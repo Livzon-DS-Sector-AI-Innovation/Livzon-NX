@@ -12,7 +12,6 @@ import FA_BATCH_TYPES, { FA_STAGE_ORDER } from '@/components/production/faBatchT
 import { useFAChat } from '@/hooks/useFAChat'
 
 const { Title, Text } = Typography
-const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
 const BASE = '/api/v1/production/fa'
 
 const STAGE_COLORS: Record<string, string> = {
@@ -60,7 +59,7 @@ function FATraceabilityContent() {
     if (!batchNo.trim()) { message.warning('请输入批号'); return }
     setLoading(true); setAiResult(null); setChatMessages([]); setFlowData(null)
     try {
-      const r = await fetch(`${API}${BASE}/lineage/trace?stage=${encodeURIComponent(stage)}&batch_no=${encodeURIComponent(batchNo.trim())}`)
+      const r = await fetch(`${BASE}/lineage/trace?stage=${encodeURIComponent(stage)}&batch_no=${encodeURIComponent(batchNo.trim())}`)
       const json = await r.json()
       if (json.code === 200) setFlowData(json.data)
       else message.error(json.message || '未找到批次数据')

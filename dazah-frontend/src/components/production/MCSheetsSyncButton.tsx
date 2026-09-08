@@ -5,8 +5,7 @@ import {Button, Modal, Checkbox, Typography, App, Alert, Tag} from 'antd'
 import { SyncOutlined } from '@ant-design/icons'
 
 const { Text, Paragraph } = Typography
-const BACKEND = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
-const API = (p: string) => `${BACKEND}/api/v1/production${p}`
+const API = (p: string) => `/api/v1/production${p}`
 
 interface SyncResult {
   created_fl?: number

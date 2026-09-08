@@ -14,7 +14,6 @@ import { toPng } from 'html-to-image'
 import BATCH_TYPES from '@/components/production/batchTypes'
 
 const { Title, Text } = Typography
-const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
 const BASE = '/api/v1/production/mc'
 
 const STAGES = [
@@ -235,7 +234,7 @@ function TraceabilityPage() {
     if (!batchNo.trim()) return
     setHistoryLoading(true); setHistoryRecords([])
     try {
-      const r = await fetch(`${API}${BASE}/lineage/ai-history?stage=${stage}&batch_no=${encodeURIComponent(batchNo.trim())}`)
+      const r = await fetch(`${BASE}/lineage/ai-history?stage=${stage}&batch_no=${encodeURIComponent(batchNo.trim())}`)
       const json = await r.json()
       if (json.code === 200) setHistoryRecords(json.data.records || [])
     } catch { /* ignore */ }
@@ -249,7 +248,7 @@ function TraceabilityPage() {
     if (!batchNo.trim()) return
         setLoading(true)
     try {
-      const r = await fetch(`${API}${BASE}/lineage/trace?stage=${stage}&batch_no=${encodeURIComponent(batchNo.trim())}`)
+      const r = await fetch(`${BASE}/lineage/trace?stage=${stage}&batch_no=${encodeURIComponent(batchNo.trim())}`)
       const json = await r.json()
       if (json.code === 200) {
         setTraceData(json.data)
@@ -271,7 +270,7 @@ function TraceabilityPage() {
 
     try {
       const r = await fetch(
-        `${API}${BASE}/lineage/ai-analysis-stream?stage=${stage}&batch_no=${encodeURIComponent(batchNo.trim())}`,
+        `${BASE}/lineage/ai-analysis-stream?stage=${stage}&batch_no=${encodeURIComponent(batchNo.trim())}`,
         { signal: AbortSignal.timeout(240000) }
       )
       const reader = r.body?.getReader()
@@ -312,8 +311,12 @@ function TraceabilityPage() {
       if (!gotResult) {
         message.error('AI 分析未返回完整结果，请重试')
       }
-    } catch {
-      message.error('AI 分析失败，请重试')
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        message.error('AI 分析超时，请稍后重试')
+      } else {
+        message.error('AI 服务暂不可用，请确认已配置模型后重试')
+      }
     } finally {
       setAiLoading(false)
     }
@@ -331,7 +334,7 @@ function TraceabilityPage() {
     setChatMessages(prev => [...prev, { role: 'user', content: msg }, { role: 'assistant', content: '' }])
     setChatSending(true)
     try {
-      const r = await fetch(`${API}${BASE}/chat/send`, {
+      const r = await fetch(`${BASE}/chat/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: aiResult.session_id, message: msg }),
@@ -398,9 +401,9 @@ function TraceabilityPage() {
   const loadAnalytics = useCallback(async () => {
     try {
       const [distR, reuseR, covR] = await Promise.all([
-        fetch(`${API}${BASE}/lineage/yield-distribution`),
-        fetch(`${API}${BASE}/lineage/material-reuse`),
-        fetch(`${API}${BASE}/lineage/coverage`),
+        fetch(`${BASE}/lineage/yield-distribution`),
+        fetch(`${BASE}/lineage/material-reuse`),
+        fetch(`${BASE}/lineage/coverage`),
       ])
       const [distJ, reuseJ, covJ] = await Promise.all([distR.json(), reuseR.json(), covR.json()])
       if (distJ.code === 200) setDistData(distJ.data)

@@ -5,8 +5,7 @@ import { Button, Modal, Form, Input, AutoComplete, Typography, App, Alert, Space
 import { LinkOutlined, SyncOutlined, PlayCircleOutlined, ClockCircleOutlined } from '@ant-design/icons'
 
 const { Text } = Typography
-const BACKEND = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
-const API = (p: string) => `${BACKEND}/api/v1/production${p}`
+const API = (p: string) => `/api/v1/production${p}`
 const STORAGE_KEY = 'feishu_saved_apps'
 
 // ── 飞书链接解析 ──

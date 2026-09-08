@@ -49,8 +49,7 @@ function Workshop203Content() {
   const fetchData = useCallback(async (monthStr: string) => {
     setLoading(true)
     try {
-      const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
-      const r = await fetch(`${API}/api/v1/production/fa/dashboard/summary?month=${monthStr}`)
+      const r = await fetch(`/api/v1/production/fa/dashboard/summary?month=${monthStr}`)
       const json = await r.json()
       if (json.code === 200) setData(json.data)
     } catch (e) { console.error('加载仪表盘失败', e) }
@@ -69,16 +68,14 @@ function Workshop203Content() {
   }, [selectedMonth, fetchData])
 
   useEffect(() => {
-    const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
-    fetch(`${API}/api/v1/production/fa/dashboard/yield-chain?month=${selectedMonth.format('YYYY-MM')}`)
+    fetch(`/api/v1/production/fa/dashboard/yield-chain?month=${selectedMonth.format('YYYY-MM')}`)
       .then(r => r.json())
       .then(json => { if (json.code === 200) setYieldData(json.data) })
       .catch(() => {})
   }, [selectedMonth])
 
   useEffect(() => {
-    const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
-    fetch(`${API}/api/v1/production/fa/dashboard/golden-batches?limit=5&score=${goldenScore}`)
+    fetch(`/api/v1/production/fa/dashboard/golden-batches?limit=5&score=${goldenScore}`)
       .then(r => r.json())
       .then(json => { if (json.code === 200) setGoldenData(json.data) })
       .catch(() => {})
@@ -92,7 +89,7 @@ function Workshop203Content() {
     if (!compareBatch.trim()) return
     setCompareLoading(true); setCompareData(null)
     try {
-      const r = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/v1/production/fa/dashboard/batch-params?batch_no=${encodeURIComponent(compareBatch.trim())}&score=${goldenScore}`)
+      const r = await fetch(`/api/v1/production/fa/dashboard/batch-params?batch_no=${encodeURIComponent(compareBatch.trim())}&score=${goldenScore}`)
       const json = await r.json()
       if (json.code === 200) setCompareData(json.data)
       else setCompareData({ error: json.message || '未找到数据' })

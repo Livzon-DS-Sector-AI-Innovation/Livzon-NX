@@ -155,6 +155,76 @@ async def _resolve_batch(stage: Any, batch_no: Any, session: Any) -> Any:
     return (stage, norm if norm != batch_no else batch_no)
 
 
+# 探测批号真实层级：按生产主链优先级查各业务表（含 MC- 前缀兼容），
+# 返回 (stage, 表内实际批号) 或 None。演示数据中同一批号可能在不同
+# 环节复用（提炼/萃取/混粉/入库同号），探测只用于修正"所选层级确定
+# 无链"的情况并优先给出提炼主链视角，精确层级仍以用户显式选择为准。
+_PROBE_STAGE_SQL = [
+    (
+        "refining",
+        "SELECT batch_no FROM production.refining_batches "
+        "WHERE batch_no = :bn AND is_deleted = false LIMIT 1",
+    ),
+    (
+        "fermentation",
+        "SELECT batch_no FROM production.fermentation_liquids "
+        "WHERE batch_no = :bn AND is_deleted = false LIMIT 1",
+    ),
+    (
+        "sub_tank",
+        "SELECT batch_no FROM production.sub_tank_records "
+        "WHERE batch_no = :bn AND is_deleted = false LIMIT 1",
+    ),
+    (
+        "extraction",
+        "SELECT batch_no FROM production.extraction_records "
+        "WHERE (batch_no = :bn OR batch_no = 'MC-' || :bn) "
+        "AND is_deleted = false LIMIT 1",
+    ),
+    (
+        "refinement",
+        "SELECT batch_no FROM production.mc_refinement_records "
+        "WHERE (batch_no = :bn OR batch_no = 'MC-' || :bn) "
+        "AND is_deleted = false LIMIT 1",
+    ),
+    (
+        "blending",
+        "SELECT batch_no FROM production.blending_records "
+        "WHERE batch_no = :bn AND is_deleted = false LIMIT 1",
+    ),
+    (
+        "qc",
+        "SELECT batch_no FROM production.qc_inspections "
+        "WHERE batch_no = :bn AND is_deleted = false LIMIT 1",
+    ),
+]
+
+
+async def _probe_real_stage(session: Any, batch_no: Any) -> tuple[str, str] | None:
+    """探测批号在血链中的真实层级，返回 (stage, 实际批号)。"""
+    norm = _normalize_batch(batch_no)
+    for stage, sql in _PROBE_STAGE_SQL:
+        row = (
+            await session.execute(text(sql), {"bn": norm})
+        ).fetchone()
+        if row:
+            return (stage, row.batch_no)
+    return None
+
+
+async def _has_lineage(session: Any, batch_no: str, stage: str) -> bool:
+    """起点 (batch_no, stage) 在血链表中是否存在任何上下游关联。"""
+    row = (
+        await session.execute(
+            text(
+                "SELECT 1 FROM production.batch_lineage WHERE (upstream_batch = :b AND upstream_type = :s) OR (downstream_batch = :b AND downstream_type = :s) LIMIT 1"  # noqa: E501
+            ),
+            {"b": batch_no, "s": stage},
+        )
+    ).fetchone()
+    return row is not None
+
+
 _SIBLING_SQL = """
     SELECT bl.upstream_type, bl.upstream_batch, bl.quantity,
            COALESCE(st.yield_rate, er.yield_rate, rr.single_step_yield) AS yield_rate
@@ -201,10 +271,21 @@ async def lineage_trace(
     session: AsyncSession = Depends(get_db),
 ) -> Any:
     if stage not in STAGE_LABELS:
-        raise HTTPException(400, f"Invalid: {stage}")
-    real_stage, real_batch_no = await _resolve_batch(stage, batch_no, session)
-    if real_stage is None:
-        raise HTTPException(404, f"Not found: {batch_no}")
+        # 兼容页面遗留的模块代号（如粗提页的 "crude"）：直接按批号探测真实层级
+        probed = await _probe_real_stage(session, batch_no)
+        if probed is None:
+            raise HTTPException(400, f"Invalid: {stage}")
+        real_stage, real_batch_no = probed
+    else:
+        real_stage, real_batch_no = await _resolve_batch(stage, batch_no, session)
+        if real_stage is None:
+            raise HTTPException(404, f"Not found: {batch_no}")
+        # 所选层级与批号不匹配时（无任何血链关联），自动修正为真实层级，
+        # 避免追溯结果只剩孤立节点
+        if not await _has_lineage(session, real_batch_no, real_stage):
+            probed = await _probe_real_stage(session, batch_no)
+            if probed is not None:
+                real_stage, real_batch_no = probed
 
     async def rd(stg: Any, bn: Any) -> Any:
         p = []

@@ -98,13 +98,40 @@ body {
   line-height: 1.50;
   color: var(--color-charcoal);
   border-radius: 8px;
-  margin-inline: 8px;
+  /* 与带箭头子菜单标题对齐：边距/内边距需 !important，
+     antd cssinjs 运行期注入会覆盖同特异性常规声明 */
+  margin-inline-start: 4px !important;
+  margin-inline-end: 4px !important;
   margin-block: 2px;
   padding-inline: 12px;
+  padding-inline-start: 24px !important;
   height: 36px;
 }
 
 .sidebar-menu.ant-menu .ant-menu-item:hover {
+  background-color: var(--color-surface);
+  color: var(--color-ink);
+}
+
+/* 子菜单标题与同层菜单项使用同一基线（起点、高度、字重一致；
+   右侧保留 antd 展开箭头空间，不覆盖 padding-inline-end）。
+   加 !important：antd cssinjs 运行期注入样式晚于本文件，
+   常规优先级不足以覆盖其 inline 菜单默认边距。
+   与普通项同取 padding-inline-start 24px，保证两类文字起点一致。 */
+.sidebar-menu.ant-menu .ant-menu-submenu-title {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  line-height: 1.50 !important;
+  color: var(--color-charcoal) !important;
+  border-radius: 8px !important;
+  margin-inline-start: 4px !important;
+  margin-inline-end: 4px !important;
+  margin-block: 2px !important;
+  padding-inline-start: 24px !important;
+  height: 36px !important;
+}
+
+.sidebar-menu.ant-menu .ant-menu-submenu-title:hover {
   background-color: var(--color-surface);
   color: var(--color-ink);
 }

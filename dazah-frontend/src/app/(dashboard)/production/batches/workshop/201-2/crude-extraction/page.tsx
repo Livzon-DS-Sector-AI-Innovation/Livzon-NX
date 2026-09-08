@@ -13,7 +13,6 @@ import MCSheetsSyncButton from '@/components/production/MCSheetsSyncButton'
 import MCTraceButton from '@/components/production/MCTraceButton'
 
 const { Title, Text } = Typography
-const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
 const BASE = '/api/v1/production/mc'
 
 const STAGES = [
@@ -27,7 +26,7 @@ const STAGES = [
 ]
 
 async function api(path: string, opts?: RequestInit) {
-  const r = await fetch(`${API}${BASE}${path}`, { headers: { 'Content-Type': 'application/json' }, ...opts })
+  const r = await fetch(`${BASE}${path}`, { headers: { 'Content-Type': 'application/json' }, ...opts })
   return r.json()
 }
 
@@ -327,7 +326,7 @@ export default function CrudeExtractionPage() {
           <Select size="small" style={{ width: 80 }} value={month} onChange={v => setMonth(v)}
             options={[{ value: 0, label: '全部' }, ...[1,2,3,4,5,6,7,8,9,10,11,12].map(m => ({ value: m, label: `${m}月` }))]} />
           <MCSheetsSyncButton />
-          <MCTraceButton initialModule="crude" />
+          <MCTraceButton initialModule="refining" />
         </Space>
       </div>
 
