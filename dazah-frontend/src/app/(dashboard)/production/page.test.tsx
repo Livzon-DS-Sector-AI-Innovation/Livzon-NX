@@ -162,4 +162,55 @@ describe('ProductionHomePage (fermentation board)', () => {
     expect(text).toContain('101一车间（菌种）')
     expect(text).toContain('201三车间 · 多拉菌素（DR）')
   })
+
+  it('shows a load failure hint when the board request rejects', async () => {
+    actions.getFermentationBoard.mockRejectedValue(new Error('network down'))
+    await render()
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('看板数据加载失败')
+  })
+
+  it('marks a tank under maintenance and refreshes the board', async () => {
+    actions.markTankMaintenance.mockResolvedValue({ code: 200, message: 'success', data: null })
+    await render()
+    const markBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('标记检修')) as HTMLElement | undefined
+    expect(markBtn).toBeTruthy()
+    await act(async () => { markBtn!.click(); await new Promise((r) => setTimeout(r, 80)) })
+    // 未填写原因时先提示且不提交
+    const emptyOk = Array.from(document.body.querySelectorAll('.ant-modal-footer button')).find((b) => b.classList.contains('ant-btn-primary')) as HTMLElement | undefined
+    await act(async () => { emptyOk!.click(); await new Promise((r) => setTimeout(r, 80)) })
+    expect(actions.markTankMaintenance).not.toHaveBeenCalled()
+    const reasonInput = Array.from(document.body.querySelectorAll('input')).find((i) => (i as HTMLInputElement).placeholder?.includes('检修原因')) as HTMLInputElement | undefined
+    expect(reasonInput).toBeTruthy()
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+      setter?.call(reasonInput!, '滤芯更换')
+      reasonInput!.dispatchEvent(new Event('input', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    const okBtn = Array.from(document.body.querySelectorAll('.ant-modal-footer button')).find((b) => b.classList.contains('ant-btn-primary')) as HTMLElement | undefined
+    await act(async () => { okBtn!.click(); await new Promise((r) => setTimeout(r, 200)) })
+    expect(actions.markTankMaintenance).toHaveBeenCalledWith('302A', '滤芯更换')
+    expect(actions.getFermentationBoard).toHaveBeenCalledTimes(2)
+    expect(document.body.textContent || '').toContain('302A 已标记检修')
+  })
+
+  it('releases a maintenance tank and refreshes the board', async () => {
+    actions.getFermentationBoard.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: {
+        ...BOARD,
+        maintenance: [{ id: 'm-1', tank_no: '304A', reason: '滤芯更换', started_at: '2026-09-08T08:00:00' }],
+      },
+    })
+    actions.removeTankMaintenance.mockResolvedValue({ code: 200, message: 'success', data: null })
+    await render()
+    const releaseBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('解除检修')) as HTMLElement | undefined
+    expect(releaseBtn).toBeTruthy()
+    await act(async () => { releaseBtn!.click(); await new Promise((r) => setTimeout(r, 200)) })
+    expect(actions.removeTankMaintenance).toHaveBeenCalledWith('m-1')
+    expect(actions.getFermentationBoard).toHaveBeenCalledTimes(2)
+    expect(document.body.textContent || '').toContain('304A 已解除检修')
+  })
 })

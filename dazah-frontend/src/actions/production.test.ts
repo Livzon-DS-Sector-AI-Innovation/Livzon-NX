@@ -53,6 +53,13 @@ import {
   updateFermentationRecord,
   updateFermentationStatus,
   deleteFermentationRecord,
+  uploadScheduleExcel,
+  getScheduleExcelArchives,
+  getScheduleExcelArchive,
+  deleteScheduleExcelArchive,
+  getFermentationBoard,
+  markTankMaintenance,
+  removeTankMaintenance,
 } from './production'
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000'
@@ -442,6 +449,90 @@ describe('production actions', () => {
     await expect(deleteProductionRecord('r-1')).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/production/records/r-1`,
+      expect.objectContaining({ method: 'DELETE' }),
+    )
+  })
+
+  it('uploads a schedule excel archive with multipart body and no JSON content type', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { id: 'arc-1' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    const formData = new FormData()
+    formData.append('file', new Blob(['excel'], { type: 'application/vnd.ms-excel' }), 'plan.xlsx')
+
+    await expect(uploadScheduleExcel(formData)).resolves.toMatchObject({ code: 200 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/production/schedule-excel`,
+      expect.objectContaining({ method: 'POST', body: formData }),
+    )
+    const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>
+    expect(headers.Authorization).toBe('Bearer test-token')
+    expect(headers['Content-Type']).toBeUndefined()
+  })
+
+  it('lists schedule excel archives with pagination params', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getScheduleExcelArchives(2, 20)).resolves.toMatchObject({ code: 200 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/production/schedule-excel?page=2&page_size=20`,
+      expect.anything(),
+    )
+
+    await expect(getScheduleExcelArchives()).resolves.toMatchObject({ code: 200 })
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      `${API_BASE}/api/v1/production/schedule-excel?page=1&page_size=50`,
+      expect.anything(),
+    )
+  })
+
+  it('fetches a schedule excel archive by id', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { id: 'arc-1' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getScheduleExcelArchive('arc-1')).resolves.toMatchObject({ code: 200 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/production/schedule-excel/arc-1`,
+      expect.anything(),
+    )
+  })
+
+  it('deletes a schedule excel archive', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(deleteScheduleExcelArchive('arc-1')).resolves.toMatchObject({ code: 200 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/production/schedule-excel/arc-1`,
+      expect.objectContaining({ method: 'DELETE' }),
+    )
+  })
+
+  it('fetches the fermentation board without caching', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { tanks: [] } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getFermentationBoard()).resolves.toMatchObject({ code: 200 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/production/fermentation-board`,
+      expect.objectContaining({ cache: 'no-store' }),
+    )
+  })
+
+  it('marks and removes tank maintenance', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(markTankMaintenance('F-1', '搅拌桨检修')).resolves.toMatchObject({ code: 200 })
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe(`${API_BASE}/api/v1/production/tank-maintenance`)
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body as string)).toEqual({ tank_no: 'F-1', reason: '搅拌桨检修' })
+    expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json')
+
+    await expect(removeTankMaintenance('m-1')).resolves.toMatchObject({ code: 200 })
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      `${API_BASE}/api/v1/production/tank-maintenance/m-1`,
       expect.objectContaining({ method: 'DELETE' }),
     )
   })
