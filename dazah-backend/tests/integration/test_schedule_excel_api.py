@@ -10,24 +10,23 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from io import BytesIO
 from types import SimpleNamespace
-from typing import Any, AsyncIterator
+from typing import Any
 from unittest.mock import AsyncMock
 
 import openpyxl  # type: ignore[import-untyped]
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
 
+import app.modules.production.schedule_excel_api as schedule_api
 from app.main import app
 from app.modules.production import schedule_excel_service
 from app.modules.production.schedule_excel_models import ScheduleExcelArchive
 from app.platform.identity.deps import get_current_user
 from app.platform.identity.models import User
-
-import app.modules.production.schedule_excel_api as schedule_api
 
 API_PREFIX = "/api/v1/production/schedule-excel"
 
@@ -57,8 +56,8 @@ def _fake_archive(**overrides: Any) -> ScheduleExcelArchive:
         "col_widths": [80],
         "row_count": 2,
         "col_count": 1,
-        "created_at": datetime.now(timezone.utc),
-        "updated_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
+        "updated_at": datetime.now(UTC),
     }
     defaults.update(overrides)
     return ScheduleExcelArchive(**defaults)

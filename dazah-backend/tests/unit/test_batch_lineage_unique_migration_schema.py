@@ -25,7 +25,7 @@ def _load_migration() -> Any:
 
 def test_batch_lineage_unique_migration_extends_current_head() -> None:
     migration = _load_migration()
-    assert migration.down_revision == "a7c100000021"
+    assert migration.down_revision == "c9d400000022"
 
 
 def test_batch_lineage_unique_migration_creates_constraint(monkeypatch: Any) -> None:
