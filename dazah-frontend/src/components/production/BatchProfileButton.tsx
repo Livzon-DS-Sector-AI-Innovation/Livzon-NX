@@ -6,7 +6,6 @@ import { NodeIndexOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 
 const { Text } = Typography
-const BACKEND = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
 const SCT = 'seed_culture'
 
 interface Props { batchNo: string }
@@ -19,7 +18,7 @@ export default function BatchProfileButton({ batchNo }: Props) {
   const open = async () => {
     setVisible(true); setData(null); setLoading(true)
     try {
-      const res = await fetch(`${BACKEND}/api/v1/production/batch-profile/${encodeURIComponent(batchNo)}`)
+      const res = await fetch(`/api/v1/production/batch-profile/${encodeURIComponent(batchNo)}`)
       const json = await res.json()
       if (json.code === 200) setData(json.data)
     } catch {} finally { setLoading(false) }

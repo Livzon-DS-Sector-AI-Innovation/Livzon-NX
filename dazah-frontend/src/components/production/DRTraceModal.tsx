@@ -8,7 +8,7 @@ import { Modal, Typography, Spin, Empty, Button, Tooltip } from 'antd'
 import { DownloadOutlined } from '@ant-design/icons'
 
 const { Text } = Typography
-const API = (p: string) => `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/v1/production${p}`
+const API = (p: string) => `/api/v1/production${p}`
 
 const COL_X = 180
 const ROW_H = 72   // 卡片加高到 66（容纳损耗行）后行距同步加大
@@ -60,9 +60,12 @@ function buildLayout(stages: StageGroup[], targetBatch: string, targetStage: str
     colNodes.push([])
   })
 
-  // 第二阶段：计算每列的垂直偏移量以居中于相邻列
+  // 第二阶段：计算每列的垂直偏移量以居中于最高列（各列顶部对齐会产生
+  // 大量空白；居中后连线更紧凑可读）
   const colOffsets: number[] = []
+  const maxColHeight = Math.max(0, ...colHeights)
   for (let col = 0; col < colHeights.length; col++) {
+    colOffsets.push(Math.max(0, (maxColHeight - colHeights[col]) / 2))
   }
 
   // 第三阶段：分配 y 坐标

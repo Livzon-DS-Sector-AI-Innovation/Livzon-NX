@@ -412,3 +412,56 @@ async def test_dr_scheduler_start_double_and_stop() -> Any:
     assert getattr(mod, "_dr_sync_scheduler") is None
     mod.stop_dr_sync_scheduler()
     assert getattr(mod, "_dr_sync_scheduler") is None
+
+
+# ═══════════ sync_dr_ledger 聚合同步 ═══════════
+
+
+def test_sync_dr_ledger_runs_all_steps_and_isolates_failures() -> Any:
+    """dr_ledger 顺序执行全部工段同步，单表失败不影响其它工段。"""
+    import asyncio
+
+    import app.modules.production.dr_feishu_sync as sync_mod
+
+    steps = {n: (m, f) for n, m, f in sync_mod.DR_LEDGER_STEPS}
+    assert set(steps) == {
+        "extraction",
+        "first_refinement",
+        "second_refinement",
+        "third_refinement",
+        "fourth_refinement",
+        "chromatography",
+    }
+    assert steps["first_refinement"] == ("dr_refinement_sync", "sync_dr_refinement")
+
+    ok_stats = {"created": 1, "updated": 0, "skipped": 0, "errors": 0}
+    patches = [
+        patch.object(sync_mod, "sync_dr_extraction", AsyncMock(return_value=ok_stats)),
+        patch(
+            "app.modules.production.dr_refinement_sync.sync_dr_refinement",
+            AsyncMock(side_effect=RuntimeError("boom-refine")),
+        ),
+        patch(
+            "app.modules.production.dr_second_refinement_sync.sync_dr_second_refinement",
+            AsyncMock(return_value=ok_stats),
+        ),
+        patch(
+            "app.modules.production.dr_third_refinement_sync.sync_dr_third_refinement",
+            AsyncMock(return_value=ok_stats),
+        ),
+        patch(
+            "app.modules.production.dr_fourth_refinement_sync.sync_dr_fourth_refinement",
+            AsyncMock(return_value=ok_stats),
+        ),
+        patch(
+            "app.modules.production.dr_chromatography_sync.sync_dr_chromatography",
+            AsyncMock(return_value=ok_stats),
+        ),
+    ]
+    with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
+        result = asyncio.run(sync_mod.sync_dr_ledger(_config(), MagicMock()))
+
+    assert result["extraction"]["created"] == 1
+    assert "boom-refine" in result["first_refinement"]["error"]
+    assert result["second_refinement"]["created"] == 1
+    assert result["chromatography"]["created"] == 1

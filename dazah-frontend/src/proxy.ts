@@ -17,6 +17,17 @@ function firstPage(items: SubMenuItem[]): string | undefined {
   }
 }
 
+/** 菜单中是否存在指向模块根路径的入口（如"XX总览"），有则模块根请求应直接放行。 */
+function hasModuleLandingEntry(items: SubMenuItem[], modulePath: string): boolean {
+  for (const item of items) {
+    if (item.disabled) continue
+    const path = item.path?.split('?')[0] || ''
+    if (path === modulePath) return true
+    if (item.children && hasModuleLandingEntry(item.children, modulePath)) return true
+  }
+  return false
+}
+
 function denied(message: string, status = 403) {
   return new NextResponse(`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>页面访问受限</title><body><main><h1>页面访问受限</h1><p>${message}</p><a href="/">返回平台</a></main></body></html>`, {
     status, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
@@ -94,6 +105,9 @@ export async function proxy(request: NextRequest) {
       if (request.nextUrl.pathname.replace(/\/$/, '') === currentModule.path) {
         const visible = getAuthorizedPageMenus(user.module_codes, user.page_permissions, user.page_permission_rollouts)
           .find((item) => item.moduleCode === currentModule.moduleCode)
+        if (visible && hasModuleLandingEntry(visible.children, currentModule.path)) {
+          return NextResponse.next({ request: { headers: requestHeaders } })
+        }
         const target = visible && firstPage(visible.children)
         return target ? NextResponse.redirect(new URL(target, request.url)) : denied('未获得本模块的任何页面访问权限。')
       }

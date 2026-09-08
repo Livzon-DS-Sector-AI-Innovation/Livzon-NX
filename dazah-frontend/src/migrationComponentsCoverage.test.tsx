@@ -1650,7 +1650,13 @@ describe('migrated component coverage', () => {
       deadline: '2025-01-01T00:00:00+00:00', responsible_person: '张三', remark: null,
       expiry_status: '已延期', created_at: '', updated_at: '',
     }
-    const detailMock = getMock('lib/api/client/quality', 'fetchSupplierQualifications').mockResolvedValue({ items: [detailRow], total: 1 })
+    const detailMock = getMock('lib/api/client/quality', 'fetchSupplierQualifications')
+      .mockResolvedValue({ items: [detailRow], total: 1 })
+      .mockImplementationOnce(async () => {
+        // 明细请求可能晚于弹窗打开完成，避免测试依赖单轮事件循环。
+        await new Promise((resolve) => setTimeout(resolve, 40))
+        return { items: [detailRow], total: 1 }
+      })
     const rendered = renderClient(createElement(SupplierDashboardPage))
     await settle()
     const roleButton = (text: string) =>
@@ -1660,7 +1666,12 @@ describe('migrated component coverage', () => {
     expect(detailMock).toHaveBeenCalledWith(expect.objectContaining({ expiry_bucket: 'expired' }))
     expect(queryElement(rendered.container, '[role="dialog"]')).not.toBeNull()
     expect(rendered.container.textContent).toContain('已过截止日期')
-    expect(rendered.container.textContent).toContain('已过期')
+    await vi.waitFor(async () => {
+      await settle()
+      const detailTable = queryElement(rendered.container, '[role="dialog"] table')
+      expect(detailTable?.textContent).toContain('测试供应商')
+      expect(detailTable?.textContent).toContain('已过期')
+    })
     Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((b) => b.textContent === '取消')?.click()
     await settle()
     roleButton('即将到期')?.click()

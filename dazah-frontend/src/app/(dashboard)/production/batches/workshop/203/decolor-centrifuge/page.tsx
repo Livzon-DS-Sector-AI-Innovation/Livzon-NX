@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation'
 import FASheetsSyncButton from '@/components/production/FASheetsSyncButton'
 import FATraceButton from '@/components/production/FATraceButton'
 const { Title, Text } = Typography
-const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
 
 const FA_STAGES = [
   { key: 'fermentation', label: '发酵液放罐', path: '/production/batches/workshop/203/fermentation' },
@@ -32,7 +31,7 @@ export default function DecolorCentrifugePage() {
   const load = async (p = 1, ps = 20) => {
     setLoading(true)
     try {
-      const r = await fetch(`${API}/api/v1/production/fa/decolor-centrifuge/list?page=${p}&page_size=${ps}${month > 0 ? `&month=${month}` : ''}`)
+      const r = await fetch(`/api/v1/production/fa/decolor-centrifuge/list?page=${p}&page_size=${ps}${month > 0 ? `&month=${month}` : ''}`)
       const json = await r.json()
       if (json.code === 200) { setData(json.data.items || []); setTotal(json.data.total || 0) }
     } catch (e) { console.error(e) } finally { setLoading(false) }
@@ -42,7 +41,7 @@ export default function DecolorCentrifugePage() {
    
   useEffect(() => { load() }, [month]) // eslint-disable-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => {
-    fetch(`${API}/api/v1/production/fa/monthly-averages?table=decolor_centrifuge_records`)
+    fetch(`/api/v1/production/fa/monthly-averages?table=decolor_centrifuge_records`)
       .then(r => r.json()).then(j => { if(j.code===200){setAvgData(j.data.data||[]);setAvgCols(j.data.columns||[])} }).catch(()=>{})
   }, [])
 

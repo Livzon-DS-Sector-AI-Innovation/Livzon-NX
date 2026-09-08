@@ -748,3 +748,24 @@ async def test_fa_ai_analysis_get_trace_data() -> Any:
     assert "酸化过滤:" in batch_data
     assert "一次脱色:" in batch_data
     assert "脱色离心" in batch_data
+
+
+# ═══════════ _sync_lineage 原生 SQL 结构 ═══════════
+# 回归保护：batch_lineage 的 id/created_at 非空且无默认值，
+# _sync_lineage 的 7 段 INSERT 必须自带 id 与 created_at，
+# 否则 MC 同步的血链更新与后续异常检测会整链失败。
+
+
+def test_sync_lineage_segments_provide_id_and_created_at() -> Any:
+    import inspect
+
+    source = inspect.getsource(sync._sync_lineage)
+    # 7 段 INSERT 都声明 id, created_at 列
+    assert source.count("INSERT INTO production.batch_lineage (") == 7
+    assert source.count("id, created_at, upstream_type, upstream_batch,") == 7
+    # 7 段 SELECT 都提供 UUID 与当前时间
+    assert source.count("gen_random_uuid()::text, now()") == 7
+    # ON CONFLICT 目标必须含环节类型：同一对批次可能同时存在
+    # 二级混粉(blending→blending)与混粉入库(blending→qc)两类关系，
+    # 只按批号对去重会把后写入的 QC 关系吞掉。
+    assert source.count("ON CONFLICT (upstream_type, upstream_batch,") == 7

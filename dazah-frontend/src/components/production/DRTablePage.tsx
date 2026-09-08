@@ -7,7 +7,6 @@ import { ArrowLeftOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
 
 const { Title, Text } = Typography
-const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
 
 interface ColDef { title: string; dataIndex: string; width?: number; ellipsis?: boolean; render?: (v: unknown) => string }
 
@@ -32,7 +31,7 @@ export default function DRTablePage({ tableKey, title, columns: columnDefs, stag
   const load = async (p = 1, ps = 20) => {
     setLoading(true)
     try {
-      const r = await fetch(`${API}/api/v1/production/dr/records?table=${tableKey}&page=${p}&page_size=${ps}`)
+      const r = await fetch(`/api/v1/production/dr/records?table=${tableKey}&page=${p}&page_size=${ps}`)
       const json = await r.json()
       if (json.code === 200) {
         const items = json.data.items || []

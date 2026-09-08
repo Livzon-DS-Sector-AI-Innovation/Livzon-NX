@@ -427,3 +427,85 @@ export interface FermentationQueryParams {
   status?: string
   fermenter?: string
 }
+// ============ 排产计划 Excel 存档 ============
+
+/** 合并单元格（0-based，与后端解析协议一致） */
+export interface ScheduleMergeRange {
+  s: { r: number; c: number }
+  e: { r: number; c: number }
+}
+
+/** 排产 Excel 存档记录（上传/详情返回全量，列表项不含 rows） */
+export interface ScheduleExcelArchive {
+  id: string
+  file_name: string
+  sheet_name: string
+  original_path?: string
+  created_by_name?: string | null
+  rows?: string[][]
+  merges?: ScheduleMergeRange[]
+  col_widths?: number[]
+  row_count: number
+  col_count: number
+  created_at?: string
+  updated_at?: string
+}
+
+// ============ 发酵车间实时看板 ============
+
+export interface BoardTank {
+  tank_no: string
+  status: 'running' | 'dumping' | 'idle' | 'maintenance' | 'dumped'
+  batch_no: string | null
+  inoculate_at: string | null
+  cultured_hours: number | null
+  cycle_hours: number | null
+  dump_at: string | null
+  note: string | null
+}
+
+export interface BoardKpis {
+  month_planned: number | null
+  month_done_planned: number | null
+  running: number | null
+  pending: number | null
+  plan_capacity: number | string | null
+  contam_count: number | null
+  contam_rate: number | string | null
+  avg_yield_rate: number | string | null
+  utilization: number | string | null
+  avg_batch_yield: number | string | null
+  qualify_rate: number | string | null
+}
+
+export interface BoardRecentBatch {
+  batch_no: string
+  dump_date: string
+  tank_no: string
+  yield_kg: number | null
+  yield_rate: number | null
+  result: string
+}
+
+export interface BoardAlert {
+  level: 'warn' | 'info'
+  text: string
+}
+
+export interface BoardMaintenance {
+  id: string
+  tank_no: string
+  reason: string
+  started_at: string | null
+}
+
+export interface FermentationBoard {
+  now: string
+  period: { start: string; end: string; label: string }
+  kpis: BoardKpis
+  tanks: BoardTank[]
+  recent: BoardRecentBatch[]
+  trend: { batches: string[]; yields: number[] } | null
+  alerts: BoardAlert[]
+  maintenance: BoardMaintenance[]
+}

@@ -5,7 +5,7 @@ import {Modal, Typography, Tag, Spin, Empty, App, Button, Input, Space, Popover,
 import { SendOutlined, HistoryOutlined, DownloadOutlined } from '@ant-design/icons'
 
 const { Text } = Typography
-const API = (p: string) => `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/v1/production${p}`
+const API = (p: string) => `/api/v1/production${p}`
 
 const COL_X = 180
 const ROW_H = 56
@@ -51,9 +51,12 @@ export function buildLayout(stages: StageGroup[], targetBatch: string, targetSta
     colNodes.push([])
   })
 
-  // 第二阶段：计算每列的垂直偏移量以居中于相邻列
+  // 第二阶段：计算每列的垂直偏移量以居中于最高列（各列顶部对齐会产生
+  // 大量空白；居中后连线更紧凑可读）
   const colOffsets: number[] = []
+  const maxColHeight = Math.max(0, ...colHeights)
   for (let col = 0; col < colHeights.length; col++) {
+    colOffsets.push(Math.max(0, (maxColHeight - colHeights[col]) / 2))
   }
 
   // 第三阶段：分配 y 坐标
@@ -216,13 +219,52 @@ export default function TraceModal({ stage, batchNo, onClose, stageConfig, stage
   const doAiAnalysis = async () => {
     setAiLoading(true); setChatMessages([])
     try {
-      const r = await fetch(API(`${apiPath}/ai-analysis?stage=${encodeURIComponent(stage)}&batch_no=${encodeURIComponent(batchNo)}`),
-        { signal: AbortSignal.timeout(180000) })
-      const json = await r.json()
-      if (json.code === 200) setAiResult(json.data)
-      else message.error(json.message || 'AI 分析失败')
-    } catch { message.error('AI 分析超时') }
-    finally { setAiLoading(false) }
+      // 与追溯页一致走流式端点：思考过程持续推送可保活连接，
+      // 避免非流式分析超过代理/网关耗时上限后无结果返回
+      const r = await fetch(
+        API(`${apiPath}/ai-analysis-stream?stage=${encodeURIComponent(stage)}&batch_no=${encodeURIComponent(batchNo)}`),
+        { signal: AbortSignal.timeout(240000) }
+      )
+      const reader = r.body?.getReader()
+      if (!reader) throw new Error('No stream')
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let gotResult = false
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const data = JSON.parse(line.slice(6))
+            if (data.type === 'result') {
+              gotResult = true
+              setAiResult({
+                severity: data.severity,
+                summary: data.summary,
+                causes: data.causes,
+                suggestions: data.suggestions,
+                analysis_text: data.analysis_text,
+                anomalies: data.anomalies,
+                session_id: data.session_id,
+              })
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+      if (!gotResult) {
+        message.error('AI 分析未返回完整结果，请重试')
+      }
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        message.error('AI 分析超时，请稍后重试')
+      } else {
+        message.error('AI 服务暂不可用，请确认已配置模型后重试')
+      }
+    } finally { setAiLoading(false) }
   }
 
   const doChatSend = useCallback(async () => {

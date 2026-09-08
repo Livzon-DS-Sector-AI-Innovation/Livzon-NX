@@ -51,6 +51,11 @@ export const moduleMenus: ModuleMenu[] = [
     path: "/production",
     children: [
       {
+        key: "overview",
+        label: "生产管理概览",
+        path: "/production",
+      },
+      {
         key: "batches",
         label: "批次管理",
         path: "",

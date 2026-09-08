@@ -168,9 +168,10 @@ uv run mypy <相关路径>
 
 根据风险和实际影响扩大验证范围。CI 对应关系如下：
 
-- `Lint`：对变更 Python 文件执行 Ruff；所有触达文件必须零 error。
-- `Backend Test`：启动 PostgreSQL 测试容器，安装锁定依赖，确认 Alembic 只有一个 head，执行 `upgrade head`，然后运行全量 Pytest 和 coverage。
-- `Backend Docker Build`：构建后端生产镜像。
+- `Backend Quality`：权限生命周期、V2 残留扫描、变更文件 Ruff、编译和 core Mypy；不启动数据库或重复执行单测。
+- `Backend Integration`：在独立 PostgreSQL/Redis 环境确认单一 Alembic head，执行迁移、模型漂移和 OpenAPI 检查，然后一次运行全量 Pytest（包含 unit/core）和完整覆盖率门禁。
+- `Backend Image Verify`：构建后端交付镜像，执行安全扫描、隔离数据库迁移和容器健康检查。
+- `CI Gate` 汇总本次范围内的必需任务；全量测试仍由 Integration 保证，不因 Quality 移除重复单测而减少覆盖。
 
 仅在变更表面要求或需要复现 CI 失败时，在独立 PostgreSQL 测试库配置好 `TEST_DATABASE_URL` 后执行完整后端门禁：
 

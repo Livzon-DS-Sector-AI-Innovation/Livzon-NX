@@ -27,6 +27,14 @@ def results(value: str = "success") -> dict[str, str]:
 
 
 class GateTests(unittest.TestCase):
+    def test_metadata_still_requires_security_and_scope_success(self) -> None:
+        job_results = results("skipped")
+        job_results["change-scope"] = "success"
+        job_results["source-security"] = "success"
+        self.assertTrue(all(c.ok for c in ci_gate.evaluate({}, job_results)))
+        job_results["source-security"] = "failure"
+        self.assertFalse(all(c.ok for c in ci_gate.evaluate({}, job_results)))
+
     def test_expected_jobs_must_succeed(self) -> None:
         job_results = results()
         job_results["frontend-quality"] = "skipped"

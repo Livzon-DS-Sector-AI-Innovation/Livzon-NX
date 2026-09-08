@@ -11724,6 +11724,21 @@
         "title": "Body_upload_review_file_endpoint_api_v1_quality_validation_reviews__review_id__files_post",
         "type": "object"
       },
+      "Body_upload_schedule_excel_api_v1_production_schedule_excel_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "排产计划 .xlsx / .xls 文件",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_schedule_excel_api_v1_production_schedule_excel_post",
+        "type": "object"
+      },
       "Body_upload_task_photo_api_v1_equipment_inspection_tasks__task_id__photos_post": {
         "properties": {
           "file": {
@@ -48124,6 +48139,30 @@
           }
         },
         "title": "LocationUpdate",
+        "type": "object"
+      },
+      "MaintenanceBody": {
+        "properties": {
+          "reason": {
+            "description": "检修原因",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "tank_no": {
+            "description": "罐号",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Tank No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tank_no",
+          "reason"
+        ],
+        "title": "MaintenanceBody",
         "type": "object"
       },
       "MaintenancePlanCreate": {
@@ -139643,6 +139682,56 @@
         ]
       }
     },
+    "/api/v1/production/fermentation-board": {
+      "get": {
+        "operationId": "get_fermentation_board_api_v1_production_fermentation_board_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Fermentation Board Api V1 Production Fermentation Board Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "发酵车间实时看板（计划驱动）",
+        "tags": [
+          "生产管理",
+          "生产管理 - 发酵车间看板"
+        ]
+      }
+    },
     "/api/v1/production/fermentation/{record_id}": {
       "delete": {
         "operationId": "delete_fermentation_record_api_v1_production_fermentation__record_id__delete",
@@ -149978,6 +150067,313 @@
         ]
       }
     },
+    "/api/v1/production/schedule-excel": {
+      "get": {
+        "operationId": "list_schedule_excel_archives_api_v1_production_schedule_excel_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response List Schedule Excel Archives Api V1 Production Schedule Excel Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "排产计划存档列表",
+        "tags": [
+          "生产管理",
+          "生产管理 - 排产计划存档"
+        ]
+      },
+      "post": {
+        "operationId": "upload_schedule_excel_api_v1_production_schedule_excel_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_schedule_excel_api_v1_production_schedule_excel_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Upload Schedule Excel Api V1 Production Schedule Excel Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "上传并存档排产计划 Excel",
+        "tags": [
+          "生产管理",
+          "生产管理 - 排产计划存档"
+        ]
+      }
+    },
+    "/api/v1/production/schedule-excel/{archive_id}": {
+      "delete": {
+        "operationId": "delete_schedule_excel_archive_api_v1_production_schedule_excel__archive_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "archive_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Archive Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Delete Schedule Excel Archive Api V1 Production Schedule Excel  Archive Id  Delete"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除排产计划存档",
+        "tags": [
+          "生产管理",
+          "生产管理 - 排产计划存档"
+        ]
+      },
+      "get": {
+        "operationId": "get_schedule_excel_archive_api_v1_production_schedule_excel__archive_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "archive_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Archive Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Schedule Excel Archive Api V1 Production Schedule Excel  Archive Id  Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "排产计划存档详情（含完整表格）",
+        "tags": [
+          "生产管理",
+          "生产管理 - 排产计划存档"
+        ]
+      }
+    },
+    "/api/v1/production/schedule-excel/{archive_id}/file": {
+      "get": {
+        "operationId": "download_schedule_excel_file_api_v1_production_schedule_excel__archive_id__file_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "archive_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Archive Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "下载排产 Excel 原件",
+        "tags": [
+          "生产管理",
+          "生产管理 - 排产计划存档"
+        ]
+      }
+    },
     "/api/v1/production/seed-cultures": {
       "get": {
         "operationId": "list_seed_cultures_api_v1_production_seed_cultures_get",
@@ -151526,6 +151922,174 @@
         "summary": "获取工艺参数列表",
         "tags": [
           "生产管理"
+        ]
+      }
+    },
+    "/api/v1/production/tank-maintenance": {
+      "get": {
+        "operationId": "list_tank_maintenance_api_v1_production_tank_maintenance_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response List Tank Maintenance Api V1 Production Tank Maintenance Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "发酵罐检修标注列表（进行中）",
+        "tags": [
+          "生产管理",
+          "生产管理 - 发酵车间看板"
+        ]
+      },
+      "post": {
+        "operationId": "mark_tank_maintenance_api_v1_production_tank_maintenance_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Mark Tank Maintenance Api V1 Production Tank Maintenance Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "标记发酵罐检修（同罐进行中则更新）",
+        "tags": [
+          "生产管理",
+          "生产管理 - 发酵车间看板"
+        ]
+      }
+    },
+    "/api/v1/production/tank-maintenance/{item_id}": {
+      "delete": {
+        "operationId": "remove_tank_maintenance_api_v1_production_tank_maintenance__item_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Remove Tank Maintenance Api V1 Production Tank Maintenance  Item Id  Delete"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "解除发酵罐检修标注",
+        "tags": [
+          "生产管理",
+          "生产管理 - 发酵车间看板"
         ]
       }
     },

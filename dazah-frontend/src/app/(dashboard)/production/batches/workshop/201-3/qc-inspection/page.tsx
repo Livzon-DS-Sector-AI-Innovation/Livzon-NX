@@ -10,7 +10,6 @@ import type { RefineColDef } from '@/components/production/DRRefinementTable'
 import DRTraceButton from '@/components/production/DRTraceButton'
 
 const { Title, Text } = Typography
-const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
 
 const STAGES = [
   { key: 'crude', label: '过滤萃取', path: '/production/batches/workshop/201-3/crude-extraction' },
@@ -67,7 +66,7 @@ export default function DrThirdRefinementPage() {
       params.set('page_size', '5000')
       if (year > 0) params.set('year', String(year))
       if (month > 0) params.set('month', String(month))
-      const r = await fetch(`${API}/api/v1/production/dr/records?${params}`)
+      const r = await fetch(`/api/v1/production/dr/records?${params}`)
       const json = await r.json()
       if (json.code === 200) setData(json.data?.items || [])
       else message.error(json.message || '加载失败')
@@ -81,7 +80,7 @@ export default function DrThirdRefinementPage() {
   useEffect(() => { loadData() }, [loadData]) // eslint-disable-line react-hooks/set-state-in-effect
 
   useEffect(() => {
-    fetch(`${API}/api/v1/production/dr/records/years?table=dr_third_refinement`)
+    fetch(`/api/v1/production/dr/records/years?table=dr_third_refinement`)
       .then(r => r.json())
       .then(json => { if (json.code === 200) setYears(json.data || []) })
       .catch(() => {})

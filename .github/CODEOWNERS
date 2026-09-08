@@ -1,0 +1,26 @@
+# Changes to these paths require review by the repository's designated owner
+# when code owner review is enabled for the pull request's target branch.
+# Match instruction files at every directory level.
+AGENTS.md       @ddlllooo
+CLAUDE.md       @ddlllooo
+
+# Protect automation, CI policy, and this CODEOWNERS file itself.
+/.github/      @ddlllooo
+/.ci/          @ddlllooo
+
+# Protect Docker build and Compose files at every directory level.
+Dockerfile*          @ddlllooo
+*.Dockerfile         @ddlllooo
+*.dockerignore       @ddlllooo
+compose*.yml         @ddlllooo
+compose*.yaml        @ddlllooo
+docker-compose*.yml  @ddlllooo
+docker-compose*.yaml @ddlllooo
+
+# Protect all repository scripts, deployment assets, and documentation.
+/scripts/  @ddlllooo
+/deploy/   @ddlllooo
+/docs/     @ddlllooo
+
+# Protect the entire Hermes-Lite subproject.
+/Hermes-Lite/  @ddlllooo

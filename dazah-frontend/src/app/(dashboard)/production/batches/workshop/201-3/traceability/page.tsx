@@ -16,7 +16,6 @@ import ReactECharts from 'echarts-for-react'
 import { toPng } from 'html-to-image'
 
 const { Title, Text } = Typography
-const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
 const BASE = '/api/v1/production/dr'
 
 const STAGES = [
@@ -559,8 +558,8 @@ function TraceabilityPage() {
     setLoading(true)
     try {
       const [traceR, funnelR] = await Promise.all([
-        fetch(`${API}${BASE}/lineage/trace?stage=${stage}&batch_no=${encodeURIComponent(batchNo.trim())}`),
-        fetch(`${API}${BASE}/lineage/loss-funnel?stage=${stage}&batch_no=${encodeURIComponent(batchNo.trim())}`),
+        fetch(`${BASE}/lineage/trace?stage=${stage}&batch_no=${encodeURIComponent(batchNo.trim())}`),
+        fetch(`${BASE}/lineage/loss-funnel?stage=${stage}&batch_no=${encodeURIComponent(batchNo.trim())}`),
       ])
       const [traceJ, funnelJ] = await Promise.all([traceR.json(), funnelR.json()])
       if (traceJ.code === 200) {
@@ -596,10 +595,10 @@ function TraceabilityPage() {
   const loadAnalytics = useCallback(async () => {
     try {
       const [distR, reuseR, covR, lossR] = await Promise.all([
-        fetch(`${API}${BASE}/lineage/yield-distribution`),
-        fetch(`${API}${BASE}/lineage/material-reuse`),
-        fetch(`${API}${BASE}/lineage/coverage`),
-        fetch(`${API}${BASE}/lineage/loss-stats`),
+        fetch(`${BASE}/lineage/yield-distribution`),
+        fetch(`${BASE}/lineage/material-reuse`),
+        fetch(`${BASE}/lineage/coverage`),
+        fetch(`${BASE}/lineage/loss-stats`),
       ])
       const [distJ, reuseJ, covJ, lossJ] = await Promise.all([distR.json(), reuseR.json(), covR.json(), lossR.json()])
       if (distJ.code === 200) setDistData(distJ.data)

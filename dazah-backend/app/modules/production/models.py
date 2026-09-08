@@ -842,8 +842,14 @@ from app.modules.production.pretreatment_models import Pretreatment  # noqa: F40
 from app.modules.production.recrystallize_models import (  # noqa: F401, E402
     Recrystallize,  # noqa: F401, E402
 )
+from app.modules.production.schedule_excel_models import (  # noqa: F401, E402
+    ScheduleExcelArchive,
+)
 from app.modules.production.seed_culture_models import SeedCulture  # noqa: F401, E402
 from app.modules.production.shift_handover_models import (  # noqa: F401, E402
     ShiftHandover,  # noqa: F401, E402
 )
 from app.modules.production.shift_log_models import ShiftLog  # noqa: F401, E402
+from app.modules.production.tank_maintenance_models import (  # noqa: F401, E402
+    TankMaintenance,
+)

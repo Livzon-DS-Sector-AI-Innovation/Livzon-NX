@@ -159,3 +159,14 @@ describe('procurement menu structure', () => {
     expect(materialLibrary?.adminOnly).toBeUndefined()
   })
 })
+
+describe('production menu structure', () => {
+  it('exposes the production overview as the first production menu entry', () => {
+    const production = moduleMenus.find((menu) => menu.key === 'production')
+    expect(production?.children[0]).toMatchObject({
+      key: 'overview',
+      label: '生产管理概览',
+      path: '/production',
+    })
+  })
+})

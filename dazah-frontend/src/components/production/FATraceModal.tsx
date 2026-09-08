@@ -7,7 +7,7 @@ import { SendOutlined, HistoryOutlined, DownloadOutlined, BulbOutlined } from '@
 import { useFAChat } from '@/hooks/useFAChat'
 
 const { Text } = Typography
-const API = (p: string) => `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/v1/production${p}`
+const API = (p: string) => `/api/v1/production${p}`
 
 interface StageGroup { stage: string; label: string; nodes: any[]; note?: string }
 interface Props { stage: string; batchNo: string; onClose: () => void }

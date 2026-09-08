@@ -11,7 +11,6 @@ import dayjs from 'dayjs'
 
 const { Title, Text } = Typography
 
-const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
 
 // 延期原因选项（单选）
 const DELAY_REASONS = ['等料', '等水', '等蒸汽', '人员不足', '设备问题', '其他']
@@ -73,7 +72,7 @@ export default function Scheduling2013Page() {
   const loadData = useCallback(() => {
     setLoading(true)
     setError('')
-    fetch(`${API}/api/v1/production/dr/schedule/dump-plans`)
+    fetch(`/api/v1/production/dr/schedule/dump-plans`)
       .then((r) => r.json())
       .then((json) => {
         if (json.code === 200) setData(json.data)
@@ -90,7 +89,7 @@ export default function Scheduling2013Page() {
     const fd = new FormData()
     fd.append('file', file)
     try {
-      const res = await fetch(`${API}/api/v1/production/dr/schedule/upload`, { method: 'POST', body: fd })
+      const res = await fetch(`/api/v1/production/dr/schedule/upload`, { method: 'POST', body: fd })
       const json = await res.json()
       if (json.code === 200) {
         message.success(json.message || '排产已更新')
@@ -109,7 +108,7 @@ export default function Scheduling2013Page() {
     if (!confirmTarget) return
     setSubmitting(true)
     try {
-      const res = await fetch(`${API}/api/v1/production/dr/schedule/tasks/${encodeURIComponent(confirmTarget.batch_no)}/confirm`, {
+      const res = await fetch(`/api/v1/production/dr/schedule/tasks/${encodeURIComponent(confirmTarget.batch_no)}/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ actual_tank_no: actualTank || confirmTarget.tank_no, note: confirmNote }),
@@ -137,7 +136,7 @@ export default function Scheduling2013Page() {
     }
     setSubmitting(true)
     try {
-      const res = await fetch(`${API}/api/v1/production/dr/schedule/tasks/${encodeURIComponent(delayTarget.batch_no)}/delay`, {
+      const res = await fetch(`/api/v1/production/dr/schedule/tasks/${encodeURIComponent(delayTarget.batch_no)}/delay`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ delay_reason: delayReason, note: delayNote }),
@@ -161,7 +160,7 @@ export default function Scheduling2013Page() {
     if (!approveTarget) return
     setSubmitting(true)
     try {
-      const res = await fetch(`${API}/api/v1/production/dr/schedule/tasks/${encodeURIComponent(approveTarget.batch_no)}/approve`, {
+      const res = await fetch(`/api/v1/production/dr/schedule/tasks/${encodeURIComponent(approveTarget.batch_no)}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ approve }),
