@@ -218,19 +218,19 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
         { title: "菜单页面", key: "page_name", width: 420, render: (_, node) => <span>
           <Typography.Text strong={Boolean(node.children?.length)}>{node.page_name}</Typography.Text>
           {node.children?.length ? <Typography.Text type="secondary" className="ml-2">{node.pageKeys.length} 个页面</Typography.Text> : null}
-          {!!node.definition?.sensitive_actions?.length && <details className="ml-6 my-2">
-            <summary className="cursor-pointer">高风险动作（已选 {editable[node.page_key]?.sensitiveActions.length || 0}/{node.definition.sensitive_actions.length}）</summary>
+          {!!node.definition?.sensitive_actions?.length && <div className="ml-6 my-2">
+            <Typography.Text type="secondary" className="block">高风险动作（已选 {editable[node.page_key]?.sensitiveActions.length || 0}/{node.definition.sensitive_actions.length}）</Typography.Text>
             <Checkbox.Group className="mt-2" value={editable[node.page_key]?.sensitiveActions || []}
               onChange={(values) => update(node.page_key, {
                 sensitiveActions: values as string[],
                 permissions: values.length ? normalize(["operate"]) : editable[node.page_key]?.permissions || [],
               })}><Space direction="vertical">{node.definition.sensitive_actions.map((action) => <Checkbox key={action.key} value={action.key}
                 title={action.description}>{action.name}</Checkbox>)}</Space></Checkbox.Group>
-          </details>}
+          </div>}
         </span> },
         { title: "权限", key: "permissions", width: 280, render: (_, node) => <Space>{order.map((level) => {
           const count = node.pageKeys.filter((key) => editable[key]?.permissions.includes(level)).length
-          return <Checkbox key={level} aria-label={`${node.page_name}：${labels[level]}`}
+          return <Checkbox key={level} aria-label={labels[level]} data-page-name={node.page_name}
             checked={count === node.pageKeys.length} indeterminate={count > 0 && count < node.pageKeys.length}
             onChange={(event) => setEditable((current) => changeTreePermission(current, node.pageKeys, level, event.target.checked))}>
             {labels[level]}
