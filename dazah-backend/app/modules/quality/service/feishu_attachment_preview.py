@@ -110,8 +110,9 @@ def convert_office_to_pdf(content: bytes, file_name: str) -> bytes:
 def resolve_preview_content(
     content: bytes, content_type: str, filename: str
 ) -> tuple[bytes, str, str]:
-    """按扩展名把附件字节转换为浏览器可呈现内容，返回 (content, content_type, filename)。
+    """按扩展名把附件字节转换为浏览器可呈现内容。
 
+    返回 (content, content_type, filename)。
     office 文档转 PDF（文件名同步改为 .pdf）；转换失败抛 502；
     不支持预览的扩展名抛 400 提示下载。
     """

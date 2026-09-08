@@ -129,7 +129,7 @@ describe('quality client - finished product anomaly', () => {
     const dashboard = { year: 2026, totals: { records: 3 } }
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonResponse({ code: 200, data: dashboard }))
+      .mockImplementation(() => Promise.resolve(jsonResponse({ code: 200, data: dashboard })))
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(fetchAnomalyDashboard(2026)).resolves.toEqual(dashboard)
@@ -190,7 +190,7 @@ describe('quality client - finished product anomaly', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         code: 200,
-        data: { record_share_links: { rec-1: 'https://feishu/rec-1' } },
+        data: { record_share_links: { 'rec-1': 'https://feishu/rec-1' } },
       }),
     )
     vi.stubGlobal('fetch', fetchMock)
