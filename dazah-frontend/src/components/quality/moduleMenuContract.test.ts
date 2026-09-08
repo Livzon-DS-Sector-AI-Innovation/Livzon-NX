@@ -15,6 +15,7 @@ describe('quality migrated menu contract', () => {
       'inspection',
       'oos-oot',
       'product-quality',
+      'anomaly-report',
       'return-recalls',
       'suppliers',
       'change',
@@ -22,9 +23,16 @@ describe('quality migrated menu contract', () => {
       'quality-settings',
     ])
     expect(children.find((item) => item.key === 'product-quality')).toMatchObject({
-      label: '产品质量回顾',
+      label: '产品质量',
       path: '/quality/product-quality',
     })
+    expect(children.find((item) => item.key === 'anomaly-report')).toMatchObject({
+      label: '成品异常报告',
+      path: '/quality/anomaly-report',
+    })
+    expect(children.find((item) => item.key === 'anomaly-report')?.children?.map((item) => item.key)).toEqual([
+      'anomaly-report-ledger',
+    ])
     // 「飞书设置」升级为「质量设置」并移到质量管理菜单末尾
     expect(children.find((item) => item.key === 'quality-settings')).toMatchObject({
       label: '质量设置',

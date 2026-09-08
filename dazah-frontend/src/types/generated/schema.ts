@@ -15780,6 +15780,179 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quality/finished-product-anomaly/analysis/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 触发成品异常记录 AI 分类（后台 job，增量去重） */
+        post: operations["api_run_anomaly_analysis_api_v1_quality_finished_product_anomaly_analysis_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/finished-product-anomaly/analysis/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询成品异常 AI 分类任务进度 */
+        get: operations["api_get_anomaly_analysis_status_api_v1_quality_finished_product_anomaly_analysis_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/finished-product-anomaly/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 成品异常仪表盘聚合（按产品×异常类型，AI 分类结果关联） */
+        get: operations["api_get_anomaly_dashboard_api_v1_quality_finished_product_anomaly_dashboard_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/finished-product-anomaly/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取成品异常报告字段元数据 */
+        get: operations["api_get_anomaly_fields_api_v1_quality_finished_product_anomaly_fields_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/finished-product-anomaly/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取成品异常报告记录列表 */
+        get: operations["api_list_anomaly_records_api_v1_quality_finished_product_anomaly_records_get"];
+        put?: never;
+        /** 新增成品异常报告记录（同步到多维表格） */
+        post: operations["api_create_anomaly_record_api_v1_quality_finished_product_anomaly_records_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/finished-product-anomaly/records/share-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 批量生成成品异常报告记录分享链接（跳转飞书对应行） */
+        post: operations["api_batch_create_anomaly_share_links_api_v1_quality_finished_product_anomaly_records_share_links_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/finished-product-anomaly/records/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取成品异常报告记录详情 */
+        get: operations["api_get_anomaly_record_api_v1_quality_finished_product_anomaly_records__record_id__get"];
+        /** 编辑成品异常报告记录（同步到多维表格） */
+        put: operations["api_update_anomaly_record_api_v1_quality_finished_product_anomaly_records__record_id__put"];
+        post?: never;
+        /** 删除成品异常报告记录（同步到多维表格） */
+        delete: operations["api_delete_anomaly_record_api_v1_quality_finished_product_anomaly_records__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/finished-product-anomaly/records/{record_id}/attachments/{file_token}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 下载成品异常报告记录附件（后端代理，携带飞书 token） */
+        get: operations["api_get_anomaly_attachment_content_api_v1_quality_finished_product_anomaly_records__record_id__attachments__file_token__content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/finished-product-anomaly/records/{record_id}/attachments/{file_token}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 在线预览成品异常报告记录附件（图片/PDF 原样，office 转 PDF，inline 响应） */
+        get: operations["api_get_anomaly_attachment_preview_api_v1_quality_finished_product_anomaly_records__record_id__attachments__file_token__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/finished-product-anomaly/years": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取成品异常报告年度表配置状态 */
+        get: operations["api_get_anomaly_years_api_v1_quality_finished_product_anomaly_years_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quality/finished-product-inspections": {
         parameters: {
             query?: never;
@@ -15950,6 +16123,23 @@ export interface paths {
         get: operations["get_legacy_inspection_dashboard_api_v1_quality_inspection_dashboard_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/inspection-dashboard/trend-ai/reanalyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 手动再次分析当月趋势 AI（页面刷新不会触发） */
+        post: operations["api_reanalyze_trend_ai_api_v1_quality_inspection_dashboard_trend_ai_reanalyze_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -42335,6 +42525,17 @@ export interface components {
             /** Spec Lines */
             spec_lines: components["schemas"]["InspectionDashboardSpecLine"][];
             summary: components["schemas"]["InspectionDashboardChartSummary"];
+            trend_ai?: components["schemas"]["InspectionDashboardTrendAI"] | null;
+            /**
+             * Trend Ai Status
+             * @default none
+             */
+            trend_ai_status: string;
+            /**
+             * Trend Anomalies
+             * @default []
+             */
+            trend_anomalies: components["schemas"]["InspectionDashboardTrendAnomaly"][];
             /** Upper Sigma Series */
             upper_sigma_series: (number | null)[];
         };
@@ -42412,10 +42613,138 @@ export interface components {
             source_label: string;
             /** Total Records */
             total_records: number;
+            /**
+             * Trend Ai Completed Count
+             * @default 0
+             */
+            trend_ai_completed_count: number;
+            /**
+             * Trend Ai Pending Count
+             * @default 0
+             */
+            trend_ai_pending_count: number;
+            /**
+             * Trend Alert Metric Count
+             * @default 0
+             */
+            trend_alert_metric_count: number;
             /** Unmapped Notification Count */
             unmapped_notification_count: number;
             /** Valid Record Count */
             valid_record_count: number;
+        };
+        /**
+         * InspectionDashboardTrendAI
+         * @description 趋势 AI 解读结论（经白名单校验后），仅作辅助展示。
+         */
+        InspectionDashboardTrendAI: {
+            /** Analyzed At */
+            analyzed_at?: string | null;
+            /**
+             * Confidence
+             * @default low
+             */
+            confidence: string;
+            /**
+             * Highlight Batches
+             * @default []
+             */
+            highlight_batches: string[];
+            /**
+             * @default {
+             *       "direction": "flat",
+             *       "risk": ""
+             *     }
+             */
+            outlook: components["schemas"]["InspectionDashboardTrendAIOutlook"];
+            /**
+             * Period
+             * @default
+             */
+            period: string;
+            /**
+             * Recommendation
+             * @default
+             */
+            recommendation: string;
+            /**
+             * Signals
+             * @default []
+             */
+            signals: components["schemas"]["InspectionDashboardTrendAISignal"][];
+            /**
+             * Summary
+             * @default
+             */
+            summary: string;
+            /**
+             * Trend Reading
+             * @default
+             */
+            trend_reading: string;
+        };
+        /** InspectionDashboardTrendAIOutlook */
+        InspectionDashboardTrendAIOutlook: {
+            /** Batches To Limit */
+            batches_to_limit?: number | null;
+            /**
+             * Direction
+             * @default flat
+             */
+            direction: string;
+            /**
+             * Risk
+             * @default
+             */
+            risk: string;
+        };
+        /** InspectionDashboardTrendAISignal */
+        InspectionDashboardTrendAISignal: {
+            /**
+             * Batch No
+             * @default
+             */
+            batch_no: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /**
+             * Rule Type
+             * @default
+             */
+            rule_type: string;
+            /**
+             * Severity
+             * @default medium
+             */
+            severity: string;
+        };
+        /**
+         * InspectionDashboardTrendAnomaly
+         * @description 确定性趋势规则命中的单条异常事实。
+         */
+        InspectionDashboardTrendAnomaly: {
+            /**
+             * Affected Batches
+             * @default []
+             */
+            affected_batches: string[];
+            /** Description */
+            description: string;
+            /** End Batch */
+            end_batch: string;
+            /** Evidence */
+            evidence: {
+                [key: string]: unknown;
+            };
+            /** Rule Type */
+            rule_type: string;
+            /** Severity */
+            severity: string;
+            /** Start Batch */
+            start_batch: string;
         };
         /**
          * InspectionFeishuRecordBody
@@ -55899,6 +56228,16 @@ export interface components {
          * @enum {string}
          */
         TrainingType: "induction" | "annual" | "special" | "emergency" | "contractor" | "refresher";
+        /**
+         * TrendAIReanalyzeRequest
+         * @description 手动「再次分析」当月趋势 AI 的请求体。
+         */
+        TrendAIReanalyzeRequest: {
+            /** Entity Code */
+            entity_code: string;
+            /** Metric Key */
+            metric_key: string;
+        };
         /**
          * TrueFalseQuestion
          * @description 判断题
@@ -100059,6 +100398,473 @@ export interface operations {
             };
         };
     };
+    api_run_anomaly_analysis_api_v1_quality_finished_product_anomaly_analysis_run_post: {
+        parameters: {
+            query?: {
+                /** @description 只分析指定年份；不传则分析全部年份 */
+                year?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_get_anomaly_analysis_status_api_v1_quality_finished_product_anomaly_analysis_status_get: {
+        parameters: {
+            query: {
+                /** @description 任务 ID */
+                job_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_get_anomaly_dashboard_api_v1_quality_finished_product_anomaly_dashboard_get: {
+        parameters: {
+            query?: {
+                /** @description 年份；不传则聚合 2025-2028 全部已配置年份 */
+                year?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_get_anomaly_fields_api_v1_quality_finished_product_anomaly_fields_get: {
+        parameters: {
+            query?: {
+                /** @description 成品异常报告年度 */
+                year?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_list_anomaly_records_api_v1_quality_finished_product_anomaly_records_get: {
+        parameters: {
+            query?: {
+                /** @description 成品异常报告年度 */
+                year?: number;
+                /** @description 关键词（按全部字段模糊匹配） */
+                keyword?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_create_anomaly_record_api_v1_quality_finished_product_anomaly_records_post: {
+        parameters: {
+            query?: {
+                /** @description 成品异常报告年度 */
+                year?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InspectionFeishuRecordBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_batch_create_anomaly_share_links_api_v1_quality_finished_product_anomaly_records_share_links_post: {
+        parameters: {
+            query?: {
+                /** @description 成品异常报告年度 */
+                year?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InspectionFeishuRecordBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_get_anomaly_record_api_v1_quality_finished_product_anomaly_records__record_id__get: {
+        parameters: {
+            query?: {
+                /** @description 成品异常报告年度 */
+                year?: number;
+            };
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_update_anomaly_record_api_v1_quality_finished_product_anomaly_records__record_id__put: {
+        parameters: {
+            query?: {
+                /** @description 成品异常报告年度 */
+                year?: number;
+            };
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InspectionFeishuRecordBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_delete_anomaly_record_api_v1_quality_finished_product_anomaly_records__record_id__delete: {
+        parameters: {
+            query?: {
+                /** @description 成品异常报告年度 */
+                year?: number;
+            };
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_get_anomaly_attachment_content_api_v1_quality_finished_product_anomaly_records__record_id__attachments__file_token__content_get: {
+        parameters: {
+            query?: {
+                /** @description 成品异常报告年度 */
+                year?: number;
+            };
+            header?: never;
+            path: {
+                record_id: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_get_anomaly_attachment_preview_api_v1_quality_finished_product_anomaly_records__record_id__attachments__file_token__preview_get: {
+        parameters: {
+            query?: {
+                /** @description 成品异常报告年度 */
+                year?: number;
+            };
+            header?: never;
+            path: {
+                record_id: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_get_anomaly_years_api_v1_quality_finished_product_anomaly_years_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_items_api_v1_quality_finished_product_inspections_get: {
         parameters: {
             query?: {
@@ -100590,6 +101396,41 @@ export interface operations {
             };
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_reanalyze_trend_ai_api_v1_quality_inspection_dashboard_trend_ai_reanalyze_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrendAIReanalyzeRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

@@ -28,12 +28,45 @@ SEVERITY_LEVELS = ["high", "medium", "low"]
 PLAN_TEXT_LIMIT = 12000
 REPORT_TEXT_LIMIT = 12000
 TAIL_KEEP = 2000
+# 大文档分块审核：每块字符数与块间重叠（防跨块边界漏审）
+CHUNK_SIZE = 10000
+CHUNK_OVERLAP = 500
 # 依据正文比对时的单份依据正文上限
 BASIS_TEXT_LIMIT = 20000
 # 关键依据筛选时的单份依据摘要长度
 BASIS_DIGEST_LEN = 500
 # 正文比对一次审核最多比对的依据份数
 MAX_CONTENT_COMPARE_BASES = 5
+
+
+def split_chunks(
+    text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP
+) -> list[dict[str, Any]]:
+    """超长正文按段落边界分块（块间重叠 overlap 字符防边界漏审）。
+
+    返回 [{"text": 块文本, "seq": 块序号, "total": 总块数}]；短文本返回单块。
+    """
+    text = text or ""
+    if not text.strip():
+        return []
+    if len(text) <= size:
+        return [{"text": text, "seq": 1, "total": 1}]
+    chunks: list[str] = []
+    start = 0
+    while start < len(text):
+        end = min(start + size, len(text))
+        # 尽量在换行处切，避免截断段落/句子
+        if end < len(text):
+            newline = text.rfind("\n", start + size - 800, end)
+            if newline > start:
+                end = newline + 1
+        chunks.append(text[start:end])
+        start = end - overlap if end < len(text) else end
+    total = len(chunks)
+    return [
+        {"text": chunk, "seq": i + 1, "total": total}
+        for i, chunk in enumerate(chunks)
+    ]
 
 
 def _truncate_text(text: str, limit: int, tail: int = TAIL_KEEP) -> str:
@@ -84,19 +117,26 @@ def build_review_prompt(
         "请仅基于下面提供的原文核对以下内容，没有证据的问题不要提出，禁止编造：",
         "1. 方案↔报告一致性：报告引用的方案编号/标题、验证参数、判定标准、批次"
         "是否与方案一致；",
-        "2. 数值核对：报告中的实测结果是否落在方案或质量标准规定的区间内；",
+        "2. 数值与计算核对：报告中的实测结果是否落在方案或质量标准规定的区间内；"
+        "方案/报告中的公式与计算是否正确（均值、标准差、RSD、回收率、合格率等"
+        "的公式选用与代入计算，发现公式用错或算错必须指出，说明正确算法）；",
         "3. 内容一致性：两份文档内部及之间的关键数据、上下文、结论是否自洽；",
-        "4. 规范性：文档编号（封面/页眉/文件名）是否一致、章节是否齐全。",
+        "4. 规范性：文档编号（封面/页眉/文件名）是否一致、章节是否齐全；",
+        "5. 文字质量：明显的错别字、前后表述矛盾、参数单位笔误（只报确定的问题）。",
     ]
     if quality_data_summary:
         parts.append(
-            "5. 质量数据联动：结合下方相关偏差/变更记录，评估验证执行期间"
+            "6. 质量数据联动：结合下方相关偏差/变更记录，评估验证执行期间"
             "是否遗留未关闭的偏差/变更影响验证结论（missing_revalidation 类发现"
             "归入 content_consistency）。"
         )
     parts.append(
         "每一条发现必须给出可核对的原文片段（quote，尽量短，10~120字），"
         "并说明位置（location，如章节或表格名）。"
+    )
+    parts.append(
+        "单次最多输出 15 条：优先报告严重度高的确定问题，宁缺毋滥、"
+        "禁止凑数；被截断的问题会在后续部分继续审核。"
     )
     parts.append(
         "分类（category）只能是：" + "/".join(FINDING_CATEGORIES) + "。"
@@ -117,9 +157,20 @@ def build_review_prompt(
         )
 
     if reference_summary:
+        # 只注入统计概要：完整清单由编号核对环节确定性输出，逐块重复注入
+        # 既浪费 token 又会把模型注意力带偏到版本号问题
+        mismatch_count = sum(
+            1 for item in reference_summary if item.get("issue") == "version_mismatch"
+        )
+        missing_count = sum(
+            1 for item in reference_summary if item.get("issue") == "missing"
+        )
         parts.append(
-            "引用文件核对结果（代码比对，已确定，直接引用即可，不要重新判断）："
-            + str(reference_summary)
+            "引用文件核对说明（代码比对已完成，编号/版本类问题已单独输出，"
+            "无需重复报告）：本次共核对 "
+            f"{len(reference_summary)} 项引用，其中版本不一致 {mismatch_count} 项、"
+            f"目录未命中 {missing_count} 项。请专注正文内容本身的问题；"
+            "确实没有问题时才返回空数组。"
         )
 
     if quality_data_summary:
@@ -184,8 +235,11 @@ def build_content_compare_prompt(
         "请逐项核对验证文档中来源于该依据的内容（操作步骤、工艺参数、限度标准、"
         "取样/检验方法、判定条件），找出与依据正文不一致之处：",
         "- 数值/范围矛盾、步骤缺失或顺序不同、方法描述偏差、限度放宽",
+        "- 文件编号/版本号差异已在编号核对环节单独处理，不要输出纯版本号差异；"
+        "只报告实质内容矛盾，且必须两边正文都能逐字找到对应原文",
         "每条发现必须同时给出两边原文：validation_quote（验证文档原文）与 "
-        "basis_quote（依据正文原文），均逐字摘录，禁止编造；无矛盾则不输出。",
+        "basis_quote（依据正文原文），均逐字摘录，禁止编造；无矛盾则不输出。"
+        "单次最多输出 10 条，优先报告严重度高的确定矛盾。",
         "severity 只能是 high/medium/low。",
         "只输出 JSON：{\"findings\": [{\"validation_quote\": \"...\", "
         "\"basis_quote\": \"...\", \"dimension\": \"参数|步骤|限度|方法\", "

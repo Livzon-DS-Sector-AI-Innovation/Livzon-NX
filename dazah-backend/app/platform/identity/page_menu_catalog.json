@@ -8,15 +8,6 @@
     "disabled": false,
     "children": [
       {
-        "key": "feishu-settings",
-        "name": "飞书设置",
-        "path": "/quality/feishu-settings",
-        "icon": null,
-        "permission_code": null,
-        "disabled": false,
-        "children": null
-      },
-      {
         "key": "documents",
         "name": "文件管理",
         "path": "/quality/documents",
@@ -631,7 +622,7 @@
       },
       {
         "key": "product-quality",
-        "name": "产品质量回顾",
+        "name": "产品质量",
         "path": "/quality/product-quality",
         "icon": null,
         "permission_code": null,
@@ -695,6 +686,25 @@
             "key": "product-quality-sas",
             "name": "L-色氨酸",
             "path": "/quality/product-quality/sas",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          }
+        ]
+      },
+      {
+        "key": "anomaly-report",
+        "name": "成品异常报告",
+        "path": "/quality/anomaly-report",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "anomaly-report-ledger",
+            "name": "异常台账",
+            "path": "/quality/anomaly-report/ledger",
             "icon": null,
             "permission_code": null,
             "disabled": false,
@@ -847,8 +857,26 @@
             "permission_code": null,
             "disabled": false,
             "children": null
+          },
+          {
+            "key": "validation-ai-review",
+            "name": "验证AI审核",
+            "path": "/quality/validation/ai-review",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
           }
         ]
+      },
+      {
+        "key": "quality-settings",
+        "name": "质量设置",
+        "path": "/quality/settings",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
       }
     ]
   },

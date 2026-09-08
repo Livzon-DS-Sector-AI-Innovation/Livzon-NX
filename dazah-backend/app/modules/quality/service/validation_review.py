@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.database import async_session_factory
 from app.core.exceptions import AppException, NotFoundException
-from app.core.jobs import submit_job
+from app.core.jobs import is_job_running, submit_job
 from app.core.llm import (
     LLMConfigError,
     LLMOutputError,
@@ -58,6 +58,8 @@ from app.modules.quality.service.document_catalog_attachment import (
 )
 from app.modules.quality.service.document_catalog_md import convert_word_attachment
 from app.modules.quality.service.validation_basis_resolver import (
+    BasisEntry,
+    DocumentBasis,
     ReferenceCheckItem,
     _compact,
     extract_document_number,
@@ -73,6 +75,7 @@ from app.modules.quality.service.validation_review_prompt import (
     build_basis_selection_prompt,
     build_content_compare_prompt,
     build_review_prompt,
+    split_chunks,
 )
 from app.platform.audit.service import record_audit_log
 
@@ -97,9 +100,14 @@ DOC_KIND_REPORT = "report"
 
 # LLM 语义审核重试（限流指数退避）
 _LLM_MAX_RETRIES = 3
-# 解析与审核超时保护（秒）：防 soffice/转换/LLM 挂死导致永久 pending
+# 解析与审核超时保护（秒）：防 soffice/转换/LLM 挂死导致永久 pending；
+# 整单预算覆盖分块审核+分块正文比对（大文档 30-60 分钟级别）
 _PARSE_FILE_TIMEOUT = 240
-_REVIEW_TOTAL_TIMEOUT = 1800
+_REVIEW_TOTAL_TIMEOUT = 3600
+# 单文件附件读取（同步 MinIO/local）超时，线程池内执行
+_READ_FILE_TIMEOUT = 120
+# P3 每份依据最多比对的验证文档分块数（超长时取开头主体+末尾结论块）
+_MAX_COMPARE_CHUNKS_PER_BASIS = 4
 
 
 # ─── 本地存储（MinIO/uploads 双通道，key 前缀 validation-review/） ───────
@@ -412,6 +420,16 @@ async def run_review(
     return job_id
 
 
+async def _report_progress(job_id: str, text: str) -> None:
+    """更新后台 job 进度文案，让前端实时看到审核进行到哪一步。"""
+    try:
+        from app.core.jobs import update_job_progress
+
+        await update_job_progress(job_id, text)
+    except Exception:  # noqa: BLE001 —— 进度更新失败不影响审核本身
+        pass
+
+
 async def _run_review_job(
     *,
     record_id: uuid.UUID,
@@ -436,16 +454,33 @@ async def _run_review_job(
         except TimeoutError:
             record.status = STATUS_FAILED
             record.error_message = "审核超时（整体超过预算时间），请重试"
+            logger.warning(
+                "validation review job %s hit total timeout",
+                job_id,
+                extra={"component": "quality", "record_id": str(record_id)},
+            )
             await db.commit()
             return {"status": STATUS_FAILED, "error": record.error_message}
         except LLMRateLimitError:
             record.status = STATUS_FAILED
             record.error_message = "LLM 速率限制，重试耗尽"
+            logger.warning(
+                "validation review job %s rate limited",
+                job_id,
+                extra={"component": "quality", "record_id": str(record_id)},
+            )
             await db.commit()
             return {"status": STATUS_FAILED, "error": record.error_message}
         except (LLMConfigError, LLMOutputError, LLMProviderError) as exc:
             record.status = STATUS_FAILED
             record.error_message = _safe_error(exc)
+            # 静默落库会让排查无线索：这里必须留下失败原因
+            logger.warning(
+                "validation review job %s llm failed: %s",
+                job_id,
+                type(exc).__name__,
+                extra={"component": "quality", "record_id": str(record_id)},
+            )
             await db.commit()
             return {"status": STATUS_FAILED, "error": record.error_message}
         except Exception as exc:  # noqa: BLE001 —— job 边界兜底，保留异常链并落库
@@ -468,7 +503,19 @@ async def _execute_review(
     for row in files:
         if row.parse_status != PARSE_PENDING:
             continue
-        content = _read_review_file(row.storage_key)
+        # 读取附件在线程池+超时保护内执行：get_object 是同步 MinIO 调用，
+        # 直接在事件循环上跑，socket 卡住会冻结整个循环（心跳/进度/超时
+        # 保护全部失效，job 永久挂死）
+        try:
+            content = await asyncio.wait_for(
+                asyncio.to_thread(_read_review_file, row.storage_key),
+                timeout=_READ_FILE_TIMEOUT,
+            )
+        except TimeoutError:
+            row.parse_status = PARSE_FAILED
+            row.parse_error = "读取附件超时"
+            db.add(row)
+            continue
         if content is None:
             row.parse_status = PARSE_FAILED
             row.parse_error = "原文件缺失"
@@ -588,17 +635,34 @@ async def _execute_review(
                 }
             )
 
-    # 4. 基准正文一致性核查：拉取命中依据正文 → P2 筛选 → P3 逐份比对
+    # 4. 基准正文一致性核查：拉取依据正文 → P2 筛选 → P3 逐份比对
+    # 候选来源两路：①引用编号命中目录的条目；②文档标题关键词在目录里的
+    # 相关条目（正文没写编号时，如只写"按清洁规程执行"，靠标题找到
+    # 《XX清洁操作规程》《XX检验方法》这类真正该比的依据）
     model_name: str | None = None
     basis_comparison: list[dict[str, Any]] = []
     hit_entries = _collect_hit_entries(reference_items)
-    basis_contents = await load_basis_contents(db, hit_entries)
+    document_summary = _document_summary(identities)
+    keyword_entries = (
+        _find_title_matched_entries(basis, document_summary, hit_entries)
+        if texts
+        else []
+    )
+    basis_contents = await load_basis_contents(
+        db, hit_entries + [entry.id for entry in keyword_entries]
+    )
     if basis_contents and texts:
         validation_text = (
             texts.get(DOC_KIND_PLAN, "") + "\n\n" + texts.get(DOC_KIND_REPORT, "")
         ).strip()
         candidate_bases = _build_candidate_bases(reference_items, basis_contents)
-        document_summary = _document_summary(identities)
+        candidate_bases.extend(
+            _build_keyword_candidate_bases(keyword_entries, basis_contents)
+        )
+        if job_id:
+            await _report_progress(
+                job_id, "正在筛选与验证正文实质相关的关键依据…"
+            )
         key_bases, model_name = await _select_key_bases(
             document_summary, candidate_bases, focus_points
         )
@@ -608,6 +672,7 @@ async def _execute_review(
             basis_contents,
             reference_items,
             focus_points,
+            job_id=job_id,
         )
         findings.extend(compare_findings)
         basis_comparison = _build_basis_comparison(
@@ -647,20 +712,97 @@ async def _execute_review(
             for item in reference_items
             if item.match_type != "noise"
         ]
-        prompt = build_review_prompt(
-            plan_text=texts.get(DOC_KIND_PLAN),
-            report_text=texts.get(DOC_KIND_REPORT),
-            reference_summary=reference_summary,
-            plan_identity=identities.get(DOC_KIND_PLAN),
-            report_identity=identities.get(DOC_KIND_REPORT),
-            focus_points=focus_points,
-            quality_data_summary=quality_data_summary,
-        )
-        raw, model_name = await _call_llm_with_retry(prompt)
-        llm_findings = _parse_llm_findings(
-            raw.get("findings") or [], list(texts.values())
-        )
-        findings.extend(llm_findings)
+        # 大文档分块审核：逐块送审保证全文覆盖，findings 合并去重
+        plan_chunks = split_chunks(texts.get(DOC_KIND_PLAN) or "")
+        report_chunks = split_chunks(texts.get(DOC_KIND_REPORT) or "")
+        model_name = None
+        seen_quotes: set[tuple[str, str]] = set()
+
+        def _merge(new_findings: list[dict[str, Any]], source_label: str) -> None:
+            nonlocal model_name
+            for finding in new_findings:
+                dedup_key = (
+                    str(finding.get("category") or ""),
+                    (finding.get("quote") or "")[:100],
+                )
+                if dedup_key in seen_quotes:
+                    continue
+                seen_quotes.add(dedup_key)
+                if not finding.get("location"):
+                    finding["location"] = source_label
+                findings.append(finding)
+
+        total_units = len(plan_chunks) + len(report_chunks) or 1
+        done_units = 0
+
+        for idx, chunk in enumerate(plan_chunks, start=1):
+            await _report_progress(
+                job_id, f"正在审核方案第 {idx}/{len(plan_chunks)} 部分…"
+            )
+            prompt = build_review_prompt(
+                plan_text=chunk["text"],
+                report_text=None,
+                reference_summary=reference_summary,
+                plan_identity=identities.get(DOC_KIND_PLAN),
+                focus_points=focus_points,
+                quality_data_summary=quality_data_summary if idx == 1 else None,
+            )
+            raw, model_name = await _call_llm_with_retry(prompt)
+            chunk_findings = _parse_llm_findings(
+                raw.get("findings") or [], [chunk["text"]]
+            )
+            _merge(chunk_findings, f"方案第 {idx} 部分")
+            done_units += 1
+
+        for idx, chunk in enumerate(report_chunks, start=1):
+            await _report_progress(
+                job_id, f"正在审核报告第 {idx}/{len(report_chunks)} 部分…"
+            )
+            prompt = build_review_prompt(
+                plan_text=None,
+                report_text=chunk["text"],
+                reference_summary=reference_summary,
+                report_identity=identities.get(DOC_KIND_REPORT),
+                focus_points=focus_points,
+            )
+            raw, model_name = await _call_llm_with_retry(prompt)
+            chunk_findings = _parse_llm_findings(
+                raw.get("findings") or [], [chunk["text"]]
+            )
+            _merge(chunk_findings, f"报告第 {idx} 部分")
+            done_units += 1
+
+        # 交叉互查：方案↔报告结论/摘要块（两边都有时才互查，且只取末块防重复）
+        if (
+            plan_chunks
+            and report_chunks
+            and total_units <= 8
+        ):
+            await _report_progress(job_id, "正在做方案↔报告交叉一致性核对…")
+            prompt = build_review_prompt(
+                plan_text=plan_chunks[-1]["text"],
+                report_text=report_chunks[-1]["text"],
+                reference_summary=[],
+                focus_points=focus_points,
+            )
+            raw, model_name = await _call_llm_with_retry(prompt)
+            cross_findings = _parse_llm_findings(
+                raw.get("findings") or [],
+                [plan_chunks[-1]["text"], report_chunks[-1]["text"]],
+            )
+            for finding in cross_findings:
+                finding["category"] = (
+                    "plan_report_mismatch"
+                    if finding.get("category") in (
+                        "content_consistency",
+                        "numeric_check",
+                    )
+                    else finding.get("category")
+                )
+            _merge(cross_findings, "方案↔报告交叉核对")
+        done_units += 1
+
+        await _report_progress(job_id, "AI 审核完成，正在汇总结果…")
 
     # 7. 结论落库
     stats = _build_stats(findings, reference_items, texts)
@@ -710,6 +852,9 @@ def _auto_generate_title(identities: dict[str, dict[str, Any]]) -> str:
     title_text = ident.get("content_title") or ident.get("file_name") or ""
     if not number and not title_text:
         return ""
+    # 正文标题已带文档编号时不再重复拼接（如 "VP-XX-01 VP-XX-01 酸性物…"）
+    if number and _compact(title_text).startswith(_compact(number)):
+        return title_text.strip()[:255]
     return f"{number} {title_text}".strip()[:255]
 
 
@@ -775,6 +920,95 @@ def _document_summary(identities: dict[str, dict[str, Any]]) -> str:
     return "；".join(parts) if parts else "验证文档"
 
 
+# 降级排序/标题预筛的停用词：验证文档标题里的通用词，不参与相关性打分
+_RELEVANCE_STOPWORDS = {"方案", "报告", "编号", "文档", "验证", "确认", "审核"}
+
+
+def _extract_relevance_keywords(document_summary: str) -> set[str]:
+    """从文档标题/摘要提取相关性关键词。
+
+    中文按 2-gram 提取（整词无法匹配规程名里的子串），英文数字取 ≥3 位
+    token；停用词在 gram 层剔除。
+    """
+    keywords: set[str] = set()
+    for run in re.findall(r"[\u4e00-\u9fa5]+", document_summary or ""):
+        if len(run) < 2 or run in _RELEVANCE_STOPWORDS:
+            continue
+        keywords.add(run)
+        keywords.update(run[i : i + 2] for i in range(len(run) - 1))
+    keywords.update(re.findall(r"[A-Za-z0-9]{3,}", document_summary or ""))
+    return keywords - _RELEVANCE_STOPWORDS
+
+
+def _rank_candidates_by_relevance(
+    document_summary: str,
+    candidate_bases: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """P2 降级时的启发式排序：与文档标题关键词重合越多越靠前。
+
+    例如《霉酚酸提炼生产工艺验证方案》降级时优先选工艺规程/操作规程，
+    而不是按引用顺序命中一堆管理程序。
+    """
+    keywords = _extract_relevance_keywords(document_summary)
+
+    def _score(item: dict[str, Any]) -> int:
+        haystack = f"{item.get('name') or ''}{item.get('digest') or ''}"
+        return sum(1 for word in keywords if word in haystack)
+
+    return sorted(candidate_bases, key=_score, reverse=True)
+
+
+# 标题预筛：单处命中即纳入（如"清洁"命中《清洁操作规程》），上限防 prompt 膨胀
+_TITLE_MATCH_MAX_ENTRIES = 12
+
+
+def _find_title_matched_entries(
+    basis: DocumentBasis,
+    document_summary: str,
+    exclude_ids: list[uuid.UUID],
+) -> list[BasisEntry]:
+    """文档标题关键词在目录里的相关条目（正文未引用编号时的候选兜底）。
+
+    例如《分析方法验证方案》即使没写检验规程编号，也能凭"分析方法"
+    找到《XX检验方法/质量标准》进 P2 候选；命中的仍需过 P2 AI 筛选。
+    """
+    keywords = _extract_relevance_keywords(document_summary)
+    if not keywords:
+        return []
+    excluded = set(exclude_ids)
+    scored: list[tuple[int, BasisEntry]] = []
+    for entry in basis.entries:
+        if entry.id in excluded or not entry.name:
+            continue
+        score = sum(1 for word in keywords if word in entry.name)
+        if score > 0:
+            scored.append((score, entry))
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    return [entry for _score, entry in scored[:_TITLE_MATCH_MAX_ENTRIES]]
+
+
+def _build_keyword_candidate_bases(
+    keyword_entries: list[BasisEntry],
+    basis_contents: dict[uuid.UUID, str],
+) -> list[dict[str, Any]]:
+    """标题预筛条目转 P2 候选（无正文的跳过）。"""
+    candidates: list[dict[str, Any]] = []
+    for entry in keyword_entries:
+        content = basis_contents.get(entry.id)
+        if not content:
+            continue
+        candidates.append(
+            {
+                "entry_id": entry.id,
+                "code": entry.code,
+                "name": entry.name,
+                "length": len(content),
+                "digest": content[:300],
+            }
+        )
+    return candidates
+
+
 async def _select_key_bases(
     document_summary: str,
     candidate_bases: list[dict[str, Any]],
@@ -791,15 +1025,17 @@ async def _select_key_bases(
         prompt = build_basis_selection_prompt(
             document_summary=document_summary, candidate_bases=candidate_bases
         )
-        raw, model_name = await _call_llm_with_retry(prompt)
+        raw, model_name = await _call_llm_with_retry(prompt, expected_keys=["selected"])
     except (LLMConfigError, LLMOutputError, LLMProviderError, LLMRateLimitError) as exc:
         logger.warning(
             "basis selection llm failed, degrade to top candidates",
             extra={"component": "quality", "error": str(exc)},
         )
-        top = candidate_bases[:MAX_CONTENT_COMPARE_BASES]
+        top = _rank_candidates_by_relevance(document_summary, candidate_bases)[
+            :MAX_CONTENT_COMPARE_BASES
+        ]
         return [
-            {**item, "reason": "AI 筛选不可用，按候选顺序取前 N 份"}
+            {**item, "reason": "AI 筛选不可用，已按与文档主题相关性排序取前 N 份"}
             for item in top
         ], None
     selected = raw.get("selected") or []
@@ -827,8 +1063,13 @@ async def _compare_basis_contents(
     basis_contents: dict[uuid.UUID, str],
     reference_items: list[ReferenceCheckItem],
     focus_points: str | None,
+    job_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    """P3：逐份关键依据与验证文档正文比对（并发 2，限流重试）。"""
+    """P3：逐份关键依据与验证文档正文比对（并发 2，限流重试）。
+
+    job_id 传入时逐段上报进度：分块比对可达 10-30 分钟，且进度更新同时
+    续期 Redis 任务键（TTL 600s），长时间静默会让前端轮询 404。
+    """
     if not validation_text or not key_bases:
         return []
     semaphore = asyncio.Semaphore(2)
@@ -838,25 +1079,46 @@ async def _compare_basis_contents(
         basis_text = basis_contents.get(entry_id) or ""
         if not basis_text:
             return []
-        prompt = build_content_compare_prompt(
-            validation_text=validation_text,
-            basis_name=basis.get("name") or "",
-            basis_code=basis.get("code") or "",
-            basis_text=basis_text,
-            focus_points=focus_points,
-        )
+        # 超长验证文档分块逐段比对（5 万字方案不再只比前 1.2 万字）；
+        # 分块超上限时取开头主体 + 末尾块（结论/判定标准常在尾部）
+        chunks = split_chunks(validation_text)
+        if len(chunks) > _MAX_COMPARE_CHUNKS_PER_BASIS:
+            chunks = (
+                chunks[: _MAX_COMPARE_CHUNKS_PER_BASIS - 1] + [chunks[-1]]
+            )
+        rows: list[Any] = []
         async with semaphore:
-            raw, _model = await _call_llm_with_retry(prompt)
-        rows = raw.get("findings") or []
-        if not isinstance(rows, list):
-            return []
+            for chunk_no, chunk in enumerate(chunks, start=1):
+                if job_id:
+                    await _report_progress(
+                        job_id,
+                        f"正在比对依据《{basis.get('name') or basis.get('code')}》"
+                        f"第 {chunk_no}/{len(chunks)} 段…",
+                    )
+                prompt = build_content_compare_prompt(
+                    validation_text=chunk["text"],
+                    basis_name=basis.get("name") or "",
+                    basis_code=basis.get("code") or "",
+                    basis_text=basis_text,
+                    focus_points=focus_points,
+                )
+                raw, _model = await _call_llm_with_retry(prompt)
+                chunk_rows = raw.get("findings") or []
+                if isinstance(chunk_rows, list):
+                    rows.extend(chunk_rows)
         compact_basis = re.sub(r"\s+", "", basis_text)
+        seen_quotes: set[tuple[str, str]] = set()
         results: list[dict[str, Any]] = []
         for item in rows:
             if not isinstance(item, dict):
                 continue
             validation_quote = str(item.get("validation_quote") or "")[:300]
             basis_quote = str(item.get("basis_quote") or "")[:300]
+            # 相邻分块有重叠，同一条矛盾可能被重复报出
+            dedup_key = (validation_quote[:100], basis_quote[:100])
+            if dedup_key in seen_quotes:
+                continue
+            seen_quotes.add(dedup_key)
             severity = item.get("severity", "medium")
             if severity not in SEVERITY_LEVELS:
                 severity = "medium"
@@ -1006,8 +1268,14 @@ def _extract_quality_keywords(
     return keywords[:3]
 
 
-async def _call_llm_with_retry(prompt: str) -> tuple[dict[str, Any], str | None]:
-    """调用 LLM 语义审核；LLMRateLimitError 指数退避重试，耗尽后原样抛出。"""
+async def _call_llm_with_retry(
+    prompt: str, expected_keys: list[str] | None = None
+) -> tuple[dict[str, Any], str | None]:
+    """调用 LLM 语义审核；LLMRateLimitError 指数退避重试，耗尽后原样抛出。
+
+    expected_keys 按调用点的输出契约传入：P1/P3 返回 findings，P2 返回 selected，
+    校验错键会让该环节永远失败并静默降级。
+    """
     config = await get_config("text")
     model_name = getattr(config, "model_name", None)
     raw: dict[str, Any] = {}
@@ -1015,7 +1283,7 @@ async def _call_llm_with_retry(prompt: str) -> tuple[dict[str, Any], str | None]
         try:
             raw = await llm_client.chat_json(
                 [{"role": "user", "content": prompt}],
-                expected_keys=["findings"],
+                expected_keys=expected_keys or ["findings"],
                 temperature=0.2,
             )
             return raw, model_name
@@ -1197,3 +1465,36 @@ def build_review_list_item(
         updated_at=record.updated_at,
     )
     return item.model_dump(mode="json")
+
+
+async def reconcile_orphaned_reviews(db: AsyncSession) -> int:
+    """启动对账：processing 但后台 job 已死的记录翻为 failed。
+
+    服务重启/进程被杀会留下永久 processing 的孤儿记录（job 与心跳随
+    进程消失，无任何收尾）；与 procurement 的 reset_interrupted_syncs
+    同一模式。返回翻失败的记录数。
+    """
+    result = await db.execute(
+        select(ValidationReviewRecord).where(
+            ValidationReviewRecord.status == STATUS_PROCESSING
+        )
+    )
+    orphans = result.scalars().all()
+    flipped = 0
+    for record in orphans:
+        job_id = record.job_id or ""
+        if job_id and await is_job_running(job_id):
+            continue  # job 真的在跑（心跳存活），不动
+        record.status = STATUS_FAILED
+        record.error_message = "审核进程被中断（服务重启），请重新发起审核"
+        flipped += 1
+    if flipped:
+        await db.commit()
+    if flipped or orphans:
+        logger.info(
+            "validation review orphan reconciliation: %s flipped / %s scanned",
+            flipped,
+            len(orphans),
+            extra={"component": "quality"},
+        )
+    return flipped

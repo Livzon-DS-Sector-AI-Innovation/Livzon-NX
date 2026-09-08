@@ -21,6 +21,11 @@ import type {
   QcValidationFieldsResult,
   QcValidationRecordsResult,
   QcValidationYearStatus,
+  AnomalyReportFieldsResult,
+  AnomalyReportRecordsResult,
+  AnomalyReportYearStatus,
+  AnomalyAnalysisStatus,
+  AnomalyDashboardData,
   InspectionFeishuFieldMeta,
   InspectionFeishuFieldsResult,
   ValidationReviewJobStatus,
@@ -173,6 +178,9 @@ export async function fetchMpaDashboard(
         first_notification_sent_count: 0,
         deduplicated_notification_count: 0,
         failed_notification_count: 0,
+        trend_ai_completed_count: 0,
+        trend_ai_pending_count: 0,
+        trend_alert_metric_count: 0,
         unmapped_notification_count: 0,
       },
     },
@@ -205,6 +213,9 @@ export async function fetchMvtDashboard(): Promise<QualityInspectionDashboardApi
         first_notification_sent_count: 0,
         deduplicated_notification_count: 0,
         failed_notification_count: 0,
+        trend_ai_completed_count: 0,
+        trend_ai_pending_count: 0,
+        trend_alert_metric_count: 0,
         unmapped_notification_count: 0,
       },
     },
@@ -241,6 +252,9 @@ export async function fetchLftDashboard(
         first_notification_sent_count: 0,
         deduplicated_notification_count: 0,
         failed_notification_count: 0,
+        trend_ai_completed_count: 0,
+        trend_ai_pending_count: 0,
+        trend_alert_metric_count: 0,
         unmapped_notification_count: 0,
       },
     },
@@ -277,6 +291,9 @@ export async function fetchDlsDashboard(
         first_notification_sent_count: 0,
         deduplicated_notification_count: 0,
         failed_notification_count: 0,
+        trend_ai_completed_count: 0,
+        trend_ai_pending_count: 0,
+        trend_alert_metric_count: 0,
         unmapped_notification_count: 0,
       },
     },
@@ -312,6 +329,9 @@ export async function fetchLkmsDashboard(
         first_notification_sent_count: 0,
         deduplicated_notification_count: 0,
         failed_notification_count: 0,
+        trend_ai_completed_count: 0,
+        trend_ai_pending_count: 0,
+        trend_alert_metric_count: 0,
         unmapped_notification_count: 0,
       },
     },
@@ -348,6 +368,9 @@ export async function fetchFormulationsDashboard(
         first_notification_sent_count: 0,
         deduplicated_notification_count: 0,
         failed_notification_count: 0,
+        trend_ai_completed_count: 0,
+        trend_ai_pending_count: 0,
+        trend_alert_metric_count: 0,
         unmapped_notification_count: 0,
       },
     },
@@ -384,6 +407,9 @@ export async function fetchBbasDashboard(
         first_notification_sent_count: 0,
         deduplicated_notification_count: 0,
         failed_notification_count: 0,
+        trend_ai_completed_count: 0,
+        trend_ai_pending_count: 0,
+        trend_alert_metric_count: 0,
         unmapped_notification_count: 0,
       },
     },
@@ -420,6 +446,9 @@ export async function fetchTryptophanDashboard(
         first_notification_sent_count: 0,
         deduplicated_notification_count: 0,
         failed_notification_count: 0,
+        trend_ai_completed_count: 0,
+        trend_ai_pending_count: 0,
+        trend_alert_metric_count: 0,
         unmapped_notification_count: 0,
       },
     },
@@ -456,6 +485,9 @@ export async function fetchWaterDashboard(
         first_notification_sent_count: 0,
         deduplicated_notification_count: 0,
         failed_notification_count: 0,
+        trend_ai_completed_count: 0,
+        trend_ai_pending_count: 0,
+        trend_alert_metric_count: 0,
         unmapped_notification_count: 0,
       },
     },
@@ -1097,6 +1129,80 @@ export async function fetchQcValidationShareLinks(
 ): Promise<Record<string, string>> {
   const res = await fetch(
     `/api/v1/quality/validation-qc/records/share-links?year=${year}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: { record_ids: recordIds } }),
+    }
+  )
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return (json.data?.record_share_links ?? {}) as Record<string, string>
+}
+
+// ---- 成品异常报告（按年分表） ----
+
+export async function fetchAnomalyReportYears(): Promise<AnomalyReportYearStatus[]> {
+  const res = await fetch('/api/v1/quality/finished-product-anomaly/years')
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return (json.data?.years ?? []) as AnomalyReportYearStatus[]
+}
+
+/** 成品异常 AI 仪表盘聚合（year 不传则聚合全部年份） */
+export async function fetchAnomalyDashboard(year?: number): Promise<AnomalyDashboardData> {
+  const query = year ? `?year=${year}` : ''
+  const res = await fetch(`/api/v1/quality/finished-product-anomaly/dashboard${query}`)
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return json.data as AnomalyDashboardData
+}
+
+/** 成品异常 AI 分析后台任务进度 */
+export async function fetchAnomalyAnalysisStatus(
+  jobId: string
+): Promise<AnomalyAnalysisStatus> {
+  const res = await fetch(
+    `/api/v1/quality/finished-product-anomaly/analysis/status?job_id=${encodeURIComponent(jobId)}`
+  )
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return json.data as AnomalyAnalysisStatus
+}
+
+export async function fetchAnomalyReportFields(
+  year: number
+): Promise<AnomalyReportFieldsResult> {
+  const res = await fetch(`/api/v1/quality/finished-product-anomaly/fields?year=${year}`)
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return json.data as AnomalyReportFieldsResult
+}
+
+export async function fetchAnomalyReportRecords(
+  year: number,
+  params?: { keyword?: string; page?: number; page_size?: number }
+): Promise<AnomalyReportRecordsResult> {
+  const searchParams = new URLSearchParams()
+  searchParams.set('year', String(year))
+  if (params?.keyword) searchParams.set('keyword', params.keyword)
+  if (params?.page) searchParams.set('page', String(params.page))
+  if (params?.page_size) searchParams.set('page_size', String(params.page_size))
+  const res = await fetch(
+    `/api/v1/quality/finished-product-anomaly/records?${searchParams.toString()}`
+  )
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return json.data as AnomalyReportRecordsResult
+}
+
+/** 批量生成成品异常报告记录分享链接（record_id → 飞书记录链接），用于行级跳转 */
+export async function fetchAnomalyReportShareLinks(
+  year: number,
+  recordIds: string[]
+): Promise<Record<string, string>> {
+  const res = await fetch(
+    `/api/v1/quality/finished-product-anomaly/records/share-links?year=${year}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -97,6 +97,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception:
         logger.exception("Failed to reset interrupted procurement material sync status")
 
+    # 验证 AI 审核：重启会杀死后台审核 job，孤儿 processing 翻 failed
+    from app.modules.quality.service.validation_review import (
+        reconcile_orphaned_reviews,
+    )
+
+    try:
+        async with async_session_factory() as session:
+            await reconcile_orphaned_reviews(session)
+    except Exception:
+        logger.exception("Validation review orphan reconciliation failed (non-fatal)")
+
     from app.modules.procurement.api import clear_stale_material_sync_lock
 
     await clear_stale_material_sync_lock()

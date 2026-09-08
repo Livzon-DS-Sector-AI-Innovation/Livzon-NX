@@ -137,7 +137,6 @@ DEFAULT_QUALITY_FEISHU_ENTITIES: list[tuple[str, str, str, int]] = [
     ("return_ledger", "退回台账", "退货与召回管理", 210),
     ("return_recall_ledger", "退货/召回台账", "退货与召回管理", 211),
     # 供应商管理
-    ("supplier_ledger", "供应商台账", "供应商管理", 214),
     ("supplier_qualification", "供应商资质", "供应商管理", 215),
     # 产品质量客户标准
     ("product_quality_ledger", "产品质量台账", "产品质量", 219),
@@ -149,6 +148,12 @@ DEFAULT_QUALITY_FEISHU_ENTITIES: list[tuple[str, str, str, int]] = [
     ("product_quality_yslkms", "盐酸林可霉素", "产品质量", 260),
     ("product_quality_bbas", "L-苯丙氨酸", "产品质量", 270),
     ("product_quality_sas", "L-色氨酸", "产品质量", 280),
+    # 成品异常报告：按年分表，2025/2026 已固定绑定专用 Base；
+    # 其余年份由用户在质量设置中自行绑定
+    ("finished_product_anomaly_2025", "成品异常报告-2025年", "成品异常报告", 281),
+    ("finished_product_anomaly_2026", "成品异常报告-2026年", "成品异常报告", 282),
+    ("finished_product_anomaly_2027", "成品异常报告-2027年", "成品异常报告", 283),
+    ("finished_product_anomaly_2028", "成品异常报告-2028年", "成品异常报告", 284),
     # 质量检验 - 成品检验补充真实子表
     ("qc_finished_bbas_hanguang_k1", "汉光（K1）", "成品检验", 294),
     ("qc_finished_bbas_weiduo_k2", "维多（K2）", "成品检验", 295),
@@ -232,8 +237,6 @@ PUSH_ONLY_QUALITY_FEISHU_ENTITIES = {
     "inspection_finished_product",
     "inspection_solid_material",
     "inspection_liquid_material",
-    "supplier_ledger",
-    "supplier_qualification",
     "complaint_ledger",
     "return_recall_ledger",
     "product_quality_ledger",
@@ -246,6 +249,9 @@ LEGACY_PUSH_ONLY_QUALITY_FEISHU_ENTITIES = {
     "liquid_material_inspections",
     "lab_items",
     "lab_instruments",
+    # 供应商台账页面已下线（供应商管理首页入口即供应商资质），
+    # 飞书实体配置随 ensure 软删，保留 push-only 默认方向归类
+    "supplier_ledger",
 }
 
 
@@ -355,6 +361,23 @@ QUALITY_FEISHU_ENTITY_ENV_PREFILLS: dict[str, dict[str, str]] = {
         "table_name": "2026年",
         "source_note": (
             "QC验证按年分表，2026 年已固定绑定飞书源表；其余年份请在同步设置中配置。"
+        ),
+    },
+    # 成品异常报告 2025/2026 年表固定绑定专用 Base；其余年份由用户在同步设置中自行绑定
+    "finished_product_anomaly_2025": {
+        "app_token": "NIEJbSxyIaHBp4shIPjcpVS2nZe",
+        "table_id": "tblivbUvnYDjATiL",
+        "table_name": "2025年",
+        "source_note": (
+            "成品异常报告按年分表，2025 年已固定绑定飞书源表；其余年份请在同步设置中配置。"
+        ),
+    },
+    "finished_product_anomaly_2026": {
+        "app_token": "NIEJbSxyIaHBp4shIPjcpVS2nZe",
+        "table_id": "tblYanzll8A5rGro",
+        "table_name": "2026年",
+        "source_note": (
+            "成品异常报告按年分表，2026 年已固定绑定飞书源表；其余年份请在同步设置中配置。"
         ),
     },
     # OOS/OOT 管理（复用主 Base QUALITY_FEISHU_APP_TOKEN）
@@ -1360,6 +1383,7 @@ async def ensure_quality_feishu_entity_settings(
             "qc_liquid_ledger",
             "qc_solid_inspection",
             "qc_liquid_inspection",
+            "supplier_ledger",
         }
 
         for legacy_entity_code in legacy_entity_codes:

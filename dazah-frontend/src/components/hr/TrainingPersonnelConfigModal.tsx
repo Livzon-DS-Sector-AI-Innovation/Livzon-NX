@@ -51,6 +51,59 @@ function aliasDept(name: string): string {
   return resolveTrainingDept(name, undefined, []) || name
 }
 
+// ── 重名人员选择支持：option value 为唯一内部键，label/签到表只呈现姓名 ──
+
+/** 部门成员按姓名分组计数：同名多于 1 人时，该姓名的选项需要唯一内部键区分 */
+export function buildNameCounts(members: Member[]): Map<string, number> {
+  const counts = new Map<string, number>()
+  members.forEach((m) => counts.set(m.name, (counts.get(m.name) || 0) + 1))
+  return counts
+}
+
+/** option 内部 value：不重名 → 纯姓名；重名 → `姓名|工号`（无工号用出现序号 `姓名|#n`）。界面上不显示 */
+export function memberOptionValue(members: Member[], idx: number): string {
+  const m = members[idx]
+  if (!m) return ''
+  const dup = (buildNameCounts(members).get(m.name) || 0) > 1
+  if (!dup) return m.name
+  const occ = members.slice(0, idx).filter((x) => x.name === m.name).length
+  return m.employee_no ? `${m.name}|${m.employee_no}` : `${m.name}|#${occ + 1}`
+}
+
+/** 下拉展示文本：一律纯姓名（重名也不加工号），符合"只呈现姓名"要求 */
+export function memberOptionLabel(m: Member): string {
+  return m.name
+}
+
+/** 解析 Select 值 → 人员项：成员选项按 value 匹配部门候选人；手动输入取纯文本姓名 */
+export function resolvePersonnelValue(
+  value: string,
+  members: Member[],
+  prevInRow: TrainingPersonnelItem[],
+  rowDept: string,
+): TrainingPersonnelItem {
+  const byValue = members.findIndex((m, i) => memberOptionValue(members, i) === value)
+  if (byValue >= 0) {
+    const m = members[byValue]
+    return { name: m.name, employee_number: m.employee_no, department: rowDept }
+  }
+  const prev = prevInRow.find((p) => p.name === value)
+  if (prev) return prev
+  return { name: value, department: rowDept }
+}
+
+/** 已存人员项 → Select 回显 value：能匹配到部门候选人的用其内部 value，其余原样姓名（手动输入项）；
+ *  occIdx 为同名项中的出现序号，保证同名且都无工号的两条历史数据也能回显为两个标签 */
+export function itemToOptionValue(p: TrainingPersonnelItem, members: Member[], occIdx = 0): string {
+  const matches = members.filter(
+    (m) =>
+      m.name === p.name &&
+      (!!p.employee_number && !!m.employee_no ? m.employee_no === p.employee_number : true),
+  )
+  const m = matches[occIdx] ?? matches[0]
+  return m ? memberOptionValue(members, members.indexOf(m)) : p.name
+}
+
 /** 公司级：一级部门罗列，有子部门的展开为子部门行；应用丢弃/合并/归并规则并去重；
  *  父部门行仅在确有直属人员时保留（如 102车间/201车间 已拆分为子车间，不再显示空父行） */
 function buildCompanyRows(
@@ -311,19 +364,12 @@ export default function TrainingPersonnelConfigModal({ open, level, scopeDept, o
     setEditPersonnel((prev) => prev.filter((p) => p.department !== dept))
   }
 
-  const handleRowChange = (row: string, names: string[]) => {
+  const handleRowChange = (row: string, values: string[]) => {
     setEditPersonnel((prev) => {
       const others = prev.filter((p) => p.department !== row)
       const prevInRow = prev.filter((p) => p.department === row)
-      const memberMap = new Map<string, Member>((membersByDept[candidateSource[row] ?? aliasDept(row)] || []).map((m) => [m.name, m]))
-      const next = names.map(
-        (n) =>
-          prevInRow.find((p) => p.name === n) || {
-            name: n,
-            employee_number: memberMap.get(n)?.employee_no,
-            department: row,
-          },
-      )
+      const members = membersByDept[candidateSource[row] ?? aliasDept(row)] || []
+      const next = values.map((v) => resolvePersonnelValue(v, members, prevInRow, row))
       return [...others, ...next]
     })
   }
@@ -357,14 +403,24 @@ export default function TrainingPersonnelConfigModal({ open, level, scopeDept, o
       render: (_: unknown, record: { dept: string }) => {
         const deptMembers = membersByDept[candidateSource[record.dept] ?? aliasDept(record.dept)] || []
         const hasMembers = deptMembers.length > 0
+        // 回显 value 需与 options 内部 value 对齐；同名项按出现序号取对应候选人
+        const rowItems = editPersonnel.filter((p) => p.department === record.dept)
+        const occCount: Record<string, number> = {}
+        const selectedValues = rowItems.map((p) => {
+          occCount[p.name] = occCount[p.name] == null ? 0 : occCount[p.name] + 1
+          return itemToOptionValue(p, deptMembers, occCount[p.name])
+        })
         return (
           <Select
             mode="tags"
             style={{ width: '100%' }}
             placeholder={hasMembers ? '选择参训人员（可手动输入）' : '手动输入参训人员姓名'}
-            value={editPersonnel.filter((p) => p.department === record.dept).map((p) => p.name)}
+            value={selectedValues}
             onChange={(names: string[]) => handleRowChange(record.dept, names)}
-            options={deptMembers.map((m) => ({ value: m.name, label: m.name }))}
+            options={deptMembers.map((m, i) => ({
+              value: memberOptionValue(deptMembers, i),
+              label: memberOptionLabel(m),
+            }))}
             showSearch
             filterOption={(input, option) => matchPinyin(String(option?.value ?? ''), input)}
             notFoundContent={hasMembers ? '无匹配人员，可手动输入' : '该部门无在职联系人，请手动输入姓名'}

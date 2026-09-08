@@ -284,7 +284,9 @@ async def test_pull_incremental_skips_below_watermark(
     assert result["synced"] == 1
     assert result["removed"] == 0
     assert db.added and db.added[0].feishu_record_id == "rec-3"
-    assert http.calls[0][0] == "POST"  # 增量轮走 search
+    # 增量轮同样走 GET /records（search 的 sort/filter 不支持自动字段，
+    # 实测 InvalidSort；靠客户端水位过滤取增量）
+    assert http.calls[0][0] == "GET"
 
 
 @pytest.mark.anyio

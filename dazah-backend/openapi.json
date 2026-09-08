@@ -43719,6 +43719,29 @@
           "summary": {
             "$ref": "#/components/schemas/InspectionDashboardChartSummary"
           },
+          "trend_ai": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InspectionDashboardTrendAI"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trend_ai_status": {
+            "default": "none",
+            "title": "Trend Ai Status",
+            "type": "string"
+          },
+          "trend_anomalies": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/InspectionDashboardTrendAnomaly"
+            },
+            "title": "Trend Anomalies",
+            "type": "array"
+          },
           "upper_sigma_series": {
             "items": {
               "anyOf": [
@@ -43952,6 +43975,21 @@
             "title": "Total Records",
             "type": "integer"
           },
+          "trend_ai_completed_count": {
+            "default": 0,
+            "title": "Trend Ai Completed Count",
+            "type": "integer"
+          },
+          "trend_ai_pending_count": {
+            "default": 0,
+            "title": "Trend Ai Pending Count",
+            "type": "integer"
+          },
+          "trend_alert_metric_count": {
+            "default": 0,
+            "title": "Trend Alert Metric Count",
+            "type": "integer"
+          },
           "unmapped_notification_count": {
             "title": "Unmapped Notification Count",
             "type": "integer"
@@ -43975,6 +44013,173 @@
           "unmapped_notification_count"
         ],
         "title": "InspectionDashboardSummary",
+        "type": "object"
+      },
+      "InspectionDashboardTrendAI": {
+        "description": "趋势 AI 解读结论（经白名单校验后），仅作辅助展示。",
+        "properties": {
+          "analyzed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analyzed At"
+          },
+          "confidence": {
+            "default": "low",
+            "title": "Confidence",
+            "type": "string"
+          },
+          "highlight_batches": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Highlight Batches",
+            "type": "array"
+          },
+          "outlook": {
+            "$ref": "#/components/schemas/InspectionDashboardTrendAIOutlook",
+            "default": {
+              "direction": "flat",
+              "risk": ""
+            }
+          },
+          "period": {
+            "default": "",
+            "title": "Period",
+            "type": "string"
+          },
+          "recommendation": {
+            "default": "",
+            "title": "Recommendation",
+            "type": "string"
+          },
+          "signals": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/InspectionDashboardTrendAISignal"
+            },
+            "title": "Signals",
+            "type": "array"
+          },
+          "summary": {
+            "default": "",
+            "title": "Summary",
+            "type": "string"
+          },
+          "trend_reading": {
+            "default": "",
+            "title": "Trend Reading",
+            "type": "string"
+          }
+        },
+        "title": "InspectionDashboardTrendAI",
+        "type": "object"
+      },
+      "InspectionDashboardTrendAIOutlook": {
+        "properties": {
+          "batches_to_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batches To Limit"
+          },
+          "direction": {
+            "default": "flat",
+            "title": "Direction",
+            "type": "string"
+          },
+          "risk": {
+            "default": "",
+            "title": "Risk",
+            "type": "string"
+          }
+        },
+        "title": "InspectionDashboardTrendAIOutlook",
+        "type": "object"
+      },
+      "InspectionDashboardTrendAISignal": {
+        "properties": {
+          "batch_no": {
+            "default": "",
+            "title": "Batch No",
+            "type": "string"
+          },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          },
+          "rule_type": {
+            "default": "",
+            "title": "Rule Type",
+            "type": "string"
+          },
+          "severity": {
+            "default": "medium",
+            "title": "Severity",
+            "type": "string"
+          }
+        },
+        "title": "InspectionDashboardTrendAISignal",
+        "type": "object"
+      },
+      "InspectionDashboardTrendAnomaly": {
+        "description": "确定性趋势规则命中的单条异常事实。",
+        "properties": {
+          "affected_batches": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Affected Batches",
+            "type": "array"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "end_batch": {
+            "title": "End Batch",
+            "type": "string"
+          },
+          "evidence": {
+            "additionalProperties": true,
+            "title": "Evidence",
+            "type": "object"
+          },
+          "rule_type": {
+            "title": "Rule Type",
+            "type": "string"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          },
+          "start_batch": {
+            "title": "Start Batch",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_type",
+          "severity",
+          "start_batch",
+          "end_batch",
+          "description",
+          "evidence"
+        ],
+        "title": "InspectionDashboardTrendAnomaly",
         "type": "object"
       },
       "InspectionFeishuRecordBody": {
@@ -75200,6 +75405,25 @@
         ],
         "title": "TrainingType",
         "type": "string"
+      },
+      "TrendAIReanalyzeRequest": {
+        "description": "手动「再次分析」当月趋势 AI 的请求体。",
+        "properties": {
+          "entity_code": {
+            "title": "Entity Code",
+            "type": "string"
+          },
+          "metric_key": {
+            "title": "Metric Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entity_code",
+          "metric_key"
+        ],
+        "title": "TrendAIReanalyzeRequest",
+        "type": "object"
       },
       "TrueFalseQuestion": {
         "description": "判断题",
@@ -167782,6 +168006,939 @@
         ]
       }
     },
+    "/api/v1/quality/finished-product-anomaly/analysis/run": {
+      "post": {
+        "operationId": "api_run_anomaly_analysis_api_v1_quality_finished_product_anomaly_analysis_run_post",
+        "parameters": [
+          {
+            "description": "只分析指定年份；不传则分析全部年份",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "只分析指定年份；不传则分析全部年份",
+              "title": "Year"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Run Anomaly Analysis Api V1 Quality Finished Product Anomaly Analysis Run Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "触发成品异常记录 AI 分类（后台 job，增量去重）",
+        "tags": [
+          "质量管理",
+          "Quality-Finished-Product-Anomaly"
+        ]
+      }
+    },
+    "/api/v1/quality/finished-product-anomaly/analysis/status": {
+      "get": {
+        "operationId": "api_get_anomaly_analysis_status_api_v1_quality_finished_product_anomaly_analysis_status_get",
+        "parameters": [
+          {
+            "description": "任务 ID",
+            "in": "query",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "description": "任务 ID",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Get Anomaly Analysis Status Api V1 Quality Finished Product Anomaly Analysis Status Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "查询成品异常 AI 分类任务进度",
+        "tags": [
+          "质量管理",
+          "Quality-Finished-Product-Anomaly"
+        ]
+      }
+    },
+    "/api/v1/quality/finished-product-anomaly/dashboard": {
+      "get": {
+        "operationId": "api_get_anomaly_dashboard_api_v1_quality_finished_product_anomaly_dashboard_get",
+        "parameters": [
+          {
+            "description": "年份；不传则聚合 2025-2028 全部已配置年份",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "年份；不传则聚合 2025-2028 全部已配置年份",
+              "title": "Year"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Get Anomaly Dashboard Api V1 Quality Finished Product Anomaly Dashboard Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "成品异常仪表盘聚合（按产品×异常类型，AI 分类结果关联）",
+        "tags": [
+          "质量管理",
+          "Quality-Finished-Product-Anomaly"
+        ]
+      }
+    },
+    "/api/v1/quality/finished-product-anomaly/fields": {
+      "get": {
+        "operationId": "api_get_anomaly_fields_api_v1_quality_finished_product_anomaly_fields_get",
+        "parameters": [
+          {
+            "description": "成品异常报告年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "default": 2025,
+              "description": "成品异常报告年度",
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Get Anomaly Fields Api V1 Quality Finished Product Anomaly Fields Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取成品异常报告字段元数据",
+        "tags": [
+          "质量管理",
+          "Quality-Finished-Product-Anomaly"
+        ]
+      }
+    },
+    "/api/v1/quality/finished-product-anomaly/records": {
+      "get": {
+        "operationId": "api_list_anomaly_records_api_v1_quality_finished_product_anomaly_records_get",
+        "parameters": [
+          {
+            "description": "成品异常报告年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "default": 2025,
+              "description": "成品异常报告年度",
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "关键词（按全部字段模糊匹配）",
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "关键词（按全部字段模糊匹配）",
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api List Anomaly Records Api V1 Quality Finished Product Anomaly Records Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取成品异常报告记录列表",
+        "tags": [
+          "质量管理",
+          "Quality-Finished-Product-Anomaly"
+        ]
+      },
+      "post": {
+        "operationId": "api_create_anomaly_record_api_v1_quality_finished_product_anomaly_records_post",
+        "parameters": [
+          {
+            "description": "成品异常报告年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "default": 2025,
+              "description": "成品异常报告年度",
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectionFeishuRecordBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Create Anomaly Record Api V1 Quality Finished Product Anomaly Records Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "新增成品异常报告记录（同步到多维表格）",
+        "tags": [
+          "质量管理",
+          "Quality-Finished-Product-Anomaly"
+        ]
+      }
+    },
+    "/api/v1/quality/finished-product-anomaly/records/share-links": {
+      "post": {
+        "operationId": "api_batch_create_anomaly_share_links_api_v1_quality_finished_product_anomaly_records_share_links_post",
+        "parameters": [
+          {
+            "description": "成品异常报告年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "default": 2025,
+              "description": "成品异常报告年度",
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectionFeishuRecordBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Batch Create Anomaly Share Links Api V1 Quality Finished Product Anomaly Records Share Links Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "批量生成成品异常报告记录分享链接（跳转飞书对应行）",
+        "tags": [
+          "质量管理",
+          "Quality-Finished-Product-Anomaly"
+        ]
+      }
+    },
+    "/api/v1/quality/finished-product-anomaly/records/{record_id}": {
+      "delete": {
+        "operationId": "api_delete_anomaly_record_api_v1_quality_finished_product_anomaly_records__record_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "成品异常报告年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "default": 2025,
+              "description": "成品异常报告年度",
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Delete Anomaly Record Api V1 Quality Finished Product Anomaly Records  Record Id  Delete"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除成品异常报告记录（同步到多维表格）",
+        "tags": [
+          "质量管理",
+          "Quality-Finished-Product-Anomaly"
+        ]
+      },
+      "get": {
+        "operationId": "api_get_anomaly_record_api_v1_quality_finished_product_anomaly_records__record_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "成品异常报告年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "default": 2025,
+              "description": "成品异常报告年度",
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Get Anomaly Record Api V1 Quality Finished Product Anomaly Records  Record Id  Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取成品异常报告记录详情",
+        "tags": [
+          "质量管理",
+          "Quality-Finished-Product-Anomaly"
+        ]
+      },
+      "put": {
+        "operationId": "api_update_anomaly_record_api_v1_quality_finished_product_anomaly_records__record_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "成品异常报告年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "default": 2025,
+              "description": "成品异常报告年度",
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectionFeishuRecordBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Update Anomaly Record Api V1 Quality Finished Product Anomaly Records  Record Id  Put"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "编辑成品异常报告记录（同步到多维表格）",
+        "tags": [
+          "质量管理",
+          "Quality-Finished-Product-Anomaly"
+        ]
+      }
+    },
+    "/api/v1/quality/finished-product-anomaly/records/{record_id}/attachments/{file_token}/content": {
+      "get": {
+        "operationId": "api_get_anomaly_attachment_content_api_v1_quality_finished_product_anomaly_records__record_id__attachments__file_token__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_token",
+            "required": true,
+            "schema": {
+              "title": "File Token",
+              "type": "string"
+            }
+          },
+          {
+            "description": "成品异常报告年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "default": 2025,
+              "description": "成品异常报告年度",
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Get Anomaly Attachment Content Api V1 Quality Finished Product Anomaly Records  Record Id  Attachments  File Token  Content Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "下载成品异常报告记录附件（后端代理，携带飞书 token）",
+        "tags": [
+          "质量管理",
+          "Quality-Finished-Product-Anomaly"
+        ]
+      }
+    },
+    "/api/v1/quality/finished-product-anomaly/records/{record_id}/attachments/{file_token}/preview": {
+      "get": {
+        "operationId": "api_get_anomaly_attachment_preview_api_v1_quality_finished_product_anomaly_records__record_id__attachments__file_token__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_token",
+            "required": true,
+            "schema": {
+              "title": "File Token",
+              "type": "string"
+            }
+          },
+          {
+            "description": "成品异常报告年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "default": 2025,
+              "description": "成品异常报告年度",
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Get Anomaly Attachment Preview Api V1 Quality Finished Product Anomaly Records  Record Id  Attachments  File Token  Preview Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "在线预览成品异常报告记录附件（图片/PDF 原样，office 转 PDF，inline 响应）",
+        "tags": [
+          "质量管理",
+          "Quality-Finished-Product-Anomaly"
+        ]
+      }
+    },
+    "/api/v1/quality/finished-product-anomaly/years": {
+      "get": {
+        "operationId": "api_get_anomaly_years_api_v1_quality_finished_product_anomaly_years_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Get Anomaly Years Api V1 Quality Finished Product Anomaly Years Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取成品异常报告年度表配置状态",
+        "tags": [
+          "质量管理",
+          "Quality-Finished-Product-Anomaly"
+        ]
+      }
+    },
     "/api/v1/quality/finished-product-inspections": {
       "get": {
         "operationId": "list_items_api_v1_quality_finished_product_inspections_get",
@@ -168825,6 +169982,66 @@
         "tags": [
           "质量管理",
           "Quality-Inspection-Submodules"
+        ]
+      }
+    },
+    "/api/v1/quality/inspection-dashboard/trend-ai/reanalyze": {
+      "post": {
+        "operationId": "api_reanalyze_trend_ai_api_v1_quality_inspection_dashboard_trend_ai_reanalyze_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrendAIReanalyzeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Reanalyze Trend Ai Api V1 Quality Inspection Dashboard Trend Ai Reanalyze Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "手动再次分析当月趋势 AI（页面刷新不会触发）",
+        "tags": [
+          "质量管理",
+          "Quality-Inspection-Feishu"
         ]
       }
     },

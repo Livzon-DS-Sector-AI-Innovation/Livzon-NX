@@ -269,20 +269,16 @@ async def _fetch_incremental_records(
     table_id: str,
     watermark: datetime | None,
 ) -> list[dict[str, Any]]:
-    """增量：search 单页按 last_modified_time 降序 + 水位过滤。
+    """增量：全量翻页（GET /records）+ 客户端水位过滤。
 
-    filter 对自动字段返回 InvalidFilter、且 search 翻页失效，故只取第一页
-    并按 record_id 去重；第 500 条之后的历史修改由每日全量兜底。
+    search 的 sort/filter 均不支持自动字段（InvalidSort/InvalidFilter）
+    且无 filter 翻页失效，无法在服务端按 last_modified_time 取增量；
+    故复用已验证的全量翻页拉取，仅把达到水位的行交给调用方写入。
+    表量级约束由 60s 增量轮 + 每日全量兜底的频率设计承担。
     """
-    data = await client.client.request(
-        "POST",
-        f"/bitable/v1/apps/{client.app_token}/tables/{table_id}/records/search",
-        params={"page_size": 500, "field_name_type": "name", "automatic_fields": True},
-        json={"sort": [{"field_name": "last_modified_time", "desc": True}]},
-        timeout=60.0,
-    )
+    records = await _fetch_full_records(client, table_id)
     merged: dict[str, dict[str, Any]] = {}
-    for record in data.get("items") or []:
+    for record in records:
         if not isinstance(record, dict):
             continue
         record_id = str(record.get("record_id") or "")

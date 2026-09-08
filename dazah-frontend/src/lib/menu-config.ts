@@ -464,7 +464,7 @@ export const moduleMenus: ModuleMenu[] = [
       },
       {
         key: "product-quality",
-        label: "产品质量回顾",
+        label: "产品质量",
         path: "/quality/product-quality",
         children: [
           { key: "product-quality-mfn", label: "霉酚酸", path: "/quality/product-quality/mfn" },
@@ -474,6 +474,14 @@ export const moduleMenus: ModuleMenu[] = [
           { key: "product-quality-yslkms", label: "盐酸林可霉素", path: "/quality/product-quality/yslkms" },
           { key: "product-quality-bbas", label: "L-苯丙氨酸", path: "/quality/product-quality/bbas" },
           { key: "product-quality-sas", label: "L-色氨酸", path: "/quality/product-quality/sas" },
+        ],
+      },
+      {
+        key: "anomaly-report",
+        label: "成品异常报告",
+        path: "/quality/anomaly-report",
+        children: [
+          { key: "anomaly-report-ledger", label: "异常台账", path: "/quality/anomaly-report/ledger" },
         ],
       },
       {

@@ -22,6 +22,9 @@ from app.modules.quality.service.inspection_finished_material import (
     FINISHED_PRODUCT_GROUP_ENTITY_MAP,
 )
 from app.modules.quality.service.inspection_helpers import _base_map, _pull_count
+from app.modules.quality.service.feishu_attachment_preview import (
+    resolve_preview_content,
+)
 from app.modules.quality.service.quality_feishu_material_groups import (
     MATERIAL_ENTITY_CODES,
 )
@@ -59,9 +62,16 @@ VALIDATION_QC_ENTITY_CODES: set[str] = {
     f"validation_qc_{year}" for year in range(2026, 2029)
 }
 
+# 质量管理-成品异常报告年度实体：共用同一套通用飞书记录读写能力
+FINISHED_PRODUCT_ANOMALY_ENTITY_CODES: set[str] = {
+    f"finished_product_anomaly_{year}" for year in range(2025, 2029)
+}
+
 # 通用飞书记录 CRUD 的完整实体白名单
 BITABLE_CRUD_ENTITY_CODES: set[str] = (
-    _INSPECTION_ENTITY_CODES | VALIDATION_QC_ENTITY_CODES
+    _INSPECTION_ENTITY_CODES
+    | VALIDATION_QC_ENTITY_CODES
+    | FINISHED_PRODUCT_ANOMALY_ENTITY_CODES
 )
 
 # 只读字段类型：通用表单不写入
@@ -315,7 +325,13 @@ async def get_inspection_feishu_record(
         app_id=runtime.app_id,
         app_secret=runtime.app_secret,
     )
-    record = await client.get_record(_entity_table_id(entity), record_id)
+    try:
+        record = await client.get_record(_entity_table_id(entity), record_id)
+    except RuntimeError as exc:
+        # 飞书 1254043：记录不存在或已被删除（含飞书侧删除与平台删除竞态）
+        if "1254043" in str(exc) or "RecordIdNotFound" in str(exc):
+            raise NotFoundException(resource="飞书记录", resource_id=str(record_id)) from exc
+        raise
     if not record or not record.get("record_id"):
         raise NotFoundException(resource="飞书记录", resource_id=str(record_id))
     remote_field_names = sorted(
@@ -650,3 +666,19 @@ async def get_inspection_feishu_attachment_content(
         )
     filename = str(attachment.get("name") or "attachment")
     return content, content_type, filename
+
+
+async def get_inspection_feishu_attachment_preview(
+    db: AsyncSession,
+    entity_code: str,
+    record_id: str,
+    file_token: str,
+) -> tuple[bytes, str, str]:
+    """附件在线预览内容（浏览器可直接呈现）：图片/PDF 原样，office 转 PDF。
+
+    附件归属校验与下载复用 get_inspection_feishu_attachment_content。
+    """
+    content, content_type, filename = await get_inspection_feishu_attachment_content(
+        db, entity_code, record_id, file_token
+    )
+    return resolve_preview_content(content, content_type, filename)
