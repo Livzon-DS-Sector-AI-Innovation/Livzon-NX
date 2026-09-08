@@ -10765,6 +10765,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/production/fermentation-board": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 发酵车间实时看板（计划驱动） */
+        get: operations["get_fermentation_board_api_v1_production_fermentation_board_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/production/fermentation/{record_id}": {
         parameters: {
             query?: never;
@@ -12734,6 +12751,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/production/schedule-excel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 排产计划存档列表 */
+        get: operations["list_schedule_excel_archives_api_v1_production_schedule_excel_get"];
+        put?: never;
+        /** 上传并存档排产计划 Excel */
+        post: operations["upload_schedule_excel_api_v1_production_schedule_excel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/schedule-excel/{archive_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 排产计划存档详情（含完整表格） */
+        get: operations["get_schedule_excel_archive_api_v1_production_schedule_excel__archive_id__get"];
+        put?: never;
+        post?: never;
+        /** 删除排产计划存档 */
+        delete: operations["delete_schedule_excel_archive_api_v1_production_schedule_excel__archive_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/schedule-excel/{archive_id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 下载排产 Excel 原件 */
+        get: operations["download_schedule_excel_file_api_v1_production_schedule_excel__archive_id__file_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/production/seed-cultures": {
         parameters: {
             query?: never;
@@ -12955,6 +13025,41 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/tank-maintenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 发酵罐检修标注列表（进行中） */
+        get: operations["list_tank_maintenance_api_v1_production_tank_maintenance_get"];
+        put?: never;
+        /** 标记发酵罐检修（同罐进行中则更新） */
+        post: operations["mark_tank_maintenance_api_v1_production_tank_maintenance_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/tank-maintenance/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 解除发酵罐检修标注 */
+        delete: operations["remove_tank_maintenance_api_v1_production_tank_maintenance__item_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -30414,6 +30519,14 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_upload_schedule_excel_api_v1_production_schedule_excel_post */
+        Body_upload_schedule_excel_api_v1_production_schedule_excel_post: {
+            /**
+             * File
+             * @description 排产计划 .xlsx / .xls 文件
+             */
+            file: string;
+        };
         /** Body_upload_task_photo_api_v1_equipment_inspection_tasks__task_id__photos_post */
         Body_upload_task_photo_api_v1_equipment_inspection_tasks__task_id__photos_post: {
             /**
@@ -44251,6 +44364,19 @@ export interface components {
              * @description 父位置ID
              */
             parent_id?: string | null;
+        };
+        /** MaintenanceBody */
+        MaintenanceBody: {
+            /**
+             * Reason
+             * @description 检修原因
+             */
+            reason: string;
+            /**
+             * Tank No
+             * @description 罐号
+             */
+            tank_no: string;
         };
         /**
          * MaintenancePlanCreate
@@ -86512,6 +86638,37 @@ export interface operations {
             };
         };
     };
+    get_fermentation_board_api_v1_production_fermentation_board_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_fermentation_record_api_v1_production_fermentation__record_id__get: {
         parameters: {
             query?: never;
@@ -91769,6 +91926,174 @@ export interface operations {
             };
         };
     };
+    list_schedule_excel_archives_api_v1_production_schedule_excel_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_schedule_excel_api_v1_production_schedule_excel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_schedule_excel_api_v1_production_schedule_excel_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_schedule_excel_archive_api_v1_production_schedule_excel__archive_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                archive_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_schedule_excel_archive_api_v1_production_schedule_excel__archive_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                archive_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_schedule_excel_file_api_v1_production_schedule_excel__archive_id__file_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                archive_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_seed_cultures_api_v1_production_seed_cultures_get: {
         parameters: {
             query?: {
@@ -92528,6 +92853,105 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tank_maintenance_api_v1_production_tank_maintenance_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_tank_maintenance_api_v1_production_tank_maintenance_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaintenanceBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_tank_maintenance_api_v1_production_tank_maintenance__item_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
