@@ -738,21 +738,11 @@ export default function TrainingSignInTabsClient() {
     }))
   }
 
-  // 选择配置后加载班组人员（支持多选：多个班组人员合并去重后一起加载）
+  // 选择配置后加载班组人员（支持多选：多个班组人员不去重合并，重名多条全部录入）
   const handleSelectConfigs = (configIds: string[]) => {
     setSelectedConfigIds(configIds)
     const selected = personnelConfigs.filter((c) => configIds.includes(c.id))
-    const seen = new Set<string>()
-    const merged: TrainingPersonnelItem[] = []
-    selected.forEach((cfg) => {
-      ;(cfg.personnel || []).forEach((p) => {
-        const key = `${p.name}|${p.department || ''}`
-        if (!seen.has(key)) {
-          seen.add(key)
-          merged.push(p)
-        }
-      })
-    })
+    const merged: TrainingPersonnelItem[] = selected.flatMap((cfg) => cfg.personnel || [])
     if (merged.length) {
       applyPersonnel(merged)
       const names = selected.map((c) => c.config_name).join('、')
@@ -760,7 +750,7 @@ export default function TrainingSignInTabsClient() {
     }
   }
 
-  // 拉取入职一周内的新员工（按 factory_entry_date 判定，姓名+部门去重）
+  // 拉取入职一周内的新员工（按 factory_entry_date 判定；不去重，重名新员工同样全部追加）
   const handleFetchNewHires = async () => {
     setFetchingNewHires(true)
     try {
@@ -776,18 +766,13 @@ export default function TrainingSignInTabsClient() {
         employee_number: h.employee_number || undefined,
         department: h.department,
       }))
-      // 与已有人员合并去重（按姓名+部门）
-      const existingNames = new Set(
-        (session.employee_names || []).map((n) => n?.trim()).filter(Boolean)
-      )
+      // 与已有人员合并（不去重：与现有名单重名的新员工也全部录入）
       const merged: TrainingPersonnelItem[] = [
         ...(session.employee_names || []).map((name) => ({
           name,
           department: (session.employee_dept_map || {})[name],
         })),
-        ...newItems.filter(
-          (item) => !existingNames.has(item.name)
-        ),
+        ...newItems,
       ]
       applyPersonnel(merged)
       const addedCount = merged.length - (session.employee_names || []).length

@@ -27,11 +27,19 @@ const DEFAULT_ATTACHMENT_URL_BUILDER: FeishuAttachmentUrlBuilder = (
 ) =>
   `/api/v1/quality/inspection/feishu/${encodeURIComponent(entityCode)}/records/${encodeURIComponent(recordId)}/attachments/${encodeURIComponent(fileToken)}/content`
 
+export interface FeishuAttachmentPreviewContext {
+  record: Record<string, unknown>
+  attachment: FeishuAttachment
+  entityCode?: string
+}
+
 export interface RenderFeishuValueOptions {
   /** 字段 ui_type，用于按类型格式化日期/勾选等原始值 */
   uiType?: string
   /** 附件代理下载地址构造器，默认走检验模块通用接口 */
   attachmentUrlBuilder?: FeishuAttachmentUrlBuilder
+  /** 提供时非图片附件点击进入弹窗预览；不提供则保持下载行为 */
+  onAttachmentPreview?: (context: FeishuAttachmentPreviewContext) => void
 }
 
 /** 通过后端代理下载飞书附件并以新标签页打开（附件 url 需带 token）。 */
@@ -208,7 +216,17 @@ export function renderFeishuValue(
                   lineHeight: 1.4,
                   maxWidth: 220,
                 }}
-                onClick={() => void openFeishuAttachment(entityCode ?? '', String(record.record_id ?? ''), att, message, attachmentUrlBuilder)}
+                onClick={() => {
+                  if (options?.onAttachmentPreview) {
+                    options.onAttachmentPreview({
+                      record,
+                      attachment: att,
+                      entityCode: entityCode ?? undefined,
+                    })
+                    return
+                  }
+                  void openFeishuAttachment(entityCode ?? '', String(record.record_id ?? ''), att, message, attachmentUrlBuilder)
+                }}
               >
                 {att.name || '附件'}
               </button>
@@ -258,7 +276,10 @@ export function renderFeishuValue(
     }
   }
   if (value === null || value === undefined || value === '') return '-'
-  if (uiType === 'DateTime' && (typeof value === 'number' || typeof value === 'string')) {
+  if (
+    (uiType === 'DateTime' || uiType === 'CreatedTime' || uiType === 'ModifiedTime') &&
+    (typeof value === 'number' || typeof value === 'string')
+  ) {
     return formatDateTimeValue(value)
   }
   if (uiType === 'Checkbox') {

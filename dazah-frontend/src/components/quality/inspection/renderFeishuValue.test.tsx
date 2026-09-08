@@ -80,6 +80,37 @@ describe('renderFeishuValue', () => {
     expect(openMock).toHaveBeenCalledWith('blob:proxy', '_blank')
   })
 
+  it('invokes onAttachmentPreview instead of downloading when provided', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const openMock = vi.fn()
+    vi.stubGlobal('open', openMock)
+    const onPreview = vi.fn()
+    const msg = makeMessage()
+    const record = { record_id: 'rec-1' }
+    renderValue(
+      renderFeishuValue(
+        [{ name: '调查报告.docx', file_token: 'ft-9', url: 'blob:direct' }],
+        record,
+        undefined,
+        msg as never,
+        { onAttachmentPreview: onPreview },
+      ),
+    )
+    const button = container.querySelector('button')
+    expect(button?.textContent).toBe('调查报告.docx')
+    await act(async () => {
+      button?.click()
+    })
+    expect(onPreview).toHaveBeenCalledWith({
+      record,
+      attachment: { name: '调查报告.docx', file_token: 'ft-9', url: 'blob:direct' },
+      entityCode: undefined,
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(openMock).not.toHaveBeenCalled()
+  })
+
   it('attachment download failure surfaces backend message via toast', async () => {
     vi.stubGlobal(
       'fetch',

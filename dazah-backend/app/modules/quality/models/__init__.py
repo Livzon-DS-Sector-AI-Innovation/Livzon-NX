@@ -52,6 +52,9 @@ from app.modules.quality.models.feishu_settings import (
 from app.modules.quality.models.finished_product_inspection import (
     FinishedProductInspection,
 )
+from app.modules.quality.models.finished_trend_ai_analysis import (
+    FinishedTrendAIAnalysis,
+)
 from app.modules.quality.models.finished_trend_alert_notification import (
     FinishedTrendAlertNotification,
 )
@@ -113,6 +116,7 @@ __all__ = [
     "OotLimitProduct",
     "OotLimitItem",
     "FinishedTrendAlertNotification",
+    "FinishedTrendAIAnalysis",
     "LiquidMaterialInspection",
     "SolidMaterialInspection",
     "FinishedProductInspection",

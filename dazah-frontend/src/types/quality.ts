@@ -929,6 +929,44 @@ export interface QcValidationYearStatus {
   feishu_url?: string | null;
 }
 
+/** 成品异常报告（按年分表）——字段元数据/记录与 QC验证共用同一后端归一化形状 */
+export type AnomalyReportFieldMeta = QcValidationFieldMeta;
+export type AnomalyReportFieldsResult = QcValidationFieldsResult;
+export type AnomalyReportRecord = QcValidationRecord;
+export type AnomalyReportRecordsResult = QcValidationRecordsResult;
+export type AnomalyReportYearStatus = QcValidationYearStatus;
+
+/** 成品异常 AI 仪表盘聚合（按产品×异常类型） */
+export interface AnomalyDashboardProductType {
+  type: string;
+  count: number;
+}
+
+export interface AnomalyDashboardProduct {
+  product: string;
+  count: number;
+  types: AnomalyDashboardProductType[];
+}
+
+export interface AnomalyDashboardData {
+  years: number[];
+  total: number;
+  analyzed: number;
+  unclassified: number;
+  ai_configured: boolean;
+  last_analyzed_at: string | null;
+  products: AnomalyDashboardProduct[];
+  type_totals: AnomalyDashboardProductType[];
+}
+
+/** 成品异常 AI 分析后台任务状态 */
+export interface AnomalyAnalysisStatus {
+  job_id: string;
+  state: 'running' | 'completed' | 'failed' | string;
+  progress?: string;
+  result?: { analyzed?: number; skipped?: number; failed?: number } | null;
+}
+
 export interface QualityAiApplicableField {
   field_key: string;
   label: string;

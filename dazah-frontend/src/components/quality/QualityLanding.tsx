@@ -4,6 +4,7 @@ import { qualityTokens } from './themeTokens'
 import Link from 'next/link'
 import { Card, Row, Col } from 'antd'
 import {
+  AlertOutlined,
   ApartmentOutlined,
   AuditOutlined,
   DatabaseOutlined,
@@ -70,10 +71,16 @@ export function QualityLanding() {
       icon: <WarningOutlined style={{ fontSize: 32, color: '#cf1322' }} />,
     },
     {
-      title: '产品质量回顾',
+      title: '产品质量',
       description: '查看产品质量标准与回顾页',
       href: '/quality/product-quality',
       icon: <DatabaseOutlined style={{ fontSize: 32, color: '#722ed1' }} />,
+    },
+    {
+      title: '成品异常报告',
+      description: '查看各年度成品异常汇总与明细',
+      href: '/quality/anomaly-report',
+      icon: <AlertOutlined style={{ fontSize: 32, color: '#d4380d' }} />,
     },
     {
       title: '退货召回',

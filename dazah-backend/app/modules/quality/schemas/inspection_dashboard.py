@@ -100,6 +100,54 @@ class InspectionDashboardChartSummary(BaseModel):
     lower_control_limit: float | None = None
 
 
+class InspectionDashboardTrendAnomaly(BaseModel):
+    """确定性趋势规则命中的单条异常事实。"""
+
+    rule_type: str
+    severity: str
+    start_batch: str
+    end_batch: str
+    description: str
+    evidence: dict
+    affected_batches: list[str] = []
+
+
+class InspectionDashboardTrendAISignal(BaseModel):
+    batch_no: str = ""
+    rule_type: str = ""
+    severity: str = "medium"
+    note: str = ""
+
+
+class InspectionDashboardTrendAIOutlook(BaseModel):
+    direction: str = "flat"
+    batches_to_limit: int | None = None
+    risk: str = ""
+
+
+class InspectionDashboardTrendAI(BaseModel):
+    """趋势 AI 解读结论（经白名单校验后），仅作辅助展示。"""
+
+    summary: str = ""
+    trend_reading: str = ""
+    signals: list[InspectionDashboardTrendAISignal] = []
+    outlook: InspectionDashboardTrendAIOutlook = InspectionDashboardTrendAIOutlook()
+    recommendation: str = ""
+    confidence: str = "low"
+    # 需在前端高亮的批次（服务端由受影响批次 + signals 汇总）
+    highlight_batches: list[str] = []
+    # 分析周期（YYYY-MM，每月固定一次）与完成时间
+    period: str = ""
+    analyzed_at: str | None = None
+
+
+class TrendAIReanalyzeRequest(BaseModel):
+    """手动「再次分析」当月趋势 AI 的请求体。"""
+
+    entity_code: str
+    metric_key: str
+
+
 class InspectionDashboardChart(BaseModel):
     metric_key: str
     metric_label: str
@@ -111,6 +159,11 @@ class InspectionDashboardChart(BaseModel):
     spec_lines: list[InspectionDashboardSpecLine]
     points: list[InspectionDashboardPoint]
     summary: InspectionDashboardChartSummary
+    # 趋势规则命中的确定性异常
+    trend_anomalies: list[InspectionDashboardTrendAnomaly] = []
+    # 趋势 AI 结论（pending/completed/failed/none 时可为 None）
+    trend_ai: InspectionDashboardTrendAI | None = None
+    trend_ai_status: str = "none"
 
 
 class InspectionDashboardAlert(BaseModel):
@@ -146,6 +199,10 @@ class InspectionDashboardSummary(BaseModel):
     deduplicated_notification_count: int
     failed_notification_count: int
     unmapped_notification_count: int
+    # 趋势规则/ AI 汇总计数
+    trend_alert_metric_count: int = 0
+    trend_ai_pending_count: int = 0
+    trend_ai_completed_count: int = 0
 
 
 class InspectionDashboardData(BaseModel):

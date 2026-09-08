@@ -6,6 +6,7 @@ import {
   App,
   Button,
   Card,
+  Collapse,
   Descriptions,
   Drawer,
   Empty,
@@ -332,11 +333,68 @@ export function ValidationAiReviewPanel() {
           </Button>
         }
       >
-        <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          上传 VP/VR 文档或从文件管理目录选择条目，AI 将对照目录核对引用的文件编号
-          、修订版本，并检查方案与报告的一致性。结果仅用于辅助审核，不写回台账，
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          上传验证方案/报告（可多份，系统自动识别 VP/VR 并匹配文件管理依据），
+          AI 按下方维度逐段审核正文。结果仅用于辅助审核，不写回台账，
           审批仍按线下流程执行。
         </Typography.Paragraph>
+        <Collapse
+          size="small"
+          defaultActiveKey={['stage-plan-report', 'stage-basis', 'stage-linkage']}
+          items={[
+            {
+              key: 'stage-plan-report',
+              label: '阶段①：方案↔报告互查（同时上传方案与报告时）',
+              children: (
+                <ul style={{ margin: 0, paddingLeft: 20 }}>
+                  <li>错别字/笔误、前后表述矛盾、术语不一致</li>
+                  <li>段落结构：章节重复/缺失、编号重复、内容放错章节</li>
+                  <li>
+                    上下文一致性：方案与报告中同一对象/参数/设备/方法表述是否一致
+                  </li>
+                  <li>
+                    数值与计算：实测结果是否落在规定区间；均值/标准差/RSD/回收率等
+                    公式选用与代入计算是否正确
+                  </li>
+                </ul>
+              ),
+            },
+            {
+              key: 'stage-basis',
+              label: '阶段②：与文件管理现行正文比对',
+              children: (
+                <ul style={{ margin: 0, paddingLeft: 20 }}>
+                  <li>
+                    验证方法/参数/限度/取样/接受标准与依据文件（SOP/管理规程）
+                    正文逐段比对，矛盾处附两边原文
+                  </li>
+                  <li>
+                    文档引用的文件编号是否真实存在、是否引用了已失效（非现行）版本
+                  </li>
+                  <li>
+                    依据文件匹配：优先按正文引用的编号；未写编号时按文档标题
+                    自动匹配文件管理中的相关规程
+                  </li>
+                  <li>文档编号（文件名/正文头部）一致性、章节齐全性</li>
+                </ul>
+              ),
+            },
+            {
+              key: 'stage-linkage',
+              label: '阶段③：质量数据联动与自定义关注点',
+              children: (
+                <ul style={{ margin: 0, paddingLeft: 20 }}>
+                  <li>
+                    关联质量管理台账：验证执行期间未关闭的偏差/变更是否影响验证结论
+                  </li>
+                  <li>
+                    新建审核时可填写「审核关注点」，AI 将对您指定的内容重点核查
+                  </li>
+                </ul>
+              ),
+            },
+          ]}
+        />
       </Card>
 
       <Card

@@ -84,3 +84,28 @@ async def update_card(message_id: str, card: dict[str, Any]) -> bool:
     except Exception as exc:
         logger.error("模块飞书卡片更新失败：%s", type(exc).__name__)
         return False
+
+
+async def upload_image(
+    image_bytes: bytes, *, file_name: str = "trend.png"
+) -> str | None:
+    """用质量模块飞书应用凭证上传图片，返回 image_key（失败 None）。
+
+    image_key 与上传应用绑定，故必须用质量应用凭证；不借用登录/其它模块应用。
+    """
+    if not image_bytes:
+        return None
+    try:
+        from app.platform.integrations.feishu.im import upload_image_to_feishu
+
+        async with async_session_factory() as db:
+            app_id, app_secret = await _get_credentials(db)
+        if not app_id or not app_secret:
+            logger.warning("质量飞书应用未配置，跳过趋势图上传")
+            return None
+        return await upload_image_to_feishu(
+            image_bytes, app_id=app_id, app_secret=app_secret, file_name=file_name
+        )
+    except Exception as exc:
+        logger.error("质量趋势图上传失败：%s", type(exc).__name__)
+        return None

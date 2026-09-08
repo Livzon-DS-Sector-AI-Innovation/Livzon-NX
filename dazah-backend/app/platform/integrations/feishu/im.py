@@ -515,3 +515,42 @@ class FeishuIM:
                 "Feishu send message failed: "
                 f"code={result.code}, msg={result.error_message}"
             )
+
+
+async def upload_image_to_feishu(
+    image_bytes: bytes,
+    *,
+    app_id: str,
+    app_secret: str,
+    file_name: str = "trend.png",
+) -> str | None:
+    """Upload image bytes to Feishu and return an ``image_key``.
+
+    Credentials-parameterized at the platform layer (no global config lookup):
+    each business module passes its own app credentials, because a Feishu
+    ``image_key`` is bound to the uploading application. Returns ``None`` on any
+    failure so callers can degrade to text-only cards.
+    """
+    if not image_bytes or not app_id or not app_secret:
+        return None
+    try:
+        token = await FeishuAuth.get_tenant_access_token(app_id, app_secret)
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{OPEN_API_BASE_URL}/im/v1/images",
+                headers={"Authorization": f"Bearer {token}"},
+                files={"image": (file_name, image_bytes, "image/png")},
+                data={"image_type": "message"},
+            )
+        if resp.status_code != 200:
+            logger.warning("upload_image_to_feishu HTTP %s", resp.status_code)
+            return None
+        body = resp.json()
+        if body.get("code") != 0:
+            logger.warning("upload_image_to_feishu code=%s", body.get("code"))
+            return None
+        image_key = (body.get("data") or {}).get("image_key")
+        return image_key if isinstance(image_key, str) and image_key else None
+    except Exception as exc:  # noqa: BLE001 —— 上传失败降级为无图
+        logger.warning("upload_image_to_feishu failed: %s", type(exc).__name__)
+        return None

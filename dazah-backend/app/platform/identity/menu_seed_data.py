@@ -729,6 +729,18 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
                 ],
             ),
             _n(
+                "anomaly-report",
+                "成品异常报告",
+                "/quality/anomaly-report",
+                children=[
+                    _n(
+                        "anomaly-report-ledger",
+                        "异常台账",
+                        "/quality/anomaly-report/ledger",
+                    ),
+                ],
+            ),
+            _n(
                 "return-recalls",
                 "退货召回",
                 "/quality/return-recalls",

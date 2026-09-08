@@ -41,6 +41,7 @@ dependencies = [
     "pypdf>=3.0.0",
     "minio>=7.2.0",
     "pymupdf>=1.28.2",
+    "matplotlib>=3.8.0",
 ]
 
 [project.optional-dependencies]
@@ -66,6 +67,8 @@ select = ["E", "F", "I", "N", "W", "UP"]
 # 物理行无法折行且折行会改变嵌入内容语义；仅豁免这两类文件的 E501
 "app/modules/regulatory_tracker/crawler/cde_crawler.py" = ["E501"]
 "tests/modules/regulatory_tracker/test_international_adapters.py" = ["E501"]
+# 成品异常 AI 分析提示词正文（多行字符串内的长中文规则行），折行会改变提示词内容
+"app/modules/quality/service/finished_product_anomaly_analysis_prompt.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"

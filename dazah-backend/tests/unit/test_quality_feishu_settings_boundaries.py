@@ -360,3 +360,94 @@ async def test_update_and_test_entity_setting_success_and_failure(
     )
     assert failed.success is False
     assert entity.last_sync_status == "failed"
+
+
+async def test_ensure_keeps_supplier_qualification_pull_enabled() -> None:
+    """supplier_qualification 依赖镜像回拉。
+
+    ensure 不得再按 push-only 强制关闭其拉取开关。
+    """
+    entity = _entity_model("supplier_qualification")
+    entity.enable_pull_from_feishu = True
+    db = _db()
+    db.execute.return_value = _Result(values=[entity])
+
+    await service.ensure_quality_feishu_entity_settings(db)
+
+    assert entity.enable_pull_from_feishu is True
+    assert entity.enable_push_to_feishu is True
+
+
+async def test_ensure_soft_deletes_legacy_supplier_ledger_setting() -> None:
+    """供应商台账已下线：ensure 应软删存量配置行且不再出现在默认集中。"""
+    legacy = QualityFeishuEntitySetting(
+        entity_code="supplier_ledger",
+        entity_name="供应商台账",
+        entity_group="供应商管理",
+        sort_order=214,
+        app_token="bascn123456789",
+        base_table_name="供应商台账",
+        base_table_id="tbl123456789",
+        is_enabled=True,
+        enable_push_to_feishu=True,
+        enable_pull_from_feishu=False,
+        field_mappings=None,
+    )
+    db = _db()
+    db.execute.return_value = _Result(values=[legacy])
+
+    await service.ensure_quality_feishu_entity_settings(db)
+
+    assert legacy.is_deleted is True
+    assert "supplier_ledger" not in service.DEFAULT_QUALITY_FEISHU_ENTITY_MAP
+
+
+def test_finished_product_anomaly_entities_seeded_and_prefilled() -> None:
+    """成品异常报告按年分表：默认集播种 2025-2028，2025/2026 预填专用 Base。"""
+    anomaly = [
+        (code, name, group, sort)
+        for code, name, group, sort in service.DEFAULT_QUALITY_FEISHU_ENTITIES
+        if code.startswith("finished_product_anomaly_")
+    ]
+    assert [code for code, *_ in anomaly] == [
+        "finished_product_anomaly_2025",
+        "finished_product_anomaly_2026",
+        "finished_product_anomaly_2027",
+        "finished_product_anomaly_2028",
+    ]
+    assert all(group == "成品异常报告" for *_, group, _ in anomaly)
+    assert [name for _, name, _, _ in anomaly] == [
+        "成品异常报告-2025年",
+        "成品异常报告-2026年",
+        "成品异常报告-2027年",
+        "成品异常报告-2028年",
+    ]
+    assert [sort for *_, sort in anomaly] == [281, 282, 283, 284]
+
+    prefill_2025 = service.QUALITY_FEISHU_ENTITY_ENV_PREFILLS[
+        "finished_product_anomaly_2025"
+    ]
+    assert prefill_2025["app_token"] == "NIEJbSxyIaHBp4shIPjcpVS2nZe"
+    assert prefill_2025["table_id"] == "tblivbUvnYDjATiL"
+    assert prefill_2025["table_name"] == "2025年"
+    prefill_2026 = service.QUALITY_FEISHU_ENTITY_ENV_PREFILLS[
+        "finished_product_anomaly_2026"
+    ]
+    assert prefill_2026["app_token"] == "NIEJbSxyIaHBp4shIPjcpVS2nZe"
+    assert prefill_2026["table_id"] == "tblYanzll8A5rGro"
+    assert prefill_2026["table_name"] == "2026年"
+    # 2027/2028 未预填：由用户在同步设置中自行绑定
+    assert (
+        "finished_product_anomaly_2027"
+        not in service.QUALITY_FEISHU_ENTITY_ENV_PREFILLS
+    )
+    assert (
+        "finished_product_anomaly_2028"
+        not in service.QUALITY_FEISHU_ENTITY_ENV_PREFILLS
+    )
+
+    # 直读直写实体：默认双向开关开启（非 push-only）
+    assert service._get_default_sync_directions("finished_product_anomaly_2025") == (
+        True,
+        True,
+    )
