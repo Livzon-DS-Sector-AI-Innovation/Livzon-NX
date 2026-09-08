@@ -44,7 +44,7 @@ function argsFor(name: string, arity: number): unknown[] {
   if (name === 'syncWarehouseFeishuTablesAction') return [['table-1']]
   if (name === 'saveWarehousePageBindingsAction') return ['raw-summary', [{ resource_id: 'table-1', tab_name: '原辅料', sort_order: 1, is_default: true, is_enabled: true, visible_field_ids: [] }]]
   if (name === 'saveRoleDataScope' || name === 'saveUserDataScope') return ['record-1', 'all', []]
-  if (name === 'setRolePermissions' || name === 'assignUserRoles' || name === 'setRoleMenus') return ['record-1', ['permission-1']]
+  if (name === 'setRolePermissions' || name === 'assignUserRoles' || name === 'applyDeptRolesToUser' || name === 'setRoleMenus') return ['record-1', ['permission-1']]
   if (/Import|Attachment|upload.*Attachment|uploadDocument|autoBind/i.test(name)) {
     return [formData(), false, false, 'technical'].slice(0, arity)
   }
