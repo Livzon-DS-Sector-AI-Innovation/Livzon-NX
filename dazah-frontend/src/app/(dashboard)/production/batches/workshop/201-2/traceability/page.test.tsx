@@ -411,7 +411,7 @@ describe('TraceabilityPage (201-2)', () => {
     if (aiBtn) {
       await act(async () => { aiBtn.click(); await new Promise((r) => setTimeout(r, 200)) })
     }
-    expect(document.body.textContent || '').toContain('AI 分析失败，请重试')
+    expect(document.body.textContent || '').toContain('AI 服务暂不可用，请确认已配置模型后重试')
   })
 
   it('sends a follow-up chat message and streams the assistant reply into the chat', async () => {
