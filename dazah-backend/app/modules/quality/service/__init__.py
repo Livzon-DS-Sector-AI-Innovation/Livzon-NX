@@ -38,15 +38,6 @@ from app.modules.quality.service.cpv_statistics import (
     get_statistics,
     get_trend_data,
 )
-from app.modules.quality.service.department_contacts import (
-    delete_department_contact,
-    # Department contacts - existing
-    get_department_contact_list,
-    get_department_contact_list_from_feishu,
-    update_department_contact,
-    update_department_contact_from_feishu,
-    upsert_department_contact,
-)
 from app.modules.quality.service.deviation_workbench import (
     analyze_workbench,
     delete_workbench_attachment_files,
@@ -320,17 +311,11 @@ __all__ = [
     "update_deviation_investigation_push_record",
     "update_deviation_investigation_push_record_by_ref",
     "sync_deviation_investigation_push_record_to_feishu_by_ref",
-    # Department contacts
     "get_capa_plan_track_detail",
     "get_capa_plan_track_list",
     "create_capa_plan_track",
     "update_capa_plan_track",
     "delete_capa_plan_track",
-    "get_department_contact_list",
-    "get_department_contact_list_from_feishu",
-    "upsert_department_contact",
-    "update_department_contact",
-    "delete_department_contact",
     "sync_deviation_report_record_to_feishu",
     "sync_capa_to_feishu",
     "sync_deviation_to_feishu",
@@ -347,13 +332,6 @@ __all__ = [
     "update_quality_feishu_entity_setting",
     "test_quality_feishu_entity_setting",
     "ensure_quality_feishu_entity_settings",
-    # Department contacts
-    "get_department_contact_list",
-    "update_department_contact_from_feishu",
-    "resolve_department_personnel_by_department",
-    "upsert_department_contact",
-    "update_department_contact",
-    "delete_department_contact",
     # Statistics
     "get_deviation_statistics",
     "get_capa_statistics",

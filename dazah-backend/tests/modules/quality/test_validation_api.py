@@ -279,3 +279,73 @@ async def test_feishu_validation_get_and_create_endpoints(
     )
     assert resp.status_code == 201
     assert resp.json()["data"][0]["record_id"] == "rec-new"
+@pytest.mark.anyio
+async def test_validation_person_options_reads_hr_feishu_members(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """人员选择候选必须来自人事管理-飞书联系人（在职、按 open_id 去重）。"""
+    from sqlalchemy import delete
+
+    from app.modules.hr.models import HrFeishuMember
+
+    # 清理历史运行残留，避免唯一约束冲突
+    await db_session.execute(
+        delete(HrFeishuMember).where(HrFeishuMember.open_id.in_(["ou_1", "ou_2"]))
+    )
+    await db_session.commit()
+
+    db_session.add_all(
+        [
+            HrFeishuMember(
+                open_id="ou_1", name="张三", department="质量部", status="1"
+            ),
+            HrFeishuMember(
+                open_id="ou_1", name="张三", department="生产部", status="1"
+            ),
+            # 离职
+            HrFeishuMember(
+                open_id="ou_2", name="李四", department="生产部", status="2"
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    response = await client.get("/api/v1/quality/validations/person-options")
+
+    assert response.status_code == 200
+    # 测试库为共享数据，断言只看本用例播种的 open_id
+    data = [
+        item
+        for item in response.json()["data"]
+        if item["open_id"] in ("ou_1", "ou_2")
+    ]
+    assert len(data) == 1
+    assert data[0]["open_id"] == "ou_1"
+    assert data[0]["name"] == "张三"
+    # 多部门去重后保留其中一个部门（取 min，不依赖具体值）
+    assert data[0]["department"] in ("质量部", "生产部")
+
+    filtered = await client.get(
+        "/api/v1/quality/validations/person-options",
+        params={"keyword": "张"},
+    )
+    ids = [item["open_id"] for item in filtered.json()["data"]]
+    assert [item for item in ids if item in ("ou_1", "ou_2")] == ["ou_1"]
+@pytest.mark.anyio
+async def test_validation_form_links_cover_reserved_years(
+    client: AsyncClient,
+) -> None:
+    """表单链接：2024-2026 预填默认表单；2027/2028 预留（链接为空）。"""
+    response = await client.get("/api/v1/quality/feishu/validations/form-links")
+
+    assert response.status_code == 200
+    years = response.json()["data"]["years"]
+    by_year = {item["year"]: item for item in years}
+    assert set(by_year) == {2024, 2025, 2026, 2027, 2028}
+    assert "shrcnw2P5gEnFsiwKGpR8TuJ1Nh" in by_year[2026]["form_url"]
+    assert "shrcnrXPjhpZb40QhpQnUqgodHc" in by_year[2025]["form_url"]
+    assert "shrcnQEeBbkDhG8CrvmW5urZ8vd" in by_year[2024]["form_url"]
+    assert by_year[2026]["table_configured"] is True
+    assert by_year[2027]["form_url"] == ""
+    assert by_year[2027]["table_configured"] is False

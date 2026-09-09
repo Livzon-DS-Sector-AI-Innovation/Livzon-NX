@@ -95,12 +95,14 @@ async def test_validation_write_operations_route_to_year_entity(
 ) -> None:
     seen: dict[str, str] = {}
 
-    async def _fake_create(db, entity_code, fields, *, search_conditions=None):
+    async def _fake_create(
+        db, entity_code, fields, *, search_conditions=None, user_id_type="open_id"
+    ):
         seen["create"] = entity_code
         return {"record_id": "rec-new"}
 
     async def _fake_update(db, entity_code, record_id, fields, *,
-                           search_conditions=None):
+                           search_conditions=None, user_id_type="open_id"):
         seen["update"] = entity_code
         return {"record_id": record_id}
 
@@ -110,11 +112,6 @@ async def test_validation_write_operations_route_to_year_entity(
     monkeypatch.setattr(pages, "_create_entity_record", _fake_create)
     monkeypatch.setattr(pages, "_update_entity_record", _fake_update)
     monkeypatch.setattr(pages, "_delete_entity_record", _fake_delete)
-    monkeypatch.setattr(
-        pages,
-        "_get_department_contacts_cache",
-        AsyncMock(return_value=[]),
-    )
     detail = {
         "record_id": "rec-1",
         "validation_type": "",
@@ -428,7 +425,9 @@ async def test_search_safe_retries_without_restricted_fields(
     """全字段搜索被受限字段拒绝时，排除后重试成功。"""
     calls: list = []
 
-    async def _fake_search(db, entity_code, *, field_names=None):
+    async def _fake_search(
+        db, entity_code, *, field_names=None, user_id_type="open_id"
+    ):
         calls.append(field_names)
         if field_names is None:
             raise RuntimeError("Feishu API error: code=1254302 RolePermNotAllow")
@@ -585,52 +584,6 @@ def test_validation_mapping_group_chat_and_empty_row() -> None:
 
 
 # ─── 联系人缓存与头像补全 ─────────────────────────────────────────
-
-
-@pytest.mark.asyncio
-async def test_department_contacts_cache_hit_and_miss(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """联系人缓存：命中直接返回；未命中拉取并写缓存；异常返回空列表。"""
-    # 命中缓存
-    async def _fake_cache_get(key: str) -> str | None:
-        import json as _json
-
-        return _json.dumps([{"name": "张三", "avatar_url": "a"}], ensure_ascii=False)
-
-    monkeypatch.setattr(pages, "cache_get", _fake_cache_get)
-    monkeypatch.setattr(pages, "cache_set", AsyncMock())
-    items = await pages._get_department_contacts_cache(SimpleNamespace())
-    assert items == [{"name": "张三", "avatar_url": "a"}]
-
-    # 未命中：拉取并写缓存
-    async def _fake_get_none(key: str) -> str | None:
-        return None
-
-    async def _fake_fetch(db, page=1, page_size=1000):
-        return {"items": [{"name": "李四", "avatar_url": "b"}]}
-
-    monkeypatch.setattr(pages, "cache_get", _fake_get_none)
-    cache_set_mock = AsyncMock()
-    monkeypatch.setattr(pages, "cache_set", cache_set_mock)
-    monkeypatch.setattr(
-        "app.modules.quality.service.department_contacts.get_department_contact_list_from_feishu",
-        _fake_fetch,
-    )
-    items = await pages._get_department_contacts_cache(SimpleNamespace())
-    assert items == [{"name": "李四", "avatar_url": "b"}]
-    cache_set_mock.assert_awaited_once()
-
-    # 拉取抛错（如部门联系人未配置）→ 返回空列表不抛
-    async def _fake_fetch_err(db, page=1, page_size=1000):
-        raise AppException("部门联系人飞书同步未启用")
-
-    monkeypatch.setattr(
-        "app.modules.quality.service.department_contacts.get_department_contact_list_from_feishu",
-        _fake_fetch_err,
-    )
-    items = await pages._get_department_contacts_cache(SimpleNamespace())
-    assert items == []
 
 
 @pytest.mark.asyncio

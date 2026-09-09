@@ -35,6 +35,10 @@ from app.modules.warehouse.feishu_material_pages import (
     FEISHU_WAREHOUSE_MATERIAL_PAGES,
     FeishuWarehouseMaterialPage,
 )
+from app.modules.warehouse.inspection_progress import (
+    FINISHED_PRODUCT_DETAIL_PAGE_KEYS,
+    build_record_inspection_cycle,
+)
 from app.modules.warehouse.legacy_models import (
     WarehouseFeishuAnalysisProfile,
     WarehouseFeishuAnalysisResult,
@@ -245,7 +249,7 @@ def build_material_page_row_search_text(row: dict[str, object | None]) -> str:
     return " ".join(
         str(value).strip().lower()
         for key, value in row.items()
-        if key != "__record_id" and value not in (None, "")
+        if not key.startswith("__") and value not in (None, "")
     )
 
 
@@ -271,18 +275,6 @@ PAGE_FIELD_ALIASES: dict[str, dict[str, list[str]]] = {
     "packaging-ledger": {
         "领料人": ["领用人"],
     },
-}
-FINISHED_PRODUCT_DETAIL_PAGE_KEYS = {
-    "product-detail-l-phenylalanine",
-    "product-detail-fumaric-acid",
-    "product-detail-l-tryptophan",
-    "product-detail-mevastatin",
-    "product-detail-kitasamycin-hcl",
-    "product-detail-doramectin",
-    "product-detail-lovastatin",
-    "product-detail-florfenicol-premix",
-    "product-detail-demeclocycline-hcl",
-    "product-detail-fenbendazole-powder",
 }
 
 
@@ -601,6 +593,10 @@ class WarehouseService:
                         resolve_option_ids(raw_value, option_map or {})
                     )
             normalized_row["__record_id"] = record.get("record_id")
+            # 飞书记录顶层时间戳（毫秒）：状态变更日志的 occurred_at 数据源，
+            # 构建 MaterialPageRow 前以 record_meta 单独传递，不进入 cells
+            normalized_row["__created_time"] = record.get("created_time")
+            normalized_row["__last_modified_time"] = record.get("last_modified_time")
             normalized_rows.append(normalized_row)
         return normalized_rows
 
@@ -727,12 +723,22 @@ class WarehouseService:
         base_name: str = "",
         stats: dict[str, Any] | None = None,
     ) -> WarehouseFeishuMaterialPageResponse:
+        # __created_time/__last_modified_time 是同步管线的内部暂存键
+        # （变更日志 occurred_at 数据源），不进入 API 响应
+        payload_rows = [
+            {
+                key: value
+                for key, value in row.items()
+                if key not in ("__created_time", "__last_modified_time")
+            }
+            for row in rows
+        ]
         return WarehouseFeishuMaterialPageResponse(
             page_key=page_key,
             page_title=page_title,
             table_name=table_name,
             columns=columns,
-            rows=rows,
+            rows=payload_rows,
             total=total,
             page=page,
             page_size=page_size,
@@ -1677,6 +1683,7 @@ class WarehouseService:
             last_error=None,
         )
         row_models = []
+        record_meta: dict[str, dict[str, Any]] = {}
         seen_ids: set[str] = set()
         for index, row in enumerate(normalized_rows, start=1):
             record_id = str(row.get("__record_id") or f"{page_key}-{index}")
@@ -1689,17 +1696,26 @@ class WarehouseService:
                     source_record_id=record_id,
                     row_order=index,
                     cells={
-                        key: value for key, value in row.items() if key != "__record_id"
+                        key: value
+                        for key, value in row.items()
+                        if not key.startswith("__")
                     },
                     search_text=build_material_page_row_search_text(row),
                     last_synced_at=now,
                 )
             )
+            record_meta[record_id] = {
+                "created_ms": row.get("__created_time"),
+                "modified_ms": row.get("__last_modified_time"),
+            }
         if use_incremental:
             # 增量模式：只 upsert 本次变更记录，不软删未变更的历史记录；
             # 行数以本地实际存量为准（本次拉取只含变更子集）
             await self.repo.upsert_material_page_rows_incremental(
-                snapshot.id, row_models
+                snapshot.id,
+                row_models,
+                page_key=page_config.page_key,
+                record_meta=record_meta,
             )
             _, total_rows = await self.repo.list_material_page_rows(
                 snapshot.id, limit=1
@@ -1708,7 +1724,12 @@ class WarehouseService:
             # 用本地存量修正，避免增量轮次把快照行数元数据覆盖成小值
             snapshot.total_rows = total_rows
         else:
-            await self.repo.upsert_material_page_rows(snapshot.id, row_models)
+            await self.repo.upsert_material_page_rows(
+                snapshot.id,
+                row_models,
+                page_key=page_config.page_key,
+                record_meta=record_meta,
+            )
             total_rows = len(normalized_rows)
 
         return self._build_material_page_response(
@@ -2521,9 +2542,23 @@ class WarehouseService:
                 )
             )
 
+        resolved_record_id = str(record.get("record_id") or record_id)
+        inspection_cycle = None
+        try:
+            inspection_cycle = await build_record_inspection_cycle(
+                self.repo.session, page_key, resolved_record_id
+            )
+        except Exception:
+            # 周期统计失败不影响详情主数据返回
+            logger.exception(
+                "warehouse inspection cycle build failed: %s/%s",
+                page_key,
+                resolved_record_id,
+            )
         return WarehouseRecordDetailResponse(
-            record_id=record.get("record_id") or record_id,
+            record_id=resolved_record_id,
             fields=detail_fields,
+            inspection_cycle=inspection_cycle,
         ).model_dump(mode="json")
 
     async def update_material_page_record(

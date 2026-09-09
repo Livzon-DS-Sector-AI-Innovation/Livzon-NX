@@ -16,6 +16,7 @@ from app.modules.quality.schemas.capa import (
     CreateCapaRequest,
     UpdateCapaRequest,
 )
+from app.modules.quality.service import person_directory
 from app.modules.quality.service import quality_capa as service
 
 
@@ -132,8 +133,17 @@ async def test_capa_crud_listing_and_workflow_paths(
     assert await service.delete_capa(db, capa.id, uuid4()) == {"success": True}
     assert capa.is_deleted is True
 
-    db.execute.return_value = _Result(rows=[("质量部",), ("生产部",)])
-    assert await service.get_capa_departments(db) == ["质量部", "生产部"]
+    monkeypatch.setattr(
+        person_directory,
+        "get_person_options",
+        AsyncMock(
+            return_value=[
+                {"open_id": "ou_1", "name": "张三", "department": "生产部"},
+                {"open_id": "ou_2", "name": "李四", "department": "质量部"},
+            ]
+        ),
+    )
+    assert await service.get_capa_departments(db) == ["生产部", "质量部"]
 
 
 @pytest.mark.anyio

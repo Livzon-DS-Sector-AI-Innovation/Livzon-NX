@@ -11,7 +11,7 @@ import { createCapaPlanTrack as createCapaPlanTrackAction, deleteCapaPlanTrack a
 import { syncCapaPlanTracksFromFeishu } from '@/actions/quality-capa'
 import { fetchCapaPlanTracks, fetchCapas } from '@/lib/api/client/quality'
 
-import { fetchFeishuDepartmentContactsAction } from '@/actions/quality'
+import { fetchQualityPersonDirectory } from '@/lib/api/client/quality'
 import { PersonCell } from './PersonCell'
 import { qualityTokens } from './themeTokens'
 import { progressMeta, reminderMeta, PROGRESS_OPTIONS, REMINDER_OPTIONS } from './capaPlanTrackLabels'
@@ -43,21 +43,16 @@ export function CapaPlanTrackPage() {
     },
   })
 
-  const { data: contactData } = useQuery({
-    queryKey: ['quality-contacts', 'department'],
-    queryFn: () => fetchFeishuDepartmentContactsAction(1, 1000),
+  const { data: contacts = [] } = useQuery({
+    queryKey: ['quality-person-directory'],
+    queryFn: fetchQualityPersonDirectory,
     staleTime: 5 * 60 * 1000,
   })
-
-  const contacts = useMemo(() => contactData?.items ?? [], [contactData])
 
   const avatarByName = useMemo(() => {
     const map: Record<string, string> = {}
     for (const contact of contacts) {
       if (contact.name && contact.avatar_url) map[contact.name] = contact.avatar_url
-      if (contact.department_head_name && contact.department_head_avatar_url) {
-        map[contact.department_head_name] = contact.department_head_avatar_url
-      }
     }
     return map
   }, [contacts])

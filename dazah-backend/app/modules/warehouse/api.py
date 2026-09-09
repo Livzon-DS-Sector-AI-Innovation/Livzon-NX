@@ -14,6 +14,8 @@ from app.modules.warehouse.feishu_material_pages import (
     FEISHU_HARDWARE_APP_TOKEN,
     FEISHU_WAREHOUSE_APP_TOKEN,
 )
+from app.modules.warehouse.inspection_progress import build_inspection_overview
+from app.modules.warehouse.inspection_progress_ai import run_inspection_ai_analysis
 from app.modules.warehouse.page_access import assert_material_page
 from app.modules.warehouse.schemas import (
     PackagingMaterialResponse,
@@ -40,6 +42,9 @@ from app.modules.warehouse.schemas import (
     WarehouseFeishuTableSyncResult,
     WarehouseFeishuWsStatusApiResponse,
     WarehouseFieldValuesApiResponse,
+    WarehouseInspectionAiAnalysisApiResponse,
+    WarehouseInspectionOverview,
+    WarehouseInspectionOverviewApiResponse,
     WarehousePageFeishuConfig,
     WarehousePromptVersionApiResponse,
     WarehousePromptVersionInput,
@@ -591,6 +596,68 @@ async def get_warehouse_dashboard(
             status_code=502,
             detail="仓储仪表盘数据读取失败，请稍后重试",
         ) from exc
+    return success_response(data=data)
+
+
+@router.get(
+    "/inspection-progress/overview",
+    summary="检验进度概览（检验周期统计）",
+    response_model=WarehouseInspectionOverviewApiResponse,
+)
+async def get_inspection_progress_overview(
+    current_user: RequireUser,
+    scope: str = Query(
+        "raw", description="raw=原辅料及包材（入库总账）/ product=成品库存"
+    ),
+    days: int = Query(30, ge=1, le=365, description="统计窗口天数（默认 30）"),
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """检验进度概览：当前待验、近 N 天完成检验、检验周期分布与每日序列。
+
+    统计自 2026-09-09（功能上线日）起，上线前批次不纳入。
+    """
+    if scope not in {"raw", "product"}:
+        raise HTTPException(
+            status_code=422,
+            detail="scope 仅支持 raw（原辅料及包材）或 product（成品）",
+        )
+    try:
+        data = await build_inspection_overview(db, scope, days=days)
+    except Exception as exc:
+        logger.exception("warehouse inspection overview failed")
+        raise HTTPException(
+            status_code=502,
+            detail="检验进度数据读取失败，请稍后重试",
+        ) from exc
+    return success_response(
+        data=WarehouseInspectionOverview.model_validate(data).model_dump(mode="json")
+    )
+
+
+@router.get(
+    "/inspection-progress/ai-analysis",
+    summary="检验进度 AI 分析（辅助解读）",
+    response_model=WarehouseInspectionAiAnalysisApiResponse,
+)
+async def get_inspection_progress_ai_analysis(
+    current_user: RequireUser,
+    scope: str = Query(
+        "raw", description="raw=原辅料及包材（入库总账）/ product=成品库存"
+    ),
+    days: int = Query(30, ge=1, le=365, description="统计窗口天数（默认 30）"),
+    force: bool = Query(False, description="跳过缓存重新分析"),
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """对检验进度统计做 AI 分析（LLM 辅助解读，不替代人工判断）。
+
+    结果缓存 10 分钟；AI 未配置/失败时返回降级文案。
+    """
+    if scope not in {"raw", "product"}:
+        raise HTTPException(
+            status_code=422,
+            detail="scope 仅支持 raw（原辅料及包材）或 product（成品）",
+        )
+    data = await run_inspection_ai_analysis(db, scope, days=days, force=force)
     return success_response(data=data)
 
 

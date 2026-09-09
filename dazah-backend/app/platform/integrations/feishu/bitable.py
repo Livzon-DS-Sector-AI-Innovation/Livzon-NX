@@ -11,6 +11,20 @@ _settings = get_settings()
 logger = logging.getLogger(__name__)
 
 
+def fields_need_union_user_id(fields: dict[str, Any]) -> bool:
+    """人员字段值里出现 on_ 前缀 union_id 时，写接口必须带 user_id_type=union_id。"""
+    for value in fields.values():
+        if not isinstance(value, list):
+            continue
+        for entry in value:
+            if (
+                isinstance(entry, dict)
+                and str(entry.get("id") or "").startswith("on_")
+            ):
+                return True
+    return False
+
+
 class BitableRecordPage(TypedDict):
     items: list[dict[str, Any]]
     has_more: bool
@@ -76,29 +90,50 @@ class BitableClient:
         return items
 
     async def create_record(
-        self, table_id: str, fields: dict[str, Any]
+        self,
+        table_id: str,
+        fields: dict[str, Any],
+        *,
+        user_id_type: str = "open_id",
     ) -> dict[str, Any]:
-        """Create a single record."""
+        """Create a single record.
+
+        user_id_type 决定人员字段 id 的命名空间（open_id/union_id/user_id）；
+        跨应用人员（如人事应用目录选人后写质量 Base）需传 union_id。
+        """
         if not self.app_token or not table_id:
             raise RuntimeError("Bitable app_token or table_id not configured")
+        params: dict[str, str] = {}
+        if user_id_type:
+            params["user_id_type"] = user_id_type
         data = await self.client.request(
             "POST",
             self._path(table_id, "/records"),
             json={"fields": fields},
+            params=params,
         )
         record = data.get("record", {})
         return record if isinstance(record, dict) else {}
 
     async def update_record(
-        self, table_id: str, record_id: str, fields: dict[str, Any]
+        self,
+        table_id: str,
+        record_id: str,
+        fields: dict[str, Any],
+        *,
+        user_id_type: str = "open_id",
     ) -> dict[str, Any]:
-        """Update a single record."""
+        """Update a single record（user_id_type 语义同 create_record）。"""
         if not self.app_token or not table_id:
             raise RuntimeError("Bitable app_token or table_id not configured")
+        params: dict[str, str] = {}
+        if user_id_type:
+            params["user_id_type"] = user_id_type
         data = await self.client.request(
             "PUT",
             self._path(table_id, f"/records/{record_id}"),
             json={"fields": fields},
+            params=params,
         )
         record = data.get("record", {})
         return record if isinstance(record, dict) else {}
@@ -112,7 +147,13 @@ class BitableClient:
             self._path(table_id, f"/records/{record_id}"),
         )
 
-    async def get_record(self, table_id: str, record_id: str) -> dict[str, Any]:
+    async def get_record(
+        self,
+        table_id: str,
+        record_id: str,
+        *,
+        user_id_type: str = "open_id",
+    ) -> dict[str, Any]:
         """Fetch one Bitable record.
 
         The migrated quality and registration integrations use this small
@@ -127,6 +168,7 @@ class BitableClient:
         data = await self.client.request(
             "GET",
             self._path(table_id, f"/records/{record_id}"),
+            params={"user_id_type": user_id_type},
         )
         record = data.get("record")
         return record if isinstance(record, dict) else {}
@@ -138,6 +180,7 @@ class BitableClient:
         page_size: int = 500,
         automatic_fields: bool = False,
         timeout: float | None = None,
+        user_id_type: str = "open_id",
     ) -> list[dict[str, Any]]:
         """Read all records while following Feishu pagination tokens."""
         records: list[dict[str, Any]] = []
@@ -149,6 +192,7 @@ class BitableClient:
                 page_token=page_token,
                 automatic_fields=automatic_fields,
                 timeout=timeout,
+                user_id_type=user_id_type,
             )
             records.extend(page["items"])
             if not page["has_more"] or not page["page_token"]:
@@ -193,6 +237,7 @@ class BitableClient:
         page_token: str | None = None,
         automatic_fields: bool = False,
         timeout: float | None = None,
+        user_id_type: str = "open_id",
     ) -> list[dict[str, Any]]:
         """Search records with optional filter."""
         page = await self.search_records_page(
@@ -205,6 +250,7 @@ class BitableClient:
             page_token=page_token,
             automatic_fields=automatic_fields,
             timeout=timeout,
+            user_id_type=user_id_type,
         )
         return page["items"]
 
@@ -220,11 +266,13 @@ class BitableClient:
         page_token: str | None = None,
         automatic_fields: bool = False,
         timeout: float | None = None,
+        user_id_type: str = "open_id",
     ) -> BitableRecordPage:
         """Search one record page and preserve Feishu pagination metadata.
 
         timeout 为 None 时沿用 FeishuClient 默认超时（15 秒）；大批量同步
         可传更长超时，避免慢但正常的页面被掐断后重复重试。
+        user_id_type 控制人员字段回读 id 的命名空间。
         """
         if not self.app_token or not table_id:
             raise RuntimeError("Bitable app_token or table_id not configured")
@@ -236,6 +284,7 @@ class BitableClient:
             params: dict[str, object] = {
                 "page_size": page_size,
                 "filter": filter_str,
+                "user_id_type": user_id_type,
             }
             if view_id:
                 params["view_id"] = view_id
@@ -257,7 +306,7 @@ class BitableClient:
                 payload["view_id"] = view_id
             if field_names:
                 payload["field_names"] = field_names
-            params = {"page_size": page_size}
+            params = {"page_size": page_size, "user_id_type": user_id_type}
             if page_token:
                 params["page_token"] = page_token
             data = await self.client.request(

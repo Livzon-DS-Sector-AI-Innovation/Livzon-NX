@@ -14467,76 +14467,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/quality/department-contacts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 获取部门联系人列表 */
-        get: operations["list_department_contacts_api_v1_quality_department_contacts_get"];
-        put?: never;
-        /** 创建部门联系人 */
-        post: operations["upsert_department_contact_api_v1_quality_department_contacts_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/department-contacts/feishu": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 直接获取飞书部门联系人列表 */
-        get: operations["list_department_contacts_from_feishu_api_v1_quality_department_contacts_feishu_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/department-contacts/feishu/{record_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** 更新飞书部门联系人人员字段 */
-        put: operations["update_department_contact_from_feishu_api_v1_quality_department_contacts_feishu__record_id__put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/department-contacts/{contact_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** 更新部门联系人 */
-        put: operations["update_department_contact_api_v1_quality_department_contacts__contact_id__put"];
-        post?: never;
-        /** 删除部门联系人 */
-        delete: operations["delete_department_contact_api_v1_quality_department_contacts__contact_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/quality/deviation-investigation-push-records": {
         parameters: {
             query?: never;
@@ -15849,6 +15779,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quality/feishu/validations/form-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 获取验证主计划各年度表的飞书表单链接
+         * @description 新增记录改为打开各年度的飞书多维表单；链接在质量设置-飞书设置中维护。
+         */
+        get: operations["list_feishu_validation_form_links_api_v1_quality_feishu_validations_form_links_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quality/feishu/validations/revalidation-upcoming": {
         parameters: {
             query?: never;
@@ -15913,6 +15863,29 @@ export interface paths {
         get: operations["api_get_anomaly_analysis_status_api_v1_quality_finished_product_anomaly_analysis_status_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/finished-product-anomaly/chat/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 成品异常 AI 流式聊天（查询异常数据 + 不合格项分析）
+         * @description 成品异常 AI 助手聊天。
+         *
+         *     流程：LLM 判断是否需要查询成品异常数据 → 调用工具（记录明细/聚合统计）
+         *     → 基于真实数据流式回答。SSE 事件：status/content/reasoning_content/done。
+         */
+        post: operations["anomaly_chat_stream_api_v1_quality_finished_product_anomaly_chat_stream_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -18074,6 +18047,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quality/person-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取质量模块人员选择候选（人事管理-飞书联系人） */
+        get: operations["list_person_options_api_v1_quality_person_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quality/product-quality": {
         parameters: {
             query?: never;
@@ -19071,6 +19061,23 @@ export interface paths {
         put?: never;
         /** 批量删除验证主计划记录 */
         post: operations["batch_delete_validation_endpoint_api_v1_quality_validations_batch_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/validations/person-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取验证人员选择候选（人事管理-飞书联系人） */
+        get: operations["list_validation_person_options_api_v1_quality_validations_person_options_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -24958,6 +24965,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/warehouse/inspection-progress/ai-analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 检验进度 AI 分析（辅助解读）
+         * @description 对检验进度统计做 AI 分析（LLM 辅助解读，不替代人工判断）。
+         *
+         *     结果缓存 10 分钟；AI 未配置/失败时返回降级文案。
+         */
+        get: operations["get_inspection_progress_ai_analysis_api_v1_warehouse_inspection_progress_ai_analysis_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/warehouse/inspection-progress/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 检验进度概览（检验周期统计）
+         * @description 检验进度概览：当前待验、近 N 天完成检验、检验周期分布与每日序列。
+         *
+         *     统计自 2026-09-09（功能上线日）起，上线前批次不纳入。
+         */
+        get: operations["get_inspection_progress_overview_api_v1_warehouse_inspection_progress_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/warehouse/material-pages/{page_key}": {
         parameters: {
             query?: never;
@@ -26410,6 +26461,29 @@ export interface components {
              */
             year?: number | null;
         };
+        /** AnomalyChatMessage */
+        AnomalyChatMessage: {
+            /**
+             * Content
+             * @description 消息内容
+             */
+            content: string;
+            /**
+             * Role
+             * @description 消息角色：user/assistant
+             */
+            role: string;
+        };
+        /** AnomalyChatRequest */
+        AnomalyChatRequest: {
+            /** Messages */
+            messages?: components["schemas"]["AnomalyChatMessage"][];
+            /**
+             * Year
+             * @description 限定分析的年份（可选）
+             */
+            year?: number | null;
+        };
         /** ApiResponse */
         ApiResponse: {
             /**
@@ -26995,24 +27069,6 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["DeclarationProgressWorkbookOverview"];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ApiResponseEnvelope[DepartmentContactOut] */
-        ApiResponseEnvelope_DepartmentContactOut_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data: components["schemas"]["DepartmentContactOut"];
             /**
              * Message
              * @default success
@@ -28208,25 +28264,6 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
-        /** ApiResponseEnvelope[list[DepartmentContactOut]] */
-        ApiResponseEnvelope_list_DepartmentContactOut__: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /** Data */
-            data: components["schemas"]["DepartmentContactOut"][];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
         /** ApiResponseEnvelope[list[DepartmentWeeklyConfirmationOut]] */
         ApiResponseEnvelope_list_DepartmentWeeklyConfirmationOut__: {
             /**
@@ -28787,6 +28824,25 @@ export interface components {
             code: number;
             /** Data */
             data: components["schemas"]["ValidationListItem"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[ValidationPersonOption]] */
+        ApiResponseEnvelope_list_ValidationPersonOption__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["ValidationPersonOption"][];
             /**
              * Message
              * @default success
@@ -34296,25 +34352,6 @@ export interface components {
              */
             title: string;
         };
-        /** CreateDepartmentContactRequest */
-        CreateDepartmentContactRequest: {
-            /** Department */
-            department: string;
-            /** Department Head Enterprise Email */
-            department_head_enterprise_email?: string | null;
-            /** Department Head Name */
-            department_head_name?: string | null;
-            /** Department Head Open Id */
-            department_head_open_id?: string | null;
-            /** Enterprise Email */
-            enterprise_email?: string | null;
-            /** Feishu Record Id */
-            feishu_record_id?: string | null;
-            /** Name */
-            name: string;
-            /** Open Id */
-            open_id?: string | null;
-        };
         /** CreateDeviationInvestigationPushRecordRequest */
         CreateDeviationInvestigationPushRecordRequest: {
             /** Department Head */
@@ -36103,40 +36140,6 @@ export interface components {
         DeleteRecordsRequest: {
             /** Ids */
             ids?: string[];
-        };
-        /** DepartmentContactOut */
-        DepartmentContactOut: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Department */
-            department: string;
-            /** Department Head Enterprise Email */
-            department_head_enterprise_email?: string | null;
-            /** Department Head Name */
-            department_head_name?: string | null;
-            /** Department Head Open Id */
-            department_head_open_id?: string | null;
-            /** Enterprise Email */
-            enterprise_email?: string | null;
-            /** Feishu Record Id */
-            feishu_record_id?: string | null;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Name */
-            name?: string | null;
-            /** Open Id */
-            open_id?: string | null;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
         };
         /** DepartmentCreate */
         DepartmentCreate: {
@@ -51176,6 +51179,8 @@ export interface components {
             entity_group: string;
             /** Entity Name */
             entity_name: string;
+            /** Feishu Form Url */
+            feishu_form_url?: string | null;
             /** Field Mappings */
             field_mappings?: components["schemas"]["QualityFeishuFieldMappingItem"][];
             /**
@@ -56565,25 +56570,6 @@ export interface components {
             /** Title */
             title?: string | null;
         };
-        /** UpdateDepartmentContactRequest */
-        UpdateDepartmentContactRequest: {
-            /** Department */
-            department?: string | null;
-            /** Department Head Enterprise Email */
-            department_head_enterprise_email?: string | null;
-            /** Department Head Name */
-            department_head_name?: string | null;
-            /** Department Head Open Id */
-            department_head_open_id?: string | null;
-            /** Enterprise Email */
-            enterprise_email?: string | null;
-            /** Feishu Record Id */
-            feishu_record_id?: string | null;
-            /** Name */
-            name?: string | null;
-            /** Open Id */
-            open_id?: string | null;
-        };
         /** UpdateDeviationAiSessionRequest */
         UpdateDeviationAiSessionRequest: {
             /**
@@ -56722,23 +56708,6 @@ export interface components {
             name?: string | null;
             /** Seq No */
             seq_no?: number | null;
-        };
-        /**
-         * UpdateFeishuDepartmentContactRequest
-         * @description 更新飞书多维表部门联系人整条记录的请求
-         *
-         *     人员身份来自人事管理下同步的飞书联系人（open_id）；后端负责把 open_id
-         *     解析为该多维表人员字段可用的 id 后写回。
-         */
-        UpdateFeishuDepartmentContactRequest: {
-            /** Department */
-            department?: string | null;
-            /** Department Head Open Id */
-            department_head_open_id?: string | null;
-            /** Enterprise Email */
-            enterprise_email?: string | null;
-            /** Open Id */
-            open_id?: string | null;
         };
         /** UpdateFinishedProductInspectionRequest */
         UpdateFinishedProductInspectionRequest: {
@@ -57109,6 +57078,8 @@ export interface components {
              * @default true
              */
             enable_push_to_feishu: boolean;
+            /** Feishu Form Url */
+            feishu_form_url?: string | null;
             /** Field Mappings */
             field_mappings?: components["schemas"]["QualityFeishuFieldMappingItem"][] | null;
             /**
@@ -57778,6 +57749,20 @@ export interface components {
             updated_at: string;
             /** Validation Type */
             validation_type: string;
+        };
+        /**
+         * ValidationPersonOption
+         * @description 验证与确认人员选择器候选（人事管理-飞书联系人，在职人员）。
+         */
+        ValidationPersonOption: {
+            /** Department */
+            department?: string | null;
+            /** Job Title */
+            job_title?: string | null;
+            /** Name */
+            name: string;
+            /** Open Id */
+            open_id: string;
         };
         /**
          * ValidationReviewCreateRequest
@@ -58908,6 +58893,252 @@ export interface components {
             values: components["schemas"]["WarehouseFieldValueItem"][];
         };
         /**
+         * WarehouseInspectionAiAnalysis
+         * @description 检验进度 AI 分析结果（辅助解读，不替代人工判断）。
+         */
+        WarehouseInspectionAiAnalysis: {
+            /** Generated At */
+            generated_at?: string | null;
+            /** Key Findings */
+            key_findings?: string[];
+            /** Overall Status */
+            overall_status?: string | null;
+            /** Risk Level */
+            risk_level?: string | null;
+            /**
+             * Scope Label
+             * @default
+             */
+            scope_label: string;
+            /** Status */
+            status: string;
+            /** Suggestions */
+            suggestions?: string[];
+            /**
+             * Summary Text
+             * @default
+             */
+            summary_text: string;
+        };
+        /** WarehouseInspectionAiAnalysisApiResponse */
+        WarehouseInspectionAiAnalysisApiResponse: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["WarehouseInspectionAiAnalysis"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+        };
+        /**
+         * WarehouseInspectionCycle
+         * @description 单条记录的检验进度周期（只读统计，详情弹窗展示）。
+         */
+        WarehouseInspectionCycle: {
+            /** Inbound Date */
+            inbound_date?: string | null;
+            /** Note */
+            note?: string | null;
+            /** Page Key */
+            page_key: string;
+            /** Pending Since */
+            pending_since?: string | null;
+            /** Record Id */
+            record_id: string;
+            /** Result */
+            result?: string | null;
+            /** Result At */
+            result_at?: string | null;
+            /** Stages */
+            stages?: components["schemas"]["WarehouseInspectionCycleStage"][];
+            /** Status */
+            status: string;
+            /** Status Label */
+            status_label: string;
+            /** Total Hours */
+            total_hours?: number | null;
+        };
+        /**
+         * WarehouseInspectionCycleStage
+         * @description 检验进度周期分段（如 入库→待验 / 待验→合格）。
+         */
+        WarehouseInspectionCycleStage: {
+            /** From At */
+            from_at?: string | null;
+            /** Hours */
+            hours?: number | null;
+            /** Label */
+            label: string;
+            /** To At */
+            to_at?: string | null;
+        };
+        /** WarehouseInspectionDailyPoint */
+        WarehouseInspectionDailyPoint: {
+            /** Avg Hours */
+            avg_hours?: number | null;
+            /** Date */
+            date: string;
+            /**
+             * Qualified
+             * @default 0
+             */
+            qualified: number;
+            /**
+             * Unqualified
+             * @default 0
+             */
+            unqualified: number;
+        };
+        /**
+         * WarehouseInspectionGroupBreakdown
+         * @description 按物料类别/产品拆分。
+         */
+        WarehouseInspectionGroupBreakdown: {
+            /** Avg Hours */
+            avg_hours?: number | null;
+            /**
+             * Completed Count
+             * @default 0
+             */
+            completed_count: number;
+            /** Label */
+            label: string;
+            /**
+             * Pending Count
+             * @default 0
+             */
+            pending_count: number;
+            /**
+             * Qualified Count
+             * @default 0
+             */
+            qualified_count: number;
+            /**
+             * Unqualified Count
+             * @default 0
+             */
+            unqualified_count: number;
+        };
+        /**
+         * WarehouseInspectionOverview
+         * @description 检验进度概览（仪表盘）。
+         */
+        WarehouseInspectionOverview: {
+            /** Breakdown */
+            breakdown?: components["schemas"]["WarehouseInspectionGroupBreakdown"][];
+            current: components["schemas"]["WarehouseInspectionOverviewCurrent"];
+            /** Daily */
+            daily?: components["schemas"]["WarehouseInspectionDailyPoint"][];
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Oldest Pending */
+            oldest_pending?: components["schemas"]["WarehouseInspectionPendingItem"][];
+            /** Scope */
+            scope: string;
+            /** Scope Label */
+            scope_label: string;
+            stages?: components["schemas"]["WarehouseInspectionStageStats"] | null;
+            /** Start Date */
+            start_date: string;
+            window: components["schemas"]["WarehouseInspectionOverviewWindow"];
+        };
+        /** WarehouseInspectionOverviewApiResponse */
+        WarehouseInspectionOverviewApiResponse: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["WarehouseInspectionOverview"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+        };
+        /**
+         * WarehouseInspectionOverviewCurrent
+         * @description 当前待验概况。
+         */
+        WarehouseInspectionOverviewCurrent: {
+            /** Pending Avg Hours */
+            pending_avg_hours?: number | null;
+            /**
+             * Pending Count
+             * @default 0
+             */
+            pending_count: number;
+            /** Pending Max Hours */
+            pending_max_hours?: number | null;
+        };
+        /**
+         * WarehouseInspectionOverviewWindow
+         * @description 近 N 天完成检验概况。
+         */
+        WarehouseInspectionOverviewWindow: {
+            /** Avg Hours */
+            avg_hours?: number | null;
+            /**
+             * Completed Count
+             * @default 0
+             */
+            completed_count: number;
+            /** Days */
+            days: number;
+            /** End */
+            end: string;
+            /** Max Hours */
+            max_hours?: number | null;
+            /** Median Hours */
+            median_hours?: number | null;
+            /** P90 Hours */
+            p90_hours?: number | null;
+            /**
+             * Qualified Count
+             * @default 0
+             */
+            qualified_count: number;
+            /** Start */
+            start: string;
+            /**
+             * Unqualified Count
+             * @default 0
+             */
+            unqualified_count: number;
+        };
+        /** WarehouseInspectionPendingItem */
+        WarehouseInspectionPendingItem: {
+            /** Batch */
+            batch?: string | null;
+            /** Category */
+            category?: string | null;
+            /** Inbound Date */
+            inbound_date?: string | null;
+            /** Name */
+            name: string;
+            /** Product */
+            product?: string | null;
+            /** Waited Hours */
+            waited_hours?: number | null;
+        };
+        /**
+         * WarehouseInspectionStageStats
+         * @description 成品分段平均时长。
+         */
+        WarehouseInspectionStageStats: {
+            /** Inbound To Pending Avg Hours */
+            inbound_to_pending_avg_hours?: number | null;
+            /** Pending To Result Avg Hours */
+            pending_to_result_avg_hours?: number | null;
+        };
+        /**
          * WarehousePageFeishuConfig
          * @description 页面飞书多维表格配置（支持动态切换数据源）
          */
@@ -58990,6 +59221,7 @@ export interface components {
         WarehouseRecordDetailResponse: {
             /** Fields */
             fields: components["schemas"]["WarehouseRecordFieldValue"][];
+            inspection_cycle?: components["schemas"]["WarehouseInspectionCycle"] | null;
             /** Record Id */
             record_id: string;
         };
@@ -59953,6 +60185,13 @@ export interface components {
              */
             responsible_person?: string | null;
             /**
+             * Responsible Users
+             * @description 负责人飞书成员对象 [{id: ou_…, name}]，写回成员字段用
+             */
+            responsible_users?: {
+                [key: string]: string;
+            }[] | null;
+            /**
              * Supplier Name
              * @description 供应商名称
              */
@@ -59979,6 +60218,10 @@ export interface components {
             remark?: string | null;
             /** Responsible Person */
             responsible_person?: string | null;
+            /** Responsible Users */
+            responsible_users?: {
+                [key: string]: string;
+            }[] | null;
             /** Supplier Name */
             supplier_name?: string | null;
         };
@@ -96909,216 +97152,6 @@ export interface operations {
             };
         };
     };
-    list_department_contacts_api_v1_quality_department_contacts_get: {
-        parameters: {
-            query?: {
-                page?: number;
-                page_size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponseEnvelope_list_DepartmentContactOut__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upsert_department_contact_api_v1_quality_department_contacts_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateDepartmentContactRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponseEnvelope_DepartmentContactOut_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_department_contacts_from_feishu_api_v1_quality_department_contacts_feishu_get: {
-        parameters: {
-            query?: {
-                page?: number;
-                page_size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_department_contact_from_feishu_api_v1_quality_department_contacts_feishu__record_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                record_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateFeishuDepartmentContactRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_department_contact_api_v1_quality_department_contacts__contact_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                contact_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateDepartmentContactRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponseEnvelope_DepartmentContactOut_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_department_contact_api_v1_quality_department_contacts__contact_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                contact_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_deviation_investigation_push_records_api_v1_quality_deviation_investigation_push_records_get: {
         parameters: {
             query?: {
@@ -100670,6 +100703,37 @@ export interface operations {
             };
         };
     };
+    list_feishu_validation_form_links_api_v1_quality_feishu_validations_form_links_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_dict_str__Any___"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_feishu_validation_revalidation_upcoming_api_v1_quality_feishu_validations_revalidation_upcoming_get: {
         parameters: {
             query?: {
@@ -100872,6 +100936,41 @@ export interface operations {
             };
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    anomaly_chat_stream_api_v1_quality_finished_product_anomaly_chat_stream_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnomalyChatRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -107069,6 +107168,41 @@ export interface operations {
             };
         };
     };
+    list_person_options_api_v1_quality_person_options_get: {
+        parameters: {
+            query?: {
+                /** @description 姓名关键词（可选） */
+                keyword?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_dict_str__Any___"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_product_quality_api_v1_quality_product_quality_get: {
         parameters: {
             query?: {
@@ -110157,6 +110291,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_validation_person_options_api_v1_quality_validations_person_options_get: {
+        parameters: {
+            query?: {
+                /** @description 姓名过滤关键词，留空返回全量在职人员 */
+                keyword?: string | null;
+                /** @description 返回条数上限 */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_ValidationPersonOption__"];
                 };
             };
             /** @description Validation Error */
@@ -124513,6 +124683,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WarehouseFeishuWsStatusApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_inspection_progress_ai_analysis_api_v1_warehouse_inspection_progress_ai_analysis_get: {
+        parameters: {
+            query?: {
+                /** @description raw=原辅料及包材（入库总账）/ product=成品库存 */
+                scope?: string;
+                /** @description 统计窗口天数（默认 30） */
+                days?: number;
+                /** @description 跳过缓存重新分析 */
+                force?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WarehouseInspectionAiAnalysisApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_inspection_progress_overview_api_v1_warehouse_inspection_progress_overview_get: {
+        parameters: {
+            query?: {
+                /** @description raw=原辅料及包材（入库总账）/ product=成品库存 */
+                scope?: string;
+                /** @description 统计窗口天数（默认 30） */
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WarehouseInspectionOverviewApiResponse"];
                 };
             };
             /** @description Validation Error */

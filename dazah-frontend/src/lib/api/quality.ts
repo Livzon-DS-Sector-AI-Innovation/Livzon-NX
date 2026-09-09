@@ -11,7 +11,6 @@ import type {
   CapaListItem,
   DeviationDetail,
   DeviationListItem,
-  DepartmentContact,
   FeishuCapaLedgerItem,
   FeishuCapaPlanTrackItem,
   FeishuDeviationLedgerRecordItem,
@@ -111,13 +110,6 @@ export async function fetchCapas(params?: {
   status?: string
 }): Promise<ListResult<CapaListItem>> {
   return apiFetch<ListResult<CapaListItem>>(withQuery('/api/v1/quality/capas', params))
-}
-
-export async function fetchDepartmentContacts(page: number = 1, page_size: number = 1000): Promise<DepartmentContact[]> {
-  const result = await apiFetch<ListResult<DepartmentContact> | DepartmentContact[]>(
-    withQuery('/api/v1/quality/department-contacts', { page, page_size })
-  )
-  return Array.isArray(result) ? result : result.items
 }
 
 function withQuery(path: string, params?: QueryParams) {

@@ -294,6 +294,48 @@ describe('WarehouseFeishuTablePage', () => {
     expect(mocks.fetchWarehouseMaterialPage).toHaveBeenLastCalledWith('raw-summary', expect.objectContaining({ incremental: true, force: undefined }), 60000)
   })
 
+  it('shows read-only inspection cycle block in record detail when available', async () => {
+    authorize('query')
+    mocks.fetchWarehouseRecordDetail.mockResolvedValue({
+      record_id: 'row-1',
+      fields: (detail as unknown as { fields: unknown[] }).fields,
+      inspection_cycle: {
+        page_key: 'inbound-ledger',
+        record_id: 'row-1',
+        status: 'completed',
+        status_label: '已完成',
+        result: '合格',
+        inbound_date: '2026-09-10',
+        pending_since: null,
+        result_at: '2026-09-12T01:00:00+00:00',
+        stages: [
+          { label: '入库 → 检测结果', hours: 57, from_at: '2026-09-09T16:00:00+00:00', to_at: '2026-09-12T01:00:00+00:00' },
+        ],
+        total_hours: 57,
+        note: null,
+      },
+    } as never)
+    await mount()
+    const button = (label: string) => Array.from(container.querySelectorAll('button')).find((item) => item.textContent === label)
+    await act(async () => button('详情')?.click())
+    const text = container.textContent ?? ''
+    expect(text).toContain('检验进度周期')
+    expect(text).toContain('只读统计')
+    expect(text).toContain('已完成')
+    expect(text).toContain('入库 → 检测结果')
+    expect(text).toContain('2.4 天（57 小时）')
+    expect(text).toContain('入库日期：2026-09-10')
+  })
+
+  it('hides inspection cycle block when detail has no inspection data', async () => {
+    authorize('query')
+    await mount()
+    const button = (label: string) => Array.from(container.querySelectorAll('button')).find((item) => item.textContent === label)
+    await act(async () => button('详情')?.click())
+    expect(container.textContent).toContain('记录详情')
+    expect(container.textContent).not.toContain('检验进度周期')
+  })
+
   it('requires explicit confirmation before authorized remote synchronization', async () => {
     authorize('operate', ['sync_config', 'delete'])
     await mount()

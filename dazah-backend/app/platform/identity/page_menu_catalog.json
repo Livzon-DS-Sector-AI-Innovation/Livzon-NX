@@ -119,15 +119,6 @@
         ]
       },
       {
-        "key": "department-contacts",
-        "name": "部门联系人",
-        "path": "/quality/department-contacts",
-        "icon": null,
-        "permission_code": null,
-        "disabled": false,
-        "children": null
-      },
-      {
         "key": "inspection",
         "name": "质量检验",
         "path": "/quality/inspection",

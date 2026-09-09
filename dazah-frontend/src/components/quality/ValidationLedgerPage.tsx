@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { App } from 'antd'
+import { App, Button, Modal, Radio, Space } from 'antd'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { batchDeleteFeishuValidationsAction, createFeishuValidationAction, deleteFeishuValidationAction, updateFeishuValidationAction } from '@/actions/quality'
-import { fetchValidations, fetchValidationExecutions } from '@/lib/api/client/quality'
+import { fetchValidationFormLinks, fetchValidations, fetchValidationExecutions } from '@/lib/api/client/quality'
 import type { ValidationListItem, ValidationExecutionItem } from '@/types/quality'
 import { ValidationEditModal } from './ValidationEditModal'
 import { ValidationDetailDrawer } from './ValidationDetailDrawer'
@@ -74,6 +74,16 @@ export function ValidationLedgerPage({
   const [editingRecord, setEditingRecord] = useState<ValidationRow | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailRecord, setDetailRecord] = useState<ValidationRow | null>(null)
+  // 主计划新增改为打开对应年度的飞书多维表单（表单可写群组等开放接口不支持的字段）
+  const [formLinkOpen, setFormLinkOpen] = useState(false)
+  const [formLinkYear, setFormLinkYear] = useState<number>(new Date().getFullYear())
+  const formLinksQuery = useQuery({
+    queryKey: ['validation-form-links'],
+    queryFn: fetchValidationFormLinks,
+    enabled: mode === 'master',
+  })
+  const formLinks = formLinksQuery.data ?? []
+  const selectedFormLink = formLinks.find((item) => item.year === formLinkYear)
 
   /** 主计划模式：写入/删除统一走验证主计划实体（年度表含全部验证类别） */
   const mutationValidationType =
@@ -135,8 +145,24 @@ export function ValidationLedgerPage({
   const total = data?.total ?? 0
 
   const handleCreate = () => {
+    if (mode === 'master') {
+      setFormLinkYear(filters.year ? Number(filters.year) : new Date().getFullYear())
+      setFormLinkOpen(true)
+      return
+    }
     setEditingRecord(null)
     setEditorOpen(true)
+  }
+
+  const handleOpenFeishuForm = () => {
+    const url = (selectedFormLink?.form_url || '').trim()
+    if (!url) {
+      message.warning(`${formLinkYear} 年表单链接未配置，请到 质量管理-设置-飞书设置 中粘贴表单链接`)
+      return
+    }
+    window.open(url, '_blank', 'noopener,noreferrer')
+    setFormLinkOpen(false)
+    message.info(`已打开 ${formLinkYear} 年飞书表单；提交后回到本页点击「刷新」即可看到新记录`)
   }
 
   const handleDetail = (record: ValidationRow) => {
@@ -172,7 +198,10 @@ export function ValidationLedgerPage({
     })
   }
 
-  const handleSubmit = async (values: Record<string, unknown>) => {
+  const handleSubmit = async (
+    values: Record<string, unknown>,
+    targetYear?: number
+  ) => {
     try {
       setSaving(true)
       if (editingRecord) {
@@ -184,7 +213,11 @@ export function ValidationLedgerPage({
         )
         message.success(`${title}已更新`)
       } else {
-        await createFeishuValidationAction(values, mutationYear)
+        // 新增以弹窗内选择的年度表为准（未选择时回退页面年份筛选）
+        await createFeishuValidationAction(
+          values,
+          targetYear ?? mutationYear
+        )
         message.success(`${title}已创建`)
       }
       setEditorOpen(false)
@@ -261,6 +294,52 @@ export function ValidationLedgerPage({
         onCancel={() => setEditorOpen(false)}
         onSubmit={handleSubmit}
       />
+
+      <Modal
+        title="新增验证记录（飞书表单）"
+        open={formLinkOpen}
+        onCancel={() => setFormLinkOpen(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setFormLinkOpen(false)}>
+            取消
+          </Button>,
+          <Button
+            key="open"
+            type="primary"
+            disabled={!selectedFormLink?.form_url}
+            onClick={handleOpenFeishuForm}
+          >
+            打开 {formLinkYear} 年表单
+          </Button>,
+        ]}
+        width={460}
+      >
+        <p style={{ marginTop: 0, color: 'var(--color-steel)' }}>
+          请选择要录入的验证年度台账，将打开对应的飞书多维表单；群组等字段可在表单中直接填写。
+        </p>
+        <Radio.Group
+          value={formLinkYear}
+          onChange={(event) => setFormLinkYear(event.target.value)}
+          style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+        >
+          <Space direction="vertical" size={8}>
+            {formLinks.map((item) => (
+              <Radio key={item.year} value={item.year}>
+                {item.year}年验证台账
+                {!item.table_configured && (
+                  <span style={{ color: 'var(--color-stone)' }}>（年度表未配置）</span>
+                )}
+                {!item.form_url && item.table_configured && (
+                  <span style={{ color: 'var(--color-stone)' }}>（表单链接未配置）</span>
+                )}
+              </Radio>
+            ))}
+            {formLinks.length === 0 && (
+              <span style={{ color: 'var(--color-stone)' }}>表单链接加载中…</span>
+            )}
+          </Space>
+        </Radio.Group>
+      </Modal>
     </div>
   )
 }

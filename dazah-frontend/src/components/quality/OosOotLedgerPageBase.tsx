@@ -7,9 +7,9 @@ import type { ColumnsType } from 'antd/es/table'
 import { DownloadOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { fetchDepartmentContacts } from '@/lib/api/client/quality'
+import { fetchQualityPersonDirectory } from '@/lib/api/client/quality'
 import { TableEmptyState } from './TableEmptyState'
-import type { DepartmentContact } from '@/types/quality'
+import type { QualityPersonOption } from '@/types/quality'
 
 export interface OosOotLedgerRecord {
   record_id: string
@@ -85,9 +85,9 @@ export function OosOotLedgerPageBase({ config }: { config: OosOotLedgerConfig })
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
 
-  const { data: contacts = [] } = useQuery<DepartmentContact[]>({
-    queryKey: ['quality-department-contacts'],
-    queryFn: fetchDepartmentContacts,
+  const { data: contacts = [] } = useQuery<QualityPersonOption[]>({
+    queryKey: ['quality-person-directory'],
+    queryFn: fetchQualityPersonDirectory,
   })
 
   const { data, isLoading: loading, error } = useQuery({
@@ -110,7 +110,7 @@ export function OosOotLedgerPageBase({ config }: { config: OosOotLedgerConfig })
 
   const contactOptions = contacts
     .filter((c) => c.name)
-    .map((c) => ({ label: c.name!, value: (c as any).bitable_user_id || c.open_id || c.name! }))
+    .map((c) => ({ label: c.name!, value: c.open_id || c.name! }))
 
   const materialOptions = useMemo(() => {
     const vals = [...new Set(items.map(i => i.material_name).filter(Boolean))]

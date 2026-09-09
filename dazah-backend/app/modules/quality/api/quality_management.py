@@ -21,13 +21,11 @@ from app.modules.quality.schemas import (
     CapaEvaluationRequest,
     CompleteAiAnalysisRequest,
     CompletePartRequest,
-    ConfirmProductionStatusRequest,
     CreateAttachmentReviewRequest,
     CreateCapaPlanTrackRequest,
     CreateCapaRequest,
     CreateChangeActionPlanRequest,
     CreateChangeRequest,
-    CreateDepartmentContactRequest,
     CreateDeviationInvestigationPushRecordRequest,
     CreateDeviationRequest,
     DeviationAiSessionOut,
@@ -45,7 +43,6 @@ from app.modules.quality.schemas import (
     UpdateCapaRequest,
     UpdateChangeActionPlanRequest,
     UpdateChangeRequest,
-    UpdateDepartmentContactRequest,
     UpdateDeviationAiSessionRequest,
     UpdateDeviationRequest,
     UpdateQualityFeishuAppSettingsRequest,
@@ -256,40 +253,6 @@ async def batch_update_deviation_status(
         db, data.deviation_ids, data.target_status, "system"
     )
     return {"data": result}
-
-
-@router.get("/deviations/department-confirmations", summary="获取部门周确认列表")
-async def list_department_confirmations(
-    week_key: str | None = None,
-    page: int = 1,
-    page_size: int = 20,
-    db: AsyncSession = Depends(get_db),
-) -> Any:
-    result = await service.get_department_confirmations(db, week_key, page, page_size)
-    return {
-        "data": result["items"],
-        "meta": {
-            "total": result["total"],
-            "page": result["page"],
-            "page_size": result["page_size"],
-        },
-    }
-
-
-@router.post("/deviations/department-confirmations", summary="确认部门生产状态")
-async def confirm_department_status(
-    data: ConfirmProductionStatusRequest, db: AsyncSession = Depends(get_db)
-) -> Any:
-    result = await service.confirm_production_status(db, data, "system")
-    return {"data": result}
-
-
-@router.get("/deviations/stopped-departments", summary="获取停产部门列表")
-async def get_stopped_departments(
-    week_key: str, db: AsyncSession = Depends(get_db)
-) -> Any:
-    departments = await service.get_stopped_departments(db, week_key)
-    return {"data": departments}
 
 
 @router.get("/deviations/{deviation_id}", summary="获取偏差详情")
@@ -1854,60 +1817,6 @@ async def submit_capa_evaluation(
 # ============ Department Contacts ============
 
 
-@router.get("/department-contacts", summary="获取部门联系人列表")
-async def list_department_contacts(
-    page: int = 1,
-    page_size: int = 20,
-    db: AsyncSession = Depends(get_db),
-) -> Any:
-    result = await service.get_department_contact_list(db, page, page_size)
-    return {"data": result}
-
-
-@router.get("/department-contacts/feishu", summary="直接获取飞书部门联系人列表")
-async def list_department_contacts_from_feishu(
-    page: int = 1,
-    page_size: int = 20,
-    db: AsyncSession = Depends(get_db),
-) -> Any:
-    result = await service.get_department_contact_list_from_feishu(db, page, page_size)
-    return {"data": result}
-
-
-@router.post("/department-contacts", summary="创建部门联系人")
-async def upsert_department_contact(
-    data: CreateDepartmentContactRequest,
-    db: AsyncSession = Depends(get_db),
-) -> Any:
-    result = await service.upsert_department_contact(db, data, None, "system")
-    return {"data": result}
-
-
-@router.put("/department-contacts/{contact_id}", summary="更新部门联系人")
-async def update_department_contact(
-    contact_id: uuid.UUID,
-    data: UpdateDepartmentContactRequest,
-    db: AsyncSession = Depends(get_db),
-) -> Any:
-    try:
-        result = await service.update_department_contact(db, contact_id, data)
-        return {"data": result}
-    except ValueError as e:
-        detail = str(e)
-        if "not found" in detail:
-            raise HTTPException(status_code=404, detail=detail)
-        raise HTTPException(status_code=400, detail=detail)
-
-
-@router.delete("/department-contacts/{contact_id}", summary="删除部门联系人")
-async def delete_department_contact(
-    contact_id: uuid.UUID, db: AsyncSession = Depends(get_db)
-) -> Any:
-    try:
-        result = await service.delete_department_contact(db, contact_id)
-        return {"data": result}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
 
 
 # ============ Statistics ============

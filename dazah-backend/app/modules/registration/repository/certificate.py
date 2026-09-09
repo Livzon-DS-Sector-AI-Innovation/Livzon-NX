@@ -5,11 +5,6 @@ from uuid import UUID
 from sqlalchemy import asc, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.quality.public_api import (
-    DepartmentContact,
-    get_department_contact_by_open_id,
-    list_department_contacts,
-)
 from app.modules.registration.models import (
     RegistrationCertificateEntry,
     RegistrationCertificateReminderNotification,
@@ -150,12 +145,6 @@ class RegistrationCertificateRepository:
             )
         )
         return result.scalar_one()
-
-    async def list_reminder_recipient_contacts(self) -> list[DepartmentContact]:
-        return await list_department_contacts(self.session)
-
-    async def get_contact_by_open_id(self, open_id: str) -> DepartmentContact | None:
-        return await get_department_contact_by_open_id(self.session, open_id)
 
     async def reminder_notification_exists(
         self,

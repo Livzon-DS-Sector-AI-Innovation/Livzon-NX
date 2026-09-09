@@ -10,7 +10,7 @@ import { ReloadOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { pullQualityRecordsFromFeishu } from '@/actions/quality'
 import { deleteDeviationReportRecord, updateDeviationReportRecord } from '@/actions/quality-deviation'
-import { fetchDepartmentContacts, fetchFeishuDeviationReportRecords, fetchQualityFeishuAppSettings, formatQualitySyncSummary } from '@/lib/api/client/quality'
+import { fetchQualityPersonDirectory, fetchFeishuDeviationReportRecords, fetchQualityFeishuAppSettings, formatQualitySyncSummary } from '@/lib/api/client/quality'
 
 import type { FeishuDeviationReportRecordItem } from '@/types/quality'
 import { buildResizableColumns, ResizableHeaderCell } from './ResizableTableHeader'
@@ -85,8 +85,8 @@ function EditDeviationRecordModal({
 
   // 编辑弹窗的报告人选项
   const { data: contacts = [], isLoading: contactsLoading } = useQuery({
-    queryKey: ['quality-department-contacts', 'for-deviation-report-edit', record.record_id || record.id],
-    queryFn: () => fetchDepartmentContacts(),
+    queryKey: ['quality-person-directory', 'for-deviation-report-edit', record.record_id || record.id],
+    queryFn: () => fetchQualityPersonDirectory(),
   })
 
   const contactOptions = useMemo(

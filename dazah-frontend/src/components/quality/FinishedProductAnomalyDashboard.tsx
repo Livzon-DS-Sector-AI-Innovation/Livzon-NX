@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { App, Alert, Button, Card, Col, Row, Select, Space, Statistic } from 'antd'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { LinkOutlined, RightOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { LinkOutlined, MessageOutlined, RightOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import ReactECharts from 'echarts-for-react'
 import {
@@ -13,6 +13,7 @@ import {
 } from '@/lib/api/client/quality'
 import type { AnomalyDashboardData } from '@/types/quality'
 import { runAnomalyAnalysisAction } from '@/actions/finished-product-anomaly'
+import { FinishedProductAnomalyChat } from './FinishedProductAnomalyChat'
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) return error.message
@@ -25,6 +26,7 @@ export function FinishedProductAnomalyDashboard() {
   const queryClient = useQueryClient()
   const [yearFilter, setYearFilter] = useState<number | null>(null)
   const [jobId, setJobId] = useState<string | null>(null)
+  const [chatOpen, setChatOpen] = useState(false)
 
   const yearsQuery = useQuery({
     queryKey: ['anomaly-report', 'years'],
@@ -56,7 +58,7 @@ export function FinishedProductAnomalyDashboard() {
       const completed = status.state === 'completed'
       setJobId(null)
       if (completed) {
-        message.success(`AI 分析完成，本次分类 ${status.result?.analyzed ?? 0} 条记录`)
+        message.success(`AI 分类完成，本次分类 ${status.result?.analyzed ?? 0} 条记录`)
         queryClient.invalidateQueries({ queryKey: ['anomaly-report', 'dashboard'] })
       } else {
         message.error(`AI 分析失败：${status.progress || '未知错误'}`)
@@ -185,13 +187,26 @@ export function FinishedProductAnomalyDashboard() {
           disabled={configuredYears.length === 0}
           onClick={() => void handleRunAnalysis()}
         >
-          {jobRunning ? 'AI 分析中…' : data && data.unclassified > 0 ? `AI 分析（${data.unclassified} 条待分析）` : '重新 AI 分析'}
+          {jobRunning ? 'AI 分类中…' : data && data.unclassified > 0 ? `AI 分类（${data.unclassified} 条待分析）` : 'AI 分类'}
+        </Button>
+        <Button
+          icon={<MessageOutlined />}
+          disabled={configuredYears.length === 0}
+          onClick={() => setChatOpen(true)}
+        >
+          AI 助手
         </Button>
       </Space>
 
       {jobRunning && statusQuery.data?.progress && (
         <Alert type="info" showIcon style={{ marginBottom: 12 }} message={statusQuery.data.progress} />
       )}
+
+      <FinishedProductAnomalyChat
+        open={chatOpen}
+        year={yearFilter}
+        onClose={() => setChatOpen(false)}
+      />
 
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={24} sm={8}>
@@ -210,7 +225,9 @@ export function FinishedProductAnomalyDashboard() {
               title="待分析"
               value={data?.unclassified ?? 0}
               suffix="条"
-              valueStyle={data && data.unclassified > 0 ? { color: '#d46b08' } : undefined}
+              styles={
+                data && data.unclassified > 0 ? { content: { color: '#d46b08' } } : undefined
+              }
             />
             {data?.last_analyzed_at && (
               <span style={{ color: 'var(--color-steel)', fontSize: 12 }}>

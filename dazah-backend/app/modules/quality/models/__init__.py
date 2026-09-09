@@ -8,7 +8,6 @@ from app.modules.quality.models.change_action_plan import ChangeActionPlan
 from app.modules.quality.models.change_control import ChangeControl
 from app.modules.quality.models.complaint import ComplaintRecord
 from app.modules.quality.models.contacts import (
-    DepartmentContact,
     DepartmentWeeklyConfirmation,
 )
 from app.modules.quality.models.cpv_batch import CpvBatch
@@ -105,7 +104,6 @@ __all__ = [
     "ProcessValidationRecord",
     "CleaningValidationRecord",
     "OtherValidationRecord",
-    "DepartmentContact",
     "DepartmentWeeklyConfirmation",
     "AttachmentReview",
     "DeviationInvestigationPushRecord",

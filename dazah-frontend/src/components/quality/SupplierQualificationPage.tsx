@@ -3,12 +3,21 @@
 import { qualityTokens } from './themeTokens'
 import { useCallback, useEffect, useState } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
-import { App, Button, Card, DatePicker, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Typography } from 'antd'
+import { App, Avatar, Button, Card, DatePicker, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { pullSupplierQualifications, createSupplierQualification, updateSupplierQualification, deleteSupplierQualification } from '@/actions/quality'
 import { fetchSupplierQualifications, type SupplierExpiryBucket } from '@/lib/api/client/quality'
+import FeishuPersonSelect, { type FeishuPersonValue } from '@/components/shared/FeishuPersonSelect'
 import type { SupplierQualificationItem } from '@/types/quality'
+
+const AV = ['#5645d4', '#7b3ff2', '#dd5b00', '#0075de', '#1aae39', '#2a9d99']
+
+function avColor(name: string) {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
+  return AV[Math.abs(h) % AV.length]
+}
 
 const MATERIAL_TYPE_OPTIONS = [
   { label: '固体', value: '固体' },
@@ -57,7 +66,6 @@ interface FormValues {
   qualification_file: string
   is_completed: boolean
   deadline: Dayjs | null
-  responsible_person: string
   remark: string
 }
 
@@ -97,6 +105,8 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
   const [modalVisible, setModalVisible] = useState(false)
   const [editingRecord, setEditingRecord] = useState<SupplierQualificationItem | null>(null)
   const [form] = Form.useForm<FormValues>()
+  // 负责人：多选飞书人员，数据源与验证模块一致（人事管理-飞书联系人）
+  const [responsiblePersons, setResponsiblePersons] = useState<FeishuPersonValue[]>([])
 
   // 任意筛选条件变化都回到第一页，避免停在越界页码
   const resetPage = () => setPage(1)
@@ -152,6 +162,7 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
     setEditingRecord(null)
     form.resetFields()
     form.setFieldsValue({ is_completed: false })
+    setResponsiblePersons([])
     setModalVisible(true)
   }, [form])
 
@@ -165,9 +176,20 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
       qualification_file: record.qualification_file ?? '',
       is_completed: record.is_completed ?? false,
       deadline: toDateValue(record.deadline),
-      responsible_person: record.responsible_person ?? '',
       remark: record.remark ?? '',
     })
+    // 编辑回显：镜像里的负责人 id 对目标 Base 有效（resolved）
+    const users = record.responsible_users ?? []
+    setResponsiblePersons(
+      users
+        .filter((user) => user.id)
+        .map((user) => ({
+          id: user.id,
+          name: user.name,
+          email: user.email ?? undefined,
+          resolved: true,
+        })),
+    )
     setModalVisible(true)
   }, [form])
 
@@ -175,6 +197,7 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
     setModalVisible(false)
     setEditingRecord(null)
     form.resetFields()
+    setResponsiblePersons([])
   }, [form])
 
   const handleSubmit = useCallback(async () => {
@@ -189,7 +212,12 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
         qualification_file: values.qualification_file?.trim() || null,
         is_completed: values.is_completed ?? false,
         deadline: values.deadline ? values.deadline.format('YYYY-MM-DD') : null,
-        responsible_person: values.responsible_person?.trim() || null,
+                responsible_users: responsiblePersons.map((person) => ({
+          id: person.id,
+          name: person.name,
+          ...(person.email ? { email: person.email } : {}),
+          ...(person.mobile ? { mobile: person.mobile } : {}),
+        })),
         remark: values.remark?.trim() || null,
       }
       if (editingRecord) {
@@ -206,7 +234,7 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
     } finally {
       setSaving(false)
     }
-  }, [closeModal, editingRecord, form, queryClient, message])
+  }, [closeModal, editingRecord, form, queryClient, message, responsiblePersons])
 
   const handleDelete = useCallback(async (recordId: string) => {
     try {
@@ -298,8 +326,55 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
       title: '负责人',
       dataIndex: 'responsible_person',
       key: 'responsible_person',
-      width: 100,
-      render: (value: string | null) => value || '-',
+      width: 160,
+      render: (_: unknown, record: SupplierQualificationItem) => {
+        const users = record.responsible_users ?? []
+        if (!users.length) {
+          return record.responsible_person || '-'
+        }
+        return (
+          <Space size={4} wrap>
+            {users.map((user) => (
+              <span key={user.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Avatar
+                  size={22}
+                  src={user.avatar_url || undefined}
+                  style={{ backgroundColor: avColor(user.name || '?'), flexShrink: 0, fontSize: 11, fontWeight: 700 }}
+                >
+                  {!user.avatar_url ? (user.name || '?').charAt(0) : undefined}
+                </Avatar>
+                {user.name}
+              </span>
+            ))}
+          </Space>
+        )
+      },
+    },
+    {
+      title: '群组',
+      dataIndex: 'groups',
+      key: 'groups',
+      width: 160,
+      render: (value: SupplierQualificationItem['groups']) => {
+        if (!value?.length) return '-'
+        return (
+          <Space size={4} wrap>
+            {value.map((group) => (
+              <span key={group.id || group.name} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Avatar
+                  size={22}
+                  src={group.avatar_url || undefined}
+                  icon={!group.avatar_url ? undefined : undefined}
+                  style={{ backgroundColor: group.avatar_url ? 'transparent' : avColor(group.name || '?'), flexShrink: 0, fontSize: 11, fontWeight: 700 }}
+                >
+                  {!group.avatar_url ? (group.name || '?').charAt(0) : undefined}
+                </Avatar>
+                {group.name}
+              </span>
+            ))}
+          </Space>
+        )
+      },
     },
     {
       title: '备注',
@@ -469,13 +544,22 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
             <Form.Item name="deadline" label="截止日期">
               <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
             </Form.Item>
-            <Form.Item name="responsible_person" label="负责人">
-              <Input placeholder="请输入负责人" />
-            </Form.Item>
             <Form.Item name="is_completed" label="是否完成" valuePropName="checked">
               <Switch />
             </Form.Item>
           </div>
+
+          <Form.Item label="负责人" extra="与验证模块一致：人事管理-飞书联系人选人，支持中文/全拼/首字母搜索，可多选">
+            <FeishuPersonSelect
+              multiple
+              placeholder="输入姓名或拼音搜索人员"
+              value={responsiblePersons}
+              onChange={(value) => {
+                const next = Array.isArray(value) ? value : value ? [value] : []
+                setResponsiblePersons(next.map((p) => ({ id: p.id, name: p.name, resolved: p.resolved })))
+              }}
+            />
+          </Form.Item>
 
           <Form.Item name="remark" label="备注">
             <Input.TextArea placeholder="请输入备注" rows={3} />

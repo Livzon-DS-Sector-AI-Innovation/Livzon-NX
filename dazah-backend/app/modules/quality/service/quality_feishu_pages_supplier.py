@@ -18,11 +18,11 @@ from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException, NotFoundException
+from app.modules.hr import public_api as hr_public_api
 from app.modules.quality.models.external_quality import SupplierQualificationMirror
 from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
 from app.modules.quality.service.quality_feishu_pages import (
     _build_page_result,
-    _create_entity_record,
     _delete_entity_record,
     _resolve_runtime_entity,
 )
@@ -30,7 +30,10 @@ from app.modules.quality.service.quality_feishu_supplier_mirror import (
     map_record_to_mirror_fields,
     pull_supplier_qualification_mirror,
 )
-from app.platform.integrations.feishu.bitable import BitableClient
+from app.platform.integrations.feishu.bitable import (
+    BitableClient,
+    fields_need_union_user_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +66,8 @@ def _mirror_row(mirror: SupplierQualificationMirror) -> dict[str, Any]:
         "is_completed": mirror.is_completed,
         "deadline": mirror.deadline,
         "responsible_person": mirror.responsible_person,
+        "responsible_users": mirror.responsible_users,
+        "groups": mirror.groups,
         "remark": mirror.remark,
         "expiry_status": mirror.expiry_status,
         "created_at": mirror.source_created_at,
@@ -181,7 +186,35 @@ async def list_supplier_qualification_records(
         .all()
     )
     items = [_mirror_row(row) for row in rows]
+    await _attach_responsible_avatars(db, items)
     return _build_page_result(items, total, page, page_size)
+
+
+async def _attach_responsible_avatars(
+    db: AsyncSession, items: list[dict[str, Any]]
+) -> None:
+    """按负责人 email 批量关联 HR 飞书成员头像（open_id 跨应用不可用）。"""
+    emails: list[str] = []
+    for item in items:
+        for user in item.get("responsible_users") or []:
+            email = str(user.get("email") or "").strip()
+            if email:
+                emails.append(email)
+    if not emails:
+        return
+    try:
+        avatar_by_email = await hr_public_api.get_avatar_urls_by_emails(db, emails)
+    except Exception:
+        logger.exception("Failed to resolve responsible avatars from HR members")
+        return
+    if not avatar_by_email:
+        return
+    for item in items:
+        for user in item.get("responsible_users") or []:
+            email = str(user.get("email") or "").strip().lower()
+            avatar_url = avatar_by_email.get(email)
+            if avatar_url:
+                user["avatar_url"] = avatar_url
 
 
 async def get_supplier_qualification_record(
@@ -235,7 +268,56 @@ async def _write_mirror_from_remote(
     return _mirror_row(row)
 
 
-def _build_supplier_qualification_fields(payload: dict[str, Any]) -> dict[str, Any]:
+def _summarize_feishu_error(exc: Exception) -> str:
+    """从飞书客户端异常中提取 code/msg，给前端可读的业务错误。"""
+    message = str(exc)
+    if "code=" in message and "msg=" in message:
+        return message.split("msg=", 1)[1].split(",")[0].strip() or message
+    return "无法连接飞书或写入被拒绝"
+
+
+async def _resolve_bitable_user_ids(
+    db: AsyncSession,
+    members: list[dict[str, str]],
+    runtime: Any = None,
+) -> list[dict[str, str]]:
+    """把人员选项 [{id, name, ...}] 转成成员字段可写的 union_id。
+
+    选人数据源（人事管理-飞书联系人）的 open_id 属 HR 应用维度，经
+    hr_identity 换发为跨应用稳定的 union_id（内部 Redis 缓存 30 天）。
+    非 ou_ 开头的 id（记录回读的成员 id）与换发失败的 id（含历史上
+    质量应用维度的 open_id，该 Base 实测接受原样写回）原样保留，不阻断保存。
+    """
+    if not members:
+        return []
+
+    from app.modules.quality.service.hr_identity import (
+        translate_hr_open_ids_to_union_ids,
+    )
+
+    resolved: list[dict[str, str]] = []
+    for member in members:
+        member_id = str(member.get("id") or "").strip()
+        resolved.append(
+            {"id": member_id, "name": str(member.get("name") or "").strip()}
+        )
+
+    need = [entry["id"] for entry in resolved if entry["id"].startswith("ou_")]
+    if need:
+        try:
+            translated = await translate_hr_open_ids_to_union_ids(db, need)
+        except Exception:
+            logger.exception("union_id 换发失败；保留原 id 写入，不阻断保存")
+            translated = {}
+        for entry in resolved:
+            if entry["id"].startswith("ou_"):
+                entry["id"] = translated.get(entry["id"], entry["id"])
+    return resolved
+
+
+async def _build_supplier_qualification_fields(
+    db: AsyncSession, payload: dict[str, Any], runtime: Any = None
+) -> dict[str, Any]:
     fields: dict[str, Any] = {}
 
     text_fields: list[tuple[str, str]] = [
@@ -261,13 +343,35 @@ def _build_supplier_qualification_fields(payload: dict[str, Any]) -> dict[str, A
             feishu_sync_service._parse_feishu_datetime(deadline)
         )
 
-    responsible = payload.get("responsible_person")
-    if responsible:
-        if isinstance(responsible, dict) and responsible.get("id"):
-            fields["负责人"] = [responsible]
-        elif isinstance(responsible, str) and responsible.strip():
-            if responsible.strip().startswith("ou_"):
-                fields["负责人"] = [{"id": responsible.strip()}]
+    if "responsible_users" in payload:
+        responsible_users = payload.get("responsible_users")
+        if isinstance(responsible_users, list) and responsible_users:
+            writable = await _resolve_bitable_user_ids(
+                db,
+                [
+                    user
+                    for user in responsible_users
+                    if isinstance(user, dict)
+                    and str(user.get("id") or "").strip()
+                ],
+                runtime,
+            )
+            if writable:
+                fields["负责人"] = [
+                    {"id": user_id} for user_id in (u["id"] for u in writable)
+                ]
+        elif isinstance(responsible_users, list):
+            # 显式传空数组：清空飞书成员字段
+            fields["负责人"] = []
+    else:
+        # 兼容旧调用：单值 dict 或 ou_ 开头的 open_id 字符串
+        responsible = payload.get("responsible_person")
+        if responsible:
+            if isinstance(responsible, dict) and responsible.get("id"):
+                fields["负责人"] = [responsible]
+            elif isinstance(responsible, str) and responsible.strip():
+                if responsible.strip().startswith("ou_"):
+                    fields["负责人"] = [{"id": responsible.strip()}]
 
     return fields
 
@@ -282,20 +386,38 @@ async def create_supplier_qualification_record(
     qualification_name = str(payload.get("qualification_name") or "").strip()
     if not qualification_name:
         raise AppException(message="资质名称不能为空")
-    fields = _build_supplier_qualification_fields(payload)
     runtime, entity = await _resolve_runtime_entity(
         db, ENTITY_SUPPLIER_QUALIFICATION, direction="push"
     )
-    created = await _create_entity_record(db, ENTITY_SUPPLIER_QUALIFICATION, fields)
-    record_id = created["record_id"]
+    fields = await _build_supplier_qualification_fields(db, payload, runtime)
+    client = BitableClient(
+        app_token=entity.app_token,
+        app_id=runtime.app_id,
+        app_secret=runtime.app_secret,
+    )
     try:
-        client = BitableClient(
-            app_token=entity.app_token,
-            app_id=runtime.app_id,
-            app_secret=runtime.app_secret,
+        # 成员字段出现 on_ 前缀 union_id 时必须声明 union_id 命名空间
+        created = await client.create_record(
+            entity.table_id,
+            fields,
+            user_id_type="union_id" if fields_need_union_user_id(fields) else None,
         )
+    except AppException:
+        raise
+    except Exception as exc:
+        logger.exception("supplier_qualification feishu create failed")
+        raise AppException(
+            status_code=502,
+            message=f"写入飞书失败：{_summarize_feishu_error(exc)}",
+        ) from exc
+    record_id = created.get("record_id") or ""
+    if not record_id:
+        raise AppException(
+            status_code=502, message="写入飞书失败：未返回记录 ID"
+        )
+    try:
         return await _write_mirror_from_remote(
-            db, client, created["table_id"], record_id, entity
+            db, client, entity.table_id, record_id, entity
         )
     except (NotFoundException, AppException):
         # 飞书写入成功但镜像回写失败：返回飞书 record_id 兜底行，不重复写飞书
@@ -324,17 +446,32 @@ async def update_supplier_qualification_record(
 ) -> dict[str, Any]:
     current = await get_supplier_qualification_record(db, record_id)
     merged = {**current, **payload}
-    fields = _build_supplier_qualification_fields(merged)
     runtime, entity = await _resolve_runtime_entity(
         db, ENTITY_SUPPLIER_QUALIFICATION, direction="push"
     )
+    fields = await _build_supplier_qualification_fields(db, merged, runtime)
     client = BitableClient(
         app_token=entity.app_token,
         app_id=runtime.app_id,
         app_secret=runtime.app_secret,
     )
     table_id = feishu_sync_service._require_table_id(entity)
-    await client.update_record(table_id, record_id, fields)
+    try:
+        # 成员字段出现 on_ 前缀 union_id 时必须声明 union_id 命名空间
+        await client.update_record(
+            table_id,
+            record_id,
+            fields,
+            user_id_type="union_id" if fields_need_union_user_id(fields) else None,
+        )
+    except AppException:
+        raise
+    except Exception as exc:
+        logger.exception("supplier_qualification feishu update failed")
+        raise AppException(
+            status_code=502,
+            message=f"写入飞书失败：{_summarize_feishu_error(exc)}",
+        ) from exc
     try:
         return await _write_mirror_from_remote(
             db, client, table_id, record_id, entity
