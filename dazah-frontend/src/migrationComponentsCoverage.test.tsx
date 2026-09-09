@@ -3036,10 +3036,14 @@ describe('migrated component coverage', () => {
       queryElement<HTMLButtonElement>(rendered.container, 'aside button')?.click()
       await settle()
     }
-    expect(getMock('actions/hr', 'syncOffboardingFromFeishuAction')).toHaveBeenCalled()
-    expect(getMock('actions/hr', 'updateOffboardingRecord')).toHaveBeenCalled()
-    expect(getMock('actions/hr', 'generateOffboardingCertificateAction')).toHaveBeenCalled()
-    expect(getMock('actions/hr', 'deleteOffboardingRecord')).toHaveBeenCalledWith('offboarding-1')
+    // 记录动作的保存/触发可能晚于固定轮次的 settle（CI 高负载时晚一个事件循环），
+    // 与 #65 交互测试稳定化同口径：改为轮询等待，不依赖单轮时序。
+    await vi.waitFor(() => {
+      expect(getMock('actions/hr', 'syncOffboardingFromFeishuAction')).toHaveBeenCalled()
+      expect(getMock('actions/hr', 'updateOffboardingRecord')).toHaveBeenCalled()
+      expect(getMock('actions/hr', 'generateOffboardingCertificateAction')).toHaveBeenCalled()
+      expect(getMock('actions/hr', 'deleteOffboardingRecord')).toHaveBeenCalledWith('offboarding-1')
+    })
     closeRendered(rendered)
   })
 
