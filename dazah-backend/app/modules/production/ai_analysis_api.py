@@ -7,13 +7,11 @@ from typing import Any
 
 from fastapi import Depends, Query
 from fastapi.responses import StreamingResponse
-from openai import AsyncOpenAI
-from openai.types.chat import ChatCompletionUserMessageParam
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.llm import get_config
+from app.core.llm import llm_client
 from app.core.response import success_response
 from app.modules.production.ai_analysis_models import AiAnalysis
 from app.modules.production.mc_lineage_api import (
@@ -261,32 +259,26 @@ async def ai_analyze(
         ref_cases,
     )
 
-    # 7. LLM
+    # 7. LLM（统一走 app.core.llm.llm_client，业务模块不直连供应商）
+    model_name = ""
+    try:
+        model_name = await llm_client.active_model_name("text")
+    except Exception:
+        model_name = ""
     llm_text = ""
     summary = ""
     causes = []
     suggestions = []
     llm_severity = overall_sev
     try:
-        cfg = await get_config("text")
-        client = AsyncOpenAI(
-            base_url=cfg.api_base_url or "https://newapi.livzon.cn/v1",
-            api_key=cfg.api_key or "",
-        )
-
         async def _call_llm(temperature: float, extra_hint: str = "") -> str:
-            msgs: list[ChatCompletionUserMessageParam] = [
-                {"role": "user", "content": prompt + extra_hint}
-            ]
-            resp = await client.chat.completions.create(
-                model=cfg.model_name or "deepseek-v4-pro",
-                messages=msgs,
+            return await llm_client.chat(
+                messages=[{"role": "user", "content": prompt + extra_hint}],
+                response_format=None,
                 temperature=temperature,
-                max_tokens=3000,
-                timeout=120,
-                extra_body={"thinking": {"type": "disabled"}},
+                max_tokens=16000,  # 思考模型 reasoning 先消耗 token，需留足正文空间
+                enable_thinking=None,  # 跟随配置（思考/非思考模型由配置决定）
             )
-            return resp.choices[0].message.content or ""
 
         llm_text = await _call_llm(0.3)
         parsed = _parse_json(llm_text)
@@ -309,6 +301,9 @@ async def ai_analyze(
             causes = parsed.get("causes", causes)
             suggestions = parsed.get("suggestions", suggestions)
             llm_severity = parsed.get("severity", llm_severity)
+        if not summary:
+            # 模型返回空/无有效摘要时按失败处理，由 except 兜底本地自动检测
+            raise RuntimeError("模型未返回有效分析内容")
     except Exception as e:
         logger.error(f"LLM failed: {e}")
         llm_text = f"分析失败: {e}"
@@ -347,7 +342,7 @@ async def ai_analyze(
         causes=causes,
         suggestions=suggestions,
         severity=llm_severity,
-        model_used=cfg.model_name or "",
+        model_used=model_name,
         reference_cases=[c["id"] for c in ref_cases],
         created_by="AI自动分析",
         session_id=sid,
@@ -385,7 +380,12 @@ async def ai_analyze_stream(
         import uuid as _uuid
 
         sid = str(_uuid.uuid4())
-        cfg = await get_config("text")
+        model_name = ""
+        try:
+            model_name = await llm_client.active_model_name("text")
+        except Exception:
+            model_name = ""
+
         def evt(t: Any, d: Any) -> Any:
             return (
                     f"data: {json.dumps({'type': t, **d}, ensure_ascii=False)}\n\n"
@@ -578,30 +578,21 @@ async def ai_analyze_stream(
         suggestions = []
         llm_severity = overall_sev
         try:
-            client = AsyncOpenAI(
-                base_url=cfg.api_base_url or "https://newapi.livzon.cn/v1",
-                api_key=cfg.api_key or "",
-            )
-
             async def _call_llm_stream(temp: Any, extra: Any="") -> AsyncIterator[Any]:
                 nonlocal llm_text
-                msgs: list[ChatCompletionUserMessageParam] = [
-                    {"role": "user", "content": prompt + extra}
-                ]
-                s = await client.chat.completions.create(
-                    model=cfg.model_name or "deepseek-v4-pro",
-                    messages=msgs,
+                async for chunk in llm_client.stream_chat(
+                    messages=[{"role": "user", "content": prompt + extra}],
                     temperature=temp,
-                    max_tokens=3000,
-                    timeout=120,
-                    stream=True,
-                    extra_body={"thinking": {"type": "disabled"}},
-                )
-                async for chunk in s:
-                    delta = chunk.choices[0].delta if chunk.choices else None
-                    if delta and delta.content:
-                        llm_text += delta.content
-                        yield evt("token", {"content": delta.content})
+                    max_tokens=16000,  # 思考模型 reasoning 先消耗 token，需留足正文空间
+                    enable_thinking=None,  # 跟随配置（思考/非思考模型由配置决定）
+                ):
+                    text = chunk.get("text") or ""
+                    if not text:
+                        continue
+                    if chunk.get("type") == "content":
+                        llm_text += text
+                    # reasoning 与正文均推送给前端：展示思考过程并保持连接活跃
+                    yield evt("token", {"content": text})
 
             async for event in _call_llm_stream(0.3):
                 yield event
@@ -611,6 +602,9 @@ async def ai_analyze_stream(
             causes = parsed.get("causes", [])
             suggestions = parsed.get("suggestions", [])
             llm_severity = parsed.get("severity", overall_sev)
+
+            if not llm_text.strip():
+                raise RuntimeError("模型未返回有效分析内容")
 
             if len(causes) < 3 or len(suggestions) < 3:
                 yield evt("step", {"step": "llm_retry", "msg": "分析过短，重新生成..."})
@@ -631,9 +625,17 @@ async def ai_analyze_stream(
                     suggestions = parsed_retry["suggestions"]
                 if parsed_retry.get("severity"):
                     llm_severity = parsed_retry["severity"]
+            if not summary:
+                # 模型返回空/无有效摘要时按失败处理，由 except 兜底本地自动检测
+                raise RuntimeError("模型未返回有效分析内容")
         except Exception as e:
             logger.error(f"LLM stream failed: {e}")
             llm_text = f"分析失败: {e}"
+            if not summary:
+                summary = (
+                    f"{STAGE_LABELS.get(real_stage, real_stage)}{batch_no} "
+                    "模型未返回有效分析，以下为后端自动检测结果"
+                )
             if not causes:
                 for a in anomalies:
                     causes.append(
@@ -665,7 +667,7 @@ async def ai_analyze_stream(
             causes=causes,
             suggestions=suggestions,
             severity=llm_severity,
-            model_used=cfg.model_name or "",
+            model_used=model_name,
             reference_cases=[c["id"] for c in ref_cases],
             created_by="AI自动分析",
             session_id=sid,

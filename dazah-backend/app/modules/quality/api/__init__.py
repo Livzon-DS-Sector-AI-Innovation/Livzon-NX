@@ -14,6 +14,9 @@ from app.modules.quality.api.cpv_products import router as cpv_products_router
 from app.modules.quality.api.document_catalog import router as document_catalog_router
 from app.modules.quality.api.external_quality import router as external_quality_router
 from app.modules.quality.api.feishu_capa import router as feishu_capa_router
+from app.modules.quality.api.finished_product_anomaly import (
+    router as finished_product_anomaly_router,
+)
 from app.modules.quality.api.inspection import router as inspection_router
 from app.modules.quality.api.inspection_feishu import router as inspection_feishu_router
 from app.modules.quality.api.inspection_feishu_crud import (
@@ -113,6 +116,9 @@ router.include_router(quality_ai_router, tags=["Quality-Management"])
 router.include_router(quality_contacts_router, tags=["Quality-Management"])
 router.include_router(validation_router, tags=["Quality-Validation"])
 router.include_router(validation_qc_router, tags=["Quality-Validation-QC"])
+router.include_router(
+    finished_product_anomaly_router, tags=["Quality-Finished-Product-Anomaly"]
+)
 router.include_router(
     validation_review_router, tags=["Quality-Validation-Review"]
 )

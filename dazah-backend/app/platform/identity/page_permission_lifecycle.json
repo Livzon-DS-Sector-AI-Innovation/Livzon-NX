@@ -463,7 +463,7 @@
       "actions": {}
     },
     "quality:feishu-settings": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/feishu-settings",
       "actions": {
@@ -2737,6 +2737,72 @@
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/product-quality/sas",
+      "actions": {}
+    },
+    "quality:anomaly-report": {
+      "status": "retired",
+      "module_code": "quality",
+      "route_path": "/quality/anomaly-report",
+      "actions": {}
+    },
+    "quality:anomaly-report:anomaly-report-2025": {
+      "status": "retired",
+      "module_code": "quality",
+      "route_path": "/quality/anomaly-report/2025",
+      "actions": {}
+    },
+    "quality:anomaly-report:anomaly-report-2026": {
+      "status": "retired",
+      "module_code": "quality",
+      "route_path": "/quality/anomaly-report/2026",
+      "actions": {}
+    },
+    "quality:anomaly-report:anomaly-report-2027": {
+      "status": "retired",
+      "module_code": "quality",
+      "route_path": "/quality/anomaly-report/2027",
+      "actions": {}
+    },
+    "quality:anomaly-report:anomaly-report-2028": {
+      "status": "retired",
+      "module_code": "quality",
+      "route_path": "/quality/anomaly-report/2028",
+      "actions": {}
+    },
+    "quality:anomaly-report:anomaly-report-ledger": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/anomaly-report/ledger",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "quality:quality-settings": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/settings",
+      "actions": {
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "quality:validation:validation-ai-review": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/validation/ai-review",
       "actions": {}
     },
     "hr:employee-management:profile": {

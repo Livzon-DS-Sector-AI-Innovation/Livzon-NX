@@ -11,6 +11,7 @@ import {
   Button,
   Card,
   Col,
+  Descriptions,
   Empty,
   Modal,
   Row,
@@ -23,6 +24,7 @@ import {
 } from 'antd'
 import {
   AlertOutlined,
+  BulbOutlined,
   ExpandOutlined,
   ReloadOutlined,
   TableOutlined,
@@ -33,6 +35,7 @@ import type {
   QualityInspectionDashboardApiResponse,
   QualityInspectionDashboardChart,
 } from '@/types/quality-inspection-dashboard'
+import { reanalyzeTrendAIAction } from '@/actions/quality'
 
 export const CHART_HEIGHT = 380
 export const EXPANDED_CHART_HEIGHT = 620
@@ -88,7 +91,47 @@ export function getNotificationTag(alert: QualityInspectionDashboardAlert) {
   return <Tag>{alert.notification_status || '未知状态'}</Tag>
 }
 
-export function buildTrendOption(chart: QualityInspectionDashboardChart, expanded: boolean): EChartsOption {
+export const SEVERITY_COLORS: Record<string, string> = {
+  high: '#ff4d4f',
+  medium: '#faad14',
+  low: '#8c8c8c',
+}
+
+export const SEVERITY_LABELS: Record<string, string> = {
+  high: '高',
+  medium: '中',
+  low: '低',
+}
+
+const RULE_TYPE_LABELS: Record<string, string> = {
+  month_level: '当月较历史抬升/下移',
+  month_slope: '当月内趋势',
+  slope_change: '斜率较历史变化',
+  month_over_month: '月度整体趋势',
+  // 旧口径（历史缓存行兼容展示）
+  continuous_move: '连续上升/下降',
+  slope_break: '斜率突变',
+  mean_shift: '均值台阶偏移',
+  level_step: '均值台阶突变',
+}
+
+export function ruleTypeLabel(ruleType: string): string {
+  return RULE_TYPE_LABELS[ruleType] ?? ruleType
+}
+
+export function buildTrendOption(
+  chart: QualityInspectionDashboardChart,
+  expanded: boolean,
+  extraHighlight: string[] = []
+): EChartsOption {
+  const highlight = Array.from(
+    new Set([...(chart.trend_ai?.highlight_batches ?? []), ...extraHighlight])
+  )
+  // 高亮批次：与折线分开的一层 scatter，按类目对齐（非高亮点置 null）
+  const scatterData: (number | null)[] = chart.categories.map((batch, idx) =>
+    highlight.includes(batch) ? chart.actual_series[idx] ?? null : null
+  )
+
   const series: LineSeriesOption[] = [
     {
       name: '实际值',
@@ -150,6 +193,23 @@ export function buildTrendOption(chart: QualityInspectionDashboardChart, expande
               : '#ff0000',
       },
     })),
+    ...(highlight.length
+      ? [
+          {
+            name: '趋势异常批次',
+            type: 'scatter',
+            symbol: 'circle',
+            symbolSize: 13,
+            data: scatterData,
+            itemStyle: {
+              color: SEVERITY_COLORS.high,
+              borderColor: '#fff',
+              borderWidth: 1.5,
+            },
+            z: 10,
+          } as unknown as LineSeriesOption,
+        ]
+      : []),
   ]
 
   return {
@@ -197,15 +257,136 @@ export interface TrendChartCardProps {
   chart: QualityInspectionDashboardChart
   expanded?: boolean
   onExpand?: (chart: QualityInspectionDashboardChart) => void
+  /** 深链带入的高亮批号（与 AI 高亮合并展示） */
+  extraHighlight?: string[]
+  /** 手动「再次分析」：仅放大视图的 AI 面板使用 */
+  onReanalyze?: (metricKey: string) => Promise<unknown> | void
 }
 
-export function TrendChartCard({ chart, expanded = false, onExpand }: TrendChartCardProps) {
-  const chartOption = useMemo(() => buildTrendOption(chart, expanded), [chart, expanded])
+export function TrendAiPanel({
+  chart,
+  onReanalyze,
+}: {
+  chart: QualityInspectionDashboardChart
+  onReanalyze?: (metricKey: string) => Promise<unknown> | void
+}) {
+  const [reanalyzing, setReanalyzing] = useState(false)
+  const anomalies = chart.trend_anomalies ?? []
+  const ai = chart.trend_ai
+  const status = chart.trend_ai_status ?? 'none'
+
+  const handleReanalyze = async () => {
+    if (!onReanalyze || reanalyzing) return
+    setReanalyzing(true)
+    try {
+      await onReanalyze(chart.metric_key)
+    } finally {
+      setReanalyzing(false)
+    }
+  }
+
+  if (anomalies.length === 0) {
+    return (
+      <Alert
+        type="success"
+        showIcon
+        icon={<BulbOutlined />}
+        title="未发现趋势异常"
+        description="该指标未触发连续趋势、斜率突变、均值偏移或周期环比判据。"
+      />
+    )
+  }
+
+  return (
+    <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+      <Space size={[6, 6]} wrap>
+        {anomalies.map((item, index) => (
+          <Tag key={`${item.rule_type}-${index}`} color={SEVERITY_COLORS[item.severity]}>
+            {ruleTypeLabel(item.rule_type)}·{SEVERITY_LABELS[item.severity] ?? item.severity}
+          </Tag>
+        ))}
+      </Space>
+      {anomalies.map((item, index) => (
+        <Typography.Text key={`desc-${index}`} type="secondary" style={{ fontSize: 12 }}>
+          {item.description}
+        </Typography.Text>
+      ))}
+      {status === 'completed' && ai ? (
+        <Descriptions size="small" column={1} bordered>
+          <Descriptions.Item label="AI 研判">{ai.summary || '-'}</Descriptions.Item>
+          <Descriptions.Item label="趋势解读">{ai.trend_reading || '-'}</Descriptions.Item>
+          <Descriptions.Item label="展望 / 建议">
+            <Space orientation="vertical" size={2}>
+              <span>
+                方向：{ai.outlook.direction === 'up' ? '上行' : ai.outlook.direction === 'down' ? '下行' : '平稳'}
+                {ai.outlook.batches_to_limit != null
+                  ? `，约 ${ai.outlook.batches_to_limit} 批后逼近限度线`
+                  : ''}
+              </span>
+              {ai.outlook.risk ? <span>{ai.outlook.risk}</span> : null}
+              <span>{ai.recommendation || '-'}</span>
+            </Space>
+          </Descriptions.Item>
+          <Descriptions.Item label="分析周期">
+            <Space size={8} wrap>
+              <span>
+                {ai.period || '-'}
+                {ai.analyzed_at ? ` · 完成于 ${new Date(ai.analyzed_at).toLocaleString('zh-CN')}` : ''}
+                （每月固定一次，期间结论不变）
+              </span>
+              {onReanalyze ? (
+                <Button size="small" loading={reanalyzing} onClick={() => void handleReanalyze()}>
+                  重新分析
+                </Button>
+              ) : null}
+            </Space>
+          </Descriptions.Item>
+        </Descriptions>
+      ) : status === 'pending' ? (
+        <Spin spinning>
+          <Typography.Text type="secondary" style={{ paddingLeft: 8 }}>
+            趋势 AI 分析中，稍后刷新查看结论…
+          </Typography.Text>
+        </Spin>
+      ) : status === 'failed' ? (
+        <Alert
+          type="warning"
+          showIcon
+          title="趋势 AI 分析失败"
+          description="已展示确定性统计结论，可稍后重试。"
+        />
+      ) : null}
+    </Space>
+  )
+}
+
+export function TrendChartCard({
+  chart,
+  expanded = false,
+  onExpand,
+  extraHighlight = [],
+  onReanalyze,
+}: TrendChartCardProps) {
+  const chartOption = useMemo(
+    () => buildTrendOption(chart, expanded, extraHighlight),
+    [chart, expanded, extraHighlight]
+  )
+  // 收起状态只出图不铺分析（否则 AI 区把整页占满）；点放大后在弹窗里看完整分析
+  const anomalyCount = chart.trend_anomalies?.length ?? 0
 
   return (
     <Card
       size="small"
-      title={<span>{chart.metric_label}</span>}
+      title={
+        <span>
+          {chart.metric_label}{' '}
+          {anomalyCount > 0 ? (
+            <Tag color={SEVERITY_COLORS.high} style={{ marginLeft: 4 }}>
+              趋势异常 {anomalyCount}
+            </Tag>
+          ) : null}
+        </span>
+      }
       extra={
         !expanded ? (
           <Button
@@ -231,6 +412,7 @@ export function TrendChartCard({ chart, expanded = false, onExpand }: TrendChart
             lazyUpdate
           />
         )}
+        {expanded ? <TrendAiPanel chart={chart} onReanalyze={onReanalyze} /> : null}
       </Space>
     </Card>
   )
@@ -266,6 +448,13 @@ export function BaseTrendDashboard({
   })
   const [activeChart, setActiveChart] = useState<QualityInspectionDashboardChart | null>(null)
   const [alertsOpen, setAlertsOpen] = useState(false)
+  // 飞书卡片深链带入的 ?highlight_batch= 批号。趋势图数据本就由 useQuery 客户端加载，
+  // 首屏 SSR 无图，故此处渲染期直接读取浏览器地址栏不会造成 hydration 不一致。
+  const deepLinkBatch = useMemo<string[]>(() => {
+    if (typeof window === 'undefined') return []
+    const value = new URLSearchParams(window.location.search).get('highlight_batch')
+    return value ? [value] : []
+  }, [])
 
   const errorMessage = error instanceof Error ? error.message : '加载趋势仪表盘失败'
 
@@ -427,6 +616,9 @@ export function BaseTrendDashboard({
                 <Tag color="gold">已通知未重复发送 {dashboard?.summary.deduplicated_notification_count ?? 0}</Tag>
                 <Tag color="red">通知失败 {dashboard?.summary.failed_notification_count ?? 0}</Tag>
                 <Tag color="orange">未找到通知对象 {dashboard?.summary.unmapped_notification_count ?? 0}</Tag>
+                <Tag color="cyan">趋势异常指标 {dashboard?.summary.trend_alert_metric_count ?? 0}</Tag>
+                <Tag color="geekblue">AI 已完成 {dashboard?.summary.trend_ai_completed_count ?? 0}</Tag>
+                <Tag color="default">AI 分析中 {dashboard?.summary.trend_ai_pending_count ?? 0}</Tag>
                 <Tag>忽略异常值 {dashboard?.summary.skipped_value_count ?? 0}</Tag>
               </Space>
             }
@@ -467,7 +659,7 @@ export function BaseTrendDashboard({
                       key={chart.metric_key}
                       flex={`0 0 calc((100% - ${(chartCountPerRow - 1) * 16}px) / ${chartCountPerRow})`}
                     >
-                      <TrendChartCard chart={chart} onExpand={setActiveChart} />
+                      <TrendChartCard chart={chart} onExpand={setActiveChart} extraHighlight={deepLinkBatch} />
                     </Col>
                   ))}
                 </Row>
@@ -476,7 +668,7 @@ export function BaseTrendDashboard({
               <Row gutter={[16, 16]}>
                 {dashboard.charts.map((chart) => (
                   <Col key={chart.metric_key} xs={24} xl={chartColumnSpan}>
-                    <TrendChartCard chart={chart} onExpand={setActiveChart} />
+                    <TrendChartCard chart={chart} onExpand={setActiveChart} extraHighlight={deepLinkBatch} />
                   </Col>
                 ))}
               </Row>
@@ -499,7 +691,19 @@ export function BaseTrendDashboard({
         width={1200}
         destroyOnHidden
       >
-        {activeChart ? <TrendChartCard chart={activeChart} expanded /> : null}
+        {activeChart ? (
+          <TrendChartCard
+            chart={activeChart}
+            expanded
+            extraHighlight={deepLinkBatch}
+            onReanalyze={async (metricKey) => {
+              const entityCode = dashboard?.source_entity_code
+              if (!entityCode) return
+              await reanalyzeTrendAIAction(entityCode, metricKey)
+              await refetch()
+            }}
+          />
+        ) : null}
       </Modal>
 
       <Modal

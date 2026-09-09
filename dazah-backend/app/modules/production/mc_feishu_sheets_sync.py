@@ -1376,31 +1376,42 @@ async def _sync_lineage(session: AsyncSession) -> int:
     segments = [
         # 第1段: 发酵液 → 提炼
         """
-        INSERT INTO production.batch_lineage (upstream_type, upstream_batch,
-        downstream_type, downstream_batch)
-        SELECT 'fermentation', fl.batch_no, 'refining', rb.batch_no
+        INSERT INTO production.batch_lineage (
+            id, created_at, upstream_type, upstream_batch,
+            downstream_type, downstream_batch
+        )
+        SELECT gen_random_uuid()::text, now(),
+        'fermentation', fl.batch_no, 'refining', rb.batch_no
         FROM production.fermentation_liquids fl
         JOIN production.refining_batches rb ON rb.fermentation_no = fl.batch_no AND
         rb.is_deleted = false
         WHERE fl.is_deleted = false
-        ON CONFLICT (upstream_batch, downstream_batch) DO NOTHING
+        ON CONFLICT (upstream_type, upstream_batch,
+        downstream_type, downstream_batch) DO NOTHING
         """,
         # 第2段: 提炼 → 子罐
         """
-        INSERT INTO production.batch_lineage (upstream_type, upstream_batch,
-        downstream_type, downstream_batch)
-        SELECT 'refining', rb.batch_no, 'sub_tank', st.batch_no
+        INSERT INTO production.batch_lineage (
+            id, created_at, upstream_type, upstream_batch,
+            downstream_type, downstream_batch
+        )
+        SELECT gen_random_uuid()::text, now(),
+        'refining', rb.batch_no, 'sub_tank', st.batch_no
         FROM production.refining_batches rb
         JOIN production.sub_tank_records st ON st.parent_batch = rb.batch_no AND
         st.is_deleted = false
         WHERE rb.is_deleted = false
-        ON CONFLICT (upstream_batch, downstream_batch) DO NOTHING
+        ON CONFLICT (upstream_type, upstream_batch,
+        downstream_type, downstream_batch) DO NOTHING
         """,
         # 第3段: 子罐 → 提取 (MC-前缀兼容)
         """
-        INSERT INTO production.batch_lineage (upstream_type, upstream_batch,
-        downstream_type, downstream_batch, quantity)
-        SELECT 'sub_tank', st.batch_no, 'extraction', er.batch_no, ei.crude_weight
+        INSERT INTO production.batch_lineage (
+            id, created_at, upstream_type, upstream_batch,
+            downstream_type, downstream_batch, quantity
+        )
+        SELECT gen_random_uuid()::text, now(),
+        'sub_tank', st.batch_no, 'extraction', er.batch_no, ei.crude_weight
         FROM production.extraction_inputs ei
         JOIN production.extraction_records er ON er.batch_no = ei.extraction_batch AND
         er.is_deleted = false
@@ -1408,13 +1419,17 @@ async def _sync_lineage(session: AsyncSession) -> int:
             st.batch_no = ei.crude_batch_no OR st.batch_no = 'MC-' || ei.crude_batch_no
         ) AND st.is_deleted = false
         WHERE ei.is_deleted = false
-        ON CONFLICT (upstream_batch, downstream_batch) DO NOTHING
+        ON CONFLICT (upstream_type, upstream_batch,
+        downstream_type, downstream_batch) DO NOTHING
         """,
         # 第4段: 提取 → 精制 (MC-前缀兼容 + FIS非标批号兼容)
         """
-        INSERT INTO production.batch_lineage (upstream_type, upstream_batch,
-        downstream_type, downstream_batch, quantity)
-        SELECT 'extraction', er.batch_no, 'refinement', rr.batch_no, ri.input_weight
+        INSERT INTO production.batch_lineage (
+            id, created_at, upstream_type, upstream_batch,
+            downstream_type, downstream_batch, quantity
+        )
+        SELECT gen_random_uuid()::text, now(),
+        'extraction', er.batch_no, 'refinement', rr.batch_no, ri.input_weight
         FROM production.mc_refinement_inputs ri
         JOIN production.mc_refinement_records rr ON (
             rr.batch_no = ri.refinement_batch
@@ -1425,13 +1440,17 @@ async def _sync_lineage(session: AsyncSession) -> int:
             er.batch_no = ri.wet_batch_no OR er.batch_no = 'MC-' || ri.wet_batch_no
         ) AND er.is_deleted = false
         WHERE ri.is_deleted = false
-        ON CONFLICT (upstream_batch, downstream_batch) DO NOTHING
+        ON CONFLICT (upstream_type, upstream_batch,
+        downstream_type, downstream_batch) DO NOTHING
         """,
         # 第5段a: 精制 → 混粉 (MC-F2来源，含(FIS)非标批号兼容)
         """
-        INSERT INTO production.batch_lineage (upstream_type, upstream_batch,
-        downstream_type, downstream_batch, quantity)
-        SELECT 'refinement', rr.batch_no, 'blending', br.batch_no, bi.input_weight
+        INSERT INTO production.batch_lineage (
+            id, created_at, upstream_type, upstream_batch,
+            downstream_type, downstream_batch, quantity
+        )
+        SELECT gen_random_uuid()::text, now(),
+        'refinement', rr.batch_no, 'blending', br.batch_no, bi.input_weight
         FROM production.blending_inputs bi
         JOIN production.blending_records br ON br.batch_no = bi.blend_batch AND
         br.is_deleted = false
@@ -1443,31 +1462,40 @@ async def _sync_lineage(session: AsyncSession) -> int:
         regexp_replace(bi.input_batch_no, '[(（]FIS[)）]', '', 'gi')
         ) AND rr.is_deleted = false
         WHERE bi.is_deleted = false
-        ON CONFLICT (upstream_batch, downstream_batch) DO NOTHING
+        ON CONFLICT (upstream_type, upstream_batch,
+        downstream_type, downstream_batch) DO NOTHING
         """,
         # 第5段b: 混粉 → 混粉 (二级混粉)
         """
-        INSERT INTO production.batch_lineage (upstream_type, upstream_batch,
-        downstream_type, downstream_batch, quantity)
-        SELECT 'blending', br_up.batch_no, 'blending', br_down.batch_no, bi.input_weight
+        INSERT INTO production.batch_lineage (
+            id, created_at, upstream_type, upstream_batch,
+            downstream_type, downstream_batch, quantity
+        )
+        SELECT gen_random_uuid()::text, now(),
+        'blending', br_up.batch_no, 'blending', br_down.batch_no, bi.input_weight
         FROM production.blending_inputs bi
         JOIN production.blending_records br_down ON br_down.batch_no = bi.blend_batch
         AND br_down.is_deleted = false
         JOIN production.blending_records br_up ON br_up.batch_no = bi.input_batch_no
         AND br_up.is_deleted = false
         WHERE bi.is_deleted = false AND bi.input_batch_no NOT LIKE 'MC-F2%'
-        ON CONFLICT (upstream_batch, downstream_batch) DO NOTHING
+        ON CONFLICT (upstream_type, upstream_batch,
+        downstream_type, downstream_batch) DO NOTHING
         """,
         # 第6段: 混粉 → QC
         """
-        INSERT INTO production.batch_lineage (upstream_type, upstream_batch,
-        downstream_type, downstream_batch)
-        SELECT 'blending', br.batch_no, 'qc', qc.batch_no
+        INSERT INTO production.batch_lineage (
+            id, created_at, upstream_type, upstream_batch,
+            downstream_type, downstream_batch
+        )
+        SELECT gen_random_uuid()::text, now(),
+        'blending', br.batch_no, 'qc', qc.batch_no
         FROM production.blending_records br
         JOIN production.qc_inspections qc ON qc.batch_no = br.batch_no AND
         qc.is_deleted = false
         WHERE br.is_deleted = false
-        ON CONFLICT (upstream_batch, downstream_batch) DO NOTHING
+        ON CONFLICT (upstream_type, upstream_batch,
+        downstream_type, downstream_batch) DO NOTHING
         """,
     ]
 

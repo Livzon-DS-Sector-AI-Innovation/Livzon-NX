@@ -23,7 +23,7 @@ export default function BatchEventsButton({ batchId, batchLabel, status }: Batch
   const open = async () => {
     setVisible(true); setEvents([]); setLoading(true)
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/production/fermentation/${batchId}/related-events`)
+      const res = await fetch(`/api/v1/production/fermentation/${batchId}/related-events`)
       const json = await res.json()
       if (json.code === 200) setEvents(json.data)
     } catch {} finally { setLoading(false) }

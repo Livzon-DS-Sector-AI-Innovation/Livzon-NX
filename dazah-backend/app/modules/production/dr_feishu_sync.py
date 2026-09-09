@@ -382,6 +382,47 @@ async def _upsert(
         return rid
 
 
+# ── DR 电子表格台账全量同步（201-3 各工段） ─────────────────
+DR_LEDGER_STEPS = [
+    ("extraction", "dr_feishu_sync", "sync_dr_extraction"),
+    ("first_refinement", "dr_refinement_sync", "sync_dr_refinement"),
+    ("second_refinement", "dr_second_refinement_sync", "sync_dr_second_refinement"),
+    ("third_refinement", "dr_third_refinement_sync", "sync_dr_third_refinement"),
+    ("fourth_refinement", "dr_fourth_refinement_sync", "sync_dr_fourth_refinement"),
+    ("chromatography", "dr_chromatography_sync", "sync_dr_chromatography"),
+]
+
+
+async def sync_dr_ledger(
+    config: ProductionFeishuConfig, session: AsyncSession
+) -> dict[str, Any]:
+    """同步 201-3 多拉菌素电子表格台账的全部工段。
+
+    同一电子表格内各子表分别对应：提取链（发酵批次/发酵罐/提取/滤液）
+    与一次~四次精制、层析及一次结晶；每个同步器内部独立提交，
+    单表失败不影响其余工段。
+    """
+    import importlib
+
+    steps: list[tuple[str, Any]] = []
+    for name, module_name, func_name in DR_LEDGER_STEPS:
+        module = importlib.import_module(f"app.modules.production.{module_name}")
+        fn = getattr(module, func_name)
+        steps.append((name, fn))
+
+    results: dict[str, Any] = {}
+    for name, fn in steps:
+        try:
+            logger.info("[DR同步] 开始同步 %s ...", name)
+            stats = await fn(config, session)
+            results[name] = stats
+            logger.info("[DR同步] %s 完成: %s", name, stats)
+        except Exception as e:  # noqa: BLE001 - 单表失败不影响其它工段
+            logger.exception("[DR同步] %s 失败: %s", name, e)
+            results[name] = {"error": str(e)}
+    return results
+
+
 # ── DR 定时同步调度 ──────────────────────────────────────
 
 DR_PRODUCT_NAME = "多拉菌素"

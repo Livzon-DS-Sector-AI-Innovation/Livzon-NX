@@ -1,13 +1,13 @@
 'use client'
 
 import { qualityTokens } from './themeTokens'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
 import { App, Button, Card, DatePicker, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { pullSupplierQualifications, createSupplierQualification, updateSupplierQualification, deleteSupplierQualification } from '@/actions/quality'
-import { fetchSupplierQualifications } from '@/lib/api/client/quality'
+import { fetchSupplierQualifications, type SupplierExpiryBucket } from '@/lib/api/client/quality'
 import type { SupplierQualificationItem } from '@/types/quality'
 
 const MATERIAL_TYPE_OPTIONS = [
@@ -39,6 +39,14 @@ const QUALIFICATION_NAME_OPTIONS = [
   { label: 'HACCP证书', value: 'HACCP证书' },
   { label: '注册证', value: '注册证' },
   { label: '其他证书', value: '其他证书' },
+]
+
+// 到期分桶选项（与后端统计/仪表盘同一口径）
+const EXPIRY_BUCKET_OPTIONS: { label: string; value: SupplierExpiryBucket }[] = [
+  { label: '已延期', value: 'expired' },
+  { label: '30天内到期', value: 'due_30' },
+  { label: '60天内到期', value: 'due_60' },
+  { label: '90天内到期', value: 'due_90' },
 ]
 
 interface FormValues {
@@ -78,29 +86,45 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
   const queryClient = useQueryClient()
   const [saving, setSaving] = useState(false)
   const [pulling, setPulling] = useState(false)
-  const [searchKeyword, setSearchKeyword] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [keyword, setKeyword] = useState('')
   const [materialTypeFilter, setMaterialTypeFilter] = useState<string | undefined>()
   const [qualificationNameFilter, setQualificationNameFilter] = useState<string | undefined>()
   const [isCompletedFilter, setIsCompletedFilter] = useState<boolean | undefined>()
+  const [expiryBucketFilter, setExpiryBucketFilter] = useState<SupplierExpiryBucket | undefined>()
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   const [modalVisible, setModalVisible] = useState(false)
   const [editingRecord, setEditingRecord] = useState<SupplierQualificationItem | null>(null)
   const [form] = Form.useForm<FormValues>()
 
+  // 任意筛选条件变化都回到第一页，避免停在越界页码
+  const resetPage = () => setPage(1)
+
   const { data, isLoading: loading, error } = useQuery({
     queryKey: ['quality-supplier', 'list', {
+      keyword: keyword.trim(),
       materialTypeFilter: materialTypeFilter ?? '',
       qualificationNameFilter: qualificationNameFilter ?? '',
       isCompletedFilter: isCompletedFilter === undefined ? '' : String(isCompletedFilter),
+      expiryBucketFilter: expiryBucketFilter ?? '',
+      page,
+      pageSize,
     }],
     queryFn: () =>
       fetchSupplierQualifications({
-        page: 1,
-        page_size: 200,
+        keyword: keyword.trim() || undefined,
+        page,
+        page_size: pageSize,
         material_type: materialTypeFilter || undefined,
         qualification_name: qualificationNameFilter || undefined,
         is_completed: isCompletedFilter,
+        expiry_bucket: expiryBucketFilter,
       }),
-    initialData: initialItems.length ? { items: initialItems, total: initialItems.length } : undefined,
+    placeholderData: keepPreviousData,
+    initialData: initialItems.length && !keyword && page === 1 && pageSize === 20
+      ? { items: initialItems, total: initialItems.length }
+      : undefined,
   })
 
   useEffect(() => {
@@ -193,22 +217,6 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
       message.error(getErrorMessage(error, '删除供应商资质记录失败'))
     }
   }, [queryClient, message])
-
-  const filteredItems = useMemo(() => {
-    if (!searchKeyword) return items
-    const keyword = searchKeyword.toLowerCase()
-    return items.filter((item) =>
-      [
-        item.supplier_name,
-        item.material_name,
-        item.material_type,
-        item.qualification_name,
-        item.qualification_file,
-        item.responsible_person,
-        item.remark,
-      ].some((value) => (value ?? '').toLowerCase().includes(keyword))
-    )
-  }, [items, searchKeyword])
 
   const columns: ColumnsType<SupplierQualificationItem> = [
     {
@@ -336,15 +344,28 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
               placeholder="搜索供应商名称、物料、资质..."
               allowClear
               style={{ width: 300 }}
-              value={searchKeyword}
-              onChange={(e) => setSearchKeyword(e.target.value)}
+              value={searchInput}
+              onChange={(e) => {
+                setSearchInput(e.target.value)
+                if (e.target.value === '') {
+                  setKeyword('')
+                  resetPage()
+                }
+              }}
+              onSearch={(value) => {
+                setKeyword(value)
+                resetPage()
+              }}
             />
             <Select
               placeholder="物料类型"
               allowClear
               style={{ width: 120 }}
               value={materialTypeFilter}
-              onChange={(val) => setMaterialTypeFilter(val)}
+              onChange={(val) => {
+                setMaterialTypeFilter(val)
+                resetPage()
+              }}
               options={MATERIAL_TYPE_OPTIONS}
             />
             <Select
@@ -352,7 +373,10 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
               allowClear
               style={{ width: 180 }}
               value={qualificationNameFilter}
-              onChange={(val) => setQualificationNameFilter(val)}
+              onChange={(val) => {
+                setQualificationNameFilter(val)
+                resetPage()
+              }}
               options={QUALIFICATION_NAME_OPTIONS}
             />
             <Select
@@ -360,11 +384,25 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
               allowClear
               style={{ width: 120 }}
               value={isCompletedFilter}
-              onChange={(val) => setIsCompletedFilter(val)}
+              onChange={(val) => {
+                setIsCompletedFilter(val)
+                resetPage()
+              }}
               options={[
                 { label: '已完成', value: true },
                 { label: '未完成', value: false },
               ]}
+            />
+            <Select
+              placeholder="到期状态"
+              allowClear
+              style={{ width: 140 }}
+              value={expiryBucketFilter}
+              onChange={(val) => {
+                setExpiryBucketFilter(val)
+                resetPage()
+              }}
+              options={EXPIRY_BUCKET_OPTIONS}
             />
           </Space>
           <Space>
@@ -377,9 +415,20 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
           rowKey="record_id"
           loading={loading}
           columns={columns}
-          dataSource={filteredItems}
-          pagination={false}
+          dataSource={items}
           scroll={{ x: 1400 }}
+          pagination={{
+            current: page,
+            pageSize,
+            total: data?.total ?? 0,
+            showSizeChanger: true,
+            pageSizeOptions: [10, 20, 50, 100],
+            showTotal: (total) => `共 ${total} 条`,
+            onChange: (nextPage, nextPageSize) => {
+              setPage(nextPage)
+              setPageSize(nextPageSize)
+            },
+          }}
         />
       </Card>
 

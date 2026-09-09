@@ -52,6 +52,7 @@ async def get_mpa_dashboard_data(
     *,
     source_entity_code: str = MPA_DASHBOARD_DEFAULT_ENTITY_CODE,
     sender_user_open_id: str | None = None,
+    frontend_group: str = "mpa",
 ) -> dict[str, Any]:
     config = MPA_DASHBOARD_ENTITY_CONFIGS.get(source_entity_code)
     if config is None:
@@ -64,12 +65,16 @@ async def get_mpa_dashboard_data(
         source_label=str(config["source_label"]),
         metric_configs=tuple(config["metric_configs"]),
         oot_product_code=MPA_DASHBOARD_OOT_PRODUCT_CODES.get(source_entity_code),
+        frontend_group=frontend_group,
+        enable_trend_ai=True,
     )
 
 
 async def get_mvt_dashboard_data(
     db: AsyncSession,
     sender_user_open_id: str | None = None,
+    *,
+    frontend_group: str = "mvt",
 ) -> dict[str, Any]:
     return await _get_finished_dashboard_data(
         db,
@@ -78,6 +83,8 @@ async def get_mvt_dashboard_data(
         source_label=MVT_DASHBOARD_SOURCE_LABEL,
         metric_configs=MVT_DASHBOARD_METRIC_CONFIGS,
         oot_product_code=MVT_DASHBOARD_OOT_PRODUCT_CODE,
+        frontend_group=frontend_group,
+        enable_trend_ai=True,
     )
 
 
@@ -86,6 +93,7 @@ async def get_lft_dashboard_data(
     *,
     source_entity_code: str = LFT_DASHBOARD_DEFAULT_ENTITY_CODE,
     sender_user_open_id: str | None = None,
+    frontend_group: str = "lft",
 ) -> dict[str, Any]:
     config = LFT_DASHBOARD_ENTITY_CONFIGS.get(source_entity_code)
     if config is None:
@@ -100,6 +108,8 @@ async def get_lft_dashboard_data(
         source_label=str(config["source_label"]),
         metric_configs=tuple(config["metric_configs"]),
         oot_product_code=LFT_DASHBOARD_OOT_PRODUCT_CODES.get(source_entity_code),
+        frontend_group=frontend_group,
+        enable_trend_ai=True,
     )
 
 
@@ -108,6 +118,7 @@ async def get_dls_dashboard_data(
     *,
     source_entity_code: str = DLS_DASHBOARD_DEFAULT_ENTITY_CODE,
     sender_user_open_id: str | None = None,
+    frontend_group: str = "dls",
 ) -> dict[str, Any]:
     config = DLS_DASHBOARD_ENTITY_CONFIGS.get(source_entity_code)
     if config is None:
@@ -122,6 +133,8 @@ async def get_dls_dashboard_data(
         source_label=str(config["source_label"]),
         metric_configs=tuple(config["metric_configs"]),
         oot_product_code=DLS_DASHBOARD_OOT_PRODUCT_CODE,
+        frontend_group=frontend_group,
+        enable_trend_ai=True,
     )
 
 
@@ -130,6 +143,7 @@ async def get_lkms_dashboard_data(
     *,
     source_entity_code: str = LKMS_VET_DASHBOARD_ENTITY_CODE,
     sender_user_open_id: str | None = None,
+    frontend_group: str = "lkms",
 ) -> dict[str, Any]:
     if source_entity_code != LKMS_VET_DASHBOARD_ENTITY_CODE:
         raise AppException(
@@ -143,6 +157,8 @@ async def get_lkms_dashboard_data(
         source_label=LKMS_VET_DASHBOARD_SOURCE_LABEL,
         metric_configs=LKMS_VET_DASHBOARD_METRIC_CONFIGS,
         oot_product_code=LKMS_VET_DASHBOARD_OOT_PRODUCT_CODE,
+        frontend_group=frontend_group,
+        enable_trend_ai=True,
     )
 
 
@@ -151,6 +167,7 @@ async def get_bbas_dashboard_data(
     *,
     source_entity_code: str = BBAS_DASHBOARD_DEFAULT_ENTITY_CODE,
     sender_user_open_id: str | None = None,
+    frontend_group: str = "bbas",
 ) -> dict[str, Any]:
     config = BBAS_DASHBOARD_ENTITY_CONFIGS.get(source_entity_code)
     if config is None:
@@ -164,6 +181,8 @@ async def get_bbas_dashboard_data(
         source_entity_code=source_entity_code,
         source_label=str(config["source_label"]),
         metric_configs=tuple(config["metric_configs"]),
+        frontend_group=frontend_group,
+        enable_trend_ai=True,
     )
 
 
@@ -172,6 +191,7 @@ async def get_tryptophan_dashboard_data(
     *,
     source_entity_code: str = TRYPTOPHAN_DASHBOARD_DEFAULT_ENTITY_CODE,
     sender_user_open_id: str | None = None,
+    frontend_group: str = "tryptophan",
 ) -> dict[str, Any]:
     config = TRYPTOPHAN_DASHBOARD_ENTITY_CONFIGS.get(source_entity_code)
     if config is None:
@@ -183,6 +203,8 @@ async def get_tryptophan_dashboard_data(
         source_entity_code=source_entity_code,
         source_label=str(config["source_label"]),
         metric_configs=tuple(config["metric_configs"]),
+        frontend_group=frontend_group,
+        enable_trend_ai=True,
     )
 
 
@@ -191,6 +213,7 @@ async def get_formulations_dashboard_data(
     *,
     source_entity_code: str = FORMULATIONS_DASHBOARD_DEFAULT_ENTITY_CODE,
     sender_user_open_id: str | None = None,
+    frontend_group: str = "formulations",
 ) -> dict[str, Any]:
     config = FORMULATIONS_DASHBOARD_ENTITY_CONFIGS.get(source_entity_code)
     if config is None:
@@ -202,6 +225,8 @@ async def get_formulations_dashboard_data(
         source_entity_code=source_entity_code,
         source_label=str(config["source_label"]),
         metric_configs=tuple(config["metric_configs"]),
+        frontend_group=frontend_group,
+        enable_trend_ai=True,
     )
 
 
@@ -210,6 +235,7 @@ async def get_water_dashboard_data(
     *,
     source_entity_code: str = WATER_DASHBOARD_DEFAULT_ENTITY_CODE,
     sender_user_open_id: str | None = None,
+    frontend_group: str = "water",
 ) -> dict[str, Any]:
     config = WATER_DASHBOARD_ENTITY_CONFIGS.get(source_entity_code)
     if config is None:
@@ -221,4 +247,6 @@ async def get_water_dashboard_data(
         source_entity_code=source_entity_code,
         source_label=str(config["source_label"]),
         metric_configs=tuple(config["metric_configs"]),
+        frontend_group=frontend_group,
+        enable_trend_ai=True,
     )

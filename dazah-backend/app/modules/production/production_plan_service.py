@@ -60,6 +60,7 @@ SYNC_TARGETS = {
     "exhaust_gas": "废气监测",
     "solid_waste": "固废台账",
     # DR 模块
+    "dr_ledger": "DR 全工段台账（一次配置同步全部）",
     "dr_extraction": "DR 过滤萃取",
     "dr_chromatography": "DR 层析及一次结晶",
     "dr_refinement": "DR 一次精制",
@@ -265,7 +266,12 @@ async def sync_config_by_target(
 ) -> dict[str, Any]:
     """根据 sync_target 路由到对应的同步逻辑"""
     target = config.sync_target or "production_plan"
-    if target == "production_plan":
+    if target == "dr_ledger":
+        # DR 多拉菌素电子表格台账全量同步（提取链 + 一次~四次精制 + 层析）
+        from app.modules.production.dr_feishu_sync import sync_dr_ledger
+
+        return await sync_dr_ledger(config, session)
+    elif target == "production_plan":
         return await _sync_production_plan(config, session)
     elif target == "sales_plan":
         return await _sync_sales_plan(config, session)

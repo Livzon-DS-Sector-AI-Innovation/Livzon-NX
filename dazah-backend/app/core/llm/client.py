@@ -467,6 +467,15 @@ class LLMClient:
         except Exception as e:
             return {"status": "error", "detail": str(e)}
 
+    async def active_model_name(self, config_type: str = "text") -> str:
+        """返回当前激活配置的模型名（不暴露密钥）。
+
+        Raises:
+            LLMConfigError: If no active config is available
+        """
+        _, config = await self._get_client_and_config(config_type)
+        return config.model_name
+
     async def stream_chat(
         self,
         messages: Sequence[Message],

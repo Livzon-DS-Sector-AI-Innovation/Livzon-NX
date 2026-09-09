@@ -6,8 +6,10 @@ assembly for the finished product trend dashboard.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
+import uuid as uuid_module
 from datetime import UTC, datetime
 from statistics import StatisticsError, fmean, pstdev
 from typing import Any
@@ -16,11 +18,18 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
+from app.core.database import async_session_factory
 from app.core.exceptions import AppException
+from app.core.jobs import submit_job
 from app.modules.quality.feishu_notification import (
     send_user_card_with_message_id,
+    upload_image,
 )
 from app.modules.quality.models.contacts import DepartmentContact
+from app.modules.quality.models.finished_trend_ai_analysis import (
+    FinishedTrendAIAnalysis,
+)
 from app.modules.quality.models.finished_trend_alert_notification import (
     FinishedTrendAlertNotification,
 )
@@ -33,6 +42,10 @@ from app.modules.quality.schemas.inspection_dashboard import (
     InspectionDashboardPoint,
     InspectionDashboardSpecLine,
     InspectionDashboardSummary,
+    InspectionDashboardTrendAI,
+    InspectionDashboardTrendAIOutlook,
+    InspectionDashboardTrendAISignal,
+    InspectionDashboardTrendAnomaly,
 )
 from app.modules.quality.service.inspection_dashboard_config import (
     FINISHED_DASHBOARD_BATCH_FIELD,
@@ -51,6 +64,9 @@ from app.modules.quality.service.quality_feishu_pages import (
 from app.modules.quality.service.quality_notification_settings import (
     load_inspection_trend_alert_config,
 )
+from app.modules.quality.service.trend_ai_analysis import run_trend_ai_analysis
+from app.modules.quality.service.trend_anomaly_rules import detect_trend_anomalies
+from app.modules.quality.service.trend_chart_render import render_trend_chart_png
 
 logger = logging.getLogger(__name__)
 
@@ -1067,6 +1083,560 @@ async def _materialize_dashboard_alert(
     )
 
 
+# ─── 趋势规则 + AI 分析（编排：确定性判据先算，AI/渲染/推送后台化） ───
+
+# 趋势 AI 后台任务整单超时保护（渲染 + 上传 + 一次 LLM + 推送），秒
+_TREND_AI_TOTAL_TIMEOUT = 240
+_TREND_AI_TERMINAL_STATUSES = {"sent", "partial", "failed", "unmapped", "ai_failed"}
+# AI 按月固定：整体分析行的规则类型与周期键（trend_end_batch 孈YYYY-MM）
+TREND_OVERALL_RULE = "monthly_overall"
+
+
+def _trend_period() -> str:
+    return datetime.now(UTC).strftime("%Y-%m")
+
+
+def _build_trend_deep_link(
+    frontend_group: str | None,
+    entity_code: str,
+    *,
+    highlight_batch: str | None = None,
+) -> str | None:
+    if not frontend_group:
+        return None
+    base_url = get_settings().FRONTEND_URL.rstrip("/")
+    link = f"{base_url}/quality/inspection/finished/{frontend_group}"
+    params = [f"entity_code={entity_code}"]
+    if highlight_batch:
+        params.append(f"highlight_batch={highlight_batch}")
+    return f"{link}?{'&'.join(params)}"
+
+
+async def _get_existing_trend_ai(
+    db: AsyncSession,
+    *,
+    entity_code: str,
+    metric_key: str,
+    rule_type: str,
+    trend_end_batch: str,
+) -> FinishedTrendAIAnalysis | None:
+    result = await db.execute(
+        select(FinishedTrendAIAnalysis).where(
+            FinishedTrendAIAnalysis.entity_code == entity_code,
+            FinishedTrendAIAnalysis.metric_key == metric_key,
+            FinishedTrendAIAnalysis.rule_type == rule_type,
+            FinishedTrendAIAnalysis.trend_end_batch == trend_end_batch,
+            FinishedTrendAIAnalysis.is_deleted.is_(False),
+        )
+    )
+    return result.scalars().first()
+
+
+def _trend_ai_row_to_chart_model(
+    rows: list[FinishedTrendAIAnalysis],
+) -> InspectionDashboardTrendAI | None:
+    """把一个指标的已完成 AI 记录合并为展示模型（供前端高亮 + 折叠区）。"""
+    completed = [row for row in rows if isinstance(row.ai_summary, dict)]
+    if not completed:
+        return None
+    signals: list[dict[str, Any]] = []
+    highlights: set[str] = set()
+    summaries: list[str] = []
+    readings: list[str] = []
+    recommendations: list[str] = []
+    worst_direction = "flat"
+    worst_batches: int | None = None
+    worst_risk = ""
+    confidence_order = {"low": 0, "medium": 1, "high": 2}
+    best_confidence = "low"
+    for row in completed:
+        summary = row.ai_summary or {}
+        highlights.update(str(b) for b in (row.affected_batches or []))
+        highlights.update(
+            str(s.get("batch_no"))
+            for s in (summary.get("signals") or [])
+            if s.get("batch_no")
+        )
+        for s in summary.get("signals") or []:
+            if isinstance(s, dict):
+                signals.append(s)
+        if summary.get("summary"):
+            summaries.append(str(summary["summary"]))
+        if summary.get("trend_reading"):
+            readings.append(str(summary["trend_reading"]))
+        if summary.get("recommendation"):
+            recommendations.append(str(summary["recommendation"]))
+        outlook = summary.get("outlook") or {}
+        if isinstance(outlook, dict):
+            if outlook.get("direction") in {"up", "down"}:
+                worst_direction = str(outlook["direction"])
+            btl = outlook.get("batches_to_limit")
+            if isinstance(btl, int):
+                worst_batches = (
+                    btl if worst_batches is None else min(worst_batches, btl)
+                )
+            if outlook.get("risk"):
+                worst_risk = str(outlook["risk"])
+        conf = str(summary.get("confidence") or "low")
+        if confidence_order.get(conf, 0) > confidence_order.get(best_confidence, 0):
+            best_confidence = conf
+    return InspectionDashboardTrendAI(
+        summary="；".join(summaries)[:120],
+        trend_reading="；".join(readings)[:600],
+        signals=[
+            InspectionDashboardTrendAISignal.model_validate(s) for s in signals[:20]
+        ],
+        outlook=InspectionDashboardTrendAIOutlook(
+            direction=worst_direction,
+            batches_to_limit=worst_batches,
+            risk=worst_risk[:160],
+        ),
+        recommendation="；".join(recommendations)[:200],
+        confidence=best_confidence,
+        highlight_batches=sorted(highlights),
+        # 分析周期（YYYY-MM）与完成时间：AI 每月固定一次，期间结论不变
+        period=completed[0].trend_end_batch,
+        analyzed_at=(
+            completed[0].updated_at.isoformat() if completed[0].updated_at else None
+        ),
+    )
+
+
+def _build_trend_ai_markdown(
+    *,
+    source_label: str,
+    metric_label: str,
+    anomaly: FinishedTrendAIAnalysis,
+) -> str:
+    lines = [
+        f"**产品系列：**{source_label}",
+        f"**检测指标：**{metric_label}",
+        f"**趋势判据：**{anomaly.description or anomaly.rule_type}",
+        f"**触发区间：**{anomaly.trend_start_batch or '-'} ~ {anomaly.trend_end_batch}",
+    ]
+    summary = anomaly.ai_summary or {}
+    if summary.get("summary"):
+        lines.append(f"**AI 研判：**{summary['summary']}")
+    outlook = summary.get("outlook") or {}
+    btl = outlook.get("batches_to_limit") if isinstance(outlook, dict) else None
+    if btl is not None:
+        lines.append(f"**趋势外推：**按当前方向预计约 {btl} 批后逼近限度线")
+    if summary.get("recommendation"):
+        lines.append(f"**建议：**{summary['recommendation']}")
+    lines.append("点开下方按钮查看完整趋势仪表盘与 AI 分析。")
+    return "\n".join(lines)
+
+
+async def _send_trend_ai_card(
+    db: AsyncSession,
+    *,
+    sender_user_open_id: str | None,
+    anomaly: FinishedTrendAIAnalysis,
+    payload: dict[str, Any],
+    image_key: str | None,
+) -> dict[str, str | None]:
+    line_config = (await load_inspection_trend_alert_config(db)).lines.get(
+        anomaly.entity_code
+    )
+    recipients = await _resolve_dashboard_recipients(
+        db,
+        entity_code=anomaly.entity_code,
+        batch_no=anomaly.trend_end_batch,
+        line_config=line_config,
+    )
+    if not recipients:
+        return {"status": "unmapped", "message_id": None, "error": "未找到通知对象"}
+    if not any(
+        r.get("open_id") or r.get("email") for r in recipients
+    ):
+        return {
+            "status": "missing_open_id",
+            "message_id": None,
+            "error": "通知对象缺少 open_id/邮箱",
+        }
+
+    content = _build_trend_ai_markdown(
+        source_label=payload.get("source_label") or anomaly.source_label or "",
+        metric_label=anomaly.metric_label,
+        anomaly=anomaly,
+    )
+    elements: list[dict[str, Any]] = []
+    if image_key:
+        elements.append(
+            {"tag": "img", "image_key": image_key, "alt": {"content": "趋势图"}}
+        )
+    deep_link = _build_trend_deep_link(
+        payload.get("frontend_group"),
+        anomaly.entity_code,
+        highlight_batch=anomaly.trend_end_batch,
+    )
+    if deep_link:
+        elements.append(
+            {
+                "tag": "action",
+                "actions": [
+                    {
+                        "tag": "button",
+                        "text": {"tag": "plain_text", "content": "查看趋势与 AI 分析"},
+                        "type": "primary",
+                        "url": deep_link,
+                    }
+                ],
+            }
+        )
+
+    sent_ids: list[str] = []
+    failed_names: list[str] = []
+    title = f"{payload.get('source_label') or anomaly.source_label or ''}趋势异常提醒"
+    for recipient in recipients:
+        name = str(recipient.get("name") or "").strip() or "未知对象"
+        message_id = None
+        if (recipient.get("open_id") or "").strip():
+            message_id = await send_user_card_with_message_id(
+                open_id=str(recipient["open_id"]),
+                title=title,
+                content=content,
+                elements=elements or None,
+            )
+        if not message_id and (recipient.get("email") or "").strip():
+            message_id = await send_user_card_with_message_id(
+                open_id=str(recipient["email"]),
+                title=title,
+                content=content,
+                elements=elements or None,
+                receive_id_type="email",
+            )
+        if message_id:
+            sent_ids.append(message_id)
+        else:
+            failed_names.append(name)
+
+    if sent_ids and not failed_names:
+        return {"status": "sent", "message_id": ",".join(sent_ids), "error": None}
+    if sent_ids:
+        return {
+            "status": "partial",
+            "message_id": ",".join(sent_ids),
+            "error": f"以下通知对象发送失败：{'、'.join(failed_names)}",
+        }
+    return {
+        "status": "failed",
+        "message_id": None,
+        "error": f"以下通知对象发送失败：{'、'.join(failed_names)}"
+        if failed_names
+        else "飞书通知发送失败",
+    }
+
+
+async def _run_trend_ai_job(
+    *,
+    analysis_id: uuid_module.UUID,
+    sender_user_open_id: str | None,
+) -> dict[str, str]:
+    """后台任务：渲染趋势图 → 上传 → AI 解读 → 飞书推送 → 幂等回写。"""
+    async with async_session_factory() as db:
+        anomaly = await db.get(FinishedTrendAIAnalysis, analysis_id)
+        if anomaly is None:
+            return {"status": "skipped"}
+        if anomaly.notification_status in _TREND_AI_TERMINAL_STATUSES:
+            # 幂等保护：已终态记录不重复推送/计费
+            return {"status": "already"}
+        payload = anomaly.payload or {}
+        try:
+            await asyncio.wait_for(
+                _execute_trend_ai_job(
+                    db, anomaly, payload, sender_user_open_id
+                ),
+                timeout=_TREND_AI_TOTAL_TIMEOUT,
+            )
+            await db.commit()
+            return {"status": anomaly.notification_status}
+        except TimeoutError:
+            anomaly.notification_status = "failed"
+            anomaly.ai_summary = None
+            await db.commit()
+            return {"status": "timeout"}
+        except Exception as exc:  # noqa: BLE001 —— job 边界兜底
+            logger.exception("trend ai job %s failed", analysis_id)
+            anomaly.notification_status = "failed"
+            await db.commit()
+            return {"status": "failed", "error": type(exc).__name__}
+
+
+async def _execute_trend_ai_job(
+    db: AsyncSession,
+    anomaly: FinishedTrendAIAnalysis,
+    payload: dict[str, Any],
+    sender_user_open_id: str | None,
+) -> None:
+    # 1. AI 分析（无论是否推送都执行，供页面回看）；整体分析带上当月全部判据命中
+    job_anomalies = list(payload.get("anomalies") or [])
+    if not job_anomalies:
+        job_anomalies = [
+            {
+                "rule_type": anomaly.rule_type,
+                "severity": anomaly.severity,
+                "description": anomaly.description,
+                "evidence": anomaly.evidence or {},
+                "trend_start_batch": anomaly.trend_start_batch,
+                "trend_end_batch": anomaly.trend_end_batch,
+            }
+        ]
+    ai_result = await run_trend_ai_analysis(
+        source_label=str(payload.get("source_label") or anomaly.source_label or ""),
+        metric_label=anomaly.metric_label,
+        points=list(payload.get("points") or []),
+        mean=payload.get("mean"),
+        std_dev=payload.get("std_dev"),
+        upper_control_limit=payload.get("upper_control_limit"),
+        lower_control_limit=payload.get("lower_control_limit"),
+        spec_lines=list(payload.get("spec_lines") or []),
+        anomalies=job_anomalies,
+    )
+    if ai_result["status"] == "completed":
+        summary = dict(ai_result["ai_summary"] or {})
+        summary["affected_batches"] = list(anomaly.affected_batches or [])
+        anomaly.ai_summary = summary
+        anomaly.model_name = ai_result.get("model_name")
+    else:
+        anomaly.ai_summary = None
+        anomaly.model_name = ai_result.get("model_name")
+
+    # 2. 通知开关检查（全局 + 产品线）
+    trend_config = await load_inspection_trend_alert_config(db)
+    line_config = trend_config.lines.get(anomaly.entity_code)
+    line_paused = bool(line_config and not line_config.get("enabled", True))
+    if not trend_config.is_enabled or line_paused:
+        anomaly.notification_status = "paused"
+        return
+
+    # 3. 渲染趋势图 + 上传（失败降级为无图仍发送）
+    image_key: str | None = None
+    png = render_trend_chart_png(
+        metric_label=anomaly.metric_label,
+        source_label=str(payload.get("source_label") or anomaly.source_label or ""),
+        categories=list(payload.get("categories") or []),
+        actual_series=list(payload.get("actual_series") or []),
+        mean=payload.get("mean"),
+        upper_control_limit=payload.get("upper_control_limit"),
+        lower_control_limit=payload.get("lower_control_limit"),
+        spec_lines=list(payload.get("spec_lines") or []),
+        highlight_batches=list(anomaly.affected_batches or []),
+    )
+    if png:
+        image_key = await upload_image(png, file_name="trend_anomaly.png")
+    anomaly.feishu_image_key = image_key
+
+    # 4. 推送
+    send_result = await _send_trend_ai_card(
+        db,
+        sender_user_open_id=sender_user_open_id,
+        anomaly=anomaly,
+        payload=payload,
+        image_key=image_key,
+    )
+    anomaly.notification_status = str(send_result["status"])
+    anomaly.feishu_message_id = send_result.get("message_id")
+    if send_result["status"] in {"sent", "partial"}:
+        anomaly.notified_at = datetime.now(UTC)
+
+
+async def _submit_trend_ai_job(
+    anomaly: FinishedTrendAIAnalysis,
+    *,
+    sender_user_open_id: str | None,
+) -> None:
+    job_id = f"quality:trend-ai:{uuid_module.uuid4().hex[:12]}"
+    anomaly.job_id = job_id
+    await submit_job(
+        _run_trend_ai_job,
+        task_id=job_id,
+        ttl=600,
+        status_extra={"component": "quality.trend_ai"},
+        analysis_id=anomaly.id,
+        sender_user_open_id=sender_user_open_id,
+    )
+
+
+async def _process_metric_trend(
+    db: AsyncSession,
+    *,
+    sender_user_open_id: str | None,
+    source_label: str,
+    entity_code: str,
+    frontend_group: str | None,
+    metric_key: str,
+    metric_label: str,
+    points: list[dict[str, Any]],
+    mean: float | None,
+    std_dev: float | None,
+    upper_control_limit: float | None,
+    lower_control_limit: float | None,
+    spec_lines: list[dict[str, float | str]],
+) -> tuple[list[dict[str, Any]], InspectionDashboardTrendAI | None, str]:
+    """对单指标跑确定性趋势规则，并按「每月一次」维护整体 AI 分析。
+
+    - 规则命中每次打开都实时重算（确定性、零成本），随响应返回供图表展示；
+    - AI 结论按 (entity, metric, 月份) 固定：当月已有分析记录就直接用缓存，
+      页面刷新不重复触发；当月首次出现命中、或上月 AI 失败时才提交后台任务；
+    - 无任何命中则不做 AI。
+    返回 (序列化的 trend_anomalies, 整体 trend_ai 展示模型, trend_ai_status)。
+    """
+    anomalies = detect_trend_anomalies(
+        points,
+        mean=mean,
+        std_dev=std_dev,
+        upper_control_limit=upper_control_limit,
+        lower_control_limit=lower_control_limit,
+        spec_lines=spec_lines,
+    )
+    serialized = [
+        InspectionDashboardTrendAnomaly(
+            rule_type=anomaly.rule_type,
+            severity=anomaly.severity,
+            start_batch=anomaly.start_batch,
+            end_batch=anomaly.end_batch,
+            description=anomaly.description,
+            evidence=anomaly.evidence,
+            affected_batches=list(anomaly.affected_batches),
+        ).model_dump(mode="json")
+        for anomaly in anomalies
+    ]
+    if not anomalies:
+        return serialized, None, "none"
+
+    period = _trend_period()
+    snapshot = {
+        "points": points,
+        "categories": [str(p["batch_no"]) for p in points],
+        "actual_series": [float(p["value"]) for p in points],
+        "mean": mean,
+        "std_dev": std_dev,
+        "upper_control_limit": upper_control_limit,
+        "lower_control_limit": lower_control_limit,
+        "spec_lines": spec_lines,
+        "source_label": source_label,
+        "frontend_group": frontend_group,
+        # 整体分析：把当月全部判据命中一起交给 AI
+        "anomalies": serialized,
+    }
+    affected = sorted({b for a in anomalies for b in a.affected_batches})
+    severity_order = {"high": 0, "medium": 1, "low": 2}
+    top_severity = min(
+        (str(a["severity"]) for a in serialized),
+        key=lambda s: severity_order.get(s, 3),
+        default="medium",
+    )
+
+    row = await _get_existing_trend_ai(
+        db,
+        entity_code=entity_code,
+        metric_key=metric_key,
+        rule_type=TREND_OVERALL_RULE,
+        trend_end_batch=period,
+    )
+    if row is None:
+        record = FinishedTrendAIAnalysis(
+            entity_code=entity_code,
+            source_label=source_label,
+            frontend_group=frontend_group,
+            metric_key=metric_key,
+            metric_label=metric_label,
+            rule_type=TREND_OVERALL_RULE,
+            severity=top_severity,
+            trend_start_batch=serialized[0]["start_batch"] or "",
+            trend_end_batch=period,
+            description=f"月度整体趋势分析（{period}，命中 {len(serialized)} 项判据）",
+            evidence={"period": period, "anomalies": serialized},
+            payload=snapshot,
+            affected_batches=affected,
+            notification_status="pending",
+        )
+        db.add(record)
+        try:
+            await db.commit()
+        except IntegrityError:
+            # 并发打开竞态：复用已存在记录，不重复提交
+            await db.rollback()
+            row = await _get_existing_trend_ai(
+                db,
+                entity_code=entity_code,
+                metric_key=metric_key,
+                rule_type=TREND_OVERALL_RULE,
+                trend_end_batch=period,
+            )
+            if row is None:
+                raise
+        else:
+            await _submit_trend_ai_job(
+                record, sender_user_open_id=sender_user_open_id
+            )
+            await db.commit()
+            row = record
+    elif row.ai_summary is None and row.notification_status == "ai_failed":
+        # 当月 AI 失败：打开页面自动重试，直至成功；成功后当月固定不再触发
+        await _submit_trend_ai_job(row, sender_user_open_id=sender_user_open_id)
+        await db.commit()
+
+    merged = _trend_ai_row_to_chart_model([row])
+    if merged is not None:
+        return serialized, merged, "completed"
+    if row.notification_status == "ai_failed":
+        return serialized, None, "failed"
+    if row.notification_status == "paused":
+        return serialized, None, "paused"
+    return serialized, None, "pending"
+
+
+async def reanalyze_trend_ai(
+    db: AsyncSession,
+    *,
+    entity_code: str,
+    metric_key: str,
+    sender_user_open_id: str | None = None,
+) -> dict[str, str]:
+    """手动「再次分析」：作废当月整体分析记录并立即重跑（AI + 推送）。
+
+    页面刷新不会走到这里——只有前端显式调用才触发。
+    """
+    period = _trend_period()
+    row = await _get_existing_trend_ai(
+        db,
+        entity_code=entity_code,
+        metric_key=metric_key,
+        rule_type=TREND_OVERALL_RULE,
+        trend_end_batch=period,
+    )
+    if row is None:
+        raise AppException(
+            message=f"当月（{period}）尚无该指标的趋势 AI 分析记录", status_code=404
+        )
+    payload = row.payload or {}
+    row.is_deleted = True
+    await db.commit()
+    record = FinishedTrendAIAnalysis(
+        entity_code=row.entity_code,
+        source_label=row.source_label,
+        frontend_group=row.frontend_group,
+        metric_key=row.metric_key,
+        metric_label=row.metric_label,
+        rule_type=TREND_OVERALL_RULE,
+        severity=row.severity,
+        trend_start_batch=row.trend_start_batch,
+        trend_end_batch=period,
+        description=row.description,
+        evidence=row.evidence,
+        payload=payload,
+        affected_batches=row.affected_batches,
+        notification_status="pending",
+    )
+    db.add(record)
+    await db.commit()
+    await _submit_trend_ai_job(record, sender_user_open_id=sender_user_open_id)
+    await db.commit()
+    return {"job_id": record.job_id or "", "period": period}
+
+
 async def _get_finished_dashboard_data(
     db: AsyncSession,
     *,
@@ -1075,6 +1645,8 @@ async def _get_finished_dashboard_data(
     source_label: str,
     metric_configs: tuple[dict[str, Any], ...],
     oot_product_code: str | None = None,
+    frontend_group: str | None = None,
+    enable_trend_ai: bool = False,
 ) -> dict[str, Any]:
     try:
         await _resolve_runtime_entity(db, source_entity_code, direction="pull")
@@ -1115,6 +1687,9 @@ async def _get_finished_dashboard_data(
     skipped_value_count = 0
     charts: list[dict[str, Any]] = []
     alerts: list[dict[str, Any]] = []
+    trend_alert_metric_count = 0
+    trend_ai_pending_count = 0
+    trend_ai_completed_count = 0
     oot_limit_items = await _get_oot_limit_items_by_product_code(db, oot_product_code)
 
     for metric_config in metric_configs:
@@ -1212,6 +1787,41 @@ async def _get_finished_dashboard_data(
                 )
                 # Alert materialization failed (e.g. feishu auth), skip this alert
 
+        # ── 趋势规则 + AI 分析（确定性判据先算，AI/推送后台化，不阻塞首屏） ──
+        trend_anomalies: list[dict[str, Any]] = []
+        trend_ai_model: InspectionDashboardTrendAI | None = None
+        trend_ai_status = "none"
+        if enable_trend_ai:
+            try:
+                (
+                    trend_anomalies,
+                    trend_ai_model,
+                    trend_ai_status,
+                ) = await _process_metric_trend(
+                    db,
+                    sender_user_open_id=sender_user_open_id,
+                    source_label=source_label,
+                    entity_code=source_entity_code,
+                    frontend_group=frontend_group,
+                    metric_key=metric_key,
+                    metric_label=str(metric_config["metric_label"]),
+                    points=points,
+                    mean=mean_value,
+                    std_dev=stats["std_dev"],
+                    upper_control_limit=upper_control_limit,
+                    lower_control_limit=lower_control_limit,
+                    spec_lines=spec_lines,
+                )
+                trend_alert_metric_count += len(trend_anomalies)
+                if trend_ai_status == "pending":
+                    trend_ai_pending_count += 1
+                elif trend_ai_status == "completed":
+                    trend_ai_completed_count += 1
+            except Exception as exc:  # noqa: BLE001 —— 趋势分析失败降级，不影响图表
+                logger.warning(
+                    f"Trend analysis failed {source_entity_code}/{metric_key}: {exc}"
+                )
+
         chart = InspectionDashboardChart(
             metric_key=metric_key,
             metric_label=str(metric_config["metric_label"]),
@@ -1237,6 +1847,12 @@ async def _get_finished_dashboard_data(
                 upper_control_limit=upper_control_limit,
                 lower_control_limit=lower_control_limit,
             ),
+            trend_anomalies=[
+                InspectionDashboardTrendAnomaly.model_validate(item)
+                for item in trend_anomalies
+            ],
+            trend_ai=trend_ai_model,
+            trend_ai_status=trend_ai_status,
         )
         charts.append(chart.model_dump(mode="json"))
 
@@ -1265,6 +1881,9 @@ async def _get_finished_dashboard_data(
             for item in alerts
             if item["notification_status"] in {"unmapped", "missing_open_id"}
         ),
+        trend_alert_metric_count=trend_alert_metric_count,
+        trend_ai_pending_count=trend_ai_pending_count,
+        trend_ai_completed_count=trend_ai_completed_count,
     )
     return InspectionDashboardData(
         source_entity_code=source_entity_code,

@@ -153,9 +153,11 @@ def test_lineage_trace_simple_path() -> Any:
 def test_lineage_trace_invalid_stage_400() -> Any:
     import asyncio
 
+    # 非法工段且批号在任何业务表都探测不到时仍返回 400
+    s = make_smart_session(probe_trace_router(hit_table=None, **EMPTY_ROWS))
     with pytest.raises(HTTPException) as exc:
         asyncio.run(
-            api.lineage_trace(batch_no="MC-1", stage="bogus", session=make_session([]))
+            api.lineage_trace(batch_no="UNKNOWN-1", stage="bogus", session=s)
         )
     assert exc.value.status_code == 400
 
@@ -365,3 +367,151 @@ def test_lineage_coverage_empty_total() -> Any:
     resp = asyncio.run(api.lineage_coverage(session=s))
     data = json.loads(resp.body)["data"]
     assert data["extraction_coverage_pct"] == 0
+
+
+# ═══════════ 自动层级探测（各追溯入口默认工段与批号不匹配时） ═══════════
+
+_PROBE_TABLES = [
+    "qc_inspections",
+    "mc_refinement_records",
+    "blending_records",
+    "extraction_records",
+    "sub_tank_records",
+    "refining_batches",
+    "fermentation_liquids",
+]
+
+EMPTY_ROWS = dict(
+    has_link=False,
+    upstream_rows=[],
+    downstream_rows=[],
+    conn_rows=[],
+)
+
+
+def probe_trace_router(
+    hit_table: str | None,
+    has_link: bool,
+    upstream_rows: Any,
+    downstream_rows: Any,
+    conn_rows: Any,
+    yield_val: Any = 90.0,
+    qty_val: Any = 100.0,
+) -> Any:
+    """trace_router 之上叠加 _has_lineage/_probe_real_stage 查询路由。"""
+
+    def _route(sql: Any, params: Any) -> Any:
+        s = str(sql)
+        if "batch_lineage WHERE (upstream_batch" in s and "LIMIT 1" in s:
+            # _has_lineage：起点是否有血链关联
+            row = SimpleNamespace(hit=1) if has_link else None
+            return make_fetch_result(fetchone=row)
+        for tbl in _PROBE_TABLES:
+            if tbl in s and "LIMIT 1" in s:
+                if tbl == hit_table:
+                    bn = params.get("bn", "MC-1")
+                    return make_fetch_result(fetchone=SimpleNamespace(batch_no=bn))
+                return make_fetch_result(fetchone=None)
+        if "upstream_batch = :b AND" in s:  # conn_map 查询
+            return make_fetch_result(fetchall=conn_rows)
+        if "downstream_batch = :batch" in s:  # _SIBLING_SQL（查上游）
+            return make_fetch_result(fetchall=upstream_rows)
+        if "upstream_batch = :batch" in s:  # _DOWNSTREAM_SQL（查下游）
+            return make_fetch_result(fetchall=downstream_rows)
+        if "quantity" in s:
+            return make_fetch_result(fetchone=SimpleNamespace(quantity=qty_val))
+        if "yield_rate" in s:
+            return make_fetch_result(fetchone=SimpleNamespace(yield_rate=yield_val))
+        return make_fetch_result(fetchall=[])
+
+    return _route
+
+
+def test_probe_real_stage_priority() -> Any:
+    import asyncio
+
+    # 探测按生产主链优先级：提炼最先，入库最后兜底
+    order = [s for s, _ in api._PROBE_STAGE_SQL]
+    assert order == [
+        "refining",
+        "fermentation",
+        "sub_tank",
+        "extraction",
+        "refinement",
+        "blending",
+        "qc",
+    ]
+
+    # 单个业务表命中 → 返回对应层级与实际批号
+    for tbl, stage in [
+        ("refining_batches", "refining"),
+        ("fermentation_liquids", "fermentation"),
+        ("sub_tank_records", "sub_tank"),
+        ("extraction_records", "extraction"),
+        ("mc_refinement_records", "refinement"),
+        ("blending_records", "blending"),
+        ("qc_inspections", "qc"),
+    ]:
+        s = make_smart_session(
+            probe_trace_router(hit_table=tbl, **EMPTY_ROWS)
+        )
+        assert asyncio.run(api._probe_real_stage(s, "MC-X")) == (
+            stage,
+            "MC-X",
+        )
+
+    # 全部未命中 → None
+    s3 = make_smart_session(probe_trace_router(hit_table=None, **EMPTY_ROWS))
+    assert asyncio.run(api._probe_real_stage(s3, "UNKNOWN-1")) is None
+
+
+def test_lineage_trace_invalid_stage_probes_real_stage() -> Any:
+    import asyncio
+
+    # 页面遗留非法工段值（如粗提页 "crude"）：探测到提炼层级后正常追溯
+    s = make_smart_session(
+        probe_trace_router(hit_table="refining_batches", **EMPTY_ROWS)
+    )
+    resp = asyncio.run(
+        api.lineage_trace(batch_no="MC-260709", stage="crude", session=s)
+    )
+    data = json.loads(resp.body)["data"]
+    assert data["target_stage"] == "refining"
+    stages = {sg["stage"] for sg in data["stages"]}
+    assert "refining" in stages
+
+
+def test_lineage_trace_mismatched_stage_probes_real_stage() -> Any:
+    import asyncio
+
+    # 追溯页默认工段 sub_tank 查询提炼批号：无血链关联 → 自动修正为 refining
+    s = make_smart_session(
+        probe_trace_router(hit_table="refining_batches", **EMPTY_ROWS)
+    )
+    resp = asyncio.run(
+        api.lineage_trace(batch_no="MC-260709", stage="sub_tank", session=s)
+    )
+    data = json.loads(resp.body)["data"]
+    assert data["target_stage"] == "refining"
+    stages = {sg["stage"] for sg in data["stages"]}
+    assert "refining" in stages
+
+
+def test_lineage_trace_matched_stage_does_not_probe() -> Any:
+    import asyncio
+
+    # 显式层级与批号匹配（血链有关联）时保持原起点，不做探测
+    s = make_smart_session(
+        probe_trace_router(
+            hit_table="extraction_records",
+            has_link=True,
+            upstream_rows=[],
+            downstream_rows=[],
+            conn_rows=[],
+        )
+    )
+    resp = asyncio.run(
+        api.lineage_trace(batch_no="MC-1", stage="extraction", session=s)
+    )
+    data = json.loads(resp.body)["data"]
+    assert data["target_stage"] == "extraction"

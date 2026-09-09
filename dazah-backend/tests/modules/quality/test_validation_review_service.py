@@ -1309,3 +1309,449 @@ class TestMissingBasis:
         mb = [f for f in findings if f.get("basis_match_type") == "missing_basis"]
         assert len(mb) == 1
         assert "未做正文一致性比对" in mb[0]["detail"]
+
+
+class TestP2ExpectedKey:
+    @pytest.mark.anyio
+    async def test_select_key_bases_uses_selected_expected_key(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """回归：P2 输出契约是 selected；expected_keys 传 findings 会让
+        chat_json 校验失败，P2 永远走降级。"""
+        monkeypatch.setattr(
+            svc,
+            "get_config",
+            AsyncMock(return_value=SimpleNamespace(model_name="m")),
+        )
+        chat_mock = AsyncMock(
+            return_value={
+                "selected": [{"code": "SOP-FT3-017/04", "reason": "参数来源"}]
+            }
+        )
+        monkeypatch.setattr(type(svc.llm_client), "chat_json", chat_mock)
+        entry_id = uuid.uuid4()
+        candidates = [
+            {
+                "entry_id": entry_id,
+                "code": "SOP-FT3-017/04",
+                "name": "方锥混合机操作规程",
+                "length": 100,
+                "digest": "混合机参数",
+            }
+        ]
+        key_bases, _model = await svc._select_key_bases("方案", candidates, None)
+        assert len(key_bases) == 1
+        assert key_bases[0]["reason"] == "参数来源"
+        # 关键断言：期望键必须是 selected，而不是 findings
+        assert chat_mock.await_args.kwargs.get("expected_keys") == ["selected"]
+
+    @pytest.mark.anyio
+    async def test_degrade_orders_by_relevance(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """降级不再盲取前 N：与文档主题相关的依据排前。"""
+        from app.core.llm.exceptions import LLMProviderError
+
+        monkeypatch.setattr(
+            type(svc.llm_client),
+            "chat_json",
+            AsyncMock(side_effect=LLMProviderError("boom")),
+        )
+        relevant_id = uuid.uuid4()
+        irrelevant_id = uuid.uuid4()
+        candidates = [
+            {
+                "entry_id": irrelevant_id,
+                "code": "SMP-QA-011/09",
+                "name": "偏差处理管理程序",
+                "length": 100,
+                "digest": "偏差的处理流程与职责划分。",
+            },
+            {
+                "entry_id": relevant_id,
+                "code": "SOP-MC-201/02",
+                "name": "霉酚酸提炼操作规程",
+                "length": 100,
+                "digest": "霉酚酸提炼的结晶温度与离心参数。",
+            },
+        ]
+        key_bases, _model = await svc._select_key_bases(
+            "方案 VP-MC-PV1902-01《霉酚酸提炼生产工艺验证方案》",
+            candidates,
+            None,
+        )
+        assert key_bases[0]["entry_id"] == relevant_id
+        assert "相关性" in key_bases[0]["reason"]
+
+
+class TestAutoTitleDedup:
+    def test_title_containing_number_not_duplicated(self) -> None:
+        """正文标题已带文档编号时不再重复拼接。"""
+        long_title = "VP-MC-PV1902-01霉酚酸提炼生产工艺验证方案(高内合并）"
+        title = svc._auto_generate_title(
+            {
+                "plan": {
+                    "doc_number": "VP-MC-PV1902-01",
+                    "content_title": long_title,
+                }
+            }
+        )
+        assert title == long_title
+
+    def test_title_partial_number_prefix_still_joined(self) -> None:
+        """标题只含编号主干（非完整编号）时仍正常拼接。"""
+        title = svc._auto_generate_title(
+            {
+                "plan": {
+                    "doc_number": "VP-MC-PV1902-01",
+                    "content_title": "霉酚酸提炼生产工艺验证方案",
+                }
+            }
+        )
+        assert title == "VP-MC-PV1902-01 霉酚酸提炼生产工艺验证方案"
+
+
+class TestCompareChunking:
+    @pytest.mark.anyio
+    async def test_long_validation_text_compared_chunk_by_chunk(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """超长验证文档分块逐段比对，重叠块产生的重复发现去重。"""
+        entry_id = uuid.uuid4()
+        basis_text = "主轴转速 2-10rpm。"
+        validation_text = "验证方案正文。\n" * 3000  # 约 27000 字 → 多块
+        chunks = svc.split_chunks(validation_text)
+        assert len(chunks) > 1
+        chat_mock = AsyncMock(
+            return_value={
+                "findings": [
+                    {
+                        "validation_quote": "验证方案正文。",
+                        "basis_quote": "主轴转速 2-10rpm。",
+                        "dimension": "参数",
+                        "severity": "high",
+                        "detail": "与规程不一致",
+                    }
+                ]
+            }
+        )
+        monkeypatch.setattr(
+            svc,
+            "get_config",
+            AsyncMock(return_value=SimpleNamespace(model_name="m")),
+        )
+        monkeypatch.setattr(type(svc.llm_client), "chat_json", chat_mock)
+        key_bases = [
+            {
+                "entry_id": entry_id,
+                "code": "SOP-MC-201/02",
+                "name": "霉酚酸提炼操作规程",
+                "reason": "工艺来源",
+            }
+        ]
+        findings = await svc._compare_basis_contents(
+            validation_text,
+            key_bases,
+            {entry_id: basis_text},
+            [],
+            None,
+        )
+        expected_calls = min(len(chunks), svc._MAX_COMPARE_CHUNKS_PER_BASIS)
+        assert chat_mock.await_count == expected_calls
+        # 相同发现来自多个重叠块，只保留一条
+        assert len(findings) == 1
+        assert findings[0]["quote_verified"] is True
+
+    @pytest.mark.anyio
+    async def test_short_validation_text_single_call(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        entry_id = uuid.uuid4()
+        chat_mock = AsyncMock(return_value={"findings": []})
+        monkeypatch.setattr(
+            svc,
+            "get_config",
+            AsyncMock(return_value=SimpleNamespace(model_name="m")),
+        )
+        monkeypatch.setattr(type(svc.llm_client), "chat_json", chat_mock)
+        findings = await svc._compare_basis_contents(
+            "短正文",
+            [
+                {
+                    "entry_id": entry_id,
+                    "code": "SOP-MC-201/02",
+                    "name": "规程",
+                    "reason": "r",
+                }
+            ],
+            {entry_id: "依据正文"},
+            [],
+            None,
+        )
+        assert findings == []
+        assert chat_mock.await_count == 1
+
+
+class TestTitleMatchCandidates:
+    """正文未写引用编号时，凭文档标题在目录预筛候选依据。"""
+
+    def _make_basis(self, entries: list[tuple[uuid.UUID, str, str]]):
+        from app.modules.quality.service.validation_basis_resolver import (
+            BasisEntry,
+            DocumentBasis,
+        )
+
+        return DocumentBasis(
+            entries=[
+                BasisEntry(
+                    id=eid,
+                    code=code,
+                    name=name,
+                    effective_date=None,
+                    updated_at=None,
+                )
+                for eid, code, name in entries
+            ],
+            prefixes={"SOP"},
+        )
+
+    def test_title_match_finds_relevant_entries(self) -> None:
+        clean_id = uuid.uuid4()
+        dev_id = uuid.uuid4()
+        equip_id = uuid.uuid4()
+        basis = self._make_basis(
+            [
+                (clean_id, "SOP-QC-901/02", "纯化水系统清洁操作规程"),
+                (dev_id, "SMP-QA-011/09", "偏差处理管理程序"),
+                (equip_id, "SOP-EQ-005/01", "设备管理与清洁规程"),
+            ]
+        )
+        matched = svc._find_title_matched_entries(
+            basis, "设备清洁验证方案", []
+        )
+        ids = [entry.id for entry in matched]
+        # 清洁/设备相关条目命中；偏差管理程序不命中
+        assert clean_id in ids
+        assert equip_id in ids
+        assert dev_id not in ids
+        # 命中数排序：双命中（清洁+设备）在前
+        assert matched[0].id == equip_id
+
+    def test_title_match_excludes_hit_entries(self) -> None:
+        clean_id = uuid.uuid4()
+        basis = self._make_basis(
+            [(clean_id, "SOP-QC-901/02", "纯化水系统清洁操作规程")]
+        )
+        matched = svc._find_title_matched_entries(
+            basis, "设备清洁验证方案", [clean_id]
+        )
+        assert matched == []
+
+    def test_keyword_candidate_bases_skip_missing_content(self) -> None:
+        entry_id = uuid.uuid4()
+        empty_id = uuid.uuid4()
+        from app.modules.quality.service.validation_basis_resolver import (
+            BasisEntry,
+        )
+
+        entries = [
+            BasisEntry(
+                id=entry_id,
+                code="SOP-QC-901/02",
+                name="纯化水系统清洁操作规程",
+                effective_date=None,
+                updated_at=None,
+            ),
+            BasisEntry(
+                id=empty_id,
+                code="SOP-EQ-005/01",
+                name="设备清洁规程",
+                effective_date=None,
+                updated_at=None,
+            ),
+        ]
+        candidates = svc._build_keyword_candidate_bases(
+            entries, {entry_id: "清洁后目检无可见残留。"}
+        )
+        assert len(candidates) == 1
+        assert candidates[0]["entry_id"] == entry_id
+        assert candidates[0]["digest"] == "清洁后目检无可见残留。"
+
+    @pytest.mark.anyio
+    async def test_review_without_reference_codes_still_compares_content(
+        self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """《设备清洁验证方案》没写任何 SOP 编号，也能靠标题找到
+        《清洁操作规程》做正文比对（候选来源②：标题关键词预筛）。"""
+        from app.modules.quality.service.validation_basis_resolver import (
+            BasisEntry,
+            DocumentBasis,
+        )
+
+        record = await _seed_record(db_session)
+        # 正文不含任何文件编号形态
+        plan_text = (
+            "本方案用于设备清洁效果确认。\n"
+            "清洁剂为纯化水，清洁后目检无可见残留。"
+        )
+        row = ValidationReviewFile(
+            id=uuid.uuid4(),
+            review_id=record.id,
+            doc_kind="plan",
+            source="upload",
+            file_name="设备清洁验证方案.md",
+            file_type="text/markdown",
+            file_size=100,
+            storage_key="",
+            parsed_text=plan_text,
+            parse_status="completed",
+            sort_order=0,
+        )
+        db_session.add(row)
+        await db_session.commit()
+
+        clean_id = uuid.uuid4()
+        basis = DocumentBasis(
+            entries=[
+                BasisEntry(
+                    id=clean_id,
+                    code="SOP-QC-901/02",
+                    name="纯化水系统清洁操作规程",
+                    effective_date=None,
+                    updated_at=None,
+                )
+            ],
+            prefixes={"SOP"},
+        )
+        monkeypatch.setattr(svc, "load_document_basis", AsyncMock(return_value=basis))
+        basis_contents_spy = AsyncMock(
+            return_value={clean_id: "清洁后应目检无可见残留，微生物不超过 10 CFU。"}
+        )
+        monkeypatch.setattr(svc, "load_basis_contents", basis_contents_spy)
+        monkeypatch.setattr(
+            svc, "get_config", AsyncMock(return_value=SimpleNamespace(model_name="m"))
+        )
+        call_results = [
+            {"selected": [{"code": "SOP-QC-901/02", "reason": "清洁步骤来源"}]},
+            {
+                "findings": [
+                    {
+                        "validation_quote": "目检无可见残留",
+                        "basis_quote": "微生物不超过 10 CFU",
+                        "dimension": "限度",
+                        "severity": "high",
+                        "detail": "方案只写目检，规程要求微生物限度",
+                    }
+                ]
+            },
+            {"findings": []},
+        ]
+        monkeypatch.setattr(
+            type(svc.llm_client), "chat_json", AsyncMock(side_effect=call_results)
+        )
+        monkeypatch.setattr(svc, "get_changes", AsyncMock(return_value=([], 0)))
+        monkeypatch.setattr(
+            svc, "get_deviations", AsyncMock(return_value=([], 0))
+        )
+
+        await svc._execute_review(db_session, record, "job:tm", uuid.uuid4())
+        await db_session.commit()
+
+        # 标题预筛条目进了正文拉取范围（无引用命中，ids 全来自标题匹配）
+        pulled_ids = basis_contents_spy.await_args.args[1]
+        assert clean_id in pulled_ids
+
+        payload = record.output_payload or {}
+        findings = payload.get("findings") or []
+        mismatch = [f for f in findings if f["category"] == "basis_content_mismatch"]
+        assert len(mismatch) == 1
+        comparison = payload.get("basis_comparison") or []
+        assert len(comparison) == 1
+        assert comparison[0]["name"] == "纯化水系统清洁操作规程"
+
+
+class TestReadFileTimeout:
+    @pytest.mark.anyio
+    async def test_read_file_timeout_marks_file_failed(
+        self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """附件读取（同步 MinIO）卡死 → 线程池+超时保护，文件 failed 不挂死 job。"""
+        record = await _seed_record(db_session)
+        row = ValidationReviewFile(
+            id=uuid.uuid4(),
+            review_id=record.id,
+            doc_kind="plan",
+            source="upload",
+            file_name="VP-test.md",
+            file_type="text/markdown",
+            file_size=3,
+            storage_key="validation-review/hang.md",
+            parse_status="pending",
+            sort_order=0,
+        )
+        db_session.add(row)
+        await db_session.commit()
+
+        def _read_hang(key):
+            import time as _time
+
+            _time.sleep(5)  # 同步阻塞，模拟 MinIO socket 挂死
+            return b"doc"
+
+        monkeypatch.setattr(svc, "_READ_FILE_TIMEOUT", 0.2)
+        monkeypatch.setattr(svc, "_read_review_file", _read_hang)
+        monkeypatch.setattr(
+            svc, "_call_llm_with_retry", AsyncMock(return_value=({}, "m"))
+        )
+        monkeypatch.setattr(svc, "get_changes", AsyncMock(return_value=([], 0)))
+        monkeypatch.setattr(
+            svc, "get_deviations", AsyncMock(return_value=([], 0))
+        )
+
+        await svc._execute_review(db_session, record, "job:rf", uuid.uuid4())
+        await db_session.commit()
+        assert row.parse_status == "failed"
+        assert "读取附件超时" in (row.parse_error or "")
+
+
+class TestReconcileOrphanedReviews:
+    @pytest.mark.anyio
+    async def test_orphan_processing_flipped_to_failed(
+        self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """processing 且 job 心跳已消失 → failed；活 job 与其他状态不动。"""
+        orphan = await _seed_record(db_session)
+        orphan.status = "processing"
+        orphan.job_id = "quality:validation-review:deadbeef0001"
+        alive = await _seed_record(db_session)
+        alive.status = "processing"
+        alive.job_id = "quality:validation-review:alivejob0002"
+        done = await _seed_record(db_session)
+        done.status = "completed"
+        await db_session.commit()
+
+        async def _fake_running(job_id: str) -> bool:
+            return job_id.endswith("alivejob0002")
+
+        monkeypatch.setattr(svc, "is_job_running", _fake_running)
+        flipped = await svc.reconcile_orphaned_reviews(db_session)
+
+        assert flipped == 1
+        assert orphan.status == "failed"
+        assert "中断" in (orphan.error_message or "")
+        assert alive.status == "processing"
+        assert done.status == "completed"
+
+    @pytest.mark.anyio
+    async def test_processing_without_job_id_flipped(
+        self, db_session: AsyncSession
+    ) -> None:
+        """processing 但没有 job_id（异常残留）也翻 failed。"""
+        record = await _seed_record(db_session)
+        record.status = "processing"
+        record.job_id = None
+        await db_session.commit()
+
+        flipped = await svc.reconcile_orphaned_reviews(db_session)
+        assert flipped == 1
+        assert record.status == "failed"

@@ -8,6 +8,22 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import TraceModal from './TraceModal'
 import { buildLayout } from './TraceModal'
 
+function streamResponse(lines: string[]): Response {
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const c of lines.map((l) => `${l}
+`)) {
+        controller.enqueue(new TextEncoder().encode(c))
+      }
+      controller.close()
+    },
+  })
+  return new Response(body, {
+    status: 200,
+    headers: { 'content-type': 'text/event-stream' },
+  })
+}
+
 const LAYOUT_STAGES = [
   { stage: 'refinement', label: '精制MC-F2', nodes: [{ batch_no: 'MC-F2-1', yield_rate: 88.5, quantity: 100 }] },
   { stage: 'extraction', label: '萃取批号', nodes: [] },
@@ -40,6 +56,11 @@ describe('TraceModal buildLayout', () => {
     expect(main).toBeTruthy()
     expect(typeof main?.x).toBe('number')
     expect(typeof main?.y).toBe('number')
+    // 回归：各列垂直偏移必须为有限数值，否则节点 y 为 NaN 导致 SVG 渲染错乱
+    for (const n of layout.nodes) {
+      expect(Number.isFinite(n.x)).toBe(true)
+      expect(Number.isFinite(n.y)).toBe(true)
+    }
   })
 
   it('returns empty layout when no stages in order match', () => {
@@ -100,6 +121,14 @@ describe('TraceModal buildLayout', () => {
           ] },
         }), { status: 200, headers: { 'content-type': 'application/json' } }))
       }
+      if (url.includes('/ai-analysis-stream')) {
+        return Promise.resolve(streamResponse([
+          'data: {"type":"step","step":"trace","msg":"查询链路"}',
+          'data: {"type":"result","severity":"high","summary":"存在风险","causes":["原因1"],"suggestions":["建议1"],"session_id":"s1","analysis_text":"分析正文","anomalies":[]}',
+          'data: {"type":"done","done":true}',
+          '',
+        ]))
+      }
       if (url.includes('/ai-analysis')) {
         return Promise.resolve(new Response(JSON.stringify({
           code: 200, message: 'success', data: {
@@ -137,7 +166,7 @@ describe('TraceModal buildLayout', () => {
 
     const aiButton = Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.includes('AI'))
     if (aiButton) {
-      await act(async () => { aiButton.click(); await new Promise((r) => setTimeout(r, 60)) })
+      await act(async () => { aiButton.click(); await new Promise((r) => setTimeout(r, 300)) })
     }
     const aiBtns = Array.from(document.querySelectorAll('button')).filter((b) => b.textContent?.includes('AI'))
     expect(aiBtns.length).toBeGreaterThan(0)
@@ -176,13 +205,6 @@ describe('TraceModal buildLayout edges', () => {
       target_stage: 'refinement',
     }
     function fetchMock(url: string): Promise<Response> {
-      if (url.includes('/ai-analysis')) {
-        return Promise.resolve(new Response(JSON.stringify({ code: 200, message: 'success', data: {
-          severity: 'high', summary: '存在风险', causes: ['原因'], suggestions: ['建议'], session_id: 's1',
-          anomalies: [{ stage: '精制', batch_no: 'MC-F2-1', value: 88.5, detail: '偏低' }],
-          analysis_text: '详细LLM输出',
-        } }), { status: 200, headers: { 'content-type': 'application/json' } }))
-      }
       if (url.includes('/trace')) {
         return Promise.resolve(new Response(JSON.stringify({ code: 200, message: 'success', data: TRACE }), {
           status: 200, headers: { 'content-type': 'application/json' },
@@ -192,6 +214,12 @@ describe('TraceModal buildLayout edges', () => {
         return Promise.resolve(new Response(JSON.stringify({ code: 200, message: 'success', data: { records: [] } }), {
           status: 200, headers: { 'content-type': 'application/json' },
         }))
+      }
+      if (url.includes('/ai-analysis-stream')) {
+        return Promise.resolve(streamResponse([
+          'data: {"type":"result","severity":"high","summary":"存在风险","causes":["原因1"],"suggestions":["建议1"],"session_id":"s1"}',
+          '',
+        ]))
       }
       return Promise.resolve(new Response(JSON.stringify({ code: 200, message: 'success', data: null }), {
         status: 200, headers: { 'content-type': 'application/json' },

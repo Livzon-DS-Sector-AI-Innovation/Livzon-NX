@@ -753,4 +753,24 @@ describe('ValidationAiReviewPanel', () => {
       expect.objectContaining({ review_mode: 'upload' })
     )
   })
+
+  it('页面展示 AI 审核维度说明（阶段①②③）', async () => {
+    act(() => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <App>
+            <ValidationAiReviewPanel />
+          </App>
+        </QueryClientProvider>
+      )
+    })
+    await act(flushRenders)
+    expect(bodyText()).toContain('阶段①：方案↔报告互查')
+    expect(bodyText()).toContain('阶段②：与文件管理现行正文比对')
+    expect(bodyText()).toContain('阶段③：质量数据联动与自定义关注点')
+    // 维度明细默认展开可见
+    expect(bodyText()).toContain('错别字/笔误')
+    expect(bodyText()).toContain('RSD/回收率')
+    expect(bodyText()).toContain('未写编号时按文档标题')
+  })
 })

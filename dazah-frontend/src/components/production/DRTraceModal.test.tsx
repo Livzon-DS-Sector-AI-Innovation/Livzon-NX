@@ -71,6 +71,13 @@ describe('DRTraceModal', () => {
     expect(text).toContain('批次追溯')
     expect(text).toContain('DR-1')
     expect(text).toContain('发酵说明')
+    // 回归：卡片坐标必须是有限数值，否则 y=NaN 导致 SVG 图错乱（同 TraceModal 缺陷）
+    const rects = Array.from(document.body.querySelectorAll('rect'))
+    expect(rects.length).toBeGreaterThan(0)
+    for (const r of rects) {
+      expect(Number.isNaN(Number(r.getAttribute('y')))).toBe(false)
+      expect(Number.isNaN(Number(r.getAttribute('x')))).toBe(false)
+    }
   })
 
   it('shows error state when trace request fails', async () => {

@@ -392,3 +392,24 @@ def test_sync_targets_catalog() -> Any:
     assert SYNC_TARGETS["sales_plan"] == "销售计划执行表"
     assert SYNC_TARGETS["dr_fourth_refinement"] == "DR 四次精制"
     assert len(SALES_FIELD_MAP) >= 14
+
+
+def test_sync_config_by_target_dr_ledger() -> Any:
+    import asyncio
+
+    with patch(
+        "app.modules.production.dr_feishu_sync.sync_dr_ledger",
+        AsyncMock(
+            return_value={
+                "extraction": {"created": 88},
+                "first_refinement": {"created": 300},
+            }
+        ),
+    ) as mock_sync:
+        result = asyncio.run(
+            sync_config_by_target(
+                make_config(sync_target="dr_ledger"), make_session()
+            )
+        )
+    assert result["first_refinement"]["created"] == 300
+    mock_sync.assert_awaited_once()

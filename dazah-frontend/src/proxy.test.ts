@@ -47,3 +47,30 @@ it('allows the system administrator to render without explicit page grants', asy
   me([], 'enforced', 'admin')
   expect((await proxy(new NextRequest('http://frontend.test/hr/profile'))).headers.get('x-middleware-next')).toBe('1')
 })
+
+it('lets an enforced module root render when its overview entry is authorized', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: {
+    role: 'user',
+    module_codes: ['production'],
+    page_permission_rollouts: { production: 'enforced' },
+    page_permissions: [
+      { page_key: 'production:overview', module_code: 'production', permissions: ['access', 'query'] },
+    ],
+  } }))))
+  const response = await proxy(new NextRequest('http://frontend.test/production'))
+  expect(response.headers.get('x-middleware-next')).toBe('1')
+  expect(response.headers.get('location')).toBeNull()
+})
+
+it('redirects an enforced module root without an overview grant to the first authorized child', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: {
+    role: 'user',
+    module_codes: ['production'],
+    page_permission_rollouts: { production: 'enforced' },
+    page_permissions: [
+      { page_key: 'production:batches:workshop-201-2', module_code: 'production', permissions: ['access', 'query'] },
+    ],
+  } }))))
+  const response = await proxy(new NextRequest('http://frontend.test/production'))
+  expect(response.headers.get('location')).toBe('http://frontend.test/production/batches/workshop/201-2')
+})

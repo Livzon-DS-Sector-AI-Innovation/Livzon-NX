@@ -1461,3 +1461,13 @@ export async function deleteDocumentEntryAttachment(entryId: string, storageKey:
   const encodedKey = storageKey.split('/').map(encodeURIComponent).join('/')
   return mutateMigratedQuality(`/api/v1/quality/document-entries/${entryId}/attachments/${encodedKey}`, 'DELETE', undefined, DOCUMENT_PATHS)
 }
+
+const INSPECTION_TREND_PATHS = ['/quality/inspection']
+export async function reanalyzeTrendAIAction(entityCode: string, metricKey: string) {
+  return mutateMigratedQuality<{ job_id: string; period: string }>(
+    '/api/v1/quality/inspection-dashboard/trend-ai/reanalyze',
+    'POST',
+    { entity_code: entityCode, metric_key: metricKey },
+    INSPECTION_TREND_PATHS,
+  )
+}

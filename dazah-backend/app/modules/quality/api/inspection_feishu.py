@@ -31,7 +31,10 @@ from app.modules.quality.api.deps import (
 from app.modules.quality.api.deps import (
     try_acquire_action_lock,
 )
-from app.modules.quality.schemas.inspection_dashboard import InspectionDashboardResponse
+from app.modules.quality.schemas.inspection_dashboard import (
+    InspectionDashboardResponse,
+    TrendAIReanalyzeRequest,
+)
 from app.modules.quality.service import (
     ensure_finished_entity_in_group,
     ensure_material_entity_in_group,
@@ -74,6 +77,7 @@ from app.modules.quality.service import (
     pull_outbounds,
     pull_repairs,
 )
+from app.modules.quality.service.inspection_dashboard_calc import reanalyze_trend_ai
 from app.shared.schemas import ApiResponseEnvelope
 
 logger = logging.getLogger(__name__)
@@ -564,6 +568,7 @@ async def api_get_inspection_dashboard(
         raise AppException(message=f"未知产品分组: {product_group}", status_code=404)
     kwargs: dict[str, Any] = {
         "sender_user_open_id": getattr(current_user, "feishu_open_id", None),
+        "frontend_group": product_group,
     }
     # mvt 分组只有单一数据源，不接受 entity_code
     if entity_code and product_group != "mvt":
@@ -581,6 +586,25 @@ async def api_get_inspection_dashboard(
             "configured": result["configured"],
         },
     )
+
+
+@router.post(
+    "/inspection-dashboard/trend-ai/reanalyze",
+    summary="手动再次分析当月趋势 AI（页面刷新不会触发）",
+)
+async def api_reanalyze_trend_ai(
+    request: TrendAIReanalyzeRequest,
+    current_user: CurrentUser = None,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    _require_user(current_user)
+    result = await reanalyze_trend_ai(
+        db,
+        entity_code=request.entity_code,
+        metric_key=request.metric_key,
+        sender_user_open_id=getattr(current_user, "feishu_open_id", None),
+    )
+    return success_response(data=result)
 
 
 @router.get(
