@@ -90,6 +90,92 @@ export interface WarehouseRecordFieldValue {
 export interface WarehouseRecordDetail {
   record_id: string
   fields: WarehouseRecordFieldValue[]
+  inspection_cycle?: WarehouseInspectionCycle | null
+}
+
+/** 检验进度周期分段（如 入库→待验 / 待验→合格） */
+export interface WarehouseInspectionCycleStage {
+  label: string
+  hours?: number | null
+  from_at?: string | null
+  to_at?: string | null
+}
+
+/** 单条记录的检验进度周期（只读统计） */
+export interface WarehouseInspectionCycle {
+  page_key: string
+  record_id: string
+  status: string
+  status_label: string
+  result?: string | null
+  inbound_date?: string | null
+  pending_since?: string | null
+  result_at?: string | null
+  stages: WarehouseInspectionCycleStage[]
+  total_hours?: number | null
+  note?: string | null
+}
+
+export interface WarehouseInspectionOverviewCurrent {
+  pending_count: number
+  pending_avg_hours?: number | null
+  pending_max_hours?: number | null
+}
+
+export interface WarehouseInspectionOverviewWindow {
+  days: number
+  start: string
+  end: string
+  completed_count: number
+  qualified_count: number
+  unqualified_count: number
+  avg_hours?: number | null
+  median_hours?: number | null
+  p90_hours?: number | null
+  max_hours?: number | null
+}
+
+export interface WarehouseInspectionGroupBreakdown {
+  label: string
+  completed_count: number
+  qualified_count: number
+  unqualified_count: number
+  avg_hours?: number | null
+  pending_count: number
+}
+
+export interface WarehouseInspectionDailyPoint {
+  date: string
+  qualified: number
+  unqualified: number
+  avg_hours?: number | null
+}
+
+export interface WarehouseInspectionPendingItem {
+  name: string
+  batch?: string | null
+  category?: string | null
+  product?: string | null
+  inbound_date?: string | null
+  waited_hours?: number | null
+}
+
+export interface WarehouseInspectionStageStats {
+  inbound_to_pending_avg_hours?: number | null
+  pending_to_result_avg_hours?: number | null
+}
+
+export interface WarehouseInspectionOverview {
+  scope: string
+  scope_label: string
+  start_date: string
+  generated_at: string
+  current: WarehouseInspectionOverviewCurrent
+  window: WarehouseInspectionOverviewWindow
+  breakdown: WarehouseInspectionGroupBreakdown[]
+  daily: WarehouseInspectionDailyPoint[]
+  oldest_pending: WarehouseInspectionPendingItem[]
+  stages?: WarehouseInspectionStageStats | null
 }
 
 export interface WarehousePageStats {

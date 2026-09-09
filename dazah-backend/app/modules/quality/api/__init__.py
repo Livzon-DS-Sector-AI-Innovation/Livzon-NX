@@ -17,6 +17,9 @@ from app.modules.quality.api.feishu_capa import router as feishu_capa_router
 from app.modules.quality.api.finished_product_anomaly import (
     router as finished_product_anomaly_router,
 )
+from app.modules.quality.api.finished_product_anomaly_chat import (
+    router as finished_product_anomaly_chat_router,
+)
 from app.modules.quality.api.inspection import router as inspection_router
 from app.modules.quality.api.inspection_feishu import router as inspection_feishu_router
 from app.modules.quality.api.inspection_feishu_crud import (
@@ -31,6 +34,7 @@ from app.modules.quality.api.notification_settings import (
 from app.modules.quality.api.oos_oot import router as oos_oot_router
 from app.modules.quality.api.oos_oot_feishu import router as oos_oot_feishu_router
 from app.modules.quality.api.oot_limit import router as oot_limit_router
+from app.modules.quality.api.person_directory import router as person_directory_router
 from app.modules.quality.api.product_quality import router as product_quality_router
 from app.modules.quality.api.product_quality_feishu import (
     router as product_quality_feishu_router,
@@ -114,10 +118,14 @@ router.include_router(
 )
 router.include_router(quality_ai_router, tags=["Quality-Management"])
 router.include_router(quality_contacts_router, tags=["Quality-Management"])
+router.include_router(person_directory_router, tags=["Quality-Management"])
 router.include_router(validation_router, tags=["Quality-Validation"])
 router.include_router(validation_qc_router, tags=["Quality-Validation-QC"])
 router.include_router(
     finished_product_anomaly_router, tags=["Quality-Finished-Product-Anomaly"]
+)
+router.include_router(
+    finished_product_anomaly_chat_router, tags=["Quality-Finished-Product-Anomaly-Chat"]
 )
 router.include_router(
     validation_review_router, tags=["Quality-Validation-Review"]

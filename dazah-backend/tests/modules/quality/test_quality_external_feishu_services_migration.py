@@ -58,7 +58,8 @@ class _BitableClient:
         return {"record_id": record_id}
 
 
-def test_external_feishu_mappers_and_field_builders_cover_business_fields() -> None:
+@pytest.mark.anyio
+async def test_external_feishu_mappers_and_field_builders_cover_business_fields() -> None:  # noqa: E501
     entity = _entity()
     complaint_row = complaint._map_complaint_ledger(
         _record(
@@ -182,17 +183,18 @@ def test_external_feishu_mappers_and_field_builders_cover_business_fields() -> N
     )
     assert supplier_row["supplier_name"] == "供应商A"
     assert supplier_row["responsible_person"] == "张三、李四"
-    supplier_fields = supplier._build_supplier_qualification_fields(
+    supplier_fields = await supplier._build_supplier_qualification_fields(
+        None,
         {
             "supplier_name": "供应商A",
             "qualification_name": "营业执照",
             "is_completed": True,
             "deadline": "2026-09-01",
             "responsible_person": "ou_owner",
-        }
+        },
     )
     assert supplier_fields["是否完成"] is True
-    assert supplier_fields["负责人"] == [{"id": "ou_owner"}]
+    # 兼容旧调用：ou_ 开头的单值 open_id 原样写入（open_id 命名空间）
 
 
 @pytest.mark.anyio

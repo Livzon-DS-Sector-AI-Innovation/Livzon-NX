@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { App, Form, Input, Modal, Select } from 'antd'
 import { useQuery } from '@tanstack/react-query'
-import { fetchDepartmentContacts } from '@/lib/api/client/quality'
+import { fetchQualityPersonDirectory } from '@/lib/api/client/quality'
 import { createDeviationReportRecord } from '@/actions/quality-deviation'
-import type { DepartmentContact } from '@/types/quality'
+import type { QualityPersonOption } from '@/types/quality'
 
 interface CreateDeviationReportRecordModalProps {
   open: boolean
@@ -30,8 +30,8 @@ export function CreateDeviationReportRecordModal({
   const reporterOpenId = Form.useWatch('reporter_open_id', form)
 
   const { data: contacts = [], isLoading: contactsLoading } = useQuery({
-    queryKey: ['quality-department-contacts', 'for-deviation-report'],
-    queryFn: () => fetchDepartmentContacts(),
+    queryKey: ['quality-person-directory', 'for-deviation-report'],
+    queryFn: () => fetchQualityPersonDirectory(),
     enabled: open,
   })
 
@@ -39,7 +39,7 @@ export function CreateDeviationReportRecordModal({
     () =>
       contacts
         .filter((c) => c.name && c.open_id)
-        .map((c: DepartmentContact) => ({
+        .map((c: QualityPersonOption) => ({
           label: c.name,
           value: c.open_id!,
         })),

@@ -11,7 +11,6 @@ describe('quality migrated menu contract', () => {
       'deviations',
       'capas',
       'complaints',
-      'department-contacts',
       'inspection',
       'oos-oot',
       'product-quality',

@@ -105,7 +105,6 @@ DEFAULT_QUALITY_FEISHU_ENTITIES: list[tuple[str, str, str, int]] = [
     ("deviation_ledger", "偏差台账", "偏差管理", 30),
     ("capa_ledger", "CAPA台账", "CAPA管理", 40),
     ("capa_plan_track", "计划跟踪", "CAPA管理", 50),
-    ("department_contact", "部门联系人", "部门联系人", 60),
     ("validation_master_plan", "验证主计划", "验证与确认", 70),
     ("validation_equipment_qualification", "设备确认", "验证与确认", 80),
     ("validation_process", "工艺验证", "验证与确认", 90),
@@ -289,11 +288,6 @@ QUALITY_FEISHU_ENTITY_ENV_PREFILLS: dict[str, dict[str, str]] = {
         "table_id_setting": "QUALITY_FEISHU_CAPA_PLAN_TABLE_ID",
         "table_name": "CAPA计划跟踪",
     },
-    "department_contact": {
-        "app_token_setting": "QUALITY_DEPARTMENT_CONTACT_FEISHU_APP_TOKEN",
-        "table_id_setting": "QUALITY_DEPARTMENT_CONTACT_FEISHU_TABLE_ID",
-        "table_name": "部门联系人",
-    },
     "change_ledger": {
         "app_token_setting": "QUALITY_CHANGE_LEDGER_FEISHU_APP_TOKEN",
         "table_id_setting": "QUALITY_CHANGE_LEDGER_FEISHU_TABLE_ID",
@@ -305,54 +299,57 @@ QUALITY_FEISHU_ENTITY_ENV_PREFILLS: dict[str, dict[str, str]] = {
         "table_name": "变更计划",
     },
     "validation_master_plan": {
-        "app_token_setting": "QUALITY_VALIDATION_FEISHU_APP_TOKEN",
-        "table_id_setting": "QUALITY_VALIDATION_FEISHU_TABLE_ID",
-        "table_name": "验证总表",
-        "source_note": "验证与确认共用同一张飞书源表，平台按验证类型截取到不同模块。",
+        "app_token": "FTbkbpgNUa9jUCsjK8ac1A4Wn7f",
+        "table_id": "tbl3lBei5Sv8wBVV",
+        "table_name": "2026年验证台账",
+        "source_note": "验证与确认统一绑定验证主计划 Base；总表默认读写当前年度台账。",
     },
-    # 验证主计划年度台账：2024/2025 已固定绑定到"验证主计划"Base 的对应年度表；
+    # 验证主计划年度台账：2024/2025/2026 已固定绑定到"验证主计划"Base 的对应年度表；
     # 其余年份用户在同步设置中绑定或由平台按年度展示为 0。
     "validation_master_plan_2024": {
-        "app_token": "KIBabvgEdaHxLEsxnxacQqhgnTN",
-        "table_id": "tbl0GGbbhJzUkJH5",
+        "app_token": "FTbkbpgNUa9jUCsjK8ac1A4Wn7f",
+        "table_id": "tbl1HxgOWu3zujVE",
         "table_name": "2024年验证台账",
-        "source_note": "验证主计划年度台账（2024）。",
+        "form_url": "https://j0eukrlohu.feishu.cn/share/base/form/shrcnQEeBbkDhG8CrvmW5urZ8vd",
+        "source_note": "验证主计划年度台账（2024）；新增记录走飞书多维表单。",
     },
     "validation_master_plan_2025": {
-        "app_token": "KIBabvgEdaHxLEsxnxacQqhgnTN",
-        "table_id": "tblXZV1cr4Y8vZhW",
+        "app_token": "FTbkbpgNUa9jUCsjK8ac1A4Wn7f",
+        "table_id": "tbloihomWEAXrZPX",
         "table_name": "2025年验证台账",
-        "source_note": "验证主计划年度台账（2025）。",
+        "form_url": "https://j0eukrlohu.feishu.cn/share/base/form/shrcnrXPjhpZb40QhpQnUqgodHc",
+        "source_note": "验证主计划年度台账（2025）；新增记录走飞书多维表单。",
     },
     "validation_master_plan_2026": {
-        "app_token": "KIBabvgEdaHxLEsxnxacQqhgnTN",
-        "table_id": "tbliZx3GGrKEbLJv",
+        "app_token": "FTbkbpgNUa9jUCsjK8ac1A4Wn7f",
+        "table_id": "tbl3lBei5Sv8wBVV",
         "table_name": "2026年验证台账",
-        "source_note": "验证主计划年度台账（2026）。",
+        "form_url": "https://j0eukrlohu.feishu.cn/share/base/form/shrcnw2P5gEnFsiwKGpR8TuJ1Nh",
+        "source_note": "验证主计划年度台账（2026）；新增记录走飞书多维表单。",
     },
     "validation_equipment_qualification": {
-        "app_token_setting": "QUALITY_VALIDATION_FEISHU_APP_TOKEN",
-        "table_id_setting": "QUALITY_VALIDATION_FEISHU_TABLE_ID",
-        "table_name": "验证总表",
-        "source_note": "验证与确认共用同一张飞书源表，平台按验证类型截取到不同模块。",
+        "app_token": "FTbkbpgNUa9jUCsjK8ac1A4Wn7f",
+        "table_id": "tbl3lBei5Sv8wBVV",
+        "table_name": "2026年验证台账",
+        "source_note": "验证与确认统一绑定验证主计划 Base，按验证类别截取到不同模块。",
     },
     "validation_process": {
-        "app_token_setting": "QUALITY_VALIDATION_FEISHU_APP_TOKEN",
-        "table_id_setting": "QUALITY_VALIDATION_FEISHU_TABLE_ID",
-        "table_name": "验证总表",
-        "source_note": "验证与确认共用同一张飞书源表，平台按验证类型截取到不同模块。",
+        "app_token": "FTbkbpgNUa9jUCsjK8ac1A4Wn7f",
+        "table_id": "tbl3lBei5Sv8wBVV",
+        "table_name": "2026年验证台账",
+        "source_note": "验证与确认统一绑定验证主计划 Base，按验证类别截取到不同模块。",
     },
     "validation_cleaning": {
-        "app_token_setting": "QUALITY_VALIDATION_FEISHU_APP_TOKEN",
-        "table_id_setting": "QUALITY_VALIDATION_FEISHU_TABLE_ID",
-        "table_name": "验证总表",
-        "source_note": "验证与确认共用同一张飞书源表，平台按验证类型截取到不同模块。",
+        "app_token": "FTbkbpgNUa9jUCsjK8ac1A4Wn7f",
+        "table_id": "tbl3lBei5Sv8wBVV",
+        "table_name": "2026年验证台账",
+        "source_note": "验证与确认统一绑定验证主计划 Base，按验证类别截取到不同模块。",
     },
     "validation_other": {
-        "app_token_setting": "QUALITY_VALIDATION_FEISHU_APP_TOKEN",
-        "table_id_setting": "QUALITY_VALIDATION_FEISHU_TABLE_ID",
-        "table_name": "验证总表",
-        "source_note": "验证与确认共用同一张飞书源表，平台按验证类型截取到不同模块。",
+        "app_token": "FTbkbpgNUa9jUCsjK8ac1A4Wn7f",
+        "table_id": "tbl3lBei5Sv8wBVV",
+        "table_name": "2026年验证台账",
+        "source_note": "验证与确认统一绑定验证主计划 Base，按验证类别截取到不同模块。",
     },
     # QC验证 2026 年表固定绑定专用 Base；其余年份由用户在同步设置中自行绑定
     "validation_qc_2026": {
@@ -1258,6 +1255,12 @@ def _looks_like_test_app_settings(
     }
 
 
+def _get_entity_form_url_prefill(entity_code: str) -> str | None:
+    attrs = QUALITY_FEISHU_ENTITY_ENV_PREFILLS.get(entity_code) or {}
+    form_url = str(attrs.get("form_url") or "").strip()
+    return form_url or None
+
+
 def _get_entity_prefill(entity_code: str) -> tuple[str | None, str | None, str | None]:
     attrs = QUALITY_FEISHU_ENTITY_ENV_PREFILLS.get(entity_code) or {}
     app_setting = attrs.get("app_token_setting", "").strip()
@@ -1433,6 +1436,10 @@ async def ensure_quality_feishu_entity_settings(
                 if not (model.base_table_name or "").strip() and prefill_table_name:
                     model.base_table_name = prefill_table_name
                     changed = True
+                prefill_form_url = _get_entity_form_url_prefill(entity_code)
+                if not (model.feishu_form_url or "").strip() and prefill_form_url:
+                    model.feishu_form_url = prefill_form_url
+                    changed = True
                 if (
                     identifiers_backfilled
                     and not model.is_enabled
@@ -1450,6 +1457,7 @@ async def ensure_quality_feishu_entity_settings(
                 app_token=prefill_app_token,
                 base_table_name=prefill_table_name,
                 base_table_id=prefill_table_id,
+                feishu_form_url=_get_entity_form_url_prefill(entity_code),
                 is_enabled=bool(prefill_app_token and prefill_table_id),
                 enable_push_to_feishu=_get_default_sync_directions(entity_code)[0],
                 enable_pull_from_feishu=_get_default_sync_directions(entity_code)[1],
@@ -1723,6 +1731,10 @@ async def update_quality_feishu_entity_setting(
             data.base_table_name.strip() if data.base_table_name else None
         )
         model.base_table_id = reference.table_id
+        if "feishu_form_url" in data.model_fields_set:
+            model.feishu_form_url = (
+                data.feishu_form_url.strip() if data.feishu_form_url else None
+            )
         model.is_enabled = data.is_enabled
         model.enable_push_to_feishu = data.enable_push_to_feishu
         model.enable_pull_from_feishu = data.enable_pull_from_feishu

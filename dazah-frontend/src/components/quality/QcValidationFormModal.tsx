@@ -4,12 +4,13 @@ import { useEffect, useMemo } from 'react'
 import { DatePicker, Form, Input, Modal, Select, Switch, Typography } from 'antd'
 import dayjs, { Dayjs } from 'dayjs'
 import type {
-  DepartmentContact,
   QcValidationFieldMeta,
   QcValidationRecord,
 } from '@/types/quality'
-import { fetchDepartmentContacts } from '@/lib/api/client/quality'
-import { useQuery } from '@tanstack/react-query'
+import {
+  FeishuPersonSelect,
+  type FeishuPersonValue,
+} from '@/components/shared/FeishuPersonSelect'
 
 /** 通用表单不写入的只读字段类型（附件请在飞书中维护） */
 const QC_READONLY_UI_TYPES = new Set([
@@ -41,7 +42,27 @@ function toBool(value: unknown): boolean {
   return value === true || value === 'True' || value === 'true'
 }
 
-/** QC验证新增/编辑弹窗：按飞书字段元数据动态生成表单（人员走部门联系人解析）。 */
+/** 记录里的 User 字段 → 选择器回显值（id 为飞书成员字段 id） */
+function toPersonValues(raw: unknown): FeishuPersonValue[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item) => {
+      if (item && typeof item === 'object') {
+        const record = item as Record<string, unknown>
+        const id = String(record.id ?? record.open_id ?? '').trim()
+        return {
+          id,
+          name: String(record.name ?? record.text ?? '').trim(),
+          // 记录回读的 id 对当前飞书表有效，写回时无需反查
+          resolved: Boolean(id),
+        }
+      }
+      return { id: '', name: '' }
+    })
+    .filter((person) => person.id || person.name)
+}
+
+/** QC验证新增/编辑弹窗：按飞书字段元数据动态生成表单（人员来自 HR 飞书联系人，中文/拼音搜索）。 */
 export function QcValidationFormModal({
   open,
   saving = false,
@@ -62,18 +83,16 @@ export function QcValidationFormModal({
     [fieldMetas],
   )
 
-  const { data: contacts = [] } = useQuery<DepartmentContact[]>({
-    queryKey: ['quality-department-contacts'],
-    queryFn: fetchDepartmentContacts,
-    enabled: open,
-  })
-
-  const personOptions = contacts
-    .map((contact) => {
-      const id = contact.bitable_user_id || contact.open_id || ''
-      return { label: contact.name || id, value: id }
-    })
-    .filter((option) => option.value)
+  // 编辑回显：每个 User 字段已有人员并入候选（候选中没有的成员 id 也能正常显示）
+  const userExtrasByField = useMemo(() => {
+    const extras: Record<string, FeishuPersonValue[]> = {}
+    for (const meta of fieldMetas) {
+      if (meta.ui_type === 'User') {
+        extras[meta.field_name] = toPersonValues(initialRecord?.[meta.field_name])
+      }
+    }
+    return extras
+  }, [fieldMetas, initialRecord])
 
   useEffect(() => {
     if (!open) return
@@ -88,11 +107,7 @@ export function QcValidationFormModal({
       } else if (meta.ui_type === 'Checkbox') {
         values[meta.field_name] = toBool(raw)
       } else if (meta.ui_type === 'User') {
-        values[meta.field_name] = Array.isArray(raw)
-          ? (raw as Array<{ id?: string }>)
-              .map((item) => item?.id || '')
-              .filter(Boolean)
-          : []
+        values[meta.field_name] = toPersonValues(raw)
       } else {
         values[meta.field_name] = raw ?? undefined
       }
@@ -113,7 +128,11 @@ export function QcValidationFormModal({
         fields[meta.field_name] = Boolean(value)
       } else if (meta.ui_type === 'User') {
         if (Array.isArray(value) && value.length > 0) {
-          fields[meta.field_name] = (value as string[]).map((id) => ({ id }))
+          fields[meta.field_name] = (value as FeishuPersonValue[]).map((person) => ({
+            id: person.id,
+            name: person.name,
+            resolved: person.resolved,
+          }))
         }
       } else if (value !== undefined && value !== null && value !== '') {
         fields[meta.field_name] = value
@@ -156,15 +175,10 @@ export function QcValidationFormModal({
           if (meta.ui_type === 'User') {
             return (
               <Form.Item key={meta.field_name} label={meta.field_name} name={meta.field_name}>
-                <Select
-                  mode="multiple"
-                  allowClear
-                  showSearch
-                  placeholder="请选择人员"
-                  options={personOptions}
-                  filterOption={(input, option) =>
-                    (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
-                  }
+                <FeishuPersonSelect
+                  multiple
+                  placeholder="输入姓名或拼音搜索人员"
+                  extraOptions={userExtrasByField[meta.field_name]}
                 />
               </Form.Item>
             )

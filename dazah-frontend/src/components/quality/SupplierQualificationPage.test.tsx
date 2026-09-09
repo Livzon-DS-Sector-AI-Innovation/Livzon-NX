@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const apiClient = vi.hoisted(() => ({
   fetchSupplierQualifications: vi.fn(),
+  searchChangeActionPlanPersons: vi.fn(),
 }))
 
 const qualityActions = vi.hoisted(() => ({
@@ -143,5 +144,66 @@ describe('SupplierQualificationPage 到期状态筛选', () => {
       container.querySelectorAll('.ant-pagination-item'),
     ).map((node) => node.textContent)
     expect(pageButtons).toContain('2')
+  })
+
+  it('editing a record keeps responsible_users pre-filled and saves them back', async () => {
+    apiClient.fetchSupplierQualifications.mockResolvedValue({
+      items: [
+        {
+          record_id: 'r1',
+          supplier_name: '南平元力活性炭',
+          material_name: null,
+          material_type: '固体',
+          qualification_name: '营业执照',
+          qualification_file: null,
+          is_completed: false,
+          deadline: null,
+          responsible_person: '甄宁宁',
+          responsible_users: [{ id: 'ou_edit_001', name: '甄宁宁' }],
+          groups: [{ id: 'oc_group_1', name: '供应商资质沟通群', avatar_url: '' }],
+          remark: null,
+          expiry_status: '正常',
+          created_at: '2026-09-01T00:00:00Z',
+          updated_at: '2026-09-01T00:00:00Z',
+        },
+      ],
+      total: 1,
+    })
+    qualityActions.updateSupplierQualification.mockResolvedValue({})
+    await renderPage()
+
+    // 列表渲染：负责人列带头像+姓名、群组列带群名
+    expect(container.textContent).toContain('甄宁宁')
+    expect(container.textContent).toContain('供应商资质沟通群')
+
+    // 打开编辑弹窗（操作列「修改」按钮）
+    const editButton = Array.from(container.querySelectorAll('button')).find(
+      (node) => (node.textContent || '').includes('修改'),
+    ) as HTMLElement | undefined
+    expect(editButton).toBeTruthy()
+    await act(async () => {
+      editButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+
+    // 编辑弹窗中负责人已预选（多选标签）
+    expect(document.body.textContent).toContain('甄宁宁')
+
+    // 直接提交，保存 payload 应带 responsible_users
+    const okButton = document.body.querySelector(
+      '.ant-modal .ant-btn-primary',
+    ) as HTMLElement | null
+    expect(okButton).toBeTruthy()
+    await act(async () => {
+      okButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 200))
+    })
+
+    expect(qualityActions.updateSupplierQualification).toHaveBeenCalledWith(
+      'r1',
+      expect.objectContaining({
+        responsible_users: [{ id: 'ou_edit_001', name: '甄宁宁' }],
+      }),
+    )
   })
 })

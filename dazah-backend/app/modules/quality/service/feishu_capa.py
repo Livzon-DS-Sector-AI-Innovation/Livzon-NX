@@ -17,7 +17,10 @@ from app.modules.quality.service.quality_feishu_sync import (
     _resolve_contact_bitable_user_value,
     feishu_sync,
 )
-from app.platform.integrations.feishu.bitable import BitableClient
+from app.platform.integrations.feishu.bitable import (
+    BitableClient,
+    fields_need_union_user_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -307,7 +310,7 @@ async def _coerce_write_fields(
                 continue
             raise AppException(
                 status_code=400,
-                message=f"{key}“{normalized_value}”未在部门联系人中维护，无法写入飞书人员字段",
+                message=f"{key}“{normalized_value}”不在人事飞书联系人目录中，无法写入飞书人员字段",
             )
         if key in checkbox_fields:
             fields[key] = bool(value)
@@ -373,7 +376,10 @@ async def list_capa_ledger(
     runtime, entity = await _resolve_entity(db, "capa_ledger", direction="pull")
     client = _make_client(runtime, entity)
     records = await client.search_records(
-        _require_table_id(entity), automatic_fields=True, page_size=500
+        _require_table_id(entity),
+        automatic_fields=True,
+        page_size=500,
+        user_id_type="union_id",
     )
     items = _records_to_items(records, _parse_capa_ledger_fields)
 
@@ -428,7 +434,9 @@ async def get_capa_ledger_record(
     """
     runtime, entity = await _resolve_entity(db, "capa_ledger", direction="pull")
     client = _make_client(runtime, entity)
-    record = await client.get_record(_require_table_id(entity), record_id)
+    record = await client.get_record(
+        _require_table_id(entity), record_id, user_id_type="union_id"
+    )
     if not record:
         raise NotFoundException("飞书CAPA台账记录", record_id)
     item = _parse_capa_ledger_fields(record.get("fields") or {})
@@ -452,7 +460,7 @@ async def create_capa_ledger_record(
         创建成功后重新读取并解析的台账记录字典。
 
     Raises:
-        AppException: 人员字段值未在部门联系人中维护时抛出 400 错误。
+        AppException: 人员字段值不在人事飞书联系人目录中时抛出 400 错误。
     """
     runtime, entity = await _resolve_entity(db, "capa_ledger", direction="push")
     client = _make_client(runtime, entity)
@@ -464,7 +472,11 @@ async def create_capa_ledger_record(
         checkbox_fields=set(),
         readonly_fields=_CAPA_LEDGER_READONLY_FIELDS,
     )
-    record = await client.create_record(_require_table_id(entity), fields)
+    record = await client.create_record(
+        _require_table_id(entity),
+        fields,
+        user_id_type="union_id" if fields_need_union_user_id(fields) else None,
+    )
     record_id = str(record.get("record_id") or "")
     logger.info("CAPA ledger record created", extra={"record_id": record_id})
     return await get_capa_ledger_record(db, record_id)
@@ -486,7 +498,7 @@ async def update_capa_ledger_record(
         更新成功后重新读取并解析的台账记录字典。
 
     Raises:
-        AppException: 人员字段值未在部门联系人中维护时抛出 400 错误。
+        AppException: 人员字段值不在人事飞书联系人目录中时抛出 400 错误。
     """
     runtime, entity = await _resolve_entity(db, "capa_ledger", direction="push")
     client = _make_client(runtime, entity)
@@ -498,7 +510,12 @@ async def update_capa_ledger_record(
         checkbox_fields=set(),
         readonly_fields=_CAPA_LEDGER_READONLY_FIELDS,
     )
-    await client.update_record(_require_table_id(entity), record_id, fields)
+    await client.update_record(
+        _require_table_id(entity),
+        record_id,
+        fields,
+        user_id_type="union_id" if fields_need_union_user_id(fields) else None,
+    )
     logger.info("CAPA ledger record updated", extra={"record_id": record_id})
     return await get_capa_ledger_record(db, record_id)
 
@@ -544,7 +561,10 @@ async def list_capa_plan_tracks(
     runtime, entity = await _resolve_entity(db, "capa_plan_track", direction="pull")
     client = _make_client(runtime, entity)
     records = await client.search_records(
-        _require_table_id(entity), automatic_fields=True, page_size=500
+        _require_table_id(entity),
+        automatic_fields=True,
+        page_size=500,
+        user_id_type="union_id",
     )
     items = _records_to_items(records, _parse_capa_plan_track_fields)
 
@@ -581,7 +601,9 @@ async def get_capa_plan_track_record(
     """
     runtime, entity = await _resolve_entity(db, "capa_plan_track", direction="pull")
     client = _make_client(runtime, entity)
-    record = await client.get_record(_require_table_id(entity), record_id)
+    record = await client.get_record(
+        _require_table_id(entity), record_id, user_id_type="union_id"
+    )
     if not record:
         raise NotFoundException("飞书CAPA计划跟踪记录", record_id)
     item = _parse_capa_plan_track_fields(record.get("fields") or {})
@@ -605,7 +627,7 @@ async def create_capa_plan_track_record(
         创建成功后重新读取并解析的计划跟踪记录字典。
 
     Raises:
-        AppException: 人员字段值未在部门联系人中维护时抛出 400 错误。
+        AppException: 人员字段值不在人事飞书联系人目录中时抛出 400 错误。
     """
     runtime, entity = await _resolve_entity(db, "capa_plan_track", direction="push")
     client = _make_client(runtime, entity)
@@ -617,7 +639,11 @@ async def create_capa_plan_track_record(
         checkbox_fields=_CAPA_PLAN_CHECKBOX_FIELDS,
         readonly_fields=_CAPA_PLAN_READONLY_FIELDS,
     )
-    record = await client.create_record(_require_table_id(entity), fields)
+    record = await client.create_record(
+        _require_table_id(entity),
+        fields,
+        user_id_type="union_id" if fields_need_union_user_id(fields) else None,
+    )
     record_id = str(record.get("record_id") or "")
     logger.info("CAPA plan track record created", extra={"record_id": record_id})
     return await get_capa_plan_track_record(db, record_id)
@@ -639,7 +665,7 @@ async def update_capa_plan_track_record(
         更新成功后重新读取并解析的计划跟踪记录字典。
 
     Raises:
-        AppException: 人员字段值未在部门联系人中维护时抛出 400 错误。
+        AppException: 人员字段值不在人事飞书联系人目录中时抛出 400 错误。
     """
     runtime, entity = await _resolve_entity(db, "capa_plan_track", direction="push")
     client = _make_client(runtime, entity)
@@ -651,7 +677,12 @@ async def update_capa_plan_track_record(
         checkbox_fields=_CAPA_PLAN_CHECKBOX_FIELDS,
         readonly_fields=_CAPA_PLAN_READONLY_FIELDS,
     )
-    await client.update_record(_require_table_id(entity), record_id, fields)
+    await client.update_record(
+        _require_table_id(entity),
+        record_id,
+        fields,
+        user_id_type="union_id" if fields_need_union_user_id(fields) else None,
+    )
     logger.info("CAPA plan track record updated", extra={"record_id": record_id})
     return await get_capa_plan_track_record(db, record_id)
 

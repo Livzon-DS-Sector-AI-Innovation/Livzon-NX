@@ -124,10 +124,6 @@ def test_certificate_date_status_page_and_group_helpers() -> None:
     assert cert._split_lines("A\n-\n B ") == ["A", "B"]
     assert cert._normalize_group_text(None) == ""
     assert cert._normalize_group_text(" A  B ") == "a b"
-    assert cert._normalize_department_text(None) == ""
-    assert cert._is_qa_department("质量保证部") is True
-    assert cert._is_qa_department(" qa ") is True
-    assert cert._is_qa_department("注册部") is False
 
 
 def test_sheet_lookup_and_sequence_helpers() -> None:

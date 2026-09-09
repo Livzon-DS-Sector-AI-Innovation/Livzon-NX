@@ -26,7 +26,6 @@ from app.modules.quality.feishu_notification import (
     send_user_card_with_message_id,
     upload_image,
 )
-from app.modules.quality.models.contacts import DepartmentContact
 from app.modules.quality.models.finished_trend_ai_analysis import (
     FinishedTrendAIAnalysis,
 )
@@ -315,75 +314,26 @@ async def _resolve_recipient_by_name(
     open_id: str | None = None,
     email: str | None = None,
 ) -> dict[str, str | None]:
+    """按姓名从人事飞书联系人目录解析通知对象（open_id + 企业邮箱）。"""
     resolved_open_id = (open_id or "").strip() or None
     resolved_email = (email or "").strip() or None
 
-    result = await db.execute(
-        select(DepartmentContact).where(
-            DepartmentContact.name == name,
-            DepartmentContact.is_deleted.is_(False),
-        )
-    )
-    contact = result.scalars().first()
-    if contact:
-        resolved_open_id = resolved_open_id or (contact.open_id or "").strip() or None
-        resolved_email = (
-            resolved_email or (contact.enterprise_email or "").strip() or None
+    if resolved_open_id is None or resolved_email is None:
+        from app.modules.quality.service.person_directory import (
+            resolve_person_by_name,
         )
 
-    result = await db.execute(
-        select(DepartmentContact).where(
-            DepartmentContact.department_head_name == name,
-            DepartmentContact.is_deleted.is_(False),
-        )
-    )
-    head_contact = result.scalars().first()
-    if head_contact:
-        resolved_open_id = (
-            resolved_open_id
-            or (head_contact.department_head_open_id or "").strip()
-            or None
-        )
-        resolved_email = (
-            resolved_email
-            or (head_contact.department_head_enterprise_email or "").strip()
-            or None
-        )
-
-    from app.modules.quality.service.department_contacts import (
-        get_department_contact_list_from_feishu,
-    )
-
-    feishu_contacts = await get_department_contact_list_from_feishu(
-        db,
-        page=1,
-        page_size=500,
-    )
-    for item in feishu_contacts.get("items", []):
-        item_name = str(item.get("name") or "").strip()
-        item_head_name = str(item.get("department_head_name") or "").strip()
-        if item_name == name:
+        person = await resolve_person_by_name(db, name)
+        if person:
             resolved_open_id = (
-                resolved_open_id or str(item.get("open_id") or "").strip() or None
+                resolved_open_id or str(person.get("open_id") or "").strip() or None
             )
             resolved_email = (
                 resolved_email
-                or str(item.get("enterprise_email") or "").strip()
+                or str(person.get("enterprise_email") or "").strip()
+                or str(person.get("email") or "").strip()
                 or None
             )
-            break
-        if item_head_name == name:
-            resolved_open_id = (
-                resolved_open_id
-                or str(item.get("department_head_open_id") or "").strip()
-                or None
-            )
-            resolved_email = (
-                resolved_email
-                or str(item.get("department_head_enterprise_email") or "").strip()
-                or None
-            )
-            break
 
     return {
         "name": name,
@@ -521,86 +471,20 @@ async def _resolve_refining_recipient(
     if not extraction_head:
         return None
 
-    recipient: dict[str, str | None] | None = None
-
-    result = await db.execute(
-        select(DepartmentContact).where(
-            DepartmentContact.name == extraction_head,
-            DepartmentContact.is_deleted.is_(False),
-        )
+    from app.modules.quality.service.person_directory import (
+        resolve_person_by_name,
     )
-    contact = result.scalars().first()
-    if contact and (
-        (contact.open_id or "").strip() or (contact.enterprise_email or "").strip()
-    ):
-        recipient = {
+
+    person = await resolve_person_by_name(db, extraction_head)
+    if person:
+        return {
             "product_code": product_code,
             "name": extraction_head,
-            "open_id": (contact.open_id or "").strip(),
-            "email": (contact.enterprise_email or "").strip() or None,
+            "open_id": str(person.get("open_id") or "").strip() or None,
+            "email": str(person.get("enterprise_email") or "").strip()
+            or str(person.get("email") or "").strip()
+            or None,
         }
-    else:
-        result = await db.execute(
-            select(DepartmentContact).where(
-                DepartmentContact.department_head_name == extraction_head,
-                DepartmentContact.is_deleted.is_(False),
-            )
-        )
-        head_contact = result.scalars().first()
-        if head_contact:
-            recipient = {
-                "product_code": product_code,
-                "name": extraction_head,
-                "open_id": (head_contact.department_head_open_id or "").strip() or None,
-                "email": (head_contact.department_head_enterprise_email or "").strip()
-                or None,
-            }
-
-    from app.modules.quality.service.department_contacts import (
-        get_department_contact_list_from_feishu,
-    )
-
-    feishu_contacts = await get_department_contact_list_from_feishu(
-        db,
-        page=1,
-        page_size=500,
-    )
-    for item in feishu_contacts.get("items", []):
-        if str(item.get("name") or "").strip() == extraction_head:
-            feishu_open_id = str(item.get("open_id") or "").strip() or None
-            feishu_email = str(item.get("enterprise_email") or "").strip() or None
-            if recipient is None:
-                recipient = {
-                    "product_code": product_code,
-                    "name": extraction_head,
-                    "open_id": feishu_open_id,
-                    "email": feishu_email,
-                }
-            else:
-                recipient["open_id"] = recipient.get("open_id") or feishu_open_id
-                recipient["email"] = recipient.get("email") or feishu_email
-            break
-        if str(item.get("department_head_name") or "").strip() == extraction_head:
-            feishu_open_id = (
-                str(item.get("department_head_open_id") or "").strip() or None
-            )
-            feishu_email = (
-                str(item.get("department_head_enterprise_email") or "").strip() or None
-            )
-            if recipient is None:
-                recipient = {
-                    "product_code": product_code,
-                    "name": extraction_head,
-                    "open_id": feishu_open_id,
-                    "email": feishu_email,
-                }
-            else:
-                recipient["open_id"] = recipient.get("open_id") or feishu_open_id
-                recipient["email"] = recipient.get("email") or feishu_email
-            break
-
-    if recipient:
-        return recipient
 
     return {
         "product_code": product_code,

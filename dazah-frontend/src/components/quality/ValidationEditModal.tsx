@@ -1,11 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { DatePicker, Form, Input, Modal, Select } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import dayjs from 'dayjs'
-import type { ValidationListItem, DepartmentContact } from '@/types/quality'
-import { fetchDepartmentContacts } from '@/lib/api/client/quality'
+import type { ValidationListItem } from '@/types/quality'
+import { fetchValidationPersonOptions } from '@/lib/api/client/quality'
+import {
+  FeishuPersonSelect,
+  type FeishuPersonValue,
+} from '@/components/shared/FeishuPersonSelect'
 
 interface ValidationEditModalProps {
   open: boolean
@@ -18,7 +22,10 @@ interface ValidationEditModalProps {
   /** 当前选择的年度表；空 = 验证总表 */
   year?: number
   onCancel: () => void
-  onSubmit: (values: Record<string, unknown>) => Promise<void> | void
+  onSubmit: (
+    values: Record<string, unknown>,
+    targetYear: number,
+  ) => Promise<void> | void
 }
 
 const statusOptions = [
@@ -26,6 +33,39 @@ const statusOptions = [
   { label: '未完成', value: '未完成' },
   { label: '待完成', value: '待完成' },
 ]
+
+/** 可写入的验证年度台账（对应验证主计划 Base 的三张年度表） */
+const TARGET_YEAR_OPTIONS = [2024, 2025, 2026].map((y) => ({
+  label: `${y}年验证台账`,
+  value: y,
+}))
+
+/** 记录里的人员字段 → 选择器回显值（id 可能是飞书成员字段 id 或 open_id，也可能是纯姓名） */
+function toPersonValue(raw: unknown): FeishuPersonValue[] {
+  if (!raw) return []
+  if (typeof raw === 'string') {
+    return raw.trim() ? [{ id: '', name: raw.trim() }] : []
+  }
+  if (Array.isArray(raw)) {
+    return raw
+      .map((item) => {
+        if (typeof item === 'string') return { id: '', name: item.trim() }
+        if (item && typeof item === 'object') {
+          const record = item as Record<string, unknown>
+          const id = String(record.id ?? record.open_id ?? '').trim()
+          return {
+            id,
+            name: String(record.name ?? record.text ?? '').trim(),
+            // 记录回读的 id 对当前飞书表有效，写回时无需反查
+            resolved: Boolean(id),
+          }
+        }
+        return { id: '', name: '' }
+      })
+      .filter((person) => person.id || person.name)
+  }
+  return []
+}
 
 export function ValidationEditModal({
   open,
@@ -41,39 +81,37 @@ export function ValidationEditModal({
   const [form] = Form.useForm()
   const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null)
 
-  // 加载部门联系人数据（共享缓存，仅当弹窗打开时启用）
-  const { data: contacts = [], isLoading: contactsLoading } = useQuery<DepartmentContact[]>({
-    queryKey: ['quality-department-contacts'],
-    queryFn: fetchDepartmentContacts,
+  // 部门与人员候选统一来自人事管理-飞书联系人目录（中文/拼音搜索）
+  const { data: directory = [], isLoading: directoryLoading } = useQuery({
+    queryKey: ['quality-person-directory'],
+    queryFn: () => fetchValidationPersonOptions(undefined, 500),
+    // 不做前端缓存：每次打开都重查，保证人事-飞书联系人同步后立刻生效
+    staleTime: 0,
     enabled: open,
   })
 
   // 提取去重部门列表
-  const departmentOptions = [...new Set(contacts.map(c => c.department).filter(Boolean))].map(d => ({
-    label: d,
-    value: d,
-  }))
+  const departmentOptions = useMemo(
+    () =>
+      [...new Set(directory.map(p => p.department).filter(Boolean))].map(d => ({
+        label: d as string,
+        value: d as string,
+      })),
+    [directory],
+  )
 
-  // 当前部门下的人员
-  const departmentPeople = selectedDepartment
-    ? contacts.filter(c => c.department === selectedDepartment)
-    : contacts
+  // 编辑回显：已有人员/负责人作为候选项并入（候选中没有的 id 也能正常显示）
+  const participantExtras = useMemo(
+    () => toPersonValue(initialValue?.participants),
+    [initialValue],
+  )
+  const ownerExtras = useMemo(
+    () => toPersonValue(initialValue?.owner_name),
+    [initialValue],
+  )
 
-  const peopleOptions = departmentPeople.map(c => ({
-    label: c.name || c.open_id || '',
-    value: c.name || c.open_id || '',
-  }))
-
-  // 选部门时：更新人员选项，自动填负责人
   const handleDepartmentChange = (dept: string | undefined) => {
     setSelectedDepartment(dept || null)
-    form.setFieldsValue({ participants: undefined, owner_name: undefined })
-    if (dept) {
-      const head = contacts.find(c => c.department === dept && c.department_head_name)
-      if (head?.department_head_name) {
-        form.setFieldsValue({ owner_name: head.department_head_name })
-      }
-    }
   }
 
   useEffect(() => {
@@ -81,6 +119,7 @@ export function ValidationEditModal({
     const dept = initialValue?.department || null
     setSelectedDepartment(dept)
     form.setFieldsValue({
+      target_year: year ?? new Date().getFullYear(),
       validation_type_label: validationTypeLabel,
       validation_type: initialValue?.validation_type ?? validationType,
       record_code: initialValue?.record_code ?? '',
@@ -94,12 +133,8 @@ export function ValidationEditModal({
           ? dayjs(initialValue.planned_end_date)
           : null,
       group_chat: initialValue?.group_chat ?? '验证群',
-      participants: initialValue?.participants
-        ? (Array.isArray(initialValue.participants)
-            ? initialValue.participants
-            : String(initialValue.participants).split(',').map(s => s.trim()).filter(Boolean))
-        : [],
-      owner_name: initialValue?.owner_name ?? '',
+      participants: participantExtras,
+      owner_name: ownerExtras[0] ?? undefined,
       plan_name: initialValue?.plan_name ?? '',
       plan_code: initialValue?.plan_code ?? '',
       drafted_at: initialValue?.drafted_at ? dayjs(initialValue.drafted_at) : null,
@@ -109,7 +144,7 @@ export function ValidationEditModal({
       approved_at_1: initialValue?.approved_at_1 ? dayjs(initialValue.approved_at_1) : null,
       revalidation_cycle_years: initialValue?.revalidation_cycle_years ?? undefined,
     })
-  }, [form, initialValue, open, validationType, validationTypeLabel])
+  }, [form, initialValue, open, validationType, validationTypeLabel, participantExtras, ownerExtras])
 
   return (
     <Modal
@@ -129,15 +164,32 @@ export function ValidationEditModal({
           borderRadius: 6,
           fontSize: 13,
           color: 'var(--color-steel, #555)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
         }}
       >
-        将写入：{year ? `${year} 年验证台账` : '验证总表'}
+        <span style={{ whiteSpace: 'nowrap' }}>将写入：</span>
+        <Form.Item name="target_year" noStyle>
+          <Select
+            style={{ width: 200 }}
+            disabled={Boolean(initialValue)}
+            options={TARGET_YEAR_OPTIONS}
+          />
+        </Form.Item>
+        {Boolean(initialValue) && (
+          <span>（编辑时不可更换年度表）</span>
+        )}
       </div>
       <Form
         form={form}
         layout="vertical"
-        onFinish={(values) =>
-          onSubmit({
+        onFinish={(values) => {
+          const { target_year, ...rest } = values as Record<string, unknown> & {
+            target_year?: number
+          }
+          const targetYear = Number(target_year) || new Date().getFullYear()
+          return onSubmit({
             validation_type: values.validation_type,
             record_code: values.record_code?.trim() || null,
             title: values.title?.trim() || null,
@@ -147,8 +199,9 @@ export function ValidationEditModal({
             product_codes: values.product_codes?.length ? values.product_codes : null,
             planned_end_date: values.planned_end_date ? values.planned_end_date.format('YYYY-MM-DD') : null,
             group_chat: values.group_chat?.trim() || null,
-            participants: values.participants || null,
-            owner_name: values.owner_name || null,
+            // 人员：[{id, name}]（空数组=清空）；负责人：单条或空数组
+            participants: (values.participants ?? []) as FeishuPersonValue[],
+            owner_name: values.owner_name ? [values.owner_name as FeishuPersonValue] : [],
             plan_name: values.plan_name?.trim() || null,
             plan_code: values.plan_code?.trim() || null,
             drafted_at: values.drafted_at ? values.drafted_at.format('YYYY-MM-DD') : null,
@@ -157,8 +210,8 @@ export function ValidationEditModal({
             drafted_at_1: values.drafted_at_1 ? values.drafted_at_1.format('YYYY-MM-DD') : null,
             approved_at_1: values.approved_at_1 ? values.approved_at_1.format('YYYY-MM-DD') : null,
             revalidation_cycle_years: values.revalidation_cycle_years ?? null,
-          })
-        }
+          }, targetYear)
+        }}
       >
         <Form.Item label="台账类型" name="validation_type_label">
           <Input disabled />
@@ -198,7 +251,7 @@ export function ValidationEditModal({
             showSearch
             allowClear
             placeholder="请选择部门"
-            loading={contactsLoading}
+            loading={directoryLoading}
             options={departmentOptions}
             onChange={handleDepartmentChange}
             filterOption={(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase())}
@@ -218,27 +271,26 @@ export function ValidationEditModal({
         <Form.Item label="验证到期时间" name="planned_end_date">
           <DatePicker style={{ width: '100%' }} />
         </Form.Item>
-        <Form.Item label="群组" name="group_chat">
-          <Input maxLength={255} />
+        <Form.Item
+          label="群组"
+          name="group_chat"
+          extra="飞书开放接口不支持写入群组字段，新增记录的群组请在多维表格中维护（表内默认群：验证群）"
+        >
+          <Input maxLength={255} disabled />
         </Form.Item>
-        <Form.Item label="人员" name="participants">
-          <Select
-            getPopupContainer={(triggerNode) => triggerNode.parentElement || triggerNode.parentNode as HTMLElement}
-            mode="multiple"
-            allowClear
-            placeholder={selectedDepartment ? '请选择人员' : '请先选择部门'}
-            options={peopleOptions}
-            filterOption={(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase())}
-          />
+        <Form.Item
+          label="人员"
+          name="participants"
+          extra="来自人事管理-飞书联系人，支持中文/全拼/首字母搜索"
+        >
+          <FeishuPersonSelect multiple extraOptions={participantExtras} />
         </Form.Item>
-        <Form.Item label="负责人" name="owner_name">
-          <Select
-            getPopupContainer={(triggerNode) => triggerNode.parentElement || triggerNode.parentNode as HTMLElement}
-            allowClear
-            placeholder="选择部门后自动填入"
-            options={peopleOptions}
-            filterOption={(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase())}
-          />
+        <Form.Item
+          label="负责人"
+          name="owner_name"
+          extra="来自人事管理-飞书联系人，支持中文/全拼/首字母搜索"
+        >
+          <FeishuPersonSelect extraOptions={ownerExtras} placeholder="输入姓名或拼音搜索负责人" />
         </Form.Item>
         <Form.Item label="方案名称" name="plan_name">
           <Input maxLength={255} />

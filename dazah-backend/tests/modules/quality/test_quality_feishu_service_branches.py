@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.core.exceptions import AppException, NotFoundException
+from app.modules.quality.service import person_directory
 from app.modules.quality.service import quality_feishu_pages as pages
 
 
@@ -83,9 +84,8 @@ async def test_validation_statistics_groups_types_statuses_and_deadlines(
 async def test_deviation_report_create_update_delete_uses_shared_entity_pipeline(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    contact = SimpleNamespace(name="张三", department="质量部")
+    contact = {"name": "张三", "department": "质量部"}
     management = SimpleNamespace(
-        _resolve_selected_reporter_contact=AsyncMock(return_value=contact),
         _generate_monthly_deviation_code=AsyncMock(return_value="PC-260801"),
     )
     sync = SimpleNamespace(
@@ -94,6 +94,11 @@ async def test_deviation_report_create_update_delete_uses_shared_entity_pipeline
     )
     monkeypatch.setattr(pages, "quality_management_service", management)
     monkeypatch.setattr(pages, "feishu_sync_service", sync)
+    monkeypatch.setattr(
+        person_directory,
+        "resolve_person_by_open_id",
+        AsyncMock(return_value=contact),
+    )
     create_entity = AsyncMock(return_value={"record_id": "report-1"})
     get_report = AsyncMock(
         return_value={

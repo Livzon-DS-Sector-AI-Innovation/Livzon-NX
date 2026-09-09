@@ -282,6 +282,49 @@ async def test_change_action_plan_person_options_search_returns_open_ids(
 
 
 @pytest.mark.anyio
+async def test_change_action_plan_person_options_matches_pinyin_en_name(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake_get_all_users() -> Any:  # noqa: ANN001
+        return [
+            {
+                "name": "甄宁宁",
+                "en_name": "ZhenNingNing",
+                "open_id": "ou_pinyin_001",
+                "user_id": "u_pinyin_001",
+                "mobile": "",
+                "email": "",
+                "job_title": "质量专员",
+            },
+            {
+                "name": "陈平",
+                "en_name": "ChenPing",
+                "open_id": "ou_pinyin_002",
+                "user_id": "u_pinyin_002",
+                "mobile": "",
+                "email": "",
+                "job_title": "",
+            },
+        ]
+
+    monkeypatch.setattr(
+        "app.modules.quality.service.change_action_plan.get_all_users",
+        _fake_get_all_users,
+    )
+
+    response = await client.get(
+        "/api/v1/quality/change-action-plans/person-options",
+        params={"keyword": "zhen", "limit": 10},
+    )
+
+    assert response.status_code == 200
+    assert [item["open_id"] for item in response.json()["data"]] == [
+        "ou_pinyin_001"
+    ]
+
+
+@pytest.mark.anyio
 async def test_change_action_plan_update_rejects_person_field_edits_for_existing_plan(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,

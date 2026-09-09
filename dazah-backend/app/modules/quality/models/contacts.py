@@ -1,4 +1,4 @@
-"""Department contacts ORM models."""
+"""Department weekly confirmation ORM model（部门联系人相关表已下线）."""
 
 import uuid
 from datetime import datetime
@@ -8,28 +8,6 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.shared.base_model import BaseModel
-
-
-class DepartmentContact(BaseModel):
-    __tablename__ = "department_contacts"
-    __table_args__ = {"schema": "quality"}
-
-    name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
-    department: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    enterprise_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    open_id: Mapped[str | None] = mapped_column(
-        String(255), nullable=True, unique=True, index=True
-    )
-    department_head_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    department_head_enterprise_email: Mapped[str | None] = mapped_column(
-        String(255), nullable=True
-    )
-    department_head_open_id: Mapped[str | None] = mapped_column(
-        String(255), nullable=True
-    )
-    feishu_record_id: Mapped[str | None] = mapped_column(
-        String(255), nullable=True, index=True
-    )
 
 
 class DepartmentWeeklyConfirmation(BaseModel):

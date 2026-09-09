@@ -8,12 +8,12 @@ import type { ColumnsType } from 'antd/es/table'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { deleteDeviationInvestigationPushRecord as deleteDeviationInvestigationPushRecordAction, updateDeviationInvestigationPushRecord as updateDeviationInvestigationPushRecordAction } from '@/actions/quality-deviation'
 import { pullQualityRecordsFromFeishu } from '@/actions/quality'
-import { fetchDeviationInvestigationPushRecords, fetchDeviationReportRecords, fetchQualityFeishuAppSettings } from '@/lib/api/client/quality'
+import { fetchDeviationInvestigationPushRecords, fetchDeviationReportRecords, fetchQualityFeishuAppSettings, fetchQualityPersonDirectory } from '@/lib/api/client/quality'
 
 import type {
-  DepartmentContact,
   DeviationInvestigationPushRecordItem,
   DeviationReportRecordItem,
+  QualityPersonOption,
 } from '@/types/quality'
 
 function formatDateTime(value: string | null | undefined): string {
@@ -130,7 +130,7 @@ interface InvestigationPushFormValues {
 }
 
 interface DeviationInvestigationPushPageProps {
-  submitterContacts?: DepartmentContact[]
+  submitterContacts?: QualityPersonOption[]
 }
 
 const pushRoundOptions = ['第1次', '第2次', '第3次'].map((value) => ({
@@ -158,6 +158,11 @@ export function DeviationInvestigationPushPage({
   submitterContacts = [],
 }: DeviationInvestigationPushPageProps) {
   const { message } = App.useApp()
+  const { data: directoryContacts = [] } = useQuery({
+    queryKey: ['quality-person-directory'],
+    queryFn: fetchQualityPersonDirectory,
+  })
+  const contacts = submitterContacts.length ? submitterContacts : directoryContacts
   const [saving, setSaving] = useState(false)
   const [pulling, setPulling] = useState(false)
   const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null)
@@ -206,7 +211,7 @@ export function DeviationInvestigationPushPage({
 
   const submitterOptions = useMemo(() => {
     const selectedDepartment = selectedReportRecord?.department?.trim()
-    return submitterContacts
+    return contacts
       .filter((item) => Boolean(item.open_id))
       .filter((item) =>
         selectedDepartment ? item.department?.trim() === selectedDepartment : true
@@ -215,7 +220,7 @@ export function DeviationInvestigationPushPage({
         label: `${item.name || '-'}${item.department ? ` / ${item.department}` : ''}`,
         value: item.open_id as string,
       }))
-  }, [selectedReportRecord?.department, submitterContacts])
+  }, [selectedReportRecord?.department, contacts])
 
   const formDeviationOptions = useMemo(() => {
     const options = reportRecordOptions.map((item) => ({
@@ -249,19 +254,19 @@ export function DeviationInvestigationPushPage({
       if (!submitterName) return undefined
       const selectedDepartment = reportRecord?.department?.trim()
       return (
-        submitterContacts.find(
+        contacts.find(
           (item) =>
             item.open_id &&
             (item.name || '').trim() === submitterName &&
             (!selectedDepartment || (item.department || '').trim() === selectedDepartment)
         )?.open_id ||
-        submitterContacts.find(
+        contacts.find(
           (item) => item.open_id && (item.name || '').trim() === submitterName
         )?.open_id ||
         undefined
       )
     },
-    [submitterContacts]
+    [contacts]
   )
 
   const openEdit = useCallback(

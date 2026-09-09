@@ -199,6 +199,7 @@ async def test_get_all_users_maps_raw_pages(monkeypatch: Any) -> None:
             "user_id": "u1",
             "open_id": "ou1",
             "name": "张三",
+            "en_name": "",
             "employee_no": "",
             "email": "",
             "mobile": "",

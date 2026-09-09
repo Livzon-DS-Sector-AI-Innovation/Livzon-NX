@@ -261,73 +261,6 @@ async def import_capas(
     return count
 
 
-async def import_department_contacts(
-    conn: asyncpg.Connection, csv_data: str, user_mapping: dict[str, str]
-) -> int:
-    """Import department_contact.csv to quality.department_contacts."""
-    reader = csv.DictReader(io.StringIO(csv_data))
-
-    sql = """
-        INSERT INTO quality.department_contacts (
-            id, department, dept_head_id, qa_staff_ids, gmp_staff_ids,
-            production_head_id, quality_head_id, additional_contacts,
-            is_production_workshop, created_at, created_by, updated_at,
-            updated_by, is_deleted
-        ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
-        )
-        ON CONFLICT (id) DO UPDATE SET
-            department = EXCLUDED.department,
-            qa_staff_ids = EXCLUDED.qa_staff_ids,
-            gmp_staff_ids = EXCLUDED.gmp_staff_ids,
-            updated_at = EXCLUDED.updated_at
-    """
-
-    count = 0
-    for row in reader:
-        # Map user IDs
-        dept_head_id = None
-        if row.get("dept_head") and row["dept_head"] in user_mapping:
-            dept_head_id = UUID(user_mapping[row["dept_head"]])
-
-        production_head_id = None
-        if row.get("production_head") and row["production_head"] in user_mapping:
-            production_head_id = UUID(user_mapping[row["production_head"]])
-
-        quality_head_id = None
-        if row.get("quality_head") and row["quality_head"] in user_mapping:
-            quality_head_id = UUID(user_mapping[row["quality_head"]])
-
-        created_by = None
-        if row.get("_created_by") and row["_created_by"] in user_mapping:
-            created_by = UUID(user_mapping[row["_created_by"]])
-
-        updated_by = None
-        if row.get("_updated_by") and row["_updated_by"] in user_mapping:
-            updated_by = UUID(user_mapping[row["_updated_by"]])
-
-        await conn.execute(
-            sql,
-            UUID(row["id"]),
-            row["department"],
-            dept_head_id,
-            parse_pg_array(row.get("qa_staff")),
-            parse_pg_array(row.get("gmp_staff")),
-            production_head_id,
-            quality_head_id,
-            parse_pg_array(row.get("additional_contacts")),
-            row.get("is_production_workshop", "false").lower() == "true",
-            parse_date(row.get("_created_at")) or datetime.now(),
-            created_by,
-            parse_date(row.get("_updated_at")) or datetime.now(),
-            updated_by,
-            False,  # is_deleted
-        )
-        count += 1
-
-    return count
-
-
 async def import_weekly_confirmations(
     conn: asyncpg.Connection, csv_data: str, user_mapping: dict[str, str]
 ) -> int:
@@ -407,7 +340,6 @@ async def main() -> Any:
     with zipfile.ZipFile(args.zip_file, "r") as z:
         deviation_csv = z.read("deviation.csv").decode("utf-8")
         capa_csv = z.read("capa.csv").decode("utf-8")
-        dept_csv = z.read("department_contact.csv").decode("utf-8")
         weekly_csv = z.read("department_weekly_confirmation.csv").decode("utf-8")
 
     # Connect to database
@@ -424,10 +356,6 @@ async def main() -> Any:
             capa_count = await import_capas(conn, capa_csv, user_mapping)
             print(f"  → {capa_count} rows")
 
-            print("Importing department contacts...")
-            dept_count = await import_department_contacts(conn, dept_csv, user_mapping)
-            print(f"  → {dept_count} rows")
-
             print("Importing weekly confirmations...")
             weekly_count = await import_weekly_confirmations(
                 conn, weekly_csv, user_mapping
@@ -436,7 +364,7 @@ async def main() -> Any:
 
         print("\n✓ Migration completed successfully!")
         print(
-            f"  Total: {dev_count + capa_count + dept_count + weekly_count} "
+            f"  Total: {dev_count + capa_count + weekly_count} "
             "rows imported"
         )
 

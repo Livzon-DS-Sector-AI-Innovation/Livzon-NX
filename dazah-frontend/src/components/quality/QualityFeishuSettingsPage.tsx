@@ -107,6 +107,7 @@ function createEntityDraft(
     app_token: item.app_token || '',
     base_table_name: item.base_table_name || '',
     base_table_id: item.base_table_id || '',
+    feishu_form_url: item.feishu_form_url || '',
     is_enabled: item.is_enabled,
     enable_push_to_feishu: item.enable_push_to_feishu,
     enable_pull_from_feishu: item.enable_pull_from_feishu,
@@ -873,6 +874,25 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
             }
           />
         ),
+      },
+      {
+        title: '表单链接',
+        key: 'feishu_form_url',
+        width: 240,
+        render: (_: unknown, record: QualityFeishuEntitySettingItem) =>
+          record.entity_code.startsWith('validation_master_plan_') ? (
+            <Input
+              value={entityDrafts[record.entity_code]?.feishu_form_url || ''}
+              placeholder="飞书表单分享链接（shrcn...），新增记录时打开"
+              onChange={(event) =>
+                patchEntityDraft(record.entity_code, {
+                  feishu_form_url: event.target.value,
+                })
+              }
+            />
+          ) : (
+            <span style={{ color: 'var(--color-stone)' }}>—</span>
+          ),
       },
       {
         title: '启用',

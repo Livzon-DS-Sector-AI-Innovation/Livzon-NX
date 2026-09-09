@@ -6,8 +6,8 @@ import { App, Button, Card, DatePicker, Form, Input, Modal, Popconfirm, Select, 
 import type { ColumnsType } from 'antd/es/table'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createReturnLedgerRecord, deleteReturnLedgerRecord, pullReturnLedgerRecords, updateReturnLedgerRecord } from '@/actions/quality'
-import { fetchDepartmentContacts, fetchReturnLedgerRecords } from '@/lib/api/client/quality'
-import type { DepartmentContact, ReturnLedgerItem } from '@/types/quality'
+import { fetchQualityPersonDirectory, fetchReturnLedgerRecords } from '@/lib/api/client/quality'
+import type { QualityPersonOption, ReturnLedgerItem } from '@/types/quality'
 import { TableEmptyState } from './TableEmptyState'
 
 
@@ -59,9 +59,9 @@ export default function ReturnLedgerPage({
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
 
-  const { data: contacts = [] } = useQuery<DepartmentContact[]>({
-    queryKey: ['quality-department-contacts'],
-    queryFn: fetchDepartmentContacts,
+  const { data: contacts = [] } = useQuery<QualityPersonOption[]>({
+    queryKey: ['quality-person-directory'],
+    queryFn: fetchQualityPersonDirectory,
   })
 
   const { data, isLoading: loading, error } = useQuery({
@@ -82,7 +82,7 @@ export default function ReturnLedgerPage({
     .filter((item) => item.name)
     .map((item) => ({
       label: item.name!,
-      value: (item as any).bitable_user_id || item.open_id || item.name!,
+      value: item.open_id || item.name!,
     }))
 
   const productOptions = useMemo(() => {

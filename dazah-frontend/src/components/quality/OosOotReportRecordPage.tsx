@@ -6,8 +6,8 @@ import { App, Avatar, Button, Card, Drawer, Form, Input, Input as AntInput, Moda
 import type { ColumnsType } from 'antd/es/table'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { pullOosOotReportRecords, updateOosOotReportRecord, deleteOosOotReportRecord } from '@/actions/quality'
-import { fetchOosOotReportRecords, fetchDepartmentContacts, fetchQualityFeishuAppSettings } from '@/lib/api/client/quality'
-import type { DepartmentContact, OosOotReportRecordItem } from '@/types/quality'
+import { fetchOosOotReportRecords, fetchQualityPersonDirectory, fetchQualityFeishuAppSettings } from '@/lib/api/client/quality'
+import type { QualityPersonOption, OosOotReportRecordItem } from '@/types/quality'
 
 interface FormValues {
   content: string
@@ -63,7 +63,7 @@ export default function OosOotReportRecordPage() {
   const [modalVisible, setModalVisible] = useState(false)
   const [editingRecord, setEditingRecord] = useState<OosOotReportRecordItem | null>(null)
   const [form] = Form.useForm<FormValues>()
-  const [contacts, setContacts] = useState<DepartmentContact[]>([])
+  const [contacts, setContacts] = useState<QualityPersonOption[]>([])
   const [stepDept, setStepDept] = useState<string | undefined>(undefined)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerRecord, setDrawerRecord] = useState<OosOotReportRecordItem | null>(null)
@@ -90,7 +90,7 @@ export default function OosOotReportRecordPage() {
 
   const loadContacts = useCallback(async () => {
     try {
-      const list = await fetchDepartmentContacts()
+      const list = await fetchQualityPersonDirectory()
       setContacts(list)
     } catch {
       // contacts load silently
@@ -113,7 +113,7 @@ export default function OosOotReportRecordPage() {
     }
     return filtered
       .filter((c) => c.name)
-      .map((c) => ({ label: c.name!, value: (c as any).bitable_user_id || c.open_id || c.name! }))
+      .map((c) => ({ label: c.name!, value: c.open_id || c.name! }))
   }, [contacts, stepDept])
 
   const reportDeptOptions = useMemo(() => {

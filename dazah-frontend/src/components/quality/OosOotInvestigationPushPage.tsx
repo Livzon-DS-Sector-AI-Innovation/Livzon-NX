@@ -6,8 +6,8 @@ import { App, Avatar, Button, Card, Drawer, Form, Input as AntInput, Modal, Popc
 import type { ColumnsType } from 'antd/es/table'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { pullOosOotInvestigationPushRecords, updateOosOotInvestigationPushRecord, deleteOosOotInvestigationPushRecord } from '@/actions/quality'
-import { fetchOosOotInvestigationPushRecords, fetchDepartmentContacts, fetchOosLedgerRecords, fetchOotLedgerRecords, fetchQualityFeishuAppSettings } from '@/lib/api/client/quality'
-import type { DepartmentContact, OosOotInvestigationPushRecordItem } from '@/types/quality'
+import { fetchOosOotInvestigationPushRecords, fetchQualityPersonDirectory, fetchOosLedgerRecords, fetchOotLedgerRecords, fetchQualityFeishuAppSettings } from '@/lib/api/client/quality'
+import type { QualityPersonOption, OosOotInvestigationPushRecordItem } from '@/types/quality'
 
 interface FormValues {
   oos_oot_code: string
@@ -62,7 +62,7 @@ export default function OosOotInvestigationPushPage() {
   const [modalVisible, setModalVisible] = useState(false)
   const [editingRecord, setEditingRecord] = useState<OosOotInvestigationPushRecordItem | null>(null)
   const [form] = Form.useForm<FormValues>()
-  const [contacts, setContacts] = useState<DepartmentContact[]>([])
+  const [contacts, setContacts] = useState<QualityPersonOption[]>([])
   const [invCodes, setInvCodes] = useState<string[]>([])
   const [stepDept, setStepDept] = useState<string | undefined>(undefined)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -93,7 +93,7 @@ export default function OosOotInvestigationPushPage() {
 
   const loadContacts = useCallback(async () => {
     try {
-      const list = await fetchDepartmentContacts()
+      const list = await fetchQualityPersonDirectory()
       setContacts(list)
     } catch { /* silent */ }
   }, [])
@@ -132,7 +132,7 @@ export default function OosOotInvestigationPushPage() {
     if (stepDept) filtered = contacts.filter((c) => c.department === stepDept)
     return filtered
       .filter((c) => c.name)
-      .map((c) => ({ label: c.name!, value: (c as any).bitable_user_id || c.open_id || c.name! }))
+      .map((c) => ({ label: c.name!, value: c.open_id || c.name! }))
   }, [contacts, stepDept])
 
   const deptOptions = useMemo(() => {
@@ -150,18 +150,10 @@ export default function OosOotInvestigationPushPage() {
     return vals.map(v => ({ label: v!, value: v! })).sort((a, b) => a.label.localeCompare(b.label))
   }, [items])
 
-  // 根据选中的部门和提交人，获取部门负责人
-  const getDeptHead = useCallback((dept: string | undefined, personBitableId: string | undefined) => {
-    if (!dept) return undefined
-    // 先从联系人中找对应部门的部门负责人
-    const deptContacts = contacts.filter((c) => c.department === dept)
-    if (deptContacts.length > 0 && deptContacts[0].department_head_name) {
-      const headName = deptContacts[0].department_head_name
-      const headContact = contacts.find((c) => c.name === headName)
-      if (headContact) return (headContact as any).bitable_user_id || headContact.open_id
-    }
+  // 部门负责人由表单手选（人员目录已无"部门负责人"推导语义）
+  const getDeptHead = useCallback((_dept: string | undefined, _personId: string | undefined) => {
     return undefined
-  }, [contacts])
+  }, [])
 
   const handleDepartmentChange = useCallback((value: string) => {
     setStepDept(value || undefined)

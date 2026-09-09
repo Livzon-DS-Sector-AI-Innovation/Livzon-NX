@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 import app.modules.quality.service.inspection_dashboard_calc as service
-from app.modules.quality.models.contacts import DepartmentContact
+from app.modules.hr.models import HrFeishuMember
 from app.modules.quality.models.finished_trend_alert_notification import (
     FinishedTrendAlertNotification,
 )
@@ -304,29 +304,26 @@ async def test_get_lft_dashboard_data_reads_selected_source_entity(
 
 
 @pytest.mark.anyio
-async def test_resolve_refining_recipient_from_department_contacts(
+async def test_resolve_refining_recipient_from_person_directory(
     db_session,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     contact_name = f"测试提炼负责人_{uuid.uuid4().hex[:8]}"
     open_id = f"ou_test_{uuid.uuid4().hex}"
     db_session.add(
-        DepartmentContact(
+        HrFeishuMember(
+            open_id=open_id,
             name=contact_name,
             department="提炼部",
-            open_id=open_id,
+            status="1",
         )
     )
-    await db_session.commit()
+    await db_session.flush()
 
     monkeypatch.setattr(
         service,
         "_get_product_department_extraction_head",
         AsyncMock(return_value=contact_name),
-    )
-    monkeypatch.setattr(
-        "app.modules.quality.service.department_contacts.get_department_contact_list_from_feishu",
-        AsyncMock(return_value={"items": []}),
     )
 
     result = await service._resolve_refining_recipient(db_session, "MFN-2607001")

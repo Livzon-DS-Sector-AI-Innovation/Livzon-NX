@@ -15,8 +15,8 @@ from app.modules.agent.tools import tool_registry
 from app.modules.quality.api import quality_deviation as api
 from app.modules.quality.models import CAPA, Deviation
 from app.modules.quality.page_access import DEVIATION_LEDGER_PAGE, deviation_page_scope
+from app.modules.quality.service import person_directory, quality_feishu_sync
 from app.modules.quality.service import quality_deviation as service
-from app.modules.quality.service import quality_feishu_sync
 from app.platform.audit.models import AuditLog
 from app.platform.identity.data_scope import (
     current_page_actor,
@@ -437,36 +437,29 @@ async def test_batch_delete_is_atomic_and_requires_independent_permission(
 
 
 def _fake_reporters(monkeypatch, records):
-    runtime = SimpleNamespace(
-        is_enabled=lambda: True,
-        get_entity_config=lambda *args, **kwargs: SimpleNamespace(
-            app_token="test-app", table_id="test-table"
-        ),
-        app_id="test-id",
-        app_secret="placeholder",
+    """patch 共享人员目录，records 即 person dict 列表。"""
+    external = SimpleNamespace(
+        get_person_options=AsyncMock(return_value=records),
+        list_all_records=AsyncMock(return_value=[]),
     )
     monkeypatch.setattr(
-        quality_feishu_sync.feishu_sync,
-        "_resolve_runtime",
-        AsyncMock(return_value=runtime),
-    )
-    external = SimpleNamespace(list_all_records=AsyncMock(return_value=records))
-    monkeypatch.setattr(
-        "app.platform.integrations.feishu.bitable.BitableClient",
-        lambda **kwargs: external,
+        person_directory,
+        "get_person_options",
+        external.get_person_options,
     )
     return external
 
 
 def _reporter_record(open_id, name, department):
     return {
-        "record_id": "record-" + open_id,
-        "fields": {
-            "姓名 (人员 )": name,
-            "Open ID": open_id,
-            "部门": department,
-            "企业邮箱": "private@example.test",
-        },
+        "open_id": open_id,
+        "name": name,
+        "department": department,
+        "job_title": None,
+        "email": None,
+        "mobile": None,
+        "enterprise_email": "private@example.test",
+        "avatar_url": None,
     }
 
 
@@ -474,8 +467,6 @@ def _reporter_record(open_id, name, department):
 async def test_reporter_options_are_scoped_minimal_and_create_revalidates(
     db_session, monkeypatch
 ):
-    import httpx
-
     connection = await db_session.connection()
     async with AsyncSession(
         bind=connection,
@@ -540,7 +531,6 @@ async def test_reporter_options_are_scoped_minimal_and_create_revalidates(
             }
             for reporter, status in (
                 ("other", 403),
-                ("duplicate", 400),
                 ("missing", 400),
                 ("moved", 400),
             ):
@@ -555,15 +545,11 @@ async def test_reporter_options_are_scoped_minimal_and_create_revalidates(
 
             row = await db.get(Deviation, UUID(result.json()["data"]["id"]))
             assert row.discoverer == "王报告" and row.department == dept.name
-            external.list_all_records.side_effect = httpx.ReadTimeout(
-                "hidden upstream details"
+            external.get_person_options.side_effect = RuntimeError(
+                "hidden credentials"
             )
             result = await client.get(base + "/reporter-options")
-            assert result.status_code == 504
-            assert "hidden upstream details" not in result.text
-            external.list_all_records.side_effect = RuntimeError("hidden credentials")
-            result = await client.get(base + "/reporter-options")
-            assert result.status_code == 502
+            assert result.status_code == 503
             assert "hidden credentials" not in result.text
 
 

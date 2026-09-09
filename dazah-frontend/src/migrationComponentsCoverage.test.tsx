@@ -56,7 +56,7 @@ const mocks = vi.hoisted(() => {
     'createOotLimitProduct', 'deleteOotLimitItem', 'deleteOotLimitProduct', 'updateOotLimitItem', 'updateOotLimitProduct',
     'updateQualityFeishuAppSettings', 'testQualityFeishuAppSettings', 'updateQualityFeishuEntitySetting', 'testQualityFeishuEntitySetting',
     'fetchOotLimitItems', 'fetchOotLimitProducts', 'pullOosOotReportRecords', 'updateOosOotReportRecord',
-    'deleteOosOotReportRecord', 'fetchOosOotReportRecords', 'fetchDepartmentContacts', 'fetchQualityFeishuAppSettings',
+    'deleteOosOotReportRecord', 'fetchOosOotReportRecords', 'fetchQualityPersonDirectory', 'fetchQualityFeishuAppSettings',
     'fetchQualityFeishuEntitySettings', 'fetchQualityFeishuEntityFieldMappingBundle', 'fetchQualityFeishuEntityTables',
     'formatQualityFeishuTestSummary', 'formatQualitySyncSummary', 'pullQualityRecordsFromFeishu',
     'pullOosOotInvestigationPushRecords', 'updateOosOotInvestigationPushRecord', 'deleteOosOotInvestigationPushRecord',
@@ -467,7 +467,6 @@ import { DeviationHistoryPage } from './components/quality/DeviationHistoryPage'
 import { DeviationWorkbenchPage } from './components/quality/DeviationWorkbenchPage'
 import { InspectionFeishuRecordModal } from './components/quality/inspection/InspectionFeishuRecordModal'
 import { InspectionFeishuTable } from './components/quality/inspection/InspectionFeishuTable'
-import { DepartmentContactPage } from './components/quality/DepartmentContactPage'
 import DocumentCatalogPickerModal from './components/hr/DocumentCatalogPickerModal'
 import OnboardingAttachmentPreviewModal from './components/hr/onboarding-management/OnboardingAttachmentPreviewModal'
 import CertificateSheetPage from './components/registration/CertificateSheetPage'
@@ -1789,7 +1788,7 @@ describe('migrated component coverage', () => {
     }
     getMock('lib/api/client/quality', 'fetchOosOotInvestigationPushRecords').mockResolvedValue({ data: [record], meta: { total: 1 } })
     getMock('lib/api/client/quality', 'fetchQualityFeishuAppSettings').mockResolvedValue({ oos_oot_investigation_push_form_url: 'https://example.feishu.cn/form' })
-    getMock('lib/api/client/quality', 'fetchDepartmentContacts').mockResolvedValue([
+    getMock('lib/api/client/quality', 'fetchQualityPersonDirectory').mockResolvedValue([
       { name: '张三', department: '质量部', department_head_name: '李四', open_id: 'u-1', bitable_user_id: 'user-1' },
       { name: '李四', department: '质量部', department_head_name: null, open_id: 'u-2', bitable_user_id: 'head-1' },
     ])
@@ -1901,7 +1900,7 @@ describe('migrated component coverage', () => {
       investigation_code: 'INV-1', problem_description: '偏差描述', root_cause: '原因', corrective_actions: '措施',
       final_disposition: '放行', registrant: 'user-1', remark: '备注',
     }
-    getMock('lib/api/client/quality', 'fetchDepartmentContacts').mockResolvedValue([{ name: '张三', open_id: 'user-1', department: '质量部' }])
+    getMock('lib/api/client/quality', 'fetchQualityPersonDirectory').mockResolvedValue([{ name: '张三', open_id: 'user-1', department: '质量部' }])
     const fetchRecords = vi.fn(async () => ({ data: [record] }))
     const pullRecords = vi.fn(async () => ({ synced: 1, failed: 0 }))
     const createRecord = vi.fn(async () => ({ id: 'ledger-new' }))
@@ -2025,7 +2024,7 @@ describe('migrated component coverage', () => {
     }
     getMock('lib/api/client/quality', 'fetchFeishuDeviationReportRecords').mockResolvedValue({ items: [record], total: 1 })
     getMock('lib/api/client/quality', 'fetchQualityFeishuAppSettings').mockResolvedValue({ deviation_report_form_url: 'https://feishu.example/form' })
-    getMock('lib/api/client/quality', 'fetchDepartmentContacts').mockResolvedValue([{ name: '张三', open_id: 'user-1' }])
+    getMock('lib/api/client/quality', 'fetchQualityPersonDirectory').mockResolvedValue([{ name: '张三', open_id: 'user-1' }])
     getMock('actions/quality', 'pullQualityRecordsFromFeishu').mockResolvedValue({ synced: 1 })
     getMock('actions/quality-deviation', 'updateDeviationReportRecord').mockResolvedValue({})
     getMock('actions/quality-deviation', 'deleteDeviationReportRecord').mockResolvedValue({})
@@ -2218,7 +2217,7 @@ describe('migrated component coverage', () => {
       qa_confirmed: true, qas: [{ name: 'QA' }], qa_head_confirmed: false, qa_heads: [{ name: 'QA负责人' }],
     }
     getMock('lib/api/client/quality', 'fetchOosOotReportRecords').mockResolvedValue({ data: [record] })
-    getMock('lib/api/client/quality', 'fetchDepartmentContacts').mockResolvedValue([{ name: '张三', open_id: 'u-1', department: '质量部' }])
+    getMock('lib/api/client/quality', 'fetchQualityPersonDirectory').mockResolvedValue([{ name: '张三', open_id: 'u-1', department: '质量部' }])
     getMock('lib/api/client/quality', 'fetchQualityFeishuAppSettings').mockResolvedValue({ oos_oot_report_form_url: 'https://feishu.example/oos' })
     getMock('actions/quality', 'pullOosOotReportRecords').mockResolvedValue({ synced: 1, failed: 0 })
     getMock('actions/quality', 'updateOosOotReportRecord').mockResolvedValue({})
@@ -4163,7 +4162,7 @@ describe('quality deviation history / workbench / inspection modal coverage', ()
   })
 })
 
-describe('department contact / inspection table / picker / attachment preview coverage', () => {
+describe('inspection table / picker / attachment preview coverage', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     mocks.permissionAllowed = true
@@ -4176,37 +4175,6 @@ describe('department contact / inspection table / picker / attachment preview co
     document.body.replaceChildren()
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
-  })
-
-  it('renders department contacts table and opens edit modal', async () => {
-    const items = [{
-      id: 'c1', name: '张三', avatar_url: null, bitable_user_id: null, department: '质量部',
-      enterprise_email: 'z@liv.com', open_id: 'ou-1', department_head_name: '李四',
-      department_head_avatar_url: null, department_head_bitable_user_id: null,
-      department_head_enterprise_email: 'l@liv.com', department_head_open_id: 'ou-2',
-      feishu_record_id: 'r-1', created_at: '2026-08-01', updated_at: '2026-08-02',
-    }]
-    const rendered = renderClient(createElement(DepartmentContactPage, {
-      items, total: 1, page: 1, pageSize: 20, activeDepartment: '', departmentOptions: ['质量部'],
-    }))
-    await settle()
-    expect(rendered.container.textContent).toContain('张三')
-    expect(rendered.container.textContent).toContain('李四')
-    const findButton = (text: string) => Array.from(rendered.container.querySelectorAll('button')).find((b) => b.textContent?.includes(text))
-    getMock('lib/api/client/hr', 'fetchHrMembers').mockResolvedValue([{ open_id: 'ou-9', name: '王五', avatar_url: null }])
-    findButton('修改')?.click()
-    await settle()
-    expect(rendered.container.querySelector('[role="dialog"]')).toBeTruthy()
-    // 编辑弹窗确定 → 飞书同步保存
-    getMock('actions/quality', 'updateDepartmentContactFeishu').mockResolvedValue({ id: 'c1' })
-    findButton('确定')?.click()
-    await settle()
-    expect(getMock('actions/quality', 'updateDepartmentContactFeishu')).toHaveBeenCalledWith(
-      'c1',
-      expect.objectContaining({ department: '质量部' }),
-    )
-    expect(mocks.message.success).toHaveBeenCalledWith('部门联系人已更新')
-    closeRendered(rendered)
   })
 
   it('renders inspection feishu table rows via list api and pull action', async () => {

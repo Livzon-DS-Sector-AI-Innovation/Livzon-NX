@@ -17,7 +17,7 @@ const apiClient = vi.hoisted(() => ({
   fetchAnomalyReportFields: vi.fn(),
   fetchAnomalyReportRecords: vi.fn(),
   fetchAnomalyReportShareLinks: vi.fn(),
-  fetchDepartmentContacts: vi.fn(),
+  fetchQualityPersonDirectory: vi.fn(),
 }))
 
 const anomalyActions = vi.hoisted(() => ({
@@ -107,7 +107,7 @@ describe('FinishedProductAnomalyTablePage', () => {
       page_size: 20,
       table_configured: true,
     }))
-    apiClient.fetchDepartmentContacts.mockResolvedValue([])
+    apiClient.fetchQualityPersonDirectory.mockResolvedValue([])
     apiClient.fetchAnomalyReportShareLinks.mockResolvedValue({
       'rec-1': 'https://j0eukrlohu.feishu.cn/record/tok-rec-1',
       'rec-25': 'https://j0eukrlohu.feishu.cn/record/tok-rec-25',

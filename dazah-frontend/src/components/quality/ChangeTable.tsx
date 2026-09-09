@@ -11,7 +11,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs, { Dayjs } from 'dayjs'
 import { ChangeListItem } from '@/types/quality'
 import { useChangeStore } from '@/stores/quality'
-import { fetchChangeActionPlansByChange, fetchDepartmentContacts } from '@/lib/api/client/quality'
+import { fetchChangeActionPlansByChange, fetchQualityPersonDirectory } from '@/lib/api/client/quality'
 
 import { batchDeleteChanges, createChange, deleteChange, updateChange } from '@/actions/quality-change'
 import { fetchNextChangeCode } from '@/lib/api/client/quality'
@@ -156,8 +156,8 @@ export function ChangeTable({ changes, total, loading = false, showPlans = true,
   }, [changes])
 
   const { data: departmentContacts = [] } = useQuery({
-    queryKey: ['quality-department-contacts'],
-    queryFn: fetchDepartmentContacts,
+    queryKey: ['quality-person-directory'],
+    queryFn: fetchQualityPersonDirectory,
   })
 
   const departmentOptions = useMemo(

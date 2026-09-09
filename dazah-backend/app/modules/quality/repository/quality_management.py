@@ -14,7 +14,6 @@ from app.modules.quality.models import (
     CapaPlanTrack,
     ChangeActionPlan,
     ChangeControl,
-    DepartmentContact,
     DepartmentWeeklyConfirmation,
     Deviation,
     DeviationInvestigationPushRecord,
@@ -953,87 +952,6 @@ async def update_capa_plan_track(
     track.updated_at = datetime.now(UTC)
     await db.flush()
     return track
-
-
-# Department Contact repository
-async def get_department_contact_by_id(
-    db: AsyncSession, contact_id: uuid.UUID
-) -> DepartmentContact | None:
-    result = await db.execute(
-        select(DepartmentContact).where(
-            DepartmentContact.id == contact_id,
-            DepartmentContact.is_deleted.is_(False),
-        )
-    )
-    return result.scalar_one_or_none()
-
-
-async def get_department_contact_by_department(
-    db: AsyncSession, department: str
-) -> DepartmentContact | None:
-    result = await db.execute(
-        select(DepartmentContact).where(
-            DepartmentContact.department == department,
-            DepartmentContact.is_deleted.is_(False),
-        )
-    )
-    return result.scalar_one_or_none()
-
-
-async def get_department_contacts(
-    db: AsyncSession,
-    page: int = 1,
-    page_size: int = 20,
-    scope: DepartmentScope | None = None,
-) -> tuple[list[DepartmentContact], int]:
-    query = select(DepartmentContact).where(DepartmentContact.is_deleted.is_(False))
-    count_query = (
-        select(func.count())
-        .select_from(DepartmentContact)
-        .where(DepartmentContact.is_deleted.is_(False))
-    )
-    # 部门数据隔离（后台可配置可见部门范围）
-    scope_clause = (
-        department_in_clause(DepartmentContact.department, scope) if scope else None
-    )
-    if scope_clause is not None:
-        query = query.where(scope_clause)
-        count_query = count_query.where(scope_clause)
-
-    total = (await db.execute(count_query)).scalar_one()
-
-    query = (
-        query.order_by(DepartmentContact.department)
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    )
-    result = await db.execute(query)
-    return list(result.scalars().all()), total
-
-
-async def create_department_contact(
-    db: AsyncSession, data: dict[str, Any]
-) -> DepartmentContact:
-    contact = DepartmentContact(**data)
-    db.add(contact)
-    await db.flush()
-    return contact
-
-
-async def update_department_contact(
-    db: AsyncSession, contact: DepartmentContact, data: dict[str, Any]
-) -> DepartmentContact:
-    for key, value in data.items():
-        setattr(contact, key, value)
-    await db.flush()
-    return contact
-
-
-async def delete_department_contact(
-    db: AsyncSession, contact: DepartmentContact
-) -> None:
-    contact.is_deleted = True
-    await db.flush()
 
 
 # Department Weekly Confirmation repository

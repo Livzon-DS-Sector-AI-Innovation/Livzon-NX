@@ -379,7 +379,6 @@ export const moduleMenus: ModuleMenu[] = [
           { key: "complaint-ledger", label: "投诉台账", path: "/quality/complaints/ledger" },
         ],
       },
-      { key: "department-contacts", label: "部门联系人", path: "/quality/department-contacts" },
       {
         key: "inspection",
         label: "质量检验",

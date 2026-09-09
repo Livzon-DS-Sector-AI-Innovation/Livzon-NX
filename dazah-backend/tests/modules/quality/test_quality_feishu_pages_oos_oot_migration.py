@@ -6,10 +6,24 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.core.exceptions import AppException, NotFoundException
+from app.modules.quality.service import person_directory
 from app.modules.quality.service import quality_feishu_pages_oos_oot as service
 from app.modules.quality.service.quality_feishu_sync import (
     QualityFeishuEntityRuntimeConfig,
 )
+
+
+def _oos_person(open_id: str, name: str) -> dict:
+    return {
+        "open_id": open_id,
+        "name": name,
+        "department": None,
+        "job_title": None,
+        "email": None,
+        "mobile": None,
+        "enterprise_email": None,
+        "avatar_url": None,
+    }
 
 
 def _entity() -> QualityFeishuEntityRuntimeConfig:
@@ -337,15 +351,26 @@ async def test_contact_resolution_prefers_direct_id_then_contact_and_fallback(
         "id": "ou-direct"
     }
     monkeypatch.setattr(
-        service.feishu_sync_service.feishu_sync,
-        "_get_department_contacts",
-        AsyncMock(return_value=[{"name": "张三", "bitable_user_id": "ou-zhang"}]),
+        person_directory,
+        "get_person_options",
+        AsyncMock(return_value=[_oos_person("ou-hr-zhang", "张三")]),
     )
-    assert await service._resolve_user_from_contacts(db, "张三") == {"id": "ou-zhang"}
+    monkeypatch.setattr(
+        "app.modules.quality.service.hr_identity.translate_hr_open_ids_to_union_ids",
+        AsyncMock(side_effect=lambda _db, ids: {i: i for i in ids}),
+    )
+    assert await service._resolve_user_from_contacts(db, "张三") == {
+        "id": "ou-hr-zhang"
+    }
+    monkeypatch.setattr(
+        person_directory,
+        "get_person_options",
+        AsyncMock(return_value=[]),
+    )
     assert await service._resolve_user_from_contacts(db, "未知") == {"id": "未知"}
     monkeypatch.setattr(
-        service.feishu_sync_service.feishu_sync,
-        "_get_department_contacts",
+        person_directory,
+        "get_person_options",
         AsyncMock(side_effect=RuntimeError("unavailable")),
     )
     assert await service._resolve_user_from_contacts(db, "回退") == {"id": "回退"}

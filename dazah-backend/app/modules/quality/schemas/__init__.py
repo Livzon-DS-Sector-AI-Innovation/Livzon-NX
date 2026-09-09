@@ -37,12 +37,7 @@ from app.modules.quality.schemas.change_control import (
 )
 from app.modules.quality.schemas.contacts import (
     ConfirmProductionStatusRequest,
-    CreateDepartmentContactRequest,
-    DepartmentContactOut,
     DepartmentWeeklyConfirmationOut,
-    FeishuDepartmentContactOut,
-    UpdateDepartmentContactRequest,
-    UpdateFeishuDepartmentContactRequest,
 )
 from app.modules.quality.schemas.cpv_batch import CpvBatchResponse, CpvBatchWideResponse
 from app.modules.quality.schemas.cpv_import import (
@@ -179,6 +174,7 @@ from app.modules.quality.schemas.validation import (
     UpdateValidationRequest,
     ValidationDetail,
     ValidationListItem,
+    ValidationPersonOption,
 )
 
 __all__ = [
@@ -283,11 +279,6 @@ __all__ = [
     "CreateCapaPlanTrackRequest",
     "UpdateCapaPlanTrackRequest",
     # Department Contacts
-    "DepartmentContactOut",
-    "FeishuDepartmentContactOut",
-    "CreateDepartmentContactRequest",
-    "UpdateDepartmentContactRequest",
-    "UpdateFeishuDepartmentContactRequest",
     "DepartmentWeeklyConfirmationOut",
     "ConfirmProductionStatusRequest",
     # Attachment Review
@@ -302,6 +293,7 @@ __all__ = [
     # Validations
     "ValidationListItem",
     "ValidationDetail",
+    "ValidationPersonOption",
     "CreateValidationRequest",
     "UpdateValidationRequest",
     # Sync

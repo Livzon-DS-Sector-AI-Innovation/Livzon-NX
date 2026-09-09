@@ -125,49 +125,13 @@ def _normalize_feishu_text(value: Any) -> str | None:
     return str(value).strip() or None
 
 
-async def _resolve_bitable_user_id(
-    db: AsyncSession,
-    user_id: str | None,
-) -> str | None:
-    if not user_id:
-        return None
-    normalized_user_id = str(user_id).strip()
-    if not normalized_user_id:
-        return None
-    if not normalized_user_id.startswith("ou_"):
-        return normalized_user_id
-
-    from app.modules.quality.service.department_contacts import (
-        get_department_contact_list_from_feishu,
-    )
-
-    contacts = await get_department_contact_list_from_feishu(
-        db,
-        page=1,
-        page_size=1000,
-    )
-    for contact in contacts.get("items", []):
-        if str(contact.get("open_id") or "").strip() == normalized_user_id:
-            bitable_user_id = str(contact.get("bitable_user_id") or "").strip()
-            if bitable_user_id:
-                return bitable_user_id
-        if (
-            str(contact.get("department_head_open_id") or "").strip()
-            == normalized_user_id
-        ):
-            bitable_user_id = str(
-                contact.get("department_head_bitable_user_id") or ""
-            ).strip()
-            if bitable_user_id:
-                return bitable_user_id
-    return normalized_user_id
-
-
 async def _build_user_field(
     db: AsyncSession,
     user_id: str | None,
 ) -> list[dict[str, str]] | None:
-    resolved_user_id = await _resolve_bitable_user_id(db, user_id)
+    from app.modules.quality.service.person_directory import resolve_person_write_id
+
+    resolved_user_id = await resolve_person_write_id(db, user_id)
     if not resolved_user_id:
         return None
     return [{"id": resolved_user_id}]
@@ -188,6 +152,14 @@ def _match_person_score(user: dict[str, Any], keyword: str) -> int | None:
         return 1
     if keyword in name:
         return 2
+
+    # 拼音/英文名匹配（en_name，如 ZhenNingNing）
+    en_name = _normalize_search_value(user.get("en_name"))
+    if en_name:
+        if en_name.startswith(keyword):
+            return 1
+        if keyword in en_name:
+            return 2
 
     secondary_fields = (
         user.get("mobile"),
@@ -311,6 +283,7 @@ class ChangeActionPlanFeishuSync:
             table_id,
             filter_str=filter_str,
             page_size=500,
+            user_id_type="union_id",
         )
 
     async def upsert_record(
@@ -324,17 +297,25 @@ class ChangeActionPlanFeishuSync:
         if not client or not table_id:
             raise RuntimeError("变更计划飞书同步未启用")
 
+        from app.platform.integrations.feishu.bitable import (
+            fields_need_union_user_id,
+        )
+
         fields = await self.build_fields(db, plan, include_users=include_users)
+        user_id_type = "union_id" if fields_need_union_user_id(fields) else None
         if plan.feishu_record_id:
             record = await client.update_record(
                 table_id,
                 plan.feishu_record_id,
                 fields,
+                user_id_type=user_id_type,
             )
             record_id = record.get("record_id")
             return str(record_id) if record_id else plan.feishu_record_id
 
-        record = await client.create_record(table_id, fields)
+        record = await client.create_record(
+            table_id, fields, user_id_type=user_id_type
+        )
         record_id = record.get("record_id", "")
         return str(record_id)
 

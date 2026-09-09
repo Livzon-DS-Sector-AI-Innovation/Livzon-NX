@@ -214,23 +214,19 @@ async def _resolve_user_from_contacts(
     name_or_id: str | None,
     department: str | None = None,
 ) -> dict[str, str] | None:
-    """Resolve user field value from department contacts or direct open_id."""
+    """把人员字段值归一为可写成员 id（union_id 优先，失败回退原值）。"""
     if not name_or_id:
         return None
-    # If it looks like an open_id, return as-is
-    if name_or_id.startswith("ou_"):
-        return {"id": name_or_id}
-    # Try to find in department contacts
     try:
-        contacts = await feishu_sync_service.feishu_sync._get_department_contacts(db)
-        for contact in contacts:
-            contact_name = str(contact.get("name") or "").strip()
-            if contact_name == name_or_id.strip():
-                user_id = str(
-                    contact.get("bitable_user_id") or contact.get("open_id") or ""
-                ).strip()
-                if user_id:
-                    return {"id": user_id}
+        from app.modules.quality.service.person_directory import (
+            resolve_person_write_id,
+        )
+
+        person_id = await resolve_person_write_id(
+            db, name_or_id, department=department
+        )
+        if person_id:
+            return {"id": person_id}
     except Exception:
         logger.warning(
             "解析用户ID失败，回退使用原始值 name_or_id=%s", name_or_id, exc_info=True
