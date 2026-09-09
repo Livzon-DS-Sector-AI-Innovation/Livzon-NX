@@ -30,7 +30,7 @@ export const SYSTEM_PERMISSION_PAGES = [
   {
     href: '/system/dept-roles',
     title: '部门角色映射',
-    description: '维护部门到角色的自动映射规则。',
+    description: '按部门查询用户，筛选并勾选需要应用角色的人员。',
   },
   {
     href: '/system/menus',

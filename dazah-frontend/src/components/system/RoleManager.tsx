@@ -79,9 +79,10 @@ export function RoleManager({ initialRoles, initialDepartments }: RoleManagerPro
         <Button size="small" disabled={role.code === "super_admin"} onClick={() => setPageRole(role)}>
           页面权限
         </Button>
-        <Button size="small" disabled={role.is_system} onClick={() => openEdit(role)}>编辑信息</Button>
-        <Popconfirm title="确认删除该角色？" disabled={role.is_system} onConfirm={() => remove(role)}>
-          <Button size="small" danger disabled={role.is_system}>删除</Button>
+        <Button size="small" disabled={role.code === "super_admin"} onClick={() => openEdit(role)}>编辑信息</Button>
+        <Popconfirm title={`确认删除角色“${role.name}”？`} description="删除后，该角色将不再为用户提供授权。"
+          disabled={role.code === "super_admin"} onConfirm={() => remove(role)}>
+          <Button size="small" danger disabled={role.code === "super_admin"}>删除</Button>
         </Popconfirm>
       </div> },
     ]} />

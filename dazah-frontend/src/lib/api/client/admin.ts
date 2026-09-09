@@ -1,3 +1,5 @@
+import type { operations } from "@/types/generated/schema"
+
 /**
  * 权限管理 - 浏览器端 GET API（只读）
  * 使用相对路径 /api/v1/...（自动代理到后端）
@@ -75,8 +77,18 @@ export async function fetchRoles(): Promise<RoleItem[]> {
   return handleResponse<RoleItem[]>(res)
 }
 
-export async function fetchAdminUsers(): Promise<{ items: AdminUserItem[]; total: number }> {
-  const res = await fetch("/api/v1/identity/admin/users?limit=500", { cache: "no-store" })
+export type AdminUserQuery = NonNullable<operations["list_admin_users_api_v1_identity_admin_users_get"]["parameters"]["query"]>
+
+export async function fetchAdminUsers(params?: AdminUserQuery): Promise<{ items: AdminUserItem[]; total: number }> {
+  const query = new URLSearchParams({ limit: String(params?.limit ?? 500) })
+  if (params) {
+    query.set("offset", String(params.offset ?? 0))
+    if (params.keyword) query.set("keyword", params.keyword)
+    if (params.department_id) query.set("department_id", params.department_id)
+    if (params.department_name) query.set("department_name", params.department_name)
+    if (params.user_scope) query.set("user_scope", params.user_scope)
+  }
+  const res = await fetch(`/api/v1/identity/admin/users?${query}`, { cache: "no-store" })
   return handleResponse<{ items: AdminUserItem[]; total: number }>(res)
 }
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 import csv
 import io
 import json
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -275,8 +275,8 @@ async def update_role(
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     role = await _get_role_or_404(db, role_id)
-    if role.is_system:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "系统角色不允许修改")
+    if role.code == "super_admin":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "系统管理员角色不允许修改")
     old = {"name": role.name, "description": role.description}
     role = await RbacRepository().update_role(
         db, role, name=body.name, description=body.description
@@ -307,8 +307,8 @@ async def delete_role(
 ) -> JSONResponse:
     role = await _get_role_or_404(db, role_id)
     await _assert_not_own_role(db, current_user, role_id)
-    if role.is_system:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "系统角色不允许删除")
+    if role.code == "super_admin":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "系统管理员角色不允许删除")
     await RbacRepository().soft_delete_role(db, role)
     await _bump_all_user_grant_versions(db, actor_id=current_user.id)
     await _audit(
@@ -369,10 +369,30 @@ async def list_admin_users(
     keyword: str | None = Query(default=None),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
+    department_id: Annotated[str | None, Query(max_length=255)] = None,
+    department_name: Annotated[str | None, Query(max_length=255)] = None,
+    user_scope: Annotated[
+        Literal["department", "missing", "all"] | None, Query()
+    ] = None,
 ) -> JSONResponse:
-    users, total = await UserRepository().list_all(
-        db, keyword=keyword, offset=offset, limit=limit
-    )
+    if user_scope is not None:
+        department_id = (department_id or "").strip() or None
+        department_name = (department_name or "").strip() or None
+        if user_scope == "department" and not (department_id or department_name):
+            raise HTTPException(422, "飞书部门 ID 与部门名称至少填写一个")
+        users, total = await UserRepository().list_role_candidates(
+            db,
+            department_id=department_id,
+            department_name=department_name,
+            user_scope=user_scope,
+            keyword=(keyword or "").strip() or None,
+            offset=offset,
+            limit=limit,
+        )
+    else:
+        users, total = await UserRepository().list_all(
+            db, keyword=keyword, offset=offset, limit=limit
+        )
     repo = RbacRepository()
     items = []
     for user in users:
@@ -725,8 +745,10 @@ async def set_role_menus(
 ) -> JSONResponse:
     role = await _get_role_or_404(db, role_id)
     await _assert_not_own_role(db, current_user, role_id)
-    if role.is_system:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "系统角色不允许修改菜单绑定")
+    if role.code == "super_admin":
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "系统管理员角色不允许修改菜单绑定"
+        )
     menu_repo = MenuRepository()
     for menu_id in dict.fromkeys(body.menu_ids):
         if await menu_repo.get_by_id(db, menu_id) is None:

@@ -15,7 +15,7 @@ export default async function DeptRolesPage() {
       <div>
         <h1 className="text-xl font-semibold text-[var(--color-charcoal)]">部门角色映射</h1>
         <p className="text-sm text-[var(--color-stone)] mt-1">
-          配置部门 → 角色的自动映射规则（成员入职后按部门自动获得角色）。
+          按部门查询用户，筛选并勾选需要应用角色的人员。
         </p>
       </div>
       <DeptRoleMapper initialRules={rules} initialRoles={roles} initialDepartments={departments} />

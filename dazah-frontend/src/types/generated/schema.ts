@@ -79377,6 +79377,9 @@ export interface operations {
                 keyword?: string | null;
                 offset?: number;
                 limit?: number;
+                department_id?: string | null;
+                department_name?: string | null;
+                user_scope?: ("department" | "missing" | "all") | null;
             };
             header?: never;
             path?: never;
