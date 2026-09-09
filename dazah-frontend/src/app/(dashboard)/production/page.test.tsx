@@ -1,6 +1,6 @@
 /* @vitest-environment happy-dom */
 
-import { act } from 'react'
+import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { App } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -24,6 +24,11 @@ vi.mock('@/actions/production', () => actions)
 const routerMock = vi.hoisted(() => ({ push: vi.fn() }))
 vi.mock('next/navigation', () => ({
   useRouter: () => routerMock,
+}))
+
+vi.mock('echarts-for-react', () => ({
+  default: ({ option }: { option?: unknown }) =>
+    createElement('pre', null, JSON.stringify(option ?? {})),
 }))
 
 import ProductionHomePage from './page'
@@ -422,5 +427,336 @@ describe('ProductionHomePage (fermentation board)', () => {
     expect(actions.removeTankMaintenance).toHaveBeenCalledWith('m-1')
     expect(actions.getFermentationBoard).toHaveBeenCalledTimes(2)
     expect(document.body.textContent || '').toContain('304A 已解除检修')
+  })
+
+  it('renders the per-batch output chart with average line', async () => {
+    actions.getFermentationBoard.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: {
+        ...BOARD,
+        trend: { batches: ['FA26229', 'FA26230'], outputs: [31000, 30500] },
+      },
+    })
+    await render()
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('FA26229')
+    expect(text).toContain('平均产量 30750.0 kg')
+  })
+
+  async function openHistoryDrawer() {
+    const historyBtn = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('历史数据'),
+    ) as HTMLElement
+    await act(async () => {
+      historyBtn.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+  }
+
+  function modalOkBtn(): HTMLElement {
+    const btn = Array.from(
+      document.body.querySelectorAll('.ant-modal-footer button'),
+    ).find((b) => b.classList.contains('ant-btn-primary')) as HTMLElement | undefined
+    expect(btn).toBeTruthy()
+    return btn!
+  }
+
+  function modalCancelBtn(): HTMLElement {
+    const btn = Array.from(
+      document.body.querySelectorAll('.ant-modal-footer button'),
+    ).find((b) => (b.textContent || '').replace(/\s/g, '') === '取消') as HTMLElement | undefined
+    expect(btn).toBeTruthy()
+    return btn!
+  }
+
+  it('records a batch actual from the dumped list and refreshes', async () => {
+    actions.getFermentationBatchActuals.mockResolvedValue({ code: 200, data: [] })
+    actions.upsertFermentationBatchActual.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: null,
+    })
+    await render()
+    await openHistoryDrawer()
+    const addBtn = Array.from(document.body.querySelectorAll('.ant-drawer button')).find(
+      (b) => b.textContent?.includes('录入批次产量'),
+    ) as HTMLElement
+    await act(async () => {
+      addBtn.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    // 未选批次时先提示且不提交
+    await act(async () => {
+      modalOkBtn().click()
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(actions.upsertFermentationBatchActual).not.toHaveBeenCalled()
+    expect(document.body.textContent || '').toContain('请填写批次号')
+    // 选择已放罐批次（自动带出计划放罐日期）后保存
+    const selector = document.body.querySelector('.ant-modal .ant-select') as HTMLElement
+    await act(async () => {
+      selector.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const option = Array.from(document.body.querySelectorAll('.ant-select-item-option')).find(
+      (o) => o.textContent?.includes('FA26230'),
+    ) as HTMLElement
+    await act(async () => {
+      option.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    await act(async () => {
+      modalOkBtn().click()
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    expect(actions.upsertFermentationBatchActual).toHaveBeenCalledWith({
+      batch_no: 'FA26230',
+      dump_date: '2026-09-07',
+      yield_kg: null,
+      remark: null,
+    })
+    expect(document.body.textContent || '').toContain('已保存批次产量')
+  })
+
+  it('edits an existing batch actual', async () => {
+    actions.getFermentationBatchActuals.mockResolvedValue({
+      code: 200,
+      data: [
+        { id: 'a-1', batch_no: 'FA26231', dump_date: '2026-09-08', yield_kg: 100, remark: '染菌批' },
+      ],
+    })
+    actions.upsertFermentationBatchActual.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: null,
+    })
+    await render()
+    await openHistoryDrawer()
+    const editBtn = Array.from(document.body.querySelectorAll('.ant-drawer button')).find(
+      (b) => b.textContent === '编辑',
+    ) as HTMLElement
+    await act(async () => {
+      editBtn.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    expect(document.body.textContent || '').toContain('编辑批次产量：FA26231')
+    // 修改放罐产量与备注
+    const yieldInput = Array.from(document.body.querySelectorAll('.ant-modal input')).find(
+      (i) => (i as HTMLInputElement).placeholder?.includes('放罐产量'),
+    ) as HTMLInputElement
+    const textarea = document.body.querySelector('.ant-modal textarea') as HTMLTextAreaElement
+    await act(async () => {
+      const inputSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value',
+      )?.set
+      inputSetter?.call(yieldInput, '105')
+      yieldInput.dispatchEvent(new Event('input', { bubbles: true }))
+      const textSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        'value',
+      )?.set
+      textSetter?.call(textarea, '复检合格')
+      textarea.dispatchEvent(new Event('input', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    await act(async () => {
+      modalOkBtn().click()
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    expect(actions.upsertFermentationBatchActual).toHaveBeenCalledWith(
+      expect.objectContaining({ batch_no: 'FA26231', yield_kg: 105, remark: '复检合格' }),
+    )
+  })
+
+  it('deletes a batch actual after confirmation', async () => {
+    actions.getFermentationBatchActuals.mockResolvedValue({
+      code: 200,
+      data: [
+        { id: 'a-1', batch_no: 'FA26231', dump_date: '2026-09-08', yield_kg: 100, remark: null },
+      ],
+    })
+    actions.deleteFermentationBatchActual.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: null,
+    })
+    await render()
+    await openHistoryDrawer()
+    const delBtn = Array.from(document.body.querySelectorAll('.ant-drawer button')).find(
+      (b) => b.textContent === '删除',
+    ) as HTMLElement
+    await act(async () => {
+      delBtn.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const confirmBtn = Array.from(
+      document.body.querySelectorAll('.ant-popover button, .ant-popconfirm button'),
+    ).find((b) => (b.textContent || '').replace(/\s/g, '') === '删除') as HTMLElement
+    expect(confirmBtn).toBeTruthy()
+    await act(async () => {
+      confirmBtn.click()
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    expect(actions.deleteFermentationBatchActual).toHaveBeenCalledWith('a-1')
+    expect(document.body.textContent || '').toContain('已删除批次产量记录')
+  })
+
+  it('shows error hints when the actuals list fails', async () => {
+    actions.getFermentationBatchActuals
+      .mockResolvedValueOnce({ code: 500, message: '服务不可用' })
+      .mockRejectedValueOnce(new Error('network down'))
+    await render()
+    const historyBtn = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('历史数据'),
+    ) as HTMLElement
+    await act(async () => {
+      historyBtn.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    // 非 200：展示后端 message
+    expect(document.body.textContent || '').toContain('服务不可用')
+    // 再次打开：请求直接抛错走兜底提示
+    await act(async () => {
+      historyBtn.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    expect(document.body.textContent || '').toContain('历史数据加载失败')
+    expect(actions.getFermentationBatchActuals).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows backend messages when save or delete fails', async () => {
+    actions.getFermentationBatchActuals.mockResolvedValue({
+      code: 200,
+      data: [
+        { id: 'a-2', batch_no: 'FA26230', dump_date: '2026-09-07', yield_kg: 200, remark: null },
+      ],
+    })
+    actions.upsertFermentationBatchActual.mockResolvedValue({
+      code: 500,
+      message: '批次号不存在',
+    })
+    actions.deleteFermentationBatchActual.mockResolvedValue({
+      code: 500,
+      message: '记录已被删除',
+    })
+    await render()
+    await openHistoryDrawer()
+    const addBtn = Array.from(document.body.querySelectorAll('.ant-drawer button')).find(
+      (b) => b.textContent?.includes('录入批次产量'),
+    ) as HTMLElement
+    await act(async () => {
+      addBtn.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const selector = document.body.querySelector('.ant-modal .ant-select') as HTMLElement
+    await act(async () => {
+      selector.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const option = Array.from(document.body.querySelectorAll('.ant-select-item-option')).find(
+      (o) => o.textContent?.includes('FA26231'),
+    ) as HTMLElement
+    await act(async () => {
+      option.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    await act(async () => {
+      modalOkBtn().click()
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    expect(document.body.textContent || '').toContain('批次号不存在')
+    // 取消录入弹窗后，从列表删除走失败分支
+    await act(async () => {
+      modalCancelBtn().click()
+      await new Promise((r) => setTimeout(r, 250))
+    })
+    const delBtn = Array.from(document.body.querySelectorAll('.ant-drawer button')).find(
+      (b) => b.textContent === '删除',
+    ) as HTMLElement
+    expect(delBtn).toBeTruthy()
+    await act(async () => {
+      delBtn.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const confirmBtn = Array.from(
+      document.body.querySelectorAll('.ant-popover button, .ant-popconfirm button'),
+    ).find((b) => (b.textContent || '').replace(/\s/g, '') === '删除') as HTMLElement
+    expect(confirmBtn).toBeTruthy()
+    await act(async () => {
+      confirmBtn.click()
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    expect(actions.deleteFermentationBatchActual).toHaveBeenCalledWith('a-2')
+    expect(document.body.textContent || '').toContain('记录已被删除')
+  })
+
+  it('shows an error when the capacity save fails', async () => {
+    actions.setFermentationMonthCapacity.mockResolvedValue({
+      code: 500,
+      message: '排产表未覆盖当前日期',
+    })
+    await render()
+    const editBtn = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.getAttribute('title') === '设置本月计划产能',
+    ) as HTMLElement
+    await act(async () => {
+      editBtn.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    await act(async () => {
+      modalOkBtn().click()
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    expect(document.body.textContent || '').toContain('排产表未覆盖当前日期')
+  })
+
+  it('closes the drawer and modals without saving', async () => {
+    actions.getFermentationBatchActuals.mockResolvedValue({ code: 200, data: [] })
+    await render()
+    await openHistoryDrawer()
+    const addBtn = Array.from(document.body.querySelectorAll('.ant-drawer button')).find(
+      (b) => b.textContent?.includes('录入批次产量'),
+    ) as HTMLElement
+    await act(async () => {
+      addBtn.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    await act(async () => {
+      modalCancelBtn().click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    // 关闭抽屉
+    const drawerClose = document.body.querySelector('.ant-drawer-close') as HTMLElement
+    await act(async () => {
+      drawerClose.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    // 产能弹窗：修改数值后取消，不应提交
+    const capacityBtn = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.getAttribute('title') === '设置本月计划产能',
+    ) as HTMLElement
+    await act(async () => {
+      capacityBtn.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const capacityInput = Array.from(document.body.querySelectorAll('.ant-modal input')).find(
+      (i) => (i as HTMLInputElement).placeholder?.includes('本月计划产能'),
+    ) as HTMLInputElement
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value',
+      )?.set
+      setter?.call(capacityInput, '950000')
+      capacityInput.dispatchEvent(new Event('input', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    await act(async () => {
+      modalCancelBtn().click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    expect(actions.setFermentationMonthCapacity).not.toHaveBeenCalled()
   })
 })
