@@ -3,6 +3,8 @@
 覆盖 PR 迁移中引入的 fermentation_records 表迁移：
 - upgrade 先检查目标表存在则删除，再建表并建索引
 - downgrade 按顺序删索引、删表
+
+覆盖发酵看板批次实绩与扎帐月设置迁移（批号/周期部分唯一索引 + 软删）。
 """
 
 from __future__ import annotations
@@ -19,6 +21,18 @@ FERMENTATION_MIGRATION_PATH = (
     / "versions"
     / "2f0b698eb4d8_add_fermentation_records_table.py"
 )
+BATCH_ACTUALS_MIGRATION_PATH = (
+    Path(__file__).parents[2]
+    / "alembic"
+    / "versions"
+    / "a3f8c2d1b4e7_add_fermentation_batch_actuals.py"
+)
+MONTH_SETTINGS_MIGRATION_PATH = (
+    Path(__file__).parents[2]
+    / "alembic"
+    / "versions"
+    / "b7c9e1f4a6d8_add_fermentation_month_settings.py"
+)
 
 
 def _load_fermentation_migration() -> Any:
@@ -26,6 +40,15 @@ def _load_fermentation_migration() -> Any:
         "fermentation_records_migration",
         FERMENTATION_MIGRATION_PATH,
     )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_migration(path: Path, module_name: str) -> Any:
+    spec = importlib.util.spec_from_file_location(module_name, path)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -176,3 +199,150 @@ def test_fermentation_migration_downgrade_drops_indexes_and_table(
         ("ix_fermentation_records_batch_no", "fermentation_records", "production"),
     ]
     assert dropped_tables == [("fermentation_records", "production")]
+
+
+def _record_created_table_with_schema(
+    target: list[tuple[str, Any]], value: Any, **kwargs: Any
+) -> None:
+    target.append((str(value), kwargs.get("schema")))
+
+
+def _record_created_partial_index(
+    target: list[dict[str, Any]],
+    name: Any,
+    table: Any,
+    columns: Any,
+    **kwargs: Any,
+) -> None:
+    target.append(
+        {
+            "name": str(name),
+            "table": str(table),
+            "columns": list(columns),
+            "unique": bool(kwargs.get("unique")),
+            "partial": kwargs.get("postgresql_where") is not None,
+            "schema": kwargs.get("schema"),
+        }
+    )
+
+
+def _run_board_setting_migration(
+    monkeypatch: Any, path: Path, module_name: str
+) -> tuple[Any, list[tuple[str, Any]], list[dict[str, Any]], list[Any], list[Any]]:
+    """执行迁移的 upgrade+downgrade，返回模块与各 op 调用记录。"""
+    migration = _load_migration(path, module_name)
+    created_tables: list[tuple[str, Any]] = []
+    created_indexes: list[dict[str, Any]] = []
+    dropped_indexes: list[Any] = []
+    dropped_tables: list[Any] = []
+
+    monkeypatch.setattr(
+        migration.op,
+        "create_table",
+        lambda *args, **kwargs: _record_created_table_with_schema(
+            created_tables, args[0], **kwargs
+        ),
+    )
+    monkeypatch.setattr(
+        migration.op,
+        "create_index",
+        lambda name, table, columns, **kwargs: _record_created_partial_index(
+            created_indexes, name, table, columns, **kwargs
+        ),
+    )
+    monkeypatch.setattr(
+        migration.op,
+        "drop_index",
+        lambda name, table_name, **kw: dropped_indexes.append((str(name), table_name)),
+    )
+    monkeypatch.setattr(
+        migration.op,
+        "drop_table",
+        lambda table, *a, **k: dropped_tables.append((str(table), k.get("schema"))),
+    )
+
+    migration.upgrade()
+    migration.downgrade()
+    return migration, created_tables, created_indexes, dropped_indexes, dropped_tables
+
+
+def test_batch_actuals_migration_creates_table_and_partial_unique_index(
+    monkeypatch: Any,
+) -> None:
+    _, created_tables, created_indexes, _, _ = _run_board_setting_migration(
+        monkeypatch,
+        BATCH_ACTUALS_MIGRATION_PATH,
+        "fermentation_batch_actuals_migration",
+    )
+
+    assert created_tables == [("fermentation_batch_actuals", "production")]
+    assert created_indexes == [
+        {
+            "name": "ux_fermentation_batch_actuals_batch_no",
+            "table": "fermentation_batch_actuals",
+            "columns": ["batch_no"],
+            "unique": True,
+            "partial": True,
+            "schema": "production",
+        }
+    ]
+
+
+def test_month_settings_migration_creates_table_and_partial_unique_index(
+    monkeypatch: Any,
+) -> None:
+    _, created_tables, created_indexes, _, _ = _run_board_setting_migration(
+        monkeypatch,
+        MONTH_SETTINGS_MIGRATION_PATH,
+        "fermentation_month_settings_migration",
+    )
+
+    assert created_tables == [("fermentation_month_settings", "production")]
+    assert created_indexes == [
+        {
+            "name": "ux_fermentation_month_settings_period",
+            "table": "fermentation_month_settings",
+            "columns": ["period_start"],
+            "unique": True,
+            "partial": True,
+            "schema": "production",
+        }
+    ]
+
+
+def test_board_setting_migrations_downgrade_drops_index_before_table(
+    monkeypatch: Any,
+) -> None:
+    for path, module_name, table, index in (
+        (
+            BATCH_ACTUALS_MIGRATION_PATH,
+            "fermentation_batch_actuals_migration",
+            "fermentation_batch_actuals",
+            "ux_fermentation_batch_actuals_batch_no",
+        ),
+        (
+            MONTH_SETTINGS_MIGRATION_PATH,
+            "fermentation_month_settings_migration",
+            "fermentation_month_settings",
+            "ux_fermentation_month_settings_period",
+        ),
+    ):
+        _, _, _, dropped_indexes, dropped_tables = _run_board_setting_migration(
+            monkeypatch, path, module_name
+        )
+        # 先删索引再删表，且都在 production schema 下
+        assert dropped_indexes == [(index, table)]
+        assert dropped_tables == [(table, "production")]
+
+
+def test_board_setting_migrations_chain_from_current_head() -> None:
+    batch = _load_migration(
+        BATCH_ACTUALS_MIGRATION_PATH, "fermentation_batch_actuals_migration"
+    )
+    month = _load_migration(
+        MONTH_SETTINGS_MIGRATION_PATH, "fermentation_month_settings_migration"
+    )
+    assert batch.revision == "a3f8c2d1b4e7"
+    assert batch.down_revision == "c9d400000023"
+    assert month.revision == "b7c9e1f4a6d8"
+    assert month.down_revision == batch.revision
