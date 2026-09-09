@@ -322,7 +322,10 @@ class MaterialStatusTransition(BaseModel):
             "ix_warehouse_material_status_transitions_occurred_at",
             "occurred_at",
         ),
-        {"schema": "warehouse"},
+        {
+            "schema": "warehouse",
+            "comment": "物料/成品质量状态变更日志（检验周期统计数据源）",
+        },
     )
 
     page_key: Mapped[str] = mapped_column(
