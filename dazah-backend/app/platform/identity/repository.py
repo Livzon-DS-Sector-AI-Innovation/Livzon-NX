@@ -1,9 +1,11 @@
+import json
 from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID
 
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.platform.identity.models import (
     DataScopeRule,
@@ -468,6 +470,52 @@ class UserRepository:
         result = await session.execute(stmt)
         users = list(result.scalars().all())
         return users, total
+
+    async def list_role_candidates(
+        self,
+        session: AsyncSession,
+        *,
+        department_id: str | None,
+        department_name: str | None,
+        user_scope: str,
+        keyword: str | None,
+        offset: int,
+        limit: int,
+    ) -> tuple[list[User], int]:
+        """按部门或补选范围查询角色分配候选人，不修改用户部门信息。"""
+        conditions: list[ColumnElement[bool]] = [User.is_deleted.is_(False)]
+        if user_scope == "department":
+            selectors = []
+            department_ids = {department_id} if department_id else set()
+            if department_name:
+                selectors.append(User.department == department_name)
+                department_result = await session.scalars(
+                    select(Department.feishu_department_id).where(
+                        Department.name == department_name,
+                        Department.is_deleted.is_(False),
+                    )
+                )
+                department_ids.update(department_result.all())
+            selectors.extend(
+                User.feishu_department_ids.contains(json.dumps(value), autoescape=True)
+                for value in sorted(department_ids)
+            )
+            conditions.append(or_(*selectors) if selectors else User.id.is_(None))
+        elif user_scope == "missing":
+            conditions.append(func.trim(func.coalesce(User.department, "")) == "")
+        if keyword:
+            conditions.append(User.name.icontains(keyword, autoescape=True))
+        total = await session.scalar(
+            select(func.count()).select_from(User).where(*conditions)
+        )
+        result = await session.scalars(
+            select(User)
+            .where(*conditions)
+            .order_by(User.name, User.id)
+            .offset(offset)
+            .limit(limit)
+        )
+        return list(result.all()), int(total or 0)
 
 
 class DepartmentRepository:

@@ -167,8 +167,9 @@ describe('system permissions settings pages', () => {
       initialRoles: roles,
       initialDepartments: departments,
     }))
-    expect(deptRoleHtml).toContain('新增规则')
-    expect(deptRoleHtml).toContain('质量部')
+    expect(deptRoleHtml).toContain('查询部门用户')
+    expect(deptRoleHtml).toContain('已有角色')
+    expect(deptRoleHtml).not.toContain('新增规则')
 
     const menuHtml = renderInApp(React.createElement(MenuManager, { initialMenus: menus }))
     expect(menuHtml).toContain('新建菜单')

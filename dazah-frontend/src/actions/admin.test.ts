@@ -14,6 +14,22 @@ import * as adminActions from './admin'
 import { createRole } from './admin'
 
 describe('system permission server actions', () => {
+  it('appends deduplicated roles and refreshes both permission entry points', async () => {
+    const request = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { message: '角色已分配' } })))
+    vi.stubGlobal('fetch', request)
+    expect((await adminActions.applyDeptRolesToUser('user-1', ['role-1', 'role-1'])).ok).toBe(true)
+    expect(request).toHaveBeenCalledWith(expect.stringContaining('/users/user-1/roles'), expect.objectContaining({
+      method: 'POST', body: JSON.stringify({ role_ids: ['role-1'] }),
+    }))
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/system/user-roles')
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/settings')
+  })
+
+  it('returns user-specific authorization failures for batch results', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ detail: '管理员不能修改自己的角色' }), { status: 403 })))
+    expect(await adminActions.applyDeptRolesToUser('self', ['role-1'])).toEqual({ ok: false, status: 403, message: '管理员不能修改自己的角色' })
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
   it('sends the role authorization version and preserves conflict errors', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: '授权版本冲突' }), { status: 409 }))
     vi.stubGlobal('fetch', fetchMock)

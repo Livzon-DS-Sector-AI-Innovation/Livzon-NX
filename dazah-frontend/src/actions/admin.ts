@@ -138,6 +138,21 @@ export async function removeUserRole(userId: string, roleId: string) {
 
 // ── 部门角色映射 ────────────────────────────────────────────────────
 
+/** 批量界面逐人调用，保留生产环境下的鉴权错误与部分成功结果。 */
+export async function applyDeptRolesToUser(userId: string, roleIds: string[]) {
+  const body: AssignUserRoleRequest = { role_ids: [...new Set(roleIds)] }
+  const result = await permissionActionResult<unknown>(() => authedFetch(
+    `/identity/admin/users/${encodeURIComponent(userId)}/roles`,
+    { method: "POST", body: JSON.stringify(body) },
+  ))
+  if (result.ok) {
+    revalidatePath("/system/user-roles")
+    revalidatePath("/system/dept-roles")
+    revalidatePath("/settings")
+  }
+  return result
+}
+
 export async function createDeptRule(data: DeptRuleCreateRequest) {
   const res = await authedFetch("/identity/admin/dept-rules", {
     method: "POST",

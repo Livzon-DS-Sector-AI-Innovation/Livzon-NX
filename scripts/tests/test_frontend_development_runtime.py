@@ -24,5 +24,12 @@ def test_docker_frontend_reconciles_named_dependency_volume_on_start() -> None:
     compose = (ROOT / "compose.dev.yml").read_text(encoding="utf-8")
 
     assert "pnpm install --frozen-lockfile --prefer-offline" in compose
-    assert "exec pnpm dev --hostname 0.0.0.0 --port 3000" in compose
+    assert "exec pnpm dev:webpack --hostname 0.0.0.0 --port 3000" in compose
     assert "frontend_node_modules:/app/node_modules" in compose
+
+
+def test_docker_compose_uses_webpack_polling_for_host_source_changes() -> None:
+    compose = (ROOT / "compose.dev.yml").read_text(encoding="utf-8")
+    assert "WATCHPACK_POLLING: ${WATCHPACK_POLLING:-true}" in compose
+    assert "./dazah-frontend:/app" in compose
+    assert "exec pnpm dev --hostname" not in compose

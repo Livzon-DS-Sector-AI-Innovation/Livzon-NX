@@ -10,5 +10,7 @@ describe('system permissions settings entry', () => {
       '/system/menus',
       '/system/permission-verification',
     ])
+    expect(SYSTEM_PERMISSION_PAGES.find((page) => page.href === '/system/dept-roles')?.description)
+      .toBe('按部门查询用户，筛选并勾选需要应用角色的人员。')
   })
 })
