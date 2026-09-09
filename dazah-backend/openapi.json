@@ -9584,6 +9584,61 @@
         "title": "AutoCompareRequest",
         "type": "object"
       },
+      "BatchActualBody": {
+        "properties": {
+          "batch_no": {
+            "description": "批次号",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Batch No",
+            "type": "string"
+          },
+          "dump_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "放罐日期",
+            "title": "Dump Date"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "备注",
+            "title": "Remark"
+          },
+          "yield_kg": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "放罐产量(kg)",
+            "title": "Yield Kg"
+          }
+        },
+        "required": [
+          "batch_no"
+        ],
+        "title": "BatchActualBody",
+        "type": "object"
+      },
       "BatchAuditRequest": {
         "properties": {
           "ids": {
@@ -50521,6 +50576,25 @@
           "updated_at"
         ],
         "title": "ModulePermissionGrantOut",
+        "type": "object"
+      },
+      "MonthCapacityBody": {
+        "properties": {
+          "planned_capacity_kg": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "本月计划产能(kg)",
+            "title": "Planned Capacity Kg"
+          }
+        },
+        "title": "MonthCapacityBody",
         "type": "object"
       },
       "NCECreate": {
@@ -139682,6 +139756,174 @@
         ]
       }
     },
+    "/api/v1/production/fermentation-batch-actuals": {
+      "get": {
+        "operationId": "list_fermentation_batch_actuals_api_v1_production_fermentation_batch_actuals_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response List Fermentation Batch Actuals Api V1 Production Fermentation Batch Actuals Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "发酵批次实际产量列表",
+        "tags": [
+          "生产管理",
+          "生产管理 - 发酵车间看板"
+        ]
+      },
+      "post": {
+        "operationId": "upsert_fermentation_batch_actual_api_v1_production_fermentation_batch_actuals_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchActualBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Upsert Fermentation Batch Actual Api V1 Production Fermentation Batch Actuals Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "录入发酵批次实际产量（同批次则更新）",
+        "tags": [
+          "生产管理",
+          "生产管理 - 发酵车间看板"
+        ]
+      }
+    },
+    "/api/v1/production/fermentation-batch-actuals/{item_id}": {
+      "delete": {
+        "operationId": "remove_fermentation_batch_actual_api_v1_production_fermentation_batch_actuals__item_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Remove Fermentation Batch Actual Api V1 Production Fermentation Batch Actuals  Item Id  Delete"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除发酵批次实际产量",
+        "tags": [
+          "生产管理",
+          "生产管理 - 发酵车间看板"
+        ]
+      }
+    },
     "/api/v1/production/fermentation-board": {
       "get": {
         "operationId": "get_fermentation_board_api_v1_production_fermentation_board_get",
@@ -139726,6 +139968,66 @@
           }
         },
         "summary": "发酵车间实时看板（计划驱动）",
+        "tags": [
+          "生产管理",
+          "生产管理 - 发酵车间看板"
+        ]
+      }
+    },
+    "/api/v1/production/fermentation-month-capacity": {
+      "post": {
+        "operationId": "set_fermentation_month_capacity_api_v1_production_fermentation_month_capacity_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MonthCapacityBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Set Fermentation Month Capacity Api V1 Production Fermentation Month Capacity Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "设置当前扎帐月计划产能(kg)",
         "tags": [
           "生产管理",
           "生产管理 - 发酵车间看板"

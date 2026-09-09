@@ -26,6 +26,8 @@ import type {
   ProcessSpecQueryParams,
   ApiResponse,
   ScheduleExcelArchive,
+  FermentationBatchActual,
+  FermentationBatchActualFormData,
 } from '@/types/production'
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000'
@@ -443,6 +445,57 @@ export async function removeTankMaintenance(itemId: string) {
   const response = await fetch(
     `${API_BASE}/api/v1/production/tank-maintenance/${itemId}`,
     { method: 'DELETE', headers: await getAuthHeaders() },
+  )
+  return response.json()
+}
+
+// ============ Fermentation Batch Actuals ============
+
+export async function getFermentationBatchActuals(): Promise<
+  ApiResponse<FermentationBatchActual[]>
+> {
+  const response = await fetch(
+    `${API_BASE}/api/v1/production/fermentation-batch-actuals`,
+    { headers: await getAuthHeaders() },
+  )
+  return response.json()
+}
+
+export async function upsertFermentationBatchActual(
+  data: FermentationBatchActualFormData,
+): Promise<ApiResponse<FermentationBatchActual>> {
+  const response = await fetch(
+    `${API_BASE}/api/v1/production/fermentation-batch-actuals`,
+    {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        batch_no: data.batch_no,
+        dump_date: data.dump_date || null,
+        yield_kg: data.yield_kg ?? null,
+        remark: data.remark || null,
+      }),
+    },
+  )
+  return response.json()
+}
+
+export async function deleteFermentationBatchActual(itemId: string) {
+  const response = await fetch(
+    `${API_BASE}/api/v1/production/fermentation-batch-actuals/${itemId}`,
+    { method: 'DELETE', headers: await getAuthHeaders() },
+  )
+  return response.json()
+}
+
+export async function setFermentationMonthCapacity(plannedCapacityKg: number | null) {
+  const response = await fetch(
+    `${API_BASE}/api/v1/production/fermentation-month-capacity`,
+    {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ planned_capacity_kg: plannedCapacityKg }),
+    },
   )
   return response.json()
 }

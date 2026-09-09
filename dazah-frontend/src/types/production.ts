@@ -467,6 +467,12 @@ export interface BoardTank {
 export interface BoardKpis {
   month_planned: number | null
   month_done_planned: number | null
+  /** 已放罐且产量已录入的批次数（进度条"已完成"段） */
+  done_with_yield: number | null
+  /** 已放罐但产量未录入的批次数（进度条灰色"待出产量"段） */
+  yield_pending: number | null
+  /** 本月已完成产能(kg) = 已录入产量的已放罐批次合计；未录入时为 null */
+  month_done_yield_kg: number | null
   running: number | null
   pending: number | null
   plan_capacity: number | string | null
@@ -483,6 +489,7 @@ export interface BoardRecentBatch {
   dump_date: string
   tank_no: string
   yield_kg: number | null
+  remark: string | null
   yield_rate: number | null
   result: string
 }
@@ -499,13 +506,33 @@ export interface BoardMaintenance {
   started_at: string | null
 }
 
+export interface FermentationBatchActual {
+  id: string
+  batch_no: string
+  dump_date: string | null
+  yield_kg: number | null
+  remark: string | null
+}
+
+export interface FermentationBatchActualFormData {
+  batch_no: string
+  dump_date?: string | null
+  yield_kg?: number | null
+  remark?: string | null
+}
+
 export interface FermentationBoard {
   now: string
   period: { start: string; end: string; label: string }
   kpis: BoardKpis
+  /** 当前扎帐月计划产能(kg)，未设置时为 null */
+  month_planned_capacity_kg: number | null
   tanks: BoardTank[]
   recent: BoardRecentBatch[]
-  trend: { batches: string[]; yields: number[] } | null
+  /** 已录入实际产量的最近 12 批（按批次顺序升序），outputs 单位 kg */
+  trend: { batches: string[]; outputs: number[] } | null
+  /** 当前周期内已放罐（放罐窗口已结束）的批次，供产量录入下拉 */
+  dumped_batches: { batch_no: string; dump_date: string }[]
   alerts: BoardAlert[]
   maintenance: BoardMaintenance[]
 }
