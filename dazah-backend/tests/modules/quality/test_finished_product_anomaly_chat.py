@@ -70,7 +70,10 @@ async def test_tool_loop_calls_aggregation_then_streams_answer(
 ) -> None:
     monkeypatch.setattr(chat_svc, "get_config", AsyncMock(return_value=_config()))
     agg_mock = AsyncMock(
-        return_value={"products": [{"product": "霉酚酸", "count": 116}], "type_totals": []}
+        return_value={
+            "products": [{"product": "霉酚酸", "count": 116}],
+            "type_totals": [],
+        }
     )
     monkeypatch.setattr(chat_svc, "get_dashboard_aggregation", agg_mock)
     # 第一轮要求调用聚合工具，第二轮直接结束工具循环
@@ -119,7 +122,12 @@ async def test_query_records_tool_filters_by_product_type_keyword(
     result = await chat_svc.execute_tool_call(
         _FakeDB(),
         "fp_query_anomaly_records",
-        {"year": 2026, "product": "霉酚酸", "anomaly_type": "杂质异常", "keyword": "RRT"},
+        {
+            "year": 2026,
+            "product": "霉酚酸",
+            "anomaly_type": "杂质异常",
+            "keyword": "RRT",
+        },
     )
     data = json.loads(result)
     assert data["total_matched"] == 1
@@ -152,7 +160,12 @@ async def test_qwen_text_tool_calls_are_parsed_and_executed(
     monkeypatch.setattr(chat_svc, "get_dashboard_aggregation", agg_mock)
     chat_mock = AsyncMock(
         side_effect=[
-            {"content": 'call\n{"name": "fp_get_anomaly_aggregation", "arguments": {}}'},
+            {
+                "content": (
+                    'call\n{"name": "fp_get_anomaly_aggregation", '
+                    '"arguments": {}}'
+                )
+            },
             {"content": "根据统计完成回答。"},
         ]
     )
@@ -162,7 +175,9 @@ async def test_qwen_text_tool_calls_are_parsed_and_executed(
     chunks = [
         chunk
         async for chunk in chat_svc.run_anomaly_chat_loop(
-            _FakeDB(), [{"role": "user", "content": "统计"}], {"role": "system", "content": "s"}
+            _FakeDB(),
+            [{"role": "user", "content": "统计"}],
+            {"role": "system", "content": "s"},
         )
     ]
     agg_mock.assert_awaited_once()
@@ -173,10 +188,14 @@ async def test_qwen_text_tool_calls_are_parsed_and_executed(
 async def test_no_config_propagates_for_503_mapping(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(chat_svc, "get_config", AsyncMock(side_effect=LLMConfigError("no config")))
+    monkeypatch.setattr(
+        chat_svc, "get_config", AsyncMock(side_effect=LLMConfigError("no config"))
+    )
     with pytest.raises(LLMConfigError):
         async for _ in chat_svc.run_anomaly_chat_loop(
-            _FakeDB(), [{"role": "user", "content": "你好"}], {"role": "system", "content": "s"}
+            _FakeDB(),
+            [{"role": "user", "content": "你好"}],
+            {"role": "system", "content": "s"},
         ):
             pass
 

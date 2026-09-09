@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import Any
 
@@ -67,11 +68,17 @@ FP_QUERY_RECORDS_SCHEMA = {
                 },
                 "month": {
                     "type": "string",
-                    "description": "月份，格式 YYYY-MM（如 2026-09），按记录日期（发现时间/提交时间）过滤",
+                    "description": (
+                        "月份，格式 YYYY-MM（如 2026-09），"
+                        "按记录日期（发现时间/提交时间）过滤"
+                    ),
                 },
                 "product": {
                     "type": "string",
-                    "description": "产品名，可选：洛伐他汀/美伐他汀/霉酚酸/盐酸林可霉素/多拉菌素/L-苯丙氨酸/色氨酸/氟苯尼考预混剂/芬苯达唑粉",
+                    "description": (
+                        "产品名，可选：洛伐他汀/美伐他汀/霉酚酸/盐酸林可霉素/"
+                        "多拉菌素/L-苯丙氨酸/色氨酸/氟苯尼考预混剂/芬苯达唑粉"
+                    ),
                 },
                 "anomaly_type": {
                     "type": "string",
@@ -81,8 +88,14 @@ FP_QUERY_RECORDS_SCHEMA = {
                         "微生物与污染/生产与包装现场问题/其他-未分类"
                     ),
                 },
-                "keyword": {"type": "string", "description": "描述关键词（如批号、残渣、黑渣）"},
-                "limit": {"type": "integer", "description": "返回条数上限，默认 20，最大 30"},
+                "keyword": {
+                    "type": "string",
+                    "description": "描述关键词（如批号、残渣、黑渣）",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "返回条数上限，默认 20，最大 30",
+                },
             },
         },
     },
@@ -265,7 +278,10 @@ async def _tool_query_records(db: AsyncSession, arguments: dict[str, Any]) -> st
             if month_filter:
                 if date_millis is None:
                     continue
-                if datetime.fromtimestamp(date_millis / 1000).strftime("%Y-%m") != month_filter:
+                if (
+                    datetime.fromtimestamp(date_millis / 1000).strftime("%Y-%m")
+                    != month_filter
+                ):
                     continue
             total_matched += 1
             if len(matched) >= limit:
@@ -295,7 +311,10 @@ async def _tool_query_records(db: AsyncSession, arguments: dict[str, Any]) -> st
 
 async def _tool_aggregation(db: AsyncSession, arguments: dict[str, Any]) -> str:
     year = arguments.get("year")
-    data = await get_dashboard_aggregation(db, int(year) if int(year or 0) in (2025, 2026, 2027, 2028) else None)
+    year_int = int(year or 0)
+    data = await get_dashboard_aggregation(
+        db, year_int if year_int in (2025, 2026, 2027, 2028) else None
+    )
     return json.dumps(data, ensure_ascii=False)
 
 
@@ -307,7 +326,10 @@ async def execute_tool_call(
             return await _tool_query_records(db, arguments)
         if tool_name == "fp_get_anomaly_aggregation":
             return await _tool_aggregation(db, arguments)
-        return json.dumps({"success": False, "error": f"未知工具: {tool_name}"}, ensure_ascii=False)
+        return json.dumps(
+            {"success": False, "error": f"未知工具: {tool_name}"},
+            ensure_ascii=False,
+        )
     except Exception as exc:
         logger.exception("Tool execution failed", extra={"tool": tool_name})
         return json.dumps({"success": False, "error": str(exc)}, ensure_ascii=False)

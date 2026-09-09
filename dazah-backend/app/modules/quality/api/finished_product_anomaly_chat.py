@@ -61,7 +61,11 @@ async def anomaly_chat_stream(
     system_prompt = {
         "role": "system",
         "content": build_chat_system_prompt()
-        + (f"\n【当前限定年份】{body.year}年（用户从仪表盘筛选）。" if body.year else ""),
+        + (
+            f"\n【当前限定年份】{body.year}年（用户从仪表盘筛选）。"
+            if body.year
+            else ""
+        ),
     }
     messages = [
         {"role": message.role, "content": message.content}
@@ -97,7 +101,10 @@ async def anomaly_chat_stream(
         except LLMConfigError:
             yield _sse(
                 {
-                    "content": "AI 服务尚未配置，请先在 系统管理 → AI 模型配置 中配置并启用 text 类型模型。"
+                    "content": (
+                        "AI 服务尚未配置，请先在 系统管理 → AI 模型配置 "
+                        "中配置并启用 text 类型模型。"
+                    )
                 }
             )
             yield _sse({"done": True})
