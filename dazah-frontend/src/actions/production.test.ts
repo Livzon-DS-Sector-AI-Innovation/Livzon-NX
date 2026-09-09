@@ -60,6 +60,10 @@ import {
   getFermentationBoard,
   markTankMaintenance,
   removeTankMaintenance,
+  getFermentationBatchActuals,
+  upsertFermentationBatchActual,
+  deleteFermentationBatchActual,
+  setFermentationMonthCapacity,
 } from './production'
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000'
@@ -540,6 +544,72 @@ describe('production actions', () => {
     expect(fetchMock).toHaveBeenLastCalledWith(
       `${API_BASE}/api/v1/production/tank-maintenance/m-1`,
       expect.objectContaining({ method: 'DELETE' }),
+    )
+  })
+
+  it('lists fermentation batch actuals with auth header', async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: [{ id: 'a-1', batch_no: 'FA26231' }] }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const res = await getFermentationBatchActuals()
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/production/fermentation-batch-actuals`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
+      }),
+    )
+    expect(res.data?.[0]?.batch_no).toBe('FA26231')
+  })
+
+  it('upserts a fermentation batch actual with normalized payload', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { id: 'a-1' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const res = await upsertFermentationBatchActual({
+      batch_no: 'FA26230',
+      dump_date: '2026-09-07',
+      yield_kg: 30500,
+      remark: null,
+    })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/production/fermentation-batch-actuals`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          batch_no: 'FA26230',
+          dump_date: '2026-09-07',
+          yield_kg: 30500,
+          remark: null,
+        }),
+      }),
+    )
+    expect(res.code).toBe(200)
+  })
+
+  it('deletes a fermentation batch actual by id', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(deleteFermentationBatchActual('a-1')).resolves.toMatchObject({ code: 200 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/production/fermentation-batch-actuals/a-1`,
+      expect.objectContaining({ method: 'DELETE' }),
+    )
+  })
+
+  it('sets the fermentation month planned capacity', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(setFermentationMonthCapacity(930000)).resolves.toMatchObject({ code: 200 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/production/fermentation-month-capacity`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ planned_capacity_kg: 930000 }),
+      }),
     )
   })
 })

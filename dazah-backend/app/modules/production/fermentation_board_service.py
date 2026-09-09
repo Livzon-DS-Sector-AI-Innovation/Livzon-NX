@@ -3,7 +3,10 @@
 一期口径（与用户确认）：
 - 看板三台发酵罐 = 排产表中 302A/303A/304A（移种 → 放罐约 3 天 / 72h）；
 - "本月" = 27 日～次月 26 日扎帐月（排产周期块）；
-- 状态由计划时间与当前时间推算；"检修维护"来自 tank_maintenance 人工标注。
+- 状态由计划时间与当前时间推算；"检修维护"来自 tank_maintenance 人工标注；
+- 计划放罐时间起 2 小时内为"放罐中"，窗口结束后批次才算"已放罐/完成"
+  （最近完成列表与"本月已完成批次" KPI 同口径，计划放罐时间以排产表为准）；
+- 运行批次的"距预估放罐"播报只提醒 24h 内将要放罐的批次。
 
 批号与时间关系（由表结构验证）：
 - 种子罐段：每天 20:00 接种一个新批号；
@@ -19,10 +22,20 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.production.fermentation_batch_actual_models import (
+    FermentationBatchActual,
+)
+from app.modules.production.fermentation_month_setting_models import (
+    FermentationMonthSetting,
+)
 from app.modules.production.schedule_excel_models import ScheduleExcelArchive
 from app.modules.production.tank_maintenance_models import TankMaintenance
 
 FERMENT_TANKS = ("302A", "303A", "304A")
+
+# 放罐窗口：计划放罐时间起 2 小时内为「放罐中」（批次仍在罐上，不算完成）；
+# 窗口结束后批次才视为「已放罐/完成」（罐状态、recent 最近完成、完成 KPI 同口径）。
+DUMP_WINDOW = timedelta(hours=2)
 
 _TITLE_RE = re.compile(
     r"(\d{4})年(\d{1,2})月27日～(\d{4})年(\d{1,2})月26日"
@@ -53,6 +66,23 @@ def _parse_time(value: Any) -> time | None:
     if not match:
         return None
     return time(int(match.group(1)), int(match.group(2)))
+
+
+def _format_dump_remain(hours: float) -> str:
+    """放罐剩余时长：满 1 小时显示 Xh Ymin，整点只显示 Xh，不满 1 小时只显示分钟。"""
+    total_minutes = max(0, int(hours * 60))
+    h, m = divmod(total_minutes, 60)
+    if h == 0:
+        return f"{m}min"
+    if m == 0:
+        return f"{h}h"
+    return f"{h}h{m}min"
+
+
+def _batch_seq(batch_no: str) -> int:
+    """批次顺序号 = 批次号后三位；无法解析时排最前。"""
+    match = re.search(r"(\d{3})$", batch_no or "")
+    return int(match.group(1)) if match else -1
 
 
 def parse_period_title(text: str) -> tuple[date, date] | None:
@@ -215,8 +245,13 @@ def build_board(
     rows: list[list[Any]],
     maintenance: list[dict[str, Any]],
     now: datetime,
+    actuals: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
-    """由存档行与检修标注组装看板数据；无当前周期返回 None。"""
+    """由存档行与检修标注组装看板数据；无当前周期返回 None。
+
+    actuals 为已录入的批次实际产量（serialize_batch_actual 列表），
+    用于回填最近完成批次的放罐产量，并生成单批产量图表序列。
+    """
     block = find_period_block(rows, now)
     if block is None:
         return None
@@ -225,6 +260,9 @@ def build_board(
     dump_map = collect_dump_dates(rows)
 
     maint_by_tank = {m["tank_no"]: m for m in maintenance}
+    actual_by_batch = {
+        a["batch_no"]: a for a in (actuals or []) if a.get("batch_no")
+    }
 
     # ── 罐状态 ──
     ferm_events = _ferm_events(days)
@@ -254,7 +292,7 @@ def build_board(
             if dump_date is None:
                 continue
             dump_at = datetime.combine(dump_date, time(10, 0))
-            dump_end = dump_at + timedelta(hours=2)
+            dump_end = dump_at + DUMP_WINDOW
             if event["start"] <= now < dump_at:
                 running = {**event, "dump_at": dump_at}
             elif dump_at <= now < dump_end:
@@ -292,7 +330,7 @@ def build_board(
                     "cultured_hours": round(hours, 1),
                     "cycle_hours": round(cycle, 1),
                     "dump_at": dumping["dump_at"],
-                    "note": f"放罐中（预计{int(remain)}min后结束）",
+                    "note": f"放罐中（预计{_format_dump_remain(remain)}后结束）",
                 }
             )
         else:
@@ -323,45 +361,92 @@ def build_board(
 
     # ── KPI（扎帐月 = 当前块）──
     month_dump_count = sum(1 for item in days if item["dump_batch"])
-    month_done = sum(
-        1
-        for item in days
-        if item["dump_batch"]
-        and datetime.combine(item["date"], item["dump_time"] or time(10, 0))
-        < now
-    )
+    # 已放罐（窗口结束）的批次按是否已录入产量拆分，供进度条分段；
+    # 已录入产量合计为"已完成产能"
+    month_done_with_yield = 0
+    month_yield_pending = 0
+    month_done_yield_kg: float | None = None
+    for item in days:
+        if not item["dump_batch"]:
+            continue
+        dump_at = datetime.combine(item["date"], item["dump_time"] or time(10, 0))
+        if dump_at + DUMP_WINDOW > now:
+            continue
+        yield_kg = (actual_by_batch.get(item["dump_batch"]) or {}).get("yield_kg")
+        if yield_kg is None:
+            month_yield_pending += 1
+        else:
+            month_done_with_yield += 1
+            month_done_yield_kg = (month_done_yield_kg or 0) + float(yield_kg)
+    month_done = month_done_with_yield + month_yield_pending
     seed_events = _seed_events(days)
     pending_count = sum(1 for ev in seed_events if ev["start"] > now)
     running_count = sum(1 for t in tanks if t["status"] == "running")
 
-    # ── 最近放罐（按计划，取已到放罐日期的最近 6 批）──
+    # ── 最近放罐（按计划，取放罐窗口已结束的批次，最多整个周期 31 批；
+    #     前端表格内部滚动展示）──
     recent: list[dict[str, Any]] = []
     for item in reversed(days):
         if not item["dump_batch"]:
             continue
         dump_at = datetime.combine(item["date"], item["dump_time"] or time(10, 0))
-        if dump_at < now:
+        if dump_at + DUMP_WINDOW <= now:
             recent.append(
                 {
                     "batch_no": item["dump_batch"],
                     "dump_date": item["date"].isoformat(),
                     "tank_no": item["dump_tank"] or "",
-                    "yield_kg": None,  # 实际产量二期接入
+                    "yield_kg": (
+                        actual_by_batch.get(item["dump_batch"]) or {}
+                    ).get("yield_kg"),
+                    "remark": (
+                        actual_by_batch.get(item["dump_batch"]) or {}
+                    ).get("remark"),
                     "yield_rate": None,
                     "result": "计划放罐",
                 }
             )
-        if len(recent) >= 6:
+        if len(recent) >= 31:
             break
     if not recent:
         recent = []
+
+    # ── 单批产量（已录入实际产量的批次，按批次顺序升序，最多 31 批）──
+    measured = sorted(
+        (a for a in (actuals or []) if a.get("yield_kg") is not None),
+        key=lambda a: _batch_seq(a["batch_no"]),
+    )
+    recent_measured = measured[-31:]
+    trend = None
+    if recent_measured:
+        trend = {
+            "batches": [a["batch_no"] for a in recent_measured],
+            "outputs": [round(float(a["yield_kg"]), 2) for a in recent_measured],
+        }
+
+    # ── 已放罐批次清单（供产量录入下拉；完成口径与 recent 一致）──
+    dumped_batches: list[dict[str, Any]] = []
+    seen_batches: set[str] = set()
+    for item in days:
+        if not item["dump_batch"] or item["dump_batch"] in seen_batches:
+            continue
+        dump_at = datetime.combine(item["date"], item["dump_time"] or time(10, 0))
+        if dump_at + DUMP_WINDOW <= now:
+            seen_batches.add(item["dump_batch"])
+            dumped_batches.append(
+                {
+                    "batch_no": item["dump_batch"],
+                    "dump_date": item["date"].isoformat(),
+                }
+            )
 
     # ─ 告警 ──
     alerts: list[dict[str, Any]] = []
     for tank in tanks:
         if tank["status"] == "running" and tank["dump_at"]:
             remain_h = int((tank["dump_at"] - now).total_seconds() // 3600)
-            if remain_h > 0:
+            # 播报只提醒 24h 内将要放罐的批次
+            if 0 < remain_h <= 24:
                 alerts.append(
                     {
                         "level": "warn",
@@ -432,6 +517,9 @@ def build_board(
         "kpis": {
             "month_planned": month_dump_count,
             "month_done_planned": month_done,
+            "done_with_yield": month_done_with_yield,
+            "yield_pending": month_yield_pending,
+            "month_done_yield_kg": month_done_yield_kg,
             "running": running_count,
             "pending": pending_count,
             # 以下指标依赖实际数据，一期返回 None（前端显示 --）
@@ -445,7 +533,8 @@ def build_board(
         },
         "tanks": tanks,
         "recent": recent,
-        "trend": None,
+        "trend": trend,
+        "dumped_batches": dumped_batches,
         "alerts": alerts,
         "maintenance": maintenance,
     }
@@ -529,3 +618,154 @@ async def load_latest_archive(session: AsyncSession) -> ScheduleExcelArchive | N
         .limit(1)
     )
     return result.scalar_one_or_none()
+
+
+# ═══════════════════ 批次实际产量（历史数据） ═══════════════════
+
+
+def serialize_batch_actual(item: FermentationBatchActual) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "batch_no": item.batch_no,
+        "dump_date": item.dump_date.isoformat() if item.dump_date else None,
+        "yield_kg": item.yield_kg,
+        "remark": item.remark,
+    }
+
+
+async def list_batch_actuals(session: AsyncSession) -> list[FermentationBatchActual]:
+    result = await session.execute(
+        select(FermentationBatchActual)
+        .where(FermentationBatchActual.is_deleted.is_(False))
+        .order_by(
+            FermentationBatchActual.dump_date.desc().nullslast(),
+            FermentationBatchActual.batch_no.desc(),
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def upsert_batch_actual(
+    session: AsyncSession,
+    *,
+    batch_no: str,
+    dump_date: date | None = None,
+    yield_kg: float | None = None,
+    remark: str | None = None,
+    created_by: Any = None,
+) -> FermentationBatchActual:
+    """同一批次存在进行中记录则更新（批号唯一）。"""
+    result = await session.execute(
+        select(FermentationBatchActual).where(
+            FermentationBatchActual.batch_no == batch_no,
+            FermentationBatchActual.is_deleted.is_(False),
+        )
+    )
+    item = result.scalar_one_or_none()
+    if item is None:
+        item = FermentationBatchActual(
+            batch_no=batch_no,
+            dump_date=dump_date,
+            yield_kg=yield_kg,
+            remark=remark,
+            created_by=created_by,
+        )
+        session.add(item)
+    else:
+        item.dump_date = dump_date
+        item.yield_kg = yield_kg
+        item.remark = remark
+        item.updated_by = created_by
+    await session.commit()
+    await session.refresh(item)
+    return item
+
+
+async def get_batch_actual(
+    session: AsyncSession, item_id: Any
+) -> FermentationBatchActual | None:
+    result = await session.execute(
+        select(FermentationBatchActual).where(
+            FermentationBatchActual.id == item_id,
+            FermentationBatchActual.is_deleted.is_(False),
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def delete_batch_actual(
+    session: AsyncSession,
+    item: FermentationBatchActual,
+    *,
+    deleted_by: Any = None,
+) -> None:
+    item.is_deleted = True
+    item.updated_by = deleted_by
+    await session.commit()
+
+
+# ═══════════════════ 扎帐月设置（计划产能） ═══════════════════
+
+
+def current_period(
+    rows: list[list[Any]], now: datetime
+) -> tuple[date, date] | None:
+    """最新存档中包含 now 的扎帐周期 (start, end)。"""
+    block = find_period_block(rows, now)
+    if block is None:
+        return None
+    return block["start"], block["end"]
+
+
+async def get_month_setting(
+    session: AsyncSession, period_start: date
+) -> FermentationMonthSetting | None:
+    result = await session.execute(
+        select(FermentationMonthSetting).where(
+            FermentationMonthSetting.period_start == period_start,
+            FermentationMonthSetting.is_deleted.is_(False),
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def upsert_month_setting(
+    session: AsyncSession,
+    *,
+    period_start: date,
+    period_end: date,
+    planned_capacity_kg: float | None,
+    updated_by: Any = None,
+) -> FermentationMonthSetting:
+    """同一周期存在进行中记录则更新。"""
+    result = await session.execute(
+        select(FermentationMonthSetting).where(
+            FermentationMonthSetting.period_start == period_start,
+            FermentationMonthSetting.is_deleted.is_(False),
+        )
+    )
+    item = result.scalar_one_or_none()
+    if item is None:
+        item = FermentationMonthSetting(
+            period_start=period_start,
+            period_end=period_end,
+            planned_capacity_kg=planned_capacity_kg,
+            created_by=updated_by,
+        )
+        session.add(item)
+    else:
+        item.period_end = period_end
+        item.planned_capacity_kg = planned_capacity_kg
+        item.updated_by = updated_by
+    await session.commit()
+    await session.refresh(item)
+    return item
+
+
+def serialize_month_setting(item: FermentationMonthSetting) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "period_start": item.period_start.isoformat(),
+        "period_end": item.period_end.isoformat(),
+        "planned_capacity_kg": item.planned_capacity_kg,
+    }

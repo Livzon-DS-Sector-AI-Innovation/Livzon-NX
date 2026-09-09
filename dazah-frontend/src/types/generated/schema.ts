@@ -10765,6 +10765,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/production/fermentation-batch-actuals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 发酵批次实际产量列表 */
+        get: operations["list_fermentation_batch_actuals_api_v1_production_fermentation_batch_actuals_get"];
+        put?: never;
+        /** 录入发酵批次实际产量（同批次则更新） */
+        post: operations["upsert_fermentation_batch_actual_api_v1_production_fermentation_batch_actuals_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fermentation-batch-actuals/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 删除发酵批次实际产量 */
+        delete: operations["remove_fermentation_batch_actual_api_v1_production_fermentation_batch_actuals__item_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/production/fermentation-board": {
         parameters: {
             query?: never;
@@ -10776,6 +10811,23 @@ export interface paths {
         get: operations["get_fermentation_board_api_v1_production_fermentation_board_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fermentation-month-capacity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 设置当前扎帐月计划产能(kg) */
+        post: operations["set_fermentation_month_capacity_api_v1_production_fermentation_month_capacity_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -29752,6 +29804,29 @@ export interface components {
              */
             video_file_key: string;
         };
+        /** BatchActualBody */
+        BatchActualBody: {
+            /**
+             * Batch No
+             * @description 批次号
+             */
+            batch_no: string;
+            /**
+             * Dump Date
+             * @description 放罐日期
+             */
+            dump_date?: string | null;
+            /**
+             * Remark
+             * @description 备注
+             */
+            remark?: string | null;
+            /**
+             * Yield Kg
+             * @description 放罐产量(kg)
+             */
+            yield_kg?: number | null;
+        };
         /** BatchAuditRequest */
         BatchAuditRequest: {
             /** Ids */
@@ -45776,6 +45851,14 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** MonthCapacityBody */
+        MonthCapacityBody: {
+            /**
+             * Planned Capacity Kg
+             * @description 本月计划产能(kg)
+             */
+            planned_capacity_kg?: number | null;
         };
         /** NCECreate */
         NCECreate: {
@@ -86980,6 +87063,105 @@ export interface operations {
             };
         };
     };
+    list_fermentation_batch_actuals_api_v1_production_fermentation_batch_actuals_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_fermentation_batch_actual_api_v1_production_fermentation_batch_actuals_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchActualBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_fermentation_batch_actual_api_v1_production_fermentation_batch_actuals__item_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_fermentation_board_api_v1_production_fermentation_board_get: {
         parameters: {
             query?: never;
@@ -86990,6 +87172,41 @@ export interface operations {
             };
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_fermentation_month_capacity_api_v1_production_fermentation_month_capacity_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MonthCapacityBody"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
