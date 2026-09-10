@@ -199,7 +199,6 @@ describe('FinishedProductAnomalyDashboard', () => {
   })
 
   it('navigates to the year ledger from the entry card', async () => {
-    const originalHref = window.location.href
     await renderPage()
     const ledgerButton = Array.from(container.querySelectorAll('button')).find((btn) =>
       (btn.textContent || '').includes('2025年台账'),
@@ -208,7 +207,6 @@ describe('FinishedProductAnomalyDashboard', () => {
     await act(async () => {
       ledgerButton?.click()
     })
-    expect(window.location.href.endsWith('/quality/anomaly-report/ledger?year=2025')).toBe(true)
-    window.location.href = originalHref
+    expect(pushMock).toHaveBeenCalledWith('/quality/anomaly-report/ledger?year=2025')
   })
 })

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { App, Alert, Button, Card, Col, Row, Select, Space, Statistic } from 'antd'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { LinkOutlined, MessageOutlined, RightOutlined, ThunderboltOutlined } from '@ant-design/icons'
@@ -22,6 +23,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 /** 成品异常仪表盘：按产品×异常类型的 AI 分类聚合视图。 */
 export function FinishedProductAnomalyDashboard() {
+  const router = useRouter()
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const [yearFilter, setYearFilter] = useState<number | null>(null)
@@ -262,7 +264,7 @@ export function FinishedProductAnomalyDashboard() {
                 key={status.year}
                 icon={<RightOutlined />}
                 onClick={() => {
-                  window.location.href = `/quality/anomaly-report/ledger?year=${status.year}`
+                  router.push(`/quality/anomaly-report/ledger?year=${status.year}`)
                 }}
               >
                 {status.year}年台账
