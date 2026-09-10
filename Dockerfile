@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 
 # Production images for the Dazah workspace.
 # Build one service image at a time with --target. Runtime configuration must be
@@ -16,7 +16,7 @@ RUN apt-get update \
         libreoffice-writer libreoffice-draw \
         fonts-noto-cjk catdoc antiword \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir uv \
+    && pip install --no-cache-dir uv==0.11.32 \
     && groupadd --system app \
     && useradd --system --gid app --create-home app \
     && mkdir -p /home/app/.config /home/app/.cache /home/app/.local/share \
@@ -33,7 +33,14 @@ ENV UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
     XDG_DATA_HOME=/home/app/.local/share
 
 COPY dazah-backend/pyproject.toml dazah-backend/uv.lock ./
-RUN uv sync --frozen --no-dev
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev
+
+COPY scripts/cd/conversion_limit.py /usr/local/bin/dazah-conversion
+COPY scripts/cd/readiness.py /opt/dazah-readiness.py
+RUN chmod 0755 /usr/local/bin/dazah-conversion \
+    && rm /usr/bin/soffice /usr/bin/libreoffice \
+    && ln -s /usr/local/bin/dazah-conversion /usr/bin/soffice \
+    && ln -s /usr/local/bin/dazah-conversion /usr/bin/libreoffice
 
 COPY --chown=app:app dazah-backend/ ./
 RUN mkdir -p /app/uploads /app/storage \
@@ -110,10 +117,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 COPY --from=hermes-lark-cli /usr/local/bin/lark-cli /usr/local/bin/lark-cli
 COPY --from=hermes-upstream /opt/hermes-upstream /opt/hermes-upstream
 
-RUN python -m pip install --no-cache-dir --upgrade pip
+RUN python -m pip install --no-cache-dir uv==0.11.32
 
-COPY Hermes-Lite/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+COPY Hermes-Lite/pyproject.toml Hermes-Lite/uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv export --frozen --no-dev --no-emit-project --format requirements.txt --output-file /tmp/hermes-requirements.txt > /dev/null \
+    && uv pip install --system --require-hashes -r /tmp/hermes-requirements.txt
 
 COPY Hermes-Lite/ ./
 COPY docker/hermes-entrypoint.sh /usr/local/bin/hermes-entrypoint.sh
