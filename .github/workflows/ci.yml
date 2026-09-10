@@ -812,3 +812,17 @@ jobs:
           HERMES_QUALITY_RESULT: ${{ needs.hermes-quality.result }}
           HERMES_CONTRACT_RESULT: ${{ needs.hermes-contract.result }}
         run: python3 .github/scripts/ci_gate.py
+
+  runner-access-denial-probe:
+    name: Runner main-ref restriction probe
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on:
+      group: dazah-production-cd-nx
+      labels: dazah-cd
+    permissions: {}
+    timeout-minutes: 1
+    steps:
+      - name: Unexpected PR access is an acceptance failure
+        run: |
+          printf '%s\n' 'ISOLATION_FAILURE: PR ci.yml acquired the runner'
+          exit 1
