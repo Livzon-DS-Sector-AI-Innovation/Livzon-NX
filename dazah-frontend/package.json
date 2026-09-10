@@ -6,6 +6,8 @@
     "dev": "next dev --turbopack",
     "dev:webpack": "next dev --webpack",
     "build": "next build",
+    "build:single-host": "node --max-old-space-size=1280 scripts/build-single-host.mjs",
+    "test:build": "node --test scripts/build-single-host.test.mjs",
     "start": "next start",
     "lint": "node scripts/lint-with-baseline.mjs",
     "test:unit": "vitest run src",

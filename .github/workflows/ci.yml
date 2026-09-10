@@ -160,6 +160,9 @@ jobs:
       - name: Run TypeScript type checking
         run: pnpm typecheck
 
+      - name: Verify bounded build failure and type coverage guards
+        run: pnpm test:build
+
       - name: Run unit tests and coverage gates
         run: |
           pnpm test:coverage

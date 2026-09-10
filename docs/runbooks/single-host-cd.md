@@ -163,7 +163,22 @@ Runner 与备份、发布、巡检服务统一加入 `dazah-control.slice`，总
   组策略以用户提供的设置截图和确认为依据；允许/拒绝工作流的实际调度验收尚未完成。
 - 正式应用未重建，资源/入口覆盖层仅完成候选配置验证，EDBO 仍保留运行，等待首次值守切换。
 - main 当前规则包含 PR、`CI Gate`、严格最新分支要求；尚未用落后 PR 做实际拦截演练。
-  本次代码未提交、未推送，未运行远端新版本 CI，也未执行首次正式发布。
+  本次代码已通过 PR #76 推送；安全修复提交 `995a90f` 的 CI Gate 已通过。
+  后续构建优化需在最新提交上重新验证；尚未执行首次正式发布。
+
+### 单机前端构建
+
+生产 Dockerfile 使用 `pnpm build:single-host`，仍运行标准 `next build --webpack`。
+该命令内部设置 `DAZAH_SINGLE_HOST_BUILD=1`，限定 Node 堆 1280 MiB、构建 worker 1 个，
+并将 `RAYON_NUM_THREADS`、`UV_THREADPOOL_SIZE` 设为 1，限制原生编译线程，
+关闭该次构建的 Webpack 缓存和 source map。外围 systemd slice 的 2 GiB 总预算仍是硬限制，
+不能用 Node 堆设置替代进程树限制。普通开发和 CI 的 `pnpm build` 保留原行为。
+
+构建使用 `tsconfig.build.json` 检查所有生产源码和生成路由类型，保留 strict 和 noEmit，
+不设置 ignoreBuildErrors。原 `pnpm typecheck` 继续在 CI 检查包含测试文件的完整源码集。
+`pnpm test:build` 验证生产源码覆盖范围和失败退出行为，并进入 Frontend Quality 门禁。
+本机受限开发容器的标准构建试验曾完成全部阶段，但仓库命令复验触发 OOM，
+不能据此判定最终实现通过；服务器 rootless 进程树合计预算仍须单独验收。
 
 未完成的发布验收仍包括：完整三镜像服务器构建、首次值守切换、旧应用写入兼容性、
 完整平台回退/RTO、构建 OOM 与发布中断的实际故障演练，以及前端/AI/外部集成混合容量测试。

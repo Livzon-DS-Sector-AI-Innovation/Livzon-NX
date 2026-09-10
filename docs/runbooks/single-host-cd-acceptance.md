@@ -73,3 +73,20 @@
   此结果仅表示未调度，不证明策略明确拒绝。
 - 因主线破坏性迁移阻断首次发布，提前取消测试运行并关闭 PR（未合并），保留测试分支供后续审计。
   没有修改组织策略、正式数据库或 EDBO。CD 仍关闭。
+
+### 后续隔离恢复验收
+
+- Runner 实际 cgroup 为 `/dazah.slice/dazah-control.slice/actions.runner.Livzon-DS-Sector-AI-Innovation.dazah-251-cd.service`。
+  同主机普通进程连接 `192.168.40.251:80` 成功；将独立探针放入该 cgroup 并降权为
+  `dazah-runner` 后连接超时，符合 IPAddressDeny 丢弃流量的行为。此对照仅证明主机网络隔离，
+  不替代 GitHub 工作流访问拒绝证据。首次探针因路径断言提前退出，未计入成功结果。
+- `DAZAH_DOCKER_TESTS=1 python -m pytest scripts/tests/test_cd_watchdog_docker.py -q`：
+  1 项通过，129.06 秒。实际开发容器持续不健康时重启三次，随后停止并设置 restart=no，
+  写入临时维护标记，后续巡检没有拉起已阻断的容器。测试结束删除该临时容器。
+  依赖健康状态使用夹具，冷却时间通过调整测试状态文件推进；未声称验证真实 30 秒调度节奏，
+  未操作正式容器、正式维护标记或数据库。
+- root 管理控制器已从通过 CI 的 `995a90f` 单独更新，SHA-256 为
+  `e12b0d17e712f39810bd233342a70f1ee027d580de6922c99aad1d41d7b2ccae`。
+  旧文件保留为 `/opt/dazah/control/controller.py.before-995a90f`；在部署锁内完成原子替换，
+  服务器 Python 编译和挂载检查通过，调度返回 `deployment_disabled_pending_acceptance`。
+  CD/watchdog timer 继续 disabled，未通过发布包替换特权控制程序。

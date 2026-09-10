@@ -64,7 +64,7 @@ RUN pnpm install --frozen-lockfile
 COPY dazah-frontend/ ./
 
 ENV NODE_ENV=production
-RUN pnpm build
+RUN pnpm build:single-host
 
 
 FROM node:20-alpine AS frontend

@@ -1,5 +1,7 @@
 import type { NextConfig } from 'next';
 
+const singleHostBuild = process.env.DAZAH_SINGLE_HOST_BUILD === '1';
+
 const extraDevOrigins =
   process.env.NEXT_ALLOWED_DEV_ORIGINS?.split(',')
     .map((origin) => origin.trim())
@@ -18,8 +20,15 @@ const nextConfig: NextConfig = {
     ...extraDevOrigins,
   ],
 
-  // 内部部署阶段：启用 sourcemap 方便定位错误
-  productionBrowserSourceMaps: true,
+  // 单机发布优先控制构建峰值；常规构建仍保留现有 source map 行为。
+  productionBrowserSourceMaps: !singleHostBuild,
+  typescript: singleHostBuild ? { tsconfigPath: 'tsconfig.build.json' } : undefined,
+  webpack: singleHostBuild
+    ? (config) => {
+        config.cache = false;
+        return config;
+      }
+    : undefined,
 
   // 记录 fetch 请求详情，方便排查后端接口问题
   logging: {
@@ -29,6 +38,9 @@ const nextConfig: NextConfig = {
   },
 
   experimental: {
+    cpus: singleHostBuild ? 1 : undefined,
+    serverSourceMaps: singleHostBuild ? false : undefined,
+    webpackBuildWorker: singleHostBuild ? true : undefined,
     // Keep Webpack development compilations within Docker Desktop's memory budget.
     webpackMemoryOptimizations: true,
     preloadEntriesOnStart: false,

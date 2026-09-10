@@ -65,6 +65,7 @@ desktop.ini
 !/scripts/tests/test_edbo_retirement.py
 !/scripts/tests/test_frontend_development_runtime.py
 !/scripts/tests/test_cd_controller.py
+!/scripts/tests/test_cd_watchdog_docker.py
 !/scripts/tests/test_cd_readiness.py
 !/scripts/tests/test_cd_stage_site.py
 !/scripts/tests/test_conversion_limit.py
