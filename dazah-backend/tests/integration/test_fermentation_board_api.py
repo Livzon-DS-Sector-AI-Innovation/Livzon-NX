@@ -46,6 +46,7 @@ def mock_db_service(monkeypatch: Any) -> None:
         "load_archive_covering",
         AsyncMock(return_value=None),
     )
+    monkeypatch.setattr(board, "load_latest_archive", AsyncMock(return_value=None))
     monkeypatch.setattr(board, "list_active_maintenance", AsyncMock(return_value=[]))
     monkeypatch.setattr(board, "upsert_maintenance", AsyncMock())
     monkeypatch.setattr(board, "delete_maintenance", AsyncMock())
@@ -463,3 +464,81 @@ async def test_service_persistence_roundtrip() -> None:
             assert await board.load_latest_archive(session) is None
     finally:
         await engine.dispose()
+
+
+@pytest.mark.anyio
+async def test_board_block_missing_returns_coverage_hint(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+) -> None:
+    """存档行解析不出周期块时提示补充排产表。"""
+    monkeypatch.setattr(
+        board,
+        "load_archive_covering",
+        AsyncMock(return_value=SimpleNamespace(rows=[["占位行"]], product_code="FA")),
+    )
+    res = await auth_client.get(f"{API}/fermentation-board?date=2026-09-01")
+    assert res.status_code == 200
+    assert res.json()["data"] is None
+    assert "排产表未覆盖" in res.json()["message"]
+    assert board.load_archive_covering.call_args.args[1] == date(2026, 9, 1)
+
+
+@pytest.mark.anyio
+async def test_board_returns_hint_when_payload_unbuildable(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+) -> None:
+    """find_period_block 命中但 build_board 返回 None 时返回兜底提示。"""
+    monkeypatch.setattr(
+        board,
+        "load_archive_covering",
+        AsyncMock(
+            return_value=SimpleNamespace(
+                rows=[
+                    [
+                        "2026年08月27日～2026年09月26日103车间FA450T罐排产",
+                        "",
+                        "",
+                    ]
+                ],
+                product_code="FA",
+            )
+        ),
+    )
+    monkeypatch.setattr(board, "build_board", MagicMock(return_value=None))
+    res = await auth_client.get(f"{API}/fermentation-board")
+    assert res.status_code == 200
+    assert res.json()["data"] is None
+    assert "排产 Excel" in res.json()["message"]
+
+
+@pytest.mark.anyio
+async def test_maintenance_release_success_path(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+) -> None:
+    item = SimpleNamespace(id=uuid.uuid4(), tank_no="302A", reason="滤芯更换")
+    monkeypatch.setattr(board, "get_maintenance", AsyncMock(return_value=item))
+    monkeypatch.setattr(board, "delete_maintenance", AsyncMock())
+    res = await auth_client.delete(f"{API}/tank-maintenance/{item.id}")
+    assert res.status_code == 200
+    assert "已解除检修" in res.json()["message"]
+    assert board.delete_maintenance.call_args.args[1] is item
+
+
+@pytest.mark.anyio
+async def test_month_capacity_requires_existing_archive(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+) -> None:
+    """无存档时设置产能返回 400（夹具默认无存档）。"""
+    res = await auth_client.post(
+        f"{API}/fermentation-month-capacity",
+        json={"planned_capacity_kg": 100000},
+    )
+    assert res.status_code == 400
+    assert "尚未上传排产 Excel" in res.json()["message"]
