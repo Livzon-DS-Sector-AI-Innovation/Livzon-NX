@@ -98,6 +98,68 @@ def migration_target(policy: dict, source_head: str, before: str) -> str:
     return target
 
 
+def root_readonly(path: Path) -> None:
+    info = path.stat()
+    if path.is_symlink() or info.st_uid != 0 or info.st_mode & 0o022:
+        raise Refused("offline cache must be root-owned and not group/world writable")
+
+
+def offline_context_args(references: set[str], policy: dict, root: Path) -> list[str]:
+    """Bind only verified pinned OCI content; never substitute mutable image tags."""
+    args = []
+    for number, ref in enumerate(sorted(references)):
+        if not re.fullmatch(r"[A-Za-z0-9./:_-]+@sha256:[a-f0-9]{64}", ref):
+            raise Refused("offline image reference is not pinned")
+        name = policy.get("images", {}).get(ref, "")
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+            raise Refused("verified offline image is missing")
+        layout = root / name
+        if layout.is_symlink() or layout.resolve().parent != root.resolve():
+            raise Refused("unsafe offline image directory")
+        blobs = layout / "blobs" / "sha256"
+        if not blobs.is_dir() or not blobs.resolve().is_relative_to(layout.resolve()):
+            raise Refused("offline image content is missing")
+        for blob in blobs.iterdir():
+            if (blob.is_symlink() or not blob.is_file()
+                    or not re.fullmatch(r"[a-f0-9]{64}", blob.name) or digest(blob) != blob.name):
+                raise Refused("offline image checksum mismatch")
+        expected = ref.rsplit(":", 1)[1]
+        try:
+            if (layout / "oci-layout").is_symlink():
+                raise ValueError("layout symlink")
+            if read_json(layout / "oci-layout")["imageLayoutVersion"] != "1.0.0":
+                raise ValueError("layout version")
+            image = read_json(blobs / expected)
+            if "manifests" in image:
+                descriptor = next(item for item in image["manifests"]
+                                  if item.get("platform", {}).get("os") == "linux"
+                                  and item["platform"].get("architecture") == "amd64")
+                if not re.fullmatch(r"sha256:[a-f0-9]{64}", descriptor["digest"]):
+                    raise ValueError("manifest digest")
+                image = read_json(blobs / descriptor["digest"][7:])
+            for descriptor in [image["config"], *image["layers"]]:
+                value = descriptor["digest"]
+                if not re.fullmatch(r"sha256:[a-f0-9]{64}", value):
+                    raise ValueError("descriptor digest")
+                if (blobs / value[7:]).stat().st_size != descriptor["size"]:
+                    raise ValueError("descriptor size")
+            config = read_json(blobs / image["config"]["digest"][7:])
+            if config.get("os") != "linux" or config.get("architecture") != "amd64":
+                raise ValueError("platform")
+        except (KeyError, TypeError, ValueError, OSError, StopIteration) as exc:
+            raise Refused("offline image is incomplete or has the wrong platform") from exc
+        store = f"dazah-cache-{number}"
+        args += ["--oci-layout", f"{store}={layout}"]
+        canonical = ref
+        if "/" not in ref:
+            canonical = "docker.io/library/" + ref
+        elif not any(char in ref.split("/", 1)[0] for char in ".:"):
+            canonical = "docker.io/" + ref
+        for alias in sorted({ref, canonical}):
+            args += ["--opt", f"context:{alias}=oci-layout://{store}@sha256:{expected}"]
+    return args
+
+
 def validate_candidate(candidate: dict, branch: dict, run: dict, jobs: list[dict]) -> str:
     sha = candidate.get("sha", "")
     if not SHA.fullmatch(sha):
@@ -629,13 +691,35 @@ class Controller:
                     raise Refused("unsupported source archive entry")
         # Operator-owned pinned base policy, not arbitrary mutable registry tags.
         pins = read_json(Path("/etc/dazah-cd/base-images.json"), {})
+        cache_references = set()
         for filename in ("Dockerfile", "Dockerfile.dev"):
             dockerfile = (source / filename).read_text()
+            syntax = re.search(r"^# syntax=(\S+)", dockerfile, re.MULTILINE)
+            if syntax:
+                cache_references.add(syntax[1])
             for base in re.findall(r"^FROM\s+(\S+)", dockerfile, re.MULTILINE):
                 if base not in pins or not re.fullmatch(r"[A-Za-z0-9./:_-]+@sha256:[a-f0-9]{64}", pins[base]):
                     raise Refused("base image digest policy missing")
                 dockerfile = dockerfile.replace(f"FROM {base} ", f"FROM {pins[base]} ")
+                cache_references.add(pins[base])
             (source / filename).write_text(dockerfile)
+        cache_args, cache_checksum = [], None
+        cache_policy_file = Path("/etc/dazah-cd/offline-images.json")
+        if cache_policy_file.exists():
+            root_readonly(cache_policy_file)
+            cache_policy = read_json(cache_policy_file)
+            cache_root = Path("/data/dazah/build-inputs")
+            root_readonly(cache_root)
+            for ref in cache_references:
+                name = cache_policy.get("images", {}).get(ref, "")
+                if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+                    raise Refused("verified offline image is missing")
+                layout = cache_root / name
+                root_readonly(layout)
+                for entry in layout.rglob("*"):
+                    root_readonly(entry)
+            cache_args = offline_context_args(cache_references, cache_policy, cache_root)
+            cache_checksum = digest(cache_policy_file)
         output_dir = work / "output"
         output_dir.mkdir()
         migration_policy = read_json(source / "deploy" / "migration-policy.json", {"transitions": []})
@@ -660,7 +744,7 @@ class Controller:
                         "--local", f"context={source}", "--local", f"dockerfile={source}",
                         "--opt", f"target={'backend' if target == 'backend-dev' else target}",
                         "--opt", f"filename={'Dockerfile.dev' if target == 'backend-dev' else 'Dockerfile'}",
-                        "--output", f"type=docker,name=dazah/{target}:cd-{sha},dest={out}"]
+                        "--output", f"type=docker,name=dazah/{target}:cd-{sha},dest={out}", *cache_args]
                 with (work / f"{target}.log").open("wb") as log:
                     process = subprocess.Popen(args, stdout=log, stderr=log, start_new_session=True)
                     low_since = None
@@ -701,6 +785,7 @@ class Controller:
             shutil.copyfile(item, release / item.name)
         atomic_json(release / "build.json", {"sha": sha, "run_id": candidate["run_id"],
                     "source_archive_sha256": source_archive_checksum, "base_images": pins,
+                    "offline_cache_policy_sha256": cache_checksum,
                     "files": {p.name: digest(p) for p in release.iterdir() if p.suffix == ".tar"}})
         atomic_json(release / "migration-policy.json", migration_policy)
         self.phase("awaiting_isolated_validation")

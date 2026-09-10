@@ -177,8 +177,25 @@ Runner 与备份、发布、巡检服务统一加入 `dazah-control.slice`，总
 构建使用 `tsconfig.build.json` 检查所有生产源码和生成路由类型，保留 strict 和 noEmit，
 不设置 ignoreBuildErrors。原 `pnpm typecheck` 继续在 CI 检查包含测试文件的完整源码集。
 `pnpm test:build` 验证生产源码覆盖范围和失败退出行为，并进入 Frontend Quality 门禁。
-本机受限开发容器的标准构建试验曾完成全部阶段，但仓库命令复验触发 OOM，
-不能据此判定最终实现通过；服务器 rootless 进程树合计预算仍须单独验收。
+初期仓库命令复验曾触发 OOM。限制原生线程并移除额外 Node 父进程后，
+固定提交 `addf5b1` 的命令已在 1792 MiB / 1 CPU / 无 swap 开发容器完成全部阶段；
+服务器 rootless 进程树 2 GiB / 1 CPU / 无 swap 下也已完成前端开发产物构建（1674 秒），
+没有 OOM，期间正式业务健康；该产物关键 E2E 32 项通过。其余服务与正式切换仍需验收。
+
+### Docker Hub 不可达时的镜像输入
+
+rootless BuildKit 不共享生产 Docker 的镜像存储。运维可把与基础镜像策略及 Dockerfile
+syntax 完全相同 digest 的镜像导出为 OCI layout，校验归档与各内容块摘要后放入
+`/data/dazah/build-inputs/<名称>`。该目录及内容必须 root 所有，构建账号只读；
+不得放到构建账号可替换的 work 或 build-cache 目录。
+
+`/etc/dazah-cd/offline-images.json` 使用 `deploy/single-host/offline-images.json.example`
+的映射格式，文件由 root 管理且不可被组或其他用户写入。配置存在时，所有本次引用都必须
+有完整缓存；控制器重新验证每个 blob、引用 digest、linux/amd64 配置与必需镜像层，
+通过 BuildKit OCI named context 提供镜像，并在 build.json 记录缓存策略校验和。
+不会改变固定 digest，不使用陌生镜像代理，不向 Runner 开放 Docker socket。
+缓存不完整或校验失败时停止构建；没有配置该文件时仍使用正常 registry 解析。
+此缓存只覆盖容器镜像，npm、Python、系统包与上游下载的锁定依赖仍需要可访问源或已有缓存。
 
 未完成的发布验收仍包括：完整三镜像服务器构建、首次值守切换、旧应用写入兼容性、
 完整平台回退/RTO、构建 OOM 与发布中断的实际故障演练，以及前端/AI/外部集成混合容量测试。

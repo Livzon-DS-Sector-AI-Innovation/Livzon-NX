@@ -333,5 +333,73 @@ def test_migration_hold_keeps_destructive_head_unapplied():
         cd.migration_target(policy, "drop", "old")
 
 
+def oci_fixture(tmp_path, architecture="amd64", manifest_digest=None):
+    import hashlib
+    import json
+    root = tmp_path / "inputs"
+    layout = root / "node"
+    blobs = layout / "blobs" / "sha256"
+    blobs.mkdir(parents=True)
+    def blob(value):
+        data = json.dumps(value).encode()
+        checksum = hashlib.sha256(data).hexdigest()
+        (blobs / checksum).write_bytes(data)
+        return {"digest": "sha256:" + checksum, "size": len(data)}
+    config = blob({"architecture": architecture, "os": "linux"})
+    layer = blob({"fixture": "not executable"})
+    manifest = blob({"schemaVersion": 2, "config": config, "layers": [layer]})
+    if manifest_digest:
+        manifest["digest"] = manifest_digest
+    manifest["platform"] = {"os": "linux", "architecture": architecture}
+    index = blob({"schemaVersion": 2, "manifests": [manifest]})
+    cd.atomic_json(layout / "oci-layout", {"imageLayoutVersion": "1.0.0"})
+    ref = "node:20-alpine@" + index["digest"]
+    return root, {"images": {ref: "node"}}, ref, blobs / layer["digest"][7:]
+
+
+def test_offline_oci_preserves_pinned_digest_without_registry_substitution(tmp_path):
+    root, policy, ref, _ = oci_fixture(tmp_path)
+    args = cd.offline_context_args({ref}, policy, root)
+    expected = "oci-layout://dazah-cache-0@" + ref.split("@", 1)[1]
+    assert f"context:{ref}={expected}" in args
+    assert f"context:docker.io/library/{ref}={expected}" in args
+    assert f"dazah-cache-0={root / 'node'}" in args
+
+
+@pytest.mark.parametrize("failure", ["missing", "traversal", "tamper", "incomplete", "mutable", "layout"])
+def test_offline_cache_fails_closed(tmp_path, failure):
+    root, policy, ref, layer = oci_fixture(tmp_path)
+    if failure == "missing":
+        policy["images"].clear()
+    elif failure == "traversal":
+        policy["images"][ref] = "../outside"
+    elif failure == "tamper":
+        layer.write_text("changed")
+    elif failure == "incomplete":
+        layer.unlink()
+    elif failure == "mutable":
+        ref = "node:latest"
+    else:
+        cd.atomic_json(root / "node" / "oci-layout", {"imageLayoutVersion": "0"})
+    with pytest.raises(cd.Refused):
+        cd.offline_context_args({ref}, policy, root)
+
+
+@pytest.mark.parametrize("options", [{"architecture": "arm64"}, {"manifest_digest": "../../outside"}])
+def test_offline_cache_rejects_wrong_platform_and_manifest_traversal(tmp_path, options):
+    root, policy, ref, _ = oci_fixture(tmp_path, **options)
+    with pytest.raises(cd.Refused, match="incomplete|platform"):
+        cd.offline_context_args({ref}, policy, root)
+
+
+@pytest.mark.parametrize("uid,mode,symlink", [(1002, 0o600, False), (0, 0o666, False), (0, 0o640, True)])
+def test_offline_policy_rejects_untrusted_ownership(uid, mode, symlink):
+    from types import SimpleNamespace
+    path = SimpleNamespace(stat=lambda: SimpleNamespace(st_uid=uid, st_mode=mode),
+                           is_symlink=lambda: symlink)
+    with pytest.raises(cd.Refused, match="root-owned"):
+        cd.root_readonly(path)
+
+
 def test_without_migration_hold_target_is_source_head():
     assert cd.migration_target({}, "head_revision", "old") == "head_revision"

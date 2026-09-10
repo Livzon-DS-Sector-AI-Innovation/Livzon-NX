@@ -90,3 +90,24 @@
   旧文件保留为 `/opt/dazah/control/controller.py.before-995a90f`；在部署锁内完成原子替换，
   服务器 Python 编译和挂载检查通过，调度返回 `deployment_disabled_pending_acceptance`。
   CD/watchdog timer 继续 disabled，未通过发布包替换特权控制程序。
+- `addf5b1` 的单机构建命令在开发容器中实际完成，1792 MiB、1 CPU、无 swap，
+  约 400 秒，退出 0、OOMKilled=false；类型检查 77 秒，静态页面 66 个。
+  早期无原生线程限制的命令及三阶段 compile/generate 试验失败，不计为通过。
+- standalone 开发产物的登录页和静态脚本返回 200；匿名跳转探针缺少 401 后端夹具，
+  整体未通过。补充 HTTP 夹具命令被工具自动审批以 blocked by policy 拒绝，未执行；
+  随后改用仓库现有 Playwright/mock-api-server 流程，在服务器实际构建产物上运行关键 E2E：
+  32 项通过（1.2 分钟），覆盖失效会话跳转、模块/页面权限、采购、助手及模型配置。
+  容器限制 512 MiB / 0.5 CPU / 无 swap，OOM=false、重启 0；使用模拟后端，无正式凭据。
+  此后续验证完成前述权限路径检查，但不替代真实后端全平台验收。
+- 服务器首次 rootless 实构建在 Docker Hub 连接被拒绝时停止，6 秒，构建内存采样峰值
+  120 MiB、OOM 计数 0，正式业务保持健康。随后按固定 digest 提供只读 OCI 缓存重新验证，
+  第二次完整构建通过：1674 秒，进程树限额 2 GiB、1 CPU、无 swap，OOM/OOM kill 均为 0，
+  全程正式业务健康。采样峰值触及 2048 MiB（含缓存），因此不能据此宣称仍有构建内存余量。
+  编译约 9.6 分钟、类型检查约 201 秒、生成 66 页；HDD 镜像导出约 533 秒。
+  开发镜像 `dazah/frontend:acceptance-addf5b1-dev` 已归档于
+  `/data/dazah/releases/acceptance-addf5b1-dev/frontend-dev.tar`，大小 297267712 字节，
+  SHA-256 `dc3bf334595a5b3c26aeeb9dcef97cba4b1a9515a183579ccfbe714d0deb7fea`。
+  同目录 acceptance.json 保存资源结果。构建后已停止独立 BuildKit，没有载入正式 Docker 或切换服务。
+- 服务器三份只读 OCI 输入（Dockerfile frontend、Node 20、Python 3.12）均通过新控制器辅助函数的
+  blob 摘要、固定 digest、linux/amd64 内容完整性及 root 所有权/不可组写检查。
+  辅助函数仅从临时文件执行；新增控制器尚未替换正式 root 控制程序。
