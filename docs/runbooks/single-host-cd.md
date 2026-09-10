@@ -177,6 +177,8 @@ Runner 与备份、发布、巡检服务统一加入 `dazah-control.slice`，总
 构建使用 `tsconfig.build.json` 检查所有生产源码和生成路由类型，保留 strict 和 noEmit，
 不设置 ignoreBuildErrors。原 `pnpm typecheck` 继续在 CI 检查包含测试文件的完整源码集。
 `pnpm test:build` 验证生产源码覆盖范围和失败退出行为，并进入 Frontend Quality 门禁。
+单机构建还将 Webpack 模块 parallelism 设为 1；Next.js 的 cpus 与原生线程上限不能
+替代该模块并发限制。保留压缩和类型校验，不自动提高 JS 堆或进程树内存预算。
 初期仓库命令复验曾触发 OOM。限制原生线程并移除额外 Node 父进程后，
 固定提交 `addf5b1` 的命令已在 1792 MiB / 1 CPU / 无 swap 开发容器完成全部阶段；
 服务器 rootless 进程树 2 GiB / 1 CPU / 无 swap 下也已完成前端开发产物构建（1674 秒），

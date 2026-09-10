@@ -111,3 +111,9 @@
 - 服务器三份只读 OCI 输入（Dockerfile frontend、Node 20、Python 3.12）均通过新控制器辅助函数的
   blob 摘要、固定 digest、linux/amd64 内容完整性及 root 所有权/不可组写检查。
   辅助函数仅从临时文件执行；新增控制器尚未替换正式 root 控制程序。
+- `c22cc312` 的 CI 34453440898 中，前端 Dockerfile 构建发生 JS heap OOM，其他适用任务通过；
+  CI Gate 正确阻止合并，Stable Frontend E2E 因前置失败跳过，不计为通过。
+  本地原命令的 4 CPU / 2 GiB 对照构建未复现该失败，不能断言只由 CPU 数或 Dockerfile 引起。
+  后续将 Webpack 模块并发单独限制为 1；与 Dockerfile 前端交付阶段相同的开发验收镜像
+  `dazah/frontend:delivery-verify-dev` 构建通过，关键 E2E 32 项通过（1.0 分钟），
+  512 MiB / 0.5 CPU 运行，无 OOM 或重启；最新 CI 仍须重新验证，不能沿用旧提交结果。

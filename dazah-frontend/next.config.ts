@@ -26,6 +26,7 @@ const nextConfig: NextConfig = {
   webpack: singleHostBuild
     ? (config) => {
         config.cache = false;
+        config.parallelism = 1;
         return config;
       }
     : undefined,

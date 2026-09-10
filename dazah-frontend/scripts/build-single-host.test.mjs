@@ -5,6 +5,26 @@ import test from 'node:test';
 import ts from 'typescript';
 import { buildSingleHost } from './build-single-host.mjs';
 
+test('single-host compiler bounds module concurrency while retaining optimizations', async () => {
+  const previous = process.env.DAZAH_SINGLE_HOST_BUILD;
+  try {
+    process.env.DAZAH_SINGLE_HOST_BUILD = '1';
+    const compiled = ts.transpileModule(readFileSync('next.config.ts', 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.ESNext },
+    }).outputText;
+    const { default: config } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+    const input = { parallelism: 100, cache: true, optimization: { minimize: true } };
+    const result = config.webpack(input);
+    assert.equal(result.parallelism, 1);
+    assert.equal(result.cache, false);
+    assert.equal(result.optimization.minimize, true);
+    assert.equal(config.typescript.ignoreBuildErrors, undefined);
+  } finally {
+    if (previous === undefined) delete process.env.DAZAH_SINGLE_HOST_BUILD;
+    else process.env.DAZAH_SINGLE_HOST_BUILD = previous;
+  }
+});
+
 test('bounded build configures the standard CLI and does not swallow failures', async () => {
   const argv = process.argv;
   const nodeOptions = process.env.NODE_OPTIONS;
