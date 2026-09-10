@@ -115,7 +115,6 @@ function propsFor(path: string, exportName: string): Record<string, unknown> {
   if (path.includes('EmployeeDashboardClient')) props.stats = { total: 0, contract_expiring_count: 0, department_distribution: [], status_distribution: {}, expiring_contracts: [] }
   if (path.includes('RosterClient')) Object.assign(props, { initialEmployees: [], initialTotal: 0 })
   if (path.includes('ChangeActionPlanTable')) Object.assign(props, { items: [{ id: 'plan-1', change_code: 'CHG-1', project_name: '项目A', related_work: '验证', owner_name: '张三', status: '未启动' }], filters: { change_code: '', project_name: '', related_work: '', owner_name: '', status: '' }, loading: false, page: 1, pageSize: 20 })
-  if (path.includes('DepartmentContactPage')) Object.assign(props, { items: [], activeDepartment: '全部', departmentOptions: [] })
   if (path.includes('DeviationAiConversationPanel')) props.deviation = { id: 'deviation-1', deviation_code: 'DEV-1', title: '偏差', status: 'open' }
   if (path.includes('ImportPreviewDrawer')) Object.assign(props, { isOpen: false, title: '导入', headers: [], fileInputId: 'file', templateDownloadUrl: '#', templateFilename: 'template.docx', previewAction: vi.fn(async () => ({})), confirmAction: vi.fn(async () => ({ success_count: 0, update_count: 0, skip_count: 0, error_count: 0 })) })
   if (path.includes('QualityAiAttachmentList')) Object.assign(props, { attachments: [], uploading: false, deletingId: null, onUpload: vi.fn(async () => undefined), onDelete: vi.fn(async () => undefined) })

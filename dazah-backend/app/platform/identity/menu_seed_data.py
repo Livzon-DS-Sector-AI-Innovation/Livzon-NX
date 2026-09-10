@@ -417,7 +417,6 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
                     _n("complaint-ledger", "投诉台账", "/quality/complaints/ledger"),
                 ],
             ),
-            _n("department-contacts", "部门联系人", "/quality/department-contacts"),
             _n(
                 "inspection",
                 "质量检验",

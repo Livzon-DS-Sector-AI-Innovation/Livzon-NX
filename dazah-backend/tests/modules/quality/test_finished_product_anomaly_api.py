@@ -39,17 +39,28 @@ class _FakeBitable:
             {"field_name": "相关照片", "ui_type": "Attachment"},
         ]
 
-    async def create_record(self, table_id: str, fields: dict) -> dict:
+    async def create_record(
+        self, table_id: str, fields: dict, *, user_id_type: str | None = None
+    ) -> dict:
         self.created.append(fields)
         return {"record_id": "rec_new"}
 
-    async def update_record(self, table_id: str, record_id: str, fields: dict) -> dict:
+    async def update_record(
+        self,
+        table_id: str,
+        record_id: str,
+        fields: dict,
+        *,
+        user_id_type: str | None = None,
+    ) -> dict:
         return {"record_id": record_id}
 
     async def delete_record(self, table_id: str, record_id: str) -> dict:
         return {}
 
-    async def get_record(self, table_id: str, record_id: str) -> dict | None:
+    async def get_record(
+        self, table_id: str, record_id: str, *, user_id_type: str = "open_id"
+    ) -> dict | None:
         return {
             "record_id": record_id,
             "fields": {
@@ -276,7 +287,9 @@ def _patch_record_with_file(monkeypatch: pytest.MonkeyPatch, filename: str) -> N
     import app.modules.quality.service.inspection_feishu_crud as svc
 
     class _FileBitable(_FakeBitable):
-        async def get_record(self, table_id: str, record_id: str) -> dict | None:
+        async def get_record(
+        self, table_id: str, record_id: str, *, user_id_type: str = "open_id"
+    ) -> dict | None:
             return {
                 "record_id": record_id,
                 "fields": {
@@ -420,7 +433,9 @@ async def test_record_detail_missing_maps_to_404(
     import app.modules.quality.service.inspection_feishu_crud as svc
 
     class _MissingBitable(_FakeBitable):
-        async def get_record(self, table_id: str, record_id: str) -> dict | None:
+        async def get_record(
+        self, table_id: str, record_id: str, *, user_id_type: str = "open_id"
+    ) -> dict | None:
             raise RuntimeError(
                 "Feishu API error: code=1254043, msg=RecordIdNotFound"
             )

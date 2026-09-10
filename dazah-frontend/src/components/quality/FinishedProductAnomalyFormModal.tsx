@@ -6,9 +6,9 @@ import dayjs, { Dayjs } from 'dayjs'
 import type {
   AnomalyReportFieldMeta,
   AnomalyReportRecord,
-  DepartmentContact,
+  QualityPersonOption,
 } from '@/types/quality'
-import { fetchDepartmentContacts } from '@/lib/api/client/quality'
+import { fetchQualityPersonDirectory } from '@/lib/api/client/quality'
 import { useQuery } from '@tanstack/react-query'
 
 /** 通用表单不写入的只读字段类型（附件/链接请在飞书中维护） */
@@ -62,15 +62,15 @@ export function FinishedProductAnomalyFormModal({
     [fieldMetas],
   )
 
-  const { data: contacts = [] } = useQuery<DepartmentContact[]>({
-    queryKey: ['quality-department-contacts'],
-    queryFn: fetchDepartmentContacts,
+  const { data: contacts = [] } = useQuery<QualityPersonOption[]>({
+    queryKey: ['quality-person-directory'],
+    queryFn: fetchQualityPersonDirectory,
     enabled: open,
   })
 
   const personOptions = contacts
     .map((contact) => {
-      const id = contact.bitable_user_id || contact.open_id || ''
+      const id = contact.open_id || ''
       return { label: contact.name || id, value: id }
     })
     .filter((option) => option.value)

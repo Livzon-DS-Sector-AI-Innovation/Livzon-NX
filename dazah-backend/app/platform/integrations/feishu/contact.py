@@ -427,6 +427,7 @@ async def get_all_users(
                         "user_id": u.get("user_id", ""),
                         "open_id": u.get("open_id", ""),
                         "name": u.get("name", ""),
+                        "en_name": u.get("en_name", ""),
                         "employee_no": u.get("employee_no", ""),
                         "email": u.get("email", ""),
                         "mobile": u.get("mobile", ""),

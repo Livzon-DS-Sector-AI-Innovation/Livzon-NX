@@ -150,6 +150,73 @@ def test_coerce_write_fields_rejects_unknown_field() -> None:
 
 
 @pytest.mark.anyio
+async def test_resolve_user_field_open_ids_union_mode_translates_hr_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """union 模式（QC验证）：人事 open_id 换发 union_id；回显 id 保持原样。"""
+
+    async def _fake_translate(db, open_ids):
+        table = {"ou_li": "on_li"}
+        return {oid: union for oid, union in table.items() if oid in open_ids}
+
+    monkeypatch.setattr(
+        "app.modules.quality.service.hr_identity."
+        "translate_hr_open_ids_to_union_ids",
+        _fake_translate,
+    )
+    fields = {
+        "检验人": [
+            {"id": "on_record", "name": "王五", "resolved": True},
+            {"id": "ou_li", "name": "李四"},
+        ]
+    }
+    await service._resolve_user_field_open_ids(
+        object(), _field_map(), fields, union_mode=True
+    )
+    assert [item["id"] for item in fields["检验人"]] == ["on_record", "on_li"]
+
+
+@pytest.mark.anyio
+async def test_resolve_user_field_open_ids_union_mode_raises_when_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake_translate(db, open_ids):
+        return {}
+
+    monkeypatch.setattr(
+        "app.modules.quality.service.hr_identity."
+        "translate_hr_open_ids_to_union_ids",
+        _fake_translate,
+    )
+    fields = {"检验人": [{"id": "ou_unknown", "name": "赵六"}]}
+    with pytest.raises(AppException, match="赵六"):
+        await service._resolve_user_field_open_ids(
+            object(), _field_map(), fields, union_mode=True
+        )
+
+
+@pytest.mark.anyio
+async def test_resolve_user_field_open_ids_legacy_mode_keeps_unknown_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """非 union 模式（检验历史表单）：人员换发失败时保留原 id，不阻断。"""
+
+    async def _fake_translate(_db, ids):
+        return {}
+
+    monkeypatch.setattr(
+        "app.modules.quality.service.hr_identity."
+        "translate_hr_open_ids_to_union_ids",
+        _fake_translate,
+    )
+    fields = {"检验人": [{"id": "ou_legacy", "name": "张三"}]}
+    await service._resolve_user_field_open_ids(
+        object(), _field_map(), fields, union_mode=False
+    )
+    assert fields["检验人"] == [{"id": "ou_legacy", "name": "张三"}]
+
+
+@pytest.mark.anyio
 async def test_inspection_feishu_crud_api_routes(
     client,
     monkeypatch: pytest.MonkeyPatch,

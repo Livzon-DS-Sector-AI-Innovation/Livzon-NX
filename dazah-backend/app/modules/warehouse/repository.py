@@ -8,6 +8,11 @@ from uuid import UUID
 from sqlalchemy import asc, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.warehouse.inspection_progress import (
+    build_change_transition,
+    build_initial_transition,
+    inspection_watched_field,
+)
 from app.modules.warehouse.legacy_models import (
     WarehouseFeishuAnalysisProfile,
     WarehouseFeishuAnalysisResult,
@@ -590,6 +595,9 @@ class WarehouseRepository:
         self,
         snapshot_id: Any,
         rows: Sequence[MaterialPageRow],
+        *,
+        page_key: str | None = None,
+        record_meta: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         """按 source_record_id 增量 upsert 页面行，替代全量 delete+add_all。
 
@@ -597,6 +605,8 @@ class WarehouseRepository:
           last_synced_at，并恢复 is_deleted=False
         - 未命中 → 新增
         - 本地存在但本次未传入的 source_record_id → 软删（is_deleted=True）
+        - 传入 page_key + record_meta 时，对比受监控状态字段并写变更日志
+          （warehouse.material_status_transitions，检验周期统计数据源）
         """
         result = await self.session.execute(
             select(MaterialPageRow).where(
@@ -612,12 +622,26 @@ class WarehouseRepository:
             incoming_ids.add(row.source_record_id)
             existing = existing_rows.get(row.source_record_id)
             if existing:
+                self._record_status_transitions(
+                    snapshot_id,
+                    row,
+                    existing=existing,
+                    page_key=page_key,
+                    record_meta=record_meta,
+                )
                 existing.cells = row.cells
                 existing.search_text = row.search_text
                 existing.row_order = row.row_order
                 existing.last_synced_at = row.last_synced_at
                 existing.is_deleted = False
             else:
+                self._record_status_transitions(
+                    snapshot_id,
+                    row,
+                    existing=None,
+                    page_key=page_key,
+                    record_meta=record_meta,
+                )
                 self.session.add(row)
 
         for record_id, existing in existing_rows.items():
@@ -630,11 +654,15 @@ class WarehouseRepository:
         self,
         snapshot_id: Any,
         rows: Sequence[MaterialPageRow],
+        *,
+        page_key: str | None = None,
+        record_meta: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         """增量同步专用：只 upsert 本次传入的变更记录，不软删未传入的历史记录。
 
         与 upsert_material_page_rows 的差异：历史记录（本次未变更）保持原状，
         避免高频增量拉取把未变更的旧记录误标为已删除。
+        传入 page_key + record_meta 时同样对比受监控状态字段写变更日志。
         """
         result = await self.session.execute(
             select(MaterialPageRow).where(
@@ -653,15 +681,78 @@ class WarehouseRepository:
                 # 避免飞书删除未生效 / 定时同步把已删记录反复拉回。
                 if existing.is_deleted:
                     continue
+                self._record_status_transitions(
+                    snapshot_id,
+                    row,
+                    existing=existing,
+                    page_key=page_key,
+                    record_meta=record_meta,
+                )
                 existing.cells = row.cells
                 existing.search_text = row.search_text
                 existing.row_order = row.row_order
                 existing.last_synced_at = row.last_synced_at
                 existing.is_deleted = False
             else:
+                self._record_status_transitions(
+                    snapshot_id,
+                    row,
+                    existing=None,
+                    page_key=page_key,
+                    record_meta=record_meta,
+                )
                 self.session.add(row)
 
         await self.session.flush()
+
+    def _record_status_transitions(
+        self,
+        snapshot_id: Any,
+        row: MaterialPageRow,
+        *,
+        existing: MaterialPageRow | None,
+        page_key: str | None,
+        record_meta: dict[str, dict[str, Any]] | None,
+    ) -> None:
+        """对比受监控状态字段新旧取值，写检验状态变更日志。
+
+        仅在页面受监控且带 record_meta（飞书记录顶层时间戳）时捕获：
+        - 已有行取值变化 → 变更记录（occurred_at=记录 last_modified_time）
+        - 新进入镜像的行 → 初始状态记录（occurred_at=记录 created_time）
+        """
+        field_name = inspection_watched_field(page_key) if page_key else None
+        if field_name is None or not record_meta:
+            return
+        meta = record_meta.get(row.source_record_id)
+        if not meta:
+            return
+        detected_at = row.last_synced_at
+        if existing is None:
+            self.session.add(
+                build_initial_transition(
+                    page_key=page_key or "",
+                    page_snapshot_id=snapshot_id,
+                    source_record_id=row.source_record_id,
+                    field_name=field_name,
+                    new_value=row.cells.get(field_name) if row.cells else None,
+                    occurred_ms=meta.get("created_ms"),
+                    modified_ms=meta.get("modified_ms"),
+                    detected_at=detected_at,
+                )
+            )
+            return
+        transition = build_change_transition(
+            page_key=page_key or "",
+            page_snapshot_id=snapshot_id,
+            source_record_id=row.source_record_id,
+            field_name=field_name,
+            old_value=existing.cells.get(field_name) if existing.cells else None,
+            new_value=row.cells.get(field_name) if row.cells else None,
+            modified_ms=meta.get("modified_ms"),
+            detected_at=detected_at,
+        )
+        if transition is not None:
+            self.session.add(transition)
 
     async def list_material_page_rows(
         self,

@@ -48,6 +48,9 @@ class QualityFeishuEntitySetting(BaseModel):
     app_token: Mapped[str | None] = mapped_column(String(100), nullable=True)
     base_table_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     base_table_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    feishu_form_url: Mapped[str | None] = mapped_column(
+        String(512), nullable=True, comment="飞书多维表单分享链接（新增记录走表单录入）"
+    )
     is_enabled: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,

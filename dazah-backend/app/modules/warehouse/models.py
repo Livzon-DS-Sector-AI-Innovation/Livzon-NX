@@ -304,6 +304,62 @@ class MaterialPageRow(BaseModel):
     )
 
 
+class MaterialStatusTransition(BaseModel):
+    """质量状态变更日志。
+
+    同步时对比新旧镜像行的受监控字段（检测结果/质量状态）捕获，
+    occurred_at 取飞书记录 last_modified_time，用于检验周期统计。
+    """
+
+    __tablename__ = "material_status_transitions"
+    __table_args__ = (
+        Index(
+            "ix_warehouse_material_status_transitions_page_record",
+            "page_key",
+            "source_record_id",
+        ),
+        Index(
+            "ix_warehouse_material_status_transitions_occurred_at",
+            "occurred_at",
+        ),
+        {
+            "schema": "warehouse",
+            "comment": "物料/成品质量状态变更日志（检验周期统计数据源）",
+        },
+    )
+
+    page_key: Mapped[str] = mapped_column(
+        String(64), nullable=False, comment="页面唯一键"
+    )
+    page_snapshot_id: Mapped[Any] = mapped_column(
+        ForeignKey("warehouse.material_page_snapshots.id"),
+        nullable=False,
+        comment="所属页面快照 ID",
+    )
+    source_record_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, comment="飞书记录 ID"
+    )
+    field_name: Mapped[str] = mapped_column(
+        String(64), nullable=False, comment="监控字段名（检测结果/质量状态）"
+    )
+    old_value: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, comment="变更前取值（初始记录为空）"
+    )
+    new_value: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, comment="变更后取值（清空时为空）"
+    )
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        comment="状态发生时刻（飞书记录最后修改时间）",
+    )
+    detected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        comment="同步捕获时刻",
+    )
+
+
 class WarehousePageFeishuConfig(BaseModel):
     """页面飞书多维表格配置（支持动态切换数据源）"""
 

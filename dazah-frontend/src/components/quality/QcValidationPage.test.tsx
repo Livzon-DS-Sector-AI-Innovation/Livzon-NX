@@ -11,7 +11,7 @@ const apiClient = vi.hoisted(() => ({
   fetchQcValidationFields: vi.fn(),
   fetchQcValidationRecords: vi.fn(),
   fetchQcValidationShareLinks: vi.fn(),
-  fetchDepartmentContacts: vi.fn(),
+  fetchValidationPersonOptions: vi.fn(),
 }))
 
 const qcActions = vi.hoisted(() => ({
@@ -90,7 +90,7 @@ describe('QcValidationPage', () => {
       page_size: 20,
       table_configured: true,
     })
-    apiClient.fetchDepartmentContacts.mockResolvedValue([])
+    apiClient.fetchValidationPersonOptions.mockResolvedValue([])
     apiClient.fetchQcValidationShareLinks.mockResolvedValue({
       'rec-1': 'https://j0eukrlohu.feishu.cn/record/tok-rec-1',
     })
@@ -558,9 +558,9 @@ describe('QcValidationPage', () => {
     })
   })
 
-  it('resolves department contacts into the editor person options', async () => {
-    apiClient.fetchDepartmentContacts.mockResolvedValue([
-      { name: '赵双', bitable_user_id: 'bu-1', open_id: 'ou-1' },
+  it('loads the HR feishu directory for the editor person options', async () => {
+    apiClient.fetchValidationPersonOptions.mockResolvedValue([
+      { open_id: 'ou_zhao', name: '赵双', department: '质量部', job_title: null },
     ])
     await renderPage()
     const editButton = container.querySelector('.anticon-edit')?.closest('button')
@@ -570,8 +570,8 @@ describe('QcValidationPage', () => {
       await new Promise((resolve) => setTimeout(resolve, 60))
     })
     expect(document.body.textContent).toContain('编辑QC验证记录（2026年）')
-    // 人员字段以部门联系人映射出的选项渲染（map/filter 分支）——
-    // 弹窗打开即触发 contacts 查询与选项构建
-    expect(apiClient.fetchDepartmentContacts).toHaveBeenCalled()
+    // 人员字段改用 FeishuPersonSelect（HR 飞书联系人目录，中文/拼音搜索）——
+    // 弹窗打开即触发目录查询
+    expect(apiClient.fetchValidationPersonOptions).toHaveBeenCalled()
   })
 })

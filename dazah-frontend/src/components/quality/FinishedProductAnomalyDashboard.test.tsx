@@ -150,9 +150,9 @@ describe('FinishedProductAnomalyDashboard', () => {
     })
     await renderPage()
     const text = container.textContent || ''
-    expect(text).toContain('AI 分析（86 条待分析）')
+    expect(text).toContain('AI 分类（86 条待分析）')
     const runButton = Array.from(container.querySelectorAll('button')).find((btn) =>
-      (btn.textContent || '').includes('AI 分析'),
+      (btn.textContent || '').includes('AI 分类'),
     )
     await act(async () => {
       runButton?.click()
@@ -161,6 +161,12 @@ describe('FinishedProductAnomalyDashboard', () => {
     expect(anomalyActions.runAnomalyAnalysisAction).toHaveBeenCalledWith(undefined)
     // 任务启动后轮询进度并在完成时刷新聚合
     expect(apiClient.fetchAnomalyAnalysisStatus).toHaveBeenCalledWith('job:x')
+    // AI 助手按钮存在（打开聊天抽屉）
+    expect(
+      Array.from(container.querySelectorAll('button')).some((btn) =>
+        (btn.textContent || '').includes('AI 助手'),
+      ),
+    ).toBe(true)
   })
 
   it('warns when AI service is not configured', async () => {

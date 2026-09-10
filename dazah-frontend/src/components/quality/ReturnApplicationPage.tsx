@@ -6,7 +6,7 @@ import { App, Button, Card, DatePicker, Divider, Form, Input, Modal, Popconfirm,
 import type { ColumnsType } from 'antd/es/table'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { pullReturnApplicationRecords, createReturnApplicationRecord, updateReturnApplicationRecord, deleteReturnApplicationRecord } from '@/actions/quality'
-import { fetchReturnApplicationRecords, fetchDepartmentContacts } from '@/lib/api/client/quality'
+import { fetchReturnApplicationRecords, fetchQualityPersonDirectory } from '@/lib/api/client/quality'
 import type { ReturnApplicationItem } from '@/types/quality'
 import ReturnApplicationCreateSheet, { type ReturnApplicationFormValues as FormValues } from './ReturnApplicationCreateSheet'
 
@@ -43,8 +43,8 @@ export default function ReturnApplicationPage({
   const [editingRecord, setEditingRecord] = useState<ReturnApplicationItem | null>(null)
   const [form] = Form.useForm<FormValues>()
   const { data: contacts = [] } = useQuery({
-    queryKey: ['quality-department-contacts'],
-    queryFn: fetchDepartmentContacts,
+    queryKey: ['quality-person-directory'],
+    queryFn: fetchQualityPersonDirectory,
   })
 
   const queryClient = useQueryClient()
@@ -67,7 +67,7 @@ export default function ReturnApplicationPage({
     .filter((item) => item.name)
     .map((item) => ({
       label: item.name!,
-      value: (item as any).bitable_user_id || item.open_id || item.name!,
+      value: item.open_id || item.name!,
     }))
 
   const productOptions = useMemo(() => {

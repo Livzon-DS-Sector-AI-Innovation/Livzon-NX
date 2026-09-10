@@ -194,6 +194,17 @@ async def delete_validation(
     return {"success": True}
 
 
+async def get_validation_person_options(
+    db: AsyncSession,
+    keyword: str | None = None,
+    limit: int = 500,
+) -> list[dict[str, Any]]:
+    """验证与确认人员选择器候选：委托模块共享人员目录（hr_feishu_members）。"""
+    from app.modules.quality.service.person_directory import get_person_options
+
+    return await get_person_options(db, keyword=keyword, limit=limit)
+
+
 def _build_execution_payload(
     execution_record: Any,
     master_record: Any,

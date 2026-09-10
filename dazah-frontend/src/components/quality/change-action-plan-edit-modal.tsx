@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DatePicker, Form, Input, Modal, Select } from 'antd'
 import dayjs from 'dayjs'
-import { fetchChanges, fetchDepartmentContacts } from '@/lib/api/quality'
+import { fetchChanges } from '@/lib/api/quality'
+import { fetchQualityPersonDirectory } from '@/lib/api/client/quality'
 import type {
   ChangeActionPlanListItem,
   ChangeListItem,
-  DepartmentContact,
+  QualityPersonOption,
 } from '@/types/quality'
 
 interface ChangeActionPlanEditModalProps {
@@ -36,8 +37,6 @@ type PersonSelectOption = {
   value: string
   personName: string
   department: string | null
-  departmentHeadName: string | null
-  departmentHeadOpenId: string | null
 }
 
 type ChangeCodeOption = {
@@ -46,7 +45,7 @@ type ChangeCodeOption = {
   projectName: string
 }
 
-function buildOwnerOption(contact: DepartmentContact): PersonSelectOption | null {
+function buildPersonOption(contact: QualityPersonOption): PersonSelectOption | null {
   if (!contact.open_id || !contact.name) return null
   const details = [contact.department, contact.enterprise_email].filter(Boolean).join(' / ')
   return {
@@ -54,21 +53,6 @@ function buildOwnerOption(contact: DepartmentContact): PersonSelectOption | null
     value: contact.open_id,
     personName: contact.name,
     department: contact.department ?? null,
-    departmentHeadName: contact.department_head_name ?? null,
-    departmentHeadOpenId: contact.department_head_open_id ?? null,
-  }
-}
-
-function buildDirectorOption(contact: DepartmentContact): PersonSelectOption | null {
-  if (!contact.department_head_open_id || !contact.department_head_name) return null
-  const details = [contact.department, contact.department_head_enterprise_email].filter(Boolean).join(' / ')
-  return {
-    label: details ? `${contact.department_head_name}（${details}）` : contact.department_head_name,
-    value: contact.department_head_open_id,
-    personName: contact.department_head_name,
-    department: contact.department ?? null,
-    departmentHeadName: contact.department_head_name,
-    departmentHeadOpenId: contact.department_head_open_id,
   }
 }
 
@@ -95,7 +79,7 @@ export function ChangeActionPlanEditModal({
   const [changeLoading, setChangeLoading] = useState(false)
   const [contactLoading, setContactLoading] = useState(false)
   const changesRef = useRef<ChangeListItem[]>([])
-  const contactsRef = useRef<DepartmentContact[]>([])
+  const contactsRef = useRef<QualityPersonOption[]>([])
   const changeMap = useMemo(
     () => new Map(changeOptions.map((item) => [item.value, item])),
     [changeOptions],
@@ -136,7 +120,7 @@ export function ChangeActionPlanEditModal({
       try {
         const [changeResult, contactResult] = await Promise.all([
           fetchChanges({ page: 1, page_size: 1000 }),
-          fetchDepartmentContacts(),
+          fetchQualityPersonDirectory(),
         ])
         if (cancelled) return
 
@@ -147,7 +131,7 @@ export function ChangeActionPlanEditModal({
 
         const ownerOptionMap = new Map<string, PersonSelectOption>()
         contactResult.forEach((contact) => {
-          const option = buildOwnerOption(contact)
+          const option = buildPersonOption(contact)
           if (option && !ownerOptionMap.has(option.value)) {
             ownerOptionMap.set(option.value, option)
           }
@@ -155,7 +139,7 @@ export function ChangeActionPlanEditModal({
 
         const directorOptionMap = new Map<string, PersonSelectOption>()
         contactResult.forEach((contact) => {
-          const option = buildDirectorOption(contact)
+          const option = buildPersonOption(contact)
           if (option && !directorOptionMap.has(option.value)) {
             directorOptionMap.set(option.value, option)
           }
@@ -167,8 +151,6 @@ export function ChangeActionPlanEditModal({
             value: initialValue.owner_user_id,
             personName: initialValue.owner_name,
             department: null,
-            departmentHeadName: null,
-            departmentHeadOpenId: null,
           })
         }
         if (
@@ -181,8 +163,6 @@ export function ChangeActionPlanEditModal({
             value: initialValue.director_user_id,
             personName: initialValue.director_name,
             department: null,
-            departmentHeadName: initialValue.director_name,
-            departmentHeadOpenId: initialValue.director_user_id,
           })
         }
 
@@ -243,8 +223,6 @@ export function ChangeActionPlanEditModal({
     form.setFieldsValue({
       owner_user_id: value,
       owner_name: option?.personName ?? null,
-      director_user_id: option?.departmentHeadOpenId ?? null,
-      director_name: option?.departmentHeadName ?? null,
     })
   }
 

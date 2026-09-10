@@ -18,6 +18,7 @@ import { graphic } from 'echarts'
 import type { EChartsOption } from 'echarts'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchWarehouseDashboard as fetchDashboardClient } from '@/lib/api/client/warehouse'
+import { WarehouseInspectionProgressPanel } from '@/components/warehouse/WarehouseInspectionProgressPanel'
 import type {
   WarehouseDashboardData,
   WarehouseDashboardDeptValue,
@@ -650,7 +651,11 @@ export function WarehouseDashboard({ group, title, baseName, initialData }: Ware
               ))}
             </div>
 
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {(group === 'raw' || group === 'product') && (
+              <WarehouseInspectionProgressPanel key={group} scope={group} />
+            )}
+
+            <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
               {charts.map((chart) => (
                 <div key={chart.key} className={chart.full ? 'xl:col-span-2' : ''}>
                   <ChartCard title={chart.title} subtitle={chart.subtitle} option={chart.option} />

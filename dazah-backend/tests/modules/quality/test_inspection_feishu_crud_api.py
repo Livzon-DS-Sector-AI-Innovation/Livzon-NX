@@ -36,11 +36,24 @@ class _FakeBitable:
             {"field_name": "含量", "ui_type": "Number"},
         ]
 
-    async def create_record(self, table_id: str, fields: dict) -> dict:
+    async def create_record(
+        self,
+        table_id: str,
+        fields: dict,
+        *,
+        user_id_type: str = "open_id",
+    ) -> dict:
         self.created.append(fields)
         return {"record_id": "rec_new"}
 
-    async def update_record(self, table_id: str, record_id: str, fields: dict) -> dict:
+    async def update_record(
+        self,
+        table_id: str,
+        record_id: str,
+        fields: dict,
+        *,
+        user_id_type: str = "open_id",
+    ) -> dict:
         return {"record_id": record_id}
 
     async def delete_record(self, table_id: str, record_id: str) -> dict:

@@ -28,6 +28,7 @@ from app.modules.quality.schemas.validation import (
     ValidationDetail,
     ValidationExecutionListItem,
     ValidationListItem,
+    ValidationPersonOption,
 )
 from app.modules.quality.service.quality_feishu_pages import (
     create_validation_record_in_feishu,
@@ -46,6 +47,7 @@ from app.modules.quality.service.validation import (
     get_validation_detail,
     get_validation_execution_list,
     get_validation_list,
+    get_validation_person_options,
     get_validation_statistics,
     update_validation,
     update_validation_execution,
@@ -167,6 +169,43 @@ async def list_feishu_validation_revalidation_upcoming(
         page_size=page_size,
         total=result["total"],
     )
+
+
+@router.get(
+    "/feishu/validations/form-links",
+    summary="获取验证主计划各年度表的飞书表单链接",
+    response_model=ApiResponseEnvelope[list[dict[str, Any]]],
+)
+async def list_feishu_validation_form_links(
+    current_user: CurrentUser = None,
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    """新增记录改为打开各年度的飞书多维表单；链接在质量设置-飞书设置中维护。"""
+    _require_user(current_user)
+    from app.modules.quality.service.quality_feishu_pages import (
+        VALIDATION_MASTER_PLAN_YEARS,
+    )
+    from app.modules.quality.service.quality_feishu_settings import (
+        ensure_quality_feishu_entity_settings,
+    )
+
+    rows = await ensure_quality_feishu_entity_settings(db)
+    row_map = {row.entity_code: row for row in rows}
+    years = []
+    for year in VALIDATION_MASTER_PLAN_YEARS:
+        row = row_map.get(f"validation_master_plan_{year}")
+        years.append(
+            {
+                "year": year,
+                "form_url": (row.feishu_form_url or "").strip() if row else "",
+                "table_configured": bool(
+                    row
+                    and (row.app_token or "").strip()
+                    and (row.base_table_id or "").strip()
+                ),
+            }
+        )
+    return success_response(data={"years": years})
 
 
 @router.get(
@@ -293,6 +332,24 @@ async def create_validation_endpoint(
         status_code = 409 if "已存在" in str(exc) else 400
         raise AppException(message=str(exc), status_code=status_code) from exc
     return success_response(data=result, message="创建成功")
+
+
+@router.get(
+    "/validations/person-options",
+    summary="获取验证人员选择候选（人事管理-飞书联系人）",
+    response_model=ApiResponseEnvelope[list[ValidationPersonOption]],
+)
+async def list_validation_person_options(
+    keyword: str | None = Query(
+        None, description="姓名过滤关键词，留空返回全量在职人员"
+    ),
+    limit: int = Query(500, ge=1, le=500, description="返回条数上限"),
+    current_user: CurrentUser = None,
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    _require_user(current_user)
+    result = await get_validation_person_options(db, keyword, limit)
+    return success_response(data=result)
 
 
 @router.get(

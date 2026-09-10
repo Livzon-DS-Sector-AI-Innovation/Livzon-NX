@@ -44,3 +44,20 @@ def test_anomaly_report_keys_do_not_collide() -> None:
     walk(SEED_MENUS)
     assert keys.count("anomaly-report") == 1
     assert keys.count("anomaly-report-ledger") == 1
+
+
+def test_department_contacts_menu_removed() -> None:
+    """部门联系人功能整体下线：种子树与页面目录都不得再出现该入口。"""
+    keys: list[str] = []
+    paths: list[str] = []
+
+    def walk(nodes: list[dict[str, Any]]) -> None:
+        for node in nodes:
+            keys.append(node["key"])
+            paths.append(node.get("path") or "")
+            if node.get("children"):
+                walk(node["children"])
+
+    walk(SEED_MENUS)
+    assert "department-contacts" not in keys
+    assert "/quality/department-contacts" not in paths

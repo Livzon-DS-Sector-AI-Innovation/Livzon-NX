@@ -31,6 +31,7 @@ from app.modules.quality.service.quality_feishu_material_groups import (
 from app.platform.identity.models import User
 from app.platform.integrations.feishu.bitable import (
     BitableClient,
+    fields_need_union_user_id,
 )
 from app.platform.integrations.feishu.bitable import (
     _to_ms_timestamp as _to_ms_timestamp,
@@ -71,7 +72,6 @@ QUALITY_FEISHU_ENTITY_ENV_FALLBACKS: dict[str, str] = {
         "deviation_investigation_push_record"
     ): "QUALITY_FEISHU_DEVIATION_INVESTIGATION_PUSH_TABLE_ID",
     "capa_plan_track": "QUALITY_FEISHU_CAPA_PLAN_TABLE_ID",
-    "department_contact": "QUALITY_DEPARTMENT_CONTACT_FEISHU_TABLE_ID",
     "change_ledger": "QUALITY_CHANGE_LEDGER_FEISHU_TABLE_ID",
     "change_action_plan": "QUALITY_CHANGE_ACTION_PLAN_FEISHU_TABLE_ID",
     "validation_master_plan": "QUALITY_VALIDATION_FEISHU_TABLE_ID",
@@ -582,9 +582,6 @@ def _build_conflict_message(source_updated_at: datetime | None) -> str:
 
 
 class QualityFeishuSync:
-    async def _get_department_contacts(self, db: AsyncSession) -> list[dict[str, Any]]:
-        return await _get_department_contacts_from_feishu(db)
-
     async def _resolve_runtime(self, db: AsyncSession) -> QualityFeishuRuntimeConfig:
         app_model = None
         rows: list[QualityFeishuEntitySetting] = []
@@ -709,6 +706,7 @@ class QualityFeishuSync:
         fields: dict[str, Any],
         *,
         search_conditions: list[tuple[str, str]] | None = None,
+        user_id_type: str | None = None,
     ) -> tuple[str, str]:
         runtime = await self._resolve_runtime(db)
         entity = runtime.get_entity_config(entity_code, direction="push")
@@ -722,6 +720,9 @@ class QualityFeishuSync:
             app_token=entity.app_token,
             app_id=runtime.app_id,
             app_secret=runtime.app_secret,
+        )
+        effective_user_id_type = user_id_type or (
+            "union_id" if fields_need_union_user_id(fields) else "open_id"
         )
         remote_fields = await client.list_fields(resolved_table_id)
         remote_field_names = {
@@ -746,7 +747,10 @@ class QualityFeishuSync:
 
         if record_id:
             record = await client.update_record(
-                resolved_table_id, record_id, mapped_fields
+                resolved_table_id,
+                record_id,
+                mapped_fields,
+                user_id_type=effective_user_id_type,
             )
             return str(record.get("record_id") or record_id), resolved_table_id
 
@@ -779,12 +783,15 @@ class QualityFeishuSync:
                         resolved_table_id,
                         existing_id,
                         mapped_fields,
+                        user_id_type=effective_user_id_type,
                     )
                     return str(
                         record.get("record_id") or existing_id
                     ), resolved_table_id
 
-        record = await client.create_record(resolved_table_id, mapped_fields)
+        record = await client.create_record(
+            resolved_table_id, mapped_fields, user_id_type=effective_user_id_type
+        )
         return str(record.get("record_id", "")), resolved_table_id
 
     async def search_records(
@@ -795,6 +802,7 @@ class QualityFeishuSync:
         *,
         filter_str: str | None = None,
         field_names: list[str] | None = None,
+        user_id_type: str = "open_id",
     ) -> list[dict[str, Any]]:
         runtime = await self._resolve_runtime(db)
         entity = runtime.get_entity_config(entity_code, direction="pull")
@@ -812,6 +820,7 @@ class QualityFeishuSync:
             page_size=500,
             automatic_fields=True,
             field_names=field_names,
+            user_id_type=user_id_type,
         )
 
 
@@ -902,43 +911,6 @@ async def _resolve_deviation_reporter_name(
     return ""
 
 
-async def _resolve_deviation_reporter_contact(
-    db: AsyncSession, deviation: Deviation
-) -> dict[str, Any] | None:
-    reporter_name = await _resolve_deviation_reporter_name(db, deviation)
-    normalized_reporter_name = reporter_name.strip()
-    normalized_department = (deviation.department or "").strip()
-    if not normalized_reporter_name or not normalized_department:
-        return None
-
-    contacts = await _get_department_contacts_from_feishu(db)
-    for contact in contacts:
-        contact_name = str(contact.get("name") or "").strip()
-        contact_department = str(contact.get("department") or "").strip()
-        if (
-            contact_name == normalized_reporter_name
-            and contact_department == normalized_department
-        ):
-            return contact
-    return None
-
-
-async def _get_department_contacts_from_feishu(
-    db: AsyncSession,
-) -> list[dict[str, Any]]:
-    from app.modules.quality.service.department_contacts import (
-        get_department_contact_list_from_feishu,
-    )
-
-    result = await get_department_contact_list_from_feishu(
-        db,
-        page=1,
-        page_size=1000,
-    )
-    items = result.get("items", [])
-    return items if isinstance(items, list) else []
-
-
 async def _resolve_contact_bitable_user_value(
     db: AsyncSession,
     name: str | None,
@@ -948,25 +920,15 @@ async def _resolve_contact_bitable_user_value(
     normalized_name = (name or "").strip()
     if not normalized_name:
         return None
-    normalized_department = (department or "").strip()
-    contacts = await _get_department_contacts_from_feishu(db)
 
-    for require_department in (True, False):
-        for contact in contacts:
-            contact_name = str(contact.get("name") or "").strip()
-            contact_department = str(contact.get("department") or "").strip()
-            if contact_name != normalized_name:
-                continue
-            if (
-                require_department
-                and normalized_department
-                and contact_department != normalized_department
-            ):
-                continue
-            bitable_user_id = str(contact.get("bitable_user_id") or "").strip()
-            if bitable_user_id:
-                return [{"id": bitable_user_id}]
-    return None
+    from app.modules.quality.service.person_directory import resolve_person_write_id
+
+    person_id = await resolve_person_write_id(
+        db, normalized_name, department=department
+    )
+    if not person_id:
+        return None
+    return [{"id": person_id}]
 
 
 async def sync_deviation_report_record_to_feishu(
@@ -987,7 +949,18 @@ async def sync_deviation_report_record_to_feishu(
         else None
     )
 
-    reporter_contact = await _resolve_deviation_reporter_contact(db, deviation)
+    reporter_name = (await _resolve_deviation_reporter_name(db, deviation)).strip()
+    reporter_user_value = None
+    if reporter_name:
+        from app.modules.quality.service.person_directory import (
+            resolve_person_write_id,
+        )
+
+        reporter_write_id = await resolve_person_write_id(
+            db, reporter_name, department=deviation.department
+        )
+        if reporter_write_id:
+            reporter_user_value = [{"id": reporter_write_id}]
     report_time = deviation.discovery_date or deviation.created_at
     fields = {
         "偏差编号": deviation.deviation_code,
@@ -996,12 +969,7 @@ async def sync_deviation_report_record_to_feishu(
         "偏差报告": deviation.report_content or "",
         "涉及产品名称/批号": deviation.affected_items or "",
         "部门": deviation.department or "",
-        "报告人": (
-            [{"id": str(reporter_contact.get("bitable_user_id")).strip()}]
-            if reporter_contact
-            and str(reporter_contact.get("bitable_user_id") or "").strip()
-            else None
-        ),
+        "报告人": reporter_user_value,
         "报告状态": deviation.status or "",
     }
     record_id, table_id = await feishu_sync._upsert_record(

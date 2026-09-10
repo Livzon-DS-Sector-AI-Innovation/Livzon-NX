@@ -39,6 +39,15 @@ class ValidationDetail(ValidationListItem):
     updated_by: uuid.UUID | None = None
 
 
+class ValidationPersonOption(BaseModel):
+    """验证与确认人员选择器候选（人事管理-飞书联系人，在职人员）。"""
+
+    open_id: str
+    name: str
+    department: str | None = None
+    job_title: str | None = None
+
+
 class ValidationExecutionListItem(BaseModel):
     id: uuid.UUID
     master_validation_id: uuid.UUID

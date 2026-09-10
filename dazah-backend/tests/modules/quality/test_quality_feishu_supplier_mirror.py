@@ -80,6 +80,40 @@ def test_map_record_handles_checkbox_bool_and_empty_fields() -> None:
     assert mapped["material_name"] is None
     assert mapped["deadline"] is None
     assert mapped["responsible_person"] is None
+    assert mapped["responsible_users"] is None
+    assert mapped["groups"] is None
+
+
+def test_map_record_captures_responsible_users_and_groups() -> None:
+    mapped = map_record_to_mirror_fields(
+        _record(
+            {
+                "供应商名称": "C",
+                "负责人": [
+                    {"id": "ou_abc", "name": "甄宁宁", "email": "znn@livzon.cn"},
+                    {"id": "ou_def", "name": "陈连平", "email": "clp@livzon.cn"},
+                ],
+                "群组": [
+                    {
+                        "id": "oc_chat1",
+                        "name": "供应商资质沟通群",
+                        "avatar_url": "https://example.com/a.webp",
+                    }
+                ],
+            }
+        ),
+        _entity(),
+    )
+    # 负责人：姓名串保持（兼容搜索/导出）+ 成员对象列表供写回（email 用于头像关联）
+    assert mapped["responsible_person"] == "甄宁宁、陈连平"
+    assert mapped["responsible_users"] == [
+        {"id": "ou_abc", "name": "甄宁宁", "email": "znn@livzon.cn"},
+        {"id": "ou_def", "name": "陈连平", "email": "clp@livzon.cn"},
+    ]
+    # 群组：只读展示（id/name/avatar_url）
+    assert mapped["groups"] == [
+        {"id": "oc_chat1", "name": "供应商资质沟通群", "avatar_url": "https://example.com/a.webp"}
+    ]
 
 
 def test_compute_watermark_and_newer_gate() -> None:

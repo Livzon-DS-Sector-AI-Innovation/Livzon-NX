@@ -508,15 +508,33 @@ async def test_department_confirmation_create_update_and_queries() -> None:
     await service.confirm_production_status(db, data, "system")
     db.add.assert_called_once()
 
+    def _person_row(open_id: str, name: str, department: str) -> Any:
+        return SimpleNamespace(
+            open_id=open_id,
+            name=name,
+            department=department,
+            job_title=None,
+            email=None,
+            mobile=None,
+            enterprise_email=None,
+            avatar_url=None,
+        )
+
     db.execute.side_effect = [
         SimpleNamespace(all=lambda: [("生产部",), ("工程部",)]),
-        SimpleNamespace(all=lambda: [("质量部",), ("生产部",)]),
+        SimpleNamespace(
+            all=lambda: [
+                _person_row("ou-1", "张三", "质量部"),
+                _person_row("ou-2", "李四", "生产部"),
+                _person_row("ou-3", "王五", None),
+            ]
+        ),
     ]
     assert await service.get_stopped_departments(db, "2026-W30") == [
         "生产部",
         "工程部",
     ]
-    assert await service.get_capa_departments(db) == ["质量部", "生产部"]
+    assert await service.get_capa_departments(db) == ["生产部", "质量部"]
 
 
 @pytest.mark.anyio

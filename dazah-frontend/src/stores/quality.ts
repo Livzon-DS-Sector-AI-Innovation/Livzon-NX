@@ -9,7 +9,6 @@ import {
   CapaWorkflowStatus,
   CapaSource,
   CapaCategory,
-  DepartmentContact,
   FeishuCapaLedgerItem,
 } from '@/types/quality'
 
@@ -325,41 +324,3 @@ export const useChangeStore = create<ChangeStore>()(
   )
 )
 
-// ============ Department Contact Store ============
-interface DepartmentContactStore {
-  // 数据
-  contacts: DepartmentContact[]
-  total: number
-  loading: boolean
-
-  // 分页
-  page: number
-  pageSize: number
-
-  // 操作
-  setContacts: (contacts: DepartmentContact[]) => void
-  setTotal: (total: number) => void
-  setLoading: (loading: boolean) => void
-  setPage: (page: number) => void
-  setPageSize: (pageSize: number) => void
-}
-
-export const useDepartmentContactStore = create<DepartmentContactStore>()(
-  devtools(
-    (set) => ({
-      contacts: [],
-      total: 0,
-      loading: false,
-
-      page: 1,
-      pageSize: 20,
-
-      setContacts: (contacts) => set({ contacts }),
-      setTotal: (total) => set({ total }),
-      setLoading: (loading) => set({ loading }),
-      setPage: (page) => set({ page }),
-      setPageSize: (pageSize) => set({ pageSize, page: 1 }),
-    }),
-    { name: 'department-contact-store' }
-  )
-)

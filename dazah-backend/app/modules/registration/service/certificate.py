@@ -255,17 +255,6 @@ def _normalize_group_text(value: str | None) -> str:
     return re.sub(r"\s+", " ", value).strip().lower()
 
 
-def _normalize_department_text(value: str | None) -> str:
-    if not value:
-        return ""
-    return re.sub(r"\s+", "", value).upper()
-
-
-def _is_qa_department(value: str | None) -> bool:
-    normalized = _normalize_department_text(value)
-    return "QA" in normalized or "质量保证" in normalized
-
-
 def _get_sheet_meta(sheet_key: str) -> dict[str, object]:
     for item in CERTIFICATE_SHEET_CONFIG:
         if item["key"] == sheet_key:
@@ -742,44 +731,29 @@ class CertificateWorkbookService:
     async def _list_qa_reminder_recipient_options(
         self,
     ) -> list[CertificateReminderRecipientOption]:
-        from app.modules.quality.public_api import (
-            get_department_contact_list_from_feishu,
-        )
+        from app.modules.quality.public_api import get_qa_reminder_recipients
 
         try:
-            result = await get_department_contact_list_from_feishu(
-                self.session,
-                page=1,
-                page_size=1000,
-            )
+            recipients = await get_qa_reminder_recipients(self.session)
         except Exception:
-            # 降级策略：获取飞书联系人列表失败时返回空列表，不影响主流程
+            # 降级策略：获取人员目录失败时返回空列表，不影响主流程
             logger.exception(
                 "Failed to fetch QA reminder recipients from quality module"
             )
             return []
 
-        options_by_open_id: dict[str, CertificateReminderRecipientOption] = {}
-        for item in result.get("items", []):
-            open_id = str(item.get("open_id") or "").strip()
-            if not open_id:
-                continue
-
-            department = str(item.get("department") or "").strip() or None
-            if not _is_qa_department(department):
-                continue
-
-            name = str(item.get("name") or "").strip() or "未命名联系人"
-            enterprise_email = str(item.get("enterprise_email") or "").strip() or None
-            options_by_open_id[open_id] = CertificateReminderRecipientOption(
-                open_id=open_id,
-                name=name,
-                department=department,
-                enterprise_email=enterprise_email,
+        options = [
+            CertificateReminderRecipientOption(
+                open_id=str(item.get("open_id") or ""),
+                name=str(item.get("name") or "未命名联系人"),
+                department=str(item.get("department") or "") or None,
+                enterprise_email=str(item.get("enterprise_email") or "") or None,
             )
-
+            for item in recipients
+            if str(item.get("open_id") or "").strip()
+        ]
         return sorted(
-            options_by_open_id.values(),
+            options,
             key=lambda item: ((item.department or ""), item.name, item.open_id),
         )
 

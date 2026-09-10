@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.hr.repository import EmployeeRepository
@@ -294,3 +295,33 @@ async def query_training_ledgers(
             }
         )
     return items
+
+
+async def get_avatar_urls_by_emails(
+    session: AsyncSession, emails: list[str]
+) -> dict[str, str]:
+    """按企业邮箱批量查询飞书成员头像（跨模块头像关联用）。
+
+    open_id 是应用维度的，跨应用不可直接关联；邮箱在全租户内稳定。
+    返回 {email: avatar_url}，未命中的邮箱不出现在结果里。
+    """
+    normalized = [item.strip().lower() for item in emails if item and item.strip()]
+    if not normalized:
+        return {}
+
+    from app.modules.hr.models import HrFeishuMember
+
+    result = await session.execute(
+        select(HrFeishuMember.open_id, HrFeishuMember.email, HrFeishuMember.avatar_url)
+        .where(
+            HrFeishuMember.is_deleted.is_(False),
+            HrFeishuMember.avatar_url.is_not(None),
+            func.lower(HrFeishuMember.email).in_(normalized),
+        )
+        .limit(500)
+    )
+    avatar_by_email: dict[str, str] = {}
+    for _open_id, email, avatar_url in result.all():
+        if email and avatar_url:
+            avatar_by_email[email.strip().lower()] = avatar_url
+    return avatar_by_email

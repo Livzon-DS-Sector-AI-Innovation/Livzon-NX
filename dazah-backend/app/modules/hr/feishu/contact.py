@@ -192,6 +192,39 @@ class FeishuContact:
         name = user_data.get("name") if isinstance(user_data, dict) else None
         return str(name) if name is not None else None
 
+    async def get_user_union_id(self, open_id: str) -> str | None:
+        """获取用户 union_id。
+
+        union_id 在同一租户的全部自建应用间保持一致，是把人事目录人员
+        写入其他应用（如质量模块）多维表格成员字段的跨应用稳定标识。
+
+        Args:
+            open_id: 人事应用命名空间下的用户 open_id
+
+        Returns:
+            union_id，获取失败返回 None
+        """
+        url = f"/contact/v3/users/{open_id}"
+        params = {
+            "user_id_type": "open_id",
+            "department_id_type": "open_department_id",
+        }
+        data = await self._make_request(url, params)
+
+        if not data or data.get("code") != 0:
+            logger.warning(
+                "Failed to get union_id for %s: %s",
+                open_id,
+                data.get("msg") if data else "no response",
+            )
+            return None
+
+        user_data = data.get("data", {}).get("user", {})
+        union_id = (
+            user_data.get("union_id") if isinstance(user_data, dict) else None
+        )
+        return str(union_id) if union_id else None
+
     async def get_department_users(self, department_id: str) -> list[dict[str, Any]]:
         """获取指定部门下的用户列表。
 
