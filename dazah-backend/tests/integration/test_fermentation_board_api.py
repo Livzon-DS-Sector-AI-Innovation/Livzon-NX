@@ -43,7 +43,7 @@ def mock_db_service(monkeypatch: Any) -> None:
     """HTTP 层不触碰数据库。"""
     monkeypatch.setattr(
         board,
-        "load_latest_archive",
+        "load_archive_covering",
         AsyncMock(return_value=None),
     )
     monkeypatch.setattr(board, "list_active_maintenance", AsyncMock(return_value=[]))
@@ -124,18 +124,63 @@ async def test_board_builds_payload_from_latest_archive(
         "trend": None,
         "alerts": [{"level": "info", "text": "车间运行正常，无待处理预警"}],
     }
-    monkeypatch.setattr(
-        board,
-        "load_latest_archive",
-        AsyncMock(return_value=SimpleNamespace(rows=[])),  # 非 None 即继续
-    )
-    monkeypatch.setattr(board, "build_board", lambda *a, **k: fake_payload)
+    _patch_period(monkeypatch, date(2026, 8, 27), date(2026, 9, 26))
+    monkeypatch.setattr(board, "build_board", MagicMock(return_value=fake_payload))
 
     response = await auth_client.get(f"{API}/fermentation-board")
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["kpis"]["month_planned"] == 31
     assert data["tanks"][0]["tank_no"] == "302A"
+    assert "is_current_period" in data
+
+
+@pytest.mark.anyio
+async def test_board_historical_period_view(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+) -> None:
+    """历史周期：按真实当前时间回看（不回到周期末）、不读取检修、产量按周期过滤。"""
+    # 选一个必然早于今天的周期（今天 >= 2026-09 时 2026-05 周期必为历史）
+    _patch_period(monkeypatch, date(2026, 4, 27), date(2026, 5, 26))
+    build_mock = MagicMock(return_value={"kpis": {}, "period": {}})
+    monkeypatch.setattr(board, "build_board", build_mock)
+
+    response = await auth_client.get(f"{API}/fermentation-board?date=2026-05-10")
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["is_current_period"] is False
+    as_of = build_mock.call_args.args[2]
+    # as_of 为真实当前时间（而非周期末 2026-05-26）
+    assert as_of > datetime(2026, 9, 1)
+    # 历史视图不加载当前检修标注
+    board.list_active_maintenance.assert_not_called()
+    # 产量列表按周期边界查询
+    kwargs = board.list_batch_actuals.call_args.kwargs
+    assert kwargs["period_start"] == date(2026, 4, 27)
+    assert kwargs["period_end"] == date(2026, 5, 26)
+
+
+def _patch_period(monkeypatch: Any, start: date, end: date) -> None:
+    """让看板端点按指定周期解析（mock 存档与周期定位）。"""
+    monkeypatch.setattr(
+        board,
+        "load_archive_covering",
+        AsyncMock(return_value=SimpleNamespace(rows=[])),
+    )
+    monkeypatch.setattr(
+        board,
+        "find_period_block",
+        MagicMock(
+            return_value={
+                "start_row": 0,
+                "start": start,
+                "end": end,
+                "label": f"{start.month}月{start.day}日～{end.month}月{end.day}日",
+            }
+        ),
+    )
 
 
 @pytest.mark.anyio
@@ -144,12 +189,7 @@ async def test_board_passes_actuals_to_build_board(
     mock_db_service: None,
     monkeypatch: Any,
 ) -> None:
-    monkeypatch.setattr(
-        board,
-        "load_latest_archive",
-        AsyncMock(return_value=SimpleNamespace(rows=[])),
-    )
-    monkeypatch.setattr(board, "list_active_maintenance", AsyncMock(return_value=[]))
+    _patch_period(monkeypatch, date(2026, 8, 27), date(2026, 9, 26))
     monkeypatch.setattr(
         board,
         "list_batch_actuals",
@@ -217,6 +257,7 @@ async def test_month_capacity_set_and_board_carries(
     assert kwargs["planned_capacity_kg"] == 930000
 
     # 看板带出产能
+    _patch_period(monkeypatch, date(2026, 8, 27), date(2026, 9, 26))
     monkeypatch.setattr(
         board,
         "build_board",
@@ -231,6 +272,21 @@ async def test_month_capacity_set_and_board_carries(
     res = await auth_client.get(f"{API}/fermentation-board")
     assert res.status_code == 200
     assert res.json()["data"]["month_planned_capacity_kg"] == 930000.0
+
+
+@pytest.mark.anyio
+async def test_batch_actuals_list_filtered_by_period(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+) -> None:
+    listed = await auth_client.get(
+        f"{API}/fermentation-batch-actuals"
+        "?period_start=2026-08-27&period_end=2026-09-26"
+    )
+    assert listed.status_code == 200
+    kwargs = board.list_batch_actuals.call_args.kwargs
+    assert kwargs["period_start"] == date(2026, 8, 27)
+    assert kwargs["period_end"] == date(2026, 9, 26)
 
 
 @pytest.mark.anyio
@@ -252,6 +308,7 @@ async def test_batch_actuals_crud_endpoints(
     listed = await auth_client.get(f"{API}/fermentation-batch-actuals")
     assert listed.status_code == 200
     assert listed.json()["data"][0]["batch_no"] == "FA26232"
+    assert "tank_no" in listed.json()["data"][0]
 
     saved = await auth_client.post(
         f"{API}/fermentation-batch-actuals",
@@ -329,6 +386,40 @@ async def test_maintenance_rejects_empty_reason(
         json={"tank_no": "302A", "reason": ""},
     )
     assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_batch_actuals_isolated_by_product() -> None:
+    """同一批号在不同产品下各自独立（数据隔离），互不覆盖。"""
+    from sqlalchemy import pool as sa_pool
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.core.config import get_settings
+    from tests.db_safety import get_pytest_database_url
+
+    engine = create_async_engine(
+        get_pytest_database_url(get_settings()),
+        poolclass=sa_pool.NullPool,
+    )
+    try:
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with factory() as session:
+            fa = await board.upsert_batch_actual(
+                session, batch_no="FA-ISO", yield_kg=111, product_code="FA"
+            )
+            mc = await board.upsert_batch_actual(
+                session, batch_no="FA-ISO", yield_kg=222, product_code="MC"
+            )
+            assert fa.id != mc.id
+            fa_list = await board.list_batch_actuals(session, product_code="FA")
+            mc_list = await board.list_batch_actuals(session, product_code="MC")
+            assert [i.yield_kg for i in fa_list if i.batch_no == "FA-ISO"] == [111]
+            assert [i.yield_kg for i in mc_list if i.batch_no == "FA-ISO"] == [222]
+            # 清理
+            await board.delete_batch_actual(session, fa)
+            await board.delete_batch_actual(session, mc)
+    finally:
+        await engine.dispose()
 
 
 @pytest.mark.anyio

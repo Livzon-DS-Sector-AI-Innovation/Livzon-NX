@@ -57,6 +57,7 @@ async def upload_schedule_excel(
     file: UploadFile = File(..., description="排产计划 .xlsx / .xls 文件"),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
+    product: str = Query("FA", min_length=1, max_length=32, description="产品代码"),
 ) -> Any:
     filename = validate_upload_metadata(
         file,
@@ -92,6 +93,7 @@ async def upload_schedule_excel(
 
     archive = await schedule_excel_service.create_archive(
         db,
+        product_code=product,
         file_name=filename,
         sheet_name=parsed["sheet_name"],
         original_path=relative_path,
@@ -116,9 +118,10 @@ async def list_schedule_excel_archives(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
+    product: str = Query("FA", min_length=1, max_length=32, description="产品代码"),
 ) -> Any:
     items, total = await schedule_excel_service.list_archives(
-        db, page=page, page_size=page_size
+        db, page=page, page_size=page_size, product_code=product
     )
     return paginated_response(
         [

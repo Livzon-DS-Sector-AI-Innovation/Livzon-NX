@@ -139816,6 +139816,56 @@
         "operationId": "list_fermentation_batch_actuals_api_v1_production_fermentation_batch_actuals_get",
         "parameters": [
           {
+            "description": "周期起始日（含）",
+            "in": "query",
+            "name": "period_start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "周期起始日（含）",
+              "title": "Period Start"
+            }
+          },
+          {
+            "description": "周期结束日（含）",
+            "in": "query",
+            "name": "period_end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "周期结束日（含）",
+              "title": "Period End"
+            }
+          },
+          {
+            "description": "产品代码（如 FA/MC/DR）",
+            "in": "query",
+            "name": "product",
+            "required": false,
+            "schema": {
+              "default": "FA",
+              "description": "产品代码（如 FA/MC/DR）",
+              "title": "Product",
+              "type": "string"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,
@@ -139854,7 +139904,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "发酵批次实际产量列表",
+        "summary": "发酵批次实际产量列表（可按周期过滤）",
         "tags": [
           "生产管理",
           "生产管理 - 发酵车间看板"
@@ -139863,6 +139913,18 @@
       "post": {
         "operationId": "upsert_fermentation_batch_actual_api_v1_production_fermentation_batch_actuals_post",
         "parameters": [
+          {
+            "description": "产品代码（如 FA/MC/DR）",
+            "in": "query",
+            "name": "product",
+            "required": false,
+            "schema": {
+              "default": "FA",
+              "description": "产品代码（如 FA/MC/DR）",
+              "title": "Product",
+              "type": "string"
+            }
+          },
           {
             "in": "cookie",
             "name": "auth_token",
@@ -139984,6 +140046,37 @@
         "operationId": "get_fermentation_board_api_v1_production_fermentation_board_get",
         "parameters": [
           {
+            "description": "查看周期内任意日期（YYYY-MM-DD）；缺省为今天所在周期",
+            "in": "query",
+            "name": "date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "查看周期内任意日期（YYYY-MM-DD）；缺省为今天所在周期",
+              "title": "Date"
+            }
+          },
+          {
+            "description": "产品代码（如 FA/MC/DR）",
+            "in": "query",
+            "name": "product",
+            "required": false,
+            "schema": {
+              "default": "FA",
+              "description": "产品代码（如 FA/MC/DR）",
+              "title": "Product",
+              "type": "string"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,
@@ -140022,7 +140115,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "发酵车间实时看板（计划驱动）",
+        "summary": "发酵车间实时看板（计划驱动，可按周期回看）",
         "tags": [
           "生产管理",
           "生产管理 - 发酵车间看板"
@@ -140033,6 +140126,18 @@
       "post": {
         "operationId": "set_fermentation_month_capacity_api_v1_production_fermentation_month_capacity_post",
         "parameters": [
+          {
+            "description": "产品代码（如 FA/MC/DR）",
+            "in": "query",
+            "name": "product",
+            "required": false,
+            "schema": {
+              "default": "FA",
+              "description": "产品代码（如 FA/MC/DR）",
+              "title": "Product",
+              "type": "string"
+            }
+          },
           {
             "in": "cookie",
             "name": "auth_token",
@@ -150452,6 +150557,20 @@
             }
           },
           {
+            "description": "产品代码",
+            "in": "query",
+            "name": "product",
+            "required": false,
+            "schema": {
+              "default": "FA",
+              "description": "产品代码",
+              "maxLength": 32,
+              "minLength": 1,
+              "title": "Product",
+              "type": "string"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,
@@ -150499,6 +150618,20 @@
       "post": {
         "operationId": "upload_schedule_excel_api_v1_production_schedule_excel_post",
         "parameters": [
+          {
+            "description": "产品代码",
+            "in": "query",
+            "name": "product",
+            "required": false,
+            "schema": {
+              "default": "FA",
+              "description": "产品代码",
+              "maxLength": 32,
+              "minLength": 1,
+              "title": "Product",
+              "type": "string"
+            }
+          },
           {
             "in": "cookie",
             "name": "auth_token",
