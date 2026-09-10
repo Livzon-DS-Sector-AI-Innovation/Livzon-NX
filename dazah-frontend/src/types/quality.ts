@@ -439,6 +439,7 @@ export type ChangeActionPlanDetail = ChangeActionPlanListItem;
 export interface ChangeActionPlanPersonOption {
   open_id: string;
   name: string;
+  en_name: string | null;
   user_id: string | null;
   mobile: string | null;
   email: string | null;
@@ -661,6 +662,7 @@ export interface QualityFeishuEntitySettingItem {
   app_token?: string | null;
   base_table_name?: string | null;
   base_table_id?: string | null;
+  feishu_form_url?: string | null;
   is_enabled: boolean;
   enable_push_to_feishu: boolean;
   enable_pull_from_feishu: boolean;
@@ -675,6 +677,7 @@ export interface UpdateQualityFeishuEntitySettingRequest {
   app_token?: string | null;
   base_table_name?: string | null;
   base_table_id?: string | null;
+  feishu_form_url?: string | null;
   is_enabled: boolean;
   enable_push_to_feishu: boolean;
   enable_pull_from_feishu: boolean;
@@ -1162,30 +1165,15 @@ export interface ValidationUpcomingItem {
   plan_code: string | null
 }
 
-// ============ Department Contact Types ============
-export interface DepartmentContact {
-  id: string;
+// ============ Person Directory Types ============
+// 数据源：人事管理-飞书联系人（/api/v1/quality/person-options）
+export interface QualityPersonOption {
+  open_id: string;
   name: string | null;
-  avatar_url: string | null;
-  bitable_user_id: string | null;
-  department: string;
+  department: string | null;
+  job_title: string | null;
   enterprise_email: string | null;
-  open_id: string | null;
-  department_head_name: string | null;
-  department_head_avatar_url: string | null;
-  department_head_bitable_user_id: string | null;
-  department_head_enterprise_email: string | null;
-  department_head_open_id: string | null;
-  feishu_record_id: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface UpdateFeishuDepartmentContactRequest {
-  open_id?: string | null;
-  department_head_open_id?: string | null;
-  department?: string | null;
-  enterprise_email?: string | null;
+  avatar_url: string | null;
 }
 
 export type InspectionFeishuFieldMeta = {
@@ -1271,13 +1259,6 @@ export interface CapaListResponse {
 
 export interface ChangeListResponse {
   items: ChangeListItem[];
-  total: number;
-  page: number;
-  page_size: number;
-}
-
-export interface DepartmentContactListResponse {
-  items: DepartmentContact[];
   total: number;
   page: number;
   page_size: number;
@@ -1425,28 +1406,6 @@ export interface UpdateChangeRequest {
   planned_approval_date?: string | null;
   execution_date?: string | null;
   closure_date?: string | null;
-}
-
-export interface CreateDepartmentContactRequest {
-  name: string;
-  department: string;
-  enterprise_email?: string | null;
-  open_id?: string | null;
-  department_head_name?: string | null;
-  department_head_enterprise_email?: string | null;
-  department_head_open_id?: string | null;
-  feishu_record_id?: string | null;
-}
-
-export interface UpdateDepartmentContactRequest {
-  name?: string | null;
-  department?: string | null;
-  enterprise_email?: string | null;
-  open_id?: string | null;
-  department_head_name?: string | null;
-  department_head_enterprise_email?: string | null;
-  department_head_open_id?: string | null;
-  feishu_record_id?: string | null;
 }
 
 
@@ -1638,6 +1597,8 @@ export interface SupplierQualificationItem {
   is_completed: boolean;
   deadline: string | null;
   responsible_person: string | null;
+  responsible_users: Array<{ id: string; name: string; email?: string; avatar_url?: string }> | null;
+  groups: Array<{ id: string; name: string; avatar_url: string }> | null;
   remark: string | null;
   expiry_status: string | null;
   created_at: string;

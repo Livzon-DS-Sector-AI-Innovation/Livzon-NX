@@ -2964,6 +2964,51 @@
         "title": "AnnualTrainingPlanUpdate",
         "type": "object"
       },
+      "AnomalyChatMessage": {
+        "properties": {
+          "content": {
+            "description": "消息内容",
+            "title": "Content",
+            "type": "string"
+          },
+          "role": {
+            "description": "消息角色：user/assistant",
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "AnomalyChatMessage",
+        "type": "object"
+      },
+      "AnomalyChatRequest": {
+        "properties": {
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/AnomalyChatMessage"
+            },
+            "title": "Messages",
+            "type": "array"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "限定分析的年份（可选）",
+            "title": "Year"
+          }
+        },
+        "title": "AnomalyChatRequest",
+        "type": "object"
+      },
       "ApiResponse": {
         "properties": {
           "code": {
@@ -4081,40 +4126,6 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[DeclarationProgressWorkbookOverview]",
-        "type": "object"
-      },
-      "ApiResponseEnvelope_DepartmentContactOut_": {
-        "properties": {
-          "code": {
-            "default": 200,
-            "title": "Code",
-            "type": "integer"
-          },
-          "data": {
-            "$ref": "#/components/schemas/DepartmentContactOut"
-          },
-          "message": {
-            "default": "success",
-            "title": "Message",
-            "type": "string"
-          },
-          "meta": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Meta"
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "title": "ApiResponseEnvelope[DepartmentContactOut]",
         "type": "object"
       },
       "ApiResponseEnvelope_DeviationAiSessionAttachmentOut_": {
@@ -6377,44 +6388,6 @@
         "title": "ApiResponseEnvelope[list[ComplaintOut]]",
         "type": "object"
       },
-      "ApiResponseEnvelope_list_DepartmentContactOut__": {
-        "properties": {
-          "code": {
-            "default": 200,
-            "title": "Code",
-            "type": "integer"
-          },
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/DepartmentContactOut"
-            },
-            "title": "Data",
-            "type": "array"
-          },
-          "message": {
-            "default": "success",
-            "title": "Message",
-            "type": "string"
-          },
-          "meta": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Meta"
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "title": "ApiResponseEnvelope[list[DepartmentContactOut]]",
-        "type": "object"
-      },
       "ApiResponseEnvelope_list_DepartmentWeeklyConfirmationOut__": {
         "properties": {
           "code": {
@@ -7553,6 +7526,44 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[list[ValidationListItem]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_ValidationPersonOption__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationPersonOption"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[ValidationPersonOption]]",
         "type": "object"
       },
       "ApiResponseEnvelope_list_ValidationReviewListItem__": {
@@ -9582,6 +9593,61 @@
           "batch_number"
         ],
         "title": "AutoCompareRequest",
+        "type": "object"
+      },
+      "BatchActualBody": {
+        "properties": {
+          "batch_no": {
+            "description": "批次号",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Batch No",
+            "type": "string"
+          },
+          "dump_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "放罐日期",
+            "title": "Dump Date"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "备注",
+            "title": "Remark"
+          },
+          "yield_kg": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "放罐产量(kg)",
+            "title": "Yield Kg"
+          }
+        },
+        "required": [
+          "batch_no"
+        ],
+        "title": "BatchActualBody",
         "type": "object"
       },
       "BatchAuditRequest": {
@@ -21107,90 +21173,6 @@
         "title": "CreateComplaintRequest",
         "type": "object"
       },
-      "CreateDepartmentContactRequest": {
-        "properties": {
-          "department": {
-            "title": "Department",
-            "type": "string"
-          },
-          "department_head_enterprise_email": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Department Head Enterprise Email"
-          },
-          "department_head_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Department Head Name"
-          },
-          "department_head_open_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Department Head Open Id"
-          },
-          "enterprise_email": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Enterprise Email"
-          },
-          "feishu_record_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Feishu Record Id"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "open_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Open Id"
-          }
-        },
-        "required": [
-          "name",
-          "department"
-        ],
-        "title": "CreateDepartmentContactRequest",
-        "type": "object"
-      },
       "CreateDeviationInvestigationPushRecordRequest": {
         "properties": {
           "department_head": {
@@ -25246,114 +25228,6 @@
           }
         },
         "title": "DeleteRecordsRequest",
-        "type": "object"
-      },
-      "DepartmentContactOut": {
-        "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "department": {
-            "title": "Department",
-            "type": "string"
-          },
-          "department_head_enterprise_email": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Department Head Enterprise Email"
-          },
-          "department_head_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Department Head Name"
-          },
-          "department_head_open_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Department Head Open Id"
-          },
-          "enterprise_email": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Enterprise Email"
-          },
-          "feishu_record_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Feishu Record Id"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "open_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Open Id"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "department",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "DepartmentContactOut",
         "type": "object"
       },
       "DepartmentCreate": {
@@ -50523,6 +50397,25 @@
         "title": "ModulePermissionGrantOut",
         "type": "object"
       },
+      "MonthCapacityBody": {
+        "properties": {
+          "planned_capacity_kg": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "本月计划产能(kg)",
+            "title": "Planned Capacity Kg"
+          }
+        },
+        "title": "MonthCapacityBody",
+        "type": "object"
+      },
       "NCECreate": {
         "properties": {
           "action_taken": {
@@ -62926,6 +62819,17 @@
           "entity_name": {
             "title": "Entity Name",
             "type": "string"
+          },
+          "feishu_form_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feishu Form Url"
           },
           "field_mappings": {
             "items": {
@@ -76439,100 +76343,6 @@
         "title": "UpdateComplaintRequest",
         "type": "object"
       },
-      "UpdateDepartmentContactRequest": {
-        "properties": {
-          "department": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Department"
-          },
-          "department_head_enterprise_email": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Department Head Enterprise Email"
-          },
-          "department_head_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Department Head Name"
-          },
-          "department_head_open_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Department Head Open Id"
-          },
-          "enterprise_email": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Enterprise Email"
-          },
-          "feishu_record_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Feishu Record Id"
-          },
-          "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "open_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Open Id"
-          }
-        },
-        "title": "UpdateDepartmentContactRequest",
-        "type": "object"
-      },
       "UpdateDeviationAiSessionRequest": {
         "properties": {
           "supplement_text": {
@@ -77187,57 +76997,6 @@
           }
         },
         "title": "UpdateDocumentEntryRequest",
-        "type": "object"
-      },
-      "UpdateFeishuDepartmentContactRequest": {
-        "description": "更新飞书多维表部门联系人整条记录的请求\n\n人员身份来自人事管理下同步的飞书联系人（open_id）；后端负责把 open_id\n解析为该多维表人员字段可用的 id 后写回。",
-        "properties": {
-          "department": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Department"
-          },
-          "department_head_open_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Department Head Open Id"
-          },
-          "enterprise_email": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Enterprise Email"
-          },
-          "open_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Open Id"
-          }
-        },
-        "title": "UpdateFeishuDepartmentContactRequest",
         "type": "object"
       },
       "UpdateFinishedProductInspectionRequest": {
@@ -78779,6 +78538,17 @@
             "default": true,
             "title": "Enable Push To Feishu",
             "type": "boolean"
+          },
+          "feishu_form_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feishu Form Url"
           },
           "field_mappings": {
             "anyOf": [
@@ -81368,6 +81138,47 @@
         "title": "ValidationListItem",
         "type": "object"
       },
+      "ValidationPersonOption": {
+        "description": "验证与确认人员选择器候选（人事管理-飞书联系人，在职人员）。",
+        "properties": {
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Title"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "open_id": {
+            "title": "Open Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "open_id",
+          "name"
+        ],
+        "title": "ValidationPersonOption",
+        "type": "object"
+      },
       "ValidationReviewCreateRequest": {
         "description": "新建一次 AI 审核会话（上传 VP/VR 文档，类型与编号自动识别）。",
         "properties": {
@@ -83928,6 +83739,637 @@
         "title": "WarehouseFieldValuesResponse",
         "type": "object"
       },
+      "WarehouseInspectionAiAnalysis": {
+        "description": "检验进度 AI 分析结果（辅助解读，不替代人工判断）。",
+        "properties": {
+          "generated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated At"
+          },
+          "key_findings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Key Findings",
+            "type": "array"
+          },
+          "overall_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overall Status"
+          },
+          "risk_level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Level"
+          },
+          "scope_label": {
+            "default": "",
+            "title": "Scope Label",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "suggestions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Suggestions",
+            "type": "array"
+          },
+          "summary_text": {
+            "default": "",
+            "title": "Summary Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "WarehouseInspectionAiAnalysis",
+        "type": "object"
+      },
+      "WarehouseInspectionAiAnalysisApiResponse": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WarehouseInspectionAiAnalysis"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "WarehouseInspectionAiAnalysisApiResponse",
+        "type": "object"
+      },
+      "WarehouseInspectionCycle": {
+        "description": "单条记录的检验进度周期（只读统计，详情弹窗展示）。",
+        "properties": {
+          "inbound_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inbound Date"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "page_key": {
+            "title": "Page Key",
+            "type": "string"
+          },
+          "pending_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Since"
+          },
+          "record_id": {
+            "title": "Record Id",
+            "type": "string"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "result_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result At"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/WarehouseInspectionCycleStage"
+            },
+            "title": "Stages",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "status_label": {
+            "title": "Status Label",
+            "type": "string"
+          },
+          "total_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Hours"
+          }
+        },
+        "required": [
+          "page_key",
+          "record_id",
+          "status",
+          "status_label"
+        ],
+        "title": "WarehouseInspectionCycle",
+        "type": "object"
+      },
+      "WarehouseInspectionCycleStage": {
+        "description": "检验进度周期分段（如 入库→待验 / 待验→合格）。",
+        "properties": {
+          "from_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From At"
+          },
+          "hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hours"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "to_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To At"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "title": "WarehouseInspectionCycleStage",
+        "type": "object"
+      },
+      "WarehouseInspectionDailyPoint": {
+        "properties": {
+          "avg_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Hours"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "qualified": {
+            "default": 0,
+            "title": "Qualified",
+            "type": "integer"
+          },
+          "unqualified": {
+            "default": 0,
+            "title": "Unqualified",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date"
+        ],
+        "title": "WarehouseInspectionDailyPoint",
+        "type": "object"
+      },
+      "WarehouseInspectionGroupBreakdown": {
+        "description": "按物料类别/产品拆分。",
+        "properties": {
+          "avg_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Hours"
+          },
+          "completed_count": {
+            "default": 0,
+            "title": "Completed Count",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "pending_count": {
+            "default": 0,
+            "title": "Pending Count",
+            "type": "integer"
+          },
+          "qualified_count": {
+            "default": 0,
+            "title": "Qualified Count",
+            "type": "integer"
+          },
+          "unqualified_count": {
+            "default": 0,
+            "title": "Unqualified Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "title": "WarehouseInspectionGroupBreakdown",
+        "type": "object"
+      },
+      "WarehouseInspectionOverview": {
+        "description": "检验进度概览（仪表盘）。",
+        "properties": {
+          "breakdown": {
+            "items": {
+              "$ref": "#/components/schemas/WarehouseInspectionGroupBreakdown"
+            },
+            "title": "Breakdown",
+            "type": "array"
+          },
+          "current": {
+            "$ref": "#/components/schemas/WarehouseInspectionOverviewCurrent"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/WarehouseInspectionDailyPoint"
+            },
+            "title": "Daily",
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "oldest_pending": {
+            "items": {
+              "$ref": "#/components/schemas/WarehouseInspectionPendingItem"
+            },
+            "title": "Oldest Pending",
+            "type": "array"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "scope_label": {
+            "title": "Scope Label",
+            "type": "string"
+          },
+          "stages": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WarehouseInspectionStageStats"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "start_date": {
+            "title": "Start Date",
+            "type": "string"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WarehouseInspectionOverviewWindow"
+          }
+        },
+        "required": [
+          "scope",
+          "scope_label",
+          "start_date",
+          "generated_at",
+          "current",
+          "window"
+        ],
+        "title": "WarehouseInspectionOverview",
+        "type": "object"
+      },
+      "WarehouseInspectionOverviewApiResponse": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WarehouseInspectionOverview"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "WarehouseInspectionOverviewApiResponse",
+        "type": "object"
+      },
+      "WarehouseInspectionOverviewCurrent": {
+        "description": "当前待验概况。",
+        "properties": {
+          "pending_avg_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Avg Hours"
+          },
+          "pending_count": {
+            "default": 0,
+            "title": "Pending Count",
+            "type": "integer"
+          },
+          "pending_max_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Max Hours"
+          }
+        },
+        "title": "WarehouseInspectionOverviewCurrent",
+        "type": "object"
+      },
+      "WarehouseInspectionOverviewWindow": {
+        "description": "近 N 天完成检验概况。",
+        "properties": {
+          "avg_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Hours"
+          },
+          "completed_count": {
+            "default": 0,
+            "title": "Completed Count",
+            "type": "integer"
+          },
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "end": {
+            "title": "End",
+            "type": "string"
+          },
+          "max_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Hours"
+          },
+          "median_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Hours"
+          },
+          "p90_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P90 Hours"
+          },
+          "qualified_count": {
+            "default": 0,
+            "title": "Qualified Count",
+            "type": "integer"
+          },
+          "start": {
+            "title": "Start",
+            "type": "string"
+          },
+          "unqualified_count": {
+            "default": 0,
+            "title": "Unqualified Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "days",
+          "start",
+          "end"
+        ],
+        "title": "WarehouseInspectionOverviewWindow",
+        "type": "object"
+      },
+      "WarehouseInspectionPendingItem": {
+        "properties": {
+          "batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "inbound_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inbound Date"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "product": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product"
+          },
+          "waited_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waited Hours"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "WarehouseInspectionPendingItem",
+        "type": "object"
+      },
+      "WarehouseInspectionStageStats": {
+        "description": "成品分段平均时长。",
+        "properties": {
+          "inbound_to_pending_avg_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inbound To Pending Avg Hours"
+          },
+          "pending_to_result_avg_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending To Result Avg Hours"
+          }
+        },
+        "title": "WarehouseInspectionStageStats",
+        "type": "object"
+      },
       "WarehousePageFeishuConfig": {
         "description": "页面飞书多维表格配置（支持动态切换数据源）",
         "properties": {
@@ -84125,6 +84567,16 @@
             },
             "title": "Fields",
             "type": "array"
+          },
+          "inspection_cycle": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WarehouseInspectionCycle"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "record_id": {
             "title": "Record Id",
@@ -87231,6 +87683,24 @@
             "description": "负责人",
             "title": "Responsible Person"
           },
+          "responsible_users": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "负责人飞书成员对象 [{id: ou_…, name}]，写回成员字段用",
+            "title": "Responsible Users"
+          },
           "supplier_name": {
             "description": "供应商名称",
             "title": "Supplier Name",
@@ -87334,6 +87804,23 @@
               }
             ],
             "title": "Responsible Person"
+          },
+          "responsible_users": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsible Users"
           },
           "supplier_name": {
             "anyOf": [
@@ -139737,6 +140224,174 @@
         ]
       }
     },
+    "/api/v1/production/fermentation-batch-actuals": {
+      "get": {
+        "operationId": "list_fermentation_batch_actuals_api_v1_production_fermentation_batch_actuals_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response List Fermentation Batch Actuals Api V1 Production Fermentation Batch Actuals Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "发酵批次实际产量列表",
+        "tags": [
+          "生产管理",
+          "生产管理 - 发酵车间看板"
+        ]
+      },
+      "post": {
+        "operationId": "upsert_fermentation_batch_actual_api_v1_production_fermentation_batch_actuals_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchActualBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Upsert Fermentation Batch Actual Api V1 Production Fermentation Batch Actuals Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "录入发酵批次实际产量（同批次则更新）",
+        "tags": [
+          "生产管理",
+          "生产管理 - 发酵车间看板"
+        ]
+      }
+    },
+    "/api/v1/production/fermentation-batch-actuals/{item_id}": {
+      "delete": {
+        "operationId": "remove_fermentation_batch_actual_api_v1_production_fermentation_batch_actuals__item_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Remove Fermentation Batch Actual Api V1 Production Fermentation Batch Actuals  Item Id  Delete"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除发酵批次实际产量",
+        "tags": [
+          "生产管理",
+          "生产管理 - 发酵车间看板"
+        ]
+      }
+    },
     "/api/v1/production/fermentation-board": {
       "get": {
         "operationId": "get_fermentation_board_api_v1_production_fermentation_board_get",
@@ -139781,6 +140436,66 @@
           }
         },
         "summary": "发酵车间实时看板（计划驱动）",
+        "tags": [
+          "生产管理",
+          "生产管理 - 发酵车间看板"
+        ]
+      }
+    },
+    "/api/v1/production/fermentation-month-capacity": {
+      "post": {
+        "operationId": "set_fermentation_month_capacity_api_v1_production_fermentation_month_capacity_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MonthCapacityBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Set Fermentation Month Capacity Api V1 Production Fermentation Month Capacity Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "设置当前扎帐月计划产能(kg)",
         "tags": [
           "生产管理",
           "生产管理 - 发酵车间看板"
@@ -160247,401 +160962,6 @@
         ]
       }
     },
-    "/api/v1/quality/department-contacts": {
-      "get": {
-        "operationId": "list_department_contacts_api_v1_quality_department_contacts_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_DepartmentContactOut__"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "获取部门联系人列表",
-        "tags": [
-          "质量管理",
-          "Quality-Management"
-        ]
-      },
-      "post": {
-        "operationId": "upsert_department_contact_api_v1_quality_department_contacts_post",
-        "parameters": [
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateDepartmentContactRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponseEnvelope_DepartmentContactOut_"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "创建部门联系人",
-        "tags": [
-          "质量管理",
-          "Quality-Management"
-        ]
-      }
-    },
-    "/api/v1/quality/department-contacts/feishu": {
-      "get": {
-        "operationId": "list_department_contacts_from_feishu_api_v1_quality_department_contacts_feishu_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponseEnvelope_dict_str__Any__"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "直接获取飞书部门联系人列表",
-        "tags": [
-          "质量管理",
-          "Quality-Management"
-        ]
-      }
-    },
-    "/api/v1/quality/department-contacts/feishu/{record_id}": {
-      "put": {
-        "operationId": "update_department_contact_from_feishu_api_v1_quality_department_contacts_feishu__record_id__put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "record_id",
-            "required": true,
-            "schema": {
-              "title": "Record Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateFeishuDepartmentContactRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponseEnvelope_dict_str__Any__"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "更新飞书部门联系人人员字段",
-        "tags": [
-          "质量管理",
-          "Quality-Management"
-        ]
-      }
-    },
-    "/api/v1/quality/department-contacts/{contact_id}": {
-      "delete": {
-        "operationId": "delete_department_contact_api_v1_quality_department_contacts__contact_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "contact_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Contact Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponseEnvelope_dict_str__Any__"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "删除部门联系人",
-        "tags": [
-          "质量管理",
-          "Quality-Management"
-        ]
-      },
-      "put": {
-        "operationId": "update_department_contact_api_v1_quality_department_contacts__contact_id__put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "contact_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Contact Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateDepartmentContactRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponseEnvelope_DepartmentContactOut_"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "更新部门联系人",
-        "tags": [
-          "质量管理",
-          "Quality-Management"
-        ]
-      }
-    },
     "/api/v1/quality/deviation-investigation-push-records": {
       "get": {
         "operationId": "list_deviation_investigation_push_records_api_v1_quality_deviation_investigation_push_records_get",
@@ -168230,6 +168550,57 @@
         ]
       }
     },
+    "/api/v1/quality/feishu/validations/form-links": {
+      "get": {
+        "description": "新增记录改为打开各年度的飞书多维表单；链接在质量设置-飞书设置中维护。",
+        "operationId": "list_feishu_validation_form_links_api_v1_quality_feishu_validations_form_links_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_dict_str__Any___"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取验证主计划各年度表的飞书表单链接",
+        "tags": [
+          "质量管理",
+          "Quality-Validation"
+        ]
+      }
+    },
     "/api/v1/quality/feishu/validations/revalidation-upcoming": {
       "get": {
         "operationId": "list_feishu_validation_revalidation_upcoming_api_v1_quality_feishu_validations_revalidation_upcoming_get",
@@ -168751,6 +169122,67 @@
         "tags": [
           "质量管理",
           "Quality-Finished-Product-Anomaly"
+        ]
+      }
+    },
+    "/api/v1/quality/finished-product-anomaly/chat/stream": {
+      "post": {
+        "description": "成品异常 AI 助手聊天。\n\n流程：LLM 判断是否需要查询成品异常数据 → 调用工具（记录明细/聚合统计）\n→ 基于真实数据流式回答。SSE 事件：status/content/reasoning_content/done。",
+        "operationId": "anomaly_chat_stream_api_v1_quality_finished_product_anomaly_chat_stream_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnomalyChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Anomaly Chat Stream Api V1 Quality Finished Product Anomaly Chat Stream Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "成品异常 AI 流式聊天（查询异常数据 + 不合格项分析）",
+        "tags": [
+          "质量管理",
+          "Quality-Finished-Product-Anomaly-Chat"
         ]
       }
     },
@@ -180934,6 +181366,86 @@
         ]
       }
     },
+    "/api/v1/quality/person-options": {
+      "get": {
+        "operationId": "list_person_options_api_v1_quality_person_options_get",
+        "parameters": [
+          {
+            "description": "姓名关键词（可选）",
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "姓名关键词（可选）",
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_dict_str__Any___"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取质量模块人员选择候选（人事管理-飞书联系人）",
+        "tags": [
+          "质量管理",
+          "Quality-Management"
+        ]
+      }
+    },
     "/api/v1/quality/product-quality": {
       "get": {
         "operationId": "list_product_quality_api_v1_quality_product_quality_get",
@@ -187218,6 +187730,88 @@
           }
         },
         "summary": "批量删除验证主计划记录",
+        "tags": [
+          "质量管理",
+          "Quality-Validation"
+        ]
+      }
+    },
+    "/api/v1/quality/validations/person-options": {
+      "get": {
+        "operationId": "list_validation_person_options_api_v1_quality_validations_person_options_get",
+        "parameters": [
+          {
+            "description": "姓名过滤关键词，留空返回全量在职人员",
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "姓名过滤关键词，留空返回全量在职人员",
+              "title": "Keyword"
+            }
+          },
+          {
+            "description": "返回条数上限",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "description": "返回条数上限",
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_ValidationPersonOption__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取验证人员选择候选（人事管理-飞书联系人）",
         "tags": [
           "质量管理",
           "Quality-Validation"
@@ -215593,6 +216187,170 @@
           }
         },
         "summary": "获取仓储飞书 WebSocket 状态",
+        "tags": [
+          "仓储管理"
+        ]
+      }
+    },
+    "/api/v1/warehouse/inspection-progress/ai-analysis": {
+      "get": {
+        "description": "对检验进度统计做 AI 分析（LLM 辅助解读，不替代人工判断）。\n\n结果缓存 10 分钟；AI 未配置/失败时返回降级文案。",
+        "operationId": "get_inspection_progress_ai_analysis_api_v1_warehouse_inspection_progress_ai_analysis_get",
+        "parameters": [
+          {
+            "description": "raw=原辅料及包材（入库总账）/ product=成品库存",
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "raw",
+              "description": "raw=原辅料及包材（入库总账）/ product=成品库存",
+              "title": "Scope",
+              "type": "string"
+            }
+          },
+          {
+            "description": "统计窗口天数（默认 30）",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "description": "统计窗口天数（默认 30）",
+              "maximum": 365,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "跳过缓存重新分析",
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "跳过缓存重新分析",
+              "title": "Force",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarehouseInspectionAiAnalysisApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "检验进度 AI 分析（辅助解读）",
+        "tags": [
+          "仓储管理"
+        ]
+      }
+    },
+    "/api/v1/warehouse/inspection-progress/overview": {
+      "get": {
+        "description": "检验进度概览：当前待验、近 N 天完成检验、检验周期分布与每日序列。\n\n统计自 2026-09-09（功能上线日）起，上线前批次不纳入。",
+        "operationId": "get_inspection_progress_overview_api_v1_warehouse_inspection_progress_overview_get",
+        "parameters": [
+          {
+            "description": "raw=原辅料及包材（入库总账）/ product=成品库存",
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "raw",
+              "description": "raw=原辅料及包材（入库总账）/ product=成品库存",
+              "title": "Scope",
+              "type": "string"
+            }
+          },
+          {
+            "description": "统计窗口天数（默认 30）",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "description": "统计窗口天数（默认 30）",
+              "maximum": 365,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarehouseInspectionOverviewApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "检验进度概览（检验周期统计）",
         "tags": [
           "仓储管理"
         ]

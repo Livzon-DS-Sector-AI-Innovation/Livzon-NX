@@ -76,10 +76,6 @@ def test_certificate_normalization_mapping_and_summary_helpers() -> None:
     assert certificate._parse_page_count("无") is None
     assert certificate._split_lines("产品A\n-\n产品B") == ["产品A", "产品B"]
     assert certificate._normalize_group_text(" A\n B ") == "a b"
-    assert certificate._normalize_department_text(" qa 部 ") == "QA部"
-    assert certificate._is_qa_department("QA部")
-    assert certificate._is_qa_department("质量保证部")
-    assert not certificate._is_qa_department("生产部")
     assert certificate._extract_sequence(" 12 ") == 12
     assert certificate._extract_sequence("bad") is None
 
@@ -279,16 +275,16 @@ async def test_certificate_reminder_settings_and_recipient_fallbacks(
     from app.modules.quality import public_api
 
     contacts = AsyncMock(
-        return_value={
-            "items": [
-                {"open_id": "", "name": "空", "department": "QA"},
-                {"open_id": "prod", "name": "生产", "department": "生产部"},
-                {"open_id": "qa", "name": "QA", "department": "质量保证部"},
-                {"open_id": "qa", "name": "QA2", "department": "QA部"},
-            ]
-        }
+        return_value=[
+            {
+                "open_id": "qa",
+                "name": "QA",
+                "department": "质量保证部",
+                "enterprise_email": None,
+            },
+        ]
     )
-    monkeypatch.setattr(public_api, "get_department_contact_list_from_feishu", contacts)
+    monkeypatch.setattr(public_api, "get_qa_reminder_recipients", contacts)
     options = await service.list_reminder_recipient_options()
     assert [item.open_id for item in options] == ["qa"]
     contacts.side_effect = RuntimeError("feishu down")

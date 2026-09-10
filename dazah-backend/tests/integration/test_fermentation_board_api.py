@@ -11,10 +11,10 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
-from datetime import datetime
+from datetime import date, datetime
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import AsyncClient
@@ -50,6 +50,10 @@ def mock_db_service(monkeypatch: Any) -> None:
     monkeypatch.setattr(board, "upsert_maintenance", AsyncMock())
     monkeypatch.setattr(board, "delete_maintenance", AsyncMock())
     monkeypatch.setattr(board, "get_maintenance", AsyncMock(return_value=None))
+    monkeypatch.setattr(board, "list_batch_actuals", AsyncMock(return_value=[]))
+    monkeypatch.setattr(board, "get_batch_actual", AsyncMock(return_value=None))
+    monkeypatch.setattr(board, "get_month_setting", AsyncMock(return_value=None))
+    monkeypatch.setattr(board, "upsert_month_setting", AsyncMock())
 
 
 @pytest.fixture
@@ -132,6 +136,148 @@ async def test_board_builds_payload_from_latest_archive(
     data = response.json()["data"]
     assert data["kpis"]["month_planned"] == 31
     assert data["tanks"][0]["tank_no"] == "302A"
+
+
+@pytest.mark.anyio
+async def test_board_passes_actuals_to_build_board(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(
+        board,
+        "load_latest_archive",
+        AsyncMock(return_value=SimpleNamespace(rows=[])),
+    )
+    monkeypatch.setattr(board, "list_active_maintenance", AsyncMock(return_value=[]))
+    monkeypatch.setattr(
+        board,
+        "list_batch_actuals",
+        AsyncMock(
+            return_value=[
+                SimpleNamespace(
+                    id="1",
+                    batch_no="FA26232",
+                    dump_date=None,
+                    yield_kg=88.5,
+                    remark=None,
+                )
+            ]
+        ),
+    )
+    build_mock = MagicMock(return_value={"kpis": {}})
+    monkeypatch.setattr(board, "build_board", build_mock)
+
+    response = await auth_client.get(f"{API}/fermentation-board")
+    assert response.status_code == 200
+    assert build_mock.call_args.kwargs["actuals"][0]["batch_no"] == "FA26232"
+
+
+@pytest.mark.anyio
+async def test_month_capacity_set_and_board_carries(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+) -> None:
+    # 设置端点：周期来自最新存档
+    monkeypatch.setattr(
+        board,
+        "load_latest_archive",
+        AsyncMock(return_value=SimpleNamespace(rows=[])),
+    )
+    monkeypatch.setattr(board, "current_period", MagicMock(return_value=None))
+    rejected = await auth_client.post(
+        f"{API}/fermentation-month-capacity",
+        json={"planned_capacity_kg": 930000},
+    )
+    assert rejected.status_code == 400
+
+    from datetime import date
+
+    monkeypatch.setattr(
+        board,
+        "current_period",
+        MagicMock(return_value=(date(2026, 8, 27), date(2026, 9, 26))),
+    )
+    setting = SimpleNamespace(
+        id="s1",
+        period_start=date(2026, 8, 27),
+        period_end=date(2026, 9, 26),
+        planned_capacity_kg=930000.0,
+    )
+    monkeypatch.setattr(board, "upsert_month_setting", AsyncMock(return_value=setting))
+    saved = await auth_client.post(
+        f"{API}/fermentation-month-capacity",
+        json={"planned_capacity_kg": 930000},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["data"]["planned_capacity_kg"] == 930000.0
+    kwargs = board.upsert_month_setting.call_args.kwargs
+    assert kwargs["period_start"] == date(2026, 8, 27)
+    assert kwargs["planned_capacity_kg"] == 930000
+
+    # 看板带出产能
+    monkeypatch.setattr(
+        board,
+        "build_board",
+        MagicMock(
+            return_value={
+                "kpis": {},
+                "period": {"start": "2026-08-27", "end": "2026-09-26", "label": ""},
+            }
+        ),
+    )
+    monkeypatch.setattr(board, "get_month_setting", AsyncMock(return_value=setting))
+    res = await auth_client.get(f"{API}/fermentation-board")
+    assert res.status_code == 200
+    assert res.json()["data"]["month_planned_capacity_kg"] == 930000.0
+
+
+@pytest.mark.anyio
+async def test_batch_actuals_crud_endpoints(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+) -> None:
+    item = SimpleNamespace(
+        id="x",
+        batch_no="FA26232",
+        dump_date=date(2026, 9, 9),
+        yield_kg=100.0,
+        remark="染菌批",
+    )
+    monkeypatch.setattr(board, "list_batch_actuals", AsyncMock(return_value=[item]))
+    monkeypatch.setattr(board, "upsert_batch_actual", AsyncMock(return_value=item))
+
+    listed = await auth_client.get(f"{API}/fermentation-batch-actuals")
+    assert listed.status_code == 200
+    assert listed.json()["data"][0]["batch_no"] == "FA26232"
+
+    saved = await auth_client.post(
+        f"{API}/fermentation-batch-actuals",
+        json={
+            "batch_no": "FA26232",
+            "dump_date": "2026-09-09",
+            "yield_kg": 100.0,
+            "remark": "染菌批",
+        },
+    )
+    assert saved.status_code == 200
+    assert saved.json()["data"]["yield_kg"] == 100.0
+    assert saved.json()["data"]["remark"] == "染菌批"
+    assert board.upsert_batch_actual.call_args.kwargs["batch_no"] == "FA26232"
+    assert board.upsert_batch_actual.call_args.kwargs["remark"] == "染菌批"
+
+    monkeypatch.setattr(board, "get_batch_actual", AsyncMock(return_value=item))
+    monkeypatch.setattr(board, "delete_batch_actual", AsyncMock())
+    delete_id = uuid.uuid4()
+    deleted = await auth_client.delete(f"{API}/fermentation-batch-actuals/{delete_id}")
+    assert deleted.status_code == 200
+
+    monkeypatch.setattr(board, "get_batch_actual", AsyncMock(return_value=None))
+    missing_id = uuid.uuid4()
+    missing = await auth_client.delete(f"{API}/fermentation-batch-actuals/{missing_id}")
+    assert missing.status_code == 404
 
 
 @pytest.mark.anyio

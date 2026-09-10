@@ -38,17 +38,32 @@ class _FakeBitable:
             {"field_name": "封面照片", "ui_type": "Attachment"},
         ]
 
-    async def create_record(self, table_id: str, fields: dict) -> dict:
+    async def create_record(
+        self, table_id: str, fields: dict, *, user_id_type: str = "open_id"
+    ) -> dict:
         self.created.append(fields)
         return {"record_id": "rec_new"}
 
-    async def update_record(self, table_id: str, record_id: str, fields: dict) -> dict:
+    async def update_record(
+        self,
+        table_id: str,
+        record_id: str,
+        fields: dict,
+        *,
+        user_id_type: str = "open_id",
+    ) -> dict:
         return {"record_id": record_id}
 
     async def delete_record(self, table_id: str, record_id: str) -> dict:
         return {}
 
-    async def get_record(self, table_id: str, record_id: str) -> dict | None:
+    async def get_record(
+        self,
+        table_id: str,
+        record_id: str,
+        *,
+        user_id_type: str = "open_id",
+    ) -> dict | None:
         return {
             "record_id": record_id,
             "fields": {

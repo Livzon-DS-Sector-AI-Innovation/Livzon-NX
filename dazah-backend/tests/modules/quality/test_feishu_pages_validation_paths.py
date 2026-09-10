@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.core.exceptions import AppException
 from app.modules.quality.service import quality_feishu_pages as pages
 
 
@@ -41,15 +42,20 @@ class _FeishuSync:
 async def test_build_validation_fields_covers_people_dates_and_optional_values(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # 遗留纯姓名路径改走人员目录（人事-飞书联系人）解析
+    async def _fake_by_name(db, name):
+        return {"open_id": f"ou_{name}"} if name in ("张三", "李四") else None
+
+    async def _fake_write_id(db, open_id):
+        return f"union_{open_id}"
+
     monkeypatch.setattr(
-        pages,
-        "_get_department_contacts_cache",
-        AsyncMock(
-            return_value=[
-                {"name": "张三", "bitable_user_id": "ou_1"},
-                {"name": "李四", "open_id": "ou_2"},
-            ]
-        ),
+        "app.modules.quality.service.person_directory.resolve_person_by_name",
+        _fake_by_name,
+    )
+    monkeypatch.setattr(
+        "app.modules.quality.service.person_directory.resolve_person_write_id",
+        _fake_write_id,
     )
     monkeypatch.setattr(pages, "feishu_sync_service", _FeishuSync)
     payload = {
@@ -74,15 +80,15 @@ async def test_build_validation_fields_covers_people_dates_and_optional_values(
     fields = await pages._build_validation_feishu_fields(SimpleNamespace(), payload)
     assert fields["验证类别"] == "工艺验证"
     assert fields["确认名称"] == "工艺验证"
-    assert fields["人员"] == [{"id": "ou_1"}, {"id": "ou_2"}]
-    assert fields["负责人"] == [{"id": "ou_1"}]
+    assert fields["人员"] == [
+        {"id": "union_ou_张三"},
+        {"id": "union_ou_李四"},
+    ]
+    assert fields["负责人"] == [{"id": "union_ou_张三"}]
     assert fields["验证到期时间"] == "2026.08"
     assert fields["再验证周期（几年）"] == "3年"
     assert "群组" not in fields
 
-    monkeypatch.setattr(
-        pages, "_get_department_contacts_cache", AsyncMock(return_value=[])
-    )
     fields = await pages._build_validation_feishu_fields(
         SimpleNamespace(),
         {
@@ -104,10 +110,6 @@ def test_validation_mapping_and_parsing_supports_feishu_shapes(
     assert pages._entity_code_for_validation_type("equipment_qualification")
     assert pages._translate_validation_type_c2f("unknown") == "unknown"
     assert pages._translate_validation_type_f2c("未知类别") == "other_validation"
-    assert pages._resolve_bitable_user_ids_from_names(
-        [{"name": "张三", "open_id": "open-1"}], "张三"
-    ) == ["open-1"]
-    assert pages._resolve_bitable_user_ids_from_names([], "") is None
     assert pages._parse_feishu_text_field([{"text": " A "}, "B"]) == "A / B"
     assert pages._parse_feishu_text_field({"text": "名称"}) == "名称"
     assert pages._parse_feishu_text_field(12) == "12"
@@ -148,6 +150,94 @@ def test_validation_mapping_and_parsing_supports_feishu_shapes(
     assert item["owner_name"] == [{"name": "张三", "avatar_url": "", "id": ""}]
     assert item["revalidation_cycle_years"] == 3
     assert item["drafted_at"] == date(2026, 8, 2)
+
+
+@pytest.mark.asyncio
+async def test_build_validation_fields_resolves_member_entries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """人员选择器（人事管理-飞书联系人）提交 [{id, name, resolved}]：
+    人事 open_id 换发 union_id、回显 id 保留、空数组清空、换发失败明确报错。"""
+    monkeypatch.setattr(pages, "feishu_sync_service", _FeishuSync)
+
+    async def _fake_translate(db, open_ids):
+        table = {
+            "ou_zhang": "on_zhang",
+            "ou_li": "on_li",
+        }
+        return {oid: union_id for oid, union_id in table.items() if oid in open_ids}
+
+    monkeypatch.setattr(
+        "app.modules.quality.service.hr_identity."
+        "translate_hr_open_ids_to_union_ids",
+        _fake_translate,
+    )
+
+    fields = await pages._build_validation_feishu_fields(
+        SimpleNamespace(),
+        {
+            "title": "确认A",
+            "participants": [
+                {"id": "ou_zhang", "name": "张三"},
+                {"id": "on_rt", "name": "王五", "resolved": True},
+            ],
+            "owner_name": [{"id": "ou_li", "name": "李四"}],
+        },
+    )
+    assert fields["人员"] == [{"id": "on_zhang"}, {"id": "on_rt"}]
+    assert fields["负责人"] == [{"id": "on_li"}]
+    # 出现 union_id 后写接口必须带 user_id_type=union_id
+    assert pages._fields_need_union_user_id(fields) is True
+    assert (
+        pages._fields_need_union_user_id({"人员": [{"id": "ou_other"}]}) is False
+    )
+
+    # 换发失败的成员明确报错（人事应用 open_id 与质量应用命名空间不同）
+    with pytest.raises(AppException, match="赵六"):
+        await pages._build_validation_feishu_fields(
+            SimpleNamespace(),
+            {
+                "title": "确认B",
+                "participants": [{"id": "ou_unknown", "name": "赵六"}],
+                "owner_name": [],
+            },
+        )
+
+    # 空负责人数组 = 显式清空
+    fields = await pages._build_validation_feishu_fields(
+        SimpleNamespace(),
+        {
+            "title": "确认B2",
+            "participants": [{"id": "ou_zhang", "name": "张三"}],
+            "owner_name": [],
+        },
+    )
+    assert fields["负责人"] == []
+
+
+def test_mark_members_resolved_flags_record_read_ids() -> None:
+    item = {
+        "participants": [{"id": "on_1", "name": "张三"}, "文本"],
+        "owner_name": [{"id": "ou_owner", "name": "李四"}],
+    }
+    marked = pages._mark_members_resolved(item)
+    assert marked["participants"][0]["resolved"] is True
+    assert marked["participants"][1] == "文本"
+    assert marked["owner_name"][0]["resolved"] is True
+
+
+@pytest.mark.asyncio
+async def test_build_validation_fields_clears_empty_participants(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(pages, "feishu_sync_service", _FeishuSync)
+
+    # 空人员数组 → 显式清空飞书成员字段
+    fields = await pages._build_validation_feishu_fields(
+        SimpleNamespace(),
+        {"title": "确认C", "participants": []},
+    )
+    assert fields["人员"] == []
 
 
 @pytest.mark.asyncio

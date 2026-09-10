@@ -17,6 +17,11 @@ import {
   App,
   Modal,
   Input,
+  InputNumber,
+  DatePicker,
+  Drawer,
+  Popconfirm,
+  Select,
   Statistic,
   Empty,
   Space,
@@ -28,14 +33,26 @@ import {
   AlertOutlined,
   ArrowRightOutlined,
   ShopOutlined,
+  DatabaseOutlined,
+  PlusOutlined,
+  EditOutlined,
 } from '@ant-design/icons'
+import dayjs from 'dayjs'
 import ReactECharts from 'echarts-for-react'
 import {
   getFermentationBoard,
   markTankMaintenance,
   removeTankMaintenance,
+  getFermentationBatchActuals,
+  upsertFermentationBatchActual,
+  deleteFermentationBatchActual,
+  setFermentationMonthCapacity,
 } from '@/actions/production'
-import type { FermentationBoard, BoardTank } from '@/types/production'
+import type {
+  FermentationBoard,
+  BoardTank,
+  FermentationBatchActual,
+} from '@/types/production'
 
 const { Title, Text } = Typography
 
@@ -118,6 +135,13 @@ function fmtShort(value?: string | null): string {
   return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
+// 批次顺序号 = 批次号后三位（如 FA26234 → 234）；无法解析时返回 null，排序时置于末尾
+function batchSeqNo(batchNo: string | null): number | null {
+  if (!batchNo) return null
+  const tail = batchNo.slice(-3)
+  return /^\d{3}$/.test(tail) ? Number(tail) : null
+}
+
 const STATUS_META: Record<string, { label: string; color: string }> = {
   running: { label: '运行中', color: 'success' },
   dumping: { label: '放罐中', color: 'processing' },
@@ -132,10 +156,22 @@ export default function ProductionDashboard() {
   const [board, setBoard] = useState<FermentationBoard | null>(null)
   const [boardMessage, setBoardMessage] = useState<string>('')
   const [loading, setLoading] = useState(true)
-  const [clock, setClock] = useState(() => fmtDateTime(new Date().toISOString()))
+  // 首帧不渲染时间（服务端与客户端时区不一致会导致 hydration 不匹配），挂载后再计时
+  const [clock, setClock] = useState('')
   const [maintModalOpen, setMaintModalOpen] = useState(false)
   const [maintTank, setMaintTank] = useState<BoardTank | null>(null)
   const [maintReason, setMaintReason] = useState('')
+  const [actualsOpen, setActualsOpen] = useState(false)
+  const [actuals, setActuals] = useState<FermentationBatchActual[]>([])
+  const [actualsLoading, setActualsLoading] = useState(false)
+  const [actualModalOpen, setActualModalOpen] = useState(false)
+  const [editingActual, setEditingActual] = useState<FermentationBatchActual | null>(null)
+  const [actualBatchNo, setActualBatchNo] = useState('')
+  const [actualDumpDate, setActualDumpDate] = useState<dayjs.Dayjs | null>(null)
+  const [actualYieldKg, setActualYieldKg] = useState<number | null>(null)
+  const [actualRemark, setActualRemark] = useState('')
+  const [capacityModalOpen, setCapacityModalOpen] = useState(false)
+  const [capacityKg, setCapacityKg] = useState<number | null>(null)
 
   const loadBoard = useCallback(async () => {
     try {
@@ -160,11 +196,14 @@ export default function ProductionDashboard() {
   }, [loadBoard])
 
   useEffect(() => {
-    const timer = setInterval(
-      () => setClock(fmtDateTime(new Date().toISOString())),
-      1000,
-    )
-    return () => clearInterval(timer)
+    const update = () => setClock(fmtDateTime(new Date().toISOString()))
+    // rAF 异步回调补首帧时间，避免 effect 内同步 setState
+    const raf = requestAnimationFrame(update)
+    const timer = setInterval(update, 1000)
+    return () => {
+      cancelAnimationFrame(raf)
+      clearInterval(timer)
+    }
   }, [])
 
   const submitMaintenance = async () => {
@@ -195,10 +234,85 @@ export default function ProductionDashboard() {
     }
   }
 
+  const openActuals = async () => {
+    setActualsOpen(true)
+    setActualsLoading(true)
+    try {
+      const res = await getFermentationBatchActuals()
+      if (res.code === 200) {
+        setActuals(res.data || [])
+      } else {
+        message.error(res.message || '历史数据加载失败')
+      }
+    } catch {
+      message.error('历史数据加载失败')
+    } finally {
+      setActualsLoading(false)
+    }
+  }
+
+  const openActualModal = (item: FermentationBatchActual | null) => {
+    setEditingActual(item)
+    setActualBatchNo(item?.batch_no ?? '')
+    setActualDumpDate(item?.dump_date ? dayjs(item.dump_date) : null)
+    setActualYieldKg(item?.yield_kg ?? null)
+    setActualRemark(item?.remark ?? '')
+    setActualModalOpen(true)
+  }
+
+  const submitActual = async () => {
+    if (!actualBatchNo.trim()) {
+      message.warning('请填写批次号')
+      return
+    }
+    const res = await upsertFermentationBatchActual({
+      batch_no: actualBatchNo.trim(),
+      dump_date: actualDumpDate ? actualDumpDate.format('YYYY-MM-DD') : null,
+      yield_kg: actualYieldKg,
+      remark: actualRemark.trim() || null,
+    })
+    if (res.code === 200) {
+      message.success('已保存批次产量')
+      setActualModalOpen(false)
+      await openActuals()
+      await loadBoard()
+    } else {
+      message.error(res.message || '保存失败')
+    }
+  }
+
+  const removeActual = async (item: FermentationBatchActual) => {
+    const res = await deleteFermentationBatchActual(item.id)
+    if (res.code === 200) {
+      message.success('已删除批次产量记录')
+      await openActuals()
+      await loadBoard()
+    } else {
+      message.error(res.message || '删除失败')
+    }
+  }
+
+  const openCapacityModal = () => {
+    setCapacityKg(board?.month_planned_capacity_kg ?? null)
+    setCapacityModalOpen(true)
+  }
+
+  const submitCapacity = async () => {
+    const res = await setFermentationMonthCapacity(capacityKg)
+    if (res.code === 200) {
+      message.success('已保存本月计划产能')
+      setCapacityModalOpen(false)
+      await loadBoard()
+    } else {
+      message.error(res.message || '保存失败')
+    }
+  }
+
   const kpi = board?.kpis
   const dash = '--'
 
   // 发酵罐实时状态：三台发酵罐 + 最近已放罐的一批（凑齐 4 批）
+  // 行序按批次顺序（批次号后三位从小到大）；无批号的罐（空闲/检修）保持罐号顺序排在最后
   const renderTanks = useMemo(() => {
     const rows: BoardTank[] = [...(board?.tanks || [])]
     const last = board?.recent?.[0]
@@ -211,46 +325,84 @@ export default function ProductionDashboard() {
         cultured_hours: null,
         cycle_hours: null,
         dump_at: last.dump_date,
-        note: last.result,
+        note: '该罐本批次放罐作业完成',
       })
     }
+    rows.sort(
+      (a, b) =>
+        (batchSeqNo(a.batch_no) ?? Number.POSITIVE_INFINITY) -
+        (batchSeqNo(b.batch_no) ?? Number.POSITIVE_INFINITY),
+    )
     return rows
   }, [board])
+
+  const achievementRate =
+    kpi?.month_done_planned != null && kpi?.month_planned
+      ? Math.round((kpi.month_done_planned / kpi.month_planned) * 100)
+      : null
+
+  // 本月批次进度条：已完成（产量已录）→ 待出产量（已放罐未录产量）→ 运行中 → 未开始
+  const planned = kpi?.month_planned ?? 0
+  const doneWithYield = kpi?.done_with_yield ?? 0
+  const yieldPending = kpi?.yield_pending ?? 0
+  const runningCount = kpi?.running ?? 0
+  const notStarted = Math.max(0, planned - doneWithYield - yieldPending - runningCount)
+  const segPct = (count: number) => (planned > 0 ? (count / planned) * 100 : 0)
+  // 箭头位置 = 已出产量（产量已录入闭环）的进度点；待出产量段留在箭头之后
+  const arrowPct = segPct(doneWithYield)
+  const physicalDone = doneWithYield + yieldPending
+  const physicalPct =
+    planned > 0 ? Math.round((physicalDone / planned) * 100) : null
+
+  const progressSegments = [
+    { key: 'done', label: '已完成', count: doneWithYield, color: '#52c41a' },
+    { key: 'pending', label: '待出产量', count: yieldPending, color: '#bfbfbf' },
+    { key: 'running', label: '运行中', count: runningCount, color: '#1677ff' },
+    { key: 'idle', label: '未开始', count: notStarted, color: '#f0f0f0' },
+  ]
+
+  // 产能达成率 = 已完成产能 / 本月计划产能
+  const doneYieldKg = kpi?.month_done_yield_kg ?? null
+  const plannedCapacityKg = board?.month_planned_capacity_kg ?? null
+  const capacityRate =
+    doneYieldKg != null && plannedCapacityKg
+      ? `${((doneYieldKg / plannedCapacityKg) * 100).toFixed(1)}%`
+      : null
+  const fmtTon = (kg: number | null) =>
+    kg == null ? '--' : kg >= 1000 ? `${(kg / 1000).toFixed(1)} t` : String(kg)
 
   const kpiCards: {
     title: string
     value: string | number | null
     sub?: string
+    extra?: { label: string; value: string; sub?: string }
   }[] = [
     {
       title: '本月计划批次',
       value: kpi?.month_planned ?? dash,
       sub: board?.period.label,
     },
-    { title: '本月满产目标批次', value: dash },
-    { title: '计划达成率', value: dash },
-    { title: '当前运行批次', value: kpi?.running ?? dash },
-    { title: '待启动排产批次', value: kpi?.pending ?? dash },
     {
       title: '本月已完成批次',
       value: kpi?.month_done_planned ?? dash,
-      sub: '按计划放罐口径',
+      sub: achievementRate != null ? `达成率 ${achievementRate}%` : undefined,
+      extra: {
+        label: '已完成产能',
+        value: fmtTon(doneYieldKg),
+        sub: `产能达成率 ${capacityRate ?? '--'}`,
+      },
     },
-    { title: '染菌数｜染菌率', value: dash },
-    { title: '计划月产能｜实际累计产能', value: dash },
-    { title: '平均放罐收率', value: dash },
-    { title: '设备利用率', value: dash },
-    { title: '昨日单批平均产量', value: dash },
-    { title: '本月批次合格率', value: dash },
+    { title: '当前运行批次', value: kpi?.running ?? dash },
+    { title: '待启动排产批次', value: kpi?.pending ?? dash },
   ]
 
   const tankColumns = [
-    { title: '罐号', dataIndex: 'tank_no', key: 'tank_no', width: 90 },
+    { title: '罐号', dataIndex: 'tank_no', key: 'tank_no', width: 80 },
     {
       title: '当前状态',
       dataIndex: 'status',
       key: 'status',
-      width: 120,
+      width: 100,
       render: (status: string) => {
         const meta = STATUS_META[status] || { label: status, color: 'default' }
         return <Tag color={meta.color}>{meta.label}</Tag>
@@ -260,41 +412,42 @@ export default function ProductionDashboard() {
       title: '当前批次号',
       dataIndex: 'batch_no',
       key: 'batch_no',
-      width: 130,
+      width: 110,
       render: (v: string | null) => v || '-',
     },
     {
       title: '接种时间',
       dataIndex: 'inoculate_at',
       key: 'inoculate_at',
-      width: 140,
+      width: 124,
       render: (v: string | null) => fmtShort(v),
     },
     {
       title: '已培养时长',
       dataIndex: 'cultured_hours',
       key: 'cultured_hours',
-      width: 110,
+      width: 88,
       render: (v: number | null) => (v == null ? '-' : `${Math.max(0, Math.floor(v))}h`),
     },
     {
       title: '计划总周期',
       dataIndex: 'cycle_hours',
       key: 'cycle_hours',
-      width: 110,
+      width: 88,
       render: (v: number | null) => (v == null ? '-' : `${v}h`),
     },
     {
       title: '预估放罐时间',
       dataIndex: 'dump_at',
       key: 'dump_at',
-      width: 150,
+      width: 136,
       render: (v: string | null) => fmtShort(v),
     },
     {
       title: '备注',
       dataIndex: 'note',
       key: 'note',
+      ellipsis: { showTitle: true },
       render: (v: string | null) => v || '-',
     },
     {
@@ -303,7 +456,8 @@ export default function ProductionDashboard() {
       width: 120,
       render: (_: unknown, record: BoardTank) =>
         record.status === 'dumped' ? (
-          '-'
+          // 占位与操作列 small 按钮同高（主题 controlHeightSM），保证已放罐行与其他行行高一致
+          <span style={{ display: 'inline-block', height: 36, lineHeight: '36px' }}>-</span>
         ) : record.status === 'maintenance' ? (
           <Button size="small" onClick={() => void releaseMaintenance(record)}>
             解除检修
@@ -330,30 +484,127 @@ export default function ProductionDashboard() {
       title: '放罐日期',
       dataIndex: 'dump_date',
       key: 'dump_date',
-      width: 120,
+      width: 76,
+      render: (v: string | null) => fmtShort(v),
     },
     {
-      title: '放罐产量',
+      title: '放罐产量(kg)',
       dataIndex: 'yield_kg',
       key: 'yield_kg',
-      width: 110,
-      render: (v: number | null) => (v == null ? '--' : `${v} kg`),
+      width: 96,
+      render: (v: number | null) => (v == null ? '--' : v),
     },
     {
-      title: '实际收率',
-      dataIndex: 'yield_rate',
-      key: 'yield_rate',
-      width: 100,
-      render: (v: number | null) => (v == null ? '--' : `${v}%`),
+      title: '备注',
+      dataIndex: 'remark',
+      key: 'remark',
+      ellipsis: { showTitle: true },
+      render: (v: string | null) => v || '-',
     },
-    { title: '结果', dataIndex: 'result', key: 'result', width: 110 },
   ]
+
+  // 新建录入时的批号下拉：已放罐且尚未录入产量的批次；编辑时锁定原批号
+  const actualBatchOptions = editingActual
+    ? [{ label: editingActual.batch_no, value: editingActual.batch_no }]
+    : (board?.dumped_batches || [])
+        .filter((b) => !actuals.some((a) => a.batch_no === b.batch_no))
+        .map((b) => ({ label: `${b.batch_no}（${b.dump_date}）`, value: b.batch_no }))
+
+  const actualColumns = [
+    { title: '批次号', dataIndex: 'batch_no', key: 'batch_no' },
+    {
+      title: '放罐日期',
+      dataIndex: 'dump_date',
+      key: 'dump_date',
+      width: 110,
+      render: (v: string | null) => v || '-',
+    },
+    {
+      title: '产量(kg)',
+      dataIndex: 'yield_kg',
+      key: 'yield_kg',
+      width: 100,
+      render: (v: number | null) => (v == null ? '-' : v),
+    },
+    {
+      title: '备注',
+      dataIndex: 'remark',
+      key: 'remark',
+      ellipsis: { showTitle: true },
+      render: (v: string | null) => v || '-',
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 110,
+      render: (_: unknown, record: FermentationBatchActual) => (
+        <Space size={0}>
+          <Button size="small" type="link" onClick={() => openActualModal(record)}>
+            编辑
+          </Button>
+          <Popconfirm
+            title="删除后看板图表不再统计该批次，确认删除？"
+            okText="删除"
+            cancelText="取消"
+            onConfirm={() => void removeActual(record)}
+          >
+            <Button size="small" type="link" danger>
+              删除
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ]
+
+  // 单批产量柱状图 + 平均产量标线
+  const trendOutputs = board?.trend?.outputs ?? []
+  const trendAvg = trendOutputs.length
+    ? trendOutputs.reduce((sum, value) => sum + value, 0) / trendOutputs.length
+    : null
 
   const trendOption = board?.trend
     ? {
-        xAxis: { type: 'category', data: board.trend.batches },
-        yAxis: { type: 'value', name: '收率 (%)' },
-        series: [{ type: 'line', data: board.trend.yields, smooth: true }],
+        // containLabel 让绘图区给 Y 轴标签让位，避免第一根柱被轴刻度遮挡
+        grid: { left: 8, right: 24, top: 40, bottom: 40, containLabel: true },
+        xAxis: {
+          type: 'category',
+          data: board.trend.batches,
+          axisLabel: { interval: 'auto', hideOverlap: true },
+        },
+        yAxis: { type: 'value', name: '产量 (kg)' },
+        dataZoom: [
+          {
+            type: 'slider',
+            xAxisIndex: 0,
+            start: 0,
+            end: 100,
+            height: 16,
+            bottom: 8,
+          },
+        ],
+        tooltip: { trigger: 'axis' },
+        series: [
+          {
+            type: 'bar',
+            name: '单批产量',
+            data: trendOutputs,
+            barMaxWidth: 36,
+            markLine:
+              trendAvg == null
+                ? undefined
+                : {
+                    symbol: 'none',
+                    silent: true,
+                    lineStyle: { color: '#fa8c16' },
+                    label: {
+                      formatter: `平均产量 ${trendAvg.toFixed(1)} kg`,
+                      position: 'insideEndTop',
+                    },
+                    data: [{ yAxis: trendAvg }],
+                  },
+          },
+        ],
       }
     : null
 
@@ -361,7 +612,7 @@ export default function ProductionDashboard() {
   const alertText = (board?.alerts || []).map((a) => a.text).join('　　｜　　')
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 flex flex-col gap-3">
       {/* 顶部通栏 */}
       <Card
         variant="borderless"
@@ -379,6 +630,13 @@ export default function ProductionDashboard() {
           <Space size={16}>
             <Text type="secondary">系统时间：{clock}</Text>
             <Text type="secondary">数据刷新：5 分钟</Text>
+            <Button
+              size="small"
+              icon={<DatabaseOutlined />}
+              onClick={() => void openActuals()}
+            >
+              历史数据
+            </Button>
             <Button
               size="small"
               icon={<SyncOutlined spin={loading} />}
@@ -419,6 +677,32 @@ export default function ProductionDashboard() {
           0% { transform: translateX(100%); }
           100% { transform: translateX(-100%); }
         }
+        /* 最近完成批次：表格区域撑满卡片高度，滚动条贴卡片右缘上下撑满 */
+        .recent-batches-card {
+          display: flex;
+          flex-direction: column;
+        }
+        .recent-batches-card .ant-card-body {
+          flex: 1;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+        }
+        .recent-batches-table,
+        .recent-batches-table .ant-spin,
+        .recent-batches-table .ant-spin-container,
+        .recent-batches-table .ant-table,
+        .recent-batches-table .ant-table-container {
+          flex: 1;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+        }
+        .recent-batches-table .ant-table-body {
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
+        }
       `}</style>
 
       {/* 主体 */}
@@ -435,26 +719,157 @@ export default function ProductionDashboard() {
           {/* KPI 卡片区 */}
           <Row gutter={[12, 12]}>
             {kpiCards.map((card) => (
-              <Col xs={12} sm={8} md={6} lg={4} key={card.title}>
+              <Col xs={12} sm={12} md={6} key={card.title}>
                 <Card
                   variant="borderless"
-                  className="shadow-sm"
+                  className="shadow-sm h-full"
                   styles={{ body: { padding: '10px 14px' } }}
                 >
-                  <Statistic
-                    title={<span style={{ fontSize: 12 }}>{card.title}</span>}
-                    value={card.value ?? undefined}
-                    styles={{ content: { fontSize: 26, fontWeight: 600 } }}
-                  />
-                  {card.sub && (
-                    <Text type="secondary" style={{ fontSize: 11 }}>
-                      {card.sub}
-                    </Text>
-                  )}
+                  <div className={card.extra ? 'flex items-stretch' : undefined}>
+                    <div className={card.extra ? 'flex-1 min-w-0' : undefined}>
+                      <Statistic
+                        title={<span style={{ fontSize: 12 }}>{card.title}</span>}
+                        value={card.value ?? undefined}
+                        styles={{ content: { fontSize: 26, fontWeight: 600 } }}
+                      />
+                      {card.sub && (
+                        <Text type="secondary" style={{ fontSize: 11 }}>
+                          {card.sub}
+                        </Text>
+                      )}
+                    </div>
+                    {card.extra && (
+                      <div className="flex-1 min-w-0 pl-3 border-l border-[var(--color-hairline)]">
+                        <Text
+                          type="secondary"
+                          style={{ fontSize: 12, display: 'block', marginBottom: 7 }}
+                        >
+                          {card.extra.label}
+                        </Text>
+                        <div
+                          style={{
+                            fontSize: 26,
+                            fontWeight: 600,
+                            lineHeight: 1.35,
+                            marginBottom: 4,
+                          }}
+                        >
+                          {card.extra.value}
+                        </div>
+                        {card.extra.sub && (
+                          <Text type="secondary" style={{ fontSize: 11 }}>
+                            {card.extra.sub}
+                          </Text>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </Card>
               </Col>
             ))}
           </Row>
+
+          {/* 本月批次进度条 */}
+          <Card
+            variant="borderless"
+            className="shadow-sm"
+            styles={{ body: { padding: '12px 20px' } }}
+          >
+            <div className="flex items-stretch gap-5">
+              <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between flex-wrap gap-1">
+              <Text strong>本月批次进度</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                已放罐 {physicalDone}/{planned}
+                {physicalPct != null ? `（${physicalPct}%）` : ''}｜运行中 {runningCount}｜待出产量{' '}
+                {yieldPending}
+              </Text>
+            </div>
+            {/* 箭头骑在轨道上，指向已放罐进度点 */}
+            <div className="relative" style={{ marginTop: 8, marginBottom: 4 }}>
+              <div className="flex h-6 rounded overflow-hidden">
+                {progressSegments.map((seg) => (
+                  <div
+                    key={seg.key}
+                    title={`${seg.label} ${seg.count} 批`}
+                    className="h-full flex items-center justify-center overflow-hidden"
+                    style={{ width: `${segPct(seg.count)}%`, backgroundColor: seg.color }}
+                  >
+                    {seg.count > 0 && segPct(seg.count) >= 6 && (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          color: seg.key === 'idle' || seg.key === 'pending' ? '#595959' : '#fff',
+                        }}
+                      >
+                        {seg.count}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {/* 箭头：轨道本身是横杠，三角头接在进度点处，整体呈 → */}
+              <div
+                className="absolute flex items-center"
+                style={{
+                  left: `${arrowPct}%`,
+                  top: 0,
+                  height: 24,
+                  transform: 'translateX(-100%)',
+                  filter: 'drop-shadow(0 1px 2px rgba(250,84,28,0.5))',
+                }}
+              >
+                <div
+                  className="w-0 h-0"
+                  style={{
+                    borderTop: '14px solid transparent',
+                    borderBottom: '14px solid transparent',
+                    borderLeft: '20px solid #fa541c',
+                  }}
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-4 flex-wrap">
+              {progressSegments.map((seg) => (
+                <span key={seg.key} className="flex items-center gap-1">
+                  <span
+                    className="inline-block w-2.5 h-2.5 rounded-sm"
+                    style={{ backgroundColor: seg.color }}
+                  />
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {seg.label} {seg.count} 批
+                  </Text>
+                </span>
+              ))}
+            </div>
+              </div>
+              {/* 右侧：本月计划产能 */}
+              <div className="flex flex-col justify-center pl-5 border-l border-[var(--color-hairline)] min-w-[170px]">
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  本月计划产能
+                </Text>
+                <div className="flex items-center gap-1">
+                  <Text strong style={{ fontSize: 22, lineHeight: 1.4 }}>
+                    {board?.month_planned_capacity_kg == null
+                      ? '--'
+                      : board.month_planned_capacity_kg >= 1000
+                        ? `${(board.month_planned_capacity_kg / 1000).toFixed(1)} t`
+                        : board.month_planned_capacity_kg}
+                  </Text>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<EditOutlined />}
+                    onClick={openCapacityModal}
+                    title="设置本月计划产能"
+                  />
+                </div>
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  按扎帐月保存，可随时修改
+                </Text>
+              </div>
+            </div>
+          </Card>
 
           {/* 三台罐状态 */}
           <Card
@@ -474,39 +889,41 @@ export default function ProductionDashboard() {
             />
           </Card>
 
-          {/* 收率趋势 + 最近完成批次 */}
+          {/* 单批产量图表 + 最近完成批次：图表占 2/3，最近批次缩为 1/3 */}
           <Row gutter={[12, 12]}>
-            <Col xs={24} lg={12}>
+            <Col xs={24} lg={16}>
               <Card
-                title="近 12 批收率走势"
+                title="单批产量（最多 31 批）"
                 variant="borderless"
-                className="shadow-sm"
+                className="shadow-sm h-full"
                 styles={{ body: { padding: 8 } }}
               >
                 {trendOption ? (
-                  <ReactECharts option={trendOption} style={{ height: 260 }} />
+                  <ReactECharts option={trendOption} style={{ height: 270 }} />
                 ) : (
                   <Empty
-                    description="实际放罐数据接入后显示（当前为计划看板）"
+                    description="暂无录入数据，请点击右上角「历史数据」录入批次产量"
                     style={{ padding: '70px 0' }}
                   />
                 )}
               </Card>
             </Col>
-            <Col xs={24} lg={12}>
+            <Col xs={24} lg={8}>
               <Card
                 title="最近完成批次"
                 variant="borderless"
-                className="shadow-sm"
+                className="shadow-sm h-full recent-batches-card"
                 styles={{ body: { padding: 8 } }}
               >
                 <Table
                   rowKey="batch_no"
                   size="small"
+                  className="recent-batches-table"
                   columns={recentColumns}
                   dataSource={board?.recent || []}
                   pagination={false}
-                  locale={{ emptyText: '暂无已到计划放罐时间的批次' }}
+                  scroll={{ y: 243 }}
+                  locale={{ emptyText: '暂无已完成放罐的批次' }}
                 />
               </Card>
             </Col>
@@ -533,14 +950,118 @@ export default function ProductionDashboard() {
         </Text>
       </Modal>
 
+      {/* 历史数据抽屉：批次实际产量 */}
+      <Drawer
+        title="批次产量历史数据"
+        size={560}
+        open={actualsOpen}
+        onClose={() => setActualsOpen(false)}
+        extra={
+          <Button
+            type="primary"
+            size="small"
+            icon={<PlusOutlined />}
+            onClick={() => openActualModal(null)}
+          >
+            录入批次产量
+          </Button>
+        }
+      >
+        <Table
+          rowKey="id"
+          size="small"
+          columns={actualColumns}
+          dataSource={actuals}
+          loading={actualsLoading}
+          pagination={false}
+          locale={{ emptyText: '暂无录入数据' }}
+        />
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          录入后单批产量图表与「最近完成批次」的放罐产量自动更新。
+        </Text>
+      </Drawer>
+
+      {/* 批次产量录入弹窗 */}
+      <Modal
+        title={editingActual ? `编辑批次产量：${editingActual.batch_no}` : '录入批次产量'}
+        open={actualModalOpen}
+        onOk={() => void submitActual()}
+        onCancel={() => setActualModalOpen(false)}
+        okText="保存"
+        cancelText="取消"
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size={12}>
+          <Select
+            showSearch
+            placeholder="选择已放罐批次"
+            style={{ width: '100%' }}
+            value={actualBatchNo || undefined}
+            disabled={Boolean(editingActual)}
+            options={actualBatchOptions}
+            notFoundContent="暂无已放罐批次"
+            onChange={(value) => {
+              setActualBatchNo(value)
+              // 选中批次后自动带出排产的计划放罐日期，仍可手动修改
+              const found = board?.dumped_batches.find((b) => b.batch_no === value)
+              if (found?.dump_date) setActualDumpDate(dayjs(found.dump_date))
+            }}
+          />
+          <DatePicker
+            placeholder="放罐日期（可选）"
+            style={{ width: '100%' }}
+            value={actualDumpDate}
+            onChange={(d) => setActualDumpDate(d)}
+          />
+          <InputNumber
+            placeholder="放罐产量 (kg)"
+            style={{ width: '100%' }}
+            min={0}
+            value={actualYieldKg}
+            onChange={(v) => setActualYieldKg(v)}
+          />
+          <Input.TextArea
+            placeholder="备注（可选，如：染菌批）"
+            rows={2}
+            maxLength={255}
+            value={actualRemark}
+            onChange={(e) => setActualRemark(e.target.value)}
+          />
+        </Space>
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          同一批次重复录入会更新原记录；保存后看板图表立即刷新。
+        </Text>
+      </Modal>
+
+      {/* 本月计划产能设置弹窗 */}
+      <Modal
+        title={`设置本月计划产能：${board?.period.label ?? ''}`}
+        open={capacityModalOpen}
+        onOk={() => void submitCapacity()}
+        onCancel={() => setCapacityModalOpen(false)}
+        okText="保存"
+        cancelText="取消"
+      >
+        <InputNumber
+          placeholder="本月计划产能 (kg)"
+          style={{ width: '100%' }}
+          min={0}
+          step={1000}
+          value={capacityKg}
+          onChange={(v) => setCapacityKg(v)}
+        />
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          按当前扎帐月保存；输入 310000 表示 310 吨。留空保存则清除设置。
+        </Text>
+      </Modal>
+
       {/* 底部：生产车间入口 */}
       <Card title="生产车间" variant="borderless" className="shadow-sm">
-        <Row gutter={[16, 16]}>
+        <Row gutter={[12, 12]}>
           {workshopItems.map((item) => (
             <Col span={8} key={item.key}>
               <div
                 data-testid={`workshop-entry:${item.key}`}
-                className="p-4 rounded-lg border border-[var(--color-hairline)] hover:border-[var(--color-primary)] cursor-pointer transition-colors"
+                className="h-full p-4 rounded-lg border border-[var(--color-hairline)] hover:border-[var(--color-primary)] cursor-pointer transition-colors"
                 onClick={() => router.push(item.key)}
               >
                 <Space align="start">

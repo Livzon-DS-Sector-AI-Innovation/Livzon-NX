@@ -20,6 +20,10 @@ class SupplierQualificationBase(BaseModel):
     is_completed: bool = Field(default=False, description="是否完成")
     deadline: str | None = Field(default=None, description="截止日期")
     responsible_person: str | None = Field(default=None, description="负责人")
+    responsible_users: list[dict[str, str]] | None = Field(
+        default=None,
+        description="负责人飞书成员对象 [{id: ou_…, name}]，写回成员字段用",
+    )
     remark: str | None = Field(default=None, description="备注")
 
 
@@ -40,6 +44,7 @@ class UpdateSupplierQualificationRequest(BaseModel):
     is_completed: bool | None = None
     deadline: str | None = None
     responsible_person: str | None = None
+    responsible_users: list[dict[str, str]] | None = None
     remark: str | None = None
 
 
@@ -55,6 +60,8 @@ class SupplierQualificationOut(BaseModel):
     is_completed: bool = False
     deadline: str | None = None
     responsible_person: str | None = None
+    responsible_users: list[dict[str, str]] | None = None
+    groups: list[dict[str, str]] | None = None
     remark: str | None = None
     expiry_status: str | None = None
     created_at: datetime | None = None

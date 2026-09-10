@@ -573,7 +573,7 @@
       }
     },
     "quality:department-contacts": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/department-contacts",
       "actions": {}

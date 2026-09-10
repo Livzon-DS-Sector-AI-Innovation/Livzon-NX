@@ -181,17 +181,31 @@ def _remote_record(record_id: str, **overrides: Any) -> dict[str, Any]:
 
 
 class _FakeClient:
+    created_record_id = "rec-1"
+
     def __init__(self, **_kwargs: Any) -> None:
         self.record: dict[str, Any] | None = _FakeClient.record
-        self.updated: list[tuple[str, str, dict[str, Any]]] = []
+        self.created: list[tuple[str, dict[str, Any], str]] = []
+        self.updated: list[tuple[str, str, dict[str, Any], str]] = []
 
     async def get_record(self, table_id: str, record_id: str) -> dict[str, Any] | None:
         return self.record
 
+    async def create_record(
+        self, table_id: str, fields: dict[str, Any], *, user_id_type: str = "open_id"
+    ) -> dict[str, Any]:
+        self.created.append((table_id, fields, user_id_type))
+        return {"record_id": _FakeClient.created_record_id}
+
     async def update_record(
-        self, table_id: str, record_id: str, fields: dict[str, Any]
+        self,
+        table_id: str,
+        record_id: str,
+        fields: dict[str, Any],
+        *,
+        user_id_type: str = "open_id",
     ) -> dict[str, str]:
-        self.updated.append((table_id, record_id, fields))
+        self.updated.append((table_id, record_id, fields, user_id_type))
         return {"record_id": record_id}
 
 
@@ -222,12 +236,8 @@ async def test_create_writes_back_mirror_row(
         "_resolve_runtime_entity",
         AsyncMock(return_value=(_runtime(), _entity())),
     )
-    monkeypatch.setattr(
-        supplier,
-        "_create_entity_record",
-        AsyncMock(return_value={"record_id": "wb-1", "table_id": "table-id"}),
-    )
     _FakeClient.record = _remote_record("wb-1")
+    _FakeClient.created_record_id = "wb-1"
     monkeypatch.setattr(supplier, "BitableClient", _FakeClient)
 
     out = await supplier.create_supplier_qualification_record(
@@ -285,6 +295,137 @@ async def test_update_pushes_feishu_and_refreshes_mirror(
         )
     ).scalar_one()
     assert row.supplier_name == "新名称"
+
+
+@pytest.mark.anyio
+async def test_update_pushes_responsible_users_to_feishu_member_field(
+    cleanup_writeback_rows: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """负责人写回飞书成员字段：responsible_users 多选数组 → [{"id": "ou_"}]。"""
+    db = cleanup_writeback_rows
+    db.add(_mirror("wb-3", "旧名称", qualification_name="营业执照"))
+    await db.commit()
+    monkeypatch.setattr(
+        supplier,
+        "_resolve_runtime_entity",
+        AsyncMock(return_value=(_runtime(), _entity())),
+    )
+    _FakeClient.record = _remote_record("wb-3", fields={"供应商名称": "新名称"})
+    client_holder: dict[str, _FakeClient] = {}
+
+    def _factory(**kwargs: Any) -> _FakeClient:
+        instance = _FakeClient(**kwargs)
+        client_holder["client"] = instance
+        return instance
+
+    monkeypatch.setattr(supplier, "BitableClient", _factory)
+
+    # union 换发：HR open_id → 跨应用稳定的 union_id
+    async def _fake_resolve(
+        _db: AsyncSession, members: list[dict[str, Any]], _runtime: Any = None
+    ) -> list[dict[str, Any]]:
+        return [
+            {"id": m["id"].replace("ou_platform", "on_platform"), "name": m["name"]}
+            for m in members
+        ]
+
+    monkeypatch.setattr(supplier, "_resolve_bitable_user_ids", _fake_resolve)
+
+    await supplier.update_supplier_qualification_record(
+        db,
+        "wb-3",
+        {
+            "responsible_users": [
+                {"id": "ou_platform_001", "name": "甄宁宁", "email": "znn@livzon.cn"},
+                {"id": "ou_platform_002", "name": "陈连平", "email": "clp@livzon.cn"},
+            ]
+        },
+    )
+
+    assert client_holder["client"].updated
+    pushed_fields = client_holder["client"].updated[0][2]
+    assert pushed_fields["负责人"] == [
+        {"id": "on_platform_001"},
+        {"id": "on_platform_002"},
+    ]
+    # 成员字段为 union_id 时写接口必须声明 union_id 命名空间
+    assert client_holder["client"].updated[0][3] == "union_id"
+
+
+@pytest.mark.anyio
+async def test_update_empty_responsible_users_clears_feishu_member_field(
+    cleanup_writeback_rows: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """显式传空数组：清空飞书成员字段（不是丢弃更新）。"""
+    db = cleanup_writeback_rows
+    db.add(_mirror("wb-4", "旧名称", qualification_name="营业执照"))
+    await db.commit()
+    monkeypatch.setattr(
+        supplier,
+        "_resolve_runtime_entity",
+        AsyncMock(return_value=(_runtime(), _entity())),
+    )
+    _FakeClient.record = _remote_record("wb-4", fields={"供应商名称": "新名称"})
+    client_holder: dict[str, _FakeClient] = {}
+
+    def _factory(**kwargs: Any) -> _FakeClient:
+        instance = _FakeClient(**kwargs)
+        client_holder["client"] = instance
+        return instance
+
+    monkeypatch.setattr(supplier, "BitableClient", _factory)
+
+    await supplier.update_supplier_qualification_record(
+        db, "wb-4", {"responsible_users": []}
+    )
+
+    assert client_holder["client"].updated
+    pushed_fields = client_holder["client"].updated[0][2]
+    assert pushed_fields["负责人"] == []
+
+
+@pytest.mark.anyio
+async def test_update_keeps_original_open_id_when_conversion_unavailable(
+    cleanup_writeback_rows: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """email 转换不可用（如应用未开通通讯录权限）时保留原 id 继续写入，不阻断。"""
+    db = cleanup_writeback_rows
+    db.add(_mirror("wb-5", "旧名称", qualification_name="营业执照"))
+    await db.commit()
+    monkeypatch.setattr(
+        supplier,
+        "_resolve_runtime_entity",
+        AsyncMock(return_value=(_runtime(), _entity())),
+    )
+    _FakeClient.record = _remote_record("wb-5")
+    client_holder: dict[str, _FakeClient] = {}
+
+    def _factory(**kwargs: Any) -> _FakeClient:
+        instance = _FakeClient(**kwargs)
+        client_holder["client"] = instance
+        return instance
+
+    monkeypatch.setattr(supplier, "BitableClient", _factory)
+
+    async def _fake_resolve_keep(
+        _db: AsyncSession, members: list[dict[str, Any]], _runtime: Any = None
+    ) -> list[dict[str, Any]]:
+        # batch_get_id 失败：原样返回，不阻断
+        return [dict(m) for m in members]
+
+    monkeypatch.setattr(supplier, "_resolve_bitable_user_ids", _fake_resolve_keep)
+
+    out = await supplier.update_supplier_qualification_record(
+        db,
+        "wb-5",
+        {"responsible_users": [{"id": "ou_fallback_001", "name": "甄宁宁"}]},
+    )
+    assert out["record_id"] == "wb-5"
+    assert client_holder["client"].updated
+    pushed_fields = client_holder["client"].updated[0][2]
+    assert pushed_fields["负责人"] == [{"id": "ou_fallback_001"}]
+    # 无 union_id 时不声明 union 命名空间（按 open_id 原样写回）
+    assert client_holder["client"].updated[0][3] != "union_id"
 
 
 @pytest.mark.anyio
@@ -357,3 +498,68 @@ async def test_expiry_bucket_combines_with_other_filters(
         db_session, expiry_bucket="expired", is_completed=False
     )
     assert result["total"] == 0
+
+
+@pytest.mark.anyio
+async def test_full_pull_backfills_missing_responsible_and_groups_columns(
+    db_session: AsyncSession,
+) -> None:
+    """升级前已回拉的老数据行（新列为 NULL）在全量轮应被回填，增量轮保持跳过。"""
+    old_time = datetime(2026, 8, 2, tzinfo=UTC)
+    row = _mirror("wb-fill", "旧供应商", qualification_name="营业执照")
+    row.source_updated_at = old_time
+    db_session.add(row)
+    await db_session.commit()
+
+    from app.modules.quality.service.quality_feishu_supplier_mirror import (
+        _upsert_mirror_record,
+    )
+
+    mapped = {
+        "supplier_name": "旧供应商",
+        "responsible_person": "张三",
+        "responsible_users": [{"id": "ou_fill_001", "name": "张三"}],
+        "groups": [{"id": "oc_fill_001", "name": "默认群", "avatar_url": ""}],
+        "source_updated_at": old_time,
+    }
+
+    # 增量轮（fill_missing=False）：修改时间未超水位 → 跳过，不补列
+    changed = await _upsert_mirror_record(
+        db_session, record_id="wb-fill", mapped=mapped, existing_updated_at=old_time
+    )
+    assert changed is False
+    refreshed = (
+        await db_session.execute(
+            select(SupplierQualificationMirror).where(
+                SupplierQualificationMirror.feishu_record_id == "wb-fill"
+            )
+        )
+    ).scalar_one()
+    assert refreshed.responsible_users is None
+
+    # 全量轮（fill_missing=True）：同一水位但缺新列 → 回填
+    changed = await _upsert_mirror_record(
+        db_session,
+        record_id="wb-fill",
+        mapped=mapped,
+        existing_updated_at=old_time,
+        fill_missing=True,
+    )
+    assert changed is True
+    refreshed = (
+        await db_session.execute(
+            select(SupplierQualificationMirror).where(
+                SupplierQualificationMirror.feishu_record_id == "wb-fill"
+            )
+        )
+    ).scalar_one()
+    assert refreshed.responsible_users == [{"id": "ou_fill_001", "name": "张三"}]
+    assert refreshed.groups == [
+        {"id": "oc_fill_001", "name": "默认群", "avatar_url": ""}
+    ]
+    await db_session.execute(
+        delete(SupplierQualificationMirror).where(
+            SupplierQualificationMirror.feishu_record_id == "wb-fill"
+        )
+    )
+    await db_session.commit()

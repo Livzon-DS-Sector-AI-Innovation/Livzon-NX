@@ -9,6 +9,7 @@ import type {
   WarehouseFeishuMaterialPageData,
   WarehouseHardwareCostAnomalyItem,
   WarehouseHardwareCostSummary,
+  WarehouseInspectionOverview,
   WarehouseMaterialPageQueryParams,
   WarehousePageFeishuConfig,
   WarehouseRecordDetail,
@@ -30,6 +31,20 @@ export async function fetchWarehouseDashboard(
   }
   const body = await res.json()
   return normalizeWarehouseDashboard(group, body.data)
+}
+
+export async function fetchWarehouseInspectionProgressOverview(
+  scope: 'raw' | 'product',
+  days = 30
+): Promise<WarehouseInspectionOverview> {
+  const res = await fetch(
+    `/api/v1/warehouse/inspection-progress/overview?scope=${scope}&days=${days}`
+  )
+  if (!res.ok) {
+    throw new Error('获取检验进度数据失败')
+  }
+  const body = await res.json()
+  return body.data as WarehouseInspectionOverview
 }
 
 export async function fetchWarehousePageFeishuConfigs(): Promise<WarehousePageFeishuConfig[]> {

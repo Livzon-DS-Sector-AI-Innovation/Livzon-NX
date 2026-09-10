@@ -129,13 +129,136 @@ class WarehouseRecordFieldValue(BaseModel):
     value: Any = None
 
 
+class WarehouseInspectionCycleStage(BaseModel):
+    """检验进度周期分段（如 入库→待验 / 待验→合格）。"""
+
+    label: str
+    hours: float | None = None
+    from_at: datetime | None = None
+    to_at: datetime | None = None
+
+
+class WarehouseInspectionCycle(BaseModel):
+    """单条记录的检验进度周期（只读统计，详情弹窗展示）。"""
+
+    page_key: str
+    record_id: str
+    status: str
+    status_label: str
+    result: str | None = None
+    inbound_date: str | None = None
+    pending_since: datetime | None = None
+    result_at: datetime | None = None
+    stages: list[WarehouseInspectionCycleStage] = Field(default_factory=list)
+    total_hours: float | None = None
+    note: str | None = None
+
+
 class WarehouseRecordDetailResponse(BaseModel):
     record_id: str
     fields: list[WarehouseRecordFieldValue]
+    inspection_cycle: WarehouseInspectionCycle | None = None
 
 
 class WarehouseUpdateRecordRequest(BaseModel):
     fields: dict[str, Any]
+
+
+class WarehouseInspectionOverviewCurrent(BaseModel):
+    """当前待验概况。"""
+
+    pending_count: int = 0
+    pending_avg_hours: float | None = None
+    pending_max_hours: float | None = None
+
+
+class WarehouseInspectionOverviewWindow(BaseModel):
+    """近 N 天完成检验概况。"""
+
+    days: int
+    start: str
+    end: str
+    completed_count: int = 0
+    qualified_count: int = 0
+    unqualified_count: int = 0
+    avg_hours: float | None = None
+    median_hours: float | None = None
+    p90_hours: float | None = None
+    max_hours: float | None = None
+
+
+class WarehouseInspectionGroupBreakdown(BaseModel):
+    """按物料类别/产品拆分。"""
+
+    label: str
+    completed_count: int = 0
+    qualified_count: int = 0
+    unqualified_count: int = 0
+    avg_hours: float | None = None
+    pending_count: int = 0
+
+
+class WarehouseInspectionDailyPoint(BaseModel):
+    date: str
+    qualified: int = 0
+    unqualified: int = 0
+    avg_hours: float | None = None
+
+
+class WarehouseInspectionPendingItem(BaseModel):
+    name: str
+    batch: str | None = None
+    category: str | None = None
+    product: str | None = None
+    inbound_date: str | None = None
+    waited_hours: float | None = None
+
+
+class WarehouseInspectionStageStats(BaseModel):
+    """成品分段平均时长。"""
+
+    inbound_to_pending_avg_hours: float | None = None
+    pending_to_result_avg_hours: float | None = None
+
+
+class WarehouseInspectionOverview(BaseModel):
+    """检验进度概览（仪表盘）。"""
+
+    scope: str
+    scope_label: str
+    start_date: str
+    generated_at: datetime
+    current: WarehouseInspectionOverviewCurrent
+    window: WarehouseInspectionOverviewWindow
+    breakdown: list[WarehouseInspectionGroupBreakdown] = Field(default_factory=list)
+    daily: list[WarehouseInspectionDailyPoint] = Field(default_factory=list)
+    oldest_pending: list[WarehouseInspectionPendingItem] = Field(default_factory=list)
+    stages: WarehouseInspectionStageStats | None = None
+
+
+class WarehouseInspectionOverviewApiResponse(BaseModel):
+    code: int = 200
+    message: str = "success"
+    data: WarehouseInspectionOverview
+
+
+class WarehouseInspectionAiAnalysis(BaseModel):
+    """检验进度 AI 分析结果（辅助解读，不替代人工判断）。"""
+
+    status: str
+    scope_label: str = ""
+    summary_text: str = ""
+    overall_status: str | None = None
+    risk_level: str | None = None
+    key_findings: list[str] = Field(default_factory=list)
+    suggestions: list[str] = Field(default_factory=list)
+    generated_at: datetime | None = None
+
+
+class WarehouseInspectionAiAnalysisApiResponse(BaseModel):
+    code: int = 200
+    message: str = "success"
+    data: WarehouseInspectionAiAnalysis
 
 
 class WarehouseDashboardData(BaseModel):

@@ -190,7 +190,10 @@ async def test_bitable_client_crud_and_pagination() -> None:
         ],
     }
     assert client.client.request.call_args.kwargs["json"]["view_id"] == "view"
-    assert client.client.request.call_args.kwargs["params"] == {"page_size": 500}
+    assert client.client.request.call_args.kwargs["params"] == {
+        "page_size": 500,
+        "user_id_type": "open_id",
+    }
     assert client._path("table", "/records").endswith("/table/records")
 
 
@@ -230,6 +233,7 @@ async def test_bitable_client_uses_legacy_endpoint_for_formula_filters() -> None
         params={
             "page_size": 20,
             "filter": 'CurrentValue.[物料编码].contains("MAT")',
+            "user_id_type": "open_id",
             "view_id": "view",
         },
         timeout=None,
@@ -258,7 +262,11 @@ async def test_bitable_search_page_accepts_override_timeout() -> None:
             "view_id": "view",
             "field_names": ["物料编码"],
         },
-        params={"page_size": 500, "page_token": "current-page"},
+        params={
+            "page_size": 500,
+            "user_id_type": "open_id",
+            "page_token": "current-page",
+        },
         timeout=60.0,
     )
 
@@ -295,7 +303,11 @@ async def test_bitable_search_page_preserves_pagination_metadata() -> None:
             "view_id": "view",
             "field_names": ["物料编码", "物料说明"],
         },
-        params={"page_size": 500, "page_token": "current-page"},
+        params={
+            "page_size": 500,
+            "user_id_type": "open_id",
+            "page_token": "current-page",
+        },
         timeout=None,
     )
 

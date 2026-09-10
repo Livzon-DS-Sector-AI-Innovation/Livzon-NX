@@ -27,17 +27,6 @@ def _normalize_department(value: str | None) -> str:
     return " ".join((value or "").split()).strip()
 
 
-def _normalize_department_text(value: str | None) -> str:
-    if not value:
-        return ""
-    return "".join((value or "").split()).upper()
-
-
-def _is_qa_department(value: str | None) -> bool:
-    normalized = _normalize_department_text(value)
-    return "QA" in normalized or "质量保证" in normalized
-
-
 def _truncate_summary(value: str | None, *, max_length: int = 100) -> str:
     text = " ".join((value or "").split()).strip()
     if not text:
@@ -100,39 +89,25 @@ class RegulatoryTrackerNotificationService:
     async def _list_reminder_recipient_options(
         self,
     ) -> list[RegulatoryTrackerNotificationRecipientOption]:
-        from app.modules.quality.service.department_contacts import (
-            get_department_contact_list_from_feishu,
-        )
+        from app.modules.quality.public_api import get_qa_reminder_recipients
 
         try:
-            result = await get_department_contact_list_from_feishu(
-                self.session,
-                page=1,
-                page_size=1000,
-            )
+            recipients = await get_qa_reminder_recipients(self.session)
         except Exception:
             return []
 
-        options_by_open_id: dict[str, RegulatoryTrackerNotificationRecipientOption] = {}
-        for item in result.get("items", []):
-            open_id = str(item.get("open_id") or "").strip()
-            if not open_id:
-                continue
-
-            name = str(item.get("name") or "").strip() or "未命名联系人"
-            department = _normalize_department(item.get("department"))
-            if not _is_qa_department(department):
-                continue
-            enterprise_email = str(item.get("enterprise_email") or "").strip() or None
-            options_by_open_id[open_id] = RegulatoryTrackerNotificationRecipientOption(
-                open_id=open_id,
-                name=name,
-                department=department or None,
-                enterprise_email=enterprise_email,
+        options = [
+            RegulatoryTrackerNotificationRecipientOption(
+                open_id=str(item.get("open_id") or ""),
+                name=str(item.get("name") or "未命名联系人"),
+                department=_normalize_department(item.get("department")) or None,
+                enterprise_email=str(item.get("enterprise_email") or "") or None,
             )
-
+            for item in recipients
+            if str(item.get("open_id") or "").strip()
+        ]
         return sorted(
-            options_by_open_id.values(),
+            options,
             key=lambda item: ((item.department or ""), item.name, item.open_id),
         )
 

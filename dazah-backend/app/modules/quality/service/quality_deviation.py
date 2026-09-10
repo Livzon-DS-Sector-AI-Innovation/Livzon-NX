@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-import httpx
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,9 +37,6 @@ from app.modules.quality.schemas.deviations import (
     DeviationBatchDeleteResult,
     DeviationReporterOption,
     DeviationReporterPage,
-)
-from app.modules.quality.service.department_contacts import (
-    get_department_contact_list_from_feishu,
 )
 from app.modules.quality.service.quality_common import (
     _build_page_result,
@@ -594,18 +590,19 @@ async def _resolve_selected_reporter_contact(
     if not normalized_open_id:
         raise AppException(message="报告人不能为空")
 
-    feishu_contact_result = await _reporter_contacts(
-        db, open_id=normalized_open_id, page_size=2
+    from app.modules.quality.service.person_directory import (
+        resolve_person_by_open_id,
     )
-    for contact in feishu_contact_result.get("items", []):
-        if str(contact.get("open_id") or "").strip() == normalized_open_id:
-            return SelectedReporterContact(
-                name=contact.get("name"),
-                open_id=contact.get("open_id"),
-                department=contact.get("department"),
-            )
 
-    raise AppException(message="所选报告人不存在于部门联系人台账中")
+    person = await resolve_person_by_open_id(db, normalized_open_id)
+    if person is not None:
+        return SelectedReporterContact(
+            name=person.get("name"),
+            open_id=person.get("open_id"),
+            department=person.get("department"),
+        )
+
+    raise AppException(message="所选报告人不在人事飞书联系人目录中")
 
 
 async def _reporter_contacts(
@@ -617,24 +614,38 @@ async def _reporter_contacts(
     keyword: str | None = None,
     open_id: str | None = None,
 ) -> dict[str, Any]:
+    from app.modules.quality.service.person_directory import get_person_options
+
     try:
-        return await get_department_contact_list_from_feishu(
-            db,
-            page=page,
-            page_size=page_size,
-            scope=scope,
-            keyword=keyword,
-            open_id=open_id,
-            reporter_only=True,
-        )
-    except httpx.TimeoutException as exc:
+        items = await get_person_options(db, limit=5000)
+    except AppException:
+        raise
+    except Exception as exc:
         raise AppException(
-            status_code=504, message="报告人目录响应超时，请稍后重试"
+            status_code=503, message="人员目录暂不可用，请稍后重试"
         ) from exc
-    except (httpx.HTTPError, RuntimeError) as exc:
-        raise AppException(
-            status_code=502, message="报告人目录暂不可用，请稍后重试"
-        ) from exc
+    normalized_keyword = (keyword or "").strip().lower()
+    if normalized_keyword:
+        items = [
+            item
+            for item in items
+            if normalized_keyword in str(item.get("name") or "").lower()
+            or normalized_keyword in str(item.get("department") or "").lower()
+        ]
+    if open_id:
+        items = [
+            item
+            for item in items
+            if str(item.get("open_id") or "").strip() == open_id.strip()
+        ]
+    if scope is not None:
+        items = [
+            item for item in items if scope.allows(str(item.get("department") or ""))
+        ]
+    total = len(items)
+    start = (page - 1) * page_size
+    page_items = items[start : start + page_size]
+    return {"items": page_items, "total": total}
 
 
 async def get_deviation_reporters(

@@ -15,7 +15,6 @@ from app.core.llm.encryption import decrypt_api_key
 from app.modules.quality import repository
 from app.modules.quality.models.capa import CAPA
 from app.modules.quality.models.change_control import ChangeControl
-from app.modules.quality.models.contacts import DepartmentContact
 from app.modules.quality.models.deviation_investigation_push_record import (
     DeviationInvestigationPushRecord,
 )
@@ -26,7 +25,7 @@ from app.modules.quality.schemas.feishu_settings import (
     UpdateQualityFeishuAppSettingsRequest,
     UpdateQualityFeishuEntitySettingRequest,
 )
-from app.modules.quality.service import quality_feishu_pages
+from app.modules.quality.service import person_directory, quality_feishu_pages
 from app.modules.quality.service import (
     quality_feishu_settings as feishu_settings_service,
 )
@@ -86,7 +85,6 @@ async def _ensure_quality_sync_columns(db_session: AsyncSession) -> AsyncIterato
         """,
     ]
     await execute_ddl_with_lock_timeout(db_session, statements)
-    await db_session.execute(DepartmentContact.__table__.delete())  # type: ignore[attr-defined]
     await db_session.execute(
         text("DELETE FROM quality.deviation_investigation_push_records")
     )
@@ -811,7 +809,11 @@ async def test_upsert_record_maps_push_fields_and_search_filter(
     create_calls: list[tuple[str, dict[str, object]]] = []
 
     async def fake_create_record(
-        self: Any, table_id: str, fields: dict[str, Any]
+        self: Any,
+        table_id: str,
+        fields: dict[str, Any],
+        *,
+        user_id_type: str | None = None,
     ) -> dict[str, Any]:
         create_calls.append((table_id, fields))
         return {"record_id": "rec_mapped_deviation"}
@@ -1206,26 +1208,6 @@ async def test_quality_feishu_settings_do_not_prefill_from_env(
         "QUALITY_CHANGE_LEDGER_FEISHU_TABLE_ID",
         "tblSDbnr2D7wk2b0",
     )
-    monkeypatch.setattr(
-        feishu_settings_service.settings,
-        "QUALITY_VALIDATION_FEISHU_APP_TOKEN",
-        "EZUib0hvTa7lnfsz9xScjFpAnvc",
-    )
-    monkeypatch.setattr(
-        feishu_settings_service.settings,
-        "QUALITY_VALIDATION_FEISHU_TABLE_ID",
-        "tblQeNmOWMCAaLrX",
-    )
-    monkeypatch.setattr(
-        feishu_settings_service.settings,
-        "QUALITY_DEPARTMENT_CONTACT_FEISHU_APP_TOKEN",
-        "DL2DbLU08auoEZs8kXAcLBPUnhg",
-    )
-    monkeypatch.setattr(
-        feishu_settings_service.settings,
-        "QUALITY_DEPARTMENT_CONTACT_FEISHU_TABLE_ID",
-        "tblDq7JM4ibtL4MO",
-    )
 
     app_settings = await feishu_settings_service.get_quality_feishu_app_settings(
         db_session
@@ -1251,21 +1233,12 @@ async def test_quality_feishu_settings_do_not_prefill_from_env(
     assert change_item.base_table_name == "变更总表"
     assert change_item.is_enabled is True
 
+    # 验证与确认实体已固定绑定验证主计划 Base（不再读取 env 回退）
     validation_item = entity_map["validation_process"]
-    assert validation_item.app_token == "EZUib0hvTa7lnfsz9xScjFpAnvc"
-    assert validation_item.base_table_id == "tblQeNmOWMCAaLrX"
-    assert validation_item.base_table_name == "验证总表"
-    assert (
-        validation_item.source_note
-        == "验证与确认共用同一张飞书源表，平台按验证类型截取到不同模块。"
-    )
+    assert validation_item.app_token == "FTbkbpgNUa9jUCsjK8ac1A4Wn7f"
+    assert validation_item.base_table_id == "tbl3lBei5Sv8wBVV"
+    assert validation_item.base_table_name == "2026年验证台账"
     assert validation_item.is_enabled is True
-
-    contact_item = entity_map["department_contact"]
-    assert contact_item.app_token == "DL2DbLU08auoEZs8kXAcLBPUnhg"
-    assert contact_item.base_table_id == "tblDq7JM4ibtL4MO"
-    assert contact_item.base_table_name == "部门联系人"
-    assert contact_item.is_enabled is True
 
 @pytest.mark.anyio
 async def test_get_quality_feishu_app_settings_does_not_backfill_existing_db_config(
@@ -1666,23 +1639,20 @@ async def test_create_deviation_triggers_auto_feishu_sync(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     reporter_open_id = f"ou_{uuid.uuid4().hex}"
+    person = {
+        "open_id": f"ou_{uuid.uuid4().hex}",
+        "name": "测试提交人",
+        "department": "质量部",
+        "job_title": None,
+        "email": None,
+        "mobile": None,
+        "enterprise_email": None,
+        "avatar_url": None,
+    }
     monkeypatch.setattr(
-        service,
-        "get_department_contact_list_from_feishu",
-        AsyncMock(
-            return_value={
-                "items": [
-                    {
-                        "name": "测试提交人",
-                        "department": "质量部",
-                        "open_id": reporter_open_id,
-                    }
-                ],
-                "total": 1,
-                "page": 1,
-                "page_size": 1000,
-            }
-        ),
+        person_directory,
+        "resolve_person_by_open_id",
+        AsyncMock(return_value=person),
     )
     monkeypatch.setattr(
         service,
@@ -1732,20 +1702,13 @@ async def test_create_deviation_requires_selected_reporter_contact(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        service,
-        "get_department_contact_list_from_feishu",
-        AsyncMock(
-            return_value={
-                "items": [],
-                "total": 0,
-                "page": 1,
-                "page_size": 1000,
-            }
-        ),
+        person_directory,
+        "resolve_person_by_open_id",
+        AsyncMock(return_value=None),
     )
     with pytest.raises(
         ValueError,
-        match="所选报告人不存在于部门联系人台账中",
+        match="所选报告人不在人事飞书联系人目录中",
     ):
         await service.create_deviation(
             db_session,
@@ -1771,23 +1734,20 @@ async def test_create_deviation_accepts_reporter_from_feishu_contacts(
         "auto_sync_deviation_after_write",
         auto_sync_mock,
     )
+    person = {
+        "open_id": "ou_ai_creator_001",
+        "name": "张建智",
+        "department": "AI创新部",
+        "job_title": None,
+        "email": None,
+        "mobile": None,
+        "enterprise_email": None,
+        "avatar_url": None,
+    }
     monkeypatch.setattr(
-        service,
-        "get_department_contact_list_from_feishu",
-        AsyncMock(
-            return_value={
-                "items": [
-                    {
-                        "name": "张建智",
-                        "department": "AI创新部",
-                        "open_id": "ou_ai_creator_001",
-                    }
-                ],
-                "total": 1,
-                "page": 1,
-                "page_size": 1000,
-            }
-        ),
+        person_directory,
+        "resolve_person_by_open_id",
+        AsyncMock(return_value=person),
     )
     monkeypatch.setattr(
         service,
@@ -1876,23 +1836,20 @@ async def test_create_deviation_fails_when_feishu_code_source_unavailable(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    person = {
+        "open_id": "ou_reporter_001",
+        "name": "测试提交人",
+        "department": "质量部",
+        "job_title": None,
+        "email": None,
+        "mobile": None,
+        "enterprise_email": None,
+        "avatar_url": None,
+    }
     monkeypatch.setattr(
-        service,
-        "get_department_contact_list_from_feishu",
-        AsyncMock(
-            return_value={
-                "items": [
-                    {
-                        "name": "测试提交人",
-                        "department": "质量部",
-                        "open_id": "ou_reporter_001",
-                    }
-                ],
-                "total": 1,
-                "page": 1,
-                "page_size": 1000,
-            }
-        ),
+        person_directory,
+        "resolve_person_by_open_id",
+        AsyncMock(return_value=person),
     )
     monkeypatch.setattr(
         service,
@@ -1947,19 +1904,26 @@ async def test_sync_deviation_report_record_to_feishu_uses_minimal_fields(
     upsert_mock: Any = AsyncMock(return_value=("rec_report_001", "tbl_report"))
     monkeypatch.setattr(feishu_sync_service.feishu_sync, "_upsert_record", upsert_mock)
     monkeypatch.setattr(
-        feishu_sync_service,
-        "_get_department_contacts_from_feishu",
+        person_directory,
+        "get_person_options",
         AsyncMock(
             return_value=[
                 {
+                    "open_id": current_user.feishu_open_id,
                     "name": "报告人甲",
                     "department": "质量部",
-                    "open_id": current_user.feishu_open_id,
-                    "bitable_user_id": "ou_bitable_reporter_001",
-                    "department_head_name": "部门负责人甲",
+                    "job_title": None,
+                    "email": None,
+                    "mobile": None,
+                    "enterprise_email": None,
+                    "avatar_url": None,
                 }
             ]
         ),
+    )
+    monkeypatch.setattr(
+        "app.modules.quality.service.hr_identity.translate_hr_open_ids_to_union_ids",
+        AsyncMock(side_effect=lambda _db, ids: {i: f"on_{i[3:]}" for i in ids}),
     )
 
     result = await feishu_sync_service.sync_deviation_report_record_to_feishu(
@@ -1977,7 +1941,7 @@ async def test_sync_deviation_report_record_to_feishu_uses_minimal_fields(
         "偏差报告": "",
         "涉及产品名称/批号": "原料A/批号B-001",
         "部门": "质量部",
-        "报告人": [{"id": "ou_bitable_reporter_001"}],
+        "报告人": [{"id": f"on_{current_user.feishu_open_id[3:]}"}],
         "报告状态": "draft",
     }
 
@@ -2014,19 +1978,26 @@ async def test_sync_deviation_report_record_to_feishu_uses_target_record_id(
     upsert_mock: Any = AsyncMock(return_value=("rec_report_target_001", "tbl_report"))
     monkeypatch.setattr(feishu_sync_service.feishu_sync, "_upsert_record", upsert_mock)
     monkeypatch.setattr(
-        feishu_sync_service,
-        "_get_department_contacts_from_feishu",
+        person_directory,
+        "get_person_options",
         AsyncMock(
             return_value=[
                 {
+                    "open_id": current_user.feishu_open_id,
                     "name": "报告人乙",
                     "department": "质量部",
-                    "open_id": current_user.feishu_open_id,
-                    "bitable_user_id": "ou_bitable_reporter_002",
-                    "department_head_name": "部门负责人乙",
+                    "job_title": None,
+                    "email": None,
+                    "mobile": None,
+                    "enterprise_email": None,
+                    "avatar_url": None,
                 }
             ]
         ),
+    )
+    monkeypatch.setattr(
+        "app.modules.quality.service.hr_identity.translate_hr_open_ids_to_union_ids",
+        AsyncMock(side_effect=lambda _db, ids: {i: f"on_{i[3:]}" for i in ids}),
     )
 
     result = await feishu_sync_service.sync_deviation_report_record_to_feishu(
@@ -2318,27 +2289,46 @@ async def test_sync_investigation_push_uses_actual_table_fields(
     upsert_mock: Any = AsyncMock(return_value=("rec_push_001", "tbl_push"))
     monkeypatch.setattr(feishu_sync_service.feishu_sync, "_upsert_record", upsert_mock)
     monkeypatch.setattr(
-        feishu_sync_service,
-        "_get_department_contacts_from_feishu",
+        person_directory,
+        "get_person_options",
         AsyncMock(
             return_value=[
                 {
+                    "open_id": "ou_submitter_001",
                     "name": "提交人甲",
                     "department": "质量部",
-                    "bitable_user_id": "ou_submitter_001",
+                    "job_title": None,
+                    "email": None,
+                    "mobile": None,
+                    "enterprise_email": None,
+                    "avatar_url": None,
                 },
                 {
+                    "open_id": "ou_qa_001",
                     "name": "QA甲",
                     "department": "质量管理部",
-                    "bitable_user_id": "ou_qa_001",
+                    "job_title": None,
+                    "email": None,
+                    "mobile": None,
+                    "enterprise_email": None,
+                    "avatar_url": None,
                 },
                 {
+                    "open_id": "ou_qa_head_001",
                     "name": "QA负责人甲",
                     "department": "质量管理部",
-                    "bitable_user_id": "ou_qa_head_001",
+                    "job_title": None,
+                    "email": None,
+                    "mobile": None,
+                    "enterprise_email": None,
+                    "avatar_url": None,
                 },
             ]
         ),
+    )
+    monkeypatch.setattr(
+        "app.modules.quality.service.hr_identity.translate_hr_open_ids_to_union_ids",
+        AsyncMock(side_effect=lambda _db, ids: {i: f"on_{i[3:]}" for i in ids}),
     )
 
     result = (
@@ -2359,13 +2349,13 @@ async def test_sync_investigation_push_uses_actual_table_fields(
             "type": "url",
         },
         "提交日期": int(now.timestamp() * 1000),
-        "提交人": [{"id": "ou_submitter_001"}],
+        "提交人": [{"id": "on_submitter_001"}],
         "部门负责人审核结果": "通过",
         "部门负责人审核时间": int(now.timestamp() * 1000),
-        "QA": [{"id": "ou_qa_001"}],
+        "QA": [{"id": "on_qa_001"}],
         "QA审核结果": "不通过",
         "QA审核时间": int(now.timestamp() * 1000),
-        "QA负责人": [{"id": "ou_qa_head_001"}],
+        "QA负责人": [{"id": "on_qa_head_001"}],
         "QA负责人审核结果": "通过",
         "QA负责人审核时间": int(now.timestamp() * 1000),
     }

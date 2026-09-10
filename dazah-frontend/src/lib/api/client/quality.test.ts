@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   fetchAnomalyAnalysisStatus,
+  fetchQualityPersonDirectory,
+  fetchValidationFormLinks,
+  fetchValidationPersonOptions,
   fetchAnomalyDashboard,
   fetchAnomalyReportFields,
   fetchAnomalyReportRecords,
@@ -212,5 +215,71 @@ describe('quality client - finished product anomaly', () => {
       vi.fn().mockResolvedValue(jsonResponse({ code: 200 }))
     )
     await expect(fetchAnomalyReportShareLinks(2026, [])).resolves.toEqual({})
+  })
+})
+
+describe('quality client - person directory and validation form links', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('fetches person directory from person-options endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ code: 200, data: [{ open_id: 'ou_1', name: '张三' }] })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchQualityPersonDirectory()).resolves.toEqual([
+      { open_id: 'ou_1', name: '张三' },
+    ])
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/quality/person-options?limit=1000')
+  })
+
+  it('falls back to empty list when directory data missing', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ code: 200 })))
+    await expect(fetchQualityPersonDirectory()).resolves.toEqual([])
+  })
+
+  it('builds validation person-options query with trimmed keyword', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ code: 200, data: [{ id: 'ou_1', name: ' 李四 ' }] })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchValidationPersonOptions(' 李四 ')).resolves.toEqual([
+      { id: 'ou_1', name: ' 李四 ' },
+    ])
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/quality/validations/person-options?keyword=%E6%9D%8E%E5%9B%9B&limit=500'
+    )
+  })
+
+  it('omits keyword param when blank and respects custom limit', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ code: 200, data: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchValidationPersonOptions('   ', 10)).resolves.toEqual([])
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/quality/validations/person-options?limit=10'
+    )
+  })
+
+  it('reads validation form links from years envelope', async () => {
+    const years = [{ year: 2026, form_url: 'https://form', table_configured: true }]
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ code: 200, data: { years } })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchValidationFormLinks()).resolves.toEqual(years)
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/quality/feishu/validations/form-links'
+    )
+  })
+
+  it('returns empty form links when years missing', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ code: 200 })))
+    await expect(fetchValidationFormLinks()).resolves.toEqual([])
   })
 })

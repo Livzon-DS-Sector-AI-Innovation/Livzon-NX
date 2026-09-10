@@ -11,9 +11,7 @@ from app.core.exceptions import AppException
 from app.modules.regulatory_tracker.services.notification_service import (
     RegulatoryTrackerNotificationService,
     _build_notification_content,
-    _is_qa_department,
     _normalize_department,
-    _normalize_department_text,
     _resolve_display_summary,
     _truncate_summary,
 )
@@ -26,30 +24,22 @@ async def test_list_notification_recipient_options_only_returns_qa_contacts(
     service = RegulatoryTrackerNotificationService(db_session)
 
     with patch(
-        "app.modules.quality.service.department_contacts.get_department_contact_list_from_feishu",
+        "app.modules.quality.public_api.get_qa_reminder_recipients",
         new=AsyncMock(
-            return_value={
-                "items": [
-                    {
-                        "open_id": "ou_qa_1",
-                        "name": "武巧玲",
-                        "department": "QA",
-                        "enterprise_email": "wuqiaoling@example.com",
-                    },
-                    {
-                        "open_id": "ou_qa_2",
-                        "name": "李四",
-                        "department": "质量保证部",
-                        "enterprise_email": "lisi@example.com",
-                    },
-                    {
-                        "open_id": "ou_non_qa",
-                        "name": "王五",
-                        "department": "注册管理",
-                        "enterprise_email": "wangwu@example.com",
-                    },
-                ]
-            }
+            return_value=[
+                {
+                    "open_id": "ou_qa_1",
+                    "name": "武巧玲",
+                    "department": "QA",
+                    "enterprise_email": "wuqiaoling@example.com",
+                },
+                {
+                    "open_id": "ou_qa_2",
+                    "name": "李四",
+                    "department": "质量保证部",
+                    "enterprise_email": "lisi@example.com",
+                },
+            ]
         ),
     ):
         result = await service.list_notification_recipient_options()
@@ -65,14 +55,6 @@ def test_normalize_department() -> None:
     assert _normalize_department("  质量管理部  部 ") == "质量管理部 部"
     assert _normalize_department(None) == ""
     assert _normalize_department("") == ""
-
-
-def test_normalize_department_text_and_qa_check() -> None:
-    assert _normalize_department_text(" 质量 保证 部 ") == "质量保证部"
-    assert _is_qa_department("质量保证部")
-    assert _is_qa_department("QA 部")
-    assert _is_qa_department("生产部") is False
-    assert _is_qa_department("") is False
 
 
 def test_truncate_summary_and_display() -> None:
@@ -142,8 +124,7 @@ async def test_list_options_handles_feishu_failure(monkeypatch) -> None:
         raise RuntimeError("feishu down")
 
     monkeypatch.setattr(
-        "app.modules.quality.service.department_contacts"
-        ".get_department_contact_list_from_feishu",
+        "app.modules.quality.public_api.get_qa_reminder_recipients",
         _boom,
     )
     assert await _service()._list_reminder_recipient_options() == []

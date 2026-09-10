@@ -48,18 +48,45 @@ def map_record_to_mirror_fields(
     # 负责人 - user 字段
     responsible_raw = get_value(entity, fields, "负责人")
     responsible: str | None = None
+    responsible_users: list[dict[str, str]] | None = None
     if isinstance(responsible_raw, list):
         names: list[str] = []
+        users: list[dict[str, str]] = []
         for item in responsible_raw:
             if isinstance(item, dict):
-                name = item.get("name", "") or item.get("text", "")
+                user_id = str(item.get("id") or item.get("open_id") or "").strip()
+                name = str(item.get("name") or item.get("en_name") or "").strip()
+                email = str(item.get("email") or "").strip()
                 if name:
-                    names.append(str(name))
+                    names.append(name)
+                if user_id and name:
+                    # email 用于跨应用关联 HR 飞书成员头像（open_id 是应用维度的）
+                    users.append({"id": user_id, "name": name, "email": email})
             elif isinstance(item, str) and item.strip():
                 names.append(item.strip())
         responsible = "、".join(names) if names else None
+        responsible_users = users if users else None
     elif responsible_raw:
         responsible = normalize_text(responsible_raw)
+
+    # 群组 - GroupChat 字段（不支持 API 写入，仅镜像展示）
+    group_raw = get_value(entity, fields, "群组")
+    groups: list[dict[str, str]] | None = None
+    if isinstance(group_raw, list):
+        group_items: list[dict[str, str]] = []
+        for item in group_raw:
+            if isinstance(item, dict) and item.get("name"):
+                group_items.append(
+                    {
+                        "id": str(item.get("id") or ""),
+                        "name": str(item.get("name") or ""),
+                        "avatar_url": str(item.get("avatar_url") or ""),
+                    }
+                )
+        groups = group_items if group_items else None
+    elif group_raw:
+        name = normalize_text(group_raw)
+        groups = [{"id": "", "name": name, "avatar_url": ""}]
 
     completed_raw = get_value(entity, fields, "是否完成")
     is_completed = (
@@ -78,6 +105,8 @@ def map_record_to_mirror_fields(
         "is_completed": is_completed,
         "deadline": deadline_dt.isoformat() if deadline_dt else None,
         "responsible_person": responsible,
+        "responsible_users": responsible_users,
+        "groups": groups,
         "remark": normalize_text(get_value(entity, fields, "备注")),
         "expiry_status": normalize_text(get_value(entity, fields, "到期状态")),
         "source_created_at": parse_datetime(record.get("created_time")),
@@ -167,6 +196,7 @@ async def _pull_supplier_qualification_mirror_impl(
                     record_id=record_id,
                     mapped=map_record_to_mirror_fields(record, entity),
                     existing_updated_at=existing_map.get(record_id),
+                    fill_missing=full or not existing_map,
                 )
             if changed:
                 synced += 1
@@ -308,26 +338,46 @@ async def _upsert_mirror_record(
     record_id: str,
     mapped: dict[str, Any],
     existing_updated_at: datetime | None,
+    fill_missing: bool = False,
 ) -> bool:
     """按飞书 record_id 镜像 upsert。返回是否发生写库。"""
     # 增量轮：远端修改时间未超过本地水位则跳过
     new_updated = mapped.get("source_updated_at")
-    if (
+    unchanged = (
         existing_updated_at is not None
         and new_updated is not None
         and new_updated <= existing_updated_at
-    ):
-        return False
+    )
 
-    model = (
-        await db.execute(
-            select(SupplierQualificationMirror).where(
-                SupplierQualificationMirror.feishu_record_id == record_id,
-                SupplierQualificationMirror.is_deleted.is_(False),
+    model = None
+    if unchanged:
+        if not fill_missing:
+            return False
+        # 全量轮缺列回填：仅当既有行缺少新增镜像列时才重写（如线上
+        # 升级前已回拉的老数据），避免每轮全量对所有行重复写库
+        model = (
+            await db.execute(
+                select(SupplierQualificationMirror).where(
+                    SupplierQualificationMirror.feishu_record_id == record_id,
+                    SupplierQualificationMirror.is_deleted.is_(False),
+                )
             )
-        )
-    ).scalar_one_or_none()
+        ).scalar_one_or_none()
+        if model is None:
+            return False
+        missing = model.responsible_users is None or model.groups is None
+        if not missing:
+            return False
 
+    if model is None:
+        model = (
+            await db.execute(
+                select(SupplierQualificationMirror).where(
+                    SupplierQualificationMirror.feishu_record_id == record_id,
+                    SupplierQualificationMirror.is_deleted.is_(False),
+                )
+            )
+        ).scalar_one_or_none()
     if model is None:
         model = SupplierQualificationMirror(feishu_record_id=record_id)
         db.add(model)

@@ -11,7 +11,7 @@ import type {
   ChangeActionPlanDetail,
   ChangeActionPlanListItem,
   ChangeActionPlanPersonOption,
-  DepartmentContact,
+  QualityPersonOption,
   DeviationDashboardStats,
   DeviationInvestigationPushRecordItem,
   FeishuDeviationInvestigationPushRecordItem,
@@ -977,6 +977,45 @@ export async function fetchNextChangeCode(changeType: string = 'technical'): Pro
 
 // ---- Validations ----
 
+export interface ValidationPersonOption {
+  open_id: string
+  name: string
+  department: string | null
+  job_title: string | null
+  email: string | null
+  mobile: string | null
+}
+
+/** 验证人员选择器候选：人事管理-飞书联系人（在职人员，前端做中文/拼音本地过滤） */
+export async function fetchValidationPersonOptions(
+  keyword?: string,
+  limit = 500,
+): Promise<ValidationPersonOption[]> {
+  const searchParams = new URLSearchParams()
+  if (keyword?.trim()) searchParams.set('keyword', keyword.trim())
+  searchParams.set('limit', String(limit))
+  const res = await fetch(
+    `/api/v1/quality/validations/person-options?${searchParams.toString()}`
+  )
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return json.data || []
+}
+
+export interface ValidationFormLink {
+  year: number;
+  form_url: string;
+  table_configured: boolean;
+}
+
+/** 验证主计划各年度表的飞书多维表单链接（质量设置-飞书设置中维护） */
+export async function fetchValidationFormLinks(): Promise<ValidationFormLink[]> {
+  const res = await fetch('/api/v1/quality/feishu/validations/form-links')
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return json.data?.years || []
+}
+
 // ---- Validation Review (验证 AI 审核) ----
 
 export async function fetchValidationReviews(params?: {
@@ -1329,13 +1368,13 @@ export async function fetchFeishuCapaPlanTracks(params?: {
   return { items: json.data ?? [], total: json.meta?.total ?? 0 }
 }
 
-// ---- Department Contacts ----
+// ---- Person Directory（人事管理-飞书联系人） ----
 
-export async function fetchDepartmentContacts(): Promise<DepartmentContact[]> {
-  const res = await fetch('/api/v1/quality/department-contacts/feishu?page=1&page_size=1000')
-  if (!res.ok) throw new Error(`获取部门联系人失败: ${res.statusText}`)
+export async function fetchQualityPersonDirectory(): Promise<QualityPersonOption[]> {
+  const res = await fetch('/api/v1/quality/person-options?limit=1000')
+  if (!res.ok) throw await parseError(res)
   const json = await res.json()
-  return json.data?.items ?? []
+  return json.data ?? []
 }
 
 // ---- OOS/OOT APIs ----

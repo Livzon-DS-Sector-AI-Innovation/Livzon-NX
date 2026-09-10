@@ -3,8 +3,10 @@
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Date,
     DateTime,
@@ -201,6 +203,14 @@ class SupplierQualificationMirror(ExternalQualityBaseModel):
     )
     responsible_person: Mapped[str | None] = mapped_column(
         String(500), nullable=True, comment="负责人"
+    )
+    responsible_users: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON, nullable=True, comment="负责人飞书成员对象列表 [{id, name}]（写回飞书用）"
+    )
+    groups: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="群组飞书群聊对象 [{id, name, avatar_url}]（只读展示）",
     )
     remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
     expiry_status: Mapped[str | None] = mapped_column(

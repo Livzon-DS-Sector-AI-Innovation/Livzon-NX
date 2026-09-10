@@ -16,7 +16,6 @@ import {
   SafetyCertificateOutlined,
   SafetyOutlined,
   SettingOutlined,
-  TeamOutlined,
   WarningOutlined,
 } from '@ant-design/icons'
 
@@ -51,12 +50,6 @@ export function QualityLanding() {
       description: '查看客户投诉台账和处理记录',
       href: '/quality/complaints',
       icon: <NotificationOutlined style={{ fontSize: 32, color: '#d46b08' }} />,
-    },
-    {
-      title: '部门联系人',
-      description: '配置部门联系信息',
-      href: '/quality/department-contacts',
-      icon: <TeamOutlined style={{ fontSize: 32, color: '#7b3ff2' }} />,
     },
     {
       title: '质量检验',

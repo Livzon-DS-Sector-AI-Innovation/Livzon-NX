@@ -12,7 +12,6 @@ from app.core.exceptions import AppException, NotFoundException
 from app.modules.quality import repository
 from app.modules.quality.models import (
     CAPA,
-    DepartmentContact,
     Deviation,
 )
 from app.modules.quality.schemas import (
@@ -243,12 +242,16 @@ async def delete_capa(
 
 
 async def get_capa_departments(db: AsyncSession) -> list[str]:
-    """Get all departments from department contacts."""
-    query = select(DepartmentContact.department).where(
-        DepartmentContact.is_deleted.is_(False)
-    )
-    result = await db.execute(query)
-    return [row[0] for row in result.all()]
+    """Get all departments from the shared person directory (HR feishu members)."""
+    from app.modules.quality.service.person_directory import get_person_options
+
+    options = await get_person_options(db, limit=5000)
+    departments = {
+        str(option.get("department") or "").strip() for option in options
+    } - {""}
+    return sorted(departments)
+
+
 
 
 async def auto_fill_from_deviation(

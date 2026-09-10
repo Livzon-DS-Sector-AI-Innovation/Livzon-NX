@@ -119,23 +119,19 @@ async def _resolve_selected_submitter_contact(
     if not normalized_open_id:
         raise AppException(message="提交人不能为空")
 
-    from app.modules.quality.service.department_contacts import (
-        get_department_contact_list_from_feishu,
+    from app.modules.quality.service.person_directory import (
+        resolve_person_by_open_id,
     )
 
-    result = await get_department_contact_list_from_feishu(db, page=1, page_size=1000)
-    for contact in result.get("items", []):
-        if str(contact.get("open_id") or "").strip() == normalized_open_id:
-            return {
-                "name": str(contact.get("name") or "").strip(),
-                "open_id": normalized_open_id,
-                "department": str(contact.get("department") or "").strip(),
-                "department_head_name": str(
-                    contact.get("department_head_name") or ""
-                ).strip(),
-            }
+    contact = await resolve_person_by_open_id(db, normalized_open_id)
+    if contact is not None:
+        return {
+            "name": str(contact.get("name") or "").strip(),
+            "open_id": normalized_open_id,
+            "department": str(contact.get("department") or "").strip(),
+        }
 
-    raise AppException(message="所选提交人不存在于部门联系人台账中")
+    raise AppException(message="所选提交人不在人事飞书联系人目录中")
 
 
 async def _build_deviation_investigation_push_items_from_feishu(
@@ -544,11 +540,7 @@ async def create_deviation_investigation_push_record(
     payload["investigation_report_url"] = investigation_report_url
     payload["submitted_at"] = data.submitted_at or datetime.now(UTC)
     payload["submitter"] = submitter_contact["name"] or deviation.discoverer or ""
-    payload["department_head"] = (
-        submitter_contact["department_head_name"]
-        or payload.get("department_head")
-        or ""
-    )
+    payload["department_head"] = payload.get("department_head") or ""
     payload["created_by"] = None
     payload["updated_by"] = None
     record = await repository.create_deviation_investigation_push_record(db, payload)

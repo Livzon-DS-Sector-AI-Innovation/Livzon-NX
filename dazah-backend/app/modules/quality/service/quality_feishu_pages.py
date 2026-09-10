@@ -107,6 +107,7 @@ async def _search_entity_records(
     *,
     filters: dict[str, Any] | None = None,
     field_names: list[str] | None = None,
+    user_id_type: str = "open_id",
 ) -> list[dict[str, Any]]:
     filter_str = None
     if filters:
@@ -125,6 +126,7 @@ async def _search_entity_records(
         None,
         filter_str=filter_str,
         field_names=field_names,
+        user_id_type=user_id_type,
     )
 
 
@@ -134,6 +136,7 @@ async def _create_entity_record(
     fields: dict[str, Any],
     *,
     search_conditions: list[tuple[str, str]] | None = None,
+    user_id_type: str = "open_id",
 ) -> dict[str, Any]:
     record_id, table_id = await feishu_sync_service.feishu_sync._upsert_record(
         db,
@@ -142,6 +145,7 @@ async def _create_entity_record(
         None,
         fields,
         search_conditions=search_conditions,
+        user_id_type=user_id_type,
     )
     return {"record_id": record_id, "table_id": table_id}
 
@@ -153,6 +157,7 @@ async def _update_entity_record(
     fields: dict[str, Any],
     *,
     search_conditions: list[tuple[str, str]] | None = None,
+    user_id_type: str = "open_id",
 ) -> dict[str, Any]:
     next_record_id, table_id = await feishu_sync_service.feishu_sync._upsert_record(
         db,
@@ -161,6 +166,7 @@ async def _update_entity_record(
         record_id,
         fields,
         search_conditions=search_conditions,
+        user_id_type=user_id_type,
     )
     return {"record_id": next_record_id, "table_id": table_id}
 
@@ -525,15 +531,17 @@ async def create_deviation_report_record(
     if not reporter_open_id:
         raise AppException(message="报告人不能为空")
 
-    # 从部门联系人中解析报告人信息（包含 name, department）
-    reporter_contact = (
-        await quality_management_service._resolve_selected_reporter_contact(
-            db, reporter_open_id
-        )
+    # 从人事飞书联系人目录解析报告人信息（包含 name, department）
+    from app.modules.quality.service.person_directory import (
+        resolve_person_by_open_id,
     )
-    department = (reporter_contact.department or "").strip()
+
+    reporter_person = await resolve_person_by_open_id(db, reporter_open_id)
+    if reporter_person is None:
+        raise AppException(message="所选报告人不在人事飞书联系人目录中")
+    department = str(reporter_person.get("department") or "").strip()
     if not department:
-        raise AppException(message="报告人未关联部门，请先在部门联系人中设置")
+        raise AppException(message="报告人未关联部门，请检查人事飞书联系人数据")
 
     # 生成偏差编号 PC-YYMM###
     now = datetime.now(UTC)
@@ -541,9 +549,11 @@ async def create_deviation_report_record(
         db, now
     )
 
-    # 解析报告人的飞书用户ID
+    # 解析报告人的飞书用户ID（人事 open_id → union_id）
     reporter_user_value = await feishu_sync_service._resolve_contact_bitable_user_value(
-        db, reporter_contact.name, department=department
+        db,
+        str(reporter_person.get("name") or ""),
+        department=department,
     )
 
     # 构建飞书字段
@@ -579,6 +589,10 @@ async def _build_report_record_fields(
 
     只写入用户可编辑字段，不覆盖确认流程字段（部门负责人、QA、报告状态等）。
     """
+    from app.modules.quality.service.person_directory import (
+        resolve_person_by_open_id,
+    )
+
     description = str(payload.get("description") or "").strip()
     product_batch = str(payload.get("product_batch") or "").strip()
     reporter_open_id = str(payload.get("reporter_open_id") or "").strip()
@@ -593,15 +607,17 @@ async def _build_report_record_fields(
     department = str(payload.get("department") or "").strip() or None
     reporter_user_value = None
     if reporter_open_id:
-        reporter_contact = (
-            await quality_management_service._resolve_selected_reporter_contact(
-                db, reporter_open_id
-            )
+        reporter_person = await resolve_person_by_open_id(db, reporter_open_id)
+        if reporter_person is None:
+            raise AppException(message="所选报告人不在人事飞书联系人目录中")
+        department = (
+            str(reporter_person.get("department") or "").strip() or department
         )
-        department = (reporter_contact.department or "").strip() or department
         reporter_user_value = (
             await feishu_sync_service._resolve_contact_bitable_user_value(
-                db, reporter_contact.name, department=department
+                db,
+                str(reporter_person.get("name") or ""),
+                department=department,
             )
         )
     elif reporter_name:
@@ -1158,63 +1174,31 @@ async def _invalidate_validation_list_cache(entity_code: str) -> None:
         logger.warning("验证列表缓存清理失败（忽略）", exc_info=True)
 
 
-_DEPARTMENT_CONTACTS_CACHE_KEY = "quality:department_contacts:list"
-_DEPARTMENT_CONTACTS_CACHE_TTL = 300
-
-
-async def _get_department_contacts_cache(db: AsyncSession) -> list[dict[str, Any]]:
-    """获取部门联系人（Redis 缓存 5 分钟，避免每个列表请求都拉飞书）"""
-    cached = await cache_get(_DEPARTMENT_CONTACTS_CACHE_KEY)
-    if cached is not None:
-        try:
-            parsed = json.loads(cached)
-            if isinstance(parsed, list):
-                return parsed
-        except (TypeError, ValueError):
-            pass
-    try:
-        from app.modules.quality.service.department_contacts import (
-            get_department_contact_list_from_feishu,
-        )
-
-        result = await get_department_contact_list_from_feishu(
-            db, page=1, page_size=1000
-        )
-        items = result.get("items", [])
-        items = items if isinstance(items, list) else []
-        await cache_set(
-            _DEPARTMENT_CONTACTS_CACHE_KEY,
-            json.dumps(items, ensure_ascii=False, default=str),
-            ex=_DEPARTMENT_CONTACTS_CACHE_TTL,
-        )
-        return items
-    except Exception:
-        # 部门联系人未配置/拉取失败时头像为空，不影响验证列表加载
-        logger.warning("拉取部门联系人失败，人员头像跳过", exc_info=True)
-        return []
-
-
-def _resolve_bitable_user_ids_from_names(
-    contacts: list[dict[str, Any]],
+async def _resolve_bitable_user_ids_from_names(
+    db: AsyncSession,
     names_str: str | None,
 ) -> list[str] | None:
-    """根据中文姓名从部门联系人中查找 bitable_user_id，必要时回退到 open_id。"""
+    """旧版纯姓名入参兜底：按姓名从人员目录解析可写成员 id（union_id）。"""
     if not names_str:
         return None
     name_list = [n.strip() for n in names_str.split("、") if n.strip()]
     if not name_list:
         return None
+    from app.modules.quality.service.person_directory import (
+        resolve_person_by_name,
+        resolve_person_write_id,
+    )
+
     user_ids: list[str] = []
     for name in name_list:
-        for contact in contacts:
-            contact_name = str(contact.get("name") or "").strip()
-            if contact_name == name:
-                bitable_user_id = str(contact.get("bitable_user_id") or "").strip()
-                open_id = str(contact.get("open_id") or "").strip()
-                resolved_user_id = bitable_user_id or open_id
-                if resolved_user_id:
-                    user_ids.append(resolved_user_id)
-                    break
+        person = await resolve_person_by_name(db, name)
+        if person is None:
+            continue
+        resolved = await resolve_person_write_id(
+            db, str(person.get("open_id") or "")
+        )
+        if resolved:
+            user_ids.append(resolved)
     return user_ids if user_ids else None
 
 
@@ -1443,6 +1427,111 @@ def _map_validation_base_item(
     }
 
 
+def _normalize_member_entries(value: Any) -> list[dict[str, Any]] | None:
+    """把人员入参归一化为 [{id, name, resolved}]；空数组返回 []（表示清空成员字段）。
+
+    不是成员结构（纯姓名字符串/字符串数组）时返回 None，走旧版姓名反查。
+    resolved=True 表示 id 来自飞书记录回读（对当前 Base 有效），无需反查。
+    """
+    if isinstance(value, dict):
+        value = [value]
+    if not isinstance(value, list):
+        return None
+    if not all(isinstance(item, dict) for item in value):
+        return None
+    members: list[dict[str, Any]] = []
+    for item in value:
+        raw_resolved = item.get("resolved")
+        members.append(
+            {
+                "id": str(item.get("id") or "").strip(),
+                "name": str(item.get("name") or item.get("text") or "").strip(),
+                # True=记录回读 id（Base 有效）；False=人事目录新选（需翻译 union_id）；
+                # None=旧调用未声明，按 False 处理
+                "resolved": raw_resolved if isinstance(raw_resolved, bool) else None,
+            }
+        )
+    return members
+
+
+async def _resolve_member_bitable_ids(
+    db: AsyncSession,
+    members: list[dict[str, Any]],
+) -> list[str]:
+    """把成员 [{id, name, resolved}] 解析为成员字段可写 union_id 列表。
+
+    人员候选来自人事管理-飞书联系人，其 open_id 属于人事应用命名空间；
+    飞书各自建应用的 open_id 互不相认（直接写成员字段报 1254066），因此：
+    - resolved=True 的记录回读 id 与 on_ 前缀的 union_id 直接使用
+      （验证模块读写已统一 user_id_type=union_id）
+    - 其余人事 open_id 经人事应用换发 union_id（Redis 长缓存）
+    - 换发失败的成员明确报错，避免静默写入失败
+    """
+    from app.modules.quality.service.hr_identity import (
+        translate_hr_open_ids_to_union_ids,
+    )
+
+    need_translate: list[str] = []
+    for member in members:
+        member_id = member["id"]
+        if not member_id:
+            continue
+        if member["resolved"] is not True and not member_id.startswith("on_"):
+            need_translate.append(member_id)
+
+    translated = await translate_hr_open_ids_to_union_ids(db, need_translate)
+
+    final_ids: list[str] = []
+    still_missing: list[str] = []
+    for member in members:
+        member_id = member["id"]
+        if not member_id:
+            continue
+        if member["resolved"] is True or member_id.startswith("on_"):
+            final_ids.append(member_id)
+            continue
+        union_id = translated.get(member_id)
+        if union_id:
+            final_ids.append(union_id)
+        else:
+            still_missing.append(member["name"] or member_id)
+    if still_missing:
+        raise AppException(
+            message=(
+                f"人员 {'、'.join(still_missing)} 无法写入飞书："
+                "未能在人事管理-飞书联系人中解析其飞书身份，"
+                "请确认其在职且已完成飞书联系人同步"
+            )
+        )
+    return final_ids
+
+
+def _fields_need_union_user_id(fields: dict[str, Any]) -> bool:
+    """人员字段里出现 on_ 前缀 union_id 时，写接口必须带 user_id_type=union_id。"""
+    for key in ("人员", "负责人"):
+        for entry in fields.get(key) or []:
+            if (
+                isinstance(entry, dict)
+                and str(entry.get("id") or "").startswith("on_")
+            ):
+                return True
+    return False
+
+
+def _mark_members_resolved(item: dict[str, Any]) -> dict[str, Any]:
+    """给记录回读的人员条目标记 resolved=True（其 id 对当前 Base 有效）。"""
+    for key in ("participants", "owner_name"):
+        entries = item.get(key)
+        if isinstance(entries, list):
+            item[key] = [
+                {**entry, "resolved": True}
+                if isinstance(entry, dict) and "resolved" not in entry
+                else entry
+                for entry in entries
+            ]
+    return item
+
+
 async def _build_validation_feishu_fields(
     db: AsyncSession,
     payload: dict[str, Any],
@@ -1483,31 +1572,46 @@ async def _build_validation_feishu_fields(
         else:
             fields["产品代码"] = [str(prods)]
 
-    # 人员 和 负责人：优先通过部门联系人反查 bitable_user_id 写入飞书用户字段
-    contacts = await _get_department_contacts_cache(db)
-    participants = payload.get("participants")
-    if participants:
-        # 支持数组（前端多选）或字符串
-        if isinstance(participants, list):
-            names_str = "、".join(str(p) for p in participants if p)
-        else:
-            names_str = str(participants).strip()
-        if names_str:
-            participant_ids = _resolve_bitable_user_ids_from_names(contacts, names_str)
-            if participant_ids:
-                fields["人员"] = [{"id": oid} for oid in participant_ids]
-
-    owner = payload.get("owner_name")
-    if owner:
-        owner_str = (
-            str(owner).strip()
-            if not isinstance(owner, list)
-            else "、".join(str(o) for o in owner if o)
+    # 人员 和 负责人：前端人员选择器（人事管理-飞书联系人）提交 [{id, name,
+    # resolved}]，人事 open_id 在后端换发为跨应用稳定的 union_id 后写入；
+    # 空数组表示清空。兼容旧版纯姓名入参：按姓名从人员目录解析。
+    participant_members = _normalize_member_entries(payload.get("participants"))
+    if participant_members is not None:
+        participant_ids = await _resolve_member_bitable_ids(
+            db, participant_members
         )
-        if owner_str:
-            owner_ids = _resolve_bitable_user_ids_from_names(contacts, owner_str)
-            if owner_ids:
-                fields["负责人"] = [{"id": oid} for oid in owner_ids[:1]]
+        fields["人员"] = [{"id": member_id} for member_id in participant_ids]
+    else:
+        participants = payload.get("participants")
+        if participants:
+            # 支持数组（前端多选）或字符串
+            if isinstance(participants, list):
+                names_str = "、".join(str(p) for p in participants if p)
+            else:
+                names_str = str(participants).strip()
+            if names_str:
+                participant_ids = await _resolve_bitable_user_ids_from_names(
+                    db, names_str
+                )
+                if participant_ids:
+                    fields["人员"] = [{"id": oid} for oid in participant_ids]
+
+    owner_members = _normalize_member_entries(payload.get("owner_name"))
+    if owner_members is not None:
+        owner_ids = await _resolve_member_bitable_ids(db, owner_members[:1])
+        fields["负责人"] = [{"id": owner_ids[0]}] if owner_ids else []
+    else:
+        owner = payload.get("owner_name")
+        if owner:
+            owner_str = (
+                str(owner).strip()
+                if not isinstance(owner, list)
+                else "、".join(str(o) for o in owner if o)
+            )
+            if owner_str:
+                owner_ids = await _resolve_bitable_user_ids_from_names(db, owner_str)
+                if owner_ids:
+                    fields["负责人"] = [{"id": oid} for oid in owner_ids[:1]]
 
     # 群组 — GroupChat 类型，不可通过 API 直接写入，跳过
     # gc = payload.get("group_chat")
@@ -1636,14 +1740,19 @@ async def _enrich_participants_avatars(
 async def _search_validation_records_safe(
     db: AsyncSession,
     entity_code: str,
+    *,
+    user_id_type: str = "open_id",
 ) -> list[dict[str, Any]]:
     """搜索验证记录；全字段搜索被高级权限受限字段拒绝时按白名单字段重试。
 
     真实年度台账可能含"无权限访问字段"等应用不可读的特殊列，飞书对
     含受限字段的全字段搜索会整体拒绝，此时排除受限字段后重试。
+    人员字段统一以 union_id 命名空间回读（与人员选择器写入一致）。
     """
     try:
-        return await _search_entity_records(db, entity_code)
+        return await _search_entity_records(
+            db, entity_code, user_id_type=user_id_type
+        )
     except Exception:
         pass
     try:
@@ -1664,7 +1773,12 @@ async def _search_validation_records_safe(
         ]
         if not safe_names:
             return []
-        return await _search_entity_records(db, entity_code, field_names=safe_names)
+        return await _search_entity_records(
+            db,
+            entity_code,
+            field_names=safe_names,
+            user_id_type=user_id_type,
+        )
     except Exception:
         return []
 
@@ -1711,7 +1825,9 @@ async def list_validation_records_from_feishu(
     except AppException:
         return _build_page_result([], 0, page, page_size)
 
-    records = await _search_validation_records_safe(db, entity_code)
+    records = await _search_validation_records_safe(
+        db, entity_code, user_id_type="union_id"
+    )
 
     items = [_map_validation_base_item(record) for record in records]
     # 隐藏仅部门（无其他业务信息）的占位行
@@ -1821,7 +1937,9 @@ async def get_validation_record_from_feishu(
             )
         raise AppException(message="验证与确认飞书 Base 未启用")
 
-    records = await _search_validation_records_safe(db, entity_code)
+    records = await _search_validation_records_safe(
+        db, entity_code, user_id_type="union_id"
+    )
     for record in records:
         if str(record.get("record_id") or "") == record_id:
             item = _map_validation_base_item(record)
@@ -1902,6 +2020,9 @@ async def create_validation_record_in_feishu(
         entity_code,
         fields,
         search_conditions=[("确认名称", title)],
+        user_id_type=(
+            "union_id" if _fields_need_union_user_id(fields) else "open_id"
+        ),
     )
     await _invalidate_validation_list_cache(entity_code)
     return await get_validation_record_from_feishu(
@@ -1922,6 +2043,7 @@ async def update_validation_record_in_feishu(
     current = await get_validation_record_from_feishu(
         db, record_id, validation_type, year
     )
+    current = _mark_members_resolved(current)
     merged = {**current, **payload}
     title = str(merged.get("title") or "").strip()
     if not title:
@@ -1935,6 +2057,9 @@ async def update_validation_record_in_feishu(
         record_id,
         fields,
         search_conditions=[("确认名称", title)],
+        user_id_type=(
+            "union_id" if _fields_need_union_user_id(fields) else "open_id"
+        ),
     )
     await _invalidate_validation_list_cache(entity_code)
     return await get_validation_record_from_feishu(

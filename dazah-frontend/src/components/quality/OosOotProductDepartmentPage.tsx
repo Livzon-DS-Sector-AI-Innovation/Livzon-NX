@@ -5,8 +5,8 @@ import { App, Button, Card, Form, Input, Input as AntInput, Modal, Popconfirm, S
 import type { ColumnsType } from 'antd/es/table'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { pullProductDepartmentRecords, createProductDepartmentRecord, updateProductDepartmentRecord, deleteProductDepartmentRecord } from '@/actions/quality'
-import { fetchProductDepartmentRecords, fetchDepartmentContacts } from '@/lib/api/client/quality'
-import type { DepartmentContact } from '@/types/quality'
+import { fetchProductDepartmentRecords, fetchQualityPersonDirectory } from '@/lib/api/client/quality'
+import type { QualityPersonOption } from '@/types/quality'
 
 interface ProductDepartmentItem {
   record_id: string
@@ -42,7 +42,7 @@ export default function OosOotProductDepartmentPage() {
   const [modalVisible, setModalVisible] = useState(false)
   const [editingRecord, setEditingRecord] = useState<ProductDepartmentItem | null>(null)
   const [form] = Form.useForm<FormValues>()
-  const [contacts, setContacts] = useState<DepartmentContact[]>([])
+  const [contacts, setContacts] = useState<QualityPersonOption[]>([])
 
   const queryClient = useQueryClient()
 
@@ -61,7 +61,7 @@ export default function OosOotProductDepartmentPage() {
 
   const loadContacts = useCallback(async () => {
     try {
-      const list = await fetchDepartmentContacts()
+      const list = await fetchQualityPersonDirectory()
       setContacts(list)
     } catch {
       // contacts load silently
@@ -74,7 +74,7 @@ export default function OosOotProductDepartmentPage() {
 
   const contactOptions = contacts
     .filter((c) => c.name)
-    .map((c) => ({ label: c.name!, value: (c as any).bitable_user_id || c.open_id || c.name! }))
+    .map((c) => ({ label: c.name!, value: c.open_id || c.name! }))
 
   const productCodeOptions = useMemo(() => {
     const vals = [...new Set(items.map(i => i.product_code).filter(Boolean))]

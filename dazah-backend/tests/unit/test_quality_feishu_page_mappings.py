@@ -202,25 +202,32 @@ def test_validation_record_mapping_handles_people_products_and_dates() -> None:
     assert fallback["owner_name"] == "负责人"
 
 
-def test_resolve_bitable_users_prefers_bitable_id_then_open_id() -> None:
-    contacts = [
-        {
-            "name": "张三",
-            "bitable_user_id": "ou_bitable_1",
-            "open_id": "ou_open_1",
-        },
-        {
-            "name": "李四",
-            "bitable_user_id": "",
-            "open_id": "ou_open_2",
-        },
-    ]
-    assert pages._resolve_bitable_user_ids_from_names(
-        contacts,
+@pytest.mark.anyio
+async def test_resolve_bitable_users_resolves_names_via_person_directory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """姓名串 → 人员目录解析可写成员 id；未知姓名跳过，全空返回 None。"""
+    import app.modules.quality.service.person_directory as pd
+
+    people = {"张三": {"open_id": "ou_name_1"}, "李四": {"open_id": "ou_name_2"}}
+    write_ids = {"ou_name_1": "on_union_1", "ou_name_2": "on_union_2"}
+
+    async def fake_resolve_by_name(db: Any, name: str) -> Any:
+        return people.get(name)
+
+    async def fake_resolve_write_id(db: Any, open_id: str) -> Any:
+        return write_ids.get(open_id)
+
+    monkeypatch.setattr(pd, "resolve_person_by_name", fake_resolve_by_name)
+    monkeypatch.setattr(pd, "resolve_person_write_id", fake_resolve_write_id)
+
+    db = SimpleNamespace()
+    assert await pages._resolve_bitable_user_ids_from_names(
+        db,
         "张三、李四、未知",
-    ) == ["ou_bitable_1", "ou_open_2"]
-    assert pages._resolve_bitable_user_ids_from_names(contacts, None) is None
-    assert pages._resolve_bitable_user_ids_from_names([], "张三") is None
+    ) == ["on_union_1", "on_union_2"]
+    assert await pages._resolve_bitable_user_ids_from_names(db, None) is None
+    assert await pages._resolve_bitable_user_ids_from_names(db, "、未知、") is None
 
 
 @pytest.mark.anyio

@@ -21,8 +21,22 @@ from app.modules.quality.schemas.tracking_records import (
     UpdateCapaPlanTrackRequest,
     UpdateDeviationInvestigationPushRecordRequest,
 )
+from app.modules.quality.service import person_directory
 from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
 from app.modules.quality.service import tracking_records as tracking_service
+
+
+def _person(open_id: str, name: str, department: str) -> dict:
+    return {
+        "open_id": open_id,
+        "name": name,
+        "department": department,
+        "job_title": None,
+        "email": None,
+        "mobile": None,
+        "enterprise_email": None,
+        "avatar_url": None,
+    }
 
 
 @pytest.fixture(autouse=True)
@@ -218,7 +232,6 @@ async def test_deviation_investigation_push_record_service_roundtrip(
                 "name": "张起智",
                 "open_id": "ou_submitter_001",
                 "department": "QC",
-                "department_head_name": "车间主任",
             }
         ),
     )
@@ -230,6 +243,7 @@ async def test_deviation_investigation_push_record_service_roundtrip(
             investigation_report_url="https://example.com/report-1.pdf",
             submitted_at=datetime(2026, 7, 2, 10, 0, tzinfo=UTC),
             submitter_open_id="ou_submitter_001",
+            department_head="车间主任",
             department_head_result="approved",
         ),
         "system",
@@ -420,32 +434,20 @@ async def test_update_deviation_investigation_push_record_by_feishu_record_ref(
         fake_search_records,
     )
     monkeypatch.setattr(
-        feishu_sync_service,
-        "_get_department_contacts_from_feishu",
+        person_directory,
+        "get_person_options",
         AsyncMock(
             return_value=[
-                {
-                    "name": "张起智",
-                    "department": "质量部",
-                    "bitable_user_id": "ou_submitter_001",
-                },
-                {
-                    "name": "部门负责人甲",
-                    "department": "质量部",
-                    "bitable_user_id": "ou_dept_head_001",
-                },
-                {
-                    "name": "QA甲",
-                    "department": "质量管理部",
-                    "bitable_user_id": "ou_qa_001",
-                },
-                {
-                    "name": "QA负责人甲",
-                    "department": "质量管理部",
-                    "bitable_user_id": "ou_qa_head_001",
-                },
+                _person("ou_submitter_001", "张起智", "质量部"),
+                _person("ou_dept_head_001", "部门负责人甲", "质量部"),
+                _person("ou_qa_001", "QA甲", "质量管理部"),
+                _person("ou_qa_head_001", "QA负责人甲", "质量管理部"),
             ]
         ),
+    )
+    monkeypatch.setattr(
+        "app.modules.quality.service.hr_identity.translate_hr_open_ids_to_union_ids",
+        AsyncMock(side_effect=lambda _db, ids: {i: f"on_{i[3:]}" for i in ids}),
     )
     upsert_mock: Any = AsyncMock(return_value=("rec_push_remote_001", "tbl_push_real"))
     monkeypatch.setattr(feishu_sync_service.feishu_sync, "_upsert_record", upsert_mock)
@@ -469,7 +471,7 @@ async def test_update_deviation_investigation_push_record_by_feishu_record_ref(
         "text": "https://example.com/new.pdf",
         "type": "url",
     }
-    assert upsert_mock.await_args.args[4]["提交人"] == [{"id": "ou_submitter_001"}]
+    assert upsert_mock.await_args.args[4]["提交人"] == [{"id": "on_submitter_001"}]
     assert upsert_mock.await_args.args[4]["QA审核结果"] == "通过"
 
 
@@ -534,8 +536,8 @@ async def test_update_push_record_by_feishu_ref_preserves_url_link(
         fake_search_records,
     )
     monkeypatch.setattr(
-        feishu_sync_service,
-        "_get_department_contacts_from_feishu",
+        person_directory,
+        "get_person_options",
         AsyncMock(return_value=[]),
     )
     upsert_mock: Any = AsyncMock(return_value=("rec_push_remote_002", "tbl_push_real"))
@@ -1016,52 +1018,6 @@ async def test_quality_feishu_entity_field_mapping_api_returns_bundle(
     assert response.json()["entity_name"] == "偏差台账"
     assert len(response.json()["system_fields"]) == 2
     assert response.json()["field_mappings"][0]["system_field"] == "偏差编号"
-
-
-@pytest.mark.anyio
-async def test_department_contacts_feishu_api_delegates_db_and_pagination(
-    client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    async def fake_get_department_contact_list_from_feishu(
-        db: AsyncSession,
-        page: int,
-        page_size: int,
-    ) -> dict[str, Any]:
-        assert db is not None
-        assert page == 2
-        assert page_size == 50
-        return {
-            "items": [
-                {
-                    "id": str(uuid.uuid4()),
-                    "department": "质量部",
-                    "name": "张三",
-                    "phone": "13800138000",
-                }
-            ],
-            "total": 1,
-            "page": page,
-            "page_size": page_size,
-        }
-
-    monkeypatch.setattr(
-        quality_api.service,  # type: ignore[attr-defined]
-        "get_department_contact_list_from_feishu",
-        fake_get_department_contact_list_from_feishu,
-    )
-
-    response = await client.get(
-        "/api/v1/quality/department-contacts/feishu",
-        params={"page": 2, "page_size": 50},
-    )
-    assert response.status_code == 200
-    payload = response.json()["data"]
-    assert payload["total"] == 1
-    assert payload["page"] == 2
-    assert payload["page_size"] == 50
-    assert payload["items"][0]["department"] == "质量部"
-    assert payload["items"][0]["name"] == "张三"
 
 
 @pytest.mark.anyio

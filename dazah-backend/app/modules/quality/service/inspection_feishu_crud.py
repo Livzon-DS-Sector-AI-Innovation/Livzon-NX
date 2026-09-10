@@ -176,6 +176,124 @@ def _coerce_write_fields(
     return coerced
 
 
+def _entity_uses_union_user_ids(entity_code: str) -> bool:
+    """QC验证实体的人员字段统一走 union_id 命名空间（与人事目录选人配套）。"""
+    return entity_code.startswith("validation_qc_")
+
+
+async def _resolve_user_field_open_ids(
+    db: AsyncSession,
+    remote_field_map: dict[str, dict[str, Any]],
+    fields: dict[str, Any],
+    *,
+    union_mode: bool = False,
+) -> None:
+    """把 User 字段里新选人员的 id 原地整理为当前 Base 可写的形态。
+
+    union_mode（QC验证）：人员候选来自人事管理-飞书联系人，其 open_id 属于
+    人事应用命名空间，与质量应用互不相认（直接写报 1254066），经人事应用
+    换发为跨应用稳定的 union_id（on_ 前缀，Redis 长缓存），写入时配套
+    user_id_type=union_id；resolved=True 的记录回读 id 保持原样；换发失败
+    明确报错，避免静默写入失败。
+
+    非 union 模式（检验等历史表单）：同样经人事应用换发 union_id；换发
+    失败（历史记录中的旧成员 id 等）保持原 id，不阻断写入。
+    """
+    user_fields = [
+        name
+        for name, value in fields.items()
+        if isinstance(value, list)
+        and str(remote_field_map.get(name, {}).get("ui_type") or "").strip() == "User"
+    ]
+    if not user_fields:
+        return
+
+    if union_mode:
+        from app.modules.quality.service.hr_identity import (
+            translate_hr_open_ids_to_union_ids,
+        )
+
+        need: list[str] = []
+        for name in user_fields:
+            for item in fields[name]:
+                if not isinstance(item, dict):
+                    continue
+                if item.get("resolved"):
+                    continue
+                member_id = str(item.get("id") or "").strip()
+                if member_id.startswith("ou_"):
+                    need.append(member_id)
+        translated = await translate_hr_open_ids_to_union_ids(db, need)
+        missing_names: list[str] = []
+        for name in user_fields:
+            fields[name] = [
+                _union_entry(item, translated)
+                if isinstance(item, dict)
+                else item
+                for item in fields[name]
+            ]
+            for item in fields[name]:
+                if (
+                    isinstance(item, dict)
+                    and not str(item.get("id") or "").startswith("on_")
+                ):
+                    missing_names.append(
+                        str(item.get("name") or "").strip()
+                        or str(item.get("id") or "")
+                    )
+        if missing_names:
+            raise AppException(
+                message=(
+                    f"人员 {'、'.join(missing_names)} 无法写入飞书："
+                    "未能在人事管理-飞书联系人中解析其飞书身份，"
+                    "请确认其在职且已完成飞书联系人同步"
+                )
+            )
+        return
+
+    # 非 union 模式：同样经人事应用换发 union_id，失败保持原 id，不阻断
+    wanted: list[str] = []
+    for name in user_fields:
+        for item in fields[name]:
+            if not isinstance(item, dict):
+                continue
+            if item.get("resolved"):
+                continue
+            member_id = str(item.get("id") or "").strip()
+            if member_id.startswith("ou_"):
+                wanted.append(member_id)
+    if not wanted:
+        return
+
+    from app.modules.quality.service.hr_identity import (
+        translate_hr_open_ids_to_union_ids,
+    )
+
+    try:
+        translated = await translate_hr_open_ids_to_union_ids(db, wanted)
+    except Exception:
+        return
+    for name in user_fields:
+        fields[name] = [
+            {
+                **item,
+                "id": translated.get(
+                    str(item.get("id") or "").strip(), item.get("id")
+                ),
+            }
+            if isinstance(item, dict) and not item.get("resolved")
+            else item
+            for item in fields[name]
+        ]
+
+
+def _union_entry(item: dict[str, Any], translated: dict[str, str]) -> dict[str, Any]:
+    member_id = str(item.get("id") or "").strip()
+    if item.get("resolved") or member_id.startswith("on_"):
+        return item
+    return {**item, "id": translated.get(member_id, member_id)}
+
+
 def _entity_table_id(entity: Any) -> str:
     """实体配置必须带非空 table_id（防御配置缺失导致对空表名发起请求）。"""
     table_id = str(entity.table_id or "").strip()
@@ -256,8 +374,16 @@ async def create_inspection_feishu_record(
     validate_bitable_crud_entity(entity_code)
     client, entity = await _resolve_write_client(db, entity_code)
     remote_field_map = await _list_remote_field_map(client, entity.table_id)
+    union_mode = _entity_uses_union_user_ids(entity_code)
+    await _resolve_user_field_open_ids(
+        db, remote_field_map, fields, union_mode=union_mode
+    )
     coerced = _coerce_write_fields(remote_field_map, fields)
-    record = await client.create_record(_entity_table_id(entity), coerced)
+    record = await client.create_record(
+        _entity_table_id(entity),
+        coerced,
+        user_id_type="union_id" if union_mode else "open_id",
+    )
     record_id = str(record.get("record_id") or "")
     await record_audit_log(
         db,
@@ -284,8 +410,17 @@ async def update_inspection_feishu_record(
     validate_bitable_crud_entity(entity_code)
     client, entity = await _resolve_write_client(db, entity_code)
     remote_field_map = await _list_remote_field_map(client, entity.table_id)
+    union_mode = _entity_uses_union_user_ids(entity_code)
+    await _resolve_user_field_open_ids(
+        db, remote_field_map, fields, union_mode=union_mode
+    )
     coerced = _coerce_write_fields(remote_field_map, fields)
-    record = await client.update_record(_entity_table_id(entity), record_id, coerced)
+    record = await client.update_record(
+        _entity_table_id(entity),
+        record_id,
+        coerced,
+        user_id_type="union_id" if union_mode else "open_id",
+    )
     next_record_id = str(record.get("record_id") or record_id)
     await record_audit_log(
         db,
@@ -325,8 +460,13 @@ async def get_inspection_feishu_record(
         app_id=runtime.app_id,
         app_secret=runtime.app_secret,
     )
+    user_id_type = (
+        "union_id" if _entity_uses_union_user_ids(entity_code) else "open_id"
+    )
     try:
-        record = await client.get_record(_entity_table_id(entity), record_id)
+        record = await client.get_record(
+            _entity_table_id(entity), record_id, user_id_type=user_id_type
+        )
     except RuntimeError as exc:
         # 飞书 1254043：记录不存在或已被删除（含飞书侧删除与平台删除竞态）
         if "1254043" in str(exc) or "RecordIdNotFound" in str(exc):
@@ -486,7 +626,13 @@ async def list_bitable_feishu_records(
             for item in await client.list_fields(_entity_table_id(entity))
             if item.get("field_name")
         )
-        records = await _search_entity_records(db, entity_code)
+        records = await _search_entity_records(
+            db,
+            entity_code,
+            user_id_type=(
+                "union_id" if _entity_uses_union_user_ids(entity_code) else "open_id"
+            ),
+        )
     except (AppException, LLMConfigError):
         # 未配置/凭证解密失败均按"表不可用"降级，前端提示先配置
         return {
