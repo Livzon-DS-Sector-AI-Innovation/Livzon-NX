@@ -20,6 +20,12 @@ class ScheduleExcelArchive(BaseModel):
     __tablename__ = "schedule_excel_archives"
     __table_args__ = {"schema": "production"}
 
+    product_code: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        server_default="FA",
+        comment="产品代码（如 FA/MC/DR），存档按产品隔离",
+    )
     file_name: Mapped[str] = mapped_column(
         String(255), nullable=False, comment="原始文件名"
     )

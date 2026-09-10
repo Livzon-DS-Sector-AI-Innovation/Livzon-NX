@@ -33,6 +33,18 @@ MONTH_SETTINGS_MIGRATION_PATH = (
     / "versions"
     / "b7c9e1f4a6d8_add_fermentation_month_settings.py"
 )
+PRODUCT_CODE_MIGRATION_PATH = (
+    Path(__file__).parents[2]
+    / "alembic"
+    / "versions"
+    / "c2f5a8d3e7b1_add_product_code_to_fermentation_tables.py"
+)
+MERGE_HEADS_MIGRATION_PATH = (
+    Path(__file__).parents[2]
+    / "alembic"
+    / "versions"
+    / "957e2da4f7c7_merge_fermentation_product_and_.py"
+)
 
 
 def _load_fermentation_migration() -> Any:
@@ -346,3 +358,85 @@ def test_board_setting_migrations_chain_from_current_head() -> None:
     assert batch.down_revision == "c9d400000023"
     assert month.revision == "b7c9e1f4a6d8"
     assert month.down_revision == batch.revision
+
+
+def test_product_code_migration_adds_columns_and_swaps_unique_indexes(
+    monkeypatch: Any,
+) -> None:
+    """product_code 迁移：三表加列，产量/月设置唯一索引改为产品内唯一。"""
+    migration = _load_migration(
+        PRODUCT_CODE_MIGRATION_PATH, "fermentation_product_code_migration"
+    )
+    added_columns: list[tuple[str, str, dict[str, Any]]] = []
+    dropped_columns: list[tuple[str, str]] = []
+    created_indexes: list[dict[str, Any]] = []
+    dropped_indexes: list[str] = []
+
+    def _add_column(
+        table: str, column: sa.Column, **kwargs: Any
+    ) -> None:
+        added_columns.append((table, column.name, kwargs))
+
+    monkeypatch.setattr(migration.op, "add_column", _add_column)
+    monkeypatch.setattr(
+        migration.op,
+        "drop_column",
+        lambda table, column, **kw: dropped_columns.append((table, column)),
+    )
+    monkeypatch.setattr(
+        migration.op,
+        "create_index",
+        lambda name, table, columns, **kwargs: _record_created_partial_index(
+            created_indexes, name, table, columns, **kwargs
+        ),
+    )
+    monkeypatch.setattr(
+        migration.op,
+        "drop_index",
+        lambda name, table_name, **kw: dropped_indexes.append(str(name)),
+    )
+
+    migration.upgrade()
+    migration.downgrade()
+
+    # upgrade：三表加 product_code（含 server_default 回填 FA）
+    assert [table for table, _, _ in added_columns] == [
+        "schedule_excel_archives",
+        "fermentation_batch_actuals",
+        "fermentation_month_settings",
+    ]
+    assert all(column == "product_code" for _, column, _ in added_columns)
+    # upgrade：唯一索引换成产品内唯一，存档表加普通索引；
+    # downgrade：把两条进行中唯一索引换回旧口径（列收窄、索引名还原）
+    assert {
+        (item["name"], tuple(item["columns"])) for item in created_indexes
+    } == {
+        ("ix_schedule_excel_archives_product_code", ("product_code",)),
+        ("ux_fermentation_batch_actuals_product_batch", ("product_code", "batch_no")),
+        ("ux_fermentation_month_settings_period", ("product_code", "period_start")),
+        ("ux_fermentation_batch_actuals_batch_no", ("batch_no",)),
+        ("ux_fermentation_month_settings_period", ("period_start",)),
+    }
+    # 部分唯一索引始终只用于两条进行中唯一约束
+    assert {
+        item["name"] for item in created_indexes if item["partial"]
+    } == {
+        "ux_fermentation_batch_actuals_product_batch",
+        "ux_fermentation_month_settings_period",
+        "ux_fermentation_batch_actuals_batch_no",
+    }
+    # downgrade：先换回旧唯一索引再删列
+    assert ("fermentation_batch_actuals", "product_code") in dropped_columns
+    assert ("fermentation_month_settings", "product_code") in dropped_columns
+    assert ("schedule_excel_archives", "product_code") in dropped_columns
+
+
+def test_merge_heads_migration_joins_product_and_contact_branches() -> None:
+    merge = _load_migration(
+        MERGE_HEADS_MIGRATION_PATH, "fermentation_merge_heads_migration"
+    )
+    assert merge.revision == "957e2da4f7c7"
+    assert set(merge.down_revision) == {"c2f5a8d3e7b1", "c9d400000026"}
+    # 合并迁移不改变任何结构
+    assert merge.upgrade() is None
+    assert merge.downgrade() is None

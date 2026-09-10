@@ -26,7 +26,7 @@ def _mini_rows() -> list[list]:
         ["放罐", "", "FA-PREV", "", "", "FA-M0"],
         ["罐号", "", "302A", "", "", "302A"],
         ["放罐时间", "", "10:00", "", "", "10:00"],
-        ["备注", "", "", "", "", ""],
+        ["备注", "本周期共放罐2批", "旧备注不播", "FA26236 菌种复检", "", ""],
         ["", "", "", "", "", ""],
         ["", "", "", "", "", ""],
         ["", "", "", "", "", ""],
@@ -89,6 +89,15 @@ async def test_build_board_tank_states_and_kpis() -> None:
 
     # 今日 8/28 20:00 待接种提醒
     assert any("待接种批次 FA-S1" in a["text"] for a in payload["alerts"])
+    # 排产备注：周期级汇总（备注行第 2 格）整月播报；
+    # 按日期备注今天(8/28)的进跑马灯，过去(8/27)的不播
+    note_alerts = [
+        a["text"] for a in payload["alerts"] if a["text"].startswith("【排产备注】")
+    ]
+    assert note_alerts == [
+        "【排产备注】本周期共放罐2批",
+        "【排产备注】08-28：FA26236 菌种复检",
+    ]
 
 
 @pytest.mark.anyio
@@ -132,6 +141,26 @@ async def test_dump_window_gates_completion() -> None:
 
 
 @pytest.mark.anyio
+async def test_tank_dumped_when_last_batch_window_passed() -> None:
+    """罐的最后批次放罐窗口已结束且无后续移种 → 已放罐（历史回看语义）。"""
+    rows = _mini_rows()
+    # 8/31：FA-M0（302A）8/30 10:00 放罐、窗口 12:00 已过；
+    # FA-M3（302A）8/30 21:00 移种但排产无其放罐日期，不参与状态判定
+    payload = board.build_board(rows, [], datetime(2026, 8, 31, 12, 0))
+    assert payload is not None
+    tank = next(t for t in payload["tanks"] if t["tank_no"] == "302A")
+    assert tank["status"] == "dumped"
+    assert tank["batch_no"] == "FA-M0"
+    assert tank["note"] == "该罐本批次放罐作业完成"
+    # 有后续移种时仍显示空闲+预计移种
+    payload = board.build_board(rows, [], datetime(2026, 8, 30, 13, 0))
+    assert payload is not None
+    tank = next(t for t in payload["tanks"] if t["tank_no"] == "302A")
+    assert tank["status"] == "idle"
+    assert "移种FA-M3" in tank["note"]
+
+
+@pytest.mark.anyio
 async def test_running_dump_alert_only_within_24h() -> None:
     """运行批次的放罐播报只提醒 24h 内将要放罐的批次。"""
     rows = _mini_rows()
@@ -169,6 +198,13 @@ async def test_build_board_merges_batch_actuals() -> None:
             "remark": None,
         },
         {"id": "3", "batch_no": "FA26232", "dump_date": "2026-08-29", "yield_kg": None},
+        # 其他周期的批次：不在本周期放罐清单内，图表不统计
+        {
+            "id": "4",
+            "batch_no": "FA99999",
+            "dump_date": "2026-10-01",
+            "yield_kg": 999.0,
+        },
     ]
     payload = board.build_board(rows, [], datetime(2026, 8, 28, 12, 0), actuals=actuals)
     assert payload is not None
@@ -203,7 +239,12 @@ async def test_trend_limits_to_31_batches() -> None:
     """单批产量序列最多 31 批，超出时保留批次顺序最大的 31 条。"""
     rows = _mini_rows()
     actuals = [
-        {"id": str(i), "batch_no": f"FA26{i:03d}", "dump_date": None, "yield_kg": 100.0}
+        {
+            "id": str(i),
+            "batch_no": f"FA26{i:03d}",
+            "dump_date": "2026-09-01",
+            "yield_kg": 100.0,
+        }
         for i in range(1, 36)  # 35 批
     ]
     payload = board.build_board(rows, [], datetime(2026, 8, 28, 12, 0), actuals=actuals)
@@ -229,3 +270,65 @@ async def test_maintenance_overrides_tank_state() -> None:
     assert payload["maintenance"][0]["tank_no"] == "302A"
     # 检修与移种计划冲突告警
     assert any("302A罐检修中" in a["text"] for a in payload["alerts"])
+
+
+def test_collect_dump_tanks_maps_batches_across_rows() -> None:
+    rows = _mini_rows()
+    mapping = board.collect_dump_tanks(rows)
+    # 放罐行批号 → 对应罐号行的罐号
+    assert mapping["FA-PREV"] == "302A"
+    assert mapping["FA-M0"] == "302A"
+    # 无周期块或空行时返回空映射
+    assert board.collect_dump_tanks([[], ["占位"]]) == {}
+    assert board.collect_dump_tanks([]) == {}
+
+
+@pytest.mark.anyio
+async def test_load_archive_covering_selects_first_covering_archive() -> None:
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock
+
+    covering = SimpleNamespace(rows=_mini_rows(), product_code="FA")
+    other = SimpleNamespace(rows=[["无关内容"]], product_code="FA")
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = [other, covering]
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=result)
+
+    got = await board.load_archive_covering(session, date(2026, 8, 28), "FA")
+    assert got is covering
+
+    result.scalars.return_value.all.return_value = [other]
+    assert await board.load_archive_covering(session, date(2026, 8, 28), "FA") is None
+
+
+@pytest.mark.anyio
+async def test_build_board_excludes_actuals_with_unparseable_dump_date() -> None:
+    rows = _mini_rows()
+    now = datetime(2026, 8, 28, 12, 0)
+    payload = board.build_board(
+        rows,
+        [],
+        now,
+        actuals=[
+            {
+                "id": "a-1",
+                "batch_no": "FA-ZZZ",  # 不在排产 dump_map 中 → 回退 dump_date
+                "dump_date": "昨天",  # 非 ISO 日期 → 解析失败分支
+                "yield_kg": 5.0,
+                "remark": None,
+            },
+            {
+                "id": "a-2",
+                "batch_no": "FA-M1",
+                "dump_date": "2026-08-29",
+                "yield_kg": 100.0,
+                "remark": None,
+            },
+        ],
+    )
+    assert payload is not None
+    # 解析失败的批次不计入趋势，有效批次正常计入
+    assert payload["trend"] is not None
+    assert "FA-ZZZ" not in payload["trend"]["batches"]
+    assert "FA-M1" in payload["trend"]["batches"]

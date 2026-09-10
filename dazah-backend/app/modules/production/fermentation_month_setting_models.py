@@ -1,12 +1,12 @@
 """发酵看板扎帐月设置模型。
 
-当前仅存本月计划产能（kg），按周期起始日唯一；由看板进度卡右侧入口编辑。
+当前仅存本月计划产能（kg），按产品+周期起始日唯一；由看板进度卡右侧入口编辑。
 """
 from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import Date, Float, Index, text
+from sqlalchemy import Date, Float, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.shared.base_model import BaseModel
@@ -19,6 +19,7 @@ class FermentationMonthSetting(BaseModel):
     __table_args__ = (
         Index(
             "ux_fermentation_month_settings_period",
+            "product_code",
             "period_start",
             unique=True,
             postgresql_where=text("is_deleted = false"),
@@ -26,6 +27,12 @@ class FermentationMonthSetting(BaseModel):
         {"schema": "production"},
     )
 
+    product_code: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        server_default="FA",
+        comment="产品代码（如 FA/MC/DR），设置按产品隔离",
+    )
     period_start: Mapped[date] = mapped_column(
         Date(), nullable=False, comment="扎帐月起始日"
     )

@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from datetime import time as datetime_time
 from typing import Any
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,37 +45,66 @@ class MonthCapacityBody(BaseModel):
     )
 
 
-@router.get("/fermentation-board", summary="发酵车间实时看板（计划驱动）")
+@router.get("/fermentation-board", summary="发酵车间实时看板（计划驱动，可按周期回看）")
 async def get_fermentation_board(
     db: AsyncSession = Depends(get_db),
+    date: date | None = Query(
+        None, description="查看周期内任意日期（YYYY-MM-DD）；缺省为今天所在周期"
+    ),
+    product: str = Query("FA", description="产品代码（如 FA/MC/DR）"),
 ) -> Any:
-    archive = await board.load_latest_archive(db)
+    now = datetime.now(BEIJING_TZ).replace(tzinfo=None)
+    ref_date = date or now.date()
+    archive = await board.load_archive_covering(db, ref_date, product)
     if archive is None:
         return success_response(
-            data=None, message="尚未上传排产 Excel，看板暂无数据"
+            data=None,
+            message=f"尚未上传覆盖 {ref_date.isoformat()} 所在扎帐周期的排产 Excel",
         )
-    maintenance = await board.list_active_maintenance(db)
-    actuals = await board.list_batch_actuals(db)
-    now = datetime.now(BEIJING_TZ).replace(tzinfo=None)
+    block = board.find_period_block(
+        archive.rows, datetime.combine(ref_date, datetime_time(12, 0))
+    )
+    if block is None:
+        return success_response(
+            data=None,
+            message=(
+                f"排产表未覆盖 {ref_date.isoformat()}，"
+                "请上传对应扎帐周期的排产 Excel"
+            ),
+        )
+    is_current = block["start"] <= now.date() <= block["end"]
+    # 统一按真实当前时间计算：历史月用"现在"回看（已过放罐窗口的批次即为已放罐），
+    # 不把时间假装回到周期末
+    as_of = now
+    maintenance: list[dict[str, Any]] = []
+    if is_current:
+        maintenance = [
+            board.serialize_maintenance(item)
+            for item in await board.list_active_maintenance(db)
+        ]
+    actuals = await board.list_batch_actuals(
+        db,
+        period_start=block["start"],
+        period_end=block["end"],
+        product_code=product,
+    )
     payload = board.build_board(
         archive.rows,
-        [board.serialize_maintenance(item) for item in maintenance],
-        now,
+        maintenance,
+        as_of,
         actuals=[board.serialize_batch_actual(item) for item in actuals],
+        block=block,
     )
     if payload is None:
         return success_response(
             data=None,
             message="排产表未覆盖当前日期，请上传当前扎帐周期的排产 Excel",
         )
-    period = board.current_period(archive.rows, now)
-    if period is not None:
-        setting = await board.get_month_setting(db, period[0])
-        payload["month_planned_capacity_kg"] = (
-            setting.planned_capacity_kg if setting else None
-        )
-    else:
-        payload["month_planned_capacity_kg"] = None
+    payload["is_current_period"] = is_current
+    setting = await board.get_month_setting(db, block["start"], product)
+    payload["month_planned_capacity_kg"] = (
+        setting.planned_capacity_kg if setting else None
+    )
     return success_response(data=payload)
 
 
@@ -120,14 +150,32 @@ async def remove_tank_maintenance(
     return success_response(data=None, message="已解除检修")
 
 
-@router.get("/fermentation-batch-actuals", summary="发酵批次实际产量列表")
+@router.get(
+    "/fermentation-batch-actuals",
+    summary="发酵批次实际产量列表（可按周期过滤）",
+)
 async def list_fermentation_batch_actuals(
     db: AsyncSession = Depends(get_db),
+    period_start: date | None = Query(None, description="周期起始日（含）"),
+    period_end: date | None = Query(None, description="周期结束日（含）"),
+    product: str = Query("FA", description="产品代码（如 FA/MC/DR）"),
 ) -> Any:
-    items = await board.list_batch_actuals(db)
-    return success_response(
-        data=[board.serialize_batch_actual(item) for item in items]
+    items = await board.list_batch_actuals(
+        db,
+        period_start=period_start,
+        period_end=period_end,
+        product_code=product,
     )
+    archive = await board.load_latest_archive(db, product)
+    tank_map = board.collect_dump_tanks(archive.rows) if archive else {}
+    data = [
+        {
+            **board.serialize_batch_actual(item),
+            "tank_no": tank_map.get(item.batch_no) or None,
+        }
+        for item in items
+    ]
+    return success_response(data=data)
 
 
 @router.post(
@@ -137,6 +185,7 @@ async def upsert_fermentation_batch_actual(
     body: BatchActualBody,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
+    product: str = Query("FA", description="产品代码（如 FA/MC/DR）"),
 ) -> Any:
     item = await board.upsert_batch_actual(
         db,
@@ -144,6 +193,7 @@ async def upsert_fermentation_batch_actual(
         dump_date=body.dump_date,
         yield_kg=body.yield_kg,
         remark=body.remark,
+        product_code=product,
         created_by=current_user.id if current_user else None,
     )
     return success_response(
@@ -173,8 +223,9 @@ async def set_fermentation_month_capacity(
     body: MonthCapacityBody,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
+    product: str = Query("FA", description="产品代码（如 FA/MC/DR）"),
 ) -> Any:
-    archive = await board.load_latest_archive(db)
+    archive = await board.load_latest_archive(db, product)
     if archive is None:
         raise HTTPException(
             status_code=400, detail="尚未上传排产 Excel，无法确定当前周期"
@@ -191,6 +242,7 @@ async def set_fermentation_month_capacity(
         period_start=period[0],
         period_end=period[1],
         planned_capacity_kg=body.planned_capacity_kg,
+        product_code=product,
         updated_by=current_user.id if current_user else None,
     )
     return success_response(

@@ -39,6 +39,8 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import ReactECharts from 'echarts-for-react'
+import BoardNavBlocks from '@/components/production/board-nav-blocks'
+import { useProductContextStore } from '@/stores/product-context'
 import {
   getFermentationBoard,
   markTankMaintenance,
@@ -116,6 +118,9 @@ const workshopItems = [
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000
 
+// 当前产品（第 5 个导航位）：看板标题与产品入口共用
+const PRODUCT_NAME = 'L-苯丙氨酸'
+
 function fmtDateTime(value?: string | null): string {
   if (!value) return '--'
   const d = new Date(value)
@@ -156,6 +161,10 @@ export default function ProductionDashboard() {
   const [board, setBoard] = useState<FermentationBoard | null>(null)
   const [boardMessage, setBoardMessage] = useState<string>('')
   const [loading, setLoading] = useState(true)
+  // 周期回看：空串 = 今天所在周期；否则为所选周期内任意日期
+  const [viewDate, setViewDate] = useState<string>('')
+  // 当前产品上下文（导航块第 5 位切换），看板按此产品取数
+  const productCode = useProductContextStore((s) => s.productCode)
   // 首帧不渲染时间（服务端与客户端时区不一致会导致 hydration 不匹配），挂载后再计时
   const [clock, setClock] = useState('')
   const [maintModalOpen, setMaintModalOpen] = useState(false)
@@ -175,7 +184,10 @@ export default function ProductionDashboard() {
 
   const loadBoard = useCallback(async () => {
     try {
-      const res = await getFermentationBoard()
+      const res = await getFermentationBoard(
+        viewDate || undefined,
+        productCode,
+      )
       if (res.code === 200) {
         setBoard(res.data)
         setBoardMessage(res.data ? '' : res.message || '')
@@ -187,7 +199,7 @@ export default function ProductionDashboard() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [viewDate, productCode])
 
   useEffect(() => {
     void loadBoard() // eslint-disable-line react-hooks/set-state-in-effect -- 看板初始加载，与 201-2 页面既有模式一致
@@ -238,7 +250,10 @@ export default function ProductionDashboard() {
     setActualsOpen(true)
     setActualsLoading(true)
     try {
-      const res = await getFermentationBatchActuals()
+      const res = await getFermentationBatchActuals(
+        board?.period.start,
+        board?.period.end,
+      )
       if (res.code === 200) {
         setActuals(res.data || [])
       } else {
@@ -309,6 +324,8 @@ export default function ProductionDashboard() {
   }
 
   const kpi = board?.kpis
+  // 周期回看：写操作（检修、产能设置）仅当前扎帐月开放
+  const isCurrent = board?.is_current_period ?? true
   const dash = '--'
 
   // 发酵罐实时状态：三台发酵罐 + 最近已放罐的一批（凑齐 4 批）
@@ -341,27 +358,7 @@ export default function ProductionDashboard() {
       ? Math.round((kpi.month_done_planned / kpi.month_planned) * 100)
       : null
 
-  // 本月批次进度条：已完成（产量已录）→ 待出产量（已放罐未录产量）→ 运行中 → 未开始
-  const planned = kpi?.month_planned ?? 0
-  const doneWithYield = kpi?.done_with_yield ?? 0
-  const yieldPending = kpi?.yield_pending ?? 0
-  const runningCount = kpi?.running ?? 0
-  const notStarted = Math.max(0, planned - doneWithYield - yieldPending - runningCount)
-  const segPct = (count: number) => (planned > 0 ? (count / planned) * 100 : 0)
-  // 箭头位置 = 已出产量（产量已录入闭环）的进度点；待出产量段留在箭头之后
-  const arrowPct = segPct(doneWithYield)
-  const physicalDone = doneWithYield + yieldPending
-  const physicalPct =
-    planned > 0 ? Math.round((physicalDone / planned) * 100) : null
-
-  const progressSegments = [
-    { key: 'done', label: '已完成', count: doneWithYield, color: '#52c41a' },
-    { key: 'pending', label: '待出产量', count: yieldPending, color: '#bfbfbf' },
-    { key: 'running', label: '运行中', count: runningCount, color: '#1677ff' },
-    { key: 'idle', label: '未开始', count: notStarted, color: '#f0f0f0' },
-  ]
-
-  // 产能达成率 = 已完成产能 / 本月计划产能
+  // 产能口径公共变量：已完成产能、计划产能与格式化
   const doneYieldKg = kpi?.month_done_yield_kg ?? null
   const plannedCapacityKg = board?.month_planned_capacity_kg ?? null
   const capacityRate =
@@ -371,29 +368,74 @@ export default function ProductionDashboard() {
   const fmtTon = (kg: number | null) =>
     kg == null ? '--' : kg >= 1000 ? `${(kg / 1000).toFixed(1)} t` : String(kg)
 
+  // 本月批次进度条：已完成（产量已录）→ 待出产量（已放罐未录产量）→ 运行中 → 未开始
+  // 产能口径：已完成段宽度 = 已完成产能/计划产能，箭头随之；
+  // 剩余宽度按待出产量/运行中/未开始的批次数比例分配（段内仍显示批数）
+  const planned = kpi?.month_planned ?? 0
+  const doneWithYield = kpi?.done_with_yield ?? 0
+  const yieldPending = kpi?.yield_pending ?? 0
+  const runningCount = kpi?.running ?? 0
+  const notStarted = Math.max(0, planned - doneWithYield - yieldPending - runningCount)
+  const segPct = (count: number) => (planned > 0 ? (count / planned) * 100 : 0)
+  const capacityMode = plannedCapacityKg != null && plannedCapacityKg > 0
+  const greenPct =
+    capacityMode && doneYieldKg != null
+      ? Math.min(100, (doneYieldKg / plannedCapacityKg) * 100)
+      : segPct(doneWithYield)
+  const arrowPct = greenPct
+  const restBatches = yieldPending + runningCount + notStarted
+  const restPct = 100 - greenPct
+  const restSegPct = (count: number) =>
+    restBatches > 0 ? (count / restBatches) * restPct : 0
+  const greenLabel =
+    capacityMode && doneYieldKg != null
+      ? `已完成 ${doneWithYield} 批｜${fmtTon(doneYieldKg)}`
+      : `${doneWithYield}`
+
+  const progressSegments = [
+    { key: 'done', label: '已完成', count: doneWithYield, color: '#33526e' },
+    { key: 'pending', label: '待出产量', count: yieldPending, color: '#94a3b8' },
+    { key: 'running', label: '运行中', count: runningCount, color: '#7ea6c9' },
+    { key: 'idle', label: '未开始', count: notStarted, color: '#e8eef4' },
+  ]
+  // 箭头两个斜角用右侧第一个有数据的段颜色填充
+  const nextSegment = progressSegments.find(
+    (seg) => seg.key !== 'done' && seg.count > 0,
+  )
+  const arrowNotchColor = nextSegment?.color ?? '#f0f0f0'
+
   const kpiCards: {
     title: string
     value: string | number | null
     sub?: string
-    extra?: { label: string; value: string; sub?: string }
+    span?: number
+    extra?: { label: string; value: string; sub?: string; editable?: boolean }
   }[] = [
     {
       title: '本月计划批次',
       value: kpi?.month_planned ?? dash,
       sub: board?.period.label,
+      span: 8,
+      extra: {
+        label: '本月计划产能',
+        value: fmtTon(plannedCapacityKg),
+        sub: '按扎帐月保存，可修改',
+        editable: true,
+      },
     },
     {
       title: '本月已完成批次',
       value: kpi?.month_done_planned ?? dash,
       sub: achievementRate != null ? `达成率 ${achievementRate}%` : undefined,
+      span: 8,
       extra: {
         label: '已完成产能',
         value: fmtTon(doneYieldKg),
         sub: `产能达成率 ${capacityRate ?? '--'}`,
       },
     },
-    { title: '当前运行批次', value: kpi?.running ?? dash },
-    { title: '待启动排产批次', value: kpi?.pending ?? dash },
+    { title: '当前运行批次', value: kpi?.running ?? dash, span: 4 },
+    { title: '待启动排产批次', value: kpi?.pending ?? dash, span: 4 },
   ]
 
   const tankColumns = [
@@ -455,8 +497,9 @@ export default function ProductionDashboard() {
       key: 'actions',
       width: 120,
       render: (_: unknown, record: BoardTank) =>
-        record.status === 'dumped' ? (
-          // 占位与操作列 small 按钮同高（主题 controlHeightSM），保证已放罐行与其他行行高一致
+        record.status === 'dumped' || !isCurrent ? (
+          // 占位与操作列 small 按钮同高（主题 controlHeightSM），保证已放罐行与其他行行高一致；
+          // 历史周期为只读视图，不提供检修操作
           <span style={{ display: 'inline-block', height: 36, lineHeight: '36px' }}>-</span>
         ) : record.status === 'maintenance' ? (
           <Button size="small" onClick={() => void releaseMaintenance(record)}>
@@ -479,6 +522,13 @@ export default function ProductionDashboard() {
   ]
 
   const recentColumns = [
+    {
+      title: '罐号',
+      dataIndex: 'tank_no',
+      key: 'tank_no',
+      width: 64,
+      render: (v: string | null | undefined) => v || '-',
+    },
     { title: '批次号', dataIndex: 'batch_no', key: 'batch_no' },
     {
       title: '放罐日期',
@@ -511,6 +561,13 @@ export default function ProductionDashboard() {
         .map((b) => ({ label: `${b.batch_no}（${b.dump_date}）`, value: b.batch_no }))
 
   const actualColumns = [
+    {
+      title: '罐号',
+      dataIndex: 'tank_no',
+      key: 'tank_no',
+      width: 64,
+      render: (v: string | null | undefined) => v || '-',
+    },
     { title: '批次号', dataIndex: 'batch_no', key: 'batch_no' },
     {
       title: '放罐日期',
@@ -613,6 +670,9 @@ export default function ProductionDashboard() {
 
   return (
     <div className="p-4 flex flex-col gap-3">
+      {/* 顶部导航块：第 5 位为当前产品 L-苯丙氨酸，其余为占位 */}
+      <BoardNavBlocks />
+
       {/* 顶部通栏 */}
       <Card
         variant="borderless"
@@ -623,9 +683,31 @@ export default function ProductionDashboard() {
           <Space size={12}>
             <ScheduleOutlined style={{ fontSize: 22, color: '#1677ff' }} />
             <Title level={4} style={{ margin: 0 }}>
-              发酵车间生产实时看板
+              {`103-1车间${PRODUCT_NAME}生产看板`}
             </Title>
+            <DatePicker
+              size="small"
+              picker="month"
+              allowClear={false}
+              style={{ width: 96 }}
+              value={
+                viewDate
+                  ? dayjs(viewDate)
+                  : board?.period.end
+                    ? dayjs(board.period.end)
+                    : null
+              }
+              onChange={(d) => {
+                // 选自然月 → 定位到主要落在该月的扎帐周期（该月 15 日必在其中）
+                if (d) setViewDate(d.date(15).format('YYYY-MM-DD'))
+              }}
+            />
             {board?.period && <Tag color="blue">生产周期 {board.period.label}</Tag>}
+            {!isCurrent && (
+              <Button size="small" onClick={() => setViewDate('')}>
+                回到本月
+              </Button>
+            )}
           </Space>
           <Space size={16}>
             <Text type="secondary">系统时间：{clock}</Text>
@@ -719,7 +801,12 @@ export default function ProductionDashboard() {
           {/* KPI 卡片区 */}
           <Row gutter={[12, 12]}>
             {kpiCards.map((card) => (
-              <Col xs={12} sm={12} md={6} key={card.title}>
+              <Col
+                xs={12}
+                sm={12}
+                md={card.span ?? 6}
+                key={card.title}
+              >
                 <Card
                   variant="borderless"
                   className="shadow-sm h-full"
@@ -747,14 +834,21 @@ export default function ProductionDashboard() {
                           {card.extra.label}
                         </Text>
                         <div
-                          style={{
-                            fontSize: 26,
-                            fontWeight: 600,
-                            lineHeight: 1.35,
-                            marginBottom: 4,
-                          }}
+                          className="flex items-center gap-1"
+                          style={{ marginBottom: 4, minHeight: 35 }}
                         >
-                          {card.extra.value}
+                          <div style={{ fontSize: 26, fontWeight: 600, lineHeight: 1.35 }}>
+                            {card.extra.value}
+                          </div>
+                          {card.extra.editable && isCurrent && (
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<EditOutlined />}
+                              onClick={openCapacityModal}
+                              title="设置本月计划产能"
+                            />
+                          )}
                         </div>
                         {card.extra.sub && (
                           <Text type="secondary" style={{ fontSize: 11 }}>
@@ -775,58 +869,90 @@ export default function ProductionDashboard() {
             className="shadow-sm"
             styles={{ body: { padding: '12px 20px' } }}
           >
-            <div className="flex items-stretch gap-5">
-              <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between flex-wrap gap-1">
-              <Text strong>本月批次进度</Text>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                已放罐 {physicalDone}/{planned}
-                {physicalPct != null ? `（${physicalPct}%）` : ''}｜运行中 {runningCount}｜待出产量{' '}
-                {yieldPending}
-              </Text>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Text strong>{isCurrent ? '本月批次进度' : '历史批次进度'}</Text>
+                {!isCurrent && <Tag color="orange">历史周期</Tag>}
+              </div>
+              {!capacityMode && isCurrent && (
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  未设置计划产能，进度暂按批次数展示；请编辑「本月计划产能」后切换产能口径
+                </Text>
+              )}
             </div>
             {/* 箭头骑在轨道上，指向已放罐进度点 */}
             <div className="relative" style={{ marginTop: 8, marginBottom: 4 }}>
-              <div className="flex h-6 rounded overflow-hidden">
+              <div
+                className="flex h-6 rounded overflow-hidden"
+                style={{ position: 'relative', zIndex: 1 }}
+              >
                 {progressSegments.map((seg) => (
                   <div
                     key={seg.key}
-                    title={`${seg.label} ${seg.count} 批`}
+                    title={
+                      seg.key === 'done'
+                        ? `${greenLabel}${
+                            capacityMode && plannedCapacityKg
+                              ? `（产能达成率 ${((greenPct)).toFixed(1)}%）`
+                              : ''
+                          }`
+                        : `${seg.label} ${seg.count} 批`
+                    }
                     className="h-full flex items-center justify-center overflow-hidden"
-                    style={{ width: `${segPct(seg.count)}%`, backgroundColor: seg.color }}
+                    style={{
+                      // 待出产量段向左多垫 34px：垫满箭头基部下方，与右侧连成一体无接缝
+                      width:
+                        seg.key === 'pending' && yieldPending > 0
+                          ? `calc(${restSegPct(seg.count)}% + 34px)`
+                          : `${seg.key === 'done' ? greenPct : restSegPct(seg.count)}%`,
+                      backgroundColor: seg.color,
+                      ...(seg.key === 'done'
+                        ? { backgroundImage: 'linear-gradient(90deg, #33526e, #4a6d8c)' }
+                        : {}),
+                    }}
                   >
-                    {seg.count > 0 && segPct(seg.count) >= 6 && (
-                      <span
-                        style={{
-                          fontSize: 11,
-                          color: seg.key === 'idle' || seg.key === 'pending' ? '#595959' : '#fff',
-                        }}
-                      >
-                        {seg.count}
-                      </span>
+                    {seg.key === 'done' ? (
+                      greenPct >= 14 && doneWithYield > 0 ? (
+                        <span style={{ fontSize: 11, color: '#fff' }}>{greenLabel}</span>
+                      ) : null
+                    ) : (
+                      seg.count > 0 &&
+                      restSegPct(seg.count) >= 6 && (
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color:
+                              seg.key === 'idle' || seg.key === 'pending'
+                                ? '#595959'
+                                : '#fff',
+                          }}
+                        >
+                          {seg.count}
+                        </span>
+                      )
                     )}
                   </div>
                 ))}
               </div>
-              {/* 箭头：轨道本身是横杠，三角头接在进度点处，整体呈 → */}
+              {/* 箭头：轨道本身是横杠，大三角头（轨道2倍高）跨骑轨道、方向向右，
+                  尖落在分界点；上下两个斜角填右侧段颜色 */}
               <div
-                className="absolute flex items-center"
+                className="absolute"
                 style={{
                   left: `${arrowPct}%`,
-                  top: 0,
-                  height: 24,
+                  top: -12,
+                  height: 48,
                   transform: 'translateX(-100%)',
-                  filter: 'drop-shadow(0 1px 2px rgba(250,84,28,0.5))',
+                  zIndex: 3,
                 }}
               >
-                <div
-                  className="w-0 h-0"
-                  style={{
-                    borderTop: '14px solid transparent',
-                    borderBottom: '14px solid transparent',
-                    borderLeft: '20px solid #fa541c',
-                  }}
-                />
+                <svg width={34} height={48} viewBox="0 0 34 48" style={{ display: 'block' }}>
+                  {/* 右侧色角块仅占据轨道高度带（沿对角线裁剪到 y=12~36） */}
+                  <polygon points="17,12 34,12 34,24" fill={arrowNotchColor} />
+                  <polygon points="17,36 34,36 34,24" fill={arrowNotchColor} />
+                  {/* 箭身取轨道渐变末端色 #4a6d8c，与轨道右端无缝衔接 */}
+                  <polygon points="0,0 34,24 0,48" fill="#4a6d8c" />
+                </svg>
               </div>
             </div>
             <div className="flex items-center gap-4 flex-wrap">
@@ -837,37 +963,14 @@ export default function ProductionDashboard() {
                     style={{ backgroundColor: seg.color }}
                   />
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    {seg.label} {seg.count} 批
+                    {seg.key === 'done'
+                      ? `已完成 ${doneWithYield} 批${
+                          capacityMode && doneYieldKg != null ? `｜${fmtTon(doneYieldKg)}` : ''
+                        }`
+                      : `${seg.label} ${seg.count} 批`}
                   </Text>
                 </span>
               ))}
-            </div>
-              </div>
-              {/* 右侧：本月计划产能 */}
-              <div className="flex flex-col justify-center pl-5 border-l border-[var(--color-hairline)] min-w-[170px]">
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  本月计划产能
-                </Text>
-                <div className="flex items-center gap-1">
-                  <Text strong style={{ fontSize: 22, lineHeight: 1.4 }}>
-                    {board?.month_planned_capacity_kg == null
-                      ? '--'
-                      : board.month_planned_capacity_kg >= 1000
-                        ? `${(board.month_planned_capacity_kg / 1000).toFixed(1)} t`
-                        : board.month_planned_capacity_kg}
-                  </Text>
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<EditOutlined />}
-                    onClick={openCapacityModal}
-                    title="设置本月计划产能"
-                  />
-                </div>
-                <Text type="secondary" style={{ fontSize: 11 }}>
-                  按扎帐月保存，可随时修改
-                </Text>
-              </div>
             </div>
           </Card>
 

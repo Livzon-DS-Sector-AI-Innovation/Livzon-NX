@@ -1,6 +1,6 @@
 """发酵批次实际产量模型（看板历史数据）。
 
-看板批次（FA26xxx）的实际放罐产量按批号唯一（进行中的记录），
+看板批次（FA26xxx）的实际放罐产量按产品+批号唯一（进行中的记录），
 删除采用软删；在看板页「历史数据」抽屉中录入，
 供单批产量柱状图与最近完成批次回填使用。
 """
@@ -20,7 +20,8 @@ class FermentationBatchActual(BaseModel):
     __tablename__ = "fermentation_batch_actuals"
     __table_args__ = (
         Index(
-            "ux_fermentation_batch_actuals_batch_no",
+            "ux_fermentation_batch_actuals_product_batch",
+            "product_code",
             "batch_no",
             unique=True,
             postgresql_where=text("is_deleted = false"),
@@ -28,6 +29,12 @@ class FermentationBatchActual(BaseModel):
         {"schema": "production"},
     )
 
+    product_code: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        server_default="FA",
+        comment="产品代码（如 FA/MC/DR），产量按产品隔离",
+    )
     batch_no: Mapped[str] = mapped_column(
         String(64), nullable=False, comment="批次号（如 FA26232）"
     )

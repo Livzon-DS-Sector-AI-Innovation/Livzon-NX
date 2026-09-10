@@ -509,6 +509,8 @@ export interface BoardMaintenance {
 export interface FermentationBatchActual {
   id: string
   batch_no: string
+  /** 放罐罐号（由排产存档解析，缺失为 null） */
+  tank_no: string | null
   dump_date: string | null
   yield_kg: number | null
   remark: string | null
@@ -525,6 +527,8 @@ export interface FermentationBoard {
   now: string
   period: { start: string; end: string; label: string }
   kpis: BoardKpis
+  /** 所查看周期是否为当前扎帐月（写操作仅当前月开放） */
+  is_current_period: boolean
   /** 当前扎帐月计划产能(kg)，未设置时为 null */
   month_planned_capacity_kg: number | null
   tanks: BoardTank[]

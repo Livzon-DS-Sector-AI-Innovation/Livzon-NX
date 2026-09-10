@@ -53,6 +53,7 @@ _ROW_FERM_TIME = 8   # 移种时间
 _ROW_DUMP_BATCH = 9  # 放罐批号
 _ROW_DUMP_TANK = 10
 _ROW_DUMP_TIME = 11  # 放罐时间
+_ROW_NOTE = 12       # 排产备注
 
 _BLOCK_HEIGHT = 16
 
@@ -166,6 +167,16 @@ def parse_block(
     dump_batches = col_list(_ROW_DUMP_BATCH)
     dump_tanks = col_list(_ROW_DUMP_TANK)
     dump_times = col_list(_ROW_DUMP_TIME)
+    notes = col_list(_ROW_NOTE)
+    # 备注行第 2 格为周期级汇总备注（如"1.09月共放罐31批"），第 3 格起为按日期备注
+    note_row = (
+        rows[start_row + _ROW_NOTE]
+        if start_row + _ROW_NOTE < len(rows)
+        else []
+    )
+    block_note = (
+        str(note_row[1]).strip() if len(note_row) > 1 and note_row[1] else ""
+    )
 
     parsed: list[dict[str, Any]] = []
     for ci in range(col_count):
@@ -182,9 +193,10 @@ def parse_block(
                 "dump_batch": str(dump_batches[ci]).strip(),
                 "dump_tank": str(dump_tanks[ci]).strip(),
                 "dump_time": _parse_time(dump_times[ci]),
+                "note": str(notes[ci]).strip(),
             }
         )
-    return {"block": block, "days": parsed}
+    return {"block": block, "days": parsed, "block_note": block_note}
 
 
 def collect_dump_dates(
@@ -205,6 +217,29 @@ def collect_dump_dates(
             batch_no = str(batch).strip()
             if batch_no and ci < len(col_dates):
                 mapping[batch_no] = col_dates[ci]
+    return mapping
+
+
+def collect_dump_tanks(
+    rows: list[list[Any]],
+) -> dict[str, str]:
+    """全表所有放罐批号 → 放罐罐号（跨块连续，批号唯一）。"""
+    mapping: dict[str, str] = {}
+    for index, row in enumerate(rows):
+        if not row:
+            continue
+        span = parse_period_title(str(row[0]))
+        if not span:
+            continue
+        days_row = rows[index + _ROW_DATE]
+        col_dates = _col_dates(days_row, span[0])
+        batches = _row_values(rows, index + _ROW_DUMP_BATCH)
+        tanks = _row_values(rows, index + _ROW_DUMP_TANK)
+        for ci, batch in enumerate(batches):
+            batch_no = str(batch).strip()
+            if batch_no and ci < len(col_dates):
+                tank = str(tanks[ci]).strip() if ci < len(tanks) else ""
+                mapping[batch_no] = tank
     return mapping
 
 
@@ -246,17 +281,22 @@ def build_board(
     maintenance: list[dict[str, Any]],
     now: datetime,
     actuals: list[dict[str, Any]] | None = None,
+    block: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """由存档行与检修标注组装看板数据；无当前周期返回 None。
 
     actuals 为已录入的批次实际产量（serialize_batch_actual 列表），
     用于回填最近完成批次的放罐产量，并生成单批产量图表序列。
+    block 为外部已定位的扎帐周期块（历史回看时传入，避免按 now 重新定位）；
+    缺省时按 now 所在周期定位。
     """
-    block = find_period_block(rows, now)
+    if block is None:
+        block = find_period_block(rows, now)
     if block is None:
         return None
     parsed = parse_block(rows, block)
     days = parsed["days"]
+    block_note = parsed.get("block_note", "")
     dump_map = collect_dump_dates(rows)
 
     maint_by_tank = {m["tank_no"]: m for m in maintenance}
@@ -340,24 +380,64 @@ def build_board(
                 if event["tank_no"] == tank_no and event["start"] > now:
                     next_event = event
                     break
-            note = "等待排产"
-            next_inoculate = None
             if next_event:
-                next_inoculate = next_event["start"]
-                next_time = next_event["start"].strftime("%m-%d %H:%M")
-                note = f"预计{next_time}移种{next_event['batch_no']}"
-            tanks.append(
-                {
-                    "tank_no": tank_no,
-                    "status": "idle",
-                    "batch_no": None,
-                    "inoculate_at": next_inoculate,
-                    "cultured_hours": None,
-                    "cycle_hours": None,
-                    "dump_at": None,
-                    "note": note,
-                }
-            )
+                tanks.append(
+                    {
+                        "tank_no": tank_no,
+                        "status": "idle",
+                        "batch_no": None,
+                        "inoculate_at": next_event["start"],
+                        "cultured_hours": None,
+                        "cycle_hours": None,
+                        "dump_at": None,
+                        "note": (
+                            f"预计{next_event['start'].strftime('%m-%d %H:%M')}"
+                            f"移种{next_event['batch_no']}"
+                        ),
+                    }
+                )
+                continue
+            # 无后续移种：该罐最后一个放罐窗口已结束的批次 → 已放罐
+            last_done = None
+            for event in ferm_events:
+                if event["tank_no"] != tank_no:
+                    continue
+                dump_day = dump_map.get(event["batch_no"])
+                if dump_day is None:
+                    continue
+                dump_end = (
+                    datetime.combine(dump_day, time(10, 0)) + DUMP_WINDOW
+                )
+                if dump_end <= now and (
+                    last_done is None or event["start"] > last_done[0]
+                ):
+                    last_done = (event["start"], event["batch_no"], dump_day)
+            if last_done:
+                tanks.append(
+                    {
+                        "tank_no": tank_no,
+                        "status": "dumped",
+                        "batch_no": last_done[1],
+                        "inoculate_at": None,
+                        "cultured_hours": None,
+                        "cycle_hours": None,
+                        "dump_at": last_done[2].isoformat(),
+                        "note": "该罐本批次放罐作业完成",
+                    }
+                )
+            else:
+                tanks.append(
+                    {
+                        "tank_no": tank_no,
+                        "status": "idle",
+                        "batch_no": None,
+                        "inoculate_at": None,
+                        "cultured_hours": None,
+                        "cycle_hours": None,
+                        "dump_at": None,
+                        "note": "等待排产",
+                    }
+                )
 
     # ── KPI（扎帐月 = 当前块）──
     month_dump_count = sum(1 for item in days if item["dump_batch"])
@@ -411,9 +491,26 @@ def build_board(
     if not recent:
         recent = []
 
-    # ── 单批产量（已录入实际产量的批次，按批次顺序升序，最多 31 批）──
+    # ── 单批产量（本周期内已录入实际产量的批次，按批次顺序升序，最多 31 批）──
+    # 批次归属周期：排产表有放罐日期的按排产判断，否则按录入的放罐日期判断
+    def _batch_in_period(batch_no: str, record_date: Any) -> bool:
+        dump_day = dump_map.get(batch_no)
+        if dump_day is None:
+            dump_day = record_date
+        if not isinstance(dump_day, date):
+            try:
+                dump_day = date.fromisoformat(str(dump_day))
+            except (TypeError, ValueError):
+                return False
+        return block["start"] <= dump_day <= block["end"]
+
     measured = sorted(
-        (a for a in (actuals or []) if a.get("yield_kg") is not None),
+        (
+            a
+            for a in (actuals or [])
+            if a.get("yield_kg") is not None
+            and _batch_in_period(a["batch_no"], a.get("dump_date"))
+        ),
         key=lambda a: _batch_seq(a["batch_no"]),
     )
     recent_measured = measured[-31:]
@@ -500,6 +597,26 @@ def build_board(
                     f"待接种批次 {today_seed['batch_no']} 今日 "
                     f"{today_seed['start'].strftime('%H:%M')} 进种子罐"
                     f"（{today_seed['tank_no'] or '按排产'}）"
+                ),
+            }
+        )
+    # 排产备注：周期级汇总备注（备注行第 2 格）整月播报；
+    # 按日期备注（第 3 格起）播今天及以后的，最多 6 条
+    if block_note:
+        alerts.append(
+            {"level": "info", "text": f"【排产备注】{block_note}"}
+        )
+    schedule_notes = [
+        item
+        for item in days
+        if item.get("note") and item["date"] >= now.date()
+    ]
+    for item in schedule_notes[:6]:
+        alerts.append(
+            {
+                "level": "info",
+                "text": (
+                    f"【排产备注】{item['date'].strftime('%m-%d')}：{item['note']}"
                 ),
             }
         )
@@ -610,14 +727,41 @@ async def get_maintenance(
     return result.scalar_one_or_none()
 
 
-async def load_latest_archive(session: AsyncSession) -> ScheduleExcelArchive | None:
+async def load_latest_archive(
+    session: AsyncSession, product_code: str = "FA"
+) -> ScheduleExcelArchive | None:
     result = await session.execute(
         select(ScheduleExcelArchive)
-        .where(ScheduleExcelArchive.is_deleted.is_(False))
+        .where(
+            ScheduleExcelArchive.is_deleted.is_(False),
+            ScheduleExcelArchive.product_code == product_code,
+        )
         .order_by(ScheduleExcelArchive.created_at.desc())
         .limit(1)
     )
     return result.scalar_one_or_none()
+
+
+async def load_archive_covering(
+    session: AsyncSession,
+    ref_date: date,
+    product_code: str = "FA",
+) -> ScheduleExcelArchive | None:
+    """查找该产品 rows 覆盖指定日期所在扎帐周期的存档（含历史存档，从新到旧）。"""
+    ref_dt = datetime.combine(ref_date, time(12, 0))
+    result = await session.execute(
+        select(ScheduleExcelArchive)
+        .where(
+            ScheduleExcelArchive.is_deleted.is_(False),
+            ScheduleExcelArchive.product_code == product_code,
+        )
+        .order_by(ScheduleExcelArchive.created_at.desc())
+        .limit(24)
+    )
+    for archive in result.scalars().all():
+        if find_period_block(archive.rows, ref_dt) is not None:
+            return archive
+    return None
 
 
 # ═══════════════════ 批次实际产量（历史数据） ═══════════════════
@@ -633,15 +777,26 @@ def serialize_batch_actual(item: FermentationBatchActual) -> dict[str, Any]:
     }
 
 
-async def list_batch_actuals(session: AsyncSession) -> list[FermentationBatchActual]:
-    result = await session.execute(
-        select(FermentationBatchActual)
-        .where(FermentationBatchActual.is_deleted.is_(False))
-        .order_by(
-            FermentationBatchActual.dump_date.desc().nullslast(),
-            FermentationBatchActual.batch_no.desc(),
-        )
+async def list_batch_actuals(
+    session: AsyncSession,
+    period_start: date | None = None,
+    period_end: date | None = None,
+    product_code: str = "FA",
+) -> list[FermentationBatchActual]:
+    """按放罐日期列出批次产量；传入周期边界时仅返回该周期内的记录。"""
+    stmt = select(FermentationBatchActual).where(
+        FermentationBatchActual.is_deleted.is_(False),
+        FermentationBatchActual.product_code == product_code,
     )
+    if period_start is not None:
+        stmt = stmt.where(FermentationBatchActual.dump_date >= period_start)
+    if period_end is not None:
+        stmt = stmt.where(FermentationBatchActual.dump_date <= period_end)
+    stmt = stmt.order_by(
+        FermentationBatchActual.dump_date.desc().nullslast(),
+        FermentationBatchActual.batch_no.desc(),
+    )
+    result = await session.execute(stmt)
     return list(result.scalars().all())
 
 
@@ -652,12 +807,14 @@ async def upsert_batch_actual(
     dump_date: date | None = None,
     yield_kg: float | None = None,
     remark: str | None = None,
+    product_code: str = "FA",
     created_by: Any = None,
 ) -> FermentationBatchActual:
-    """同一批次存在进行中记录则更新（批号唯一）。"""
+    """同一产品下批次已存在进行中记录则更新（产品内批号唯一）。"""
     result = await session.execute(
         select(FermentationBatchActual).where(
             FermentationBatchActual.batch_no == batch_no,
+            FermentationBatchActual.product_code == product_code,
             FermentationBatchActual.is_deleted.is_(False),
         )
     )
@@ -668,6 +825,7 @@ async def upsert_batch_actual(
             dump_date=dump_date,
             yield_kg=yield_kg,
             remark=remark,
+            product_code=product_code,
             created_by=created_by,
         )
         session.add(item)
@@ -718,11 +876,14 @@ def current_period(
 
 
 async def get_month_setting(
-    session: AsyncSession, period_start: date
+    session: AsyncSession,
+    period_start: date,
+    product_code: str = "FA",
 ) -> FermentationMonthSetting | None:
     result = await session.execute(
         select(FermentationMonthSetting).where(
             FermentationMonthSetting.period_start == period_start,
+            FermentationMonthSetting.product_code == product_code,
             FermentationMonthSetting.is_deleted.is_(False),
         )
     )
@@ -735,12 +896,14 @@ async def upsert_month_setting(
     period_start: date,
     period_end: date,
     planned_capacity_kg: float | None,
+    product_code: str = "FA",
     updated_by: Any = None,
 ) -> FermentationMonthSetting:
-    """同一周期存在进行中记录则更新。"""
+    """同一产品下周期存在进行中记录则更新。"""
     result = await session.execute(
         select(FermentationMonthSetting).where(
             FermentationMonthSetting.period_start == period_start,
+            FermentationMonthSetting.product_code == product_code,
             FermentationMonthSetting.is_deleted.is_(False),
         )
     )
@@ -750,6 +913,7 @@ async def upsert_month_setting(
             period_start=period_start,
             period_end=period_end,
             planned_capacity_kg=planned_capacity_kg,
+            product_code=product_code,
             created_by=updated_by,
         )
         session.add(item)
