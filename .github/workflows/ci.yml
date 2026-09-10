@@ -817,7 +817,9 @@ jobs:
     name: Register CD Candidate
     needs: ci-gate
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.ci-gate.result == 'success' }}
-    runs-on: [self-hosted, linux, x64, dazah-cd]
+    runs-on:
+      group: dazah-production-cd-nx
+      labels: [self-hosted, linux, x64, dazah-cd]
     environment: single-host-cd
     permissions:
       contents: read

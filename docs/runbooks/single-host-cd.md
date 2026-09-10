@@ -67,6 +67,9 @@ Redis 容器上限 192 MiB，数据集上限 128 MiB，使用 `noeviction` 保�
 7. 没有 schema 变化时自动继续；有变化时 `deploy/migration-policy.json`
    必须包含明确的 from/to revision、`backward_compatible: true` 和 `review_reference`。
    该声明须经过代码审查，不能为了部署通过而填入未经验证的兼容结论。
+   首轮过渡配置另以 `deployment_hold` 将源码 head `c9d400000026` 的部署目标固定为
+   `c9d400000025`，暂缓删除部门联系人表。源码新增后续迁移即拒绝沿用；
+   验证与正式迁移均执行明确目标，不执行隐含的 `upgrade head`。详见剩余验收执行单。
 8. 04:30 后不开始切换。进入维护模式，等待请求排空，停止应用写入源，完成部署前备份。
 9. 单独执行迁移并核对 revision；再按后端、Hermes、前端顺序启动，重建 Nginx。
 10. 容器、依赖及容器内 readiness probe 通过后开放流量，观察 5 分钟，记录成功 SHA。

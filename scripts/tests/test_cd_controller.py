@@ -317,3 +317,20 @@ def test_complete_backup_references_protect_old_release(tmp_path, monkeypatch):
     assert releases[0].exists()
     assert not releases[1].exists()
     assert all(path.exists() for path in releases[-3:])
+
+
+def test_migration_hold_keeps_destructive_head_unapplied():
+    policy = {"deployment_hold": {"source_head": "drop", "target_revision": "keep",
+              "allowed_from_revisions": ["old", "keep"], "review_reference": "review"}}
+    assert cd.migration_target(policy, "drop", "old") == "keep"
+    assert cd.migration_target(policy, "drop", "keep") == "keep"
+    for source, before in [("later", "old"), ("drop", "drop"), ("drop", "unknown")]:
+        with pytest.raises(cd.Refused):
+            cd.migration_target(policy, source, before)
+    policy["deployment_hold"]["review_reference"] = ""
+    with pytest.raises(cd.Refused):
+        cd.migration_target(policy, "drop", "old")
+
+
+def test_without_migration_hold_target_is_source_head():
+    assert cd.migration_target({}, "head_revision", "old") == "head_revision"

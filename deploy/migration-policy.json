@@ -1,3 +1,10 @@
 {
-  "transitions": []
+  "transitions": [],
+  "deployment_hold": {
+    "source_head": "c9d400000026",
+    "target_revision": "c9d400000025",
+    "allowed_from_revisions": ["a7c100000021", "c9d400000025"],
+    "review_reference": "docs/runbooks/single-host-cd-acceptance.md",
+    "reason": "Retain quality.department_contacts and its data during first application rollback acceptance. Compatibility approval remains required separately."
+  }
 }

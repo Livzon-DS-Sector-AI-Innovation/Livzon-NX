@@ -84,6 +84,20 @@ def in_window(now: dt.datetime, *, switch: bool = False) -> bool:
     return 120 <= minute < (270 if switch else 300)
 
 
+def migration_target(policy: dict, source_head: str, before: str) -> str:
+    """A reviewed temporary hold never stamps or downgrades a database."""
+    hold = policy.get("deployment_hold")
+    if hold is None:
+        return source_head
+    target = hold.get("target_revision", "")
+    if (hold.get("source_head") != source_head
+            or not re.fullmatch(r"[A-Za-z0-9_]+", target)
+            or target == source_head or not hold.get("review_reference")
+            or before not in hold.get("allowed_from_revisions", [])):
+        raise Refused("deployment migration hold requires renewed review")
+    return target
+
+
 def validate_candidate(candidate: dict, branch: dict, run: dict, jobs: list[dict]) -> str:
     sha = candidate.get("sha", "")
     if not SHA.fullmatch(sha):
@@ -241,7 +255,7 @@ class Controller:
             raise
         try:
             self.phase("migrating")
-            self.compose("run", "--rm", "--no-deps", "migrate", ".venv/bin/alembic", "upgrade", "head", timeout=300)
+            self.compose("run", "--rm", "--no-deps", "migrate", ".venv/bin/alembic", "upgrade", migration["to_revision"], timeout=300)
             if self.revision() != migration["to_revision"]:
                 raise Refused("migration revision verification failed")
             migrated = True
@@ -739,15 +753,15 @@ class Controller:
             revisions = re.findall(r"^([A-Za-z0-9_]+) \(head\)", heads, re.MULTILINE)
             if len(revisions) != 1:
                 raise Refused("expected one Alembic head")
-            after = revisions[0]
             policy = read_json(release / "migration-policy.json", {})
+            after = migration_target(policy, revisions[0], before)
             compatible = before == after or any(
                 p.get("from_revision") == before and p.get("to_revision") == after
                 and p.get("backward_compatible") is True and p.get("review_reference")
                 for p in policy.get("transitions", []))
             if not compatible:
                 raise Refused("reviewed migration compatibility declaration missing")
-            command(args + [".venv/bin/alembic", "upgrade", "head"], timeout=300)
+            command(args + [".venv/bin/alembic", "upgrade", after], timeout=300)
             actual = command(["docker", "exec", database, "psql", "-U", "postgres", "-Atc",
                               "select version_num from alembic_version order by version_num"])
             if actual != after:
@@ -759,7 +773,8 @@ class Controller:
             manifest = {"sha": sha, "run_id": candidate["run_id"], "images": images, "files": build["files"],
                         "base_images": build["base_images"], "source_archive_sha256": build["source_archive_sha256"],
                         "site_files": self.site_checksums(),
-                        "migration": {"from_revision": before, "to_revision": after, "backward_compatible": compatible}}
+                        "migration": {"from_revision": before, "to_revision": after,
+                                      "source_head": revisions[0], "backward_compatible": compatible}}
             atomic_json(release / "manifest.json", manifest)
             atomic_json(self.state_dir / "accepted" / f"{sha}.json", {"manifest_sha256": digest(release / "manifest.json")})
             self.phase("validated")

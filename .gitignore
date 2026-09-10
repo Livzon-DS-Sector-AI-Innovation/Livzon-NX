@@ -35,6 +35,7 @@ desktop.ini
 !/docs/runbooks/hermes-native-feishu-gateway-phase0-runbook.md
 !/docs/runbooks/production-offline-deployment.md
 !/docs/runbooks/single-host-cd.md
+!/docs/runbooks/single-host-cd-acceptance.md
 !/docs/runbooks/feishu-login-credential-boundary.md
 !/docs/runbooks/edbo-retirement.md
 !/docs/runbooks/page-permission-implementation-status.md
