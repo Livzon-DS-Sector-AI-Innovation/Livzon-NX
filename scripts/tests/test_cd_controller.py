@@ -184,6 +184,7 @@ def test_compatible_migration_start_failure_rolls_back_images_and_gateway(tmp_pa
     assert overlay["services"]["app"]["image"] == "sha256:" + "a" * 64
     assert ("up", "-d", "--no-deps", "--force-recreate", "nginx") in calls
     assert sum("upgrade" in args for args in calls) == 1
+    assert ("run", "--rm", "--no-deps", "migrate", ".venv/bin/alembic", "upgrade", "new") in calls
     assert not any("downgrade" in args for args in calls)
 
 
