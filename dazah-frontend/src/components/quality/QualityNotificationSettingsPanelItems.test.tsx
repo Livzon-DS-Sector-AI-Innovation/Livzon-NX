@@ -125,4 +125,62 @@ describe('QualityNotificationSettingsPanel 物品库存不足预警卡', () => {
     await flush()
     expect(document.body.textContent).toContain('当前没有库存不足的物料，未发送测试')
   })
+
+  it('保存物品库存不足预警设置并提示成功', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    root = createRoot(container)
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <App>
+            <QualityNotificationSettingsPanel />
+          </App>
+        </QueryClientProvider>
+      )
+    })
+    await flush()
+    const saveButtons = Array.from(container.querySelectorAll('button')).filter(
+      (btn) => /保\s*存/.test(btn.textContent || ''),
+    )
+    await act(async () => {
+      saveButtons[saveButtons.length - 1]?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      )
+    })
+    await flush()
+    expect(qualityActions.updateQualityNotificationSetting).toHaveBeenCalled()
+    expect(document.body.textContent).toContain('物品库存不足预警推送设置已保存')
+  })
+
+  it('物品库存不足预警保存失败时提示错误', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    root = createRoot(container)
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <App>
+            <QualityNotificationSettingsPanel />
+          </App>
+        </QueryClientProvider>
+      )
+    })
+    await flush()
+    qualityActions.updateQualityNotificationSetting.mockRejectedValue(
+      new Error('后端繁忙'),
+    )
+    const saveButtons = Array.from(container.querySelectorAll('button')).filter(
+      (btn) => /保\s*存/.test(btn.textContent || ''),
+    )
+    await act(async () => {
+      saveButtons[saveButtons.length - 1]?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      )
+    })
+    await flush()
+    expect(document.body.textContent).toContain('保存失败：后端繁忙')
+  })
 })
