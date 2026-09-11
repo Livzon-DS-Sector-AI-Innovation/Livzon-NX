@@ -10,6 +10,8 @@ import {
   uploadScheduleExcel,
 } from '@/actions/production'
 import type { ScheduleExcelArchive } from '@/types/production'
+import BoardNavBlocks from '@/components/production/board-nav-blocks'
+import { useProductContextStore } from '@/stores/product-context'
 
 const { Title, Text } = Typography
 const { Dragger } = Upload
@@ -30,28 +32,31 @@ export default function SchedulingPage() {
   const [active, setActive] = useState<ScheduleExcelArchive | null>(null)
   const [loadingActive, setLoadingActive] = useState(false)
 
+  const productCode = useProductContextStore((s) => s.productCode)
+
   const reloadList = useCallback(async () => {
     setLoadingList(true)
     try {
-      const res = await getScheduleExcelArchives(1, 50)
+      const res = await getScheduleExcelArchives(1, 50, productCode)
       if (res.code === 200) setArchives(res.data || [])
     } catch {
       message.error('加载历史存档失败')
     } finally {
       setLoadingList(false)
     }
-  }, [message])
+  }, [message, productCode])
 
   useEffect(() => {
     void reloadList()
-  }, [reloadList])
+    // 切换产品上下文后重新加载该产品的存档
+  }, [reloadList, productCode])
 
   const handleUpload = async (file: File) => {
     setUploading(true)
     try {
       const formData = new FormData()
       formData.append('file', file)
-      const res = await uploadScheduleExcel(formData)
+      const res = await uploadScheduleExcel(formData, productCode)
       if (res.code === 200 && res.data?.id) {
         message.success(`已存档：${res.data.file_name}`)
         setActive(res.data)
@@ -244,6 +249,7 @@ export default function SchedulingPage() {
 
   return (
     <div className="p-6">
+      <BoardNavBlocks />
       <style>{`
         .scheduling-table .ant-table-cell {
           padding: 6px 8px !important;

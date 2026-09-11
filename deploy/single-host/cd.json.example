@@ -1,0 +1,10 @@
+{
+  "repository": "Livzon-DS-Sector-AI-Innovation/Livzon-NX",
+  "data_root": "/data/dazah",
+  "data_uuid": "SET_AFTER_FORMATTING",
+  "current": "/opt/dazah/current",
+  "enabled": false,
+  "ssh_build_proxy": false,
+  "alert_enabled": false,
+  "external_backup_enabled": false
+}

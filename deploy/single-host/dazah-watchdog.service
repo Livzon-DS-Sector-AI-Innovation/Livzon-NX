@@ -1,0 +1,10 @@
+[Unit]
+Description=Dazah bounded application recovery
+After=docker.service
+[Service]
+Slice=dazah-control.slice
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/dazah/control/controller.py watchdog
+UMask=0077
+TimeoutStartSec=90
+MemoryMax=128M

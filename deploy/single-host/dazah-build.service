@@ -1,0 +1,26 @@
+[Unit]
+Description=Isolated rootless Dazah BuildKit
+RequiresMountsFor=/data/dazah/build-cache
+After=network-online.target
+
+[Service]
+Slice=dazah-build.slice
+User=dazah-build
+Group=dazah-build
+RuntimeDirectory=dazah-build
+RuntimeDirectoryMode=0700
+Environment=HOME=/home/dazah-build
+Environment=XDG_RUNTIME_DIR=/run/dazah-build
+ExecStartPre=+/usr/bin/python3 /opt/dazah/control/controller.py mount-check
+ExecStart=/usr/bin/rootlesskit --net=slirp4netns --copy-up=/etc --disable-host-loopback /usr/local/bin/buildkitd --config /etc/dazah-cd/buildkitd.toml --root /data/dazah/build-cache --addr unix:///run/dazah-build/buildkitd.sock --oci-worker-snapshotter=fuse-overlayfs
+MemoryMax=2G
+MemorySwapMax=0
+CPUQuota=100%
+CPUWeight=10
+IOWeight=10
+TasksMax=256
+KillMode=mixed
+TimeoutStopSec=30
+RuntimeMaxSec=7200
+Delegate=yes
+Restart=no

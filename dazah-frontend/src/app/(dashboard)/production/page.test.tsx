@@ -36,6 +36,7 @@ import ProductionHomePage from './page'
 const BOARD = {
   now: '2026-09-08T12:00:00',
   period: { start: '2026-08-27', end: '2026-09-26', label: '8月27日～9月26日' },
+  is_current_period: true,
   month_planned_capacity_kg: 930000,
   kpis: {
     month_planned: 31,
@@ -140,7 +141,7 @@ describe('ProductionHomePage (fermentation board)', () => {
     await render()
     expect(actions.getFermentationBoard).toHaveBeenCalled()
     const text = (container.textContent || '') + (document.body.textContent || '')
-    expect(text).toContain('发酵车间生产实时看板')
+    expect(text).toContain('103-1车间L-苯丙氨酸生产看板')
     expect(text).toContain('生产周期 8月27日～9月26日')
     expect(text).toContain('本月计划批次')
     expect(text).toContain('31')
@@ -158,16 +159,17 @@ describe('ProductionHomePage (fermentation board)', () => {
     expect(text).not.toContain('（298.5 t/930.0 t）')
     expect(text).not.toContain('染菌数｜染菌率')
     expect(text).not.toContain('设备利用率')
-    // 本月批次进度条：汇总与图例
+    // 本月批次进度条：产能口径（绿色段=已完成产能/计划产能），汇总行已删除
     expect(text).toContain('本月批次进度')
-    expect(text).toContain('已放罐 10/31（32%）｜运行中 2｜待出产量 1')
-    expect(text).toContain('已完成 9 批')
+    expect(text).not.toContain('已放罐 10/31')
+    expect(text).toContain('已完成 9 批｜298.5 t')
+    expect(text).toContain('待出产量 1 批')
     expect(text).toContain('未开始 19 批')
     // 右侧计划产能：未设置显示 --，有设置显示吨
     expect(text).toContain('本月计划产能')
     expect(container.textContent || '').toContain('--')
-    // 箭头位置 = 已出产量 9/31 ≈ 29%（待出产量 1 批在箭头之后）
-    const arrow = container.querySelector('.relative .absolute[style*="left: 29"]')
+    // 箭头位置 = 产能进度点 298531/930000 ≈ 32.1%
+    const arrow = container.querySelector('.relative .absolute[style*="left: 32"]')
     expect(arrow).toBeTruthy()
     // 顶部保留历史数据入口
     const historyBtn = Array.from(container.querySelectorAll('button')).find((b) =>
@@ -189,6 +191,7 @@ describe('ProductionHomePage (fermentation board)', () => {
       data: [
         {
           id: 'a-1',
+          tank_no: '303A',
           batch_no: 'FA26231',
           dump_date: '2026-09-08',
           yield_kg: 100,
@@ -207,6 +210,8 @@ describe('ProductionHomePage (fermentation board)', () => {
     const drawerText = document.body.textContent || ''
     expect(drawerText).toContain('批次产量历史数据')
     expect(drawerText).toContain('FA26231')
+    // 抽屉表含罐号列
+    expect(drawerText).toContain('罐号')
     // 列表展示备注
     expect(drawerText).toContain('染菌批')
     const addBtn = Array.from(document.body.querySelectorAll('.ant-drawer button')).find(
@@ -758,5 +763,57 @@ describe('ProductionHomePage (fermentation board)', () => {
       await new Promise((r) => setTimeout(r, 120))
     })
     expect(actions.setFermentationMonthCapacity).not.toHaveBeenCalled()
+  })
+
+  it('switches period via the month picker and reloads with a located date', async () => {
+    await render()
+    // 月份选择器：顶部标题栏（103-1车间L-苯丙氨酸生产看板 与 生产周期 标签之间）
+    const pickerInput = Array.from(container.querySelectorAll('.ant-picker input')).find(
+      (i) => i.closest('.ant-space')?.textContent?.includes('103-1车间L-苯丙氨酸生产看板'),
+    ) as HTMLInputElement
+    expect(pickerInput).toBeTruthy()
+    await act(async () => {
+      pickerInput.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      pickerInput.click()
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    // 面板月份格按 Jan~Dec 顺序排列（测试环境无中文 locale），第 8 格 = 8 月
+    const monthCells = Array.from(
+      document.body.querySelectorAll('.ant-picker-dropdown .ant-picker-cell'),
+    )
+    expect(monthCells.length).toBeGreaterThanOrEqual(12)
+    const augCell = monthCells[7] as HTMLElement
+    const callsBefore = actions.getFermentationBoard.mock.calls.length
+    await act(async () => {
+      augCell.click()
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    const call = actions.getFermentationBoard.mock.calls[callsBefore]
+    expect(call?.[0]).toBe('2026-08-15')
+  })
+
+  it('renders a read-only view for a historical period', async () => {
+    actions.getFermentationBoard.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: {
+        ...BOARD,
+        is_current_period: false,
+        period: { start: '2026-07-27', end: '2026-08-26', label: '7月27日～8月26日' },
+      },
+    })
+    await render()
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    // 历史标记与标题
+    expect(text).toContain('历史批次进度')
+    expect(text).toContain('历史周期')
+    expect(text).toContain('回到本月')
+    // 写操作隐藏：产能编辑与检修按钮均不渲染
+    expect(container.querySelector('button[title="设置本月计划产能"]')).toBeFalsy()
+    expect(
+      Array.from(container.querySelectorAll('button')).some((b) =>
+        b.textContent?.includes('标记检修'),
+      ),
+    ).toBe(false)
   })
 })

@@ -380,22 +380,30 @@ export async function deleteFermentationRecord(id: string) {
 }
 // ============ 排产计划 Excel 存档 Actions ============
 
-export async function uploadScheduleExcel(formData: FormData) {
+export async function uploadScheduleExcel(formData: FormData, product = 'FA') {
   const authHeaders = await getAuthHeaders()
   // multipart boundary 必须由运行时生成，剔除通用 JSON Content-Type
   delete authHeaders['Content-Type']
-  const response = await fetch(`${API_BASE}/api/v1/production/schedule-excel`, {
-    method: 'POST',
-    headers: authHeaders,
-    body: formData,
-  })
+  const response = await fetch(
+    `${API_BASE}/api/v1/production/schedule-excel?product=${encodeURIComponent(product)}`,
+    {
+      method: 'POST',
+      headers: authHeaders,
+      body: formData,
+    },
+  )
   return response.json()
 }
 
-export async function getScheduleExcelArchives(page = 1, pageSize = 50) {
+export async function getScheduleExcelArchives(
+  page = 1,
+  pageSize = 50,
+  product = 'FA',
+) {
   const queryString = new URLSearchParams({
     page: String(page),
     page_size: String(pageSize),
+    product,
   }).toString()
   return fetchApi<ScheduleExcelArchive[]>(
     `/api/v1/production/schedule-excel?${queryString}`,
@@ -421,9 +429,11 @@ export async function deleteScheduleExcelArchive(id: string) {
 
 // ============ 发酵车间看板 Actions ============
 
-export async function getFermentationBoard() {
+export async function getFermentationBoard(date?: string, product = 'FA') {
+  const params = new URLSearchParams({ product })
+  if (date) params.set('date', date)
   const response = await fetch(
-    `${API_BASE}/api/v1/production/fermentation-board`,
+    `${API_BASE}/api/v1/production/fermentation-board?${params.toString()}`,
     { headers: await getAuthHeaders(), cache: 'no-store' },
   )
   return response.json()
@@ -451,11 +461,16 @@ export async function removeTankMaintenance(itemId: string) {
 
 // ============ Fermentation Batch Actuals ============
 
-export async function getFermentationBatchActuals(): Promise<
-  ApiResponse<FermentationBatchActual[]>
-> {
+export async function getFermentationBatchActuals(
+  periodStart?: string,
+  periodEnd?: string,
+): Promise<ApiResponse<FermentationBatchActual[]>> {
+  const params = new URLSearchParams()
+  if (periodStart) params.set('period_start', periodStart)
+  if (periodEnd) params.set('period_end', periodEnd)
+  const qs = params.toString()
   const response = await fetch(
-    `${API_BASE}/api/v1/production/fermentation-batch-actuals`,
+    `${API_BASE}/api/v1/production/fermentation-batch-actuals${qs ? `?${qs}` : ''}`,
     { headers: await getAuthHeaders() },
   )
   return response.json()

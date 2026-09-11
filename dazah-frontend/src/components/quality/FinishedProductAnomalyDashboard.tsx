@@ -24,6 +24,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 /** 成品异常仪表盘：按产品×异常类型的 AI 分类聚合视图。 */
 export function FinishedProductAnomalyDashboard() {
+  const router = useRouter()
   const { message } = App.useApp()
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -267,7 +268,7 @@ export function FinishedProductAnomalyDashboard() {
                 key={status.year}
                 icon={<RightOutlined />}
                 onClick={() => {
-                  window.location.href = `/quality/anomaly-report/ledger?year=${status.year}`
+                  router.push(`/quality/anomaly-report/ledger?year=${status.year}`)
                 }}
               >
                 {status.year}年台账

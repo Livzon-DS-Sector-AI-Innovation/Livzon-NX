@@ -468,7 +468,7 @@ describe('production actions', () => {
 
     await expect(uploadScheduleExcel(formData)).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
-      `${API_BASE}/api/v1/production/schedule-excel`,
+      `${API_BASE}/api/v1/production/schedule-excel?product=FA`,
       expect.objectContaining({ method: 'POST', body: formData }),
     )
     const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>
@@ -482,13 +482,13 @@ describe('production actions', () => {
 
     await expect(getScheduleExcelArchives(2, 20)).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
-      `${API_BASE}/api/v1/production/schedule-excel?page=2&page_size=20`,
+      `${API_BASE}/api/v1/production/schedule-excel?page=2&page_size=20&product=FA`,
       expect.anything(),
     )
 
     await expect(getScheduleExcelArchives()).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenLastCalledWith(
-      `${API_BASE}/api/v1/production/schedule-excel?page=1&page_size=50`,
+      `${API_BASE}/api/v1/production/schedule-excel?page=1&page_size=50&product=FA`,
       expect.anything(),
     )
   })
@@ -521,7 +521,7 @@ describe('production actions', () => {
 
     await expect(getFermentationBoard()).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
-      `${API_BASE}/api/v1/production/fermentation-board`,
+      `${API_BASE}/api/v1/production/fermentation-board?product=FA`,
       expect.objectContaining({ cache: 'no-store' }),
     )
   })

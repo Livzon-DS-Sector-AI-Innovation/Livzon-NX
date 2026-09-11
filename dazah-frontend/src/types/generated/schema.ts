@@ -10772,7 +10772,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 发酵批次实际产量列表 */
+        /** 发酵批次实际产量列表（可按周期过滤） */
         get: operations["list_fermentation_batch_actuals_api_v1_production_fermentation_batch_actuals_get"];
         put?: never;
         /** 录入发酵批次实际产量（同批次则更新） */
@@ -10807,7 +10807,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 发酵车间实时看板（计划驱动） */
+        /** 发酵车间实时看板（计划驱动，可按周期回看） */
         get: operations["get_fermentation_board_api_v1_production_fermentation_board_get"];
         put?: never;
         post?: never;
@@ -87774,7 +87774,14 @@ export interface operations {
     };
     list_fermentation_batch_actuals_api_v1_production_fermentation_batch_actuals_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 周期起始日（含） */
+                period_start?: string | null;
+                /** @description 周期结束日（含） */
+                period_end?: string | null;
+                /** @description 产品代码（如 FA/MC/DR） */
+                product?: string;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -87805,7 +87812,10 @@ export interface operations {
     };
     upsert_fermentation_batch_actual_api_v1_production_fermentation_batch_actuals_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 产品代码（如 FA/MC/DR） */
+                product?: string;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -87873,7 +87883,12 @@ export interface operations {
     };
     get_fermentation_board_api_v1_production_fermentation_board_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 查看周期内任意日期（YYYY-MM-DD）；缺省为今天所在周期 */
+                date?: string | null;
+                /** @description 产品代码（如 FA/MC/DR） */
+                product?: string;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -87904,7 +87919,10 @@ export interface operations {
     };
     set_fermentation_month_capacity_api_v1_production_fermentation_month_capacity_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 产品代码（如 FA/MC/DR） */
+                product?: string;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -93199,6 +93217,8 @@ export interface operations {
             query?: {
                 page?: number;
                 page_size?: number;
+                /** @description 产品代码 */
+                product?: string;
             };
             header?: never;
             path?: never;
@@ -93230,7 +93250,10 @@ export interface operations {
     };
     upload_schedule_excel_api_v1_production_schedule_excel_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 产品代码 */
+                product?: string;
+            };
             header?: never;
             path?: never;
             cookie?: {

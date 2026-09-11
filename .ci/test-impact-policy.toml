@@ -1,5 +1,6 @@
 version = 1
 production_roots = [
+  "scripts/cd/",
   "dazah-backend/app/",
   "dazah-backend/alembic/",
   "dazah-frontend/src/",
@@ -21,6 +22,7 @@ production_roots = [
   "Hermes-Lite/utils.py",
 ]
 production_include = [
+  "^scripts/cd/.*\\.py$",
   "^dazah-backend/app/.*\\.py$",
   "^dazah-backend/alembic/.*\\.py$",
   "^dazah-frontend/src/.*\\.(ts|tsx)$",
@@ -35,6 +37,30 @@ ignore = [
   "\\.pyc$",
   "^Hermes-Lite/scripts/ci\\.sh$",
 ]
+
+[[rules]]
+id = "cd-controller"
+description = "部署控制器必须包含状态机与恢复边界测试"
+source = "^scripts/cd/controller\\.py$"
+tests = ["^scripts/tests/test_cd_controller\\.py$"]
+
+[[rules]]
+id = "cd-readiness"
+description = "内部就绪探针必须包含依赖失败与资源释放测试"
+source = "^scripts/cd/readiness\\.py$"
+tests = ["^scripts/tests/test_cd_readiness\\.py$"]
+
+[[rules]]
+id = "cd-site"
+description = "站点配置转换必须包含路由保留与拒绝重复转换测试"
+source = "^scripts/cd/stage_site\\.py$"
+tests = ["^scripts/tests/test_cd_stage_site\\.py$"]
+
+[[rules]]
+id = "cd-conversion"
+description = "转换限流必须包含并发锁测试"
+source = "^scripts/cd/conversion_limit\\.py$"
+tests = ["^scripts/tests/test_conversion_limit\\.py$"]
 
 [[rules]]
 id = "backend-module"

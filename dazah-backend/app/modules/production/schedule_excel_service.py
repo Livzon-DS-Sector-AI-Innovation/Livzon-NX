@@ -92,6 +92,7 @@ def serialize_archive(
     """ORM → API 响应（mode=json 友好的 dict）。"""
     return {
         "id": str(archive.id),
+        "product_code": archive.product_code,
         "file_name": archive.file_name,
         "sheet_name": archive.sheet_name,
         "original_path": archive.original_path,
@@ -127,6 +128,7 @@ def serialize_archive_summary(
 async def create_archive(
     session: AsyncSession,
     *,
+    product_code: str = "FA",
     file_name: str,
     sheet_name: str,
     original_path: str,
@@ -138,6 +140,7 @@ async def create_archive(
     created_by: uuid.UUID | None = None,
 ) -> ScheduleExcelArchive:
     archive = ScheduleExcelArchive(
+        product_code=product_code,
         file_name=file_name,
         sheet_name=sheet_name,
         original_path=original_path,
@@ -159,19 +162,24 @@ async def list_archives(
     *,
     page: int,
     page_size: int,
+    product_code: str = "FA",
 ) -> tuple[list[tuple[ScheduleExcelArchive, str | None]], int]:
     """分页列表，附带上传人姓名（created_by 外键 join identity.users）。"""
     from app.platform.identity.models import User
 
     total = await session.scalar(
         select(func.count(ScheduleExcelArchive.id)).where(
-            ScheduleExcelArchive.is_deleted.is_(False)
+            ScheduleExcelArchive.is_deleted.is_(False),
+            ScheduleExcelArchive.product_code == product_code,
         )
     )
     query = (
         select(ScheduleExcelArchive, User.name)
         .outerjoin(User, User.id == ScheduleExcelArchive.created_by)
-        .where(ScheduleExcelArchive.is_deleted.is_(False))
+        .where(
+            ScheduleExcelArchive.is_deleted.is_(False),
+            ScheduleExcelArchive.product_code == product_code,
+        )
         .order_by(ScheduleExcelArchive.created_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
