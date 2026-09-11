@@ -30,7 +30,8 @@
   `build-cache` 由构建账号管理。恢复演练临时目录位于 root-only 的 `backups/.drills`，
   不在构建账号可改写的目录中解包配置。
 - `/opt/dazah/current`、PostgreSQL 和 Docker/containerd 继续使用 SSD。
-- controller 校验 `/data` 的精确 UUID；挂载丢失时拒绝备份和发布。
+- controller 要求 `/data` 只有一条 ext4 根挂载记录，同时核对 UUID 和实际路径的块设备身份；
+  挂载丢失、叠加挂载或绑定了其他子目录时拒绝备份和发布。
 - 原历史发布包在新盘完成 checksum 比对后才允许删除；首次实施保留旧副本。
 
 ```sh
@@ -40,6 +41,32 @@ sudo python3 /opt/dazah/control/controller.py drill
 ```
 
 每日 01:00 备份，月初 00:00 在独立 PostgreSQL 容器恢复演练。
+
+### 可选 SSH 构建代理
+
+在 Windows 保持本机代理 `127.0.0.1:7897` 运行，再执行并保持终端打开：
+
+```powershell
+ssh -N -T -i "C:\Users\Dan\.ssh\id_ed25519" -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -R 127.0.0.1:17897:127.0.0.1:7897 livzon@192.168.40.251
+```
+
+root 配置 `/etc/dazah-cd/config.json` 的 `ssh_build_proxy` 默认 false。设为 true 前，
+必须由运维独立安装本机桥接：`dazah-build-proxy.socket/service`、
+`/usr/local/libexec/dazah-build-proxy.py` 和 `dazah-build.service.d/ssh-proxy.conf`。
+这些特权配置不能从发布包自动安装。服务器 17897 仅监听回环地址；
+`/run/dazah-build-proxy.sock` 为 dazah-build 专用的 0600 Unix socket，
+RootlessKit 内转接为 `127.0.0.1:17898`，保留 `--disable-host-loopback`。
+
+控制器在创建构建目录前通过隧道检查 GitHub 下载连接；不可用即延期，不留下阻止下次重试的
+工作目录。固定 SHA 源码归档及构建依赖使用代理，GitHub API 候选复核保持原有独立连接，
+避免共享代理出口的匿名 API 限流。代理参数不注入应用环境，使用情况记录在 build.json。
+构建中断仍须按失败记录检查现场；不能自动清空未核对的工作目录。
+
+本机关机、休眠或断网会使隧道失效，这不是无人值守网络保障。服务器不需要复制本机代理密钥。
+Runner 必须同时阻止回环代理访问；本机专用 nftables 规则仅匹配其 UID 1002，
+为 `127.0.0.53` 保留 TCP/UDP 53 的 DNS 例外，拒绝其他回环端口。
+Runner 的 `proxy-isolation.conf` 依赖 `dazah-runner-loopback.service`，规则与桥接配置
+须随独立运维恢复包保存；其他主机使用前必须核对账号 UID。
 备份成功以 `manifest.json` 及每个文件的 SHA-256 为准；无 manifest 的目录是失败或未完成备份。
 保留最近 7 份日备份、4 周各一份备份、最近 3 次部署前备份及当前/上一版本恢复点。
 在线备份标记 `online_independent_copies`，不保证数据库和对象文件同一时间点；
