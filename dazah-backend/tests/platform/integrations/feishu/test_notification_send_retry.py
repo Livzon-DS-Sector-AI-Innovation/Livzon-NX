@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -11,7 +10,9 @@ from app.platform.integrations.feishu import notification
 
 
 class _FakeResponse:
-    def __init__(self, success: bool, code: int = 0, message_id: str | None = None) -> None:
+    def __init__(
+        self, success: bool, code: int = 0, message_id: str | None = None
+    ) -> None:
         self._success = success
         self.code = code
         self.data = type("D", (), {"message_id": message_id})()
@@ -32,8 +33,12 @@ async def test_send_retries_once_on_token_frequency_limit(
     )
     client = AsyncMock()
     client.im.v1.message.acreate = acreate
-    monkeypatch.setattr(notification, "_get_client", AsyncMock(return_value=client))
-    monkeypatch.setattr(notification, "_get_tenant_token", AsyncMock(return_value="tok"))
+    monkeypatch.setattr(
+        notification, "_get_client", AsyncMock(return_value=client)
+    )
+    monkeypatch.setattr(
+        notification, "_get_tenant_token", AsyncMock(return_value="tok")
+    )
     monkeypatch.setattr(
         notification, "build_card", AsyncMock(return_value='{"msg_type":"interactive"}')
     )
@@ -45,7 +50,10 @@ async def test_send_retries_once_on_token_frequency_limit(
     assert sent == "msg-1"
     assert acreate.await_count == 2
     # 重试请求带刷新后的 Bearer 头
-    heads = [call.args[0].headers.get("Authorization") for call in acreate.await_args_list]
+    heads = [
+        call.args[0].headers.get("Authorization")
+        for call in acreate.await_args_list
+    ]
     assert heads == ["Bearer tok", "Bearer tok"]
 
 
@@ -56,8 +64,12 @@ async def test_send_returns_none_when_non_rate_limit_failure(
     acreate = AsyncMock(return_value=_FakeResponse(success=False, code=99991661))
     client = AsyncMock()
     client.im.v1.message.acreate = acreate
-    monkeypatch.setattr(notification, "_get_client", AsyncMock(return_value=client))
-    monkeypatch.setattr(notification, "_get_tenant_token", AsyncMock(return_value="tok"))
+    monkeypatch.setattr(
+        notification, "_get_client", AsyncMock(return_value=client)
+    )
+    monkeypatch.setattr(
+        notification, "_get_tenant_token", AsyncMock(return_value="tok")
+    )
     monkeypatch.setattr(
         notification, "build_card", AsyncMock(return_value='{"msg_type":"interactive"}')
     )
