@@ -240,3 +240,181 @@ async def test_process_escalation_recovered_cancels(
     await db_session.refresh(item)
     assert item.status == "cancelled"
     send_notifications.assert_not_awaited()
+
+@pytest.mark.anyio
+async def test_find_due_returns_pending_rows_only_once(
+    db_session: AsyncSession,
+) -> None:
+    """到期 pending 行进入队列（带行锁查询可执行）。"""
+    await _ensure_table(db_session)
+    await _purge(db_session)
+    item = QualityTrendAlertEscalation(
+        entity_code="qc_finished_internal",
+        source_label="霉酚酸（内控）",
+        batch_no="B1",
+        metric_key="k",
+        metric_label="指标",
+        payload={"spec_lines": [], "escalation_hours": 2},
+        status="pending",
+        escalate_at=datetime.now(UTC) - timedelta(minutes=5),
+    )
+    db_session.add(item)
+    await db_session.commit()
+
+    due = await esc.find_due_trend_alert_escalations(db_session)
+    assert [row.id for row in due] == [item.id]
+
+
+@pytest.mark.anyio
+async def test_process_escalation_cancels_when_trend_disabled(
+    db_session: AsyncSession, monkeypatch
+) -> None:
+    await _ensure_table(db_session)
+    await _purge(db_session)
+    item = QualityTrendAlertEscalation(
+        entity_code="qc_finished_internal",
+        source_label="霉酚酸（内控）",
+        batch_no="B1",
+        metric_key="k",
+        metric_label="指标",
+        payload={"spec_lines": [], "escalation_hours": 2},
+        status="pending",
+        escalate_at=datetime.now(UTC) - timedelta(minutes=5),
+    )
+    db_session.add(item)
+    await db_session.commit()
+    monkeypatch.setattr(
+        calc,
+        "load_inspection_trend_alert_config",
+        AsyncMock(
+            return_value=InspectionTrendAlertConfig(is_enabled=False)
+        ),
+    )
+
+    await esc.process_trend_alert_escalation(db_session, item)
+    await db_session.commit()
+    await db_session.refresh(item)
+    assert item.status == "cancelled"
+
+
+@pytest.mark.anyio
+async def test_process_escalation_cancels_when_escalation_disabled(
+    db_session: AsyncSession, monkeypatch
+) -> None:
+    await _ensure_table(db_session)
+    await _purge(db_session)
+    item = QualityTrendAlertEscalation(
+        entity_code="qc_finished_internal",
+        source_label="霉酚酸（内控）",
+        batch_no="B1",
+        metric_key="k",
+        metric_label="指标",
+        payload={"spec_lines": [], "escalation_hours": 2},
+        status="pending",
+        escalate_at=datetime.now(UTC) - timedelta(minutes=5),
+    )
+    db_session.add(item)
+    await db_session.commit()
+    monkeypatch.setattr(
+        calc,
+        "load_inspection_trend_alert_config",
+        AsyncMock(return_value=_enabled_trend_config()),
+    )
+    monkeypatch.setattr(
+        calc,
+        "load_inspection_trend_alert_escalation_config",
+        AsyncMock(
+            return_value=InspectionTrendAlertEscalationConfig(is_enabled=False)
+        ),
+    )
+
+    await esc.process_trend_alert_escalation(db_session, item)
+    await db_session.commit()
+    await db_session.refresh(item)
+    assert item.status == "cancelled"
+
+
+@pytest.mark.anyio
+async def test_process_escalation_cancels_when_series_insufficient(
+    db_session: AsyncSession, monkeypatch
+) -> None:
+    """样本不足（<3）无法复检统计：直接取消而非失败。"""
+    await _ensure_table(db_session)
+    await _purge(db_session)
+    item = QualityTrendAlertEscalation(
+        entity_code="qc_finished_internal",
+        source_label="霉酚酸（内控）",
+        batch_no="B1",
+        metric_key="k",
+        metric_label="指标",
+        payload={"spec_lines": [], "escalation_hours": 2},
+        status="pending",
+        escalate_at=datetime.now(UTC) - timedelta(minutes=5),
+    )
+    db_session.add(item)
+    await db_session.commit()
+    monkeypatch.setattr(
+        calc,
+        "_search_entity_records_with_fallback",
+        AsyncMock(return_value=[{"fields": {"批号": "B1", "k": 5.0}}]),
+    )
+    monkeypatch.setattr(
+        calc,
+        "load_inspection_trend_alert_config",
+        AsyncMock(return_value=_enabled_trend_config()),
+    )
+    monkeypatch.setattr(
+        calc,
+        "load_inspection_trend_alert_escalation_config",
+        AsyncMock(return_value=_enabled_escalation_config()),
+    )
+
+    await esc.process_trend_alert_escalation(db_session, item)
+    await db_session.commit()
+    await db_session.refresh(item)
+    assert item.status == "cancelled"
+
+
+@pytest.mark.anyio
+async def test_process_escalation_retries_then_marks_failed(
+    db_session: AsyncSession, monkeypatch
+) -> None:
+    """复检异常重试至上限后标记 failed，不再抛出。"""
+    await _ensure_table(db_session)
+    await _purge(db_session)
+    item = QualityTrendAlertEscalation(
+        entity_code="qc_finished_internal",
+        source_label="霉酚酸（内控）",
+        batch_no="B1",
+        metric_key="k",
+        metric_label="指标",
+        payload={"spec_lines": [], "escalation_hours": 2},
+        status="pending",
+        escalate_at=datetime.now(UTC) - timedelta(minutes=5),
+    )
+    db_session.add(item)
+    await db_session.commit()
+    monkeypatch.setattr(
+        esc, "_process", AsyncMock(side_effect=RuntimeError("boom"))
+    )
+
+    with pytest.raises(RuntimeError):
+        await esc.process_trend_alert_escalation(db_session, item)
+    await db_session.commit()
+    await db_session.refresh(item)
+    assert item.status == "pending"
+    assert item.retry_count == 1
+
+    with pytest.raises(RuntimeError):
+        await esc.process_trend_alert_escalation(db_session, item)
+    await db_session.commit()
+
+    # 第三次达到上限：标记 failed 且不再抛出
+    await esc.process_trend_alert_escalation(db_session, item)
+    await db_session.commit()
+
+    await db_session.refresh(item)
+    assert item.status == "failed"
+    assert item.retry_count == 3
+    assert item.last_error == "RuntimeError"
+

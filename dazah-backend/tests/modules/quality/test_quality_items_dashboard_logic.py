@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.modules.quality.schemas.inspection_items_dashboard import (
     ItemsStockAlertItem,
 )
 from app.modules.quality.service.items_dashboard import (
     _aggregate_monthly,
     _build_alert_content,
+    _cell_text,
     _is_low_stock,
+    _pick_cell_value,
     _render_template,
+    _row_month,
     _to_number,
+    find_low_stock_items,
 )
 from app.modules.quality.service.quality_notification_settings import (
     ItemsStockAlertConfig,
@@ -71,3 +77,52 @@ def test_render_and_build_content() -> None:
     # 超过预览上限(10)出现溢出提示
     assert "其余 2 种" in content
     assert "共 12 种" in content
+def test_cell_text_variants() -> None:
+    assert _cell_text(None) == ""
+    assert _cell_text("  abc  ") == "abc"
+    assert _cell_text(12) == "12"
+    assert _cell_text([1, "二"]) == "1 二"
+    assert _cell_text({"text": "T"}) == "T"
+    assert _cell_text({"name": "N"}) == "N"
+    assert _cell_text(3.5) == "3.5"
+
+
+def test_pick_cell_value_falls_through_keys() -> None:
+    assert _pick_cell_value({"a": "", "b": "ok"}, ["a", "b"]) == "ok"
+    assert _pick_cell_value({"a": None}, ["a", "b"]) is None
+    assert _pick_cell_value({}, ["a"]) is None
+
+
+def test_row_month_parses_timestamps_and_dates() -> None:
+    # 毫秒时间戳
+    assert _row_month({"日期": "1735689600000"}, ["日期"]) == 1
+    # ISO 日期串
+    assert _row_month({"日期": "2026-09-03T10:00:00+08:00"}, ["日期"]) == 9
+    # 列表取首项
+    assert _row_month({"日期": ["2026-05-12"]}, ["日期"]) == 5
+    # 非法值回退 created_at
+    assert _row_month({"日期": "bad"}, ["日期"]) is None
+    assert _row_month({"created_at": "2026-07-01T00:00:00"}, ["日期"]) == 7
+    assert _row_month({}, ["日期"]) is None
+
+
+async def test_find_low_stock_items_uses_inventory_page(
+    monkeypatch: Any,
+) -> None:
+    async def fake_list(db: Any, page_key: str, **kwargs: Any) -> dict[str, Any]:
+        return {
+            "items": [
+                {"record_id": "r1", "当前库存": 1, "警戒库存": 5},
+                {"record_id": "r2", "当前库存": 9, "警戒库存": 5},
+            ],
+            "configured": True,
+            "last_sync_time": None,
+        }
+
+    monkeypatch.setattr("app.modules.quality.service.items_dashboard.list_items_mirror", fake_list)
+
+    found = await find_low_stock_items(
+        None, ItemsStockAlertConfig(warning_source="local_threshold")
+    )
+    assert [item["record_id"] for item in found] == ["r1"]
+

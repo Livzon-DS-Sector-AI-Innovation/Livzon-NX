@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import AppException
 from app.modules.quality.models.inspection_items_mirror import (
     QualityItemsPageRow,
 )
@@ -304,6 +305,74 @@ def test_select_option_resolution_formula_and_plain() -> None:
     )
     assert cells["存放位置"] == "资料室"
     assert cells["库存报警"] == "库存不足"
+
+
+def test_build_columns_skips_blank_names_and_marks_editable() -> None:
+    cols = mirror._build_columns(
+        [
+            {"field_name": "  ", "ui_type": "Text"},
+            {"field_name": "名称", "ui_type": "Text"},
+            {"field_name": "只读列", "type": "Digital", "ui_type": "Number"},
+        ]
+    )
+    assert [c["title"] for c in cols] == ["名称", "只读列"]
+    assert cols[0]["editable"] is True
+    assert cols[1]["ui_type"] == "Number"
+
+
+def test_resolve_option_value_multi_select_and_missing_option() -> None:
+    options = [{"id": "a", "name": "甲"}, {"id": "b", "name": "乙"}]
+    assert mirror._resolve_option_value("a", options) == "甲"
+    assert mirror._resolve_option_value("unknown", options) == "unknown"
+    assert mirror._resolve_option_value(["a", "unknown", "b"], options) == (
+        "甲、unknown、乙"
+    )
+    assert mirror._resolve_option_value(["a", None, ""], options) == "甲"
+    assert mirror._resolve_option_value(3, options) == 3
+    assert mirror._resolve_option_value("a", []) == "a"
+
+
+async def test_fetch_or_fail_wraps_errors_and_passes_app_exception() -> None:
+    async def boom() -> list[dict[str, Any]]:
+        raise RuntimeError("conn reset")
+
+    async def app_err() -> list[dict[str, Any]]:
+        raise AppException(message="原始错误", status_code=400)
+
+    with pytest.raises(AppException) as exc:
+        await mirror._fetch_or_fail(boom())
+    assert exc.value.status_code == 503
+    assert "无法连接飞书" in exc.value.message
+
+    with pytest.raises(AppException) as exc:
+        await mirror._fetch_or_fail(app_err())
+    assert exc.value.status_code == 400
+    assert exc.value.message == "原始错误"
+
+
+async def test_incremental_pagination_loop_ends_on_missing_token() -> None:
+    async def paged(page_token: str | None) -> dict[str, Any]:
+        if page_token is None:
+            return {
+                "items": [{"record_id": "r1"}],
+                "has_more": True,
+                "page_token": "next",
+            }
+        return {"items": [{"record_id": "r2"}], "has_more": False}
+
+    collected = []
+    page_token = None
+    while True:
+        page = await paged(page_token)
+        collected.extend(
+            item for item in (page.get("items") or []) if isinstance(item, dict)
+        )
+        if not page.get("has_more"):
+            break
+        page_token = str(page.get("page_token") or "")
+        if not page_token:
+            break
+    assert [r["record_id"] for r in collected] == ["r1", "r2"]
 
 
 async def test_maybe_refresh_items_mirror_gate(
