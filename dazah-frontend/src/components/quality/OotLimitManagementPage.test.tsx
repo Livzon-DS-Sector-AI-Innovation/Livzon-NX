@@ -139,6 +139,14 @@ it('exports the selected product notice as docx', async () => {
   expect(URL.createObjectURL).toHaveBeenCalledWith(expect.any(Blob))
 })
 
+it('shows an error when exporting the current product fails', async () => {
+  mocks.fetchOotLimitProductExport.mockRejectedValue(new Error('单产品导出失败'))
+  await renderPage()
+  await act(async () => findButton('导出当前产品')?.click())
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)) })
+  expect(document.body.textContent).toContain('单产品导出失败')
+})
+
 it('exports all notices as zip without needing a selection', async () => {
   mocks.fetchOotLimitProductsExportAll.mockResolvedValue({
     blob: new Blob(['zip-bytes']),
