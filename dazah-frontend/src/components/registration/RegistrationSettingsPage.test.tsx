@@ -238,4 +238,40 @@ describe('RegistrationSettingsPage', () => {
       '质量模块飞书应用未配置或已停用，无法发送测试消息',
     )
   })
+
+  it('shows certificate save and test failures', async () => {
+    await renderPage()
+    registrationActions.updateCertificateReminderSettings.mockRejectedValue(
+      new Error('服务暂不可用'),
+    )
+    const saveButton = findButton('保存设置', 0)
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 60))
+    })
+    expect(document.body.textContent).toContain('服务暂不可用')
+
+    registrationActions.testCertificateReminderSettings.mockRejectedValue(
+      new Error('测试发送网络错误'),
+    )
+    const testButton = findButton('测试发送', 0)
+    await act(async () => {
+      testButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 60))
+    })
+    expect(document.body.textContent).toContain('测试发送网络错误')
+  })
+
+  it('shows regulation save failure', async () => {
+    await renderPage()
+    regulatoryClient.updateRegulatoryTrackerNotificationSettingsClient.mockRejectedValue(
+      new Error('法规服务超时'),
+    )
+    const saveButton = findButton('保存设置', 1)
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 60))
+    })
+    expect(document.body.textContent).toContain('法规服务超时')
+  })
 })

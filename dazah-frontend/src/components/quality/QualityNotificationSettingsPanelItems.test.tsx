@@ -87,4 +87,42 @@ describe('QualityNotificationSettingsPanel 物品库存不足预警卡', () => {
     expect(container.textContent).toContain('当前库存 ≤ 警戒库存')
     expect(container.textContent).toContain('发送测试推送')
   })
+
+  it('测试推送：unmapped 提示未配置接收人，no_data 提示无物料', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    root = createRoot(container)
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <App>
+            <QualityNotificationSettingsPanel />
+          </App>
+        </QueryClientProvider>
+      )
+    })
+    await flush()
+    const testButton = Array.from(container.querySelectorAll('button')).find(
+      (btn) => (btn.textContent || '').includes('测试推送'),
+    ) as HTMLButtonElement | undefined
+
+    inspectionActions.pushItemsLowStockTest.mockResolvedValue({
+      status: 'unmapped', sent: 0, skipped: 0, failed: 0, item_count: 0, message: '未配置有效接收人',
+    })
+    await act(async () => {
+      testButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flush()
+    expect(document.body.textContent).toContain('未配置有效接收人')
+
+    inspectionActions.pushItemsLowStockTest.mockResolvedValue({
+      status: 'no_data', sent: 0, skipped: 0, failed: 0, item_count: 0, message: '',
+    })
+    await act(async () => {
+      testButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flush()
+    expect(document.body.textContent).toContain('当前没有库存不足的物料，未发送测试')
+  })
 })
