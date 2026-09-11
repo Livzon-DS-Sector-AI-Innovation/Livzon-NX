@@ -540,13 +540,15 @@ async def test_analysis_export_returns_attachment_json(
             "exported_at": "2026-09-09T00:00:00+00:00",
             "count": 1,
             "rows": [
-                {"year": 2026, "record_id": "rec-1", "content_hash": "h",
-                 {
-                     "product": "霉酚酸",
-                     "anomaly_type": "杂质异常",
-                     "reason": "RRT",
-                     "model_name": "q"
-                 }
+                {
+                    "year": 2026,
+                    "record_id": "rec-1",
+                    "content_hash": "h",
+                    "product": "霉酚酸",
+                    "anomaly_type": "杂质异常",
+                    "reason": "RRT",
+                    "model_name": "q",
+                }
             ],
         }
 
