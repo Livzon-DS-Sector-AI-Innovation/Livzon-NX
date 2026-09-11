@@ -604,6 +604,12 @@
       "route_path": "/quality/inspection/items/outbound",
       "actions": {}
     },
+    "quality:inspection:inspection-items:inspection-items-dashboard": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/items/dashboard",
+      "actions": {}
+    },
     "quality:inspection:inspection-instruments:inspection-instruments-equipment": {
       "status": "active",
       "module_code": "quality",
@@ -689,6 +695,12 @@
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/finished/lkms",
+      "actions": {}
+    },
+    "quality:inspection:inspection-finished:inspection-finished-pf": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/finished/pf",
       "actions": {}
     },
     "quality:inspection:inspection-finished:inspection-finished-bbas": {
