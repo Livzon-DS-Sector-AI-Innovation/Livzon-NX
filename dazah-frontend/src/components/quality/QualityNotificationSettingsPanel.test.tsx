@@ -13,6 +13,7 @@ const qualityActions = vi.hoisted(() => ({
 
 const apiClient = vi.hoisted(() => ({
   searchChangeActionPlanPersons: vi.fn(),
+  fetchQaPersonOptions: vi.fn(),
 }))
 
 vi.mock('@/actions/quality', () => qualityActions)
@@ -75,6 +76,7 @@ describe('QualityNotificationSettingsPanel', () => {
       is_enabled: false,
     })
     apiClient.searchChangeActionPlanPersons.mockResolvedValue([])
+    apiClient.fetchQaPersonOptions.mockResolvedValue([])
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -207,10 +209,10 @@ describe('QualityNotificationSettingsPanel', () => {
   it('toggles a single inspection line switch and persists the change', async () => {
     await renderPanel()
     const switches = Array.from(container.querySelectorAll('button.ant-switch'))
-    // 开关顺序：变更计划卡、检验卡总开关、霉酚酸（内控）、纯化水
-    expect(switches.length).toBeGreaterThanOrEqual(4)
+    // 开关顺序：变更计划卡、检验卡总开关、手动重分析发送、霉酚酸（内控）、纯化水
+    expect(switches.length).toBeGreaterThanOrEqual(5)
     await act(async () => {
-      switches[2].dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      switches[3].dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await new Promise((resolve) => setTimeout(resolve, 30))
     })
     qualityActions.updateQualityNotificationSetting.mockResolvedValue({

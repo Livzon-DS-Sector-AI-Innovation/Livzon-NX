@@ -28,6 +28,7 @@ import type {
   AnomalyDashboardData,
   InspectionFeishuFieldMeta,
   InspectionFeishuFieldsResult,
+  ItemsDashboardData,
   ValidationReviewJobStatus,
   ValidationReviewListItem,
   ValidationReviewRecord,
@@ -966,6 +967,16 @@ export async function searchChangeActionPlanPersons(
   return json.data || []
 }
 
+/** QA 部门人员（产品QA 默认候选，人员目录部门含 QA/质量保证） */
+export async function fetchQaPersonOptions(): Promise<
+  { open_id: string; name: string; department?: string | null }[]
+> {
+  const res = await fetch('/api/v1/quality/person-options/qa')
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return json.data || []
+}
+
 export async function fetchNextChangeCode(changeType: string = 'technical'): Promise<string> {
   const searchParams = new URLSearchParams()
   if (changeType) searchParams.set('change_type', changeType)
@@ -1459,6 +1470,22 @@ export async function fetchOotLimitItems(params?: Record<string, string | number
   return res.json()
 }
 
+/** 导出单个产品OOT限度告知单 docx（版式与原告知单一致） */
+export async function fetchOotLimitProductExport(productId: string): Promise<{ blob: Blob; filename: string }> {
+  return fetchQualityFile(
+    `${OOS_OOT_API_BASE}/oot-limit-products/${productId}/export`,
+    'OOT限度告知单.docx'
+  )
+}
+
+/** 导出全部产品OOT限度告知单 zip 包 */
+export async function fetchOotLimitProductsExportAll(): Promise<{ blob: Blob; filename: string }> {
+  return fetchQualityFile(
+    `${OOS_OOT_API_BASE}/oot-limit-products/export/all`,
+    'OOT限度告知单.zip'
+  )
+}
+
 export async function fetchProductDepartmentRecords(params?: Record<string, string | number>) {
   const queryParts: string[] = []
   if (params) {
@@ -1614,6 +1641,28 @@ export async function fetchInspectionFeishuFields(
   if (!res.ok) return null
   const json = await res.json()
   return json.data as InspectionFeishuFieldsResult
+}
+
+/** 库存台账动态筛选项（存放位置 / 库存报警去重值）。 */
+export async function fetchItemsInventoryFilterOptions(): Promise<{
+  存放位置: string[]
+  库存报警: string[]
+}> {
+  const res = await fetch('/api/v1/quality/items/inventory/filter-options')
+  if (!res.ok) return { 存放位置: [], 库存报警: [] }
+  const json = await res.json()
+  return (json.data ?? { 存放位置: [], 库存报警: [] }) as {
+    存放位置: string[]
+    库存报警: string[]
+  }
+}
+
+/** 物品管理仪表盘统计（库存预警 + 月度出入库量）。 */
+export async function fetchItemsDashboard(): Promise<ItemsDashboardData | null> {
+  const res = await fetch('/api/v1/quality/items/dashboard')
+  if (!res.ok) return null
+  const json = await res.json()
+  return json.data as ItemsDashboardData
 }
 
 // ---- 历史偏差 ----

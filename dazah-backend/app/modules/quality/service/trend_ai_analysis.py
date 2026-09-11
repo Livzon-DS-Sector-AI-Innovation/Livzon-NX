@@ -22,6 +22,7 @@ from app.core.llm.config import get_config
 from app.modules.quality.service.trend_ai_prompt import (
     CONFIDENCE_LEVELS,
     SEVERITY_LEVELS,
+    build_product_trend_ai_prompt,
     build_trend_ai_prompt,
 )
 
@@ -41,6 +42,8 @@ _EXPECTED_KEYS = [
     "recommendation",
     "confidence",
 ]
+# 产品级（多指标合并）输出额外要求逐指标结论
+_PRODUCT_EXPECTED_KEYS = [*_EXPECTED_KEYS, "metric_findings"]
 _VALID_RULE_TYPES = {
     "month_level",
     "month_slope",
@@ -106,11 +109,30 @@ def _clean_outlook(value: Any) -> dict[str, Any]:
     }
 
 
-def validate_trend_ai_payload(raw: dict[str, Any]) -> dict[str, Any]:
+def _clean_metric_findings(value: Any) -> list[dict[str, Any]]:
+    """清洗产品级逐指标结论：白名单键 + 长度裁剪，最多 12 项。"""
+    if not isinstance(value, list):
+        return []
+    findings: list[dict[str, Any]] = []
+    for item in value[:12]:
+        if not isinstance(item, dict):
+            continue
+        label = _clip(item.get("metric_label"), 80)
+        summary = _clip(item.get("summary"), _LIMITS["summary"])
+        if not label or not summary:
+            continue
+        findings.append({"metric_label": label, "summary": summary})
+    return findings
+
+
+def validate_trend_ai_payload(
+    raw: dict[str, Any], *, product_level: bool = False
+) -> dict[str, Any]:
     """把模型原始输出裁剪为可信结构：白名单/枚举/长度/数值校验。
 
     缺关键字段由 chat_json 的 expected_keys 先行抛错；这里进一步丢弃非法
-    signal 与回退非法枚举，保证可安全落库与展示。
+    signal 与回退非法枚举，保证可安全落库与展示。产品级额外清洗
+    metric_findings（逐指标结论）。
     """
     confidence = str(raw.get("confidence") or "").strip()
     if confidence not in CONFIDENCE_LEVELS:
@@ -122,7 +144,7 @@ def validate_trend_ai_payload(raw: dict[str, Any]) -> dict[str, Any]:
             cleaned = _clean_signal(item)
             if cleaned is not None:
                 signals.append(cleaned)
-    return {
+    payload = {
         "summary": _clip(raw.get("summary"), _LIMITS["summary"]),
         "trend_reading": _clip(raw.get("trend_reading"), _LIMITS["trend_reading"]),
         "signals": signals,
@@ -130,10 +152,18 @@ def validate_trend_ai_payload(raw: dict[str, Any]) -> dict[str, Any]:
         "recommendation": _clip(raw.get("recommendation"), _LIMITS["recommendation"]),
         "confidence": confidence,
     }
+    if product_level:
+        payload["metric_findings"] = _clean_metric_findings(
+            raw.get("metric_findings")
+        )
+    return payload
 
 
 async def _call_trend_llm(
     prompt: str,
+    *,
+    expected_keys: list[str] | None = None,
+    product_level: bool = False,
 ) -> tuple[dict[str, Any] | None, str | None, str | None]:
     """调用 LLM 并校验；返回 (校验后载荷|None, model_name, error_code)。
 
@@ -145,6 +175,7 @@ async def _call_trend_llm(
     except LLMConfigError:
         return None, None, "no_config"
     model_name = getattr(config, "model_name", None)
+    keys = expected_keys or _EXPECTED_KEYS
 
     last_error: str | None = None
     for attempt in range(_AI_MAX_RETRIES):
@@ -152,7 +183,7 @@ async def _call_trend_llm(
             raw = await asyncio.wait_for(
                 llm_client.chat_json(
                     [{"role": "user", "content": prompt}],
-                    expected_keys=_EXPECTED_KEYS,
+                    expected_keys=keys,
                     temperature=0.2,
                     timeout=_AI_SINGLE_TIMEOUT,
                 ),
@@ -179,7 +210,11 @@ async def _call_trend_llm(
             return None, model_name, "provider_error"
 
         try:
-            return validate_trend_ai_payload(raw), model_name, None
+            return (
+                validate_trend_ai_payload(raw, product_level=product_level),
+                model_name,
+                None,
+            )
         except LLMOutputError:
             return None, model_name, "invalid_output"
     return None, model_name, last_error or "provider_error"
@@ -214,6 +249,43 @@ async def run_trend_ai_analysis(
         anomalies=anomalies,
     )
     payload, model_name, error = await _call_trend_llm(prompt)
+    if error is not None:
+        return {
+            "status": "failed",
+            "error": error,
+            "model_name": model_name,
+            "ai_summary": None,
+        }
+    return {
+        "status": "completed",
+        "error": None,
+        "model_name": model_name,
+        "ai_summary": payload,
+    }
+
+
+async def run_product_trend_ai_analysis(
+    *,
+    source_label: str,
+    period: str,
+    metrics: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """对整个产品（多指标合并）做一次 AI 汇总解读，返回状态字典供 job 落库。
+
+    一个产品只调用一次模型：整体结论 + 逐指标结论（metric_findings），
+    避免逐指标调用成本与逐指标推送触发飞书卡片限流。
+    status：completed（含 ai_summary）/ 失败原因码。失败时 ai_summary=None。
+    """
+    prompt = build_product_trend_ai_prompt(
+        source_label=source_label,
+        period=period,
+        metrics=metrics,
+    )
+    payload, model_name, error = await _call_trend_llm(
+        prompt,
+        expected_keys=_PRODUCT_EXPECTED_KEYS,
+        product_level=True,
+    )
     if error is not None:
         return {
             "status": "failed",

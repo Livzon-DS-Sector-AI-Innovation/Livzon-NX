@@ -6,7 +6,7 @@
 trend_end_batch) 作去重，避免重复打开仪表盘时重复分析/推送/计费。
 
 Revision ID: c9d400000023
-Revises: c9d400000022
+Revises: b1c2d3e4f5a6
 Create Date: 2026-09-08 12:00:00.000000
 """
 

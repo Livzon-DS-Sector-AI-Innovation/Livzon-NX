@@ -54,6 +54,7 @@ vi.mock('@/actions/quality', () => ({
 vi.mock('@/lib/api/client/warehouse', () => ({
   fetchWarehouseMaterialPage: vi.fn(async () => undefined),
   fetchWarehouseRecordDetail: vi.fn(async () => undefined),
+  fetchWarehousePersonAvatarMap: vi.fn(async () => ({})),
 }))
 
 vi.mock('@/actions/warehouse', () => ({
@@ -186,7 +187,6 @@ describe('migrated page smoke contracts', () => {
         schedule_time: '09:00',
         pending_count: 0,
       },
-      notificationRecipients: [],
     }))).toContain('法规')
     expect(renderWithAntdApp(React.createElement(WarehouseFeishuConfigPage, {
       initialConfigs: [],

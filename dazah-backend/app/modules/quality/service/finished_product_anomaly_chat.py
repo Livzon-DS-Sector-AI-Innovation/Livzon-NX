@@ -22,15 +22,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import (
     LLMConfigError,
+    LLMOutputError,
     LLMProviderError,
     LLMRateLimitError,
     llm_client,
 )
 from app.core.llm.config import get_config
 from app.modules.quality.service.finished_product_anomaly_analysis import (
+    _CHINA_TZ,
+    ANALYSIS_YEARS,
     _list_year_items,
     _load_cached_classifications,
     get_dashboard_aggregation,
+    record_date_millis,
 )
 from app.modules.quality.service.finished_product_anomaly_analysis_prompt import (
     ANOMALY_TYPE_OPTIONS,
@@ -75,17 +79,16 @@ FP_QUERY_RECORDS_SCHEMA = {
                 },
                 "product": {
                     "type": "string",
-                    "description": (
-                        "产品名，可选：洛伐他汀/美伐他汀/霉酚酸/盐酸林可霉素/"
-                        "多拉菌素/L-苯丙氨酸/色氨酸/氟苯尼考预混剂/芬苯达唑粉"
-                    ),
+                    "description": "产品名，可选：" + "/".join(PRODUCT_OPTIONS),
                 },
                 "anomaly_type": {
                     "type": "string",
                     "description": (
-                        "异常类型，可选：检验结果超标（OOS）/检验结果超趋势（OOT）/"
-                        "杂质异常/溶剂残留异常/异物混入/性状与外观异常/稳定性考察异常/"
-                        "微生物与污染/生产与包装现场问题/其他-未分类"
+                        "异常类型，可选："
+                        + "/".join(
+                            t.replace("其他/未分类", "其他-未分类")
+                            for t in ANOMALY_TYPE_OPTIONS
+                        )
                     ),
                 },
                 "keyword": {
@@ -114,7 +117,11 @@ FP_AGGREGATION_SCHEMA = {
             "properties": {
                 "year": {
                     "type": "integer",
-                    "description": "年份（2025 或 2026），不传统计全部年份",
+                    "description": (
+                        "年份，可选："
+                        + "/".join(str(y) for y in ANALYSIS_YEARS)
+                        + "，不传统计全部年份"
+                    ),
                 },
             },
         },
@@ -140,19 +147,14 @@ _SYSTEM_PROMPT_TEMPLATE = """你是原料药（API）生产企业的资深现场
 1. 通过工具查询成品异常记录与聚合统计（数据实时来自飞书多维表格）；
 2. 基于查询结果做资深 QA 视角的分析：现象归纳、可能原因（人机料法环）、处置建议、趋势提醒。
 
-【数据范围】2025/2026 两年成品异常记录（约 486 条），字段包括：不合格项目描述、
-涉及产品、数据来源（QC检测/IC检测/QA）、是否结案、相关照片等附件。
+【数据范围】各年度成品异常记录（实时读飞书，条数与年份以工具查询结果为准），字段包括：
+不合格项目描述、涉及产品、数据来源（QC检测/IC检测/QA）、是否结案、相关照片等附件。
 每条记录已由 AI 标注"异常类型"，枚举为：
 {type_options}
 
-【日期语义（重要，避免误导）】
-- 2025 表的"发现时间"= 异常发现日期，可信；
-- 2026 表的"提交时间"= 记录录入时间（该表 2026-09-08 才批量导入，历史记录的提交时间
-  全部集中在导入日），不代表异常发生时间。因此：
-  1) 用户问"这个月/某月"时，工具的 month 过滤基于记录日期字段，回答时必须说明口径：
-     "2025 年按发现时间、2026 年按录入时间（≠异常发生时间，发生时间需结合批号判断）"；
-  2) 2026 批号含时间线索（如 MC-2601xx 中 2601 为年序），可辅助说明大致期间；
-  3) 不要把 2026 年"9 月 N 条"表述成"9 月发生的异常"，应表述为"9 月录入/导入的记录"。
+【日期语义】
+- 2025 表的"发现时间"= 异常发现日期；2026 表的"提交时间"= 异常提交日期（均为可编辑真实日期）；
+- 用户问"这个月/某月"时，工具的 month 参数按上述日期字段过滤，直接如实回答即可。
 
 【产品枚举与批号前缀】
 {product_lines}
@@ -177,7 +179,8 @@ def build_chat_system_prompt() -> str:
     prefix_hints = "；".join(
         f"{prefix}→{product}" for prefix, product in PRODUCT_PREFIX_HINTS.items()
     )
-    now = datetime.now()
+    # 当前日期按飞书用户时区（东八区）注入，避免 UTC 容器下"这个月"偏一天
+    now = datetime.now(_CHINA_TZ)
     return _SYSTEM_PROMPT_TEMPLATE.format(
         type_options=type_lines,
         product_lines=product_lines,
@@ -218,29 +221,76 @@ def _parse_qwen_tool_calls(content: str) -> list[dict[str, Any]] | None:
     return tool_calls or None
 
 
-# 各年子表的记录日期字段（"这个月/某月"筛选依据）
-_YEAR_DATE_FIELD = {2025: "发现时间", 2026: "提交时间"}
+# qwen 兼容接口还会输出 XML 风格的文本工具调用（标签字符运行时拼接以避开转义问题）：
+# tool_call 块内 function=名称，其内 parameter=名称 包值。
+_LT = chr(60)
+_GT = chr(62)
+_XML_INVOKE_RE = re.compile(
+    _LT + r"(?:antml_)?tool_call" + _GT + r"(.*?)" + _LT + r"/(?:antml_)?tool_call" + _GT,
+    re.DOTALL,
+)
+_XML_FUNCTION_RE = re.compile(
+    _LT
+    + r"(?:antml_)?function=([A-Za-z0-9_]+)"
+    + _GT
+    + r"(.*?)"
+    + _LT
+    + r"/(?:antml_)?function"
+    + _GT,
+    re.DOTALL,
+)
+_XML_PARAM_RE = re.compile(
+    _LT
+    + r"(?:antml_)?parameter=([A-Za-z0-9_]+)"
+    + _GT
+    + r"(.*?)"
+    + _LT
+    + r"/(?:antml_)?parameter"
+    + _GT,
+    re.DOTALL,
+)
 
 
-def _record_date_millis(item: dict[str, Any], year: int) -> int | None:
-    """取记录的日期毫秒值（飞书 DateTime/CreatedTime 为 ms 数字或数字字符串）。"""
-    field = _YEAR_DATE_FIELD.get(year)
-    if not field:
+def _coerce_xml_param(text: str) -> Any:
+    """XML 参数值尽力按 JSON 标量解析（数字/布尔/null），失败则保留字符串。"""
+    stripped = text.strip()
+    try:
+        return json.loads(stripped)
+    except (json.JSONDecodeError, ValueError):
+        return stripped
+
+
+def _parse_xml_tool_calls(content: str) -> list[dict[str, Any]] | None:
+    """解析 DashScope XML 风格文本工具调用，转成 OpenAI 兼容 tool_calls。"""
+    if not content or (_LT + "tool_call") not in content[:300]:
         return None
-    value = item.get(field)
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, (int, float)):
-        return int(value)
-    text = str(value or "").strip()
-    if text.isdigit():
-        return int(text)
-    return None
+    tool_calls: list[dict[str, Any]] = []
+    blocks = _XML_INVOKE_RE.findall(content) or [content]
+    index = 0
+    for block in blocks:
+        for name, body in _XML_FUNCTION_RE.findall(block):
+            arguments = {
+                key: _coerce_xml_param(value)
+                for key, value in _XML_PARAM_RE.findall(body)
+            }
+            tool_calls.append(
+                {
+                    "id": f"xml_tc_{index}",
+                    "type": "function",
+                    "function": {
+                        "name": name,
+                        "arguments": json.dumps(arguments, ensure_ascii=False),
+                    },
+                }
+            )
+            index += 1
+    return tool_calls or None
 
 
 async def _tool_query_records(db: AsyncSession, arguments: dict[str, Any]) -> str:
     year = arguments.get("year")
-    years = [int(year)] if int(year or 0) in (2025, 2026, 2027, 2028) else [2025, 2026]
+    # 未指定年份时遍历全部预置年份（未配置的在拉取时自然跳过），与聚合工具口径一致
+    years = [int(year)] if int(year or 0) in ANALYSIS_YEARS else list(ANALYSIS_YEARS)
     month_filter = str(arguments.get("month") or "").strip()
     product_filter = str(arguments.get("product") or "").strip()
     type_filter = str(arguments.get("anomaly_type") or "").strip().replace(
@@ -274,12 +324,14 @@ async def _tool_query_records(db: AsyncSession, arguments: dict[str, Any]) -> st
                 continue
             if keyword and keyword not in desc:
                 continue
-            date_millis = _record_date_millis(item, item_year)
+            date_millis = record_date_millis(item, item_year)
             if month_filter:
                 if date_millis is None:
                     continue
                 if (
-                    datetime.fromtimestamp(date_millis / 1000).strftime("%Y-%m")
+                    datetime.fromtimestamp(date_millis / 1000, tz=_CHINA_TZ).strftime(
+                        "%Y-%m"
+                    )
                     != month_filter
                 ):
                     continue
@@ -287,7 +339,9 @@ async def _tool_query_records(db: AsyncSession, arguments: dict[str, Any]) -> st
             if len(matched) >= limit:
                 continue
             date_text = (
-                datetime.fromtimestamp(date_millis / 1000).strftime("%Y-%m-%d")
+                datetime.fromtimestamp(date_millis / 1000, tz=_CHINA_TZ).strftime(
+                    "%Y-%m-%d"
+                )
                 if date_millis
                 else ""
             )
@@ -313,8 +367,10 @@ async def _tool_aggregation(db: AsyncSession, arguments: dict[str, Any]) -> str:
     year = arguments.get("year")
     year_int = int(year or 0)
     data = await get_dashboard_aggregation(
-        db, year_int if year_int in (2025, 2026, 2027, 2028) else None
+        db, year_int if year_int in ANALYSIS_YEARS else None
     )
+    # 逐行明细（open_recent）体积大且聚合类问题不需要，剔除以省上下文
+    data.pop("open_recent", None)
     return json.dumps(data, ensure_ascii=False)
 
 
@@ -373,8 +429,8 @@ async def run_anomaly_chat_loop(
                 max_tokens=4096,
                 enable_thinking=enable_thinking,
             )
-        except (LLMRateLimitError, LLMProviderError, LLMConfigError):
-            raise
+        except (LLMRateLimitError, LLMProviderError, LLMConfigError, LLMOutputError):
+            raise  # 上抛，由 API 层转中文提示
 
         reasoning = response.get("reasoning_content")
         if reasoning:
@@ -382,7 +438,9 @@ async def run_anomaly_chat_loop(
 
         tool_calls = response.get("tool_calls")
         if not tool_calls and response.get("content"):
-            tool_calls = _parse_qwen_tool_calls(response["content"])
+            tool_calls = _parse_qwen_tool_calls(
+                response["content"]
+            ) or _parse_xml_tool_calls(response["content"])
         if not tool_calls:
             break
 
@@ -417,7 +475,7 @@ async def run_anomaly_chat_loop(
             enable_thinking=False,
         ):
             yield chunk
-    except (LLMRateLimitError, LLMProviderError, LLMConfigError):
+    except (LLMRateLimitError, LLMProviderError, LLMConfigError, LLMOutputError):
         raise
 
     yield {"type": "done"}

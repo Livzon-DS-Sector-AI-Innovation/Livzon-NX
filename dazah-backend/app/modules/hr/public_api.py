@@ -325,3 +325,24 @@ async def get_avatar_urls_by_emails(
         if email and avatar_url:
             avatar_by_email[email.strip().lower()] = avatar_url
     return avatar_by_email
+
+
+async def get_active_avatar_map_by_name(session: AsyncSession) -> dict[str, str]:
+    """查询在职飞书成员的 {姓名: 头像URL}（同名按姓名聚合取其一）。
+
+    供跨模块文本/单选类型的「入库人/领料人」等人员字段按姓名补齐真实
+    头像；无头像的姓名不进入结果，由调用方回落姓名首字占位。
+    """
+    from app.modules.hr.models import HrFeishuMember
+
+    result = await session.execute(
+        select(HrFeishuMember.name, func.min(HrFeishuMember.avatar_url))
+        .where(
+            HrFeishuMember.is_deleted.is_(False),
+            HrFeishuMember.status == "1",  # 在职
+            HrFeishuMember.open_id != "",
+            HrFeishuMember.name != "",
+        )
+        .group_by(HrFeishuMember.name)
+    )
+    return {name: url for name, url in result.all() if url}

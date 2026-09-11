@@ -26,6 +26,8 @@ from app.modules.registration.schemas.certificate import (
     CertificateReminderRecipientOption,
     CertificateReminderSettingResponse,
     CertificateReminderSettingUpdate,
+    CertificateReminderTestRequest,
+    CertificateReminderTestResult,
     CertificateSheetDetail,
     CertificateWorkbookDetail,
     CertificateWorkbookImportResult,
@@ -138,6 +140,25 @@ async def update_certificate_reminder_settings(
     _require_user(current_user)
     settings = await CertificateWorkbookService(db).update_reminder_settings(data)
     return success_response(message="提醒配置已保存", data=settings)
+
+
+@router.post(
+    "/reminder-settings/test",
+    summary="发送证书到期提醒测试消息",
+    response_model=ApiResponseEnvelope[CertificateReminderTestResult],
+)
+async def test_certificate_reminder_settings(
+    data: CertificateReminderTestRequest,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    _require_user(current_user)
+    result = await CertificateWorkbookService(db).send_test_notification(
+        recipient_open_id=data.recipient_open_id,
+        header_template=data.header_template,
+        footer_template=data.footer_template,
+    )
+    return success_response(data=CertificateReminderTestResult(**result))
 
 
 @router.get(

@@ -3051,7 +3051,7 @@ describe('migrated component coverage', () => {
     const detail = { ...record, fields: [{ field_name: '项目名称', value: '项目A' }], history: [] }
     const rendered = renderClient(createElement('div', null,
       createElement(AuthorizationLetterClient, { initialRecords: [record] as never, initialFdaRecords: [record] as never, key: 'auth' }),
-      createElement(RegulationTrackerPage, { key: 'reg', initialResult: { items: [record] as never, total: 1, page: 1, pageSize: 20, totalPages: 1 }, initialNotificationSettings: notificationSettings, notificationRecipients: [{ name: '张三', open_id: 'u-1', department: '注册部' }] }),
+      createElement(RegulationTrackerPage, { key: 'reg', initialResult: { items: [record] as never, total: 1, page: 1, pageSize: 20, totalPages: 1 }, initialNotificationSettings: notificationSettings }),
       createElement(ProjectLedgerSheetPage, { key: 'project', detail: { sheet_key: 'projects', columns: [{ label: '项目名称', key: 'project_name' }, { label: '产品', key: 'product_name' }], records: [record] } as never }),
       createElement(DeclarationProgressPage, { key: 'declaration', detail: { sheet_key: 'declarations', columns: [{ label: '项目名称', key: 'project_name' }, { label: '产品名称', key: 'product_name' }], records: [record] } as never }),
       createElement(KnowledgeBasePage, { key: 'knowledge', articles: [record] as never, categories: [{ id: 'cat-1', name: '法规' }] as never, overview: { total_articles: 1, published_articles: 1, category_count: 1 } as never }),
@@ -3401,7 +3401,7 @@ describe('migrated component coverage', () => {
     closeRendered(importer)
   })
 
-  it('drives regulation tracker filters, detail, AI analysis and notification settings', async () => {
+  it('drives regulation tracker filters, detail and AI analysis', async () => {
     const record = {
       id: 'reg-1', title: '药品注册法规更新', version_text: '2026版', capture_date: '2026-08-20T10:00:00',
       publish_date: '2026-08-18', effective_date: '2026-09-01', summary_text: '第一行\n第二行',
@@ -3433,7 +3433,6 @@ describe('migrated component coverage', () => {
     const rendered = renderClient(createElement(RegulationTrackerPage, {
       initialResult: { items: [record], total: 1, page: 1, pageSize: 20, totalPages: 1 },
       initialNotificationSettings: { ...notificationSettings, is_enabled: false, recipient_open_id: null, pending_count: 0 },
-      notificationRecipients: [{ name: 'QA', open_id: 'qa-1', department: '质量部' }],
     }))
     await settle()
     Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes('刷新数据'))?.click()
@@ -3463,16 +3462,7 @@ describe('migrated component coverage', () => {
     Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === '查询')?.click()
     await settle()
     Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === '重置')?.click()
-    const recipient = Array.from(rendered.container.querySelectorAll('select')).find((select) => select.querySelector('option[value="qa-1"]'))
-    if (recipient) {
-      recipient.value = 'qa-1'
-      recipient.dispatchEvent(new Event('change', { bubbles: true }))
-    }
-    const save = Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes('保存设置'))
     rendered.container.querySelector('input[type="checkbox"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    const recentDays = rendered.container.querySelector('input[type="number"]') as HTMLInputElement | null
-    recentDays?.dispatchEvent(new Event('change', { bubbles: true }))
-    save?.click()
     await settle()
     vi.stubGlobal('setTimeout', ((callback: TimerHandler) => {
       if (typeof callback === 'function') queueMicrotask(() => callback())
@@ -3485,7 +3475,6 @@ describe('migrated component coverage', () => {
     Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === '触发抓取')?.click()
     await settle()
     expect(getMock('lib/api/client/regulatoryTracker', 'analyzeRegulatoryDocumentClient')).toHaveBeenCalled()
-    expect(getMock('lib/api/client/regulatoryTracker', 'updateRegulatoryTrackerNotificationSettingsClient')).toHaveBeenCalled()
     closeRendered(rendered)
   })
 
@@ -3498,7 +3487,6 @@ describe('migrated component coverage', () => {
     const rendered = renderClient(createElement(RegulationTrackerPage, {
       initialResult: { items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 },
       initialNotificationSettings: { ...notificationSettings, is_enabled: false, recipient_open_id: null, recipient_name: null, recipient_department: null },
-      notificationRecipients: [],
     }))
     await settle()
     const click = (text: string) => Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes(text))?.click()
@@ -3646,7 +3634,7 @@ describe('migrated component coverage', () => {
       createElement(SupplierQualificationPage, { key: 'supplier', initialItems: [] as never }),
       createElement(CertificateSheetPage, { key: 'certificate-sheet', detail: { sheet_key: 'licenses', sheet_name: '证书', columns: [], rows: [], records: [], summary: { total_records: 0 } } as never }),
       createElement(CertificateManagementDashboard, { key: 'certificate-dashboard', overview: { total_records: 0, sheet_count: 0, issuer_count: 0, product_count: 0, expired_count: 0, due_90_count: 0, total_pages: 0, sheet_summaries: [] } as never }),
-      createElement(CertificateDashboardPage, { key: 'certificate-reminders', overview: { total_records: 0, sheet_count: 0, issuer_count: 0, product_count: 0, expired_count: 0, due_90_count: 0, total_pages: 0, sheet_summaries: [], records: [] } as never, reminderSettings: { is_enabled: false, reminder_days: 90, recipient_open_id: null, recipient_name: null, recipient_department: null, pending_count: 0 } as never, reminderRecipients: [] }),
+      createElement(CertificateDashboardPage, { key: 'certificate-reminders', overview: { total_records: 0, sheet_count: 0, issuer_count: 0, product_count: 0, expired_count: 0, due_90_count: 0, total_pages: 0, sheet_summaries: [], records: [] } as never, reminderSettings: { is_enabled: false, reminder_days: 90, recipient_open_id: null, recipient_name: null, recipient_department: null, pending_count: 0 } as never }),
       createElement(FeeDashboardPage, { key: 'fee-dashboard', dashboard: { total_amount: 0, paid_amount: 0, pending_amount: 0, total_records: 0, inspection_contact_count: 0, fee_type_summaries: [], year_summaries: [], agency_summaries: [], year_fee_type_summaries: [] } as never }),
       createElement(FeeLedgerPage, { key: 'fee-ledger', entries: [] }),
       createElement(KnowledgeArticleDetail, { key: 'article', article: { id: 'article-1', title: '法规', content: '内容', attachments: [], comments: [] } as never }),
@@ -4249,10 +4237,11 @@ describe('inspection table / picker / attachment preview coverage', () => {
     getMock('lib/api/client/quality', 'fetchInspectionFeishuFields').mockResolvedValue({
       fields: [{ field_name: '检验编号', ui_type: 'Text', editable: true }], can_push: false,
     })
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       data: [{ record_id: 'x1', 检验编号: 'JY-1' }],
       meta: { total: 1, configured: true, fields: ['检验编号'], display_fields: ['检验编号'] },
-    }), { status: 200, headers: { 'content-type': 'application/json' } })))
+    }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
     getMock('actions/quality-inspection', 'deleteInspectionFeishuRecord').mockResolvedValue({ record_id: 'x1' })
     getMock('actions/quality-inspection', 'pullInspectionFeishuRecords').mockResolvedValue({ synced: 2, failed: 0 })
     const rendered = renderClient(createElement(InspectionFeishuTable, {
@@ -4273,7 +4262,8 @@ describe('inspection table / picker / attachment preview coverage', () => {
     expect(getMock('actions/quality-inspection', 'deleteInspectionFeishuRecord')).toHaveBeenCalledWith('material', 'x1')
     findButton('同步飞书数据')?.click()
     await settle()
-    expect(getMock('actions/quality-inspection', 'pullInspectionFeishuRecords')).toHaveBeenCalledWith('material')
+    // 传入 pullApi 时同步按钮走 POST pullApi（镜像回拉），不再调用通用 action
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/quality/inspection/feishu/material/pull', { method: 'POST' })
     closeRendered(rendered)
 
     // 未配置态：Alert + 空态错误分支

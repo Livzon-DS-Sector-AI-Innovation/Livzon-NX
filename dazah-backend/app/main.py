@@ -197,8 +197,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     from app.modules.quality.scheduled import (
         ChangeActionPlanReminderGenerator,
+        InspectionFinishedMirrorFullSyncGenerator,
+        InspectionFinishedMirrorSyncGenerator,
+        InspectionItemsMirrorFullSyncGenerator,
+        InspectionItemsMirrorSyncGenerator,
+        InspectionMaterialMirrorFullSyncGenerator,
+        InspectionMaterialMirrorSyncGenerator,
+        ItemsStockAlertPushGenerator,
         SupplierQualificationMirrorFullSyncGenerator,
         SupplierQualificationMirrorSyncGenerator,
+        TrendAlertEscalationGenerator,
+        TrendAlertMonthlyAnalysisGenerator,
     )
     from app.modules.registration.scheduled import CertificateReminderGenerator
     from app.modules.warehouse.scheduler import (
@@ -224,12 +233,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_registry.register_generator(QualityFeishuReadDailySyncGenerator())
     scheduler_registry.register_generator(CertificateReminderGenerator())
     scheduler_registry.register_generator(ChangeActionPlanReminderGenerator())
+    scheduler_registry.register_generator(TrendAlertEscalationGenerator())
+    scheduler_registry.register_generator(TrendAlertMonthlyAnalysisGenerator())
     scheduler_registry.register_generator(
         SupplierQualificationMirrorSyncGenerator()
     )
     scheduler_registry.register_generator(
         SupplierQualificationMirrorFullSyncGenerator()
     )
+    scheduler_registry.register_generator(InspectionItemsMirrorSyncGenerator())
+    scheduler_registry.register_generator(InspectionItemsMirrorFullSyncGenerator())
+    scheduler_registry.register_generator(InspectionMaterialMirrorSyncGenerator())
+    scheduler_registry.register_generator(InspectionMaterialMirrorFullSyncGenerator())
+    scheduler_registry.register_generator(InspectionFinishedMirrorSyncGenerator())
+    scheduler_registry.register_generator(InspectionFinishedMirrorFullSyncGenerator())
+    scheduler_registry.register_generator(ItemsStockAlertPushGenerator())
     scheduler_registry.register_generator(OffboardingReminderGenerator())
     scheduler_registry.register_generator(ContractExpiryReminderGenerator())
     scheduler_registry.register_generator(ContractSignReminderGenerator())

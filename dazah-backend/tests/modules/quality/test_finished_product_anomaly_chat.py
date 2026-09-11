@@ -207,3 +207,82 @@ def test_system_prompt_contains_persona_and_taxonomy() -> None:
     assert " Phenomenon" not in prompt
     assert "现象归纳" in prompt
     assert "USMC" in prompt
+
+
+# ── DashScope XML 风格文本工具调用 ─────────────────────────
+
+
+def _xml_call_block(tool_name: str, params: dict[str, str]) -> str:
+    lt, gt = chr(60), chr(62)
+    body = "".join(
+        f"{lt}parameter={key}{gt}\n{value}\n{lt}/parameter{gt}\n"
+        for key, value in params.items()
+    )
+    return (
+        f"{lt}tool_call{gt}\n"
+        f"{lt}function={tool_name}{gt}\n{body}{lt}/function{gt}\n"
+        f"{lt}/tool_call{gt}"
+    )
+
+
+def test_parse_xml_tool_calls_extracts_name_and_params() -> None:
+    content = "我需要查询\n" + _xml_call_block(
+        "fp_get_anomaly_aggregation", {"year": "2026"}
+    )
+    calls = chat_svc._parse_xml_tool_calls(content)
+    assert calls is not None and len(calls) == 1
+    fn = calls[0]["function"]
+    assert fn["name"] == "fp_get_anomaly_aggregation"
+    args = json.loads(fn["arguments"])
+    assert args == {"year": 2026}  # 数字参数按 JSON 标量还原
+
+
+def test_parse_xml_tool_calls_rejects_plain_content() -> None:
+    assert chat_svc._parse_xml_tool_calls("这是普通回答") is None
+    assert chat_svc._parse_xml_tool_calls("") is None
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_recovers_from_xml_style_calls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(chat_svc, "get_config", AsyncMock(return_value=_config()))
+    agg_mock = AsyncMock(return_value={"products": [], "type_totals": []})
+    monkeypatch.setattr(chat_svc, "get_dashboard_aggregation", agg_mock)
+    chat_mock = AsyncMock(
+        side_effect=[
+            {"content": _xml_call_block("fp_get_anomaly_aggregation", {})},
+            {"content": "根据聚合结果完成回答。"},
+        ]
+    )
+    monkeypatch.setattr(type(chat_svc.llm_client), "chat_with_tools", chat_mock)
+    monkeypatch.setattr(type(chat_svc.llm_client), "stream_chat", _fake_stream)
+
+    class _DB:
+        pass
+
+    chunks = [
+        chunk
+        async for chunk in chat_svc.run_anomaly_chat_loop(
+            _DB(),
+            [{"role": "user", "content": "统计"}],
+            {"role": "system", "content": "s"},
+        )
+    ]
+    assert agg_mock.await_count == 1
+    assert chunks[-1] == {"type": "done"}
+    assert "最终回答" in _collect(chunks)["content"]
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_hallucinated_tool_name_gets_error_feedback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """模型幻觉出不存在的工具名时，工具结果返回错误 JSON 让模型自纠，不炸流。"""
+    monkeypatch.setattr(chat_svc, "get_config", AsyncMock(return_value=_config()))
+    result = await chat_svc.execute_tool_call(
+        None, "query_anomaly_statistics", {"group_by": "anomaly_type"}
+    )
+    payload = json.loads(result)
+    assert payload["success"] is False
+    assert "未知工具" in payload["error"]

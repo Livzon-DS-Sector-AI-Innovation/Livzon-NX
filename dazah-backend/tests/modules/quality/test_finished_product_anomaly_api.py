@@ -526,3 +526,57 @@ async def test_analysis_status_endpoint(
         "/api/v1/quality/finished-product-anomaly/analysis/status?job_id=job:x"
     )
     assert resp.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_analysis_export_returns_attachment_json(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.modules.quality.api.finished_product_anomaly as api_mod
+
+    async def _export(db):
+        return {
+            "entity_type": "fp_anomaly_classification",
+            "exported_at": "2026-09-09T00:00:00+00:00",
+            "count": 1,
+            "rows": [
+                {"year": 2026, "record_id": "rec-1", "content_hash": "h",
+                 "product": "霉酚酸", "anomaly_type": "杂质异常", "reason": "RRT", "model_name": "q"}
+            ],
+        }
+
+    monkeypatch.setattr(api_mod, "export_classifications", _export)
+    resp = await client.get("/api/v1/quality/finished-product-anomaly/analysis/export")
+    assert resp.status_code == 200
+    assert "attachment" in resp.headers.get("content-disposition", "")
+    assert resp.json()["count"] == 1
+
+
+@pytest.mark.anyio
+async def test_analysis_import_validates_and_reports_counts(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.modules.quality.api.finished_product_anomaly as api_mod
+
+    imported: list = []
+
+    async def _import(db, rows):
+        imported.append(rows)
+        return {"imported": len(rows), "skipped": 0}
+
+    monkeypatch.setattr(api_mod, "import_classifications_from_rows", _import)
+    resp = await client.post(
+        "/api/v1/quality/finished-product-anomaly/analysis/import",
+        json={
+            "entity_type": "fp_anomaly_classification",
+            "rows": [{"year": 2026, "record_id": "rec-1", "anomaly_type": "杂质异常"}],
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["data"]["imported"] == 1
+
+    resp = await client.post(
+        "/api/v1/quality/finished-product-anomaly/analysis/import",
+        json={"entity_type": "unknown_type", "rows": []},
+    )
+    assert resp.status_code == 400

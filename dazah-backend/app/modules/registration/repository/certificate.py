@@ -121,6 +121,8 @@ class RegistrationCertificateRepository:
         recipient_open_id: str | None,
         recipient_name: str | None,
         recipient_department: str | None,
+        header_template: str | None = None,
+        footer_template: str | None = None,
     ) -> RegistrationCertificateReminderSetting:
         if setting is None:
             setting = RegistrationCertificateReminderSetting(
@@ -129,6 +131,8 @@ class RegistrationCertificateRepository:
                 recipient_open_id=recipient_open_id,
                 recipient_name=recipient_name,
                 recipient_department=recipient_department,
+                header_template=header_template,
+                footer_template=footer_template,
             )
             self.session.add(setting)
         else:
@@ -137,6 +141,8 @@ class RegistrationCertificateRepository:
             setting.recipient_open_id = recipient_open_id
             setting.recipient_name = recipient_name
             setting.recipient_department = recipient_department
+            setting.header_template = header_template
+            setting.footer_template = footer_template
 
         await self.session.flush()
         result = await self.session.execute(

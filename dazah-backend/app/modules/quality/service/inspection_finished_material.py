@@ -10,15 +10,29 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import async_session_factory
 from app.core.exceptions import AppException
 from app.modules.quality.service import (
     inspection_dashboard_config as _dash_cfg,
 )
 from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
+from app.modules.quality.service.inspection_finished_mirror import (
+    get_finished_mirror_fields,
+    list_finished_mirror,
+    sync_finished_page,
+)
 from app.modules.quality.service.inspection_helpers import (
     _get_feishu_one,
     _list_feishu,
-    _pull_count,
+)
+from app.modules.quality.service.inspection_material_mirror import (
+    get_material_mirror_fields,
+    list_material_mirror,
+    sync_material_page,
+)
+from app.modules.quality.service.quality_feishu_finished_groups import (
+    FINISHED_ENTITY_LABELS,
+    FINISHED_PRODUCT_GROUP_ENTITY_MAP,
 )
 from app.modules.quality.service.quality_feishu_material_groups import (
     MATERIAL_ENTITY_LABELS,
@@ -38,167 +52,6 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════
 #  成品检验 (finished product)
 # ═══════════════════════════════════════════
-
-# 成品检验各飞书子表字段并不一致，必须按实体分别映射，不能共用一套通用字段。
-FINISHED_PRODUCT_GROUP_ENTITY_MAP: dict[str, list[str]] = {
-    "bbas": [
-        "qc_finished_fcc14",
-        "qc_finished_usp",
-        "qc_finished_bbas_hanguang_k1",
-        "qc_finished_bbas_weiduo_k2",
-        "qc_finished_bbas_changmao_k3",
-        "qc_finished_bbas_jinghai_k4",
-        "qc_finished_bbas_xiehe_k5",
-        "qc_finished_bbas_jiuling_k7",
-        "qc_finished_bbas_jirong_k8",
-        "qc_finished_bbas_yuanda_k9",
-        "qc_finished_bbas_hongshan_k10",
-        "qc_finished_bbas_bafeng_k11",
-        "qc_finished_bbas_haitian_k12",
-        "qc_finished_bbas_feed_q",
-    ],
-    "mvt": [
-        "qc_finished_mvt",
-        "qc_finished_mvt_bt_k1",
-        "qc_finished_mvt_tw_k2",
-        "qc_finished_mvt_zh_k3",
-        "qc_finished_mvt_tapi_k5",
-    ],
-    "lft": [
-        "qc_finished_lft_ep",
-        "qc_finished_lft_usp",
-        "qc_finished_lft_lp_k3",
-        "qc_finished_lft_tapi_k4",
-        "qc_finished_lft_gn_k6",
-        "qc_finished_lft_jingxin_k7",
-        "qc_finished_lft_jb_k9",
-        "qc_finished_lft_jinbao_k10",
-        "qc_finished_lft_lp_crude_k11",
-    ],
-    "dls": [
-        "qc_finished_dor_gb",
-        "qc_finished_dor_vet",
-        "qc_finished_dls_norbrook_k2",
-        "qc_finished_dls_zenex_k10",
-        "qc_finished_dls_microsules_k6",
-        "qc_finished_dls_elanco_kr_k11",
-        "qc_finished_dls_adwia_k12",
-        "qc_finished_dls_qilu_k13",
-        "qc_finished_dls_eurofarwa_k14",
-        "qc_finished_dls_msd_k15",
-        "qc_finished_dls_haoze_k16",
-        "qc_finished_dls_vetni_k17",
-        "qc_finished_dls_eva_k18",
-        "qc_finished_dls_cronus_k19",
-    ],
-    "mpa": [
-        "qc_finished_internal",
-        "qc_finished_high_spec",
-        "qc_finished_mpa_tapi_k1",
-        "qc_finished_mpa_emcure_k2",
-        "qc_finished_mpa_rakshit_k3",
-        "qc_finished_mpa_apotex_k4",
-        "qc_finished_mpa_sloara_k6",
-        "qc_finished_mpa_concord_k7",
-        "qc_finished_mpa_concord_high_spec_k11",
-        "qc_finished_mpa_taiwan_china_k12",
-        "qc_finished_mpa_biocon_k13",
-        "qc_finished_mpa_dasami_k14",
-        "qc_finished_mpa_fis_k15",
-        "qc_finished_mpa_intas_k16",
-        "qc_finished_crude",
-    ],
-    "lkms": [
-        "qc_finished_lkms_vet",
-        "qc_finished_lkms_ep",
-        "qc_finished_lkms_internal",
-        "qc_finished_lkms_usp",
-        "qc_finished_lkms_k1",
-        "qc_finished_lkms_k2",
-        "qc_finished_lkms_k3",
-    ],
-    "formulations": ["qc_finished_flu_powder", "qc_finished_fen_powder"],
-    "water": [
-        "qc_finished_pure_water",
-        "qc_finished_drink_water",
-        "qc_finished_boiler_water",
-    ],
-    "tryptophan": ["qc_finished_trp_powder", "qc_finished_trp_granule"],
-}
-
-FINISHED_ENTITY_LABELS: dict[str, str] = {
-    "qc_finished_fcc14": "FCC14",
-    "qc_finished_usp": "USP",
-    "qc_finished_bbas_hanguang_k1": "汉光（K1）",
-    "qc_finished_bbas_weiduo_k2": "维多（K2）",
-    "qc_finished_bbas_changmao_k3": "常茂（K3）",
-    "qc_finished_bbas_jinghai_k4": "晶海（k4）",
-    "qc_finished_bbas_xiehe_k5": "协和（K5）",
-    "qc_finished_bbas_jiuling_k7": "久凌（K7）",
-    "qc_finished_bbas_jirong_k8": "冀荣（k8）",
-    "qc_finished_bbas_yuanda_k9": "远大（K9）",
-    "qc_finished_bbas_hongshan_k10": "红衫（K10）未做",
-    "qc_finished_bbas_bafeng_k11": "八峰（k11）",
-    "qc_finished_bbas_haitian_k12": "海天（k12）",
-    "qc_finished_bbas_feed_q": "饲料（Q）",
-    "qc_finished_internal": "霉酚酸（内控）",
-    "qc_finished_high_spec": "霉酚酸（高规）",
-    "qc_finished_crude": "霉酚酸（粗品）",
-    "qc_finished_mvt": "美伐他汀（DMF）",
-    "qc_finished_mvt_bt_k1": "BT-K1",
-    "qc_finished_mvt_tw_k2": "TW-K2",
-    "qc_finished_mvt_zh_k3": "ZH-K3（未做）",
-    "qc_finished_mvt_tapi_k5": "TAPI-K5",
-    "qc_finished_lft_ep": "洛伐他汀（EP）",
-    "qc_finished_lft_usp": "洛伐他汀（USP）",
-    "qc_finished_lft_lp_k3": "LP-K3",
-    "qc_finished_lft_tapi_k4": "TAPI-K4",
-    "qc_finished_lft_gn_k6": "GN-K6",
-    "qc_finished_lft_jingxin_k7": "京新-K7",
-    "qc_finished_lft_jb_k9": "JB-K9",
-    "qc_finished_lft_jinbao_k10": "金宝-K10",
-    "qc_finished_lft_lp_crude_k11": "LP粗品-K11",
-    "qc_finished_dor_gb": "多拉菌素（GB）",
-    "qc_finished_dor_vet": "多拉菌素（兽药）",
-    "qc_finished_dls_norbrook_k2": "Norbrook-K2",
-    "qc_finished_dls_zenex_k10": "Zenex-K10",
-    "qc_finished_dls_microsules_k6": "Microsules-K6",
-    "qc_finished_dls_elanco_kr_k11": "Elanco韩国-K11",
-    "qc_finished_dls_adwia_k12": "ADWIA-K12",
-    "qc_finished_dls_qilu_k13": "齐鲁动保-K13",
-    "qc_finished_dls_eurofarwa_k14": "EUROFARWA-K14",
-    "qc_finished_dls_msd_k15": "MSD-K15",
-    "qc_finished_dls_haoze_k16": "昊泽-K16",
-    "qc_finished_dls_vetni_k17": "Vetni-K17",
-    "qc_finished_dls_eva_k18": "EVA-K18",
-    "qc_finished_dls_cronus_k19": "Cronus-K19",
-    "qc_finished_mpa_tapi_k1": "TAPI-K1",
-    "qc_finished_mpa_emcure_k2": "Emcure-K2",
-    "qc_finished_mpa_rakshit_k3": "RAKSHIT-K3",
-    "qc_finished_mpa_apotex_k4": "APOTEX-K4",
-    "qc_finished_mpa_sloara_k6": "Sloara-K6",
-    "qc_finished_mpa_concord_k7": "Concord-K7",
-    "qc_finished_mpa_concord_high_spec_k11": "Concord高规-K11",
-    "qc_finished_mpa_taiwan_china_k12": "台湾中化-K12",
-    "qc_finished_mpa_biocon_k13": "Biocon-K13",
-    "qc_finished_mpa_dasami_k14": "Dasami-K14",
-    "qc_finished_mpa_fis_k15": "FIS-K15",
-    "qc_finished_mpa_intas_k16": "Intas-K16",
-    "qc_finished_lkms_ep": "林可霉素（EP）",
-    "qc_finished_lkms_vet": "林可霉素（兽药）",
-    "qc_finished_lkms_internal": "林可霉素内控-未做",
-    "qc_finished_lkms_usp": "林可霉素USP",
-    "qc_finished_lkms_k1": "林可霉素K1",
-    "qc_finished_lkms_k2": "林可霉素K2",
-    "qc_finished_lkms_k3": "林可霉素K3",
-    "qc_finished_flu_powder": "2%氟苯尼考预混剂",
-    "qc_finished_fen_powder": "5%芬苯达唑粉",
-    "qc_finished_pure_water": "纯化水",
-    "qc_finished_drink_water": "饮用水",
-    "qc_finished_boiler_water": "锅炉水",
-    "qc_finished_trp_powder": "色氨酸粉末",
-    "qc_finished_trp_granule": "色氨酸颗粒",
-}
 
 FINISHED_ENTITY_FIELDS: dict[str, list[str]] = {
     "qc_finished_fcc14": [
@@ -903,14 +756,88 @@ async def get_finished_fields(
     db: AsyncSession,
     entity_code: str,
 ) -> list[str]:
-    explicit_fields = FINISHED_ENTITY_FIELDS.get(entity_code)
-    if explicit_fields:
-        return explicit_fields
+    """成品展示列：优先读本地镜像快照列（与飞书全列一致）；
+    未同步时实时拉飞书列元数据；再退回代码内固定清单。"""
+    mirror_fields = await get_finished_mirror_fields(db, entity_code)
+    if mirror_fields:
+        return mirror_fields
     try:
         return await _get_finished_remote_fields(db, entity_code)
     except Exception:
         logger.warning("Falling back to default finished fields for %s", entity_code)
+        explicit_fields = FINISHED_ENTITY_FIELDS.get(entity_code)
+        if explicit_fields:
+            return explicit_fields
         return FINISHED_FIELD_FALLBACKS
+
+
+async def _list_mirror_first(
+    db: AsyncSession,
+    entity_code: str,
+    *,
+    label: str,
+    keyword: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+    filters: dict[str, str] | None = None,
+    list_mirror: Any,
+    sync_page: Any,
+    get_fields: Any,
+    keyword_fields: list[str] | None = None,
+    sync_incremental: bool = False,
+) -> dict[str, Any]:
+    """镜像优先读取通用流程：读镜像 → 无快照独立会话同步一次 → 复读 → 实时降级。
+
+    同步阶段在独立会话中执行，避免在请求事务里中途提交；同步失败仅记日志，
+    保证列表页不因飞书不可达而空屏。keyword_fields 缺省时降级路径用全字段检索。
+    """
+    # 1) 已同步：直接读本地镜像
+    try:
+        result = await list_mirror(
+            db,
+            entity_code,
+            keyword=keyword,
+            page=page,
+            page_size=page_size,
+            filters=filters,
+        )
+        if result["configured"]:
+            return result
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("%s mirror read failed for %s: %s", label, entity_code, exc)
+
+    # 2) 无快照：独立会话 best-effort 同步一次（失败不阻塞，走实时降级）
+    try:
+        async with async_session_factory() as sync_db:
+            await sync_page(sync_db, entity_code, incremental=sync_incremental)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("%s mirror sync failed for %s: %s", label, entity_code, exc)
+    try:
+        result = await list_mirror(
+            db,
+            entity_code,
+            keyword=keyword,
+            page=page,
+            page_size=page_size,
+            filters=filters,
+        )
+        if result["configured"]:
+            return result
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("%s mirror re-read failed for %s: %s", label, entity_code, exc)
+
+    # 3) 实时降级：飞书不可达/镜像未就绪时保证不空屏
+    field_names = await get_fields(db, entity_code)
+    return await _list_feishu(
+        db,
+        entity_code,
+        field_names,
+        keyword_fields=keyword_fields or field_names,
+        keyword=keyword,
+        page=page,
+        page_size=page_size,
+        filters=filters,
+    )
 
 
 async def list_finished_by_entity(
@@ -922,17 +849,20 @@ async def list_finished_by_entity(
     page_size: int = 20,
     filters: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """List finished product inspections for a specific entity (product table)."""
-    field_names = await get_finished_fields(db, entity_code)
-    return await _list_feishu(
+    """成品列表：镜像优先；无快照先同步一次；同步失败或镜像空则降级实时读飞书。"""
+    return await _list_mirror_first(
         db,
         entity_code,
-        field_names,
-        ["批号", "报告单号"],
+        label="finished",
         keyword=keyword,
         page=page,
         page_size=page_size,
         filters=filters,
+        list_mirror=list_finished_mirror,
+        sync_page=sync_finished_page,
+        get_fields=get_finished_fields,
+        keyword_fields=["批号", "报告单号"],
+        sync_incremental=False,
     )
 
 
@@ -946,7 +876,8 @@ async def get_finished_by_entity(
 
 
 async def pull_finished_by_entity(db: AsyncSession, entity_code: str) -> dict[str, int]:
-    return await _pull_count(db, entity_code)
+    """同步飞书数据：全量回拉该成品实体到本地镜像（替代纯计数）。"""
+    return await sync_finished_page(db, entity_code, incremental=False)
 
 
 # ═══════════════════════════════════════════
@@ -999,7 +930,11 @@ async def get_material_fields(
     db: AsyncSession,
     entity_code: str,
 ) -> list[str]:
+    """物料展示列：优先读本地镜像快照列；未同步时再实时拉飞书列元数据。"""
     await ensure_quality_feishu_entity_settings(db)
+    mirror_fields = await get_material_mirror_fields(db, entity_code)
+    if mirror_fields:
+        return mirror_fields
     try:
         runtime, entity = await _resolve_runtime_entity(
             db, entity_code, direction="pull"
@@ -1032,16 +967,19 @@ async def list_material_records_by_entity(
     page_size: int = 20,
     filters: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    field_names = await get_material_fields(db, entity_code)
-    return await _list_feishu(
+    """物料列表：镜像优先；无快照先同步一次；同步失败或镜像空则降级实时读飞书。"""
+    return await _list_mirror_first(
         db,
         entity_code,
-        field_names,
-        keyword_fields=field_names,
+        label="material",
         keyword=keyword,
         page=page,
         page_size=page_size,
         filters=filters,
+        list_mirror=list_material_mirror,
+        sync_page=sync_material_page,
+        get_fields=get_material_fields,
+        sync_incremental=True,
     )
 
 
@@ -1049,8 +987,9 @@ async def pull_material_records_by_entity(
     db: AsyncSession,
     entity_code: str,
 ) -> dict[str, int]:
+    """同步飞书数据：全量回拉该物料实体到本地镜像（替代纯计数）。"""
     await ensure_quality_feishu_entity_settings(db)
-    return await _pull_count(db, entity_code)
+    return await sync_material_page(db, entity_code, incremental=False)
 
 
 # ═══════════════════════════════════════════

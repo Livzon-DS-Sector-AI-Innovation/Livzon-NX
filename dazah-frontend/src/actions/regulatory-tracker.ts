@@ -3,6 +3,13 @@
 import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 
+import type { components } from '@/types/generated/schema'
+
+type RegulatoryTrackerNotificationTestInput =
+  components['schemas']['RegulatoryTrackerNotificationTestRequest']
+type RegulatoryTrackerNotificationTestResult =
+  components['schemas']['RegulatoryTrackerNotificationTestResult']
+
 const API_BASE_URL =
   process.env.API_BASE_URL ||
   process.env.INTERNAL_API_BASE_URL ||
@@ -147,4 +154,16 @@ export async function manualSyncRegulatoryTracker(
 
   revalidateRegulatoryTrackerPaths()
   return result
+}
+
+export async function testRegulatoryTrackerNotificationSettings(
+  data: RegulatoryTrackerNotificationTestInput
+): Promise<RegulatoryTrackerNotificationTestResult | null> {
+  return actionFetch<RegulatoryTrackerNotificationTestResult>(
+    '/api/v1/regulatory-documents/notification-settings/test',
+    {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }
+  )
 }

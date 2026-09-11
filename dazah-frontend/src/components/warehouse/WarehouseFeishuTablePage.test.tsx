@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   ),
   fetchWarehouseMaterialPage: vi.fn(),
   fetchWarehouseRecordDetail: vi.fn(),
+  fetchWarehousePersonAvatarMap: vi.fn(async () => ({})),
   updateWarehouseRecordAction: vi.fn(),
   deleteWarehouseRecordAction: vi.fn(),
 }))
@@ -29,6 +30,7 @@ vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ hasAny: mocks.
 vi.mock('@/lib/api/client/warehouse', () => ({
   fetchWarehouseMaterialPage: mocks.fetchWarehouseMaterialPage,
   fetchWarehouseRecordDetail: mocks.fetchWarehouseRecordDetail,
+  fetchWarehousePersonAvatarMap: mocks.fetchWarehousePersonAvatarMap,
 }))
 vi.mock('@/actions/warehouse', () => ({
   deleteWarehouseRecordAction: mocks.deleteWarehouseRecordAction,
@@ -352,6 +354,12 @@ describe('WarehouseFeishuTablePage', () => {
   it('covers warehouse filter, projection, grouping, and display helpers', () => {
     expect(resolveInoutLinks('raw-ledger')?.inbound).toContain('feishu.cn')
     expect(resolveInoutLinks('unknown')).toBeNull()
+    // 液体入库两页 + 原辅料/包材表单换新链接（2026-09）
+    expect(resolveInoutLinks('liquid-raw-inbound')?.inbound).toContain('shrcnfWaTJinJrjFh0hcqvYG0De')
+    expect(resolveInoutLinks('liquid-sugar-inbound')?.inbound).toContain('shrcnPdocHXYzag4Uyj0biU9bYc')
+    expect(resolveInoutLinks('inbound-ledger')?.inbound).toContain('shrcnLl9xrz5e60vRG4P8Cy85FC')
+    expect(resolveInoutLinks('raw-ledger')?.outbound).toContain('shrcnsJ8U9aoOqqEBS5b1mpG2Zd')
+    expect(resolveInoutLinks('packaging-ledger')?.outbound).toContain('shrcnOZBGw46qWth2auB1F09kNd')
     expect(isDateLikeColumn('入库日期')).toBe(true)
     expect(isDateLikeColumn('物料名称')).toBe(false)
     expect(formatDateValue(null as never)).toBeNull()
@@ -392,6 +400,16 @@ describe('WarehouseFeishuTablePage', () => {
       rows: [{ __record_id: 'r3', 物料名称: 'C' }],
     } as never)
     expect(ruleProjection.rows[0].__record_id).toBe('r3')
+    // 液体入库页只展示「入库日期→备注」规则内的列，规则外字段（检测结果）仅在详情查看
+    const liquidProjection = buildVisiblePageData('liquid-raw-inbound', {
+      columns: [
+        { key: '入库日期', title: '入库日期', field_type: 5 },
+        { key: '备注', title: '备注', field_type: 1 },
+        { key: '检测结果', title: '检测结果', field_type: 1 },
+      ],
+      rows: [{ __record_id: 'r4', 入库日期: '2026/09/01', 备注: 'x', 检测结果: 'y' }],
+    } as never)
+    expect(liquidProjection.columns.map((column) => column.key)).toEqual(['入库日期', '备注'])
 
     expect(parseAdvancedFilters(null)).toEqual([])
     expect(parseAdvancedFilters('invalid-json')).toEqual([])

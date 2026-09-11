@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { API_BASE_URL, actionFetch } from './quality-shared'
 import type { components } from '@/types/generated/schema'
-import type { InspectionFeishuFields } from '@/types/quality'
+import type { InspectionFeishuFields, ItemsLowStockPushResult } from '@/types/quality'
 
 function revalidateInspectionPaths() {
   revalidatePath('/quality')
@@ -61,4 +61,22 @@ export async function pullInspectionFeishuRecords(entityCode: string) {
   )
   revalidateInspectionPaths()
   return result
+}
+
+/** 一键推送库存不足物料到配置的接收人。 */
+export async function pushItemsLowStock(): Promise<ItemsLowStockPushResult> {
+  const result = await actionFetch<ItemsLowStockPushResult>(
+    `${API_BASE_URL}/api/v1/quality/items/dashboard/push-low-stock`,
+    { method: 'POST' }
+  )
+  return result ?? { status: 'failed', sent: 0, skipped: 0, failed: 0, item_count: 0, message: '推送失败' }
+}
+
+/** 测试推送库存不足物料（不写幂等、不影响真实去重）。 */
+export async function pushItemsLowStockTest(): Promise<ItemsLowStockPushResult> {
+  const result = await actionFetch<ItemsLowStockPushResult>(
+    `${API_BASE_URL}/api/v1/quality/items/dashboard/push-low-stock/test`,
+    { method: 'POST' }
+  )
+  return result ?? { status: 'failed', sent: 0, skipped: 0, failed: 0, item_count: 0, message: '推送失败' }
 }

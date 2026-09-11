@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Index, String, Text, UniqueConstraint
+from sqlalchemy import JSON, DateTime, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.shared.base_model import BaseModel
@@ -23,12 +23,15 @@ class FinishedTrendAIAnalysis(BaseModel):
 
     __tablename__ = "quality_finished_trend_ai_analyses"
     __table_args__ = (
-        UniqueConstraint(
+        # 软删除语义：仅未删除行唯一（重分析=软删旧行再建新行）
+        Index(
+            "uq_quality_finished_trend_ai_analysis_key",
             "entity_code",
             "metric_key",
             "rule_type",
             "trend_end_batch",
-            name="uq_quality_finished_trend_ai_analysis_key",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
         ),
         Index(
             "ix_quality_finished_trend_ai_analysis_entity_metric",

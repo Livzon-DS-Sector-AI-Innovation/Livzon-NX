@@ -409,3 +409,50 @@ async def test_update_notification_settings_returns_saved_payload(
     assert body["code"] == 200
     assert body["message"] == "推送配置已保存"
     assert body["data"] == payload
+
+
+@pytest.mark.anyio
+async def test_test_notification_settings_returns_result_payload(
+    client: AsyncClient,
+) -> None:
+    result_payload = {
+        "sent": True,
+        "recipient_name": "张起智",
+        "detail": "测试消息已发送至 张起智",
+    }
+    with patch(
+        "app.modules.regulatory_tracker.api.routes.RegulatoryTrackerNotificationService.send_test_notification",
+        new=AsyncMock(return_value=result_payload),
+    ) as mocked_test:
+        response = await client.post(
+            "/api/v1/regulatory-documents/notification-settings/test",
+            json={
+                "recipient_open_id": "ou_test",
+                "header_template": "开头 {count}",
+                "footer_template": "结尾",
+            },
+        )
+
+    assert response.status_code == 200
+    mocked_test.assert_awaited_once()
+    kwargs = mocked_test.await_args.kwargs
+    assert kwargs["recipient_open_id"] == "ou_test"
+    assert kwargs["header_template"] == "开头 {count}"
+    assert kwargs["footer_template"] == "结尾"
+    body = response.json()
+    assert body["code"] == 200
+    assert body["data"]["sent"] is True
+    assert body["data"]["detail"] == "测试消息已发送至 张起智"
+
+
+@pytest.mark.anyio
+async def test_test_notification_settings_rejects_missing_recipient(
+    client: AsyncClient,
+) -> None:
+    """失败路径：缺少 recipient_open_id 时请求校验拒绝（422）。"""
+    response = await client.post(
+        "/api/v1/regulatory-documents/notification-settings/test",
+        json={"header_template": "开头"},
+    )
+
+    assert response.status_code == 422

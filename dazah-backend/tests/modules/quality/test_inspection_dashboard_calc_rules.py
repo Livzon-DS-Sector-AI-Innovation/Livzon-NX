@@ -12,6 +12,9 @@ from app.modules.quality.models.finished_trend_alert_notification import (
     FinishedTrendAlertNotification,
 )
 from app.modules.quality.service import inspection_dashboard_calc as calc
+from app.modules.quality.service.quality_notification_settings import (
+    InspectionTrendAlertEscalationConfig,
+)
 
 SimpleNamespace: Any = _SimpleNamespace
 
@@ -220,6 +223,14 @@ async def test_materialize_dashboard_alert_handles_existing_and_new_states(
     monkeypatch.setattr(
         calc, "_get_existing_dashboard_notification", AsyncMock(return_value=existing)
     )
+    # 升级推送停用：本测试只关注既有告警状态机，db 为 SimpleNamespace
+    monkeypatch.setattr(
+        calc,
+        "load_inspection_trend_alert_escalation_config",
+        AsyncMock(
+            return_value=InspectionTrendAlertEscalationConfig(is_enabled=False)
+        ),
+    )
     result = await calc._materialize_dashboard_alert(
         SimpleNamespace(),
         **_alert_kwargs(),  # type: ignore[arg-type]
@@ -333,8 +344,8 @@ async def test_finished_dashboard_data_handles_unconfigured_and_alerting_records
     alert["batch_no"] = "B2"
     monkeypatch.setattr(
         calc,
-        "_materialize_dashboard_alert",
-        AsyncMock(return_value=alert),
+        "_materialize_merged_dashboard_alerts",
+        AsyncMock(return_value=[alert]),
     )
     data = await calc._get_finished_dashboard_data(
         SimpleNamespace(),

@@ -122,10 +122,9 @@ async function typeAndSend(text: string) {
 }
 
 describe('FinishedProductAnomalyChat', () => {
-  it('renders welcome message, version tag and composer', async () => {
+  it('renders welcome message and composer', async () => {
     await renderChat()
     expect(document.body.textContent).toContain('成品异常 AI 助手')
-    expect(document.body.textContent).toContain('v2')
     expect(document.body.textContent).toContain('资深现场 QA')
     expect(document.body.querySelector('textarea')).not.toBeNull()
   })

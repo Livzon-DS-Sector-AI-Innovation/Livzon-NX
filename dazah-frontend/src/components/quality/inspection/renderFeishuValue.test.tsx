@@ -199,6 +199,41 @@ describe('renderFeishuValue', () => {
     expect(container.textContent).toBe('42')
   })
 
+  it('colorizes 结果判断 conclusion values (合格/不合格) via fieldName', () => {
+    const renderFor = (value: unknown) => {
+      const msg = makeMessage()
+      return renderFeishuValue(value, {}, 'ent', msg as never, { fieldName: '结果判断' })
+    }
+
+    renderValue(renderFor('合格'))
+    const passTag = container.querySelector('.ant-tag')
+    expect(passTag?.textContent).toBe('合格')
+    expect(passTag?.className).toContain('ant-tag-success')
+
+    renderValue(renderFor('不合格'))
+    const failTag = container.querySelector('.ant-tag')
+    expect(failTag?.textContent).toBe('不合格')
+    expect(failTag?.className).toContain('ant-tag-error')
+  })
+
+  it('leaves non-conclusion 结果判断 values as plain text', () => {
+    renderValue(
+      renderFeishuValue('异常待复核', {}, 'ent', makeMessage() as never, {
+        fieldName: '结果判断',
+      }),
+    )
+    expect(container.textContent).toBe('异常待复核')
+    expect(container.querySelector('.ant-tag')).toBeNull()
+  })
+
+  it('does not colorize the same scalar value when fieldName differs', () => {
+    renderValue(
+      renderFeishuValue('合格', {}, 'ent', makeMessage() as never, { fieldName: '批号' }),
+    )
+    expect(container.textContent).toBe('合格')
+    expect(container.querySelector('.ant-tag')).toBeNull()
+  })
+
   it('renders image attachments inline via proxy builder (no download button)', async () => {
     const blob = new Blob(['x'], { type: 'image/jpeg' })
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, blob: async () => blob })

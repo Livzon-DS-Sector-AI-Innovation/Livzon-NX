@@ -166,16 +166,238 @@ def test_certificate_workbook_parser_and_sheet_writer() -> None:
 
 
 @pytest.mark.asyncio
-async def test_certificate_reminder_batches_are_disabled_without_marking_sent() -> None:
-    service = CertificateWorkbookService(AsyncMock())
-    service.repository = AsyncMock()
+async def test_certificate_reminder_content_templates() -> None:
+    entry = _entry()
+    # 默认文案：开头语与溢出提示与历史行为一致
+    default_content = certificate._build_reminder_content([entry] * 12, 90)
+    assert default_content.startswith("以下证书已进入**到期前 90 天**提醒窗口")
+    assert "其余还有 **2** 份" in default_content
+
+    # 自定义模板：占位符渲染，未知占位符原样保留
+    custom = certificate._build_reminder_content(
+        [entry],
+        30,
+        header_template=(
+            "{date} 共 {count} 份证书，提前 {reminder_days} 天，未知 {nope}"
+        ),
+        footer_template="溢出 {overflow_count} 条，请处理",
+    )
+    first_line = custom.split("\n", 1)[0]
+    expected_first = (
+        f"{date.today().isoformat()} 共 1 份证书，提前 30 天，未知 {{nope}}"
+    )
+    assert first_line == expected_first
+    assert "其余还有" not in custom
+    assert "溢出 0 条，请处理" in custom
+
+    # 空白模板回退默认文案
+    blank = certificate._build_reminder_content([entry], 90, header_template="   ")
+    assert blank.startswith("以下证书已进入**到期前 90 天**提醒窗口")
+
+
+def _patch_certificate_send_chain(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    credentials: tuple[str, str],
+    resolved: tuple[str, str] | None,
+) -> AsyncMock:
+    from app.modules.quality import public_api
+
+    monkeypatch.setattr(
+        public_api,
+        "get_module_feishu_app_credentials",
+        AsyncMock(return_value=credentials),
+    )
+    monkeypatch.setattr(
+        certificate,
+        "resolve_feishu_notification_recipient",
+        AsyncMock(return_value=resolved),
+    )
+    send_mock = AsyncMock(return_value=True)
+    monkeypatch.setattr(
+        certificate,
+        "send_user_card",
+        send_mock,
+    )
+    return send_mock
+
+
+def _reminder_service(*, setting: SimpleNamespace | None, entries: list) -> tuple:
+    session = SimpleNamespace(commit=AsyncMock(), flush=AsyncMock())
+    repo = SimpleNamespace(
+        get_reminder_setting=AsyncMock(return_value=setting),
+        list_entries=AsyncMock(return_value=entries),
+        reminder_notification_exists=AsyncMock(return_value=False),
+        create_reminder_notifications=AsyncMock(),
+    )
+    service = CertificateWorkbookService(session)
+    service.repository = repo
     service.ensure_seeded = AsyncMock()
-    assert await service.find_due_reminder_batch() == []
-    with pytest.raises(AppException) as exc:
-        await service.send_due_reminder_batch({})
-    assert exc.value.status_code == 503
-    service.ensure_seeded.assert_not_awaited()
-    service.repository.create_reminder_notifications.assert_not_awaited()
+    service._get_qa_reminder_recipient_by_open_id = AsyncMock(
+        return_value=SimpleNamespace(
+            open_id="qa", name="QA", department="QA部", enterprise_email=None
+        )
+    )
+    return service, repo
+
+
+def _reminder_setting() -> SimpleNamespace:
+    return SimpleNamespace(
+        is_enabled=True,
+        reminder_days=90,
+        recipient_open_id="qa",
+        recipient_name="QA",
+        recipient_department="QA部",
+        header_template=None,
+        footer_template=None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_certificate_reminder_find_due_and_send_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    due_entry = _entry(
+        expiry_date=(date.today() + timedelta(days=10)).strftime("%Y.%m.%d")
+    )
+    service, repo = _reminder_service(
+        setting=_reminder_setting(), entries=[due_entry]
+    )
+    send_mock = _patch_certificate_send_chain(
+        monkeypatch,
+        credentials=("cli_app", "secret"),
+        resolved=("zhangqizhi01", "user_id"),
+    )
+
+    batches = await service.find_due_reminder_batch()
+    assert len(batches) == 1
+    batch = batches[0]
+    assert batch["recipient_open_id"] == "qa"
+    assert batch["entries"] == [due_entry]
+
+    await service.send_due_reminder_batch(batch)
+    send_mock.assert_awaited_once()
+    kwargs = send_mock.await_args.kwargs
+    assert kwargs["open_id"] == "zhangqizhi01"
+    assert kwargs["receive_id_type"] == "user_id"
+    assert kwargs["app_id"] == "cli_app"
+    repo.create_reminder_notifications.assert_awaited_once()
+    assert len(repo.create_reminder_notifications.await_args.args[0]) == 1
+    service.session.commit.assert_awaited_once()  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_certificate_reminder_send_skips_without_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, repo = _reminder_service(
+        setting=_reminder_setting(), entries=[_entry()]
+    )
+    _patch_certificate_send_chain(
+        monkeypatch, credentials=("", ""), resolved=None
+    )
+    await service.send_due_reminder_batch(
+        {
+            "recipient_open_id": "qa",
+            "recipient_name": "QA",
+            "reminder_days": 90,
+            "entries": [_entry()],
+        }
+    )
+    repo.create_reminder_notifications.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_certificate_reminder_send_failure_does_not_mark_sent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, repo = _reminder_service(
+        setting=_reminder_setting(), entries=[_entry()]
+    )
+    _patch_certificate_send_chain(
+        monkeypatch,
+        credentials=("cli_app", "secret"),
+        resolved=("zhangqizhi01", "user_id"),
+    )
+    from unittest.mock import AsyncMock as _AsyncMock
+
+    monkeypatch.setattr(
+        certificate, "send_user_card", _AsyncMock(return_value=False)
+    )
+    await service.send_due_reminder_batch(
+        {
+            "recipient_open_id": "qa",
+            "recipient_name": "QA",
+            "reminder_days": 90,
+            "entries": [_entry()],
+        }
+    )
+    repo.create_reminder_notifications.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_certificate_reminder_test_notification_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, repo = _reminder_service(setting=None, entries=[_entry()])
+
+    # 接收人不在 QA 名单 → 业务报错
+    service._get_qa_reminder_recipient_by_open_id = AsyncMock(return_value=None)
+    with pytest.raises(AppException, match="QA 联系人范围"):
+        await service.send_test_notification(recipient_open_id="unknown")
+
+    # 已保存的通知人调离 QA 名单后，仍允许测试验证（与真实发送行为一致）
+    repo.get_reminder_setting.return_value = SimpleNamespace(
+        is_enabled=True,
+        reminder_days=60,
+        recipient_open_id="ou_saved",
+        recipient_name="张起智",
+        recipient_department="AI创新部",
+        header_template=None,
+        footer_template=None,
+    )
+    service._get_qa_reminder_recipient_by_open_id = AsyncMock(return_value=None)
+    _patch_certificate_send_chain(
+        monkeypatch,
+        credentials=("cli_app", "secret"),
+        resolved=("zhangqizhi01", "user_id"),
+    )
+    result = await service.send_test_notification(recipient_open_id="ou_saved")
+    assert result["sent"] is True
+    assert result["recipient_name"] == "张起智"
+
+    service._get_qa_reminder_recipient_by_open_id = AsyncMock(
+        return_value=SimpleNamespace(
+            open_id="qa", name="张起智", department="QA部", enterprise_email=None
+        )
+    )
+    # 凭证缺失 → 发送失败并带原因，不写发送记录
+    _patch_certificate_send_chain(monkeypatch, credentials=("", ""), resolved=None)
+    result = await service.send_test_notification(recipient_open_id="qa")
+    assert result["sent"] is False
+    assert "未配置" in str(result["detail"])
+    repo.create_reminder_notifications.assert_not_awaited()
+
+    # 成功 → 不写发送记录（测试不影响幂等）
+    send_mock = _patch_certificate_send_chain(
+        monkeypatch,
+        credentials=("cli_app", "secret"),
+        resolved=("zhangqizhi01", "user_id"),
+    )
+    result = await service.send_test_notification(
+        recipient_open_id="qa",
+        header_template="测试开头 {count}",
+        footer_template="测试结尾",
+    )
+    assert result == {
+        "sent": True,
+        "recipient_name": "张起智",
+        "detail": "测试消息已发送至 张起智",
+    }
+    content = send_mock.await_args.kwargs["content"]
+    assert content.startswith("测试开头 1")
+    assert "测试结尾" in content
+    repo.create_reminder_notifications.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -309,18 +531,30 @@ async def test_certificate_reminder_settings_and_recipient_fallbacks(
     )
     saved = await service.update_reminder_settings(
         certificate.CertificateReminderSettingUpdate(
-            is_enabled=False, reminder_days=30, recipient_open_id="qa"
+            is_enabled=False,
+            reminder_days=30,
+            recipient_open_id="qa",
+            header_template="开头 {count}",
+            footer_template="结尾",
         )
     )
     assert saved.is_enabled is False
+    save_kwargs = repo.save_reminder_setting.await_args.kwargs
+    assert save_kwargs["header_template"] == "开头 {count}"
+    assert save_kwargs["footer_template"] == "结尾"
     repo.get_reminder_setting.return_value = SimpleNamespace(
         is_enabled=True,
         reminder_days=30,
         recipient_open_id="qa",
         recipient_name="QA",
         recipient_department="QA部",
+        header_template="开头 {count}",
+        footer_template="结尾",
     )
-    assert (await service.get_reminder_settings()).pending_count == 0
+    settings = await service.get_reminder_settings()
+    assert settings.pending_count == 0
+    assert settings.header_template == "开头 {count}"
+    assert settings.footer_template == "结尾"
 
 
 @pytest.mark.asyncio

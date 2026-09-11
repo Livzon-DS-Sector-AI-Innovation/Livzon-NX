@@ -284,7 +284,7 @@ export function ChangeActionPlanEditModal({
         <Form.Item
           label="总负责人"
           name="owner_user_id"
-          extra="从部门联系人中选择；选择后会自动带出对应部门负责人。"
+          extra="从人事飞书联系人中选择。"
         >
           <Select
             allowClear
