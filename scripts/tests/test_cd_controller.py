@@ -1,7 +1,11 @@
 """Safety boundaries of the single-host controller, without a live Docker daemon."""
+import contextlib
 import datetime as dt
 import importlib.util
+import json
+import stat
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -58,11 +62,99 @@ def test_disabled_scheduler_never_contacts_docker_or_github(tmp_path, monkeypatc
     assert "deployment_disabled" in (control.state_dir / "events.jsonl").read_text()
 
 
-def test_disk_uuid_mismatch_fails_closed(tmp_path, monkeypatch):
+@pytest.mark.parametrize("case", ["valid", "wrong_uuid", "stacked", "missing", "subdirectory", "wrong_device", "not_block"])
+def test_effective_data_mount_identity(tmp_path, monkeypatch, case):
+    control = cd.Controller({"data_root": "/data/dazah", "data_uuid": "expected", "current": str(tmp_path), "state_dir": str(tmp_path)})
+    mount = {"target": "/data", "source": "/dev/sdb1", "fstype": "ext4", "uuid": "expected", "fsroot": "/"}
+    mounts = [mount]
+    if case == "wrong_uuid":
+        mount["uuid"] = "other"
+    elif case == "stacked":
+        mounts.append({"target": "/data", "source": "tmpfs", "fstype": "tmpfs", "uuid": None, "fsroot": "/"})
+    elif case == "missing":
+        mounts = []
+    elif case == "subdirectory":
+        mount["fsroot"] = "/another-directory"
+    def mount_inventory(args, **kwargs):
+        if "--json" in args:
+            return json.dumps({"filesystems": mounts})
+        return "\n".join(item.get("uuid") or "" for item in mounts).strip()
+
+    monkeypatch.setattr(cd, "command", mount_inventory)
+    original_stat, original_resolve = Path.stat, Path.resolve
+
+    def mount_stat(path, *args, **kwargs):
+        if path == Path("/data"):
+            return SimpleNamespace(st_dev=123)
+        if path == Path("/dev/sdb1"):
+            return SimpleNamespace(st_rdev=456 if case == "wrong_device" else 123,
+                                   st_mode=stat.S_IFREG if case == "not_block" else stat.S_IFBLK)
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", mount_stat)
+    monkeypatch.setattr(Path, "resolve", lambda path, *a, **k: path if path == Path("/data/dazah") else original_resolve(path, *a, **k))
+    if case == "valid":
+        control.mount_check()
+    else:
+        with pytest.raises(cd.Refused, match="UUID or effective mount"):
+            control.mount_check()
+
+
+def test_malformed_mount_inventory_fails_closed(tmp_path, monkeypatch):
     control = cd.Controller({"data_root": "/data/dazah", "data_uuid": "expected", "current": str(tmp_path), "state_dir": str(tmp_path)})
     monkeypatch.setattr(cd, "command", lambda *a, **k: "wrong-disk")
-    with pytest.raises(cd.Refused, match="UUID"):
+    with pytest.raises(cd.Refused, match="UUID or effective mount"):
         control.mount_check()
+
+
+def test_ssh_build_proxy_checks_tunnel_and_scopes_worker_arguments(monkeypatch):
+    requests = []
+
+    def open_request(request, timeout):
+        requests.append((request.full_url, request.get_method(), timeout))
+        return contextlib.nullcontext(SimpleNamespace(status=200))
+
+    opener = SimpleNamespace(open=open_request)
+    handlers = []
+    monkeypatch.setattr(cd.urllib.request, "build_opener", lambda handler: handlers.append(handler) or opener)
+    result, args = cd.build_network(True)
+    assert result is opener
+    assert handlers[0].proxies == {"http": "http://127.0.0.1:17897", "https": "http://127.0.0.1:17897"}
+    assert requests == [("https://github.com/", "HEAD", 10)]
+    assert args == [item for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy")
+                    for item in ("--opt", f"build-arg:{name}=http://127.0.0.1:17898")]
+
+
+def test_disabled_build_proxy_does_not_probe_network(monkeypatch):
+    opener = SimpleNamespace(open=lambda *a, **k: pytest.fail("unexpected network probe"))
+    monkeypatch.setattr(cd.urllib.request, "build_opener", lambda: opener)
+    assert cd.build_network(False) == (opener, [])
+
+
+@pytest.mark.parametrize("value", ["true", 1, None])
+def test_build_proxy_rejects_non_boolean_settings(value):
+    with pytest.raises(cd.Refused, match="boolean"):
+        cd.build_network(value)
+
+
+def test_unavailable_ssh_proxy_leaves_no_partial_build_directory(tmp_path, monkeypatch):
+    control = cd.Controller({"data_root": str(tmp_path), "current": str(tmp_path),
+                             "state_dir": str(tmp_path / "state"), "ssh_build_proxy": True})
+    sha = "a" * 40
+    monkeypatch.setattr(control, "verify_candidate", lambda candidate: sha)
+    monkeypatch.setattr(control, "mount_check", lambda: None)
+    monkeypatch.setattr(cd.shutil, "disk_usage", lambda path: SimpleNamespace(free=100 * 1024**3))
+    original_read = Path.read_text
+    monkeypatch.setattr(Path, "read_text", lambda path, *a, **k: "MemAvailable: 4194304 kB" if path == Path("/proc/meminfo") else original_read(path, *a, **k))
+
+    def unavailable(*args, **kwargs):
+        raise OSError("private connection details must not escape")
+
+    monkeypatch.setattr(cd.urllib.request, "build_opener", lambda *args: SimpleNamespace(open=unavailable))
+    with pytest.raises(cd.Refused, match="SSH build proxy unavailable; postpone build"):
+        control.build({"sha": sha})
+    assert not (tmp_path / "work" / sha).exists()
+    assert not control.state_file.exists()
 
 
 def test_maintenance_prevents_watchdog_interference(tmp_path, monkeypatch):

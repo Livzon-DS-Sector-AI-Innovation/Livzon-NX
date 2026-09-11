@@ -12,7 +12,6 @@ import datetime as dt
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import stat
@@ -21,6 +20,7 @@ import tarfile
 import tempfile
 import time
 import urllib.request
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 APPS = ("app", "hermes-lite", "frontend")
@@ -180,6 +180,28 @@ def validate_candidate(candidate: dict, branch: dict, run: dict, jobs: list[dict
     return sha
 
 
+def build_network(ssh_proxy: bool) -> tuple[urllib.request.OpenerDirector, list[str]]:
+    """Use only the operator's fixed loopback bridge, never application proxy settings."""
+    if not isinstance(ssh_proxy, bool):
+        raise Refused("ssh_build_proxy must be a boolean")
+    if not ssh_proxy:
+        return urllib.request.build_opener(), []
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({
+        "http": "http://127.0.0.1:17897", "https": "http://127.0.0.1:17897",
+    }))
+    try:
+        request = urllib.request.Request("https://github.com/", method="HEAD")
+        with opener.open(request, timeout=10) as response:
+            if response.status != 200:
+                raise Refused("SSH build proxy unavailable; postpone build")
+    except OSError as exc:
+        raise Refused("SSH build proxy unavailable; postpone build") from exc
+    args = []
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+        args.extend(["--opt", f"build-arg:{name}=http://127.0.0.1:17898"])
+    return opener, args
+
+
 class Controller:
     def __init__(self, config: dict):
         self.config = config
@@ -205,9 +227,26 @@ class Controller:
         self.event("phase", phase=name)
 
     def mount_check(self) -> None:
-        actual = command(["findmnt", "-n", "-o", "UUID", "--mountpoint", "/data"])
-        if not self.config.get("data_uuid") or actual != self.config["data_uuid"]:
-            raise Refused("data disk UUID mismatch")
+        # Plain UUID output loses empty rows after strip(): an overlaid tmpfs can
+        # hide the expected disk while the old mount's UUID still appears valid.
+        try:
+            mounts = json.loads(command([
+                "findmnt", "--json", "--output", "TARGET,SOURCE,FSTYPE,UUID,FSROOT",
+                "--mountpoint", "/data",
+            ]))["filesystems"]
+            if not isinstance(mounts, list) or len(mounts) != 1:
+                raise ValueError("ambiguous mount stack")
+            mount = mounts[0]
+            if (not isinstance(mount, dict) or not self.config.get("data_uuid")
+                    or mount.get("uuid") != self.config["data_uuid"]
+                    or mount.get("target") != "/data" or mount.get("fsroot") != "/"
+                    or mount.get("fstype") != "ext4"):
+                raise ValueError("unexpected mount identity")
+            source = Path(mount["source"]).stat()
+            if not stat.S_ISBLK(source.st_mode) or Path("/data").stat().st_dev != source.st_rdev:
+                raise ValueError("path does not resolve to the expected block device")
+        except (KeyError, TypeError, ValueError, OSError) as exc:
+            raise Refused("data disk UUID or effective mount mismatch") from exc
         if self.data.resolve() != Path("/data/dazah"):
             raise Refused("unexpected data root")
 
@@ -660,14 +699,23 @@ class Controller:
         available = int(re.search(r"MemAvailable:\s+(\d+)", Path("/proc/meminfo").read_text()).group(1)) * 1024
         if available < 3 * 1024**3 or shutil.disk_usage("/").free < 20 * 1024**3 or shutil.disk_usage(self.data).free < 50 * 1024**3:
             raise Refused("insufficient resources for build")
+        use_proxy = self.config.get("ssh_build_proxy", False)
+        # Check the SSH tunnel before creating work so an offline laptop does
+        # not leave a partial directory that prevents the next window's retry.
+        source_opener, proxy_args = build_network(use_proxy)
         work = self.data / "work" / sha
         if work.exists():
             raise Refused("previous build directory exists; inspect failed build before retry")
         work.mkdir(mode=0o700)
         archive = work / "source.tar.gz"
-        request = urllib.request.Request(f"https://api.github.com/repos/{self.config['repository']}/tarball/{sha}",
+        # Keep GitHub API admission checks direct: shared proxy exits may have
+        # exhausted the anonymous API quota. Only archive/dependency downloads
+        # use the optional tunnel; both archive routes identify the fixed SHA.
+        source_url = (f"https://github.com/{self.config['repository']}/archive/{sha}.tar.gz" if use_proxy
+                      else f"https://api.github.com/repos/{self.config['repository']}/tarball/{sha}")
+        request = urllib.request.Request(source_url,
                                          headers={"User-Agent": "dazah-cd"})
-        with urllib.request.urlopen(request, timeout=60) as response, archive.open("wb") as handle:
+        with source_opener.open(request, timeout=60) as response, archive.open("wb") as handle:
             shutil.copyfileobj(response, handle)
         source_archive_checksum = digest(archive)
         source = work / "source"
@@ -744,7 +792,7 @@ class Controller:
                         "--local", f"context={source}", "--local", f"dockerfile={source}",
                         "--opt", f"target={'backend' if target == 'backend-dev' else target}",
                         "--opt", f"filename={'Dockerfile.dev' if target == 'backend-dev' else 'Dockerfile'}",
-                        "--output", f"type=docker,name=dazah/{target}:cd-{sha},dest={out}", *cache_args]
+                        "--output", f"type=docker,name=dazah/{target}:cd-{sha},dest={out}", *cache_args, *proxy_args]
                 with (work / f"{target}.log").open("wb") as log:
                     process = subprocess.Popen(args, stdout=log, stderr=log, start_new_session=True)
                     low_since = None
@@ -785,6 +833,7 @@ class Controller:
             shutil.copyfile(item, release / item.name)
         atomic_json(release / "build.json", {"sha": sha, "run_id": candidate["run_id"],
                     "source_archive_sha256": source_archive_checksum, "base_images": pins,
+                    "ssh_build_proxy": use_proxy,
                     "offline_cache_policy_sha256": cache_checksum,
                     "files": {p.name: digest(p) for p in release.iterdir() if p.suffix == ".tar"}})
         atomic_json(release / "migration-policy.json", migration_policy)
