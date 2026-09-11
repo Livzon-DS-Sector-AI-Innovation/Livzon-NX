@@ -117,3 +117,31 @@
   后续将 Webpack 模块并发单独限制为 1；与 Dockerfile 前端交付阶段相同的开发验收镜像
   `dazah/frontend:delivery-verify-dev` 构建通过，关键 E2E 32 项通过（1.0 分钟），
   512 MiB / 0.5 CPU 运行，无 OOM 或重启；最新 CI 仍须重新验证，不能沿用旧提交结果。
+
+## 2026-09-11 隧道与继续验收
+
+- 用户在 Windows 建立 SSH 远程转发：服务器 `127.0.0.1:17897` 转到本机
+  `127.0.0.1:7897`。服务器 GitHub 请求返回 200。隧道依赖本机在线，未配置为
+  无人值守网络保障，也没有修改系统全局代理或正式应用的代理环境。
+- 验收期间，root 管理的 Unix socket `/run/dazah-build-proxy.sock` 仅允许
+  `dazah-build` 访问（0600）；namespace 内转接到 `127.0.0.1:17898`，通过显式
+  BuildKit proxy build-arg 下载。保留 RootlessKit `--disable-host-loopback`，
+  Runner 无权读取 socket。本机代理桥接为本次验收运维配置，尚未集成到 CD 控制器。
+- Hermes 固定上游包下载及校验通过，`addf5b1` 服务器开发镜像构建通过：613 秒，
+  2 GiB / 1 CPU / 无 swap，OOM 和 OOM kill 均为 0，全程正式业务健康。
+  产物 `/data/dazah/releases/acceptance-addf5b1-dev/hermes-dev.tar` 为 177672704 字节，
+  SHA-256 `367c4d8ae3891471ccec1287eedac5a31987fd72d22575363634e49aeb031a6e`。
+  下载回本机再次校验后，在 network=none、512 MiB / 0.5 CPU 的临时开发容器中
+  启动并验证 `/health` 返回 200，OOM=false、重启 0；容器已删除。
+  Hermes 源码及对应 Dockerfile.dev 相对同步主线后的 `c4e1ab45` 无变化。
+- 01:00 日备份执行成功（01:00:37 结束），最新备份 8 个文件的 SHA-256 校验通过。
+  controller enabled=false，CD/watchdog timer disabled；备份与恢复演练 timer enabled。
+- `05f960e` 的 CI 34455677108 全部适用任务成功。随后主线新增 #77，已无冲突同步
+  `dcfc6aac`，得到 `c4e1ab45`；该提交的新 CI 为 34548164458，需以其最终结果为准。
+  本地复验：前端定向测试 59 项、后端 Service/迁移结构测试 21 项、控制器测试
+  48 项通过（Windows 相关跳过 1 项），测试影响检查通过。
+  将过期 `.next/dev/types` 缓存移出构建目录后，经 Next typegen 重新生成，完整类型检查通过。
+- 独立临时 PostgreSQL 空库升级到 `957e2da4f7c7` 成功，发酵看板接口测试 16 项通过。
+  临时数据库 OOM=false、重启 0，已删除；没有迁移正式数据库。
+  新主线 migration head 已变化，旧 deployment_hold 必须拒绝沿用。该空库测试不代表
+  正式数据迁移、部门联系人保留或旧应用写入兼容性通过；无人值守发布继续关闭。
