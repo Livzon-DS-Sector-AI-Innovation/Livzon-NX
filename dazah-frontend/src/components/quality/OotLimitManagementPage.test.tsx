@@ -5,6 +5,7 @@ import { App } from 'antd'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const drawerState = vi.hoisted(() => ({ open: false }))
+const drawerProps = vi.hoisted(() => ({ current: null as { onSuccess?: () => void } | null }))
 
 const mocks = vi.hoisted(() => ({
   fetchOotLimitProducts: vi.fn(),
@@ -36,8 +37,9 @@ vi.mock('@/actions/quality', () => ({
 }))
 
 vi.mock('./OotLimitImportDrawer', () => ({
-  OotLimitImportDrawer: (props: { isOpen: boolean }) => {
+  OotLimitImportDrawer: (props: { isOpen: boolean; onSuccess?: () => void }) => {
     drawerState.open = props.isOpen
+    drawerProps.current = props
     return null
   },
 }))
@@ -156,4 +158,12 @@ it('shows an error message when export fails', async () => {
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)) })
   // antd message 渲染在 body portal 中
   expect(document.body.textContent).toContain('暂无可导出的OOT限度产品')
+})
+it('refreshes the product list after a successful import', async () => {
+  mocks.fetchOotLimitProducts.mockClear()
+  await act(async () => {
+    drawerProps.current?.onSuccess?.()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  })
+  expect(mocks.fetchOotLimitProducts).toHaveBeenCalled()
 })
