@@ -6,6 +6,7 @@ from typing import Any, cast
 
 import httpx
 
+from .capacity import bounded_call, bounded_stream
 from .config import LLMConfigData, get_config
 from .exceptions import LLMOutputError, LLMProviderError, LLMRateLimitError
 
@@ -72,6 +73,7 @@ class LLMClient:
         )
         return client, config
 
+    @bounded_call
     async def chat(
         self,
         messages: Sequence[Message],
@@ -172,6 +174,7 @@ class LLMClient:
         finally:
             await client.aclose()
 
+    @bounded_call
     async def chat_with_tools(
         self,
         messages: Sequence[Message],
@@ -321,6 +324,7 @@ class LLMClient:
 
         return cast(JsonObject, parsed)
 
+    @bounded_call
     async def chat_vision(
         self,
         text_prompt: str,
@@ -476,6 +480,7 @@ class LLMClient:
         _, config = await self._get_client_and_config(config_type)
         return config.model_name
 
+    @bounded_stream
     async def stream_chat(
         self,
         messages: Sequence[Message],

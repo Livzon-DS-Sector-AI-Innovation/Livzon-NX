@@ -78,6 +78,13 @@ describe('AuthCompletion', () => {
     )
     expect(retryButton).toBeDefined()
 
+    const loginButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.includes('返回登录'),
+    )
+    expect(loginButton).toBeDefined()
+    act(() => loginButton?.click())
+    expect(routerReplace).toHaveBeenCalledWith('/login?next=%2Fproduction')
+
     await act(async () => {
       retryButton?.click()
       await Promise.resolve()

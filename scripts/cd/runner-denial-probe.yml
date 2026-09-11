@@ -1,0 +1,20 @@
+# Acceptance fixture only. Copy into .github/workflows/runner-denial-probe.yml
+# on an explicitly authorized disposable PR branch. Never merge this fixture.
+# Successful isolation prevents the job from acquiring dazah-251-cd.
+name: Runner Access Denial Probe
+on:
+  pull_request:
+    branches: [main]
+    paths: [.github/workflows/runner-denial-probe.yml]
+permissions: {}
+jobs:
+  forbidden-runner:
+    runs-on:
+      group: dazah-production-cd-nx
+      labels: dazah-cd
+    timeout-minutes: 1
+    steps:
+      - name: Unexpected access is an acceptance failure
+        run: |
+          printf '%s\n' 'ISOLATION_FAILURE: an unapproved PR workflow acquired the runner'
+          exit 1

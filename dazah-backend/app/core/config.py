@@ -3,7 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent  # dazah-backend/
@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/dazah"
     TEST_DATABASE_URL: str | None = None
+    DATABASE_POOL_SIZE: int = Field(default=5, ge=1, le=30)
+    DATABASE_MAX_OVERFLOW: int = Field(default=5, ge=0, le=30)
+    DATABASE_POOL_TIMEOUT: float = Field(default=5, gt=0, le=60)
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"

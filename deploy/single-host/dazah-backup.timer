@@ -1,0 +1,8 @@
+[Unit]
+Description=Dazah daily backup
+[Timer]
+OnCalendar=*-*-* 01:00:00 Asia/Shanghai
+Persistent=false
+Unit=dazah-backup.service
+[Install]
+WantedBy=timers.target

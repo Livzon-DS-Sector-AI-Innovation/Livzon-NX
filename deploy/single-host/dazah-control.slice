@@ -1,0 +1,7 @@
+[Unit]
+Description=Shared budget for Dazah runner and control tasks
+[Slice]
+MemoryMax=384M
+CPUQuota=25%
+CPUWeight=10
+IOWeight=10

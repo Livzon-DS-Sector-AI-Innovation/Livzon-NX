@@ -147,7 +147,7 @@ export function AuthCompletion({ nextPath }: AuthCompletionProps) {
 
   function restartLogin() {
     const loginUrl = `/login?next=${encodeURIComponent(nextPath)}`
-    window.location.assign(loginUrl)
+    router.replace(loginUrl)
   }
 
   const presentation = getAuthCompletionPresentation(state)

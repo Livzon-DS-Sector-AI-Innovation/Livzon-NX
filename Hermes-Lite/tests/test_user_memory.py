@@ -11,6 +11,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import httpx
+from openai import RateLimitError
 from cryptography.fernet import Fernet
 
 from services import dazah_agent_service as agent_service
@@ -410,6 +412,31 @@ def test_actual_memory_llm_adapter_reuses_dazah_proxy(monkeypatch: pytest.Monkey
     assert recorded["provider"] == "custom"
     assert recorded["base_url"] == "http://app:8000/api/v1/agent/llm"
     assert recorded["model"] == "configured-model"
+
+
+def test_dazah_capacity_rejection_does_not_create_memory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The shared proxy's 429 must fail the actual adapter, never become memory text."""
+    async def saturated(**kwargs):
+        raise RateLimitError(
+            "AI capacity exhausted",
+            response=httpx.Response(429, request=httpx.Request("POST", "http://test/llm")),
+            body={"detail": "AI 服务繁忙，请稍后重试"},
+        )
+
+    monkeypatch.setattr("agent.auxiliary_client.async_call_llm", saturated)
+    monkeypatch.setenv("DAZAH_LLM_BASE_URL", "http://test/llm")
+    monkeypatch.setenv("AGENT_LLM_PROXY_TOKEN", "test-token")
+    repo = _repo(tmp_path)
+    with pytest.raises(RateLimitError):
+        asyncio.run(review_turn(
+            repo, tenant_id="t", user_id="u", session_id="s", run_id="capacity-test",
+            user_message="记住我的偏好", assistant_message="好的",
+            llm_call=agent_service._call_memory_llm,
+        ))
+    assert repo.list_entries("t", "u") == []
+    assert not repo.has_processed_run("t", "u", "capacity-test")
 
 
 @pytest.mark.parametrize(
