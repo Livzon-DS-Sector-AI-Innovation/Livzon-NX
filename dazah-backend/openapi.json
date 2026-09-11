@@ -174198,6 +174198,83 @@
         ]
       }
     },
+    "/api/v1/quality/inspection/feishu/{entity_code}/records/{record_id}/attachments/{file_token}/preview": {
+      "get": {
+        "operationId": "api_get_inspection_feishu_attachment_preview_api_v1_quality_inspection_feishu__entity_code__records__record_id__attachments__file_token__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entity_code",
+            "required": true,
+            "schema": {
+              "title": "Entity Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_token",
+            "required": true,
+            "schema": {
+              "title": "File Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Get Inspection Feishu Attachment Preview Api V1 Quality Inspection Feishu  Entity Code  Records  Record Id  Attachments  File Token  Preview Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "在线预览检验记录附件（图片/PDF 原样，office 转 PDF，inline 响应）",
+        "tags": [
+          "质量管理",
+          "Quality-Inspection-Feishu-CRUD"
+        ]
+      }
+    },
     "/api/v1/quality/inspections": {
       "get": {
         "operationId": "list_inspections_api_v1_quality_inspections_get",

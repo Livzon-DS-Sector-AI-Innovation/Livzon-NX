@@ -16791,6 +16791,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quality/inspection/feishu/{entity_code}/records/{record_id}/attachments/{file_token}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 在线预览检验记录附件（图片/PDF 原样，office 转 PDF，inline 响应） */
+        get: operations["api_get_inspection_feishu_attachment_preview_api_v1_quality_inspection_feishu__entity_code__records__record_id__attachments__file_token__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quality/inspections": {
         parameters: {
             query?: never;
@@ -103867,6 +103884,41 @@ export interface operations {
         };
     };
     api_get_inspection_feishu_attachment_content_api_v1_quality_inspection_feishu__entity_code__records__record_id__attachments__file_token__content_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_code: string;
+                record_id: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_get_inspection_feishu_attachment_preview_api_v1_quality_inspection_feishu__entity_code__records__record_id__attachments__file_token__preview_get: {
         parameters: {
             query?: never;
             header?: never;
