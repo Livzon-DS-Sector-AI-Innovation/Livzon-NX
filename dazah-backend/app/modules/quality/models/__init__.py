@@ -57,7 +57,6 @@ from app.modules.quality.models.finished_trend_ai_analysis import (
 from app.modules.quality.models.finished_trend_alert_escalation import (
     QualityTrendAlertEscalation,
 )
-from app.modules.quality.models.trend_monthly_run import QualityTrendMonthlyRun
 from app.modules.quality.models.finished_trend_alert_notification import (
     FinishedTrendAlertNotification,
 )
@@ -80,6 +79,7 @@ from app.modules.quality.models.product_quality import ProductQualityRecord
 from app.modules.quality.models.return_recall import ReturnRecallRecord
 from app.modules.quality.models.solid_material_inspection import SolidMaterialInspection
 from app.modules.quality.models.supplier import Supplier
+from app.modules.quality.models.trend_monthly_run import QualityTrendMonthlyRun
 from app.modules.quality.models.validation_execution_record import (
     CleaningValidationRecord,
     EquipmentQualificationRecord,

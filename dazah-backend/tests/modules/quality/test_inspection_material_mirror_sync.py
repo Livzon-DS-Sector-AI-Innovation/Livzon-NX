@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
 from app.modules.quality.repository import inspection_items_mirror as repo
-from app.modules.quality.service import inspection_finished_material as mat_svc
 from app.modules.quality.service import inspection_material_mirror as mirror
 
 pytestmark = pytest.mark.anyio

@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.core.exceptions import AppException
 import app.modules.quality.service.inspection_dashboard_calc as service
+from app.core.exceptions import AppException
 from app.modules.hr.models import HrFeishuMember
 from app.modules.quality.models.finished_trend_alert_notification import (
     FinishedTrendAlertNotification,
@@ -201,7 +201,9 @@ async def test_get_mpa_dashboard_data_detects_alerts(
             }
         ]
     )
-    monkeypatch.setattr(service, "_materialize_merged_dashboard_alerts", materialize_mock)
+    monkeypatch.setattr(
+        service, "_materialize_merged_dashboard_alerts", materialize_mock
+    )
 
     result = await _get_mpa_dashboard_data(db_session)
 
