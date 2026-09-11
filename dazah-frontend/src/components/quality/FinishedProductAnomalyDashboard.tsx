@@ -26,7 +26,6 @@ function getErrorMessage(error: unknown, fallback: string): string {
 export function FinishedProductAnomalyDashboard() {
   const router = useRouter()
   const { message } = App.useApp()
-  const router = useRouter()
   const queryClient = useQueryClient()
   const [yearFilter, setYearFilter] = useState<number | null>(null)
   const [jobId, setJobId] = useState<string | null>(null)

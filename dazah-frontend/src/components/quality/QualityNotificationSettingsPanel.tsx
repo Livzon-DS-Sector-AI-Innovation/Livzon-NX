@@ -608,7 +608,7 @@ function ItemsStockAlertCard({
     >
       <Space direction="vertical" size={12} style={{ display: 'flex' }}>
         <Typography.Text type="secondary">
-          定时（每天到点）+ 手动（物品管理页"推送库存不足"按钮）向接收人推送库存不足物料清单。
+          定时（每天到点）+ 手动（物品管理页「推送库存不足」按钮）向接收人推送库存不足物料清单。
           文案支持 {'{date}'} {'{count}'} 占位符。
         </Typography.Text>
         <Space wrap size={12} style={{ display: 'flex', alignItems: 'center' }}>
