@@ -82,8 +82,8 @@ describe('regulatory tracker server actions', () => {
 
     await expect(
       testRegulatoryTrackerNotificationSettings({
-        event_type: 'deadline_reminder',
-        receiver_ids: ['ou-1'],
+        recipient_open_id: 'ou-1',
+        header_template: '法规更新 {count}',
       }),
     ).resolves.toEqual({ ok: true, recipients: 2 })
     expect(fetchMock).toHaveBeenCalledWith(
@@ -91,8 +91,8 @@ describe('regulatory tracker server actions', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({
-          event_type: 'deadline_reminder',
-          receiver_ids: ['ou-1'],
+          recipient_open_id: 'ou-1',
+          header_template: '法规更新 {count}',
         }),
       }),
     )
