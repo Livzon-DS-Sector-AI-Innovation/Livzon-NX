@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
+
+import pytest
 
 from app.modules.quality.schemas.inspection_items_dashboard import (
     ItemsStockAlertItem,
@@ -125,4 +129,113 @@ async def test_find_low_stock_items_uses_inventory_page(
         None, ItemsStockAlertConfig(warning_source="local_threshold")
     )
     assert [item["record_id"] for item in found] == ["r1"]
+def test_build_deep_link_appends_feishu_filter(monkeypatch: Any) -> None:
+    from app.modules.quality.service.items_dashboard import _build_deep_link
+
+    monkeypatch.setenv("FRONTEND_URL", "https://qa.example.cn")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    link = _build_deep_link(ItemsStockAlertConfig(warning_source="feishu"))
+    assert link == "https://qa.example.cn/quality/inspection/items/inventory?filter_库存报警=库存不足"
+    local = _build_deep_link(ItemsStockAlertConfig(warning_source="local_threshold"))
+    assert local == "https://qa.example.cn/quality/inspection/items/inventory"
+    get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_resolve_recipients_fills_open_id_by_name(monkeypatch: Any) -> None:
+    from app.modules.quality.service.items_dashboard import _resolve_recipients
+
+    async def fake_by_name(db: Any, name: str) -> dict[str, Any] | None:
+        return {"open_id": f"ou_{name}"} if name == "张三" else None
+
+    monkeypatch.setattr(
+        "app.modules.quality.service.items_dashboard.resolve_person_by_name",
+        fake_by_name,
+    )
+    config = ItemsStockAlertConfig(
+        is_enabled=True,
+        recipients=[
+            {"open_id": "ou_direct", "name": "直连人"},
+            {"name": "张三"},
+            {"name": "无名氏"},
+            {"name": "  "},
+        ],
+    )
+    resolved = await _resolve_recipients(None, config)
+    assert resolved == [
+        ("ou_direct", "open_id", "直连人"),
+        ("ou_张三", "open_id", "张三"),
+    ]
+@pytest.mark.anyio
+async def test_push_low_stock_alert_test_mode_sends_and_reports(
+    monkeypatch: Any,
+) -> None:
+    """测试推送：两个接收人都发送成功，不写幂等记录。"""
+    from unittest.mock import AsyncMock as _AM
+
+    from app.modules.quality.schemas.inspection_items_dashboard import (
+        PushLowStockResult,
+    )
+    from app.modules.quality.service import items_dashboard as svc
+    from app.modules.quality.service.items_dashboard import (
+        _STOCK_ALARM_LOW_VALUES,
+    )
+
+    assert _STOCK_ALARM_LOW_VALUES  # 常量存在
+
+    low_rows = [
+        {"record_id": "r1", "当前库存": 1, "警戒库存": 5, "物资名称": "酒精"},
+        {"record_id": "r2", "当前库存": 2, "警戒库存": 5, "物资名称": "纱布"},
+    ]
+    monkeypatch.setattr(
+        svc, "load_items_stock_alert_config",
+        _AM(return_value=ItemsStockAlertConfig(is_enabled=True, warning_source="local_threshold")),
+    )
+    monkeypatch.setattr(svc, "find_low_stock_items", _AM(return_value=low_rows))
+    monkeypatch.setattr(
+        svc, "_build_deep_link",
+        lambda config: "https://qa.example.cn/inventory",
+    )
+    monkeypatch.setattr(
+        svc, "_resolve_recipients",
+        _AM(return_value=[("ou_a", "open_id", "甲"), ("ou_b", "open_id", "乙")]),
+    )
+    send_mock = _AM(return_value="msg-1")
+    monkeypatch.setattr(
+        svc.feishu_notification,
+        "send_user_card_with_message_id",
+        send_mock,
+    )
+    record_mock = _AM()
+    monkeypatch.setattr(svc, "_record_notifications", record_mock)
+
+    db = SimpleNamespace(commit=_AM(), flush=_AM(), add=lambda *_: None)
+    result = await svc.push_low_stock_alert(db, test=True)
+    assert isinstance(result, PushLowStockResult)
+    assert result.status == "sent"
+    assert result.sent == 2
+    assert send_mock.await_count == 2
+    record_mock.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_push_low_stock_alert_returns_unmapped_without_recipients(
+    monkeypatch: Any,
+) -> None:
+    from app.modules.quality.service import items_dashboard as svc
+
+    monkeypatch.setattr(
+        svc, "load_items_stock_alert_config",
+        AsyncMock(return_value=ItemsStockAlertConfig(is_enabled=True)),
+    )
+    monkeypatch.setattr(svc, "find_low_stock_items", AsyncMock(return_value=[
+        {"record_id": "r1", "当前库存": 1, "警戒库存": 5}
+    ]))
+    monkeypatch.setattr(svc, "_resolve_recipients", AsyncMock(return_value=[]))
+
+    db = SimpleNamespace(commit=AsyncMock(), flush=AsyncMock(), add=lambda *_: None)
+    result = await svc.push_low_stock_alert(db, test=True)
+    assert result.status == "unmapped"
 
