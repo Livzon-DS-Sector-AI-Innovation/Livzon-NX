@@ -1,9 +1,9 @@
 import { RegulationTrackerPage, RegistrationQueryProvider } from '@/components/registration'
 import {
   fetchRegulatoryTrackerDocumentsServer,
-  fetchRegulatoryTrackerNotificationRecipientsServer,
   fetchRegulatoryTrackerNotificationSettingsServer,
 } from '@/lib/api/server/regulatoryTracker'
+import type { RegulatoryTrackerNotificationSetting } from '@/lib/api/client/regulatoryTracker'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,7 +14,7 @@ export default async function Page() {
   publishDateFromDate.setDate(today.getDate() - 6)
   const publishDateFrom = publishDateFromDate.toISOString().slice(0, 10)
 
-  const [initialResult, notificationSettings, notificationRecipients] = await Promise.all([
+  const [initialResult, notificationSettings] = await Promise.all([
     // 主数据不降级：失败时抛出异常由错误边界展示，避免静默吞错
     fetchRegulatoryTrackerDocumentsServer({
       page: 1,
@@ -32,14 +32,9 @@ export default async function Page() {
         recipient_name: null,
         recipient_department: null,
         // schedule_time 语义为"每日推送时刻"（后端固定 10:00），非抓取时刻
-        // schedule_time 语义为"每日推送时刻"（后端固定 10:00），非抓取时刻
         schedule_time: '10:00',
         pending_count: 0,
-      }
-    }),
-    fetchRegulatoryTrackerNotificationRecipientsServer().catch((error) => {
-      console.error('获取法规跟踪通知接收人失败，使用空列表降级:', error)
-      return []
+      } satisfies RegulatoryTrackerNotificationSetting
     }),
   ])
 
@@ -48,7 +43,6 @@ export default async function Page() {
       <RegulationTrackerPage
         initialResult={initialResult}
         initialNotificationSettings={notificationSettings}
-        notificationRecipients={notificationRecipients}
       />
     </RegistrationQueryProvider>
   )

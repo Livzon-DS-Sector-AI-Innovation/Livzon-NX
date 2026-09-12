@@ -3009,6 +3009,29 @@
         "title": "AnomalyChatRequest",
         "type": "object"
       },
+      "AnomalyClassificationImportBody": {
+        "description": "成品异常 AI 分类结果导入请求（由导出接口产出的 JSON 结构）。",
+        "properties": {
+          "entity_type": {
+            "description": "固定 fp_anomaly_classification",
+            "title": "Entity Type",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "entity_type"
+        ],
+        "title": "AnomalyClassificationImportBody",
+        "type": "object"
+      },
       "ApiResponse": {
         "properties": {
           "code": {
@@ -3548,6 +3571,40 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[CertificateReminderSettingResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_CertificateReminderTestResult_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CertificateReminderTestResult"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[CertificateReminderTestResult]",
         "type": "object"
       },
       "ApiResponseEnvelope_CertificateSheetDetail_": {
@@ -5554,6 +5611,40 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[QualityNotificationSettingItem]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_RegulatoryTrackerNotificationTestResult_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/RegulatoryTrackerNotificationTestResult"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[RegulatoryTrackerNotificationTestResult]",
         "type": "object"
       },
       "ApiResponseEnvelope_ReturnRecallOut_": {
@@ -10751,6 +10842,23 @@
         "title": "Body_confirm_import_api_v1_quality_cpv_import_confirm_post",
         "type": "object"
       },
+      "Body_confirm_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_confirm_post": {
+        "properties": {
+          "files": {
+            "items": {
+              "contentMediaType": "application/octet-stream",
+              "type": "string"
+            },
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "files"
+        ],
+        "title": "Body_confirm_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_confirm_post",
+        "type": "object"
+      },
       "Body_confirm_training_import_api_v1_hr_training_ledgers_import_confirm_post": {
         "properties": {
           "department": {
@@ -11444,6 +11552,23 @@
           "file"
         ],
         "title": "Body_preview_import_api_v1_quality_cpv_import_preview_post",
+        "type": "object"
+      },
+      "Body_preview_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_preview_post": {
+        "properties": {
+          "files": {
+            "items": {
+              "contentMediaType": "application/octet-stream",
+              "type": "string"
+            },
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "files"
+        ],
+        "title": "Body_preview_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_preview_post",
         "type": "object"
       },
       "Body_preview_training_import_api_v1_hr_training_ledgers_import_preview_post": {
@@ -15670,6 +15795,30 @@
       "CertificateReminderSettingResponse": {
         "description": "证书到期提醒配置响应。",
         "properties": {
+          "footer_template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "消息结尾语模板（空用内置默认）",
+            "title": "Footer Template"
+          },
+          "header_template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "消息开头语模板（空用内置默认）",
+            "title": "Header Template"
+          },
           "is_enabled": {
             "description": "是否启用自动提醒",
             "title": "Is Enabled",
@@ -15733,6 +15882,32 @@
       "CertificateReminderSettingUpdate": {
         "description": "证书到期提醒配置入参。",
         "properties": {
+          "footer_template": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "消息结尾语模板（空用内置默认）",
+            "title": "Footer Template"
+          },
+          "header_template": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "消息开头语模板（空用内置默认）",
+            "title": "Header Template"
+          },
           "is_enabled": {
             "description": "是否启用自动提醒",
             "title": "Is Enabled",
@@ -15763,6 +15938,104 @@
           "reminder_days"
         ],
         "title": "CertificateReminderSettingUpdate",
+        "type": "object"
+      },
+      "CertificateReminderTestRequest": {
+        "description": "证书提醒测试消息入参。",
+        "properties": {
+          "footer_template": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "结尾语模板草稿（空用内置默认）",
+            "title": "Footer Template"
+          },
+          "header_template": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "开头语模板草稿（空用内置默认）",
+            "title": "Header Template"
+          },
+          "recipient_open_id": {
+            "description": "测试接收人飞书 open_id",
+            "title": "Recipient Open Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "recipient_open_id"
+        ],
+        "title": "CertificateReminderTestRequest",
+        "type": "object"
+      },
+      "CertificateReminderTestResult": {
+        "description": "证书提醒测试消息结果。",
+        "properties": {
+          "detail": {
+            "description": "结果说明",
+            "title": "Detail",
+            "type": "string"
+          },
+          "footer_template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "消息结尾语模板（空用内置默认）",
+            "title": "Footer Template"
+          },
+          "header_template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "消息开头语模板（空用内置默认）",
+            "title": "Header Template"
+          },
+          "recipient_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "接收人姓名",
+            "title": "Recipient Name"
+          },
+          "sent": {
+            "description": "是否发送成功",
+            "title": "Sent",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sent",
+          "detail"
+        ],
+        "title": "CertificateReminderTestResult",
         "type": "object"
       },
       "CertificateSheetDetail": {
@@ -44099,6 +44372,20 @@
             "title": "Entity Label",
             "type": "string"
           },
+          "qa_recipients": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/QualityNotificationRecipientItem"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qa Recipients"
+          },
           "recipients": {
             "items": {
               "$ref": "#/components/schemas/QualityNotificationRecipientItem"
@@ -63069,11 +63356,29 @@
       },
       "QualityNotificationSettingItem": {
         "properties": {
+          "escalation_hours": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Escalation Hours"
+          },
           "fallback_recipients": {
             "items": {
               "$ref": "#/components/schemas/QualityNotificationRecipientItem"
             },
             "title": "Fallback Recipients",
+            "type": "array"
+          },
+          "first_recipients": {
+            "items": {
+              "$ref": "#/components/schemas/QualityNotificationRecipientItem"
+            },
+            "title": "First Recipients",
             "type": "array"
           },
           "inspection_lines": {
@@ -63091,6 +63396,28 @@
             "title": "Lead Days",
             "type": "integer"
           },
+          "manual_rerun_send": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Rerun Send"
+          },
+          "monthly_day": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Day"
+          },
           "notification_label": {
             "title": "Notification Label",
             "type": "string"
@@ -63105,6 +63432,40 @@
           },
           "send_time": {
             "title": "Send Time",
+            "type": "string"
+          },
+          "stock_footer_template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stock Footer Template"
+          },
+          "stock_header_template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stock Header Template"
+          },
+          "stock_recipients": {
+            "items": {
+              "$ref": "#/components/schemas/QualityNotificationRecipientItem"
+            },
+            "title": "Stock Recipients",
+            "type": "array"
+          },
+          "stock_warning_source": {
+            "default": "feishu",
+            "title": "Stock Warning Source",
             "type": "string"
           }
         },
@@ -63920,6 +64281,32 @@
       "RegulatoryTrackerNotificationSettingUpdate": {
         "description": "法规跟踪推送配置更新入参。",
         "properties": {
+          "footer_template": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "消息结尾语模板（空用内置默认）",
+            "title": "Footer Template"
+          },
+          "header_template": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "消息开头语模板（空用内置默认）",
+            "title": "Header Template"
+          },
           "is_enabled": {
             "description": "是否启用每日自动抓取推送",
             "title": "Is Enabled",
@@ -63950,6 +64337,80 @@
           "recent_days"
         ],
         "title": "RegulatoryTrackerNotificationSettingUpdate",
+        "type": "object"
+      },
+      "RegulatoryTrackerNotificationTestRequest": {
+        "description": "法规推送测试消息入参。",
+        "properties": {
+          "footer_template": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "结尾语模板草稿（空用内置默认）",
+            "title": "Footer Template"
+          },
+          "header_template": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "开头语模板草稿（空用内置默认）",
+            "title": "Header Template"
+          },
+          "recipient_open_id": {
+            "description": "测试接收人飞书 open_id",
+            "title": "Recipient Open Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "recipient_open_id"
+        ],
+        "title": "RegulatoryTrackerNotificationTestRequest",
+        "type": "object"
+      },
+      "RegulatoryTrackerNotificationTestResult": {
+        "description": "法规推送测试消息结果。",
+        "properties": {
+          "detail": {
+            "description": "结果说明",
+            "title": "Detail",
+            "type": "string"
+          },
+          "recipient_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "接收人姓名",
+            "title": "Recipient Name"
+          },
+          "sent": {
+            "description": "是否发送成功",
+            "title": "Sent",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sent",
+          "detail"
+        ],
+        "title": "RegulatoryTrackerNotificationTestResult",
         "type": "object"
       },
       "RelatedCapaRef": {
@@ -78575,6 +79036,19 @@
       },
       "UpdateQualityNotificationSettingRequest": {
         "properties": {
+          "escalation_hours": {
+            "anyOf": [
+              {
+                "maximum": 72.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Escalation Hours"
+          },
           "fallback_recipients": {
             "anyOf": [
               {
@@ -78588,6 +79062,20 @@
               }
             ],
             "title": "Fallback Recipients"
+          },
+          "first_recipients": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/QualityNotificationRecipientItem"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Recipients"
           },
           "inspection_lines": {
             "anyOf": [
@@ -78621,6 +79109,30 @@
             ],
             "title": "Lead Days"
           },
+          "manual_rerun_send": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Rerun Send"
+          },
+          "monthly_day": {
+            "anyOf": [
+              {
+                "maximum": 31.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Day"
+          },
           "repeat_interval_days": {
             "anyOf": [
               {
@@ -78646,6 +79158,56 @@
             ],
             "description": "每天发送时间 HH:MM（Asia/Shanghai）",
             "title": "Send Time"
+          },
+          "stock_footer_template": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stock Footer Template"
+          },
+          "stock_header_template": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stock Header Template"
+          },
+          "stock_recipients": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/QualityNotificationRecipientItem"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stock Recipients"
+          },
+          "stock_warning_source": {
+            "anyOf": [
+              {
+                "pattern": "^(feishu|local_threshold)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stock Warning Source"
           }
         },
         "title": "UpdateQualityNotificationSettingRequest",
@@ -169129,6 +169691,116 @@
         ]
       }
     },
+    "/api/v1/quality/finished-product-anomaly/analysis/export": {
+      "get": {
+        "operationId": "api_export_anomaly_classifications_api_v1_quality_finished_product_anomaly_analysis_export_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Export Anomaly Classifications Api V1 Quality Finished Product Anomaly Analysis Export Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "导出成品异常 AI 分类结果（环境间搬运，避免生产重新跑 AI）",
+        "tags": [
+          "质量管理",
+          "Quality-Finished-Product-Anomaly"
+        ]
+      }
+    },
+    "/api/v1/quality/finished-product-anomaly/analysis/import": {
+      "post": {
+        "operationId": "api_import_anomaly_classifications_api_v1_quality_finished_product_anomaly_analysis_import_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnomalyClassificationImportBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Import Anomaly Classifications Api V1 Quality Finished Product Anomaly Analysis Import Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "导入成品异常 AI 分类结果（幂等：本环境已有分类的记录跳过）",
+        "tags": [
+          "质量管理",
+          "Quality-Finished-Product-Anomaly"
+        ]
+      }
+    },
     "/api/v1/quality/finished-product-anomaly/analysis/run": {
       "post": {
         "operationId": "api_run_anomaly_analysis_api_v1_quality_finished_product_anomaly_analysis_run_post",
@@ -173526,6 +174198,83 @@
         ]
       }
     },
+    "/api/v1/quality/inspection/feishu/{entity_code}/records/{record_id}/attachments/{file_token}/preview": {
+      "get": {
+        "operationId": "api_get_inspection_feishu_attachment_preview_api_v1_quality_inspection_feishu__entity_code__records__record_id__attachments__file_token__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entity_code",
+            "required": true,
+            "schema": {
+              "title": "Entity Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_token",
+            "required": true,
+            "schema": {
+              "title": "File Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Get Inspection Feishu Attachment Preview Api V1 Quality Inspection Feishu  Entity Code  Records  Record Id  Attachments  File Token  Preview Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "在线预览检验记录附件（图片/PDF 原样，office 转 PDF，inline 响应）",
+        "tags": [
+          "质量管理",
+          "Quality-Inspection-Feishu-CRUD"
+        ]
+      }
+    },
     "/api/v1/quality/inspections": {
       "get": {
         "operationId": "list_inspections_api_v1_quality_inspections_get",
@@ -174971,6 +175720,156 @@
         ]
       }
     },
+    "/api/v1/quality/items/dashboard": {
+      "get": {
+        "operationId": "api_items_dashboard_api_v1_quality_items_dashboard_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_dict_str__Any__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Api Items Dashboard",
+        "tags": [
+          "质量管理",
+          "Quality-Inspection-Feishu"
+        ]
+      }
+    },
+    "/api/v1/quality/items/dashboard/push-low-stock": {
+      "post": {
+        "operationId": "api_push_low_stock_api_v1_quality_items_dashboard_push_low_stock_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_dict_str__Any__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Api Push Low Stock",
+        "tags": [
+          "质量管理",
+          "Quality-Inspection-Feishu"
+        ]
+      }
+    },
+    "/api/v1/quality/items/dashboard/push-low-stock/test": {
+      "post": {
+        "operationId": "api_push_low_stock_test_api_v1_quality_items_dashboard_push_low_stock_test_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_dict_str__Any__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Api Push Low Stock Test",
+        "tags": [
+          "质量管理",
+          "Quality-Inspection-Feishu"
+        ]
+      }
+    },
     "/api/v1/quality/items/inbound": {
       "get": {
         "operationId": "api_list_inbounds_api_v1_quality_items_inbound_get",
@@ -175005,6 +175904,26 @@
               "minimum": 1,
               "title": "Page Size",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Force",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "incremental",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Incremental",
+              "type": "boolean"
             }
           },
           {
@@ -175140,6 +176059,26 @@
             }
           },
           {
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Force",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "incremental",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Incremental",
+              "type": "boolean"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,
@@ -175179,6 +176118,57 @@
           }
         },
         "summary": "Api List Items",
+        "tags": [
+          "质量管理",
+          "Quality-Inspection-Feishu"
+        ]
+      }
+    },
+    "/api/v1/quality/items/inventory/filter-options": {
+      "get": {
+        "description": "库存台账动态筛选项（存放位置 / 库存报警去重值），供筛选/分类按钮使用。",
+        "operationId": "api_items_inventory_filter_options_api_v1_quality_items_inventory_filter_options_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_dict_str__Any__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Api Items Inventory Filter Options",
         "tags": [
           "质量管理",
           "Quality-Inspection-Feishu"
@@ -175269,6 +176259,26 @@
               "minimum": 1,
               "title": "Page Size",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Force",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "incremental",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Incremental",
+              "type": "boolean"
             }
           },
           {
@@ -179009,6 +180019,174 @@
         ]
       }
     },
+    "/api/v1/quality/oos-oot/oot-limit-products/export/all": {
+      "get": {
+        "operationId": "export_all_oot_limit_products_api_v1_quality_oos_oot_oot_limit_products_export_all_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "导出全部OOT限度告知单（zip）",
+        "tags": [
+          "质量管理",
+          "Quality-OOS/OOT-Limits"
+        ]
+      }
+    },
+    "/api/v1/quality/oos-oot/oot-limit-products/import/confirm": {
+      "post": {
+        "operationId": "confirm_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_confirm_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_confirm_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_confirm_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_dict_str__Any__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "确认导入OOT限度告知单",
+        "tags": [
+          "质量管理",
+          "Quality-OOS/OOT-Limits"
+        ]
+      }
+    },
+    "/api/v1/quality/oos-oot/oot-limit-products/import/preview": {
+      "post": {
+        "operationId": "preview_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_preview_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_preview_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_preview_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_dict_str__Any__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "OOT限度告知单导入预览",
+        "tags": [
+          "质量管理",
+          "Quality-OOS/OOT-Limits"
+        ]
+      }
+    },
     "/api/v1/quality/oos-oot/oot-limit-products/{product_id}": {
       "delete": {
         "operationId": "delete_oot_limit_product_api_v1_quality_oos_oot_oot_limit_products__product_id__delete",
@@ -179131,6 +180309,64 @@
           }
         },
         "summary": "更新OOT限度产品",
+        "tags": [
+          "质量管理",
+          "Quality-OOS/OOT-Limits"
+        ]
+      }
+    },
+    "/api/v1/quality/oos-oot/oot-limit-products/{product_id}/export": {
+      "get": {
+        "operationId": "export_oot_limit_product_api_v1_quality_oos_oot_oot_limit_products__product_id__export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "product_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Product Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "导出单个产品OOT限度告知单",
         "tags": [
           "质量管理",
           "Quality-OOS/OOT-Limits"
@@ -181573,6 +182809,56 @@
           }
         },
         "summary": "获取质量模块人员选择候选（人事管理-飞书联系人）",
+        "tags": [
+          "质量管理",
+          "Quality-Management"
+        ]
+      }
+    },
+    "/api/v1/quality/person-options/qa": {
+      "get": {
+        "operationId": "list_qa_person_options_api_v1_quality_person_options_qa_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_dict_str__Any___"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取 QA 部门人员（产品QA 默认候选）",
         "tags": [
           "质量管理",
           "Quality-Management"
@@ -190267,6 +191553,66 @@
         ]
       }
     },
+    "/api/v1/registration/certificate-management/reminder-settings/test": {
+      "post": {
+        "operationId": "test_certificate_reminder_settings_api_v1_registration_certificate_management_reminder_settings_test_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CertificateReminderTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_CertificateReminderTestResult_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "发送证书到期提醒测试消息",
+        "tags": [
+          "注册管理",
+          "证书管理"
+        ]
+      }
+    },
     "/api/v1/registration/certificate-management/sheets/{sheet_key}": {
       "get": {
         "operationId": "get_certificate_sheet_detail_api_v1_registration_certificate_management_sheets__sheet_key__get",
@@ -196986,6 +198332,65 @@
           }
         },
         "summary": "更新法规更新推送配置",
+        "tags": [
+          "法规追踪"
+        ]
+      }
+    },
+    "/api/v1/regulatory-documents/notification-settings/test": {
+      "post": {
+        "operationId": "test_notification_settings_api_v1_regulatory_documents_notification_settings_test_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegulatoryTrackerNotificationTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_RegulatoryTrackerNotificationTestResult_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "发送法规推送测试消息",
         "tags": [
           "法规追踪"
         ]
@@ -217742,6 +219147,56 @@
           }
         },
         "summary": "更新页面飞书配置",
+        "tags": [
+          "仓储管理"
+        ]
+      }
+    },
+    "/api/v1/warehouse/person-avatar-map": {
+      "get": {
+        "description": "供文本类型人员字段（入库人/领料人等）渲染真实头像的姓名映射",
+        "operationId": "get_person_avatar_map_api_v1_warehouse_person_avatar_map_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Person Avatar Map Api V1 Warehouse Person Avatar Map Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "人员姓名→飞书头像映射（人事-飞书联系人，在职）",
         "tags": [
           "仓储管理"
         ]

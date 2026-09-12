@@ -5,17 +5,14 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterable
 
-from app.core.config import get_settings
-
 logger = logging.getLogger(__name__)
 
-
-def _get_solid_base_token() -> str:
-    return get_settings().QUALITY_SOLID_BASE_TOKEN
-
-
-def _get_liquid_base_token() -> str:
-    return get_settings().QUALITY_LIQUID_BASE_TOKEN
+# 2026-09-11：固体/液体物料检验整体迁移到新 Base（每物料子表不变，仅 Base 与
+# table_id 更新）。table_id 硬编码为新 Base 内各子表，故 app_token 不再走环境变量
+# 兜底（旧 env 值会与硬编码 table_id 拼成跨 Base 坏配置）；运行期以 DB 实体配置
+# （质量设置-飞书设置）为准，此处仅作初始化预填默认。
+SOLID_MATERIAL_BASE_TOKEN = "TGWXbQ1Pma00Nrs2rbxcJMO2nQb"
+LIQUID_MATERIAL_BASE_TOKEN = "HTn4b3Xvqa2W9NsGkd6clQzZnde"
 
 
 SOLID_GROUPS: list[dict[str, str]] = [
@@ -878,6 +875,170 @@ def _flatten_items(groups: dict[str, list[dict[str, str]]]) -> Iterable[dict[str
         yield from items
 
 
+SOLID_MATERIAL_NEW_TABLE_IDS: dict[str, str] = {
+    "qc_solid_ys001": "tbl22bufTp7GGXwk",
+    "qc_solid_ys002": "tblr6H8kGD3gtFW8",
+    "qc_solid_ys003": "tbl0fIwEomjxR8w2",
+    "qc_solid_ys004": "tblPMkgoBJFeDLMJ",
+    "qc_solid_ys005": "tblyybnIuNRQw36Z",
+    "qc_solid_ys006": "tblfUx9DIU4opMjh",
+    "qc_solid_ys007": "tblL0ZvwMiy0O5GX",
+    "qc_solid_ys008": "tblwXsDyhGRlsIrf",
+    "qc_solid_ys009": "tblA2qRr757pDSNK",
+    "qc_solid_ys010": "tblOJoZHOnuRyGgS",
+    "qc_solid_ys011": "tbljtukrBXTzMkuh",
+    "qc_solid_ys012": "tbluGONgJDaHFInW",
+    "qc_solid_ys013": "tblYqwmBr6JC1Srg",
+    "qc_solid_ys014": "tblEyJXShRMqUa9H",
+    "qc_solid_ys015": "tblKZbNSkE8c4Gkc",
+    "qc_solid_ys016": "tbl2JXf6JT0rYtRk",
+    "qc_solid_ys017": "tblklGwUG6KQUHvx",
+    "qc_solid_ys018": "tblwax8w3R9sjw8C",
+    "qc_solid_ys019": "tbld6lTYinNZLAsz",
+    "qc_solid_ys020": "tbl0TlrDFJ7zMGfD",
+    "qc_solid_ys021": "tblBUIudR5KjZJh0",
+    "qc_solid_ys022": "tblrAUAYt8yp5PuO",
+    "qc_solid_ys023": "tblgZmOFPGtwWN8C",
+    "qc_solid_ys024": "tbln5iOm3saFt8vR",
+    "qc_solid_ys025": "tbl1F2D8nky608V2",
+    "qc_solid_ys026": "tblyZcMoHd7umvcW",
+    "qc_solid_ys027": "tblldolYH7tjDDnC",
+    "qc_solid_ys028": "tblXeyQR2zmDqjQG",
+    "qc_solid_ys029": "tblXE8se0JAlxCeI",
+    "qc_solid_ys030": "tblX0OebuCw3az6R",
+    "qc_solid_ys034": "tblbZotGpQxfvtkJ",
+    "qc_solid_ys038": "tblAEZKygR6yt0Yf",
+    "qc_solid_ys039": "tblgx8XHVm4WWRTO",
+    "qc_solid_ys040": "tbl7Pb3kdBTThCAA",
+    "qc_solid_ys044": "tbl5bU4ZWtw07NLj",
+    "qc_solid_ys047": "tblvMmeNguouyV3s",
+    "qc_solid_ys048": "tbl2u4M9uxOX0KG3",
+    "qc_solid_ys051": "tblN246yqWll3yF3",
+    "qc_solid_ys052": "tblBN44qar7FBF8S",
+    "qc_solid_ys053": "tblILf2E52oKNXzn",
+    "qc_solid_ys105": "tblwLcTUDRBy8NgT",
+    "qc_solid_ys107": "tblqOpZ4oKwjJX2r",
+    "qc_solid_ys110": "tblv91nJtKDTgcmg",
+    "qc_solid_ys112": "tblKMzrlnYBXHUXo",
+    "qc_solid_ys201": "tbl8422kYxJxurEK",
+    "qc_solid_ys301": "tblsOn5MqIeieekU",
+    "qc_solid_ys302": "tblJ4zNdBvYG2CgQ",
+    "qc_solid_ys303": "tblmF9AMmuSYuJQZ",
+    "qc_solid_ys304": "tbljVidqjbcpJlOZ",
+    "qc_solid_ys401": "tblMTk05FKLpftLG",
+    "qc_solid_ys403": "tblhITS9R7QxHoHv",
+    "qc_solid_ys404": "tbl9YB1p7M3j9l0Z",
+    "qc_solid_ys405": "tblzTgpj72y9WZuo",
+    "qc_solid_ys406": "tblbl4zeXrKhqgbK",
+    "qc_solid_ys407": "tblDj7dKwvafPoVY",
+    "qc_solid_ys412": "tblPAgC7HuUgqyIX",
+    "qc_solid_ys415": "tbldfAG4pYL6B8Rr",
+    "qc_solid_ys501": "tbl35m4mxsdBsUM8",
+    "qc_solid_ys502": "tblqlfpm7hIyumrU",
+    "qc_solid_ys503": "tbl3W1i2yJiYAldN",
+    "qc_solid_ys504": "tblL4uT9VVZwIeFr",
+    "qc_solid_ys505": "tbliSV1BQcgbrL5B",
+    "qc_solid_ys507": "tblfgFt1qnXF3v5X",
+    "qc_solid_ys511": "tblOecpTL6xv0v7Z",
+    "qc_solid_ys513": "tbllBEW5t32kSEcV",
+    "qc_solid_ys513_fvhdro": "tbllBEW5t32kSEcV",
+    "qc_solid_ys514": "tblgcnJhVXRYu9tT",
+    "qc_solid_ys514_sgx7j0": "tblgcnJhVXRYu9tT",
+    "qc_solid_ys515": "tblYrFRQq8dAeHgl",
+    "qc_solid_ys516": "tblm5EJBQdUj8qg5",
+    "qc_solid_ys517": "tblOULZWquhVOFko",
+    "qc_solid_ys520": "tbldZRMdOSU5dpRl",
+    "qc_solid_ys524": "tblin8Gg0fVnyNa6",
+    "qc_solid_ys525": "tbl29Wn2a2hqsPdb",
+    "qc_solid_ys528": "tbl1Hn4BJYbxWpin",
+    "qc_solid_ys530": "tblPaZrR6QDm5Odf",
+    "qc_solid_ys531": "tblaHyvoJaFa2ZHz",
+    "qc_solid_ys602": "tbl7wFqgQ3ZNCm7Y",
+    "qc_solid_ys603": "tblQLCoHSUGbTEtz",
+    "qc_solid_ys604": "tblJP5EG71A8t8gi",
+    "qc_solid_ys606": "tblle6hSCX0RR2MM",
+    "qc_solid_ys702": "tblHlF2aPfBegl2x",
+    "qc_solid_ys703": "tblqtdcl8o4drEVl",
+    "qc_solid_ys704": "tblF8ADdIpC92JjK",
+    "qc_solid_ys704_oowx6g": "tblF8ADdIpC92JjK",
+    "qc_solid_ys705": "tbls9Dl3dzofqFUX",
+    "qc_solid_ys712": "tblzze1gVB5SCB6R",
+    "qc_solid_ys803": "tblo7kybLBDmx1W4",
+    "qc_solid_ys804": "tblwQ4L28qJAzyq9",
+    "qc_solid_ys805": "tblfcK4WZBG81eXh",
+    "qc_solid_ys806": "tblr1vud0izn1Xe7",
+    "qc_solid_ys809": "tblmCvPUXXxAED9g",
+    "qc_solid_ys810": "tblhMwTKvHnQt4ee",
+    "qc_solid_ys813": "tblhddMjBv3drlKd",
+    "qc_solid_ys814": "tblXU6F8whSe7Nxy",
+    "qc_solid_manual_msvxtv": "tbl5HMLce5lCXrP2",
+    "qc_solid_manual_jgw8uq": "tbl3sRv2F1yaBBJz",
+    "qc_solid_manual_lveh9l": "tbl2Q2lgROvFJywd",
+    "qc_solid_manual_ufjdgx": "tbln2DneffFvFXyp",
+    "qc_solid_manual_ntqrid": "tblUnZXH0Fn0UFVW",
+}
+
+LIQUID_MATERIAL_NEW_TABLE_IDS: dict[str, str] = {
+    "qc_liquid_yl001": "tbl4hyUkbKg5Tifv",
+    "qc_liquid_yl002": "tblccmc1Y3ZUf6pj",
+    "qc_liquid_yl003": "tbllIM8zSsiB9Nlx",
+    "qc_liquid_yl004": "tblY5O1ejRfLtiKS",
+    "qc_liquid_yl005": "tblpjisUBCCOa12H",
+    "qc_liquid_yl006": "tblQizBvS3DpDFm8",
+    "qc_liquid_yl007": "tblQsLax1C2Bmjxn",
+    "qc_liquid_yl008": "tblIMprOC8uUqhLy",
+    "qc_liquid_yl009": "tblHr0Btt8sgl7p2",
+    "qc_liquid_yl012": "tblqadCdi6umdzgH",
+    "qc_liquid_yl015": "tbldydSYF8m9Yoxx",
+    "qc_liquid_yl016": "tbloD0JaDBq51Ozz",
+    "qc_liquid_yl017": "tblbDrfWcsuX3WAG",
+    "qc_liquid_yl018": "tblfLYqV2JJackAb",
+    "qc_liquid_yl019": "tbld4dG8yrQvj6qi",
+    "qc_liquid_yl020": "tblEmRe3xqOYS5zL",
+    "qc_liquid_yl021": "tbl12nmcjsFtO2iR",
+    "qc_liquid_yl022": "tbljJ1jn3y3wTSpS",
+    "qc_liquid_yl023": "tblbL9OaV5gtSQYH",
+    "qc_liquid_yl024": "tblod6CKL6uI0Rq9",
+    "qc_liquid_yl025": "tblPO0L5w92PAnRg",
+    "qc_liquid_yl026": "tbllZFytL6EVtCNw",
+    "qc_liquid_yl027": "tblX3LjojomW37zt",
+    "qc_liquid_yl029": "tbl7p8GpXJi3Gh0r",
+    "qc_liquid_yl030": "tblP757yoylg5Ff5",
+    "qc_liquid_yl032": "tblja29xj89ORdrB",
+    "qc_liquid_yl101": "tblGCm4c4LPJGVMQ",
+    "qc_liquid_yl102": "tbl3QVGea4JWJWGl",
+    "qc_liquid_yl201": "tbl9bIPrNro8t0xe",
+    "qc_liquid_yl202": "tblXwsvzEsOO57gu",
+    "qc_liquid_yl203": "tblP7oEktuFydb3U",
+    "qc_liquid_yl204": "tblFajtBdIsKcyGB",
+    "qc_liquid_yl301": "tblxlcmGG22O4IO0",
+    "qc_liquid_yl401": "tbl2u6n05vZMJRH7",
+    "qc_liquid_yl402": "tblR2CPeFsezvdAN",
+    "qc_liquid_yl403": "tbleny58QU8EMh41",
+    "qc_liquid_yl404": "tbl1leLjMxfuoGf0",
+    "qc_liquid_yl405": "tbld7Jiao6O7LDBp",
+    "qc_liquid_yl407": "tblo6x7X9A0qC6wR",
+    "qc_liquid_yl501": "tbld52W3kIiBwSM0",
+    "qc_liquid_yl502": "tbl4Fgv5FocZLQFI",
+    "qc_liquid_yl503": "tbludfJqPTaZ5eQZ",
+    "qc_liquid_yl504": "tblGlTBAKjiLq3L6",
+    "qc_liquid_yl505": "tblDzmtep7F1okhp",
+    "qc_liquid_yl506": "tblvCR9FVk6QmyHm",
+    "qc_liquid_yl507": "tbltUIpbaSEw1Mbg",
+    "qc_liquid_yl508": "tblVU8kOeJPtdDoa",
+    "qc_liquid_yl509": "tblLmSD0e5vtC2Oe",
+    "qc_liquid_yl511": "tblPYAkI45ZZhlrY",
+    "qc_liquid_yl512": "tblQXF77cfgpxOpo",
+    "qc_liquid_yl513": "tbl26Yhv8iPxNYw0",
+    "qc_liquid_yl602": "tbltW5WB6xb48gCH",
+    "qc_liquid_yl603": "tblxHKx3t6Mlq30g",
+    "qc_liquid_yl604": "tblR5UX8Gyas0Oiq",
+    "qc_liquid_yl701": "tblAzE1AsODltTlH",
+    "qc_liquid_yl801": "tblqeIi98bQPwWIP",
+    "qc_liquid_yl803": "tblECv4dYHWPdGOn",
+}
+
+
 MATERIAL_GROUPS = {
     "solid": SOLID_GROUPS,
     "liquid": LIQUID_GROUPS,
@@ -936,8 +1097,10 @@ MATERIAL_ENTITY_GROUPS: dict[str, dict[str, str]] = {
 MATERIAL_ENTITY_PREFILLS: dict[str, dict[str, str]] = {
     **{
         item["entity_code"]: {
-            "app_token": _get_solid_base_token(),
-            "table_id": item["table_id"],
+            "app_token": SOLID_MATERIAL_BASE_TOKEN,
+            "table_id": SOLID_MATERIAL_NEW_TABLE_IDS.get(
+                item["entity_code"], item["table_id"]
+            ),
             "table_name": item["label"],
             "source_note": "默认预填：QC固体物料结果统计表",
         }
@@ -945,8 +1108,10 @@ MATERIAL_ENTITY_PREFILLS: dict[str, dict[str, str]] = {
     },
     **{
         item["entity_code"]: {
-            "app_token": _get_liquid_base_token(),
-            "table_id": item["table_id"],
+            "app_token": LIQUID_MATERIAL_BASE_TOKEN,
+            "table_id": LIQUID_MATERIAL_NEW_TABLE_IDS.get(
+                item["entity_code"], item["table_id"]
+            ),
             "table_name": item["label"],
             "source_note": "默认预填：QC液体物料结果统计表",
         }

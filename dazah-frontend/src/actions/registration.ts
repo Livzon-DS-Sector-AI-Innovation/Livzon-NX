@@ -24,6 +24,8 @@ import {
   DeclarationProgressEntryInput,
   DeclarationProgressWorkbookImportResult,
   CertificateReminderSettingInput,
+  CertificateReminderTestInput,
+  CertificateReminderTestResult,
   FeeEntryCreate,
   FeeEntryUpdate,
   InspectionContactCreate,
@@ -300,7 +302,17 @@ export async function updateCertificateReminderSettings(
     data
   )
   revalidatePath('/registration/certificate-management')
+  revalidatePath('/registration/settings')
   return result
+}
+
+export async function testCertificateReminderSettings(
+  data: CertificateReminderTestInput
+) {
+  return serverApiPost<CertificateReminderTestResult>(
+    '/api/v1/registration/certificate-management/reminder-settings/test',
+    data
+  )
 }
 
 export async function importCertificateWorkbook(formData: FormData) {

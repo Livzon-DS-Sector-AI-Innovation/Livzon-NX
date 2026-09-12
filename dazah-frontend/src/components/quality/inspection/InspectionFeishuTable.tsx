@@ -4,7 +4,7 @@ import { TableEmptyState } from '../TableEmptyState'
 import { qualityTokens } from '../themeTokens'
 
 import { useState, useEffect } from 'react'
-import { Table, Card, Button, Input, Space, Typography, Alert, Select, App, Popconfirm } from 'antd'
+import { Table, Card, Button, Input, Space, Typography, Alert, Select, App, Modal, Popconfirm } from 'antd'
 import { SyncOutlined, SearchOutlined, FilterOutlined, PlusOutlined } from '@ant-design/icons'
 import type { TablePaginationConfig } from 'antd'
 import type { ColumnsType, ColumnType } from 'antd/es/table'
@@ -15,7 +15,9 @@ import { fetchInspectionFeishuFields } from '@/lib/api/client/quality'
 import type { InspectionFeishuFieldMeta } from '@/types/quality'
 import { InspectionFeishuRecordModal } from './InspectionFeishuRecordModal'
 import { InspectionFeishuRecordDetailDrawer } from './InspectionFeishuRecordDetailDrawer'
+import { FeishuAttachmentPreviewModal } from '../FeishuAttachmentPreviewModal'
 import { renderFeishuValue } from './renderFeishuValue'
+import type { FeishuAttachmentPreviewContext } from './renderFeishuValue'
 
 export interface FilterConfig {
   key: string
@@ -35,6 +37,13 @@ interface Props {
   columns?: ColumnsType<Record<string, unknown>>
   filters?: FilterConfig[]
   editable?: boolean
+  createLabel?: string
+  /** 开启后纯文本单元格可点击，弹窗查看完整内容 */
+  enableTextPreview?: boolean
+  /** 开启后附件（报告单等文档）点击弹窗在线预览（office 由后端转 PDF） */
+  enableAttachmentPreview?: boolean
+  /** 开启后工具栏展示镜像最近同步时间（成品页） */
+  showLastSyncTime?: boolean
 }
 
 interface FetchResult {
@@ -43,6 +52,7 @@ interface FetchResult {
   configured: boolean
   serverFields: string[]
   displayFields: string[]
+  lastSyncTime?: string | null
 }
 
 export function InspectionFeishuTable({
@@ -56,6 +66,10 @@ export function InspectionFeishuTable({
   columns,
   filters = [],
   editable = false,
+  createLabel = '新增',
+  enableTextPreview = false,
+  enableAttachmentPreview = false,
+  showLastSyncTime = false,
 }: Props) {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
@@ -67,13 +81,31 @@ export function InspectionFeishuTable({
   const [modalOpen, setModalOpen] = useState(false)
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create')
   const [editingRecord, setEditingRecord] = useState<Record<string, unknown>>()
+  const [textPreview, setTextPreview] = useState<{ title: string; content: string } | null>(null)
+  const [attachmentPreview, setAttachmentPreview] = useState<{
+    fileName: string
+    previewSrc: string
+    downloadSrc: string
+  } | null>(null)
 
-  const { data: fieldsData } = useQuery<{ fields: InspectionFeishuFieldMeta[]; can_push: boolean } | null>({
+  const openAttachmentPreview = (context: FeishuAttachmentPreviewContext) => {
+    const recordId = String(context.record.record_id ?? '')
+    const fileToken = String(context.attachment.file_token ?? '')
+    const base = `/api/v1/quality/inspection/feishu/${encodeURIComponent(context.entityCode ?? '')}/records/${encodeURIComponent(recordId)}/attachments/${encodeURIComponent(fileToken)}`
+    setAttachmentPreview({
+      fileName: context.attachment.name || '附件',
+      previewSrc: `${base}/preview`,
+      downloadSrc: `${base}/content`,
+    })
+  }
+
+  const { data: fieldsData } = useQuery<{ fields: InspectionFeishuFieldMeta[]; can_push: boolean; form_url?: string | null } | null>({
     queryKey: ['quality-inspection', 'fields', entityCode],
     queryFn: () => fetchInspectionFeishuFields(entityCode as string),
     enabled: editable && Boolean(entityCode),
   })
   const canPush = fieldsData?.can_push ?? false
+  const formUrl = fieldsData?.form_url ?? null
 
   const { data: queryData, isFetching: loading, error } = useQuery<FetchResult>({
     queryKey: ['quality-inspection', 'list', listApi, { page: pagination.page, pageSize: pagination.pageSize, keyword, filterValues, entityCode }],
@@ -92,6 +124,7 @@ export function InspectionFeishuTable({
         configured: json.meta?.configured !== false,
         serverFields: Array.isArray(json.meta?.fields) ? json.meta.fields as string[] : [],
         displayFields: Array.isArray(json.meta?.display_fields) ? json.meta.display_fields as string[] : [],
+        lastSyncTime: typeof json.meta?.last_sync_time === 'string' ? json.meta.last_sync_time : null,
       }
     },
     placeholderData: (prev) => prev,
@@ -102,6 +135,7 @@ export function InspectionFeishuTable({
   const configured = queryData?.configured ?? true
   const serverFields = queryData?.serverFields ?? []
   const displayFields = queryData?.displayFields ?? []
+  const lastSyncTime = queryData?.lastSyncTime ?? null
 
   useEffect(() => {
     if (error) {
@@ -120,8 +154,16 @@ export function InspectionFeishuTable({
     if (!entityCode) return
     setSyncing(true)
     try {
-      const result = await pullInspectionFeishuRecords(entityCode)
-      message.success(`已同步 ${result?.synced ?? 0} 条记录`)
+      let synced = 0
+      if (pullApi) {
+        const res = await fetch(pullApi, { method: 'POST' })
+        const json = await res.json()
+        synced = json?.data?.synced ?? 0
+      } else {
+        const result = await pullInspectionFeishuRecords(entityCode)
+        synced = result?.synced ?? 0
+      }
+      message.success(`已同步 ${synced} 条记录`)
       queryClient.invalidateQueries({ queryKey: ['quality-inspection', 'list', listApi] })
     } catch {
       message.error('同步失败，请检查飞书设置')
@@ -131,6 +173,10 @@ export function InspectionFeishuTable({
   }
 
   const openCreate = () => {
+    if (formUrl) {
+      window.open(formUrl, '_blank', 'noopener,noreferrer')
+      return
+    }
     setModalMode('create')
     setEditingRecord(undefined)
     setModalOpen(true)
@@ -221,7 +267,15 @@ export function InspectionFeishuTable({
             width: '100%',
           }}
         >
-          {renderFeishuValue(value, record, entityCode, message)}
+          {renderFeishuValue(value, record, entityCode, message, {
+            fieldName: field,
+            onAttachmentPreview:
+              enableAttachmentPreview ? openAttachmentPreview : undefined,
+            onTextPreview: enableTextPreview
+              ? (fieldName, text) =>
+                  setTextPreview({ title: fieldName || '内容', content: text })
+              : undefined,
+          })}
         </div>
       ),
       onCell: () => ({
@@ -293,15 +347,20 @@ export function InspectionFeishuTable({
               筛选
             </Button>
           )}
-          {editable && canPush && (
+          {editable && (canPush || formUrl) && (
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-              新增
+              {createLabel}
             </Button>
           )}
           {pullApi && entityCode && (
             <Button type="primary" icon={<SyncOutlined />} onClick={handlePull} loading={syncing}>
               同步飞书数据
             </Button>
+          )}
+          {showLastSyncTime && lastSyncTime && (
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              最近同步：{new Date(lastSyncTime).toLocaleString('zh-CN', { hour12: false })}
+            </Typography.Text>
           )}
         </Space>
       </div>
@@ -398,8 +457,37 @@ export function InspectionFeishuTable({
         entityCode={entityCode}
         record={detailRecord}
         allFields={serverFields}
+        onAttachmentPreview={
+          enableAttachmentPreview ? openAttachmentPreview : undefined
+        }
         onClose={() => setDetailOpen(false)}
       />
+      <FeishuAttachmentPreviewModal
+        open={attachmentPreview !== null}
+        fileName={attachmentPreview?.fileName ?? ''}
+        previewSrc={attachmentPreview?.previewSrc ?? ''}
+        downloadSrc={attachmentPreview?.downloadSrc ?? ''}
+        onClose={() => setAttachmentPreview(null)}
+      />
+      <Modal
+        open={textPreview !== null}
+        title={textPreview?.title}
+        footer={null}
+        width={680}
+        onCancel={() => setTextPreview(null)}
+      >
+        <div
+          style={{
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            maxHeight: '60vh',
+            overflowY: 'auto',
+            lineHeight: 1.6,
+          }}
+        >
+          {textPreview?.content}
+        </div>
+      </Modal>
     </div>
   )
 }

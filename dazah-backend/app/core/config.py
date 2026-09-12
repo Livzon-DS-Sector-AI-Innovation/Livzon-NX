@@ -161,8 +161,6 @@ class Settings(BaseSettings):
     # Feishu Bitable — 质量模块环境兜底。质量模块仍以模块内配置表为主；
     # 这些字段仅用于兼容既有部署和初始化预填。
     QUALITY_FEISHU_APP_TOKEN: str = ""
-    QUALITY_SOLID_BASE_TOKEN: str = ""
-    QUALITY_LIQUID_BASE_TOKEN: str = ""
     QUALITY_FEISHU_DEVIATION_REPORT_TABLE_ID: str = ""
     QUALITY_FEISHU_DEVIATION_INVESTIGATION_PUSH_TABLE_ID: str = ""
     QUALITY_FEISHU_DEVIATION_TABLE_ID: str = ""

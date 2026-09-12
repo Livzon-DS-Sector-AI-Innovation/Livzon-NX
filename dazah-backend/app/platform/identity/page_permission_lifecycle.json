@@ -462,6 +462,14 @@
       "route_path": "/registration/knowledge",
       "actions": {}
     },
+    "registration:registration-settings": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/settings",
+      "actions": {
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
+    },
     "quality:feishu-settings": {
       "status": "retired",
       "module_code": "quality",
@@ -596,6 +604,12 @@
       "route_path": "/quality/inspection/items/outbound",
       "actions": {}
     },
+    "quality:inspection:inspection-items:inspection-items-dashboard": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/items/dashboard",
+      "actions": {}
+    },
     "quality:inspection:inspection-instruments:inspection-instruments-equipment": {
       "status": "active",
       "module_code": "quality",
@@ -681,6 +695,12 @@
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/finished/lkms",
+      "actions": {}
+    },
+    "quality:inspection:inspection-finished:inspection-finished-pf": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/finished/pf",
       "actions": {}
     },
     "quality:inspection:inspection-finished:inspection-finished-bbas": {
@@ -1244,6 +1264,24 @@
           "status": "active",
           "category": "bulk_change"
         }
+      }
+    },
+    "warehouse:materials:liquid-raw-inbound": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/materials/liquid-raw-inbound",
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
+    },
+    "warehouse:materials:liquid-sugar-inbound": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/materials/liquid-sugar-inbound",
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
       }
     },
     "warehouse:materials:qualified-suppliers": {

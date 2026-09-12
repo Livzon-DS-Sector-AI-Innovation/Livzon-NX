@@ -41,7 +41,7 @@ function toBool(value: unknown): boolean {
   return value === true || value === 'True' || value === 'true'
 }
 
-/** 成品异常报告新增/编辑弹窗：按飞书字段元数据动态生成表单（人员走部门联系人解析）。 */
+/** 成品异常报告新增/编辑弹窗：按飞书字段元数据动态生成表单（人员经后端换发 union_id 写入）。 */
 export function FinishedProductAnomalyFormModal({
   open,
   saving = false,

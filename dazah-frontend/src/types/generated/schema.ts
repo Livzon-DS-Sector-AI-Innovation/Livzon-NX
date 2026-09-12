@@ -15887,6 +15887,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quality/finished-product-anomaly/analysis/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 导出成品异常 AI 分类结果（环境间搬运，避免生产重新跑 AI） */
+        get: operations["api_export_anomaly_classifications_api_v1_quality_finished_product_anomaly_analysis_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/finished-product-anomaly/analysis/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 导入成品异常 AI 分类结果（幂等：本环境已有分类的记录跳过） */
+        post: operations["api_import_anomaly_classifications_api_v1_quality_finished_product_anomaly_analysis_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quality/finished-product-anomaly/analysis/run": {
         parameters: {
             query?: never;
@@ -16757,6 +16791,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quality/inspection/feishu/{entity_code}/records/{record_id}/attachments/{file_token}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 在线预览检验记录附件（图片/PDF 原样，office 转 PDF，inline 响应） */
+        get: operations["api_get_inspection_feishu_attachment_preview_api_v1_quality_inspection_feishu__entity_code__records__record_id__attachments__file_token__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quality/inspections": {
         parameters: {
             query?: never;
@@ -17066,6 +17117,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quality/items/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Api Items Dashboard */
+        get: operations["api_items_dashboard_api_v1_quality_items_dashboard_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/items/dashboard/push-low-stock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Api Push Low Stock */
+        post: operations["api_push_low_stock_api_v1_quality_items_dashboard_push_low_stock_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/items/dashboard/push-low-stock/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Api Push Low Stock Test */
+        post: operations["api_push_low_stock_test_api_v1_quality_items_dashboard_push_low_stock_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quality/items/inbound": {
         parameters: {
             query?: never;
@@ -17109,6 +17211,26 @@ export interface paths {
         };
         /** Api List Items */
         get: operations["api_list_items_api_v1_quality_items_inventory_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/items/inventory/filter-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Api Items Inventory Filter Options
+         * @description 库存台账动态筛选项（存放位置 / 库存报警去重值），供筛选/分类按钮使用。
+         */
+        get: operations["api_items_inventory_filter_options_api_v1_quality_items_inventory_filter_options_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -17710,6 +17832,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quality/oos-oot/oot-limit-products/export/all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 导出全部OOT限度告知单（zip） */
+        get: operations["export_all_oot_limit_products_api_v1_quality_oos_oot_oot_limit_products_export_all_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/oos-oot/oot-limit-products/import/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 确认导入OOT限度告知单 */
+        post: operations["confirm_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/oos-oot/oot-limit-products/import/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** OOT限度告知单导入预览 */
+        post: operations["preview_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quality/oos-oot/oot-limit-products/{product_id}": {
         parameters: {
             query?: never;
@@ -17723,6 +17896,23 @@ export interface paths {
         post?: never;
         /** 删除OOT限度产品 */
         delete: operations["delete_oot_limit_product_api_v1_quality_oos_oot_oot_limit_products__product_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/oos-oot/oot-limit-products/{product_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 导出单个产品OOT限度告知单 */
+        get: operations["export_oot_limit_product_api_v1_quality_oos_oot_oot_limit_products__product_id__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -18108,6 +18298,23 @@ export interface paths {
         };
         /** 获取质量模块人员选择候选（人事管理-飞书联系人） */
         get: operations["list_person_options_api_v1_quality_person_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/person-options/qa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取 QA 部门人员（产品QA 默认候选） */
+        get: operations["list_qa_person_options_api_v1_quality_person_options_qa_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -19570,6 +19777,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/registration/certificate-management/reminder-settings/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 发送证书到期提醒测试消息 */
+        post: operations["test_certificate_reminder_settings_api_v1_registration_certificate_management_reminder_settings_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/registration/certificate-management/sheets/{sheet_key}": {
         parameters: {
             query?: never;
@@ -20866,6 +21090,23 @@ export interface paths {
         /** 更新法规更新推送配置 */
         put: operations["update_notification_settings_api_v1_regulatory_documents_notification_settings_put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/regulatory-documents/notification-settings/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 发送法规推送测试消息 */
+        post: operations["test_notification_settings_api_v1_regulatory_documents_notification_settings_test_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -25255,6 +25496,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/warehouse/person-avatar-map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 人员姓名→飞书头像映射（人事-飞书联系人，在职）
+         * @description 供文本类型人员字段（入库人/领料人等）渲染真实头像的姓名映射
+         */
+        get: operations["get_person_avatar_map_api_v1_warehouse_person_avatar_map_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/warehouse/products": {
         parameters: {
             query?: never;
@@ -26536,6 +26797,21 @@ export interface components {
              */
             year?: number | null;
         };
+        /**
+         * AnomalyClassificationImportBody
+         * @description 成品异常 AI 分类结果导入请求（由导出接口产出的 JSON 结构）。
+         */
+        AnomalyClassificationImportBody: {
+            /**
+             * Entity Type
+             * @description 固定 fp_anomaly_classification
+             */
+            entity_type: string;
+            /** Rows */
+            rows?: {
+                [key: string]: unknown;
+            }[];
+        };
         /** ApiResponse */
         ApiResponse: {
             /**
@@ -26815,6 +27091,24 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["CertificateReminderSettingResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[CertificateReminderTestResult] */
+        ApiResponseEnvelope_CertificateReminderTestResult_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["CertificateReminderTestResult"];
             /**
              * Message
              * @default success
@@ -27877,6 +28171,24 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["QualityNotificationSettingItem"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[RegulatoryTrackerNotificationTestResult] */
+        ApiResponseEnvelope_RegulatoryTrackerNotificationTestResult_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["RegulatoryTrackerNotificationTestResult"];
             /**
              * Message
              * @default success
@@ -30392,6 +30704,11 @@ export interface components {
              */
             skip_errors: boolean;
         };
+        /** Body_confirm_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_confirm_post */
+        Body_confirm_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_confirm_post: {
+            /** Files */
+            files: string[];
+        };
         /** Body_confirm_training_import_api_v1_hr_training_ledgers_import_confirm_post */
         Body_confirm_training_import_api_v1_hr_training_ledgers_import_confirm_post: {
             /**
@@ -30704,6 +31021,11 @@ export interface components {
         Body_preview_import_api_v1_quality_cpv_import_preview_post: {
             /** File */
             file: string;
+        };
+        /** Body_preview_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_preview_post */
+        Body_preview_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_preview_post: {
+            /** Files */
+            files: string[];
         };
         /** Body_preview_training_import_api_v1_hr_training_ledgers_import_preview_post */
         Body_preview_training_import_api_v1_hr_training_ledgers_import_preview_post: {
@@ -32154,6 +32476,16 @@ export interface components {
          */
         CertificateReminderSettingResponse: {
             /**
+             * Footer Template
+             * @description 消息结尾语模板（空用内置默认）
+             */
+            footer_template?: string | null;
+            /**
+             * Header Template
+             * @description 消息开头语模板（空用内置默认）
+             */
+            header_template?: string | null;
+            /**
              * Is Enabled
              * @description 是否启用自动提醒
              */
@@ -32190,6 +32522,16 @@ export interface components {
          */
         CertificateReminderSettingUpdate: {
             /**
+             * Footer Template
+             * @description 消息结尾语模板（空用内置默认）
+             */
+            footer_template?: string | null;
+            /**
+             * Header Template
+             * @description 消息开头语模板（空用内置默认）
+             */
+            header_template?: string | null;
+            /**
              * Is Enabled
              * @description 是否启用自动提醒
              */
@@ -32204,6 +32546,58 @@ export interface components {
              * @description 提前提醒天数
              */
             reminder_days: number;
+        };
+        /**
+         * CertificateReminderTestRequest
+         * @description 证书提醒测试消息入参。
+         */
+        CertificateReminderTestRequest: {
+            /**
+             * Footer Template
+             * @description 结尾语模板草稿（空用内置默认）
+             */
+            footer_template?: string | null;
+            /**
+             * Header Template
+             * @description 开头语模板草稿（空用内置默认）
+             */
+            header_template?: string | null;
+            /**
+             * Recipient Open Id
+             * @description 测试接收人飞书 open_id
+             */
+            recipient_open_id: string;
+        };
+        /**
+         * CertificateReminderTestResult
+         * @description 证书提醒测试消息结果。
+         */
+        CertificateReminderTestResult: {
+            /**
+             * Detail
+             * @description 结果说明
+             */
+            detail: string;
+            /**
+             * Footer Template
+             * @description 消息结尾语模板（空用内置默认）
+             */
+            footer_template?: string | null;
+            /**
+             * Header Template
+             * @description 消息开头语模板（空用内置默认）
+             */
+            header_template?: string | null;
+            /**
+             * Recipient Name
+             * @description 接收人姓名
+             */
+            recipient_name?: string | null;
+            /**
+             * Sent
+             * @description 是否发送成功
+             */
+            sent: boolean;
         };
         /**
          * CertificateSheetDetail
@@ -42961,6 +43355,8 @@ export interface components {
              * @default
              */
             entity_label: string;
+            /** Qa Recipients */
+            qa_recipients?: components["schemas"]["QualityNotificationRecipientItem"][] | null;
             /** Recipients */
             recipients?: components["schemas"]["QualityNotificationRecipientItem"][];
         };
@@ -51348,14 +51744,22 @@ export interface components {
         };
         /** QualityNotificationSettingItem */
         QualityNotificationSettingItem: {
+            /** Escalation Hours */
+            escalation_hours?: number | null;
             /** Fallback Recipients */
             fallback_recipients?: components["schemas"]["QualityNotificationRecipientItem"][];
+            /** First Recipients */
+            first_recipients?: components["schemas"]["QualityNotificationRecipientItem"][];
             /** Inspection Lines */
             inspection_lines?: components["schemas"]["InspectionLineNotificationPayload"][];
             /** Is Enabled */
             is_enabled: boolean;
             /** Lead Days */
             lead_days: number;
+            /** Manual Rerun Send */
+            manual_rerun_send?: boolean | null;
+            /** Monthly Day */
+            monthly_day?: number | null;
             /** Notification Label */
             notification_label: string;
             /** Notification Type */
@@ -51364,6 +51768,17 @@ export interface components {
             repeat_interval_days: number;
             /** Send Time */
             send_time: string;
+            /** Stock Footer Template */
+            stock_footer_template?: string | null;
+            /** Stock Header Template */
+            stock_header_template?: string | null;
+            /** Stock Recipients */
+            stock_recipients?: components["schemas"]["QualityNotificationRecipientItem"][];
+            /**
+             * Stock Warning Source
+             * @default feishu
+             */
+            stock_warning_source: string;
         };
         /** RawMaterialResponse */
         RawMaterialResponse: {
@@ -51643,6 +52058,16 @@ export interface components {
          */
         RegulatoryTrackerNotificationSettingUpdate: {
             /**
+             * Footer Template
+             * @description 消息结尾语模板（空用内置默认）
+             */
+            footer_template?: string | null;
+            /**
+             * Header Template
+             * @description 消息开头语模板（空用内置默认）
+             */
+            header_template?: string | null;
+            /**
              * Is Enabled
              * @description 是否启用每日自动抓取推送
              */
@@ -51657,6 +52082,48 @@ export interface components {
              * @description 接收人飞书 open_id
              */
             recipient_open_id?: string | null;
+        };
+        /**
+         * RegulatoryTrackerNotificationTestRequest
+         * @description 法规推送测试消息入参。
+         */
+        RegulatoryTrackerNotificationTestRequest: {
+            /**
+             * Footer Template
+             * @description 结尾语模板草稿（空用内置默认）
+             */
+            footer_template?: string | null;
+            /**
+             * Header Template
+             * @description 开头语模板草稿（空用内置默认）
+             */
+            header_template?: string | null;
+            /**
+             * Recipient Open Id
+             * @description 测试接收人飞书 open_id
+             */
+            recipient_open_id: string;
+        };
+        /**
+         * RegulatoryTrackerNotificationTestResult
+         * @description 法规推送测试消息结果。
+         */
+        RegulatoryTrackerNotificationTestResult: {
+            /**
+             * Detail
+             * @description 结果说明
+             */
+            detail: string;
+            /**
+             * Recipient Name
+             * @description 接收人姓名
+             */
+            recipient_name?: string | null;
+            /**
+             * Sent
+             * @description 是否发送成功
+             */
+            sent: boolean;
         };
         /** RelatedCapaRef */
         RelatedCapaRef: {
@@ -57173,8 +57640,12 @@ export interface components {
         };
         /** UpdateQualityNotificationSettingRequest */
         UpdateQualityNotificationSettingRequest: {
+            /** Escalation Hours */
+            escalation_hours?: number | null;
             /** Fallback Recipients */
             fallback_recipients?: components["schemas"]["QualityNotificationRecipientItem"][] | null;
+            /** First Recipients */
+            first_recipients?: components["schemas"]["QualityNotificationRecipientItem"][] | null;
             /** Inspection Lines */
             inspection_lines?: components["schemas"]["InspectionLineNotificationPayload"][] | null;
             /**
@@ -57184,6 +57655,10 @@ export interface components {
             is_enabled: boolean;
             /** Lead Days */
             lead_days?: number | null;
+            /** Manual Rerun Send */
+            manual_rerun_send?: boolean | null;
+            /** Monthly Day */
+            monthly_day?: number | null;
             /** Repeat Interval Days */
             repeat_interval_days?: number | null;
             /**
@@ -57191,6 +57666,14 @@ export interface components {
              * @description 每天发送时间 HH:MM（Asia/Shanghai）
              */
             send_time?: string | null;
+            /** Stock Footer Template */
+            stock_footer_template?: string | null;
+            /** Stock Header Template */
+            stock_header_template?: string | null;
+            /** Stock Recipients */
+            stock_recipients?: components["schemas"]["QualityNotificationRecipientItem"][] | null;
+            /** Stock Warning Source */
+            stock_warning_source?: string | null;
         };
         /**
          * UpdateReturnRecallRequest
@@ -101129,6 +101612,72 @@ export interface operations {
             };
         };
     };
+    api_export_anomaly_classifications_api_v1_quality_finished_product_anomaly_analysis_export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_import_anomaly_classifications_api_v1_quality_finished_product_anomaly_analysis_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnomalyClassificationImportBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     api_run_anomaly_analysis_api_v1_quality_finished_product_anomaly_analysis_run_post: {
         parameters: {
             query?: {
@@ -103369,6 +103918,41 @@ export interface operations {
             };
         };
     };
+    api_get_inspection_feishu_attachment_preview_api_v1_quality_inspection_feishu__entity_code__records__record_id__attachments__file_token__preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_code: string;
+                record_id: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_inspections_api_v1_quality_inspections_get: {
         parameters: {
             query?: {
@@ -104077,12 +104661,107 @@ export interface operations {
             };
         };
     };
+    api_items_dashboard_api_v1_quality_items_dashboard_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_push_low_stock_api_v1_quality_items_dashboard_push_low_stock_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_push_low_stock_test_api_v1_quality_items_dashboard_push_low_stock_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     api_list_inbounds_api_v1_quality_items_inbound_get: {
         parameters: {
             query?: {
                 keyword?: string;
                 page?: number;
                 page_size?: number;
+                force?: boolean;
+                incremental?: boolean;
             };
             header?: never;
             path?: never;
@@ -104149,6 +104828,8 @@ export interface operations {
                 keyword?: string;
                 page?: number;
                 page_size?: number;
+                force?: boolean;
+                incremental?: boolean;
             };
             header?: never;
             path?: never;
@@ -104165,6 +104846,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponseEnvelope_list_dict_str__Any___"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_items_inventory_filter_options_api_v1_quality_items_inventory_filter_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
                 };
             };
             /** @description Validation Error */
@@ -104215,6 +104927,8 @@ export interface operations {
                 keyword?: string;
                 page?: number;
                 page_size?: number;
+                force?: boolean;
+                incremental?: boolean;
             };
             header?: never;
             path?: never;
@@ -106106,6 +106820,107 @@ export interface operations {
             };
         };
     };
+    export_all_oot_limit_products_api_v1_quality_oos_oot_oot_limit_products_export_all_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_confirm_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_confirm_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_preview_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_preview_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_oot_limit_product_api_v1_quality_oos_oot_oot_limit_products__product_id__put: {
         parameters: {
             query?: never;
@@ -106163,6 +106978,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_oot_limit_product_api_v1_quality_oos_oot_oot_limit_products__product_id__export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -107415,6 +108263,37 @@ export interface operations {
                 keyword?: string | null;
                 limit?: number;
             };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_dict_str__Any___"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_qa_person_options_api_v1_quality_person_options_qa_get: {
+        parameters: {
+            query?: never;
             header?: never;
             path?: never;
             cookie?: {
@@ -111759,6 +112638,41 @@ export interface operations {
             };
         };
     };
+    test_certificate_reminder_settings_api_v1_registration_certificate_management_reminder_settings_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CertificateReminderTestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_CertificateReminderTestResult_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_certificate_sheet_detail_api_v1_registration_certificate_management_sheets__sheet_key__get: {
         parameters: {
             query?: never;
@@ -115306,6 +116220,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_notification_settings_api_v1_regulatory_documents_notification_settings_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegulatoryTrackerNotificationTestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_RegulatoryTrackerNotificationTestResult_"];
                 };
             };
             /** @description Validation Error */
@@ -125475,6 +126424,37 @@ export interface operations {
                 "application/json": components["schemas"]["WarehousePageFeishuConfig"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_person_avatar_map_api_v1_warehouse_person_avatar_map_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

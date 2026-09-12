@@ -1241,6 +1241,40 @@ async def test_quality_feishu_settings_do_not_prefill_from_env(
     assert validation_item.is_enabled is True
 
 @pytest.mark.anyio
+async def test_legacy_department_contact_entity_is_soft_deleted(
+    db_session: AsyncSession,
+) -> None:
+    """部门联系人实体已下线：种子函数必须软删 DB 残留行并从列表剔除。"""
+    await db_session.execute(text("DELETE FROM quality.quality_feishu_entity_settings"))
+    await db_session.execute(
+        text(
+            "INSERT INTO quality.quality_feishu_entity_settings "
+            "(id, entity_code, entity_name, entity_group, is_enabled, sort_order, "
+            " is_deleted, created_at, updated_at) "
+            "VALUES (gen_random_uuid(), 'department_contact', '部门联系人', "
+            "'部门联系人', false, 60, false, now(), now())"
+        )
+    )
+    await db_session.commit()
+
+    items = await feishu_settings_service.list_quality_feishu_entity_settings(
+        db_session
+    )
+    codes = {item.entity_code for item in items}
+    assert "department_contact" not in codes
+
+    row = (
+        await db_session.execute(
+            text(
+                "SELECT is_deleted FROM quality.quality_feishu_entity_settings "
+                "WHERE entity_code = 'department_contact'"
+            )
+        )
+    ).scalar_one()
+    assert row is True
+
+
+@pytest.mark.anyio
 async def test_get_quality_feishu_app_settings_does_not_backfill_existing_db_config(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,

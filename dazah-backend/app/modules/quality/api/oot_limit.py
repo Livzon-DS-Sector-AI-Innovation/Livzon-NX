@@ -4,22 +4,30 @@ from __future__ import annotations
 
 import logging
 import uuid
+from io import BytesIO
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, Query
+from fastapi import APIRouter, Body, Depends, File, Query, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import CurrentUser
+from app.core.exceptions import AppException
 from app.core.response import error_response, paginated_response, success_response
 from app.modules.quality.api.deps import (
+    IMPORT_FILE_MAX_SIZE,
     QUALITY_QA_SCOPE_PERMISSIONS,
 )
 from app.modules.quality.api.deps import (
     assert_quality_edit_scope as _assert_quality_edit_scope,
 )
+from app.modules.quality.api.deps import (
+    build_docx_download_headers as _build_docx_download_headers,
+)
 from app.modules.quality.api.deps import require_user as _require_user
+from app.modules.quality.api.uploads import read_upload_with_limit
 from app.modules.quality.models.oot_limit import OotLimitItem, OotLimitProduct
 from app.modules.quality.schemas.oot_limit import (
     CreateOotLimitItemRequest,
@@ -29,6 +37,7 @@ from app.modules.quality.schemas.oot_limit import (
     UpdateOotLimitItemRequest,
     UpdateOotLimitProductRequest,
 )
+from app.modules.quality.service import oot_limit_docx as _oot_limit_docx
 from app.shared.schemas import ApiResponseEnvelope
 
 logger = logging.getLogger(__name__)
@@ -407,3 +416,157 @@ async def delete_oot_limit_item(
     except Exception:
         logger.exception("Failed to delete OOT limit item")
         return error_response(message="操作失败，请稍后重试", status_code=500)
+
+
+# ============ OOT 限度告知单 docx 导入/导出 ============
+
+
+async def _read_notice_uploads(
+    files: list[UploadFile],
+) -> list[tuple[str, bytes]]:
+    if not files:
+        raise AppException(message="请至少选择一个 Word 文件", status_code=400)
+    if len(files) > _oot_limit_docx.MAX_IMPORT_FILES:
+        raise AppException(
+            message=f"单次最多导入 {_oot_limit_docx.MAX_IMPORT_FILES} 个文件",
+            status_code=400,
+        )
+    payloads: list[tuple[str, bytes]] = []
+    for file in files:
+        if not file.filename or not file.filename.lower().endswith(".docx"):
+            raise AppException(
+                message=f"文件 {file.filename or ''} 不是 .docx 格式，请重新选择",
+                status_code=400,
+            )
+        content = await read_upload_with_limit(file, IMPORT_FILE_MAX_SIZE, "导入文件")
+        payloads.append((file.filename, content))
+    return payloads
+
+
+@router.post(
+    "/oot-limit-products/import/preview",
+    summary="OOT限度告知单导入预览",
+    response_model=ApiResponseEnvelope[dict[str, Any]],
+)
+async def preview_oot_limit_notice_import(
+    files: list[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
+    payloads = await _read_notice_uploads(files)
+    result = await _oot_limit_docx.preview_oot_limit_notice_import(db, payloads)
+    return success_response(data=result)
+
+
+@router.post(
+    "/oot-limit-products/import/confirm",
+    summary="确认导入OOT限度告知单",
+    response_model=ApiResponseEnvelope[dict[str, Any]],
+)
+async def confirm_oot_limit_notice_import(
+    files: list[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
+    payloads = await _read_notice_uploads(files)
+    result = await _oot_limit_docx.confirm_oot_limit_notice_import(db, payloads)
+    return success_response(data=result, message="导入完成")
+
+
+async def _load_product_items(
+    db: AsyncSession, product_id: uuid.UUID
+) -> list[OotLimitItem]:
+    result = await db.execute(
+        select(OotLimitItem)
+        .where(
+            OotLimitItem.product_id == product_id,
+            OotLimitItem.is_deleted.is_(False),
+        )
+        .order_by(OotLimitItem.display_order.asc())
+    )
+    return list(result.scalars().all())
+
+
+@router.get(
+    "/oot-limit-products/export/all",
+    summary="导出全部OOT限度告知单（zip）",
+)
+async def export_all_oot_limit_products(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> StreamingResponse:
+    _require_user(current_user)
+    products = (
+        (
+            await db.execute(
+                select(OotLimitProduct)
+                .where(OotLimitProduct.is_deleted.is_(False))
+                .order_by(OotLimitProduct.product_code.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not products:
+        raise AppException(message="暂无可导出的OOT限度产品", status_code=404)
+    entries = []
+    for product in products:
+        items = await _load_product_items(db, product.id)
+        entries.append(
+            (
+                _oot_limit_docx.notice_export_filename(product),
+                _oot_limit_docx.export_notice_docx(product, items),
+            )
+        )
+    return StreamingResponse(
+        BytesIO(_oot_limit_docx.build_notice_zip(entries)),
+        media_type=_oot_limit_docx.ZIP_MEDIA_TYPE,
+        headers=_build_docx_download_headers(
+            "OOT限度告知单.zip",
+            "oot-limit-notices.zip",
+        ),
+    )
+
+
+@router.get(
+    "/oot-limit-products/{product_id}/export",
+    summary="导出单个产品OOT限度告知单",
+)
+async def export_oot_limit_product(
+    product_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> StreamingResponse:
+    _require_user(current_user)
+    product = (
+        await db.execute(
+            select(OotLimitProduct).where(
+                OotLimitProduct.id == product_id,
+                OotLimitProduct.is_deleted.is_(False),
+            )
+        )
+    ).scalar_one_or_none()
+    if product is None:
+        raise AppException(message="产品不存在", status_code=404)
+    items = await _load_product_items(db, product_id)
+    data = _oot_limit_docx.export_notice_docx(product, items)
+    return StreamingResponse(
+        BytesIO(data),
+        media_type=_oot_limit_docx.DOCX_MEDIA_TYPE,
+        headers=_build_docx_download_headers(
+            _oot_limit_docx.notice_export_filename(product),
+            "oot-limit-notice.docx",
+        ),
+    )

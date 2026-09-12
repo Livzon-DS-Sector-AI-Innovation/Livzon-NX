@@ -26,10 +26,14 @@ from app.core.deps import CurrentUser
 from app.core.exceptions import AppException
 from app.core.response import success_response
 from app.modules.quality.api.deps import (
-    require_user as _require_user,
+    QUALITY_QA_SCOPE_PERMISSIONS,
+    try_acquire_action_lock,
 )
 from app.modules.quality.api.deps import (
-    try_acquire_action_lock,
+    assert_quality_edit_scope as _assert_quality_edit_scope,
+)
+from app.modules.quality.api.deps import (
+    require_user as _require_user,
 )
 from app.modules.quality.schemas.inspection_dashboard import (
     InspectionDashboardResponse,
@@ -40,7 +44,6 @@ from app.modules.quality.service import (
     ensure_material_entity_in_group,
     get_bbas_dashboard_data,
     get_dls_dashboard_data,
-    get_finished_display_fields,
     get_formulations_dashboard_data,
     get_lft_dashboard_data,
     get_lkms_dashboard_data,
@@ -66,18 +69,27 @@ from app.modules.quality.service import (
     pull_calibrations,
     pull_equipment,
     pull_finished_by_entity,
-    pull_inbounds,
     pull_instr_assets,
     pull_instr_changes,
     pull_instr_contracts,
     pull_instr_plans,
-    pull_items,
     pull_maintenance,
     pull_material_records_by_entity,
-    pull_outbounds,
     pull_repairs,
 )
 from app.modules.quality.service.inspection_dashboard_calc import reanalyze_trend_ai
+from app.modules.quality.service.inspection_items_mirror import (
+    PAGE_INBOUND,
+    PAGE_INVENTORY,
+    PAGE_OUTBOUND,
+    list_distinct_column_values,
+    list_items_mirror,
+    sync_items_page,
+)
+from app.modules.quality.service.items_dashboard import (
+    get_items_dashboard,
+    push_low_stock_alert,
+)
 from app.shared.schemas import ApiResponseEnvelope
 
 logger = logging.getLogger(__name__)
@@ -167,6 +179,79 @@ def _parse_filter_params(request: Request | None) -> dict[str, str]:
     return filters
 
 
+def _items_mirror_response(result: dict[str, Any]) -> Any:
+    meta = {
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+        "fields": result.get("fields", []),
+        "configured": result.get("configured", True),
+        "last_sync_time": result.get("last_sync_time"),
+        "source": "local_mirror",
+    }
+    return success_response(data=result["items"], meta=meta)
+
+
+async def _items_page_list(
+    db: AsyncSession,
+    page_key: str,
+    *,
+    live_coro: Any,
+    keyword: str | None,
+    filters: dict[str, str],
+    page: int,
+    page_size: int,
+    force: bool,
+    incremental: bool,
+) -> Any:
+    """物品页列表：镜像优先，可选触发同步；空镜像/未镜像降级实时读。"""
+    if force or incremental:
+        try:
+            await sync_items_page(db, page_key, incremental=incremental and not force)
+        except AppException as exc:
+            logger.info("items mirror sync skipped (%s): %s", page_key, exc)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("items mirror sync failed (%s): %s", page_key, exc)
+
+    mirror = await list_items_mirror(
+        db,
+        page_key,
+        keyword=keyword,
+        filters=filters,
+        page=page,
+        page_size=page_size,
+    )
+    # 未同步且未强制刷新 → 降级实时读，保证首次进入不空屏
+    if not force and not mirror["configured"]:
+        return await _safe_list(
+            live_coro,
+            db,
+            keyword=keyword,
+            page=page,
+            page_size=page_size,
+            filters=filters,
+        )
+    empty_unfiltered = (
+        mirror["configured"]
+        and mirror["total"] == 0
+        and not keyword
+        and not filters
+    )
+    if not force and empty_unfiltered:
+        # 镜像为空可能是尚未首跑：降级实时读探测一次
+        live_probe = await _safe_list(
+            live_coro, db, keyword=keyword, page=1, page_size=1, filters=filters
+        )
+        if _response_has_data(live_probe):
+            return live_probe
+    return _items_mirror_response(mirror)
+
+
+def _response_has_data(envelope: Any) -> bool:
+    meta = getattr(envelope, "meta", None) or {}
+    return bool(meta.get("total") if isinstance(meta, dict) else 0)
+
+
 @router.get(
     "/items/inventory", response_model=ApiResponseEnvelope[list[dict[str, Any]]]
 )
@@ -174,18 +259,23 @@ async def api_list_items(
     keyword: str = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
+    force: bool = Query(False),
+    incremental: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     request: Request = cast(Request, None),
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    return await _safe_list(
-        list_items,
+    return await _items_page_list(
         db,
+        PAGE_INVENTORY,
+        live_coro=list_items,
         keyword=keyword,
+        filters=_parse_filter_params(request),
         page=page,
         page_size=page_size,
-        filters=_parse_filter_params(request),
+        force=force,
+        incremental=incremental,
     )
 
 
@@ -197,7 +287,7 @@ async def api_pull_items(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    return await _safe_pull(pull_items, db)
+    return await _safe_pull_sync_page(PAGE_INVENTORY, db)
 
 
 @router.get("/items/inbound", response_model=ApiResponseEnvelope[list[dict[str, Any]]])
@@ -205,18 +295,23 @@ async def api_list_inbounds(
     keyword: str = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
+    force: bool = Query(False),
+    incremental: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     request: Request = cast(Request, None),
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    return await _safe_list(
-        list_inbounds,
+    return await _items_page_list(
         db,
+        PAGE_INBOUND,
+        live_coro=list_inbounds,
         keyword=keyword,
+        filters=_parse_filter_params(request),
         page=page,
         page_size=page_size,
-        filters=_parse_filter_params(request),
+        force=force,
+        incremental=incremental,
     )
 
 
@@ -226,7 +321,7 @@ async def api_pull_inbounds(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    return await _safe_pull(pull_inbounds, db)
+    return await _safe_pull_sync_page(PAGE_INBOUND, db)
 
 
 @router.get("/items/outbound", response_model=ApiResponseEnvelope[list[dict[str, Any]]])
@@ -234,18 +329,23 @@ async def api_list_outbounds(
     keyword: str = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
+    force: bool = Query(False),
+    incremental: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     request: Request = cast(Request, None),
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    return await _safe_list(
-        list_outbounds,
+    return await _items_page_list(
         db,
+        PAGE_OUTBOUND,
+        live_coro=list_outbounds,
         keyword=keyword,
+        filters=_parse_filter_params(request),
         page=page,
         page_size=page_size,
-        filters=_parse_filter_params(request),
+        force=force,
+        incremental=incremental,
     )
 
 
@@ -255,7 +355,93 @@ async def api_pull_outbounds(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    return await _safe_pull(pull_outbounds, db)
+    return await _safe_pull_sync_page(PAGE_OUTBOUND, db)
+
+
+async def _safe_pull_sync_page(page_key: str, db: AsyncSession) -> Any:
+    """手动全量同步物品页到镜像（幂等锁防连点）。"""
+    if not await try_acquire_action_lock(f"pull:items_mirror:{page_key}", timeout=300):
+        return success_response(
+            data={"synced": 0, "failed": 0, "error": "同步正在进行中，请勿重复操作"}
+        )
+    try:
+        result = await sync_items_page(db, page_key, incremental=False)
+        return success_response(
+            data={"synced": result["synced"], "failed": result.get("failed", 0)}
+        )
+    except AppException as exc:
+        logger.info("items pull not configured (%s): %s", page_key, exc)
+        return success_response(data={"synced": 0, "failed": 0, "error": "飞书未配置"})
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("items pull error (%s): %s", page_key, exc)
+        return success_response(data={"synced": 0, "failed": 0, "error": str(exc)})
+
+
+# ── 物品管理仪表盘 / 库存不足推送 ──
+
+
+@router.get("/items/dashboard", response_model=ApiResponseEnvelope[dict[str, Any]])
+async def api_items_dashboard(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    _require_user(current_user)
+    result = await get_items_dashboard(db)
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.get(
+    "/items/inventory/filter-options",
+    response_model=ApiResponseEnvelope[dict[str, Any]],
+)
+async def api_items_inventory_filter_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    """库存台账动态筛选项（存放位置 / 库存报警去重值），供筛选/分类按钮使用。"""
+    _require_user(current_user)
+    locations = await list_distinct_column_values(db, PAGE_INVENTORY, "存放位置")
+    alarms = await list_distinct_column_values(db, PAGE_INVENTORY, "库存报警")
+    return success_response(
+        data={"存放位置": locations, "库存报警": alarms}
+    )
+
+
+@router.post(
+    "/items/dashboard/push-low-stock",
+    response_model=ApiResponseEnvelope[dict[str, Any]],
+)
+async def api_push_low_stock(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    user_id = _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["qc"],
+    )
+    result = await push_low_stock_alert(db)
+    logger.info("items low-stock push by user=%s", str(user_id))
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.post(
+    "/items/dashboard/push-low-stock/test",
+    response_model=ApiResponseEnvelope[dict[str, Any]],
+)
+async def api_push_low_stock_test(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["qc"],
+    )
+    result = await push_low_stock_alert(db, test=True)
+    return success_response(data=result.model_dump(mode="json"))
 
 
 # ═══════════════════════════════════════
@@ -948,9 +1134,11 @@ async def api_list_finished_records(
     field_names = result.get("fields") or []
     if field_names:
         response_meta["fields"] = field_names
-    response_meta["display_fields"] = get_finished_display_fields(
-        entity_code, field_names
-    )
+    if "configured" in result:
+        # 镜像路径：附带同步状态；不返回 display_fields 裁剪，前端展示全部列
+        response_meta["configured"] = result["configured"]
+        response_meta["last_sync_time"] = result.get("last_sync_time")
+        response_meta["source"] = "local_mirror"
     return success_response(data=result["items"], meta=response_meta)
 
 

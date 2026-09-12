@@ -12,6 +12,7 @@ from app.modules.warehouse.ai_service import WarehouseAIService
 from app.modules.warehouse.feishu_material_pages import (
     FEISHU_FINISHED_PRODUCT_APP_TOKEN,
     FEISHU_HARDWARE_APP_TOKEN,
+    FEISHU_LIQUID_WAREHOUSE_APP_TOKEN,
     FEISHU_WAREHOUSE_APP_TOKEN,
 )
 from app.modules.warehouse.inspection_progress import build_inspection_overview
@@ -69,6 +70,9 @@ logger = logging.getLogger(__name__)
 # 页面所属 Base → 细分编辑权限码（按飞书部门映射的子领域）
 WAREHOUSE_EDIT_SCOPE_PERMISSION = {
     FEISHU_WAREHOUSE_APP_TOKEN: "warehouse:raw:write",
+    # 液体入库页挂在原辅料及包材分组下，编辑权限与前端 warehouseScope.ts 的
+    # raw scope 归类保持一致
+    FEISHU_LIQUID_WAREHOUSE_APP_TOKEN: "warehouse:raw:write",
     FEISHU_FINISHED_PRODUCT_APP_TOKEN: "warehouse:product:write",
     FEISHU_HARDWARE_APP_TOKEN: "warehouse:hardware:write",
 }
@@ -683,6 +687,18 @@ async def update_page_feishu_config(
     """更新指定页面的飞书多维表格配置（支持动态切换数据源）"""
     await service.update_page_feishu_config(page_key, payload.model_dump())
     return success_response(message="配置已更新")
+
+
+@router.get(
+    "/person-avatar-map",
+    summary="人员姓名→飞书头像映射（人事-飞书联系人，在职）",
+)
+async def get_person_avatar_map(
+    current_user: RequireUser,
+    service: WarehouseService = Depends(get_warehouse_service),
+) -> Any:
+    """供文本类型人员字段（入库人/领料人等）渲染真实头像的姓名映射"""
+    return success_response(data=await service.get_person_avatar_map())
 
 
 @router.get(

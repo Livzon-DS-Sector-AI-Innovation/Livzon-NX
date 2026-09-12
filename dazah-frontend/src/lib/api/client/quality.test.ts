@@ -14,6 +14,8 @@ import {
   fetchQcValidationRecords,
   fetchQcValidationShareLinks,
   fetchQcValidationYears,
+  fetchOotLimitProductExport,
+  fetchOotLimitProductsExportAll,
 } from './quality'
 
 function jsonResponse(body: unknown, status = 200) {
@@ -281,5 +283,57 @@ describe('quality client - person directory and validation form links', () => {
   it('returns empty form links when years missing', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ code: 200 })))
     await expect(fetchValidationFormLinks()).resolves.toEqual([])
+  })
+})
+
+describe('quality client - oot limit notice export', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('exports single product notice with disposition filename', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(new Blob(['docx-bytes']), {
+        status: 200,
+        headers: {
+          'content-disposition':
+            "attachment; filename=notice.docx; filename*=UTF-8''%E5%91%8A%E7%9F%A5%E5%8D%95.docx",
+        },
+      })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await fetchOotLimitProductExport('product-1')
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/quality/oos-oot/oot-limit-products/product-1/export'
+    )
+    expect(result.filename).toBe('告知单.docx')
+    expect(result.blob.size).toBeGreaterThan(0)
+  })
+
+  it('exports all notices as zip with fallback filename', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(new Blob(['zip-bytes']), { status: 200 })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await fetchOotLimitProductsExportAll()
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/quality/oos-oot/oot-limit-products/export/all'
+    )
+    expect(result.filename).toBe('OOT限度告知单.zip')
+    expect(result.blob.size).toBeGreaterThan(0)
+  })
+
+  it('surfaces backend error message when nothing to export', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ detail: '暂无可导出的OOT限度产品' }, 404)
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchOotLimitProductsExportAll()).rejects.toThrow(
+      '暂无可导出的OOT限度产品'
+    )
   })
 })

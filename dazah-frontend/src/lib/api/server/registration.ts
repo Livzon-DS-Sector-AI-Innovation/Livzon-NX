@@ -247,6 +247,8 @@ export async function fetchCertificateReminderSettingsServer(): Promise<Certific
     recipient_name: data.recipient_name || null,
     recipient_department: data.recipient_department || null,
     pending_count: data.pending_count || 0,
+    header_template: data.header_template ?? null,
+    footer_template: data.footer_template ?? null,
   }
 }
 

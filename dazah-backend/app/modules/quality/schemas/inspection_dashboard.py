@@ -161,7 +161,7 @@ class InspectionDashboardChart(BaseModel):
     summary: InspectionDashboardChartSummary
     # 趋势规则命中的确定性异常
     trend_anomalies: list[InspectionDashboardTrendAnomaly] = []
-    # 趋势 AI 结论（pending/completed/failed/none 时可为 None）
+    # 趋势 AI 结论（pending/completed/failed/paused/none 时可为 None）
     trend_ai: InspectionDashboardTrendAI | None = None
     trend_ai_status: str = "none"
 

@@ -17,6 +17,8 @@ import {
   createInspectionFeishuRecord,
   deleteInspectionFeishuRecord,
   pullInspectionFeishuRecords,
+  pushItemsLowStock,
+  pushItemsLowStockTest,
   updateInspectionFeishuRecord,
 } from './quality-inspection'
 
@@ -111,6 +113,40 @@ describe('quality inspection feishu record actions', () => {
     })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/quality/inspection/feishu/entity/pull`,
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
+  it('pushes low stock and falls back to a failed payload on empty reply', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
+
+    await expect(pushItemsLowStock()).resolves.toEqual({
+      status: 'failed',
+      sent: 0,
+      skipped: 0,
+      failed: 0,
+      item_count: 0,
+      message: '推送失败',
+    })
+  })
+
+  it('pushes low stock test and returns the backend result', async () => {
+    const payload = {
+      status: 'success',
+      sent: 3,
+      skipped: 0,
+      failed: 0,
+      item_count: 3,
+      message: '推送成功',
+    }
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ code: 200, data: payload }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(pushItemsLowStockTest()).resolves.toEqual(payload)
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/quality/items/dashboard/push-low-stock/test`,
       expect.objectContaining({ method: 'POST' }),
     )
   })

@@ -195,3 +195,135 @@ def test_filter_record_rejects_excluded_topic_from_nested_raw_data_content() -> 
 
     assert accepted is False
     assert reason == "excluded_keyword:biosimilar"
+
+
+def test_filter_record_rejects_ema_clinical_investigation_guideline() -> None:
+    """EMA 正式用语 clinical investigation（非 clinical trial）也必须被排除。"""
+    record = _build_record(
+        title=(
+            "Clinical investigation of medicinal products for treatment "
+            "of migraine - Scientific guideline"
+        ),
+        original_url=(
+            "https://www.ema.europa.eu/en/documents/scientific-guideline/"
+            "clinical-investigation-migraine_en.pdf"
+        ),
+        publish_date=date(2026, 9, 10),
+        source_site="ema",
+    )
+
+    accepted, reason = filter_record(
+        record,
+        recent_days=7,
+        reference_date=date(2026, 9, 11),
+    )
+
+    assert accepted is False
+    assert reason == "excluded_keyword:clinical investigation"
+
+
+def test_filter_record_rejects_imp_acronym_in_clinical_context() -> None:
+    """临床试验类文件常见的 IMP（试验用药品）缩写必须命中排除。"""
+    record = _build_record(
+        title="Guideline on the quality of IMP in clinical trials",
+        original_url=(
+            "https://www.ema.europa.eu/en/documents/scientific-guideline/"
+            "imp-quality_en.pdf"
+        ),
+        publish_date=date(2026, 9, 10),
+        source_site="ema",
+    )
+
+    accepted, reason = filter_record(
+        record,
+        recent_days=7,
+        reference_date=date(2026, 9, 11),
+    )
+
+    assert accepted is False
+    assert reason in {
+        "excluded_keyword:clinical trial",
+        "excluded_keyword:imp",
+    }
+
+
+def test_filter_record_rejects_chinese_synonym_clinical_research() -> None:
+    """中文同义表达“临床研究”也属于临床试验排除范围。"""
+    record = _build_record(
+        title="化学药品临床研究技术指导原则",
+        original_url="https://www.cde.org.cn/main/news/viewInfoCommon/2001",
+        publish_date=date(2026, 9, 10),
+    )
+
+    accepted, reason = filter_record(
+        record,
+        recent_days=7,
+        reference_date=date(2026, 9, 11),
+    )
+
+    assert accepted is False
+    assert reason == "excluded_keyword:临床研究"
+
+
+def test_filter_record_does_not_false_positive_short_acronym() -> None:
+    """短缩写 imp 必须整词匹配，不能因 important 等常见词误拒正常文件。"""
+    record = _build_record(
+        title="Guideline on important aspects of API quality",
+        original_url=(
+            "https://www.ema.europa.eu/en/documents/scientific-guideline/"
+            "important-api-quality_en.pdf"
+        ),
+        publish_date=date(2026, 9, 10),
+        source_site="ema",
+    )
+
+    accepted, reason = filter_record(
+        record,
+        recent_days=7,
+        reference_date=date(2026, 9, 11),
+    )
+
+    assert accepted is True
+    assert reason == "accepted"
+
+
+def test_filter_record_rejects_vaccine_variant() -> None:
+    record = _build_record(
+        title="Guideline on quality for mRNA vaccine platforms",
+        original_url=(
+            "https://www.ema.europa.eu/en/documents/scientific-guideline/"
+            "mrna-vaccine-platforms_en.pdf"
+        ),
+        publish_date=date(2026, 9, 10),
+        source_site="ema",
+    )
+
+    accepted, reason = filter_record(
+        record,
+        recent_days=7,
+        reference_date=date(2026, 9, 11),
+    )
+
+    assert accepted is False
+    assert reason == "excluded_keyword:vaccine"
+
+
+def test_filter_record_rejects_medical_device_variant() -> None:
+    record = _build_record(
+        title="Guideline on quality requirements for in vitro diagnostic devices",  # noqa: E501
+        original_url=(
+            "https://www.ema.europa.eu/en/documents/scientific-guideline/"
+            "ivd-devices_en.pdf"
+        ),
+        publish_date=date(2026, 9, 10),
+        source_site="ema",
+    )
+
+    accepted, reason = filter_record(
+        record,
+        recent_days=7,
+        reference_date=date(2026, 9, 11),
+    )
+
+    assert accepted is False
+    assert reason == "excluded_keyword:in vitro diagnostic"

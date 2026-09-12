@@ -54,11 +54,19 @@ from app.modules.quality.models.finished_product_inspection import (
 from app.modules.quality.models.finished_trend_ai_analysis import (
     FinishedTrendAIAnalysis,
 )
+from app.modules.quality.models.finished_trend_alert_escalation import (
+    QualityTrendAlertEscalation,
+)
 from app.modules.quality.models.finished_trend_alert_notification import (
     FinishedTrendAlertNotification,
 )
 from app.modules.quality.models.historical_deviation import HistoricalDeviation
 from app.modules.quality.models.inspection import InspectionRecord
+from app.modules.quality.models.inspection_items_mirror import (
+    QualityItemsPageRow,
+    QualityItemsPageSnapshot,
+    QualityItemsStockAlertNotification,
+)
 from app.modules.quality.models.lab_instrument import LabInstrument
 from app.modules.quality.models.lab_item import LabItem
 from app.modules.quality.models.liquid_material_inspection import (
@@ -71,6 +79,7 @@ from app.modules.quality.models.product_quality import ProductQualityRecord
 from app.modules.quality.models.return_recall import ReturnRecallRecord
 from app.modules.quality.models.solid_material_inspection import SolidMaterialInspection
 from app.modules.quality.models.supplier import Supplier
+from app.modules.quality.models.trend_monthly_run import QualityTrendMonthlyRun
 from app.modules.quality.models.validation_execution_record import (
     CleaningValidationRecord,
     EquipmentQualificationRecord,
@@ -114,6 +123,8 @@ __all__ = [
     "OotLimitProduct",
     "OotLimitItem",
     "FinishedTrendAlertNotification",
+    "QualityTrendAlertEscalation",
+    "QualityTrendMonthlyRun",
     "FinishedTrendAIAnalysis",
     "LiquidMaterialInspection",
     "SolidMaterialInspection",
@@ -143,4 +154,7 @@ __all__ = [
     "QualityFeishuReadPageBinding",
     "QualityFeishuReadSyncRun",
     "QualityNotificationSetting",
+    "QualityItemsPageSnapshot",
+    "QualityItemsPageRow",
+    "QualityItemsStockAlertNotification",
 ]

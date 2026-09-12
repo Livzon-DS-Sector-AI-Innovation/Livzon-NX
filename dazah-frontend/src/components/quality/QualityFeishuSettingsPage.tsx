@@ -791,12 +791,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
     [entityDrafts, message]
   )
 
-  // 数据加载后默认展开全部分组（defaultActiveKey 依赖异步数据时首次渲染为空，会导致面板折叠）
-  useEffect(() => {
-    if (groupedEntities.length > 0) {
-      setActiveGroups(groupedEntities.map(([group]) => group))
-    }
-  }, [groupedEntities])
+  // 分组默认全部折叠（activeGroups 初始为空），用户按需展开，避免上百行实体全部铺开难以查找
 
   const columns = useMemo(
     () => [
@@ -880,7 +875,9 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
         key: 'feishu_form_url',
         width: 240,
         render: (_: unknown, record: QualityFeishuEntitySettingItem) =>
-          record.entity_code.startsWith('validation_master_plan_') ? (
+          record.entity_code.startsWith('validation_master_plan_') ||
+          record.entity_code === 'qc_items_inbound' ||
+          record.entity_code === 'qc_items_outbound' ? (
             <Input
               value={entityDrafts[record.entity_code]?.feishu_form_url || ''}
               placeholder="飞书表单分享链接（shrcn...），新增记录时打开"

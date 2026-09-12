@@ -16,13 +16,19 @@ from app.modules.hr.models import HrFeishuMember
 from app.modules.hr.public_api import get_avatar_urls_by_emails
 
 
-def _member(email: str | None, avatar_url: str | None, name: str = "张三") -> Any:
+def _member(
+    email: str | None,
+    avatar_url: str | None,
+    name: str = "张三",
+    status: str = "1",
+) -> Any:
     return HrFeishuMember(
         open_id=f"ou_{uuid.uuid4().hex[:12]}",
         name=name,
         department="质量部",
         email=email,
         avatar_url=avatar_url,
+        status=status,
     )
 
 
@@ -50,3 +56,19 @@ async def test_empty_input_short_circuits_without_query(
 ) -> None:
     assert await get_avatar_urls_by_emails(db_session, []) == {}
     assert await get_avatar_urls_by_emails(db_session, ["  ", None]) == {}  # type: ignore[list-item]
+
+
+@pytest.mark.anyio
+async def test_active_avatar_map_groups_by_name(db_session: AsyncSession) -> None:
+    """get_active_avatar_map_by_name：按姓名取头像，无头像/多部门不重复。"""
+    await _seed(
+        db_session,
+        _member("zhang@livzon.cn", "https://avatar/z1", name="张三"),
+        _member("zhang2@livzon.cn", "https://avatar/z2", name="张三"),
+        _member("li@livzon.cn", None, name="李四"),
+    )
+    from app.modules.hr.public_api import get_active_avatar_map_by_name
+
+    result = await get_active_avatar_map_by_name(db_session)
+    assert result == {"张三": "https://avatar/z1"}
+    assert "李四" not in result

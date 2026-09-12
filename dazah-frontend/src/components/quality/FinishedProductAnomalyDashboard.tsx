@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { App, Alert, Button, Card, Col, Row, Select, Space, Statistic } from 'antd'
+import { App, Alert, Button, Card, Col, Row, Select, Space, Statistic, Table, Tag, Tooltip } from 'antd'
+import type { ColumnsType } from 'antd/es/table'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { LinkOutlined, MessageOutlined, RightOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { useRouter } from 'next/navigation'
 import dayjs from 'dayjs'
 import ReactECharts from 'echarts-for-react'
 import {
@@ -12,7 +13,7 @@ import {
   fetchAnomalyDashboard,
   fetchAnomalyReportYears,
 } from '@/lib/api/client/quality'
-import type { AnomalyDashboardData } from '@/types/quality'
+import type { AnomalyDashboardData, AnomalyOpenRecord } from '@/types/quality'
 import { runAnomalyAnalysisAction } from '@/actions/finished-product-anomaly'
 import { FinishedProductAnomalyChat } from './FinishedProductAnomalyChat'
 
@@ -240,6 +241,8 @@ export function FinishedProductAnomalyDashboard() {
         </Col>
       </Row>
 
+      <OpenAnomalyBoard data={data} onOpenLedger={(year) => void router.push(`/quality/anomaly-report/ledger?year=${year}`)} />
+
       {productChart && (
         <Card title="各产品异常数量（按异常类型堆叠）" size="small" style={{ marginBottom: 16 }}>
           <ReactECharts
@@ -274,5 +277,89 @@ export function FinishedProductAnomalyDashboard() {
         </Card>
       )}
     </div>
+  )
+}
+
+const openColumns = (
+  onOpenLedger: (year: number) => void
+): ColumnsType<AnomalyOpenRecord> => [
+  { title: '年份', key: 'year', dataIndex: 'year', width: 70 },
+  {
+    title: '日期',
+    key: 'date',
+    dataIndex: 'date',
+    width: 104,
+    render: (value: string) => value || '—',
+  },
+  { title: '产品', key: 'product', dataIndex: 'product', width: 120, ellipsis: true },
+  { title: '异常类型', key: 'anomaly_type', dataIndex: 'anomaly_type', width: 150, ellipsis: true },
+  {
+    title: '不合格描述',
+    key: 'desc',
+    ellipsis: true,
+    render: (_, row) => (
+      <Tooltip title={row.desc} placement="topLeft">
+        <span>{row.desc || '（无描述）'}</span>
+      </Tooltip>
+    ),
+  },
+  {
+    title: '操作',
+    key: 'action',
+    width: 80,
+    render: (_, row) => (
+      <Button size="small" type="link" onClick={() => onOpenLedger(row.year)}>
+        去台账
+      </Button>
+    ),
+  },
+]
+
+/** 未关闭异常看板：口径 = 无调查报告说明 且 未结案（有报告或已结案均不统计）；自带年份筛选。 */
+function OpenAnomalyBoard({
+  data,
+  onOpenLedger,
+}: {
+  data?: AnomalyDashboardData
+  onOpenLedger: (year: number) => void
+}) {
+  const [boardYear, setBoardYear] = useState<number>(0)
+  if (!data) return null
+  const rows =
+    boardYear === 0
+      ? data.open_recent
+      : data.open_recent.filter((row) => row.year === boardYear)
+  return (
+    <Card
+      title="未关闭异常看板"
+      size="small"
+      style={{ marginBottom: 16 }}
+      extra={
+        <Select
+          size="small"
+          style={{ width: 150 }}
+          value={boardYear}
+          onChange={setBoardYear}
+          options={[
+            { label: `全部（${data.open_count}）`, value: 0 },
+            ...data.by_year_open.map((item) => ({
+              label: `${item.year}年（${item.open_count}）`,
+              value: item.year,
+            })),
+          ]}
+        />
+      }
+    >
+      <Table<AnomalyOpenRecord>
+        rowKey={(row) => `${row.year}-${row.id}`}
+        size="small"
+        dataSource={rows}
+        columns={openColumns(onOpenLedger)}
+        tableLayout="fixed"
+        scroll={{ x: 900 }}
+        pagination={{ pageSize: 10, showSizeChanger: false, showTotal: (count) => `共 ${count} 条` }}
+        locale={{ emptyText: '没有未关闭的异常记录' }}
+      />
+    </Card>
   )
 }

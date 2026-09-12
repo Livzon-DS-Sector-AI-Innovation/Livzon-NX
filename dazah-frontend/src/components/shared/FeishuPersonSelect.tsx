@@ -13,7 +13,7 @@ export interface FeishuPersonValue {
   /** 邮箱/手机号：跨应用 id 换算（batch_get_id）用 */
   email?: string
   mobile?: string
-  /** true = id 来自飞书记录回读（对目标 Base 有效），后端无需经部门联系人反查 */
+  /** true = id 来自飞书记录回读（对目标 Base 有效），后端无需换发 union_id */
   resolved?: boolean
 }
 

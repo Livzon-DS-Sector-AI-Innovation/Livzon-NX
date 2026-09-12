@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 import app.modules.quality.service.inspection_dashboard_calc as service
+from app.core.exceptions import AppException
 from app.modules.hr.models import HrFeishuMember
 from app.modules.quality.models.finished_trend_alert_notification import (
     FinishedTrendAlertNotification,
@@ -90,29 +91,18 @@ def test_extract_batch_product_code_maps_mpa_batches_to_mc() -> None:
 
 
 @pytest.mark.anyio
-async def test_resolve_dashboard_recipients_uses_fixed_override_list(
+async def test_resolve_dashboard_recipients_without_hardcoded_defaults(
     db_session,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    resolve_mock = AsyncMock(
-        side_effect=[
-            {"name": "陈连平", "open_id": "ou_chen", "email": None},
-            {"name": "席晓", "open_id": "ou_xi", "email": "xixiao@livzon.cn"},
-        ]
-    )
-    monkeypatch.setattr(service, "_resolve_recipient_by_name", resolve_mock)
-
-    result = await service._resolve_dashboard_recipients(
-        db_session,
-        entity_code=MPA_DASHBOARD_ENTITY_CODE,
-        batch_no="USMC-M-2606013",
-    )
-
-    assert result == [
-        {"name": "陈连平", "open_id": "ou_chen", "email": None},
-        {"name": "席晓", "open_id": "ou_xi", "email": "xixiao@livzon.cn"},
-    ]
-    assert resolve_mock.await_count == 2
+    # 写死的默认收件人已删除：未配置收件人且飞书 Base 不可用时 →
+    # 提炼负责人兜底抛 AppException（不静默吞掉）
+    with pytest.raises(AppException):
+        await service._resolve_dashboard_recipients(
+            db_session,
+            entity_code=MPA_DASHBOARD_ENTITY_CODE,
+            batch_no="USMC-M-2606013",
+        )
 
 
 @pytest.mark.anyio
@@ -197,19 +187,23 @@ async def test_get_mpa_dashboard_data_detects_alerts(
         AsyncMock(return_value=records),
     )
     materialize_mock = AsyncMock(
-        return_value={
-            "entity_code": MPA_DASHBOARD_ENTITY_CODE,
-            "batch_no": "MFN-999",
-            "metric_key": "干燥失重:≤0.50%",
-            "metric_label": "干燥失重:≤0.50%",
-            "actual_value": 1.2,
-            "spec_lines": [{"label": "标准上限", "value": 0.5}],
-            "notification_status": "sent",
-            "notification_sent": True,
-            "notification_deduplicated": False,
-        }
+        return_value=[
+            {
+                "entity_code": MPA_DASHBOARD_ENTITY_CODE,
+                "batch_no": "MFN-999",
+                "metric_key": "干燥失重:≤0.50%",
+                "metric_label": "干燥失重:≤0.50%",
+                "actual_value": 1.2,
+                "spec_lines": [{"label": "标准上限", "value": 0.5}],
+                "notification_status": "sent",
+                "notification_sent": True,
+                "notification_deduplicated": False,
+            }
+        ]
     )
-    monkeypatch.setattr(service, "_materialize_dashboard_alert", materialize_mock)
+    monkeypatch.setattr(
+        service, "_materialize_merged_dashboard_alerts", materialize_mock
+    )
 
     result = await _get_mpa_dashboard_data(db_session)
 

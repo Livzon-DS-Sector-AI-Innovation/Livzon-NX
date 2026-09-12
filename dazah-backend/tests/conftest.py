@@ -58,6 +58,16 @@ async def db_session() -> AsyncIterator[AsyncSession]:
 
 
 @pytest.fixture
+def mirror_session_factory():
+    """测试库的 session factory，用于覆盖模块内 async_session_factory 的独立会话。
+
+    产品代码为隔离请求事务，镜像同步用独立会话（async_session_factory 连主库）；
+    测试需把它指向测试库，否则独立会话写进主库、断言读测试库会落空。
+    """
+    return _test_session_factory
+
+
+@pytest.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     """Provide an AsyncClient with get_db overridden to use a rolled-back session."""
     async with _test_session_factory() as session:

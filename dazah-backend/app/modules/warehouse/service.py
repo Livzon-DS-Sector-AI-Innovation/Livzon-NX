@@ -115,6 +115,9 @@ _DATE_SORT_DESC_FIELDS = {
     "raw-ledger": "出库日期",
     "packaging-ledger": "出库日期",
     "inbound-ledger": "入库日期",
+    "liquid-raw-inbound": "入库日期",
+    # 液糖表的「入库日期」为公式列，真正的业务日期是「日期」
+    "liquid-sugar-inbound": "日期",
     "hardware-inbound-ledger": "日期",
     "hardware-outbound-ledger": "日期",
     "product-inbound-ledger": "入库日期",
@@ -445,6 +448,12 @@ _FIELD_META_CACHE: dict[str, tuple[datetime, list[dict[str, Any]]]] = {}
 _TABLE_FIELDS_CACHE: dict[str, tuple[datetime, list[dict[str, Any]]]] = {}
 # 仪表盘聚合结果缓存（TTL 300s，force 强制刷新）
 _DASHBOARD_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+
+# 质量检验结果联动目标页：固体→入库总账 / 液体→液体原辅料入库
+_INBOUND_RESULT_SYNC_PAGES: dict[str, str] = {
+    "solid": "inbound-ledger",
+    "liquid": "liquid-raw-inbound",
+}
 
 
 class WarehouseService:
@@ -2676,6 +2685,87 @@ class WarehouseService:
             ) from exc
         self._invalidate_page_cache(page_key)
 
+    async def update_inbound_inspection_result(
+        self,
+        *,
+        material_module: str,
+        material_code: str,
+        batch_no: str,
+        result: str,
+        unqualified_items: str | None = None,
+    ) -> dict[str, Any]:
+        """质量物料检验结果 → 仓储入库台账联动（固体→入库总账 / 液体→液体原辅料入库）。
+
+        按 物料代码+厂内批号（固体）或 入库批号（液体）定位台账记录，多行取
+        入库日期最新一条；把 检测结果 更新为 合格/不合格；不合格时写入
+        不合格项目，合格不动该列。只更新已存在行，无匹配记日志返回。
+        """
+        page_key = _INBOUND_RESULT_SYNC_PAGES.get(material_module)
+        if page_key is None:
+            raise AppException(
+                message=f"不支持的检验结果联动模块：{material_module}", status_code=400
+            )
+        if material_module == "solid":
+            conditions: list[dict[str, Any]] = [
+                {"field_name": "厂内代码", "operator": "is", "value": [material_code]},
+                {"field_name": "厂内批号", "operator": "is", "value": [batch_no]},
+            ]
+        else:
+            # 液体：调用方把质量批号整串（即台账「入库批号」）作为 batch_no 传入
+            conditions = [
+                {"field_name": "入库批号", "operator": "is", "value": [batch_no]}
+            ]
+
+        page_config = await self._get_material_page_config(page_key)
+        client = await self._get_material_client(page_config.app_token)
+        # 只过滤不排序：大表上 filter+服务端排序实测会超时；匹配行通常仅数行，
+        # “多行取最新”改在内存按 入库日期 比较
+        data = await client.request(
+            "POST",
+            (
+                f"/bitable/v1/apps/{page_config.app_token}"
+                f"/tables/{page_config.table_id}/records/search"
+            ),
+            params={"page_size": 5, "field_name_type": "name"},
+            json_body={"filter": {"conjunction": "and", "conditions": conditions}},
+            timeout=30.0,
+        )
+        items = [item for item in (data.get("items") or []) if isinstance(item, dict)]
+        if not items:
+            logger.warning(
+                "quality result sync: no inbound row matched page=%s code=%s batch=%s",
+                page_key,
+                material_code,
+                batch_no,
+            )
+            return {"matched": False, "updated": False}
+
+        def _inbound_date_key(item: dict[str, Any]) -> float:
+            value = (item.get("fields") or {}).get("入库日期")
+            return float(value) if isinstance(value, (int, float)) else 0.0
+
+        items.sort(key=_inbound_date_key, reverse=True)
+        record_id = str(items[0].get("record_id") or "")
+        fields: dict[str, Any] = {"检测结果": result}
+        if result == "不合格":
+            fields["不合格项目"] = unqualified_items or ""
+        await self.update_material_page_record(page_key, record_id, fields)
+
+        # 写后 best-effort 刷新本地镜像，页面尽快可见（失败等下一轮定时同步）
+        try:
+            await self.sync_material_page_to_local(page_key, incremental=True)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "quality result sync: mirror refresh failed for %s: %s", page_key, exc
+            )
+        logger.info(
+            "quality result synced to inbound ledger: page=%s record=%s result=%s",
+            page_key,
+            record_id,
+            result,
+        )
+        return {"matched": True, "updated": True, "record_id": record_id}
+
     async def upsert_raw_material_snapshot(
         self,
         *,
@@ -2832,6 +2922,19 @@ class WarehouseService:
 
         item = ProductInventory(**payload)
         return await self.repo.create_product(item)
+
+    # ── 人员目录（人事-飞书联系人，姓名→头像供文本人员字段渲染）─────────
+
+    async def get_person_avatar_map(self) -> dict[str, str]:
+        """人员姓名 → 飞书头像 URL（在职），查询实现收口在 hr.public_api。
+
+        文本/单选类型的「入库人/领料人」等人员字段只存姓名字符串，缺少
+        avatar_url；前端渲染头像前用它按姓名补齐真实照片，查不到时回落
+        姓名首字占位。注意：同名在职成员会聚合为同一头像（姓名无法消歧）。
+        """
+        from app.modules.hr.public_api import get_active_avatar_map_by_name
+
+        return await get_active_avatar_map_by_name(self.repo.session)
 
     # ── 页面飞书配置管理 ────────────────────────────────────────────────
 

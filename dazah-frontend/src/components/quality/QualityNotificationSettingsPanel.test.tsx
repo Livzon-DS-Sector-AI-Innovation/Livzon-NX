@@ -13,6 +13,7 @@ const qualityActions = vi.hoisted(() => ({
 
 const apiClient = vi.hoisted(() => ({
   searchChangeActionPlanPersons: vi.fn(),
+  fetchQaPersonOptions: vi.fn(),
 }))
 
 vi.mock('@/actions/quality', () => qualityActions)
@@ -54,6 +55,18 @@ const SETTINGS = [
       },
     ],
   },
+  {
+    notification_type: 'inspection_trend_alert_escalation',
+    notification_label: '成品/纯化水异常升级推送',
+    is_enabled: true,
+    lead_days: 3,
+    repeat_interval_days: 1,
+    send_time: '09:00',
+    fallback_recipients: [],
+    inspection_lines: [],
+    first_recipients: [],
+    escalation_hours: 3,
+  },
 ]
 
 function makeQueryClient() {
@@ -75,6 +88,7 @@ describe('QualityNotificationSettingsPanel', () => {
       is_enabled: false,
     })
     apiClient.searchChangeActionPlanPersons.mockResolvedValue([])
+    apiClient.fetchQaPersonOptions.mockResolvedValue([])
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -154,7 +168,7 @@ describe('QualityNotificationSettingsPanel', () => {
     const saveButtons = Array.from(container.querySelectorAll('button')).filter(
       (btn) => /保\s*存/.test(btn.textContent || ''),
     )
-    expect(saveButtons.length).toBe(2)
+    expect(saveButtons.length).toBe(3)
     await act(async () => {
       saveButtons[1].dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await new Promise((resolve) => setTimeout(resolve, 60))
@@ -207,10 +221,10 @@ describe('QualityNotificationSettingsPanel', () => {
   it('toggles a single inspection line switch and persists the change', async () => {
     await renderPanel()
     const switches = Array.from(container.querySelectorAll('button.ant-switch'))
-    // 开关顺序：变更计划卡、检验卡总开关、霉酚酸（内控）、纯化水
-    expect(switches.length).toBeGreaterThanOrEqual(4)
+    // 开关顺序：变更计划卡、检验卡总开关、手动重分析发送、霉酚酸（内控）、纯化水
+    expect(switches.length).toBeGreaterThanOrEqual(5)
     await act(async () => {
-      switches[2].dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      switches[3].dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await new Promise((resolve) => setTimeout(resolve, 30))
     })
     qualityActions.updateQualityNotificationSetting.mockResolvedValue({
@@ -248,11 +262,43 @@ describe('QualityNotificationSettingsPanel', () => {
     const saveButtons = Array.from(container.querySelectorAll('button')).filter(
       (btn) => /保\s*存/.test(btn.textContent || ''),
     )
-    expect(saveButtons.length).toBe(2)
+    expect(saveButtons.length).toBe(3)
     await act(async () => {
       saveButtons[1].dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await new Promise((resolve) => setTimeout(resolve, 60))
     })
     expect(document.body.textContent).toContain('保存失败：网络中断')
+  })
+
+  it('preloads QA person options into recipient selects', async () => {
+    apiClient.fetchQaPersonOptions.mockResolvedValue([
+      { name: '张三', open_id: 'ou_qa_1' },
+    ])
+    await renderPanel()
+    expect(apiClient.fetchQaPersonOptions).toHaveBeenCalled()
+  })
+
+  it('saves the trend alert card and reports success', async () => {
+    await renderPanel()
+    const saveButtons = Array.from(container.querySelectorAll('button')).filter(
+      (btn) => /保\s*存/.test(btn.textContent || ''),
+    )
+    await act(async () => {
+      saveButtons[1].dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 60))
+    })
+    expect(qualityActions.updateQualityNotificationSetting).toHaveBeenCalled()
+  })
+
+  it('warns when the escalation card has no first recipients', async () => {
+    await renderPanel()
+    const saveButtons = Array.from(container.querySelectorAll('button')).filter(
+      (btn) => /保\s*存/.test(btn.textContent || ''),
+    )
+    await act(async () => {
+      saveButtons[2].dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 60))
+    })
+    expect(document.body.textContent).toContain('请至少选择一位首推接收人')
   })
 })

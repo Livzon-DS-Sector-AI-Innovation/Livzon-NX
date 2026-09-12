@@ -365,6 +365,7 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
                 ],
             ),
             _n("knowledge", "注册知识库", "/registration/knowledge"),
+            _n("registration-settings", "注册设置", "/registration/settings"),
         ],
     ),
     # ── 质量管理 ────────────────────────────────────────────────
@@ -966,6 +967,16 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
                         "inbound-ledger",
                         "入库总账",
                         "/warehouse/materials/inbound-ledger",
+                    ),
+                    _n(
+                        "liquid-raw-inbound",
+                        "液体原辅料入库",
+                        "/warehouse/materials/liquid-raw-inbound",
+                    ),
+                    _n(
+                        "liquid-sugar-inbound",
+                        "液糖入库",
+                        "/warehouse/materials/liquid-sugar-inbound",
                     ),
                     _n(
                         "qualified-suppliers",

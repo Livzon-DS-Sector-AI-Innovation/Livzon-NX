@@ -31,7 +31,6 @@ GROUP_TOKENS = {
     "OOS/OOT管理": "NLQlbJFsjaY37Vs65gyc6VdtnXf",
     "投诉管理": "NLQlbJFsjaY37Vs65gyc6VdtnXf",
     "退货与召回管理": "NLQlbJFsjaY37Vs65gyc6VdtnXf",
-    "部门联系人": "NLQlbJFsjaY37Vs65gyc6VdtnXf",
 }
 
 # 相关表格 Base 的表映射：实体名 → table_id

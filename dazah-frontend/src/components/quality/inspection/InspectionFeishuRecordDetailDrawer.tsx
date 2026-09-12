@@ -3,12 +3,15 @@
 import { App, Descriptions, Drawer } from 'antd'
 
 import { renderFeishuValue } from './renderFeishuValue'
+import type { FeishuAttachmentPreviewContext } from './renderFeishuValue'
 
 interface InspectionFeishuRecordDetailDrawerProps {
   open: boolean
   entityCode?: string
   record?: Record<string, unknown>
   allFields?: string[]
+  /** 提供时附件点击进入弹窗预览；不提供则保持下载行为 */
+  onAttachmentPreview?: (context: FeishuAttachmentPreviewContext) => void
   onClose: () => void
 }
 
@@ -18,6 +21,7 @@ export function InspectionFeishuRecordDetailDrawer({
   entityCode,
   record,
   allFields = [],
+  onAttachmentPreview,
   onClose,
 }: InspectionFeishuRecordDetailDrawerProps) {
   const { message } = App.useApp()
@@ -34,7 +38,10 @@ export function InspectionFeishuRecordDetailDrawer({
         >
           {fields.map((field) => (
             <Descriptions.Item key={field} label={field}>
-              {renderFeishuValue(record[field], record, entityCode, message)}
+              {renderFeishuValue(record[field], record, entityCode, message, {
+                fieldName: field,
+                onAttachmentPreview,
+              })}
             </Descriptions.Item>
           ))}
         </Descriptions>

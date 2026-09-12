@@ -14,7 +14,8 @@ interface WarehouseFeishuConfigPageProps {
 
 // 数据源 Base 配置（与后端 feishu_material_pages.py 保持一致）
 const BASE_CONFIGS = [
-  { name: '原辅料', appToken: 'IpMdbEFSlaZRoJstpFLcbTzPn2e', tagColor: 'blue' },
+  { name: '原辅料', appToken: 'ZWuBb4cziadvVqsRGP8c93JOnOb', tagColor: 'blue' },
+  { name: '液体入库', appToken: 'NX5GbfHJhaYrnLszxbZcrmwvnKf', tagColor: 'cyan' },
   { name: '成品', appToken: 'S9KobSXEIaU9K4sgohycpiLqnhg', tagColor: 'green' },
   { name: '五金', appToken: 'DPjgbn78nao1lWsU7a3c3JUdnSb', tagColor: 'purple' },
 ] as const

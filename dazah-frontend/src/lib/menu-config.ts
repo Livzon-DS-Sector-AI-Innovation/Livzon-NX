@@ -340,6 +340,7 @@ export const moduleMenus: ModuleMenu[] = [
         ],
       },
       { key: "knowledge", label: "注册知识库", path: "/registration/knowledge" },
+      { key: "registration-settings", label: "注册设置", path: "/registration/settings" },
     ],
   },
   {
@@ -392,6 +393,7 @@ export const moduleMenus: ModuleMenu[] = [
               { key: "inspection-items-inventory", label: "库存台账", path: "/quality/inspection/items/inventory" },
               { key: "inspection-items-inbound", label: "入库记录", path: "/quality/inspection/items/inbound" },
               { key: "inspection-items-outbound", label: "出库记录", path: "/quality/inspection/items/outbound" },
+              { key: "inspection-items-dashboard", label: "物品仪表盘", path: "/quality/inspection/items/dashboard" },
             ],
           },
           {
@@ -423,6 +425,7 @@ export const moduleMenus: ModuleMenu[] = [
               { key: "inspection-finished-formulations", label: "预混剂", path: "/quality/inspection/finished/formulations" },
               { key: "inspection-finished-tryptophan", label: "色氨酸", path: "/quality/inspection/finished/tryptophan" },
               { key: "inspection-finished-water", label: "纯化水", path: "/quality/inspection/finished/water" },
+              { key: "inspection-finished-pf", label: "PF", path: "/quality/inspection/finished/pf" },
             ],
           },
           {
@@ -626,6 +629,8 @@ export const moduleMenus: ModuleMenu[] = [
           { key: "packaging-detail", label: "包材库存明细表", path: "/warehouse/materials/packaging-detail", feishuPageKey: "packaging-detail" },
           { key: "packaging-ledger", label: "包材出库总账", path: "/warehouse/materials/packaging-ledger", feishuPageKey: "packaging-ledger" },
           { key: "inbound-ledger", label: "入库总账", path: "/warehouse/materials/inbound-ledger", feishuPageKey: "inbound-ledger" },
+          { key: "liquid-raw-inbound", label: "液体原辅料入库", path: "/warehouse/materials/liquid-raw-inbound", feishuPageKey: "liquid-raw-inbound" },
+          { key: "liquid-sugar-inbound", label: "液糖入库", path: "/warehouse/materials/liquid-sugar-inbound", feishuPageKey: "liquid-sugar-inbound" },
           { key: "qualified-suppliers", label: "原辅材料合格供应商一览表", path: "/warehouse/materials/qualified-suppliers", feishuPageKey: "qualified-suppliers" },
           { key: "material-name-code-map", label: "物料名称及代码对应表", path: "/warehouse/materials/material-name-code-map", feishuPageKey: "material-name-code-map" },
         ],

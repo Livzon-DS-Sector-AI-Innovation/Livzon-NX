@@ -108,6 +108,44 @@ async def test_unknown_entity_returns_400(client: AsyncClient) -> None:
 
 
 @pytest.mark.anyio
+async def test_attachment_preview_inline_pdf(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """附件预览端点：mock 服务层返回 PDF，断言 inline 响应头与内容。"""
+    import app.modules.quality.api.inspection_feishu_crud as crud_api
+
+    async def _fake_preview(db, entity_code, record_id, file_token):
+        assert entity_code == "qc_items_inventory"
+        assert record_id == "rec_1"
+        assert file_token == "ft"
+        return b"%PDF-1.4 test", "application/pdf", "报告单.pdf"
+
+    monkeypatch.setattr(
+        crud_api, "get_inspection_feishu_attachment_preview", _fake_preview
+    )
+    resp = await client.get(
+        "/api/v1/quality/inspection/feishu/qc_items_inventory/records/rec_1/attachments/ft/preview"
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/pdf")
+    disposition = resp.headers["content-disposition"]
+    assert disposition.startswith("inline")
+    assert "%E6%8A%A5%E5%91%8A%E5%8D%95.pdf" in disposition
+
+
+@pytest.mark.anyio
+async def test_attachment_preview_unconfigured_returns_400(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_feishu_enabled(monkeypatch)
+    resp = await client.get(
+        "/api/v1/quality/inspection/feishu/qc_items_inventory/records/rec_1/attachments/ft/preview"
+    )
+    assert resp.status_code == 400
+    assert "飞书 Base 未启用" in resp.json().get("message", "")
+
+
+@pytest.mark.anyio
 async def test_unconfigured_feishu_returns_400_with_message(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

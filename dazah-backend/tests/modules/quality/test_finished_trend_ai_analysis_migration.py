@@ -68,18 +68,18 @@ def test_table_schema_and_columns() -> None:
     assert _COLUMNS == {column.name for column in table.columns}
 
 
-def test_unique_dedup_constraint_present() -> None:
+def test_unique_dedup_partial_index_present() -> None:
+    """去重键为「仅未删除行唯一」的部分唯一索引（软删旧行后可重建新行）。"""
     table = FinishedTrendAIAnalysis.__table__
-    unique_keys = {
-        tuple(sorted(c.name for c in constraint.columns))
-        for constraint in table.constraints
-        if constraint.__class__.__name__ == "UniqueConstraint"
-    }
-    assert tuple(
-        sorted(
-            ["entity_code", "metric_key", "rule_type", "trend_end_batch"]
-        )
-    ) in unique_keys
+    expected_cols = ("entity_code", "metric_key", "rule_type", "trend_end_batch")
+    partial_indexes = [
+        index
+        for index in table.indexes
+        if index.unique and {c.name for c in index.columns} == set(expected_cols)
+    ]
+    assert partial_indexes, "应存在去重列上的部分唯一索引"
+    dialect_options = partial_indexes[0].dialect_options["postgresql"]
+    assert dialect_options["where"] is not None  # WHERE is_deleted = false
 
 
 @pytest.mark.anyio

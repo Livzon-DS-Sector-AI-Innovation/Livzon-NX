@@ -54,6 +54,7 @@ import {
 } from './warehouseScope'
 import {
   fetchWarehouseMaterialPage,
+  fetchWarehousePersonAvatarMap,
   fetchWarehouseRecordDetail,
 } from '@/lib/api/client/warehouse'
 import {
@@ -252,6 +253,33 @@ const PAGE_COLUMN_RULES: Partial<Record<string, ColumnDisplayRule[]>> = {
     { sourceKey: '车间领出原因' },
     { sourceKey: '备注' },
   ],
+  // 液体入库两页：列表只展示「入库日期/日期 → 备注」之间的业务列，
+  // 其余字段（请检/检测结果等）在详情弹窗查看
+  'liquid-raw-inbound': [
+    { sourceKey: '入库日期' },
+    // 品种列不在列表展示（多为空），仅在详情弹窗查看
+    { sourceKey: '物料名称' },
+    { sourceKey: '入库批号' },
+    { sourceKey: '规格' },
+    { sourceKey: '厂家批号' },
+    { sourceKey: '供应商' },
+    { sourceKey: '生产商' },
+    { sourceKey: '计量单位' },
+    { sourceKey: '入库数量' },
+    { sourceKey: '入库件数' },
+    { sourceKey: '备注' },
+  ],
+  'liquid-sugar-inbound': [
+    { sourceKey: '日期' },
+    { sourceKey: '入库批号' },
+    { sourceKey: '厂家批号' },
+    { sourceKey: '经销商' },
+    { sourceKey: '规格' },
+    { sourceKey: '件数' },
+    { sourceKey: '数量kg' },
+    { sourceKey: '填写人' },
+    { sourceKey: '备注' },
+  ],
 }
 
 for (const pageKey of PRODUCT_DETAIL_PAGE_KEYS) {
@@ -284,6 +312,9 @@ const DATE_SORT_DESC_PAGES: Record<string, string> = {
   'product-inbound-detail': '入库日期',
   'product-outbound-ledger': '出库日期',
   'product-shipping': '日期',
+  'liquid-raw-inbound': '入库日期',
+  // 液糖表的「入库日期」为公式列，业务日期是「日期」
+  'liquid-sugar-inbound': '日期',
   // 五金库存明细页：按业务/入库日期倒序，保证每天最新记录在前。
   // 注意：hardware-summary / hardware-electrical 的「日期」绝大多数为同一
   // 初始化日期且最新行常因结存 0 被隐藏，无排序意义，故不配置。
@@ -325,18 +356,26 @@ const WAREHOUSE_INOUT_LINKS: Record<
   string,
   { inbound?: string; outbound?: string; outboundLabel?: string; inboundLabel?: string }
 > = {
-  // 入库总账（原辅料/包材共用）→ 原辅料入库表单
+  // 入库总账（原辅料/包材共用）→ 原辅料入库表单（2026-09 换新 Base 表单）
   'inbound-ledger': {
-    inbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnw9CyyTl8PdAvOyQZqK9oie',
+    inbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnLl9xrz5e60vRG4P8Cy85FC',
   },
   // 原辅料出库总账 → 原辅料入库 + 出库表单
   'raw-ledger': {
-    inbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnw9CyyTl8PdAvOyQZqK9oie',
-    outbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnHN5pqjlDlKc3iyUi7Fts7b',
+    inbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnLl9xrz5e60vRG4P8Cy85FC',
+    outbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnsJ8U9aoOqqEBS5b1mpG2Zd',
   },
   // 包材出库总账 → 包材出库表单
   'packaging-ledger': {
-    outbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcneDAUnAAhPs1yFMfOq0Uhkf',
+    outbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnOZBGw46qWth2auB1F09kNd',
+  },
+  // 液体原辅料入库 → 液体原辅料入库表单
+  'liquid-raw-inbound': {
+    inbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnfWaTJinJrjFh0hcqvYG0De',
+  },
+  // 液糖入库 → 液糖入库表单
+  'liquid-sugar-inbound': {
+    inbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnPdocHXYzag4Uyj0biU9bYc',
   },
   // 成品入库明细 → 成品入库表单（按钮「新增」）
   'product-inbound-detail': {
@@ -672,7 +711,8 @@ export function buildAdvancedFilterLabel(filter: WarehouseAdvancedFilter) {
 function renderCell(
   value: WarehouseFeishuCellValue | string | undefined,
   columnKey: string,
-  fieldType?: number | null
+  fieldType?: number | null,
+  personAvatarMap?: Record<string, string>
 ) {
   if (value === null || value === undefined || value === '') {
     return <span className="text-[var(--color-muted)]">-</span>
@@ -689,7 +729,7 @@ function renderCell(
     isPersonValue ||
     isPersonNamedField
   ) {
-    return renderPersonList(value)
+    return renderPersonList(value, personAvatarMap)
   }
 
   if (columnKey === '质量状态') {
@@ -766,8 +806,9 @@ export function formatSyncTime(time: string | undefined): string {
 
 // 人员字段渲染：头像 + 姓名（类似飞书联系人展示）。
 // 兼容飞书人员结构（数组/单对象，含 id/name/avatar_url）与纯字符串姓名
-// （如部分表的"发料人"为文本/单选字段，仅存姓名文本，无头像数据时用姓名首字占位）。
-function renderPersonList(value: unknown) {
+// （如部分表的"发料人"为文本/单选字段，仅存姓名文本，无头像数据时用姓名首字占位，
+// 并按 personAvatarMap（人事-飞书联系人姓名映射）补齐真实照片）。
+function renderPersonList(value: unknown, personAvatarMap?: Record<string, string>) {
   // 飞书人员值可能是单个 dict、多个 dict 的 list，或纯字符串姓名，统一归一为数组
   const normalized = Array.isArray(value)
     ? value
@@ -787,9 +828,11 @@ function renderPersonList(value: unknown) {
             ? (person as Record<string, unknown>)
             : { name: String(person) }
         const name = String(item.name ?? '?')
+        const avatarUrl =
+          item.avatar_url ? String(item.avatar_url) : personAvatarMap?.[name.trim()]
         return (
           <span key={index} className="inline-flex items-center gap-1">
-            <Avatar size={20} src={item.avatar_url ? String(item.avatar_url) : undefined}>
+            <Avatar size={20} src={avatarUrl}>
               {name.slice(0, 1)}
             </Avatar>
             <span>{name}</span>
@@ -804,7 +847,8 @@ function renderDetailField(
   field: WarehouseRecordFieldValue,
   editValues: Record<string, unknown>,
   onChange: (fieldName: string, value: unknown) => void,
-  editMode: boolean
+  editMode: boolean,
+  personAvatarMap?: Record<string, string>
 ) {
   const fieldName = field.field_name
   const value = editValues[fieldName]
@@ -816,7 +860,7 @@ function renderDetailField(
       (field.field_type !== null && field.field_type !== undefined && FIELD_PERSON_TYPES.has(field.field_type)) ||
       fieldName.endsWith('人')
     if (isPersonField) {
-      return renderPersonList(field.value)
+      return renderPersonList(field.value, personAvatarMap)
     }
     return <span className="break-all text-[13px]">{formatDetailDisplayValue(field)}</span>
   }
@@ -826,7 +870,7 @@ function renderDetailField(
     // 人员字段（含字段名以"人"结尾的文本/单选人员字段）：头像 + 姓名展示
     const isPersonField = fieldName.endsWith('人')
     if (isPersonField) {
-      return renderPersonList(field.value)
+      return renderPersonList(field.value, personAvatarMap)
     }
     return <span className="break-all text-[13px]">{formatDetailDisplayValue(field)}</span>
   }
@@ -1296,6 +1340,15 @@ export function WarehouseFeishuTablePage({
     [resolvedPageKey]
   )
 
+  // 人员姓名→飞书头像映射（人事-飞书联系人）：文本类型人员字段（入库人/领料人等）
+  // 只存姓名字符串，用它补齐真实照片；queryKey 全模块共享缓存。
+  // 注意：列定义 useMemo 的依赖数组引用本值，声明必须位于其上方
+  const { data: personAvatarMap } = useQuery({
+    queryKey: ['warehouse-person-avatar-map'],
+    queryFn: fetchWarehousePersonAvatarMap,
+    staleTime: 30 * 60 * 1000,
+  })
+
   const columns: TableColumnsType<WarehouseTableRow> = useMemo(
     () => [
       ...visibleData.columns.map((column, columnIndex) => ({
@@ -1352,7 +1405,7 @@ export function WarehouseFeishuTablePage({
               </span>
             )
           }
-          return renderCell(value, column.key, column.field_type)
+          return renderCell(value, column.key, column.field_type, personAvatarMap)
         },
       })),
       {
@@ -1378,7 +1431,7 @@ export function WarehouseFeishuTablePage({
           ) : null,
       },
     ],
-    [columnWidth, isCompactPage, resolvedPageKey, visibleData.columns, openDetail]
+    [columnWidth, isCompactPage, personAvatarMap, resolvedPageKey, visibleData.columns, openDetail]
   )
 
   const basePath = pathname || `/warehouse/materials/${resolvedPageKey}`
@@ -1659,9 +1712,9 @@ export function WarehouseFeishuTablePage({
           style: { whiteSpace: 'normal' as const, wordBreak: 'break-word' as const },
         }),
         render: (value: WarehouseFeishuCellValue | string | undefined) =>
-          renderCell(value, column.key, column.field_type),
+          renderCell(value, column.key, column.field_type, personAvatarMap),
       })),
-    [statDetailVisible.columns, columnWidth, resolvedPageKey]
+    [personAvatarMap, statDetailVisible.columns, columnWidth, resolvedPageKey]
   )
 
   const statCards = useMemo(() => {
@@ -2304,7 +2357,7 @@ export function WarehouseFeishuTablePage({
                     </Space>
                   }
                 >
-                  {renderDetailField(field, editValues, handleEditValueChange, editMode)}
+                  {renderDetailField(field, editValues, handleEditValueChange, editMode, personAvatarMap)}
                 </Descriptions.Item>
               ))}
             </Descriptions>

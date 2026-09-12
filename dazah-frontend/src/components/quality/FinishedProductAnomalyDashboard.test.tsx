@@ -71,6 +71,37 @@ const DASHBOARD_DATA = {
     { type: '杂质异常', count: 100 },
     { type: '性状与外观异常', count: 40 },
   ],
+  open_count: 3,
+  by_year_open: [
+    { year: 2025, open_count: 1, total: 274 },
+    { year: 2026, open_count: 2, total: 212 },
+  ],
+  open_recent: [
+    {
+      id: 'rec-o1',
+      year: 2026,
+      date: '2026-09-01',
+      product: 'L-苯丙氨酸',
+      anomaly_type: '异物混入',
+      desc: 'FA-2602156批物料中发现异物',
+    },
+    {
+      id: 'rec-o2',
+      year: 2026,
+      date: '2026-09-02',
+      product: '霉酚酸',
+      anomaly_type: '杂质异常',
+      desc: 'MC-260428 成品干粉杂质超标',
+    },
+    {
+      id: 'rec-o3',
+      year: 2025,
+      date: '2025-06-10',
+      product: '色氨酸',
+      anomaly_type: '检验结果超标（OOS）',
+      desc: 'TY-2506xxx 残渣不合格',
+    },
+  ],
 }
 
 function makeQueryClient() {
@@ -141,6 +172,44 @@ describe('FinishedProductAnomalyDashboard', () => {
     expect(options).toContain('全部年份')
     expect(options).toContain('2025年')
     expect(options.some((item) => item.includes('2027'))).toBe(false)
+  })
+
+  it('renders the open-anomaly board with year filter and ledger link', async () => {
+    await renderPage()
+    const text = container.textContent || ''
+    expect(text).toContain('未关闭异常看板')
+    expect(text).toContain('全部（3）')
+    expect(text).toContain('FA-2602156批物料中发现异物')
+    // 框内旧汇总与缺口标签已移除（AND 口径下全部行同状态）
+    expect(text).not.toContain('两者均缺')
+    expect(text).not.toContain('缺调查报告')
+    // 看板自带年份筛选：切到 2025 只保留该年行
+    const boardSelect = Array.from(container.querySelectorAll('.ant-select')).pop() as HTMLElement
+    await act(async () => {
+      boardSelect?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      boardSelect?.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    const option2025 = Array.from(
+      document.body.querySelectorAll('.ant-select-item-option'),
+    ).find((item) => (item.textContent || '').includes('2025年（1）')) as HTMLElement
+    expect(option2025).toBeTruthy()
+    await act(async () => {
+      option2025?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 60))
+    })
+    const filtered = container.textContent || ''
+    expect(filtered).toContain('TY-2506xxx 残渣不合格')
+    expect(filtered).not.toContain('FA-2602156批物料中发现异物')
+    const ledgerButton = Array.from(container.querySelectorAll('button')).find((btn) =>
+      (btn.textContent || '').includes('去台账'),
+    )
+    expect(ledgerButton).toBeTruthy()
+    await act(async () => {
+      ledgerButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(pushMock).toHaveBeenCalledWith('/quality/anomaly-report/ledger?year=2025')
   })
 
   it('shows the pending count on the AI analysis button and starts the job', async () => {

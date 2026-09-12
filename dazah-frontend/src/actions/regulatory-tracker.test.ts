@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('next/headers', () => ({ cookies: mocks.cookies }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 
-import { analyzeRegulatoryDocument, analyzeRegulatoryDocuments, manualSyncRegulatoryTracker, markDocumentRead } from './regulatory-tracker'
+import { analyzeRegulatoryDocument, analyzeRegulatoryDocuments, manualSyncRegulatoryTracker, markDocumentRead, testRegulatoryTrackerNotificationSettings } from './regulatory-tracker'
 
 describe('regulatory tracker server actions', () => {
   afterEach(() => {
@@ -72,5 +72,29 @@ describe('regulatory tracker server actions', () => {
     await expect(markDocumentRead('doc-empty')).resolves.toBeNull()
     await expect(analyzeRegulatoryDocument('doc-2')).resolves.toEqual({ analyzed: true })
     await expect(manualSyncRegulatoryTracker(14)).resolves.toEqual({ synced: 2, failed: 0 })
+  })
+
+  it('posts notification settings test payload to the tracker endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { ok: true, recipients: 2 } }), { status: 200 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      testRegulatoryTrackerNotificationSettings({
+        recipient_open_id: 'ou-1',
+        header_template: '法规更新 {count}',
+      }),
+    ).resolves.toEqual({ ok: true, recipients: 2 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/regulatory-documents/notification-settings/test'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          recipient_open_id: 'ou-1',
+          header_template: '法规更新 {count}',
+        }),
+      }),
+    )
   })
 })

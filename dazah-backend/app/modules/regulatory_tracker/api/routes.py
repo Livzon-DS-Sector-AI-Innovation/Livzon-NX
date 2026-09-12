@@ -11,9 +11,12 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import async_session_factory, get_db
+from app.core.response import success_response
 from app.modules.regulatory_tracker import repository as repo
 from app.modules.regulatory_tracker.schemas import (
     RegulatoryTrackerNotificationSettingUpdate,
+    RegulatoryTrackerNotificationTestRequest,
+    RegulatoryTrackerNotificationTestResult,
     TrackerLedgerDetailRead,
     TrackerLedgerDetailResponse,
     TrackerLedgerItemRead,
@@ -31,6 +34,7 @@ from app.modules.regulatory_tracker.services.summary_backfill_service import (
     backfill_document_summaries,
 )
 from app.modules.regulatory_tracker.services.sync_service import run_all_sites
+from app.shared.schemas import ApiResponseEnvelope
 
 logger = logging.getLogger(__name__)
 
@@ -251,6 +255,23 @@ async def update_notification_settings(
         "message": "推送配置已保存",
         "data": settings.model_dump(mode="json"),
     }
+
+
+@router.post(
+    "/regulatory-documents/notification-settings/test",
+    summary="发送法规推送测试消息",
+    response_model=ApiResponseEnvelope[RegulatoryTrackerNotificationTestResult],
+)
+async def test_notification_settings(
+    data: RegulatoryTrackerNotificationTestRequest,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    result = await RegulatoryTrackerNotificationService(db).send_test_notification(
+        recipient_open_id=data.recipient_open_id,
+        header_template=data.header_template,
+        footer_template=data.footer_template,
+    )
+    return success_response(data=RegulatoryTrackerNotificationTestResult(**result))
 
 
 # ============ 法规文档列表 ============

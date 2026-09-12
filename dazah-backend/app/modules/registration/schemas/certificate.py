@@ -197,6 +197,12 @@ class CertificateReminderSettingUpdate(BaseModel):
     is_enabled: bool = Field(..., description="是否启用自动提醒")
     reminder_days: int = Field(..., ge=1, le=365, description="提前提醒天数")
     recipient_open_id: str | None = Field(None, description="接收人飞书 open_id")
+    header_template: str | None = Field(
+        None, max_length=500, description="消息开头语模板（空用内置默认）"
+    )
+    footer_template: str | None = Field(
+        None, max_length=500, description="消息结尾语模板（空用内置默认）"
+    )
 
 
 class CertificateReminderSettingResponse(BaseModel):
@@ -208,3 +214,35 @@ class CertificateReminderSettingResponse(BaseModel):
     recipient_name: str | None = Field(None, description="接收人姓名")
     recipient_department: str | None = Field(None, description="接收人所属部门")
     pending_count: int = Field(..., description="当前规则命中的待提醒证书数")
+    header_template: str | None = Field(
+        None, description="消息开头语模板（空用内置默认）"
+    )
+    footer_template: str | None = Field(
+        None, description="消息结尾语模板（空用内置默认）"
+    )
+
+
+class CertificateReminderTestRequest(BaseModel):
+    """证书提醒测试消息入参。"""
+
+    recipient_open_id: str = Field(..., description="测试接收人飞书 open_id")
+    header_template: str | None = Field(
+        None, max_length=500, description="开头语模板草稿（空用内置默认）"
+    )
+    footer_template: str | None = Field(
+        None, max_length=500, description="结尾语模板草稿（空用内置默认）"
+    )
+
+
+class CertificateReminderTestResult(BaseModel):
+    """证书提醒测试消息结果。"""
+
+    sent: bool = Field(..., description="是否发送成功")
+    recipient_name: str | None = Field(None, description="接收人姓名")
+    detail: str = Field(..., description="结果说明")
+    header_template: str | None = Field(
+        None, description="消息开头语模板（空用内置默认）"
+    )
+    footer_template: str | None = Field(
+        None, description="消息结尾语模板（空用内置默认）"
+    )
