@@ -321,7 +321,7 @@ async def test_process_escalation_cancels_when_escalation_disabled(
         AsyncMock(return_value=_enabled_trend_config()),
     )
     monkeypatch.setattr(
-        calc,
+        esc,
         "load_inspection_trend_alert_escalation_config",
         AsyncMock(
             return_value=InspectionTrendAlertEscalationConfig(is_enabled=False)

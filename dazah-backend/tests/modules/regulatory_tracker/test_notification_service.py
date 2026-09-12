@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.core.exceptions import AppException
+from app.modules.regulatory_tracker.models.regulatory_document import RegulatoryDocument
 from app.modules.regulatory_tracker.services.notification_service import (
     RegulatoryTrackerNotificationService,
     _build_notification_content,
@@ -730,3 +731,33 @@ async def test_send_test_notification_paths(monkeypatch) -> None:
     assert "测试开头 1" in kwargs["content"]
     assert "测试结尾" in kwargs["content"]
     create_mock.assert_not_awaited()
+@pytest.mark.anyio
+async def test_list_sample_documents_prefers_real_rows() -> None:
+    """有 accepted 法规时返回真实最近 3 条。"""
+    rows = [
+        SimpleNamespace(title=f"真实法规 {i}", capture_date=date(2026, 9, 1 + i))
+        for i in range(3)
+    ]
+    session = SimpleNamespace(
+        execute=AsyncMock(
+            return_value=SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: rows))
+        )
+    )
+    service = RegulatoryTrackerNotificationService(session)
+    docs = await service._list_sample_documents()
+    assert len(docs) == 3
+    assert all("真实法规" in doc.title for doc in docs)
+
+
+@pytest.mark.anyio
+async def test_list_sample_documents_synthesizes_when_empty() -> None:
+    """无 accepted 法规时返回 3 条合成样例。"""
+    session = SimpleNamespace(
+        execute=AsyncMock(
+            return_value=SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: []))
+        )
+    )
+    service = RegulatoryTrackerNotificationService(session)
+    docs = await service._list_sample_documents()
+    assert len(docs) == 3
+    assert all("测试样例" in doc.title for doc in docs)
