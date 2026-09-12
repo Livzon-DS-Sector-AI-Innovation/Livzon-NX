@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.core.exceptions import AppException
-from app.modules.regulatory_tracker.models.regulatory_document import RegulatoryDocument
 from app.modules.regulatory_tracker.services.notification_service import (
     RegulatoryTrackerNotificationService,
     _build_notification_content,
@@ -740,7 +739,9 @@ async def test_list_sample_documents_prefers_real_rows() -> None:
     ]
     session = SimpleNamespace(
         execute=AsyncMock(
-            return_value=SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: rows))
+            return_value=SimpleNamespace(
+                scalars=lambda: SimpleNamespace(all=lambda: rows)
+            )
         )
     )
     service = RegulatoryTrackerNotificationService(session)
@@ -754,7 +755,9 @@ async def test_list_sample_documents_synthesizes_when_empty() -> None:
     """无 accepted 法规时返回 3 条合成样例。"""
     session = SimpleNamespace(
         execute=AsyncMock(
-            return_value=SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: []))
+            return_value=SimpleNamespace(
+                scalars=lambda: SimpleNamespace(all=lambda: [])
+            )
         )
     )
     service = RegulatoryTrackerNotificationService(session)
