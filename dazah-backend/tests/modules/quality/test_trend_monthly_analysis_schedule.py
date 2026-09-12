@@ -108,3 +108,67 @@ async def test_run_monthly_analysis_short_circuits_when_already_ran() -> None:
     result = await tma.run_trend_monthly_analysis(db, "2026-09")
     assert result == {"status": "already"}
     db.add.assert_not_called()
+@pytest.mark.anyio
+async def test_run_monthly_analysis_executes_all_groups_and_finishes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """逐组执行：命中入队/未配置跳过/停用线跳过/异常跳过，最后标记 done。"""
+    added: list[Any] = []
+
+    db = SimpleNamespace(
+        execute=AsyncMock(
+            return_value=SimpleNamespace(
+                scalars=lambda: SimpleNamespace(first=lambda: None)
+            )
+        ),
+        add=lambda row: added.append(row),
+        commit=AsyncMock(),
+    )
+    monkeypatch.setattr(
+        tma,
+        "load_inspection_trend_alert_config",
+        AsyncMock(
+            return_value=InspectionTrendAlertConfig(
+                is_enabled=True,
+                lines={"qc_finished_internal": {"enabled": True}},
+            )
+        ),
+    )
+
+    async def ok_group(db, **kwargs):
+        return {
+            "configured": True,
+            "source_entity_code": "qc_finished_internal",
+            "summary": {"trend_ai_pending_count": 2},
+            "charts": [1, 2],
+        }
+
+    async def unconfigured_group(db, **kwargs):
+        return {"configured": False}
+
+    async def disabled_group(db, **kwargs):
+        return {
+            "configured": True,
+            "source_entity_code": "other_line",
+            "summary": {},
+            "charts": [1],
+        }
+
+    async def broken_group(db, **kwargs):
+        raise RuntimeError("boom")
+
+    runners = [
+        ("internal", ok_group, {}),
+        ("none", unconfigured_group, {}),
+        ("disabled", disabled_group, {}),
+        ("broken", broken_group, {}),
+    ]
+    monkeypatch.setattr(tma, "_GROUP_RUNNERS", runners)
+
+    stats = await tma.run_trend_monthly_analysis(db, "2026-09")
+    # "other_line" 不在停用名单 → 默认启用并计入 lines/charts
+    assert stats == {"lines": 2, "charts": 3, "enqueued": 1, "skipped": 1}
+    assert len(added) == 1
+    assert added[0].status == "done"
+    assert added[0].last_error == "1 组拉取失败"
+
