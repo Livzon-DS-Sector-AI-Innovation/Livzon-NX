@@ -32,6 +32,7 @@ vi.mock('echarts-for-react', () => ({
     createElement('pre', null, JSON.stringify(option ?? {})),
 }))
 
+
 // 认证 store：默认管理员（通配权限），工段矩阵用例直接改 state.user.permissions
 const authStore = vi.hoisted(() => {
   const state = {
@@ -775,6 +776,134 @@ describe('ProductionHomePage (fermentation board)', () => {
       await new Promise((r) => setTimeout(r, 200))
     })
     expect(document.body.textContent || '').toContain('排产表未覆盖当前日期')
+  })
+
+  it('falls back to empty plan rows when the plan fetch fails', async () => {
+    actions.getPlans.mockRejectedValue(new Error('plan service down'))
+    await render()
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('月生产计划待更新')
+  })
+
+  it('persists the selected plan row per month into local storage', async () => {
+    actions.getPlans.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [
+        {
+          id: 'pl-1',
+          workshop: '203车间',
+          product_name: 'L-苯丙氨酸',
+          plan_date: '2026-09-01',
+          planned_yield: 100,
+          unit: 'KG',
+          actual_completion: 0,
+          completion_rate: 0,
+          safety_status: '',
+          quality_status: '',
+          remarks: '',
+          source: 'feishu',
+        },
+        {
+          id: 'pl-2',
+          workshop: '203车间',
+          product_name: '甲瓦',
+          plan_date: '2026-09-01',
+          planned_yield: 200,
+          unit: 'KG',
+          actual_completion: 0,
+          completion_rate: 0,
+          safety_status: '',
+          quality_status: '',
+          remarks: '',
+          source: 'feishu',
+        },
+      ],
+    })
+    await render()
+    // antd v6：选择面为 .ant-select-content，对 Select 根元素派发 mousedown 打开
+    const trigger = container.querySelector('.plan-product-select') as HTMLElement
+    expect(trigger).toBeTruthy()
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const dropdown = document.body.querySelector(
+      '.ant-select-dropdown:not(.ant-select-dropdown-hidden)',
+    ) as HTMLElement
+    expect(dropdown).toBeTruthy()
+    const option = Array.from(
+      dropdown.querySelectorAll('.ant-select-item-option'),
+    ).find((o) => o.textContent?.includes('甲瓦')) as HTMLElement
+    expect(option).toBeTruthy()
+    await act(async () => {
+      option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      option.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const raw = window.localStorage.getItem('dazah.production.plan-card.selection')
+    expect(raw).toBeTruthy()
+    const store = JSON.parse(raw || '{}') as Record<string, string>
+    const values = Object.values(store)
+    expect(values).toContain('203车间|甲瓦')
+  })
+
+  it('picks a dump date manually in the actual modal', async () => {
+    actions.getFermentationBatchActuals.mockResolvedValue({ code: 200, data: [] })
+    actions.upsertFermentationBatchActual.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: null,
+    })
+    await render()
+    await openHistoryDrawer()
+    const addBtn = Array.from(document.body.querySelectorAll('.ant-drawer button')).find(
+      (b) => b.textContent?.includes('录入批次产量'),
+    ) as HTMLElement
+    await act(async () => {
+      addBtn.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const selector = document.body.querySelector('.ant-modal .ant-select') as HTMLElement
+    await act(async () => {
+      selector.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const option = Array.from(document.body.querySelectorAll('.ant-select-item-option')).find(
+      (o) => o.textContent?.includes('FA26230'),
+    ) as HTMLElement
+    await act(async () => {
+      option.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    // 手动打开放罐日期面板并改选 9 日
+    const dateInput = Array.from(document.body.querySelectorAll('.ant-modal input')).find(
+      (i) => (i as HTMLInputElement).placeholder?.includes('放罐日期'),
+    ) as HTMLElement
+    // antd：mousedown 需落在 .ant-picker 根元素上才会打开面板
+    const pickerRoot = dateInput.closest('.ant-picker') as HTMLElement
+    expect(pickerRoot).toBeTruthy()
+    await act(async () => {
+      dateInput.focus()
+      pickerRoot.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      pickerRoot.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const targetCell = Array.from(
+      document.body.querySelectorAll('.ant-picker-cell'),
+    ).find((c) => c.getAttribute('title') === '2026-09-09') as HTMLElement | undefined
+    expect(targetCell).toBeTruthy()
+    await act(async () => {
+      ;(targetCell!.querySelector('.ant-picker-cell-inner') as HTMLElement | null)?.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    await act(async () => {
+      modalOkBtn().click()
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    expect(actions.upsertFermentationBatchActual).toHaveBeenCalledWith(
+      expect.objectContaining({ dump_date: '2026-09-09' }),
+    )
   })
 
   it('closes the drawer and modals without saving', async () => {

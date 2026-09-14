@@ -125,4 +125,68 @@ describe('PlanPage', () => {
     expect(text).toContain('数据源待接入')
     expect(container.querySelectorAll('.ant-table-row')).toHaveLength(0)
   })
+
+  it('reloads the ledger when the month changes', async () => {
+    await renderAndSettle()
+    prodActions.getPlans.mockClear()
+    const pickerRoot = container.querySelector('.ant-picker') as HTMLElement
+    expect(pickerRoot).toBeTruthy()
+    const input = pickerRoot.querySelector('input') as HTMLInputElement
+    await act(async () => {
+      input.focus()
+      pickerRoot.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      pickerRoot.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const monthCell = Array.from(
+      document.body.querySelectorAll('.ant-picker-cell'),
+    ).find((c) => c.getAttribute('title') === '2026-10') as HTMLElement | undefined
+    expect(monthCell).toBeTruthy()
+    await act(async () => {
+      ;(monthCell!.querySelector('.ant-picker-cell-inner') as HTMLElement | null)?.click()
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    const lastCall = prodActions.getPlans.mock.calls.at(-1)?.[0] as
+      | { month?: string }
+      | undefined
+    expect(lastCall?.month).toBe('2026-10')
+  })
+
+  it('paginates to the second page when there are more than 20 rows', async () => {
+    const rows = Array.from({ length: 25 }, (_, i) => ({
+      id: `pl-${i + 1}`,
+      workshop: '203车间',
+      product_name: `产品${i + 1}`,
+      plan_date: '2026-09-01',
+      planned_yield: 100,
+      unit: 'KG',
+      actual_completion: 0,
+      completion_rate: 0,
+      safety_status: '无异常',
+      quality_status: '无异常',
+      remarks: '',
+      source: 'feishu',
+    }))
+    prodActions.getPlans.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: rows,
+      meta: { total: 25 },
+    })
+    await renderAndSettle()
+    prodActions.getPlans.mockClear()
+    const page2 = document.body.querySelector(
+      '.ant-pagination-item-2',
+    ) as HTMLElement | undefined
+    expect(page2).toBeTruthy()
+    await act(async () => {
+      page2!.querySelector('a')?.click()
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    expect(prodActions.getPlans).toHaveBeenCalledTimes(1)
+    const lastCall = prodActions.getPlans.mock.calls[0]?.[0] as
+      | { page?: number }
+      | undefined
+    expect(lastCall?.page).toBe(2)
+  })
 })

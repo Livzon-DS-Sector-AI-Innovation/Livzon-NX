@@ -64,6 +64,7 @@ import {
   upsertFermentationBatchActual,
   deleteFermentationBatchActual,
   setFermentationMonthCapacity,
+  getPlanMonthlySummary,
 } from './production'
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000'
@@ -610,6 +611,17 @@ describe('production actions', () => {
         method: 'POST',
         body: JSON.stringify({ planned_capacity_kg: 930000 }),
       }),
+    )
+  })
+
+  it('fetches the plan monthly summary for a month', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getPlanMonthlySummary('2026-09')).resolves.toMatchObject({ code: 200 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/production/plans/monthly-summary?month=2026-09`,
+      expect.anything(),
     )
   })
 })
