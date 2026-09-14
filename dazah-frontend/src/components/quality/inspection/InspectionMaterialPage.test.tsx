@@ -140,11 +140,18 @@ describe('InspectionMaterialPage 固体物料检验单页', () => {
     expect(optionTexts).not.toContain('YL001 乙醇')
   })
 
-  it('物料列表加载失败时提示错误并清空选择', async () => {
+  it('物料列表加载失败时提示错误并支持重试', async () => {
     apiClient.fetchInspectionMaterials.mockRejectedValue(new Error('飞书超时'))
     await renderPage()
     expect(document.body.textContent).toContain('物料列表加载失败')
-    expect(document.body.textContent).toContain('重试')
+    const retry = Array.from(container.querySelectorAll('a')).find((anchor) =>
+      (anchor.textContent || '').trim() === '重试',
+    )
+    await act(async () => {
+      retry?.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(apiClient.fetchInspectionMaterials).toHaveBeenCalledTimes(2)
   })
 
   it('切换物料后加载该物料对应分组子表的检验记录', async () => {
