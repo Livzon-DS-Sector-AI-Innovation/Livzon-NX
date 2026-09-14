@@ -242,7 +242,11 @@ const server = createServer(async (request, response) => {
     const user = authorization.includes('restricted')
       ? { ...currentUser, role: 'user', module_codes: [] }
       : authorization.includes('procurement-only')
-        ? { ...currentUser, role: 'user', module_codes: ['procurement'] }
+        ? { ...currentUser, role: 'user', module_codes: ['procurement'],
+          page_permission_rollouts: { procurement: 'enforced' },
+          page_permissions: [{ page_key: 'purchasing:supplier', module_code: 'procurement',
+            permissions: ['access', 'query'], sensitive_actions: [], source: 'user',
+            data_scope: { scope_type: 'not_applicable' } }] }
         : currentUser
     response.end(JSON.stringify({ code: 200, message: 'success', data: user }))
     return
