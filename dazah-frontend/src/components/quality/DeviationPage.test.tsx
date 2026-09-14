@@ -68,6 +68,12 @@ it('does not request or retain data with access-only permission', async () => {
   expect(useDeviationStore.getState().deviations).toEqual([])
 })
 
+it('keeps import restricted to administrators even with operate permission', async () => {
+  setGrant(['access', 'query', 'operate'])
+  await renderPage()
+  expect(container.textContent).not.toContain('导入')
+})
+
 it('sends all visible filters and keeps read-only operations hidden', async () => {
   setGrant(['access', 'query'])
   useDeviationStore.getState().setStatusFilter('draft')

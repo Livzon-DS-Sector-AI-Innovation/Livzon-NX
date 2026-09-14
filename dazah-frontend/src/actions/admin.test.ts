@@ -40,6 +40,31 @@ describe('system permission server actions', () => {
     }))
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
+
+  it('publishes a page rollout with preview version and confirmation reason', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: { module_code: 'hr', status: 'enforced' },
+    }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(adminActions.publishPagePermissionRollout({
+      module_code: 'hr', current_version: 4, preview_hash: 'preview-hash',
+    } as never, '发布员工页面权限')).resolves.toEqual({
+      ok: true, data: { module_code: 'hr', status: 'enforced' },
+    })
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining(
+      '/identity/admin/page-permissions/modules/hr/publish',
+    ), expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        expected_version: 4,
+        preview_hash: 'preview-hash',
+        reason: '发布员工页面权限',
+        confirmed: true,
+      }),
+    }))
+  })
+
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.clearAllMocks()

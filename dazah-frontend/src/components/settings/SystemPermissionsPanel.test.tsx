@@ -13,4 +13,12 @@ describe('system permissions settings entry', () => {
     expect(SYSTEM_PERMISSION_PAGES.find((page) => page.href === '/system/dept-roles')?.description)
       .toBe('按部门查询用户，筛选并勾选需要应用角色的人员。')
   })
+
+  it('keeps page-level permission guidance visible at the system entry', () => {
+    expect(SYSTEM_PERMISSION_PAGES.every((page) => page.description.length > 10)).toBe(true)
+    expect(SYSTEM_PERMISSION_PAGES.find((page) => page.href === '/system/roles')?.description)
+      .toContain('菜单页面')
+    expect(SYSTEM_PERMISSION_PAGES.find((page) => page.href === '/system/user-roles')?.description)
+      .toContain('一级业务模块')
+  })
 })
