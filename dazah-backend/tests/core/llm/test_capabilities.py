@@ -1,390 +1,220 @@
+import base64
+import io
 import json
 from typing import Any
 
 import httpx
 import pytest
+from PIL import Image
 
 from app.core.llm.capabilities import detect_model_capabilities, probe_api_base_url
 from app.core.llm.exceptions import LLMConfigError
 
 
+def image_answer(payload: dict[str, Any]) -> str:
+    content = payload["messages"][0]["content"]
+    if not isinstance(content, list):
+        return "OK"
+    url = next(
+        part["image_url"]["url"] for part in content if part["type"] == "image_url"
+    )
+    image = Image.open(io.BytesIO(base64.b64decode(url.split(",", 1)[1])))
+    colors = {
+        (37, 99, 235): "blue",
+        (234, 179, 8): "yellow",
+        (220, 38, 38): "red",
+        (22, 163, 74): "green",
+    }
+    return ", ".join(colors[image.getpixel((32 + 64 * i, 96))] for i in range(6))
+
+
+def answer_response(answer: object, **extra: object) -> httpx.Response:
+    return httpx.Response(
+        200, json={"choices": [{"message": {"content": answer}, **extra}]}
+    )
+
+
 @pytest.mark.asyncio
-async def test_detect_model_capabilities_identifies_vision_model() -> None:
-    requests: list[dict[Any, Any]] = []
+@pytest.mark.parametrize(
+    "model_name", ["unknown-alias", "gpt-5", "kimi-k2.6", "text-only"]
+)
+async def test_all_names_use_same_visual_challenge(model_name: str) -> None:
+    requests: list[dict[str, Any]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         payload = json.loads(request.content)
         requests.append(payload)
-        content = payload["messages"][0]["content"]
-        answer: str | list[dict[str, str]] = (
-            [{"type": "text", "text": "blue, yellow, red"}]
-            if isinstance(content, list)
-            else "OK"
-        )
-        return httpx.Response(
-            200,
-            json={"choices": [{"message": {"content": answer}}]},
-            request=request,
-        )
+        assert "thinking" not in payload
+        assert payload["max_tokens"] == 2048
+        return answer_response([{"type": "text", "text": image_answer(payload)}])
 
-    capabilities = await detect_model_capabilities(
+    result = await detect_model_capabilities(
         api_base_url="https://llm.example/v1",
         api_key="test-key",
-        model_name="multimodal-model",
+        model_name=model_name,
         timeout_seconds=30,
         transport=httpx.MockTransport(handler),
     )
-
-    assert capabilities.supports_text is True
-    assert capabilities.supports_vision is True
-    assert capabilities.config_type == "vision"
-    assert len(requests) == 2
-    assert requests[1]["messages"][0]["content"][0]["type"] == "image_url"
-
-
-@pytest.mark.asyncio
-async def test_detect_model_capabilities_identifies_text_only_model() -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
-        payload = json.loads(request.content)
-        content = payload["messages"][0]["content"]
-        if isinstance(content, list):
-            return httpx.Response(
-                400,
-                json={"error": {"message": "image input is not supported"}},
-                request=request,
-            )
-        return httpx.Response(
-            200,
-            json={"choices": [{"message": {"content": "OK"}}]},
-            request=request,
-        )
-
-    capabilities = await detect_model_capabilities(
-        api_base_url="https://llm.example/v1",
-        api_key="test-key",
-        model_name="text-model",
-        timeout_seconds=30,
-        transport=httpx.MockTransport(handler),
-    )
-
-    assert capabilities.supports_text is True
-    assert capabilities.supports_vision is False
-    assert capabilities.config_type == "text"
-
-
-@pytest.mark.asyncio
-async def test_detect_model_capabilities_rejects_silent_image_discard() -> None:
-    """A text-only gateway may accept and silently discard list content."""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        payload = json.loads(request.content)
-        content = payload["messages"][0]["content"]
-        answer = "red, blue, green" if isinstance(content, list) else "OK"
-        return httpx.Response(
-            200,
-            json={"choices": [{"message": {"content": answer}}]},
-            request=request,
-        )
-
-    capabilities = await detect_model_capabilities(
-        api_base_url="https://llm.example/v1",
-        api_key="test-key",
-        model_name="text-model-behind-compatible-gateway",
-        timeout_seconds=30,
-        transport=httpx.MockTransport(handler),
-    )
-
-    assert capabilities.supports_text is True
-    assert capabilities.supports_vision is False
-    assert capabilities.config_type == "text"
-
-
-@pytest.mark.asyncio
-async def test_detect_model_capabilities_uses_completion_tokens_for_gpt5() -> None:
-    requests: list[dict[Any, Any]] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        payload = json.loads(request.content)
-        requests.append(payload)
-        content = payload["messages"][0]["content"]
-        answer = "blue, yellow, red" if isinstance(content, list) else "OK"
-        return httpx.Response(
-            200,
-            json={"choices": [{"message": {"content": answer}}]},
-            request=request,
-        )
-
-    capabilities = await detect_model_capabilities(
-        api_base_url="https://llm.example/v1",
-        api_key="test-key",
-        model_name="GPT-5.6-Luna",
-        timeout_seconds=30,
-        transport=httpx.MockTransport(handler),
-    )
-
-    assert capabilities.supports_vision is True
-    assert len(requests) == 2
-    assert requests[0]["max_completion_tokens"] == 16
-    assert requests[1]["max_completion_tokens"] == 32
-    assert "max_tokens" not in requests[1]
-
-
-@pytest.mark.asyncio
-async def test_detect_model_capabilities_handles_kimi_k26_vision_defaults() -> None:
-    requests: list[dict[Any, Any]] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        payload = json.loads(request.content)
-        requests.append(payload)
-        content = payload["messages"][0]["content"]
-        is_valid_kimi_probe = (
-            isinstance(content, list)
-            and content[0]["type"] == "image_url"
-            and content[1]["type"] == "text"
-            and payload.get("thinking") == {"type": "disabled"}
-        )
-        answer = "蓝色、黄色、红色" if is_valid_kimi_probe else ""
-        return httpx.Response(
-            200,
-            json={"choices": [{"message": {"content": answer}}]},
-            request=request,
-        )
-
-    capabilities = await detect_model_capabilities(
-        api_base_url="https://llm.example/v1",
-        api_key="test-key",
-        model_name="kimi-k2.6",
-        timeout_seconds=30,
-        transport=httpx.MockTransport(handler),
-    )
-
-    assert capabilities.supports_vision is True
-    assert len(requests) == 2
-    assert requests[1]["max_tokens"] == 32
-    assert requests[1]["thinking"] == {"type": "disabled"}
-
-
-@pytest.mark.asyncio
-async def test_detect_model_capabilities_retries_when_thinking_is_unsupported() -> None:
-    requests: list[dict[Any, Any]] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        payload = json.loads(request.content)
-        requests.append(payload)
-        content = payload["messages"][0]["content"]
-        if isinstance(content, list) and "thinking" in payload:
-            return httpx.Response(
-                400,
-                json={"error": {"message": "thinking is not supported"}},
-                request=request,
-            )
-        answer = "blue, yellow, red" if isinstance(content, list) else "OK"
-        return httpx.Response(
-            200,
-            json={"choices": [{"message": {"content": answer}}]},
-            request=request,
-        )
-
-    capabilities = await detect_model_capabilities(
-        api_base_url="https://llm.example/v1",
-        api_key="test-key",
-        model_name="kimi-k2.6",
-        timeout_seconds=30,
-        transport=httpx.MockTransport(handler),
-    )
-
-    assert capabilities.supports_vision is True
+    assert result.supports_text and result.supports_vision
     assert len(requests) == 3
-    assert requests[1]["thinking"] == {"type": "disabled"}
-    assert "thinking" not in requests[2]
+    assert image_answer(requests[1]) != image_answer(requests[2])
 
 
 @pytest.mark.asyncio
-async def test_detect_model_capabilities_retries_token_parameter() -> None:
-    requests: list[dict[Any, Any]] = []
+@pytest.mark.parametrize("phase", ["text", "vision"])
+async def test_negotiates_token_parameter_from_error(phase: str) -> None:
+    requests: list[dict[str, Any]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         payload = json.loads(request.content)
         requests.append(payload)
-        content = payload["messages"][0]["content"]
-        if isinstance(content, list) and "max_tokens" in payload:
+        vision = isinstance(payload["messages"][0]["content"], list)
+        if "max_tokens" in payload and (phase == "text" or vision):
             return httpx.Response(
-                400,
-                json={
-                    "error": {
-                        "message": (
-                            "Unsupported parameter: max_tokens; "
-                            "use max_completion_tokens"
-                        )
-                    }
-                },
-                request=request,
+                400, json={"error": {"message": "unsupported max_tokens"}}
             )
-        answer = "blue, yellow, red" if isinstance(content, list) else "OK"
-        return httpx.Response(
-            200,
-            json={"choices": [{"message": {"content": answer}}]},
-            request=request,
-        )
+        return answer_response(image_answer(payload))
 
-    capabilities = await detect_model_capabilities(
+    result = await detect_model_capabilities(
         api_base_url="https://llm.example/v1",
         api_key="test-key",
-        model_name="compatible-model",
+        model_name="alias",
         timeout_seconds=30,
         transport=httpx.MockTransport(handler),
     )
-
-    assert capabilities.supports_vision is True
-    assert len(requests) == 3
-    assert requests[1]["max_tokens"] == 32
-    assert requests[2]["max_completion_tokens"] == 32
-    assert "max_tokens" not in requests[2]
-
-
-@pytest.mark.asyncio
-async def test_detect_model_capabilities_retries_with_alternate_image_content() -> None:
-    requests: list[dict[Any, Any]] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        payload = json.loads(request.content)
-        requests.append(payload)
-        content = payload["messages"][0]["content"]
-        if isinstance(content, list):
-            image_part = next(
-                part for part in content if part.get("type") != "text"
-            )
-            if image_part["type"] == "image_url":
-                return httpx.Response(
-                    400,
-                    json={
-                        "error": {
-                            "message": (
-                                "image_url content is not supported; use input_image"
-                            )
-                        }
-                    },
-                    request=request,
-                )
-            answer = "blue, yellow, red"
-        else:
-            answer = "OK"
-        return httpx.Response(
-            200,
-            json={"choices": [{"message": {"content": answer}}]},
-            request=request,
-        )
-
-    capabilities = await detect_model_capabilities(
-        api_base_url="https://llm.example/v1",
-        api_key="test-key",
-        model_name="GPT-5.6-Luna",
-        timeout_seconds=30,
-        transport=httpx.MockTransport(handler),
-    )
-
-    assert capabilities.supports_vision is True
+    assert result.supports_vision
     assert len(requests) == 4
-    assert requests[1]["messages"][0]["content"][0]["type"] == "image_url"
-    assert requests[2]["messages"][0]["content"][0]["image_url"].startswith(
-        "data:image/png;base64,"
-    )
-    assert requests[3]["messages"][0]["content"][0]["type"] == "input_image"
-    assert requests[3]["max_completion_tokens"] == 32
+    assert "max_completion_tokens" in requests[-1]
 
 
 @pytest.mark.asyncio
-async def test_detect_model_capabilities_rejects_unverified_image_response() -> None:
+async def test_retries_truncated_final_answer_with_larger_budget() -> None:
+    budgets: list[int] = []
+
     def handler(request: httpx.Request) -> httpx.Response:
         payload = json.loads(request.content)
-        content = payload["messages"][0]["content"]
-        answer = "我无法查看图片" if isinstance(content, list) else "OK"
-        return httpx.Response(
-            200,
-            json={"choices": [{"message": {"content": answer}}]},
-            request=request,
-        )
+        budgets.append(payload["max_tokens"])
+        if payload["max_tokens"] == 2048:
+            return answer_response("", finish_reason="length")
+        return answer_response(image_answer(payload))
 
-    capabilities = await detect_model_capabilities(
+    result = await detect_model_capabilities(
         api_base_url="https://llm.example/v1",
         api_key="test-key",
-        model_name="text-model",
+        model_name="alias",
         timeout_seconds=30,
         transport=httpx.MockTransport(handler),
     )
-
-    assert capabilities.supports_vision is False
+    assert result.supports_vision
+    assert budgets == [2048, 8192] * 3
 
 
 @pytest.mark.asyncio
-async def test_detect_model_capabilities_accepts_reasoning_probe_answer() -> None:
+async def test_alternate_content_order_is_verified() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         payload = json.loads(request.content)
         content = payload["messages"][0]["content"]
-        message: dict[str, Any]
-        if isinstance(content, list):
-            message = {
-                "content": "",
-                "reasoning_content": "The image colors are blue, yellow, red.",
-            }
-        else:
-            message = {"content": "OK"}
-        return httpx.Response(
-            200,
-            json={"choices": [{"message": message}]},
-            request=request,
-        )
+        if isinstance(content, list) and content[0]["type"] == "image_url":
+            return answer_response("UNAVAILABLE")
+        return answer_response(image_answer(payload))
 
-    capabilities = await detect_model_capabilities(
+    result = await detect_model_capabilities(
         api_base_url="https://llm.example/v1",
         api_key="test-key",
-        model_name="GPT-5.6-Luna",
+        model_name="alias",
         timeout_seconds=30,
         transport=httpx.MockTransport(handler),
     )
-
-    assert capabilities.supports_vision is True
+    assert result.supports_vision
 
 
 @pytest.mark.asyncio
-async def test_detect_model_capabilities_rejects_invalid_image_response() -> None:
+async def test_explicit_input_rejection_identifies_text_only() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        content = json.loads(request.content)["messages"][0]["content"]
+        if isinstance(content, list):
+            return httpx.Response(
+                400, json={"error": {"message": "does not support images"}}
+            )
+        return answer_response("OK")
+
+    result = await detect_model_capabilities(
+        api_base_url="https://llm.example/v1",
+        api_key="test-key",
+        model_name="alias",
+        timeout_seconds=30,
+        transport=httpx.MockTransport(handler),
+    )
+    assert result.supports_text and not result.supports_vision
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "failure",
+    [
+        "invalid-json",
+        "empty",
+        "reasoning",
+        "length",
+        "discard",
+        "401",
+        "429",
+        "500",
+        "timeout",
+    ],
+)
+async def test_inconclusive_results_are_not_capability_labels(failure: str) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         payload = json.loads(request.content)
-        content = payload["messages"][0]["content"]
-        if isinstance(content, list):
-            return httpx.Response(200, text="not-json", request=request)
-        return httpx.Response(
-            200,
-            json={"choices": [{"message": {"content": "OK"}}]},
-            request=request,
-        )
+        if not isinstance(payload["messages"][0]["content"], list):
+            return answer_response("OK")
+        if failure == "invalid-json":
+            return httpx.Response(200, text="not-json")
+        if failure == "empty":
+            return httpx.Response(200, json={"choices": []})
+        if failure == "reasoning":
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
+                            "message": {
+                                "content": "",
+                                "reasoning_content": image_answer(payload),
+                            }
+                        }
+                    ]
+                },
+            )
+        if failure == "length":
+            return answer_response(image_answer(payload), finish_reason="length")
+        if failure == "discard":
+            return answer_response("I cannot see the image")
+        if failure == "timeout":
+            raise httpx.ReadTimeout("private provider data", request=request)
+        return httpx.Response(int(failure), text="private provider data")
 
-    with pytest.raises(LLMConfigError, match="视觉能力检测失败：响应格式无效"):
+    with pytest.raises(LLMConfigError) as exc:
         await detect_model_capabilities(
             api_base_url="https://llm.example/v1",
             api_key="test-key",
-            model_name="model",
+            model_name="alias",
             timeout_seconds=30,
             transport=httpx.MockTransport(handler),
         )
+    assert "private provider data" not in str(exc.value)
 
 
 @pytest.mark.asyncio
-async def test_detect_model_capabilities_rejects_broken_text_connection() -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            401,
-            json={"error": {"message": "invalid key"}},
-            request=request,
-        )
-
-    with pytest.raises(LLMConfigError, match="文本能力检测失败"):
+@pytest.mark.parametrize("response", [httpx.Response(401), answer_response("")])
+async def test_rejects_broken_text_connection(response: httpx.Response) -> None:
+    with pytest.raises(LLMConfigError):
         await detect_model_capabilities(
             api_base_url="https://llm.example/v1",
-            api_key="bad-key",
-            model_name="model",
+            api_key="test-key",
+            model_name="alias",
             timeout_seconds=30,
-            transport=httpx.MockTransport(handler),
+            transport=httpx.MockTransport(lambda request: response),
         )
 
 
@@ -421,3 +251,36 @@ async def test_probe_api_base_url_reports_authentication_failure_safely() -> Non
         )
 
     assert "secret provider response" not in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("second_answer", ["cached", "wrong", "schema", "rejection"])
+async def test_second_image_must_be_independently_verified(second_answer: str) -> None:
+    first_answer = ""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal first_answer
+        payload = json.loads(request.content)
+        if not isinstance(payload["messages"][0]["content"], list):
+            return answer_response("OK")
+        if not first_answer:
+            first_answer = image_answer(payload)
+            return answer_response(first_answer)
+        if second_answer == "schema":
+            return httpx.Response(
+                400, json={"error": {"message": "does not support image_url schema"}}
+            )
+        if second_answer == "rejection":
+            return httpx.Response(
+                400, json={"error": {"message": "does not support images"}}
+            )
+        return answer_response(first_answer if second_answer == "cached" else "UNKNOWN")
+
+    with pytest.raises(LLMConfigError):
+        await detect_model_capabilities(
+            api_base_url="https://llm.example/v1",
+            api_key="test-key",
+            model_name="alias",
+            timeout_seconds=30,
+            transport=httpx.MockTransport(handler),
+        )

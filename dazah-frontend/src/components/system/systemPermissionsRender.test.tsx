@@ -125,7 +125,7 @@ describe('system permissions settings pages', () => {
     expect(settingsHtml).toContain('用户角色')
     expect(settingsHtml).toContain('部门角色映射')
     expect(settingsHtml).toContain('菜单管理')
-    expect(settingsHtml).toContain('权限验证台')
+    expect(settingsHtml).toContain('权限接入检查')
     expect(settingsHtml).toContain('质量管理员')
 
     const scopeHtml = renderInApp(React.createElement(DataScopeConfig, {
@@ -175,16 +175,9 @@ describe('system permissions settings pages', () => {
     expect(menuHtml).toContain('新建菜单')
     expect(menuHtml).toContain('CAPA')
 
-    const verificationHtml = renderInApp(React.createElement(PermissionVerification, {
-      users: [{
-        id: 'user-1',
-        name: '测试用户',
-        department: '质量部',
-        roles,
-      }],
-    }))
-    expect(verificationHtml).toContain('按页面验证生效权限')
-    expect(verificationHtml).toContain('菜单页面')
-    expect(verificationHtml).not.toContain('接口路径')
+    const verificationHtml = renderInApp(React.createElement(PermissionVerification))
+    expect(verificationHtml).toContain('模块权限接入状态')
+    expect(verificationHtml).toContain('保存后立即生效')
+    expect(verificationHtml).not.toContain('按页面验证生效权限')
   })
 })

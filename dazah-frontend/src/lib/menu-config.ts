@@ -905,11 +905,10 @@ function filterPageChildren(
   })
 }
 
-/** 已发布模块按页面访问权限裁剪；旧规则和草稿模块保持原模块菜单。 */
+/** 模块入口按模块授权显示，模块内菜单始终按已保存的页面访问权限裁剪。 */
 export function getAuthorizedPageMenus(
   moduleCodes: string[] | undefined,
   pagePermissions: PageAccessSummary[] | undefined,
-  rollouts: Record<string, string> | undefined,
 ): ModuleMenu[] {
   const allowedModules = getAuthorizedModuleMenus(moduleCodes)
   const allowedPageKeys = new Set(
@@ -918,7 +917,6 @@ export function getAuthorizedPageMenus(
       .map((grant) => grant.page_key),
   )
   return allowedModules.flatMap((module) => {
-    if (rollouts?.[module.moduleCode] !== "enforced") return [module]
     const children = filterPageChildren(module.children, module.key, allowedPageKeys)
     return children.length ? [{ ...module, children }] : []
   })
@@ -938,7 +936,6 @@ export function getFirstAuthorizedModulePath(user: ModuleLandingAccess): string 
     : getAuthorizedPageMenus(
         user.module_codes,
         user.page_permissions,
-        user.page_permission_rollouts,
       )
   return visibleModules[0]?.path || "/production"
 }

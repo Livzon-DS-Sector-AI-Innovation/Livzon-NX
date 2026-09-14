@@ -111,3 +111,49 @@ async def test_probe_config_maps_expected_provider_failure_to_400(
 
     assert response.status_code == 400
     assert response.json() == {"detail": "URL 连通性测试失败：ConnectError"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("verified", [True, False])
+async def test_probe_runs_real_detection_and_returns_inconclusive_error(
+    llm_api_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    verified: bool,
+) -> None:
+    import json
+
+    import httpx
+
+    from app.core.llm.capabilities import detect_model_capabilities
+    from tests.core.llm.test_capabilities import answer_response, image_answer
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        if isinstance(payload["messages"][0]["content"], list) and not verified:
+            return answer_response("UNAVAILABLE")
+        return answer_response(image_answer(payload))
+
+    async def detect_with_transport(**kwargs: Any) -> LLMCapabilities:
+        return await detect_model_capabilities(
+            **kwargs,
+            transport=httpx.MockTransport(handler),
+        )
+
+    monkeypatch.setattr(llm_api, "detect_model_capabilities", detect_with_transport)
+    response = await llm_api_client.post(
+        "/api/v1/llm/configs/probe",
+        json={
+            "probe_type": "model",
+            "api_base_url": "https://llm.example/v1",
+            "api_key": "test-key",
+            "model_name": "arbitrary-alias",
+        },
+    )
+    if verified:
+        assert response.status_code == 200
+        assert response.json()["config_type"] == "vision"
+        assert "image" in response.json()["capabilities"]
+    else:
+        assert response.status_code == 400
+        assert "未能验证图片内容" in response.json()["detail"]
+        assert "config_type" not in response.json()

@@ -23,15 +23,12 @@ export default async function DashboardLayout({
   const moduleKey = pathname.split('/')[1]
   const currentModule = getModuleByKey(moduleKey)
   const pageKey = getPageKeyByPath(pathname)
-  const enforced = Boolean(
-    user.role !== 'admin' && currentModule &&
-      user.page_permission_rollouts?.[currentModule.moduleCode] === 'enforced'
-  )
   const pageGrant = user.page_permissions?.find(
     (grant) => grant.page_key === pageKey
   )
-  const canAccess = !enforced || Boolean(pageGrant?.permissions?.includes('access'))
-  const canQuery = !enforced || Boolean(pageGrant?.permissions?.includes('query'))
+  const pagePolicyApplies = user.role !== 'admin' && Boolean(currentModule)
+  const canAccess = !pagePolicyApplies || Boolean(pageGrant?.permissions?.includes('access'))
+  const canQuery = !pagePolicyApplies || Boolean(pageGrant?.permissions?.includes('query'))
   const guardedChildren = canAccess && canQuery ? children : null
 
   return (

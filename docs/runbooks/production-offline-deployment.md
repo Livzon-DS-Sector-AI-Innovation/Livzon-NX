@@ -37,9 +37,13 @@ Windows 本地需要安装并可直接调用：
 .\scripts\deploy-production.ps1 Build -Version 20260813-a1b2c3d
 ```
 
+如果 Docker Desktop 的默认代理不可达，可通过 `-BuildProxy` 临时指定可用的
+构建代理，例如 `http://http.docker.internal:3128`；不要为每次构建生成不同的
+临时 Dockerfile，以免依赖层缓存失效。
+
 该命令会依次完成：
 
-1. 使用本地 Buildx 缓存构建四个 `linux/amd64` 应用镜像；
+1. 使用 `docker-bake.hcl` 通过一次 Buildx Bake 共享依赖缓存，构建三个 `linux/amd64` 应用镜像；
 2. 使用 `docker save` 生成离线镜像包；
 3. 生成 SHA-256 校验文件；
 4. 将 Compose、Nginx 和服务器端部署脚本放入同一版本目录；
@@ -50,6 +54,10 @@ Windows 本地需要安装并可直接调用：
 9. 等待应用服务健康；
 10. 强制重建 Nginx，使单文件挂载重新绑定到本次发布的配置；
 11. 检查 Nginx 配置，并通过 HTTPS 实际访问 `/health` 和 `/login`。
+
+构建缓存要求：固定使用持久的 `dazah-builder`，不要执行全量 builder prune；后端
+uv、前端 pnpm/Next.js 和 Hermes uv 依赖均使用 BuildKit cache mount。只有基础镜像
+Digest 或 lock 文件变化时，依赖层才需要重新构建。
 
 生产 `.env` 永远只保留在服务器，脚本不会下载、覆盖或打印它。
 

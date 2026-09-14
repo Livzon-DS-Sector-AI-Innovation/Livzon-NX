@@ -257,14 +257,10 @@ async def test_ordinary_user_has_no_business_wildcard(
 
 
 @pytest.mark.asyncio
-async def test_enforced_module_rejects_missing_or_insufficient_page_context(
+async def test_saved_page_policy_rejects_missing_or_insufficient_page_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from app.platform.identity import deps
-
-    class _RolloutRepo:
-        async def get_rollout(self, _db: object, **_kwargs: object) -> object:
-            return SimpleNamespace(status="enforced")
 
     class _Service:
         async def effective_grants(
@@ -281,7 +277,6 @@ async def test_enforced_module_rejects_missing_or_insufficient_page_context(
                 )
             ]
 
-    monkeypatch.setattr(deps, "PagePermissionRepository", _RolloutRepo)
     monkeypatch.setattr(deps, "PagePermissionService", _Service)
     monkeypatch.setattr(
         deps.PermissionGrantRepository,
@@ -313,7 +308,7 @@ async def test_enforced_module_rejects_missing_or_insufficient_page_context(
 
 
 @pytest.mark.asyncio
-async def test_enforced_page_grant_cannot_bypass_direct_module_access(
+async def test_saved_page_grant_cannot_bypass_direct_module_access(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from app.platform.identity import deps
@@ -322,11 +317,6 @@ async def test_enforced_page_grant_cannot_bypass_direct_module_access(
         deps.PermissionGrantRepository,
         "has_module_view",
         AsyncMock(return_value=False),
-    )
-    monkeypatch.setattr(
-        deps.PagePermissionRepository,
-        "get_rollout",
-        AsyncMock(return_value=SimpleNamespace(status="enforced")),
     )
     page_grants = AsyncMock(
         return_value=[

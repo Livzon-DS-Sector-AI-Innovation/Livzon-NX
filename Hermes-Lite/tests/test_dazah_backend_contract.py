@@ -37,6 +37,13 @@ def test_backend_openapi_exposes_page_permission_execution_contract() -> None:
     assert "/api/v1/identity/admin/page-permissions/modules" in paths
     assert "/api/v1/warehouse/page-data/{page_key}" in paths
 
+    execute_schema = document["components"]["schemas"]["AgentToolExecuteRequest"]
+    assert execute_schema["required"] == ["operation", "subject"]
+    assert execute_schema["properties"]["subject"]["$ref"].endswith(
+        "AgentTrustedSubject"
+    )
+    assert execute_schema["properties"]["execution_context"]["type"] == "object"
+
 
 def test_backend_openapi_exposes_runtime_overview_contract() -> None:
     openapi_path = Path(__file__).parents[2] / "dazah-backend" / "openapi.json"

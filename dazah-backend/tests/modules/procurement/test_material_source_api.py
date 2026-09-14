@@ -17,7 +17,8 @@ from app.modules.procurement.material_source import (
     MaterialSourceTimeoutError,
 )
 from app.platform.identity.deps import get_current_user
-from app.platform.identity.models import User, UserModuleGrant
+from app.platform.identity.models import User, UserModuleGrant, UserPageGrant
+from app.platform.identity.rbac import seed_menus
 
 SimpleNamespace: Any = _SimpleNamespace
 
@@ -510,6 +511,10 @@ async def test_regular_user_can_query_duplicate_material_options(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Seed the live page catalog before creating rows in the rollback-scoped
+    # session; ``seed_menus`` commits by design.
+    await seed_menus(db_session)
+
     async def override_db() -> Any:
         yield db_session
 
@@ -540,6 +545,16 @@ async def test_regular_user_can_query_duplicate_material_options(
             status="active",
         )
     )
+    db_session.add(
+        UserPageGrant(
+            user_id=user.id,
+            page_key="purchasing:request:request-hardware",
+            permissions=["access", "query"],
+            sensitive_actions=[],
+            scope_type="department_tree",
+            department_ids=[],
+        )
+    )
     await db_session.flush()
 
     async def list_options(_db: Any, *, keyword: Any, limit: Any) -> Any:
@@ -562,7 +577,10 @@ async def test_regular_user_can_query_duplicate_material_options(
 
     monkeypatch.setattr(procurement_api, "list_material_options", list_options)
     try:
-        response = await client.get("/api/v1/procurement/material-options?keyword=MAT")
+        response = await client.get(
+            "/api/v1/procurement/material-options?keyword=MAT",
+            headers={"X-Dazah-Page-Key": "purchasing:request:request-hardware"},
+        )
 
         assert response.status_code == 200
         assert [item["record_id"] for item in response.json()["data"]] == [
