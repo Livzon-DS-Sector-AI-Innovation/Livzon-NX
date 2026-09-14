@@ -43,9 +43,13 @@ def test_catalog_count() -> None:
     # 16 模块 x 2 + identity:admin + 仓储细分编辑 3（product/hardware/raw:write）
     # + HR 员工档案细分 1（employee:read）
     # + 质量子域编辑 6（qc/product_qa/change_qa/validation_qa/
-    #   system_qa/material_qa:write）= 43
-    assert len(catalog) == 43
+    #   system_qa/material_qa:write）
+    # + 生产工段级数据权限 2（fermentation-yield / extraction-yield）= 45
+    assert len(catalog) == 45
     codes = {c["code"] for c in catalog}
+    # 工段级产量数据权限（控制看板产量字段可见性）
+    assert "production:fermentation-yield" in codes
+    assert "production:extraction-yield" in codes
     assert "hr:read" in codes and "hr:write" in codes
     assert "identity:admin" in codes
     assert "quality:read" in codes

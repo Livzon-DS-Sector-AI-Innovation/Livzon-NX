@@ -440,3 +440,70 @@ def test_merge_heads_migration_joins_product_and_contact_branches() -> None:
     # 合并迁移不改变任何结构
     assert merge.upgrade() is None
     assert merge.downgrade() is None
+
+
+def _run_add_column_migration(
+    monkeypatch: Any, path: Path, module_name: str
+) -> tuple[list[tuple[str, str, dict[str, Any]]], list[tuple[str, str]]]:
+    migration = _load_migration(path, module_name)
+    added: list[tuple[str, str, dict[str, Any]]] = []
+    dropped: list[tuple[str, str]] = []
+
+    def _add(table: str, column: sa.Column, **kwargs: Any) -> None:
+        added.append((table, column.name, kwargs))
+
+    monkeypatch.setattr(migration.op, "add_column", _add)
+    monkeypatch.setattr(
+        migration.op,
+        "drop_column",
+        lambda table, column, **kw: dropped.append((table, column)),
+    )
+    migration.upgrade()
+    migration.downgrade()
+    return added, dropped
+
+
+def test_extract_kg_migration_adds_and_drops_column(monkeypatch: Any) -> None:
+    added, dropped = _run_add_column_migration(
+        monkeypatch,
+        PRODUCT_CODE_MIGRATION_PATH.parent
+        / "b5d2e8a4c6f9_add_extract_kg_to_batch_actuals.py",
+        "extract_kg_migration",
+    )
+    assert added == [
+        ("fermentation_batch_actuals", "extract_kg", {"schema": "production"})
+    ]
+    assert dropped == [("fermentation_batch_actuals", "extract_kg")]
+
+
+def test_row_order_migration_adds_and_drops_column(monkeypatch: Any) -> None:
+    added, dropped = _run_add_column_migration(
+        monkeypatch,
+        PRODUCT_CODE_MIGRATION_PATH.parent
+        / "a9e3c1f8b2d4_add_row_order_to_production_plans.py",
+        "row_order_migration",
+    )
+    assert added == [("production_plans", "row_order", {"schema": "production"})]
+    assert dropped == [("production_plans", "row_order")]
+
+
+def test_extraction_daily_reports_migration_chain() -> None:
+    migration = _load_migration(
+        PRODUCT_CODE_MIGRATION_PATH.parent
+        / "c8f5a2d7e4b6_add_extraction_daily_reports.py",
+        "extraction_daily_reports_migration",
+    )
+    assert migration.revision == "c8f5a2d7e4b6"
+    assert migration.down_revision == "b5d2e8a4c6f9"
+
+
+def test_extraction_merge_migration_joins_quality_branch() -> None:
+    merge = _load_migration(
+        PRODUCT_CODE_MIGRATION_PATH.parent
+        / "f73ddeb82366_merge_extraction_reports_and_quality_.py",
+        "extraction_merge_heads_migration",
+    )
+    assert merge.revision == "f73ddeb82366"
+    assert set(merge.down_revision) == {"a9e3c1f8b2d4", "c9d400000032"}
+    assert merge.upgrade() is None
+    assert merge.downgrade() is None
