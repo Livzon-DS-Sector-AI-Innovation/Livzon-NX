@@ -13,6 +13,7 @@ WORKDIR /app
 # fonts-noto-cjk 中文字体；catdoc/antiword 文本级兜底
 RUN --mount=type=cache,id=dazah-debian-apt,target=/var/cache/apt,sharing=locked \
     apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends \
         libreoffice-writer libreoffice-draw \
         fonts-noto-cjk catdoc antiword \
