@@ -1,20 +1,237 @@
 {
   "version": 1,
   "pages": {
-    "production:batches": {
+    "production:overview": {
       "status": "active",
+      "module_code": "production",
+      "route_path": "/production",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        }
+      }
+    },
+    "production:batches:workshop-101-1": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/batches/workshop/101-1",
+      "actions": {
+        "delete": {"status": "active", "category": "destructive"},
+        "sync_config": {"status": "active", "category": "integration_admin"}
+      }
+    },
+    "production:batches:workshop-101-2": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/batches/workshop/101-2",
+      "actions": {
+        "delete": {"status": "active", "category": "destructive"},
+        "sync_config": {"status": "active", "category": "integration_admin"}
+      }
+    },
+    "production:batches:workshop-102-1": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/batches/workshop/102-1",
+      "actions": {
+        "delete": {"status": "active", "category": "destructive"},
+        "sync_config": {"status": "active", "category": "integration_admin"}
+      }
+    },
+    "production:batches:workshop-102-2": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/batches/workshop/102-2",
+      "actions": {
+        "delete": {"status": "active", "category": "destructive"},
+        "sync_config": {"status": "active", "category": "integration_admin"}
+      }
+    },
+    "production:batches:workshop-103:ws103-phenylalanine": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/batches/workshop/103/phenylalanine",
+      "actions": {
+        "delete": {"status": "active", "category": "destructive"},
+        "sync_config": {"status": "active", "category": "integration_admin"}
+      }
+    },
+    "production:batches:workshop-103:ws103-lovastatin": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/batches/workshop/103/lovastatin",
+      "actions": {
+        "delete": {"status": "active", "category": "destructive"},
+        "sync_config": {"status": "active", "category": "integration_admin"}
+      }
+    },
+    "production:batches:workshop-201-1": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/batches/workshop/201-1",
+      "actions": {
+        "delete": {"status": "active", "category": "destructive"},
+        "sync_config": {"status": "active", "category": "integration_admin"}
+      }
+    },
+    "production:batches:workshop-201-2": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/batches/workshop/201-2",
+      "actions": {
+        "delete": {"status": "active", "category": "destructive"},
+        "sync_config": {"status": "active", "category": "integration_admin"}
+      }
+    },
+    "production:batches:workshop-201-3": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/batches/workshop/201-3",
+      "actions": {
+        "delete": {"status": "active", "category": "destructive"},
+        "sync_config": {"status": "active", "category": "integration_admin"},
+        "approve": {"status": "active", "category": "decision"},
+        "reject": {"status": "active", "category": "decision"},
+        "bulk_import": {"status": "active", "category": "bulk_change"}
+      }
+    },
+    "production:batches:workshop-202": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/batches/workshop/202",
+      "actions": {
+        "delete": {"status": "active", "category": "destructive"},
+        "sync_config": {"status": "active", "category": "integration_admin"}
+      }
+    },
+    "production:batches:workshop-203": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/batches/workshop/203",
+      "actions": {
+        "delete": {"status": "active", "category": "destructive"},
+        "sync_config": {"status": "active", "category": "integration_admin"}
+      }
+    },
+    "production:batches:workshop-203-3": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/batches/workshop/203-3",
+      "actions": {
+        "delete": {"status": "active", "category": "destructive"},
+        "sync_config": {"status": "active", "category": "integration_admin"}
+      }
+    },
+    "production:plan:sales-plan": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/plan",
+      "actions": {
+        "delete": {"status": "active", "category": "destructive"},
+        "sync_config": {"status": "active", "category": "integration_admin"}
+      }
+    },
+    "production:plan:scheduling": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/scheduling",
+      "actions": {
+        "delete": {"status": "active", "category": "destructive"},
+        "bulk_import": {"status": "active", "category": "bulk_change"},
+        "sensitive_export": {"status": "active", "category": "sensitive_export"},
+        "sync_config": {"status": "active", "category": "integration_admin"}
+      }
+    },
+    "production:process": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/process",
+      "actions": {
+        "delete": {"status": "active", "category": "destructive"}
+      }
+    },
+    "production:records": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/records",
+      "actions": {
+        "delete": {"status": "active", "category": "destructive"},
+        "sensitive_export": {"status": "active", "category": "sensitive_export"}
+      }
+    },
+    "production:balance": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/balance",
+      "actions": {
+        "delete": {"status": "active", "category": "destructive"}
+      }
+    },
+    "production:shift-log:shift-log-deviation": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/shift-log/deviation",
+      "actions": {
+        "delete": {"status": "active", "category": "destructive"}
+      }
+    },
+    "production:shift-log:shift-log-quality": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/shift-log/quality",
+      "actions": {}
+    },
+    "production:shift-log:shift-log-summary": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/shift-log/summary",
+      "actions": {
+        "delete": {"status": "active", "category": "destructive"}
+      }
+    },
+    "production:shift-log:shift-log-handover": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/shift-log/handover",
+      "actions": {
+        "approve": {"status": "active", "category": "decision"},
+        "delete": {"status": "active", "category": "destructive"}
+      }
+    },
+    "production:label-verification": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/label-verification",
+      "actions": {
+        "delete": {"status": "active", "category": "destructive"}
+      }
+    },
+    "production:pressure": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/pressure",
+      "actions": {
+        "approve": {"status": "active", "category": "decision"},
+        "delete": {"status": "active", "category": "destructive"},
+        "bulk_import": {"status": "active", "category": "bulk_change"},
+        "sensitive_export": {"status": "active", "category": "sensitive_export"}
+      }
+    },
+    "production:batches": {
+      "status": "retired",
       "module_code": "production",
       "route_path": "/production/batches",
       "actions": {}
     },
     "production:plan": {
-      "status": "active",
+      "status": "retired",
       "module_code": "production",
       "route_path": "/production/plan",
       "actions": {}
     },
     "production:cost": {
-      "status": "active",
+      "status": "retired",
       "module_code": "production",
       "route_path": "/production/cost",
       "actions": {}
@@ -357,73 +574,120 @@
       "status": "active",
       "module_code": "registration",
       "route_path": "/registration/declaration-progress/international-planned-in-progress",
-      "actions": {}
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "bulk_import": { "status": "active", "category": "bulk_change" }
+      }
     },
     "registration:project:declaration-progress:domestic-planned-in-progress": {
       "status": "active",
       "module_code": "registration",
       "route_path": "/registration/declaration-progress/domestic-planned-in-progress",
-      "actions": {}
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "bulk_import": { "status": "active", "category": "bulk_change" }
+      }
     },
     "registration:project:declaration-progress:new-product-projects": {
       "status": "active",
       "module_code": "registration",
       "route_path": "/registration/declaration-progress/new-product-projects",
-      "actions": {}
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "bulk_import": { "status": "active", "category": "bulk_change" }
+      }
     },
     "registration:project:declaration-progress:international-completed": {
       "status": "active",
       "module_code": "registration",
       "route_path": "/registration/declaration-progress/international-completed",
-      "actions": {}
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "bulk_import": { "status": "active", "category": "bulk_change" }
+      }
     },
     "registration:project:declaration-progress:domestic-completed": {
       "status": "active",
       "module_code": "registration",
       "route_path": "/registration/declaration-progress/domestic-completed",
-      "actions": {}
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "bulk_import": { "status": "active", "category": "bulk_change" }
+      }
     },
     "registration:project:declaration-progress:gmp-projects": {
       "status": "active",
       "module_code": "registration",
       "route_path": "/registration/declaration-progress/gmp-projects",
-      "actions": {}
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "bulk_import": { "status": "active", "category": "bulk_change" }
+      }
     },
     "registration:project:declaration-progress:us-fda-progress": {
       "status": "active",
       "module_code": "registration",
       "route_path": "/registration/declaration-progress/us-fda-progress",
-      "actions": {}
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "bulk_import": { "status": "active", "category": "bulk_change" }
+      }
     },
     "registration:authorization-letter": {
       "status": "active",
       "module_code": "registration",
       "route_path": "/registration/authorization-letter",
-      "actions": {}
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" }
+      }
     },
     "registration:certificate-management:international-registration": {
       "status": "active",
       "module_code": "registration",
       "route_path": "/registration/certificate-management/international-registration",
-      "actions": {}
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "bulk_import": { "status": "active", "category": "bulk_change" }
+      }
     },
     "registration:certificate-management:domestic-registration": {
       "status": "active",
       "module_code": "registration",
       "route_path": "/registration/certificate-management/domestic-registration",
-      "actions": {}
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "bulk_import": { "status": "active", "category": "bulk_change" }
+      }
     },
     "registration:certificate-management:domestic-gmp": {
       "status": "active",
       "module_code": "registration",
       "route_path": "/registration/certificate-management/domestic-gmp",
-      "actions": {}
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "bulk_import": { "status": "active", "category": "bulk_change" }
+      }
     },
     "registration:certificate-management:international-gmp": {
       "status": "active",
       "module_code": "registration",
       "route_path": "/registration/certificate-management/international-gmp",
-      "actions": {}
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "bulk_import": { "status": "active", "category": "bulk_change" }
+      }
     },
     "registration:regulation": {
       "status": "active",
@@ -454,20 +718,26 @@
       "status": "active",
       "module_code": "registration",
       "route_path": "/registration/fees/contacts",
-      "actions": {}
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" }
+      }
     },
     "registration:knowledge": {
       "status": "active",
       "module_code": "registration",
       "route_path": "/registration/knowledge",
-      "actions": {}
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" }
+      }
     },
     "registration:registration-settings": {
       "status": "active",
       "module_code": "registration",
       "route_path": "/registration/settings",
       "actions": {
-        "sync_config": { "status": "active", "category": "integration_admin" }
+        "sync_config": { "status": "active", "category": "integration_admin" },
+        "delete": { "status": "active", "category": "destructive" }
       }
     },
     "quality:feishu-settings": {
@@ -1045,7 +1315,10 @@
       "status": "active",
       "module_code": "hr",
       "route_path": "/hr/departments",
-      "actions": {}
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
     },
     "hr:employee-management": {
       "status": "retired",
@@ -1074,25 +1347,43 @@
       "status": "active",
       "module_code": "hr",
       "route_path": "/hr/recruitment",
-      "actions": {}
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
     },
     "hr:onboarding": {
       "status": "active",
       "module_code": "hr",
       "route_path": "/hr/onboarding",
-      "actions": {}
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
     },
     "hr:offboarding": {
       "status": "active",
       "module_code": "hr",
       "route_path": "/hr/offboarding",
-      "actions": {}
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
     },
     "hr:position-transfer": {
       "status": "active",
       "module_code": "hr",
       "route_path": "/hr/position-transfer",
-      "actions": {}
+      "actions": {
+        "approve": { "status": "active", "category": "decision" },
+        "reject": { "status": "active", "category": "decision" },
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
     },
     "hr:contracts": {
       "status": "retired",
@@ -1714,6 +2005,10 @@
         "sync_config": {
           "status": "active",
           "category": "integration_admin"
+        },
+        "delete": {
+          "status": "active",
+          "category": "destructive"
         }
       }
     },
@@ -2872,7 +3167,8 @@
       "actions": {
         "delete": { "status": "active", "category": "destructive" },
         "sensitive_export": { "status": "active", "category": "sensitive_export" },
-        "bulk_import": { "status": "active", "category": "bulk_change" }
+        "bulk_import": { "status": "active", "category": "bulk_change" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
       }
     },
     "hr:contracts:contract-approval-results": {
@@ -2888,11 +3184,19 @@
     },
     "hr:training:annual-plan": {
       "status": "active", "module_code": "hr", "route_path": "/hr/training/annual-plan",
-      "actions": { "bulk_import": { "status": "active", "category": "bulk_change" } }
+      "actions": {
+        "bulk_import": { "status": "active", "category": "bulk_change" },
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" }
+      }
     },
     "hr:training:sign-in-sheet": {
       "status": "active", "module_code": "hr", "route_path": "/hr/training/sign-in",
-      "actions": { "bulk_import": { "status": "active", "category": "bulk_change" } }
+      "actions": {
+        "bulk_import": { "status": "active", "category": "bulk_change" },
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" }
+      }
     },
     "hr:training:new-employee-training": {
       "status": "active", "module_code": "hr", "route_path": "/hr/training/new-employee",
@@ -2907,7 +3211,8 @@
       "actions": {
         "delete": { "status": "active", "category": "destructive" },
         "sensitive_export": { "status": "active", "category": "sensitive_export" },
-        "bulk_import": { "status": "active", "category": "bulk_change" }
+        "bulk_import": { "status": "active", "category": "bulk_change" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
       }
     },
     "hr:training:employee-training-list": {
@@ -2920,15 +3225,28 @@
     },
     "hr:training:trainer": {
       "status": "active", "module_code": "hr", "route_path": "/hr/training/trainer",
-      "actions": { "bulk_import": { "status": "active", "category": "bulk_change" } }
+      "actions": {
+        "bulk_import": { "status": "active", "category": "bulk_change" },
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
     },
     "hr:training:position-training": {
       "status": "active", "module_code": "hr", "route_path": "/hr/training/position-training",
-      "actions": { "bulk_import": { "status": "active", "category": "bulk_change" } }
+      "actions": {
+        "bulk_import": { "status": "active", "category": "bulk_change" },
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" }
+      }
     },
     "hr:training:plan-tracking": {
       "status": "active", "module_code": "hr", "route_path": "/hr/training/plan-tracking",
-      "actions": { "bulk_import": { "status": "active", "category": "bulk_change" } }
+      "actions": {
+        "bulk_import": { "status": "active", "category": "bulk_change" },
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" }
+      }
     },
     "hr:hr-settings:hr-settings-feishu": {
       "status": "active", "module_code": "hr", "route_path": "/hr/settings/feishu",
@@ -2936,23 +3254,33 @@
     },
     "hr:hr-settings:hr-settings-reminder": {
       "status": "active", "module_code": "hr", "route_path": "/hr/settings/reminder",
-      "actions": { "sync_config": { "status": "active", "category": "integration_admin" } }
+      "actions": {
+        "sync_config": { "status": "active", "category": "integration_admin" },
+        "delete": { "status": "active", "category": "destructive" }
+      }
     },
     "hr:hr-settings:hr-settings-approval": {
       "status": "active", "module_code": "hr", "route_path": "/hr/settings/approval",
       "actions": {
         "approve": { "status": "active", "category": "decision" },
         "reject": { "status": "active", "category": "decision" },
-        "sync_config": { "status": "active", "category": "integration_admin" }
+        "sync_config": { "status": "active", "category": "integration_admin" },
+        "delete": { "status": "active", "category": "destructive" }
       }
     },
     "hr:hr-settings:hr-settings-dept-mapping": {
       "status": "active", "module_code": "hr", "route_path": "/hr/settings/dept-mapping",
-      "actions": { "sync_config": { "status": "active", "category": "integration_admin" } }
+      "actions": {
+        "sync_config": { "status": "active", "category": "integration_admin" },
+        "delete": { "status": "active", "category": "destructive" }
+      }
     },
     "hr:hr-settings:hr-settings-dept-scopes": {
       "status": "active", "module_code": "hr", "route_path": "/hr/settings/dept-scopes",
-      "actions": { "sync_config": { "status": "active", "category": "integration_admin" } }
+      "actions": {
+        "sync_config": { "status": "active", "category": "integration_admin" },
+        "delete": { "status": "active", "category": "destructive" }
+      }
     },
     "warehouse:product-inventory:product-details:product-detail-l-phenylalanine": {
       "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/l-phenylalanine", "actions": {

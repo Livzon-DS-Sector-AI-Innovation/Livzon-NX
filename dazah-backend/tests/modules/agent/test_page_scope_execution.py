@@ -154,6 +154,48 @@ async def test_saved_page_grant_authorizes_tool_without_publication(monkeypatch)
 
 
 @pytest.mark.asyncio
+async def test_legacy_page_context_resolves_to_current_tool_grant(monkeypatch):
+    spec = tool_registry.require("warehouse.list_products")
+    current_page_key = spec.page_keys[0]
+    legacy_page_key = current_page_key.replace(
+        "warehouse:product-inventory:", "warehouse:product:", 1
+    )
+    monkeypatch.setattr(
+        "app.modules.agent.tools.PagePermissionService.effective_grants",
+        AsyncMock(
+            return_value=[
+                EffectivePageGrantOut(
+                    page_key=current_page_key,
+                    module_code="warehouse",
+                    permissions=["access", "query"],
+                    sensitive_actions=[],
+                    data_scope=PageDataScopeInput(scope_type="department_tree"),
+                    source="user",
+                )
+            ]
+        ),
+    )
+    grant = await ToolExecutor._resolve_tool_page_grant(
+        None,
+        spec=spec,
+        request=AgentToolExecuteRequest.model_validate(
+            {
+                "operation": spec.name,
+                "subject": {
+                    "tenant_id": "local",
+                    "user_id": uuid4(),
+                    "source": "internal",
+                },
+                "execution_context": {"page_key": legacy_page_key},
+            }
+        ),
+        validated=spec.input_model.model_validate({}),
+        user=SimpleNamespace(id=uuid4(), role="user"),
+    )
+    assert grant.page_key == current_page_key
+
+
+@pytest.mark.asyncio
 async def test_admin_tool_permission_does_not_query_page_grants(monkeypatch):
     spec = tool_registry.require("procurement.list_purchase_requests")
     page_grants = AsyncMock(

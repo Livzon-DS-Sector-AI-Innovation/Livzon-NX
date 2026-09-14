@@ -11774,7 +11774,7 @@
         "title": "Body_upload_knowledge_article_attachment_api_v1_safety_knowledge_articles__article_id__upload_post",
         "type": "object"
       },
-      "Body_upload_label_verification_video_api_v1_quality_label_verifications_upload_video_post": {
+      "Body_upload_label_verification_video_api_v1_production_label_verifications_upload_video_post": {
         "properties": {
           "file": {
             "contentMediaType": "application/octet-stream",
@@ -11785,7 +11785,7 @@
         "required": [
           "file"
         ],
-        "title": "Body_upload_label_verification_video_api_v1_quality_label_verifications_upload_video_post",
+        "title": "Body_upload_label_verification_video_api_v1_production_label_verifications_upload_video_post",
         "type": "object"
       },
       "Body_upload_offboarding_template_api_v1_hr_hr_settings_offboarding_template_post": {
@@ -142055,6 +142055,706 @@
         ]
       }
     },
+    "/api/v1/production/label-verifications": {
+      "get": {
+        "operationId": "list_label_verifications_api_v1_production_label_verifications_get",
+        "parameters": [
+          {
+            "description": "批号搜索",
+            "in": "query",
+            "name": "batch_number",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "批号搜索",
+              "title": "Batch Number"
+            }
+          },
+          {
+            "description": "产品名称搜索",
+            "in": "query",
+            "name": "product_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "产品名称搜索",
+              "title": "Product Name"
+            }
+          },
+          {
+            "description": "结论状态筛选",
+            "in": "query",
+            "name": "result_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "结论状态筛选",
+              "title": "Result Status"
+            }
+          },
+          {
+            "description": "复核日期起始",
+            "in": "query",
+            "name": "start_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "复核日期起始",
+              "title": "Start Date"
+            }
+          },
+          {
+            "description": "复核日期截止",
+            "in": "query",
+            "name": "end_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "复核日期截止",
+              "title": "End Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response List Label Verifications Api V1 Production Label Verifications Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "标签复核记录列表",
+        "tags": [
+          "生产管理 - 标签复核"
+        ]
+      },
+      "post": {
+        "operationId": "create_label_verification_api_v1_production_label_verifications_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabelVerificationCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Create Label Verification Api V1 Production Label Verifications Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "创建标签复核记录",
+        "tags": [
+          "生产管理 - 标签复核"
+        ]
+      }
+    },
+    "/api/v1/production/label-verifications/analyze-video": {
+      "post": {
+        "description": "分析视频中的标签信息，返回 AI 识别结果",
+        "operationId": "analyze_label_verification_video_api_v1_production_label_verifications_analyze_video_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "file_key",
+            "required": true,
+            "schema": {
+              "title": "File Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "fps",
+            "required": false,
+            "schema": {
+              "default": 1.0,
+              "title": "Fps",
+              "type": "number"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Analyze Label Verification Video Api V1 Production Label Verifications Analyze Video Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "分析标签复核视频",
+        "tags": [
+          "生产管理 - 标签复核"
+        ]
+      }
+    },
+    "/api/v1/production/label-verifications/auto-compare": {
+      "post": {
+        "description": "自动分析视频中的标签信息，与表单数据逐项对比，返回 8 项核对结论。\n如果识别不全，会自动降低帧率重新分析。",
+        "operationId": "auto_compare_video_api_v1_production_label_verifications_auto_compare_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutoCompareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Auto Compare Video Api V1 Production Label Verifications Auto Compare Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "自动对比视频与表单数据",
+        "tags": [
+          "生产管理 - 标签复核"
+        ]
+      }
+    },
+    "/api/v1/production/label-verifications/batch/{batch_number}": {
+      "get": {
+        "operationId": "get_verifications_by_batch_api_v1_production_label_verifications_batch__batch_number__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_number",
+            "required": true,
+            "schema": {
+              "title": "Batch Number",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Verifications By Batch Api V1 Production Label Verifications Batch  Batch Number  Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "按批号查询历史记录",
+        "tags": [
+          "生产管理 - 标签复核"
+        ]
+      }
+    },
+    "/api/v1/production/label-verifications/statistics": {
+      "get": {
+        "operationId": "get_label_verification_statistics_api_v1_production_label_verifications_statistics_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Label Verification Statistics Api V1 Production Label Verifications Statistics Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "标签复核统计",
+        "tags": [
+          "生产管理 - 标签复核"
+        ]
+      }
+    },
+    "/api/v1/production/label-verifications/upload-video": {
+      "post": {
+        "description": "上传视频文件，返回文件 key 和文件名",
+        "operationId": "upload_label_verification_video_api_v1_production_label_verifications_upload_video_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_label_verification_video_api_v1_production_label_verifications_upload_video_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Upload Label Verification Video Api V1 Production Label Verifications Upload Video Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "上传标签复核视频",
+        "tags": [
+          "生产管理 - 标签复核"
+        ]
+      }
+    },
+    "/api/v1/production/label-verifications/{verification_id}": {
+      "delete": {
+        "operationId": "delete_label_verification_api_v1_production_label_verifications__verification_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "verification_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Verification Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Delete Label Verification Api V1 Production Label Verifications  Verification Id  Delete"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除标签复核记录",
+        "tags": [
+          "生产管理 - 标签复核"
+        ]
+      },
+      "get": {
+        "operationId": "get_label_verification_api_v1_production_label_verifications__verification_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "verification_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Verification Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Label Verification Api V1 Production Label Verifications  Verification Id  Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "标签复核记录详情",
+        "tags": [
+          "生产管理 - 标签复核"
+        ]
+      },
+      "put": {
+        "operationId": "update_label_verification_api_v1_production_label_verifications__verification_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "verification_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Verification Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabelVerificationUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Update Label Verification Api V1 Production Label Verifications  Verification Id  Put"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "更新标签复核记录",
+        "tags": [
+          "生产管理 - 标签复核"
+        ]
+      }
+    },
     "/api/v1/production/materials/{material_id}": {
       "delete": {
         "description": "删除批次物料",
@@ -153555,59 +154255,6 @@
         "tags": [
           "生产管理",
           "生产管理 - 发酵车间看板"
-        ]
-      }
-    },
-    "/api/v1/quality/": {
-      "get": {
-        "operationId": "read_module_api_v1_quality__get",
-        "parameters": [
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Read Module Api V1 Quality  Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "质量管理模块信息",
-        "tags": [
-          "质量管理 - 标签复核"
         ]
       }
     },
@@ -177044,706 +177691,6 @@
         "tags": [
           "质量管理",
           "Quality-Inspection-Submodules"
-        ]
-      }
-    },
-    "/api/v1/quality/label-verifications": {
-      "get": {
-        "operationId": "list_label_verifications_api_v1_quality_label_verifications_get",
-        "parameters": [
-          {
-            "description": "批号搜索",
-            "in": "query",
-            "name": "batch_number",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "批号搜索",
-              "title": "Batch Number"
-            }
-          },
-          {
-            "description": "产品名称搜索",
-            "in": "query",
-            "name": "product_name",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "产品名称搜索",
-              "title": "Product Name"
-            }
-          },
-          {
-            "description": "结论状态筛选",
-            "in": "query",
-            "name": "result_status",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "结论状态筛选",
-              "title": "Result Status"
-            }
-          },
-          {
-            "description": "复核日期起始",
-            "in": "query",
-            "name": "start_date",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "复核日期起始",
-              "title": "Start Date"
-            }
-          },
-          {
-            "description": "复核日期截止",
-            "in": "query",
-            "name": "end_date",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "复核日期截止",
-              "title": "End Date"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response List Label Verifications Api V1 Quality Label Verifications Get"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "标签复核记录列表",
-        "tags": [
-          "质量管理 - 标签复核"
-        ]
-      },
-      "post": {
-        "operationId": "create_label_verification_api_v1_quality_label_verifications_post",
-        "parameters": [
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LabelVerificationCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Create Label Verification Api V1 Quality Label Verifications Post"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "创建标签复核记录",
-        "tags": [
-          "质量管理 - 标签复核"
-        ]
-      }
-    },
-    "/api/v1/quality/label-verifications/analyze-video": {
-      "post": {
-        "description": "分析视频中的标签信息，返回 AI 识别结果",
-        "operationId": "analyze_label_verification_video_api_v1_quality_label_verifications_analyze_video_post",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "file_key",
-            "required": true,
-            "schema": {
-              "title": "File Key",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "fps",
-            "required": false,
-            "schema": {
-              "default": 1.0,
-              "title": "Fps",
-              "type": "number"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Analyze Label Verification Video Api V1 Quality Label Verifications Analyze Video Post"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "分析标签复核视频",
-        "tags": [
-          "质量管理 - 标签复核"
-        ]
-      }
-    },
-    "/api/v1/quality/label-verifications/auto-compare": {
-      "post": {
-        "description": "自动分析视频中的标签信息，与表单数据逐项对比，返回 8 项核对结论。\n如果识别不全，会自动降低帧率重新分析。",
-        "operationId": "auto_compare_video_api_v1_quality_label_verifications_auto_compare_post",
-        "parameters": [
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AutoCompareRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Auto Compare Video Api V1 Quality Label Verifications Auto Compare Post"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "自动对比视频与表单数据",
-        "tags": [
-          "质量管理 - 标签复核"
-        ]
-      }
-    },
-    "/api/v1/quality/label-verifications/batch/{batch_number}": {
-      "get": {
-        "operationId": "get_verifications_by_batch_api_v1_quality_label_verifications_batch__batch_number__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "batch_number",
-            "required": true,
-            "schema": {
-              "title": "Batch Number",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Get Verifications By Batch Api V1 Quality Label Verifications Batch  Batch Number  Get"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "按批号查询历史记录",
-        "tags": [
-          "质量管理 - 标签复核"
-        ]
-      }
-    },
-    "/api/v1/quality/label-verifications/statistics": {
-      "get": {
-        "operationId": "get_label_verification_statistics_api_v1_quality_label_verifications_statistics_get",
-        "parameters": [
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Get Label Verification Statistics Api V1 Quality Label Verifications Statistics Get"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "标签复核统计",
-        "tags": [
-          "质量管理 - 标签复核"
-        ]
-      }
-    },
-    "/api/v1/quality/label-verifications/upload-video": {
-      "post": {
-        "description": "上传视频文件，返回文件 key 和文件名",
-        "operationId": "upload_label_verification_video_api_v1_quality_label_verifications_upload_video_post",
-        "parameters": [
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_upload_label_verification_video_api_v1_quality_label_verifications_upload_video_post"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Upload Label Verification Video Api V1 Quality Label Verifications Upload Video Post"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "上传标签复核视频",
-        "tags": [
-          "质量管理 - 标签复核"
-        ]
-      }
-    },
-    "/api/v1/quality/label-verifications/{verification_id}": {
-      "delete": {
-        "operationId": "delete_label_verification_api_v1_quality_label_verifications__verification_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "verification_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Verification Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Delete Label Verification Api V1 Quality Label Verifications  Verification Id  Delete"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "删除标签复核记录",
-        "tags": [
-          "质量管理 - 标签复核"
-        ]
-      },
-      "get": {
-        "operationId": "get_label_verification_api_v1_quality_label_verifications__verification_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "verification_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Verification Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Get Label Verification Api V1 Quality Label Verifications  Verification Id  Get"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "标签复核记录详情",
-        "tags": [
-          "质量管理 - 标签复核"
-        ]
-      },
-      "put": {
-        "operationId": "update_label_verification_api_v1_quality_label_verifications__verification_id__put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "verification_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Verification Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LabelVerificationUpdate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Update Label Verification Api V1 Quality Label Verifications  Verification Id  Put"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "更新标签复核记录",
-        "tags": [
-          "质量管理 - 标签复核"
         ]
       }
     },

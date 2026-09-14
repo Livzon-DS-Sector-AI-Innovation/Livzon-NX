@@ -78,6 +78,12 @@ include_business_router(
     production_router, module_code="production", prefix="/production", tags=["生产管理"]
 )
 include_business_router(
+    label_verification_router,
+    module_code="production",
+    prefix="/production",
+    tags=["生产管理 - 标签复核"],
+)
+include_business_router(
     equipment_router, module_code="equipment", prefix="/equipment", tags=["设备管理"]
 )
 include_business_router(
@@ -137,12 +143,6 @@ include_business_router(
     module_code="quality",
     prefix="/quality",
     tags=["质量管理"],
-)
-include_business_router(
-    label_verification_router,
-    module_code="quality",
-    prefix="/quality",
-    tags=["质量管理 - 标签复核"],
 )
 include_business_router(
     regulatory_tracker_router,

@@ -1,5 +1,3 @@
-import { cookies } from 'next/headers'
-
 import {
   AuthorizationFdaRecord,
   AuthorizationLedgerOverview,
@@ -21,6 +19,7 @@ import {
   ProjectLedgerWorkbookOverview,
   ProjectOverview,
 } from '@/types/registration'
+import { getAuthHeaders } from '@/lib/auth'
 
 const API_BASE_URL =
   process.env.API_BASE_URL || 'http://dazah-backend-app-1:8000'
@@ -28,9 +27,7 @@ const REGISTRATION_SERVER_REQUEST_TIMEOUT_MS = 15000
 
 /** 服务端读取 auth_token cookie，供请求后端时携带 Bearer 认证头 */
 async function getAuthHeadersForServer(): Promise<Record<string, string> | undefined> {
-  const cookieStore = await cookies()
-  const token = cookieStore.get('auth_token')?.value
-  return token ? { Authorization: `Bearer ${token}` } : undefined
+  return getAuthHeaders()
 }
 
 interface ApiEnvelope<T> {

@@ -20,6 +20,7 @@ from app.platform.identity.page_policy import (
     PageDefinition,
     api_bindings_for_module,
     api_route_catalog,
+    canonical_page_key,
     get_page_definition,
     normalize_permissions,
     page_api_catalog_gaps,
@@ -37,6 +38,10 @@ from app.platform.identity.schemas import (
     UserPagePermissionsOut,
 )
 from app.shared.module_registry import MODULES_BY_CODE
+
+REVIEW_PENDING_ROLLOUT_MODULES = frozenset(
+    {"hr", "warehouse", "registration", "production"}
+)
 
 
 def _definition_out(item: PageDefinition) -> PagePermissionDefinitionOut:
@@ -100,8 +105,9 @@ class PagePermissionService:
         role_grants = await self.repo.list_role_grants(db, role_ids=list(role_by_id))
         merged: dict[str, dict[str, Any]] = {}
         for grant in role_grants:
-            definition = get_page_definition(grant.page_key)
-            if definition is None or grant.page_key not in active_keys:
+            page_key = canonical_page_key(grant.page_key)
+            definition = get_page_definition(page_key)
+            if definition is None or page_key not in active_keys:
                 continue
             if (
                 grant.scope_type not in definition.supported_scope_types
@@ -111,7 +117,7 @@ class PagePermissionService:
             if not grant.permissions and not grant.sensitive_actions:
                 continue
             item = merged.setdefault(
-                grant.page_key,
+                page_key,
                 {
                     "permissions": set(),
                     "sensitive_actions": set(),
@@ -159,15 +165,16 @@ class PagePermissionService:
             else []
         )
         for override in overrides:
-            definition = get_page_definition(override.page_key)
-            if definition is None or override.page_key not in active_keys:
+            page_key = canonical_page_key(override.page_key)
+            definition = get_page_definition(page_key)
+            if definition is None or page_key not in active_keys:
                 continue
             if (
                 override.scope_type not in definition.supported_scope_types
                 or set(override.permissions or []) - PAGE_PERMISSION_SET
             ):
                 # An obsolete custom override must deny, never reveal the role baseline.
-                outputs.pop(override.page_key, None)
+                outputs.pop(page_key, None)
                 continue
             permissions = list(normalize_permissions(list(override.permissions or [])))
             allowed_actions = {action.key for action in definition.sensitive_actions}
@@ -176,8 +183,8 @@ class PagePermissionService:
             )
             if sensitive_actions and "operate" not in permissions:
                 permissions = list(normalize_permissions([*permissions, "operate"]))
-            outputs[override.page_key] = EffectivePageGrantOut(
-                page_key=override.page_key,
+            outputs[page_key] = EffectivePageGrantOut(
+                page_key=page_key,
                 module_code=definition.module_code,
                 permissions=permissions,
                 sensitive_actions=sensitive_actions,
@@ -197,6 +204,9 @@ class PagePermissionService:
         custom = await self.repo.list_user_grants(db, user_id=user.id)
         rollouts = await self.repo.list_rollouts(db)
         active_keys = await self.repo.active_page_keys(db)
+        rollout_statuses = {item.module_code: item.status for item in rollouts}
+        for module_code in REVIEW_PENDING_ROLLOUT_MODULES:
+            rollout_statuses.setdefault(module_code, "draft")
         return UserPagePermissionsOut(
             user_id=user.id,
             grant_version=user.grant_version,
@@ -209,8 +219,10 @@ class PagePermissionService:
             role_grants=await self.effective_grants(
                 db, user=user, include_user_overrides=False
             ),
-            custom_page_keys=sorted(grant.page_key for grant in custom),
-            module_rollouts={item.module_code: item.status for item in rollouts},
+            custom_page_keys=sorted(
+                canonical_page_key(grant.page_key) for grant in custom
+            ),
+            module_rollouts=rollout_statuses,
         )
 
     async def role_permissions_out(
@@ -220,12 +232,13 @@ class PagePermissionService:
         active_keys = await self.repo.active_page_keys(db)
         outputs: list[EffectivePageGrantOut] = []
         for grant in grants:
-            definition = get_page_definition(grant.page_key)
-            if definition is None or grant.page_key not in active_keys:
+            page_key = canonical_page_key(grant.page_key)
+            definition = get_page_definition(page_key)
+            if definition is None or page_key not in active_keys:
                 continue
             outputs.append(
                 EffectivePageGrantOut(
-                    page_key=grant.page_key,
+                    page_key=page_key,
                     module_code=definition.module_code,
                     permissions=list(
                         normalize_permissions(list(grant.permissions or []))
@@ -256,10 +269,11 @@ class PagePermissionService:
         seen: set[str] = set()
         normalized: list[dict[str, Any]] = []
         for grant in grants:
-            if grant.page_key in seen:
+            page_key = canonical_page_key(grant.page_key)
+            if page_key in seen:
                 raise HTTPException(400, f"页面授权重复：{grant.page_key}")
-            seen.add(grant.page_key)
-            definition = get_page_definition(grant.page_key)
+            seen.add(page_key)
+            definition = get_page_definition(page_key)
             if definition is None:
                 raise HTTPException(400, f"未知菜单页面：{grant.page_key}")
             if grant.mode == "inherit":
@@ -288,7 +302,7 @@ class PagePermissionService:
                 )
             normalized.append(
                 {
-                    "page_key": grant.page_key,
+                    "page_key": page_key,
                     "permissions": permissions,
                     "sensitive_actions": sorted(set(grant.sensitive_actions)),
                     "scope_type": grant.data_scope.scope_type,
@@ -324,7 +338,13 @@ class PagePermissionService:
         rollout = await self.repo.get_rollout(db, module_code=module_code)
         if rollout is None:
             return PermissionModuleRolloutOut(
-                module_code=module_code, status="legacy", version=0
+                module_code=module_code,
+                status=(
+                    "draft"
+                    if module_code in REVIEW_PENDING_ROLLOUT_MODULES
+                    else "legacy"
+                ),
+                version=0,
             )
         return PermissionModuleRolloutOut.model_validate(rollout, from_attributes=True)
 
@@ -356,7 +376,9 @@ class PagePermissionService:
                 without_access += 1
         gaps = [] if pages else ["未登记有效菜单页面"]
         menu_catalog = await self.repo.active_menu_page_catalog(db)
-        menu_by_key = {item.key: item for item in menu_catalog if item.key}
+        menu_by_key = {
+            canonical_page_key(item.key): item for item in menu_catalog if item.key
+        }
         page_by_key = {page.page_key: page for page in pages}
         module_roots = {page.page_key.split(":", 1)[0] for page in pages}
         module = MODULES_BY_CODE.get(module_code)
@@ -386,10 +408,8 @@ class PagePermissionService:
             menu_label = f"{menu.name}（{menu.route_path}）"
             if not menu.key:
                 gaps.append(f"菜单页面缺少稳定权限标识：{menu_label}")
-            elif menu.key not in page_by_key:
-                gaps.append(
-                    f"新增菜单页面尚未接入权限登记：{menu.name}（{menu.key}）"
-                )
+            elif canonical_page_key(menu.key) not in page_by_key:
+                gaps.append(f"新增菜单页面尚未接入权限登记：{menu.name}（{menu.key}）")
         gaps.extend(page_api_catalog_gaps(module_code))
         tools = tool_page_bindings()
         if tools is None:
@@ -400,7 +420,7 @@ class PagePermissionService:
             if not spec.page_keys:
                 gaps.append(f"Livzon 工具未绑定菜单页面：{spec.summary}")
             for page_key in spec.page_keys:
-                definition = PAGES_BY_KEY.get(page_key)
+                definition = PAGES_BY_KEY.get(canonical_page_key(page_key))
                 if definition is None or definition.module_code != module_code:
                     gaps.append(f"Livzon 工具页面绑定无效：{spec.summary}")
                     continue

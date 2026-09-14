@@ -10,6 +10,48 @@ def test_procurement_catalog_covers_actual_endpoints_and_valid_menu_pages():
     assert page_policy.page_api_catalog_gaps("procurement") == []
 
 
+def test_requested_module_catalogs_cover_all_live_api_routes():
+    from app.main import app
+
+    page_policy.register_api_catalog_provider(
+        lambda: page_policy.collect_http_route_catalog(app.routes)
+    )
+    for module_code in ("warehouse", "hr", "registration", "production"):
+        assert page_policy.page_api_catalog_gaps(module_code) == []
+
+
+def test_production_catalog_tracks_current_workshop_and_operation_pages():
+    expected = {
+        "production:overview",
+        "production:batches:workshop-101-1",
+        "production:batches:workshop-101-2",
+        "production:batches:workshop-102-1",
+        "production:batches:workshop-102-2",
+        "production:batches:workshop-103:ws103-phenylalanine",
+        "production:batches:workshop-103:ws103-lovastatin",
+        "production:batches:workshop-201-1",
+        "production:batches:workshop-201-2",
+        "production:batches:workshop-201-3",
+        "production:batches:workshop-202",
+        "production:batches:workshop-203",
+        "production:batches:workshop-203-3",
+        "production:plan:sales-plan",
+        "production:plan:scheduling",
+        "production:process",
+        "production:records",
+        "production:balance",
+        "production:shift-log:shift-log-deviation",
+        "production:shift-log:shift-log-quality",
+        "production:shift-log:shift-log-summary",
+        "production:shift-log:shift-log-handover",
+        "production:label-verification",
+        "production:pressure",
+    }
+    assert {
+        page.page_key for page in page_policy.PAGES_BY_MODULE["production"]
+    } == expected
+
+
 def test_new_endpoint_without_a_page_contract_blocks_publication(monkeypatch):
     monkeypatch.setattr(
         page_policy,

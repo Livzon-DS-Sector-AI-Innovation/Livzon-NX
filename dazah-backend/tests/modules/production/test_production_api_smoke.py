@@ -8,6 +8,7 @@ import pytest
 from httpx import AsyncClient
 
 from app.main import app
+from app.modules.production.label_verification_api import get_label_verification_service
 from app.platform.identity.deps import get_current_user
 from app.platform.identity.models import User
 
@@ -117,6 +118,7 @@ LIST_ENDPOINTS = [
     "/api/v1/production/shift-handovers/positions",
     "/api/v1/production/shift-handovers/search-users",
     "/api/v1/production/shift-logs",
+    "/api/v1/production/label-verifications",
 ]
 
 DETAIL_ENDPOINTS = [
@@ -149,6 +151,29 @@ async def test_production_list_endpoints(client: AsyncClient, path: str) -> None
     response = await client.get(path)
     # 空表列表接口返回 200；带参数的接口可能 422（缺参数）但不允许 500
     assert response.status_code in (200, 400, 422), f"{path}: {response.status_code} {response.text[:200]}"  # noqa: E501
+
+
+@pytest.mark.anyio
+async def test_label_verification_is_mounted_under_production_only(
+    client: AsyncClient,
+) -> None:
+    class _EmptyLabelVerificationService:
+        async def list_verifications(self, **_: object) -> tuple[list[object], int]:
+            return [], 0
+
+    app.dependency_overrides[get_label_verification_service] = (
+        lambda: _EmptyLabelVerificationService()
+    )
+    try:
+        production_response = await client.get(
+            "/api/v1/production/label-verifications"
+        )
+        legacy_response = await client.get("/api/v1/quality/label-verifications")
+    finally:
+        app.dependency_overrides.pop(get_label_verification_service, None)
+
+    assert production_response.status_code == 200
+    assert legacy_response.status_code == 404
 
 
 @pytest.mark.anyio

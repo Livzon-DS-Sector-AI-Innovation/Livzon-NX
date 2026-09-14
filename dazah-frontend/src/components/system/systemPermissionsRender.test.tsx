@@ -177,7 +177,8 @@ describe('system permissions settings pages', () => {
 
     const verificationHtml = renderInApp(React.createElement(PermissionVerification))
     expect(verificationHtml).toContain('模块权限接入状态')
-    expect(verificationHtml).toContain('保存后立即生效')
+    expect(verificationHtml).toContain('接入状态')
+    expect(verificationHtml).not.toContain('保存后立即生效')
     expect(verificationHtml).not.toContain('按页面验证生效权限')
   })
 })
