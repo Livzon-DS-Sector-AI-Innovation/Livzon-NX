@@ -76,6 +76,28 @@ describe('FeishuAttachmentPreviewModal', () => {
     expect(document.body.querySelector('iframe')).toBeNull()
   })
 
+  it('fetches and renders text attachments as plain text', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: () => Promise.resolve('仪器校准记录\nline2'),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderModal({
+      fileName: '校准记录.txt',
+      previewSrc: '/preview/txt',
+      downloadSrc: '/download/txt',
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(fetchMock).toHaveBeenCalledWith('/preview/txt')
+    const modalText = document.body.textContent || ''
+    expect(modalText).toContain('仪器校准记录')
+    expect(modalText).toContain('line2')
+    expect(document.body.querySelector('iframe')).toBeNull()
+    vi.unstubAllGlobals()
+  })
+
   it('falls back to download hint for unsupported extensions', async () => {
     const openMock = vi.fn()
     vi.stubGlobal('open', openMock)

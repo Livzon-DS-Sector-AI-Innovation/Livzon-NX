@@ -13,6 +13,8 @@ export default function ItemsOutboundPage() {
         entityCode="qc_items_outbound"
         createLabel="新增出库"
         editable
+        enableTextPreview
+        enableAttachmentPreview
       />
     </QualityQueryProvider>
   )

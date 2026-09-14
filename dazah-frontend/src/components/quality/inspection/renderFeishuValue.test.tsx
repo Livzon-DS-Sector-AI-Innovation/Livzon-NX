@@ -23,6 +23,29 @@ let container: HTMLDivElement
 let root: Root
 
 beforeEach(() => {
+  // happy-dom 的 IntersectionObserver 不触发回调；默认 stub 为「立即可见」，
+  // 模拟真实浏览器中表格单元格处于视口附近的行为。懒加载专项测试自行覆盖。
+  class ImmediateObserver {
+    private callback: IntersectionObserverCallback
+    constructor(callback: IntersectionObserverCallback) {
+      this.callback = callback
+    }
+    observe(target: Element) {
+      this.callback(
+        [{ isIntersecting: true } as IntersectionObserverEntry],
+        this as unknown as IntersectionObserver,
+      )
+    }
+    disconnect() {}
+    unobserve() {}
+    takeRecords() {
+      return []
+    }
+    root: Element | null = null
+    rootMargin = ''
+    thresholds: number[] = []
+  }
+  vi.stubGlobal('IntersectionObserver', ImmediateObserver)
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -234,7 +257,7 @@ describe('renderFeishuValue', () => {
     expect(container.querySelector('.ant-tag')).toBeNull()
   })
 
-  it('renders image attachments inline via proxy builder (no download button)', async () => {
+  it('renders image attachments inline via thumbnail proxy (no download button)', async () => {
     const blob = new Blob(['x'], { type: 'image/jpeg' })
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, blob: async () => blob })
     vi.stubGlobal('fetch', fetchMock)
@@ -259,8 +282,9 @@ describe('renderFeishuValue', () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 30))
     })
+    // 列表走缩略图端点（content 后缀替换为 thumbnail，保留 query）
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/v1/quality/validation-qc/records/rec-qc-1/attachments/ft-qc-1/content?year=2026&entity=',
+      '/api/v1/quality/validation-qc/records/rec-qc-1/attachments/ft-qc-1/thumbnail?year=2026&entity=',
     )
     expect(createObjectURL).toHaveBeenCalled()
     // 图片内联展示，没有下载按钮、不触发 window.open
@@ -300,6 +324,43 @@ describe('renderFeishuValue', () => {
       }),
     )
     expect(container.textContent).toBe('2026-01-30')
+  })
+
+  it('converts formula-date Excel serials to dates via resultUiType', () => {
+    // 飞书公式日期列回读 Excel 序列号（1899-12-30 起天数）：46406 = 2027-01-19
+    renderValue(
+      renderFeishuValue('46406', {}, undefined, makeMessage() as never, {
+        uiType: 'Formula',
+        resultUiType: 'DateTime',
+      }),
+    )
+    expect(container.textContent).toBe('2027-01-19')
+
+    // 序列号也可能是数字
+    renderValue(
+      renderFeishuValue(46465, {}, undefined, makeMessage() as never, {
+        uiType: 'Formula',
+        resultUiType: 'DateTime',
+      }),
+    )
+    expect(container.textContent).toBe('2027-03-19')
+
+    // 公式引用日期字段时可能直接给毫秒时间戳
+    renderValue(
+      renderFeishuValue('1769774400000', {}, undefined, makeMessage() as never, {
+        uiType: 'Formula',
+        resultUiType: 'DateTime',
+      }),
+    )
+    expect(container.textContent).toBe('2026-01-30')
+
+    // 未提供 resultUiType 时保持原样（非日期公式）
+    renderValue(
+      renderFeishuValue('46406', {}, undefined, makeMessage() as never, {
+        uiType: 'Formula',
+      }),
+    )
+    expect(container.textContent).toBe('46406')
   })
 
   it('renders image attachment with direct url when no file_token', async () => {
@@ -344,5 +405,89 @@ describe('renderFeishuValue', () => {
       (b) => (b.textContent || '').includes('fail.jpeg'),
     )
     expect(button).toBeTruthy()
+  })
+
+  it('defers thumbnail fetch until element is visible (IntersectionObserver)', async () => {
+    const observers: FakeObserver[] = []
+    class FakeObserver {
+      private callback: IntersectionObserverCallback
+      constructor(callback: IntersectionObserverCallback) {
+        this.callback = callback
+        observers.push(this)
+      }
+      observe() {
+        /* 不自动触发，等待 fire() */
+      }
+      fire() {
+        this.callback(
+          [{ isIntersecting: true } as IntersectionObserverEntry],
+          this as unknown as IntersectionObserver,
+        )
+      }
+      disconnect() {}
+      unobserve() {}
+      takeRecords() {
+        return []
+      }
+      root: Element | null = null
+      rootMargin = ''
+      thresholds: number[] = []
+    }
+    vi.stubGlobal('IntersectionObserver', FakeObserver)
+
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(['x']) })
+    vi.stubGlobal('fetch', fetchMock)
+    const createObjectURL = vi.fn(() => 'blob:proxy')
+    Object.defineProperty(URL, 'createObjectURL', { value: createObjectURL, configurable: true })
+
+    // 初始不可见：不发起 fetch，展示占位符
+    renderValue(
+      renderFeishuValue(
+        [{ name: 'visible.png', file_token: 'ft-io' }],
+        { record_id: 'rec-io' },
+        'ent',
+        makeMessage() as never,
+      ),
+    )
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('图片加载中')
+
+    // 进入视口：触发 fetch，渲染图片
+    await act(async () => {
+      for (const obs of observers) obs.fire()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/quality/inspection/feishu/ent/records/rec-io/attachments/ft-io/thumbnail',
+    )
+  })
+
+  it('renders placeholder while image is loading', async () => {
+    let resolveFetch!: (value: { ok: boolean; blob: () => Promise<Blob> }) => void
+    const fetchMock = vi.fn(
+      () =>
+        new Promise<{ ok: boolean; blob: () => Promise<Blob> }>((resolve) => {
+          resolveFetch = resolve
+        }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const createObjectURL = vi.fn(() => 'blob:proxy')
+    Object.defineProperty(URL, 'createObjectURL', { value: createObjectURL, configurable: true })
+
+    renderValue(
+      renderFeishuValue(
+        [{ name: 'slow.jpeg', file_token: 'ft-slow' }],
+        { record_id: 'rec-slow' },
+        'ent',
+        makeMessage() as never,
+      ),
+    )
+    expect(container.textContent).toContain('图片加载中')
+    await act(async () => {
+      resolveFetch({ ok: true, blob: async () => new Blob(['x']) })
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(container.textContent).not.toContain('图片加载中')
+    expect(createObjectURL).toHaveBeenCalled()
   })
 })

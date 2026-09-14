@@ -60,3 +60,45 @@ def test_convert_success_reads_pdf_from_out_dir(monkeypatch: Any) -> None:
 def test_convert_without_soffice_returns_empty(monkeypatch: Any) -> None:
     monkeypatch.setattr(preview_mod, "_find_soffice", lambda: None)
     assert convert_office_to_pdf(b"x", "a.doc") == b""
+
+
+def test_text_extensions_previewable_and_decoded() -> None:
+    """文本类附件：txt/log/md/json/xml/yaml 支持预览并解码为 UTF-8。"""
+    from app.core.exceptions import AppException
+    from app.modules.quality.service.feishu_attachment_preview import (
+        PREVIEWABLE_EXTS,
+        decode_text_preview,
+        resolve_preview_content,
+    )
+
+    for ext in (".txt", ".log", ".md", ".json", ".xml", ".yaml", ".yml"):
+        assert ext in PREVIEWABLE_EXTS
+
+    content = "中文校准记录\nline2".encode("gb18030")
+    body, mime, filename = resolve_preview_content(content, "", "记录.txt")
+    assert mime == "text/plain; charset=utf-8"
+    assert body.decode("utf-8") == "中文校准记录\nline2"
+    assert filename == "记录.txt"
+
+    assert decode_text_preview("plain".encode("utf-8")) == "plain"
+
+    # 超限文本提示下载
+    big = b"x" * (2 * 1024 * 1024 + 1)
+    try:
+        resolve_preview_content(big, "", "big.log")
+    except AppException as exc:
+        assert exc.status_code == 400
+        assert "下载" in exc.message
+    else:  # pragma: no cover - 应当抛出
+        raise AssertionError("oversize text should not be previewable")
+
+
+def test_office_previewable_ext_unchanged() -> None:
+    """csv 仍走 office→PDF 路径（保持既有行为），文本集合不与 office 交集。"""
+    from app.modules.quality.service.feishu_attachment_preview import (
+        PREVIEW_OFFICE_EXTS,
+        PREVIEW_TEXT_EXTS,
+    )
+
+    assert ".csv" in PREVIEW_OFFICE_EXTS
+    assert not (PREVIEW_OFFICE_EXTS & PREVIEW_TEXT_EXTS)

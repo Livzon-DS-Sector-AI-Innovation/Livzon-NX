@@ -1,9 +1,12 @@
-import { redirect } from 'next/navigation'
-
-import { solidInspectionGroups } from '@/lib/quality-inspection-material-groups'
+import { QualityQueryProvider } from '@/components/quality'
+import { InspectionMaterialPage } from '@/components/quality/inspection'
 
 export const dynamic = 'force-dynamic'
 
 export default function InspectionSolidPage() {
-  redirect(`/quality/inspection/solid/${solidInspectionGroups[0].key}`)
+  return (
+    <QualityQueryProvider>
+      <InspectionMaterialPage module="solid" />
+    </QualityQueryProvider>
+  )
 }

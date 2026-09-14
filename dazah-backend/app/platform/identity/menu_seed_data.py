@@ -456,18 +456,8 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
                                 "/quality/inspection/instruments/equipment",
                             ),
                             _n(
-                                "inspection-instruments-assets",
-                                "资产台账",
-                                "/quality/inspection/instruments/assets",
-                            ),
-                            _n(
-                                "inspection-instruments-calibration",
-                                "校准计划",
-                                "/quality/inspection/instruments/calibration",
-                            ),
-                            _n(
                                 "inspection-instruments-maintenance",
-                                "维护保养",
+                                "维护保养记录",
                                 "/quality/inspection/instruments/maintenance",
                             ),
                             _n(
@@ -476,19 +466,29 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
                                 "/quality/inspection/instruments/repair",
                             ),
                             _n(
-                                "inspection-instruments-change",
-                                "变更记录",
-                                "/quality/inspection/instruments/change",
-                            ),
-                            _n(
                                 "inspection-instruments-contracts",
-                                "外协合同",
+                                "维保合同",
                                 "/quality/inspection/instruments/contracts",
                             ),
                             _n(
                                 "inspection-instruments-plans",
-                                "年度计划",
+                                "维保周期表",
                                 "/quality/inspection/instruments/plans",
+                            ),
+                            _n(
+                                "inspection-instruments-calibration",
+                                "内校汇总",
+                                "/quality/inspection/instruments/calibration",
+                            ),
+                            _n(
+                                "inspection-instruments-cal-plan",
+                                "内部校验计划",
+                                "/quality/inspection/instruments/cal-plan",
+                            ),
+                            _n(
+                                "inspection-instruments-cal-external",
+                                "外部校准检定",
+                                "/quality/inspection/instruments/cal-external",
                             ),
                         ],
                     ),
@@ -548,120 +548,11 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
                         "inspection-solid",
                         "固体物料检验",
                         "/quality/inspection/solid",
-                        children=[
-                            _n(
-                                "inspection-solid-raw",
-                                "原料检验",
-                                "/quality/inspection/solid/raw-inspection",
-                            ),
-                            _n(
-                                "inspection-solid-ys-000",
-                                "YS000",
-                                "/quality/inspection/solid/ys-000",
-                            ),
-                            _n(
-                                "inspection-solid-ys-100",
-                                "YS100",
-                                "/quality/inspection/solid/ys-100",
-                            ),
-                            _n(
-                                "inspection-solid-ys-200",
-                                "YS200",
-                                "/quality/inspection/solid/ys-200",
-                            ),
-                            _n(
-                                "inspection-solid-ys-300",
-                                "YS300",
-                                "/quality/inspection/solid/ys-300",
-                            ),
-                            _n(
-                                "inspection-solid-ys-400",
-                                "YS400",
-                                "/quality/inspection/solid/ys-400",
-                            ),
-                            _n(
-                                "inspection-solid-ys-500",
-                                "YS500",
-                                "/quality/inspection/solid/ys-500",
-                            ),
-                            _n(
-                                "inspection-solid-ys-600",
-                                "YS600",
-                                "/quality/inspection/solid/ys-600",
-                            ),
-                            _n(
-                                "inspection-solid-ys-700",
-                                "YS700",
-                                "/quality/inspection/solid/ys-700",
-                            ),
-                            _n(
-                                "inspection-solid-ys-800",
-                                "YS800",
-                                "/quality/inspection/solid/ys-800",
-                            ),
-                            _n(
-                                "inspection-solid-manual",
-                                "待人工归组",
-                                "/quality/inspection/solid/manual",
-                            ),
-                        ],
                     ),
                     _n(
                         "inspection-liquid",
                         "液体物料检验",
                         "/quality/inspection/liquid",
-                        children=[
-                            _n(
-                                "inspection-liquid-raw",
-                                "原料检验",
-                                "/quality/inspection/liquid/raw-inspection",
-                            ),
-                            _n(
-                                "inspection-liquid-yl-0xx",
-                                "YL0xx",
-                                "/quality/inspection/liquid/yl-0xx",
-                            ),
-                            _n(
-                                "inspection-liquid-yl-1xx",
-                                "YL1xx",
-                                "/quality/inspection/liquid/yl-1xx",
-                            ),
-                            _n(
-                                "inspection-liquid-yl-2xx",
-                                "YL2xx",
-                                "/quality/inspection/liquid/yl-2xx",
-                            ),
-                            _n(
-                                "inspection-liquid-yl-3xx",
-                                "YL3xx",
-                                "/quality/inspection/liquid/yl-3xx",
-                            ),
-                            _n(
-                                "inspection-liquid-yl-4xx",
-                                "YL4xx",
-                                "/quality/inspection/liquid/yl-4xx",
-                            ),
-                            _n(
-                                "inspection-liquid-yl-5xx",
-                                "YL5xx",
-                                "/quality/inspection/liquid/yl-5xx",
-                            ),
-                            _n(
-                                "inspection-liquid-yl-6xx",
-                                "YL6xx",
-                                "/quality/inspection/liquid/yl-6xx",
-                            ),
-                            _n(
-                                "inspection-liquid-yl-7xx",
-                                "YL7xx",
-                                "/quality/inspection/liquid/yl-7xx",
-                            ),
-                            _n(
-                                "inspection-liquid-yl-8xx",
-                                "YL8xx",
-                                "/quality/inspection/liquid/yl-8xx",
-                            ),
-                        ],
                     ),
                 ],
             ),

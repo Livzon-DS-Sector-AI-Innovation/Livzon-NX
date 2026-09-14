@@ -139,6 +139,16 @@ DEFAULT_QUALITY_FEISHU_ENTITIES: list[tuple[str, str, str, int]] = [
     ("qc_items_inventory", "关键物资库存", "物品管理", 212),
     ("qc_items_inbound", "关键物资入库明细", "物品管理", 213),
     ("qc_items_outbound", "关键物资领用明细", "物品管理", 214),
+    # 质量检验 - 仪器管理（本地镜像 + 飞书多维表格，两张 Base：
+    # 设备台账 5 表 + QC 校验计划 3 表）
+    ("qc_instr_equipment", "设备数据管理", "仪器管理", 216),
+    ("qc_instr_maintenance", "设备维护保养记录", "仪器管理", 217),
+    ("qc_instr_repair", "设备维修记录", "仪器管理", 218),
+    ("qc_instr_contracts", "设备维保合同", "仪器管理", 219),
+    ("qc_instr_plans", "QC检测仪器维护保养周期表", "仪器管理", 220),
+    ("qc_instr_calibration", "内校汇总", "仪器管理", 221),
+    ("qc_instr_cal_plan", "内部校验计划", "仪器管理", 222),
+    ("qc_instr_cal_external", "外部校准、检定", "仪器管理", 223),
     # 供应商管理
     ("supplier_qualification", "供应商资质", "供应商管理", 215),
     # 产品质量客户标准
@@ -489,45 +499,47 @@ QUALITY_FEISHU_ENTITY_ENV_PREFILLS: dict[str, dict[str, str]] = {
         "form_url": "https://j0eukrlohu.feishu.cn/share/base/form/shrcnzxLM8wD8gVXESsVN3M4amh",
     },
     # 仪器管理（固定 Base 配置）
+    # Base 一：设备全生命周期管理系统（设备台账 + 维保 + 周期表）
     "qc_instr_equipment": {
-        "app_token": "O0S2bHK6Ca5UiCsABPLcZtYhn6d",
-        "table_id": "tblUUbPOOokfxnUE",
+        "app_token": "Cencb8KRja1vL8s7DLqcXiQtnMf",
+        "table_id": "tblIKMhgGxdLNoow",
         "table_name": "设备数据管理",
     },
     "qc_instr_maintenance": {
-        "app_token": "O0S2bHK6Ca5UiCsABPLcZtYhn6d",
-        "table_id": "tbl9P17KgdD7XuEu",
+        "app_token": "Cencb8KRja1vL8s7DLqcXiQtnMf",
+        "table_id": "tblTw5RseafXYYdK",
         "table_name": "设备维护保养记录",
     },
-    "qc_instr_calibration": {
-        "app_token": "O0S2bHK6Ca5UiCsABPLcZtYhn6d",
-        "table_id": "tblBUZbc5FPZLuJS",
-        "table_name": "设备校验记录",
-    },
     "qc_instr_repair": {
-        "app_token": "O0S2bHK6Ca5UiCsABPLcZtYhn6d",
-        "table_id": "tblQbwxJHCOzffKQ",
+        "app_token": "Cencb8KRja1vL8s7DLqcXiQtnMf",
+        "table_id": "tblhiX6LUYC1uxTl",
         "table_name": "设备维修记录",
     },
-    "qc_instr_change": {
-        "app_token": "O0S2bHK6Ca5UiCsABPLcZtYhn6d",
-        "table_id": "tblO8Pg0axL0JLvc",
-        "table_name": "设备变更记录",
-    },
     "qc_instr_contracts": {
-        "app_token": "O0S2bHK6Ca5UiCsABPLcZtYhn6d",
-        "table_id": "tblLLsCm7uizb5Fn",
+        "app_token": "Cencb8KRja1vL8s7DLqcXiQtnMf",
+        "table_id": "tblpyvFJI0tBZBhz",
         "table_name": "设备维保合同",
     },
     "qc_instr_plans": {
-        "app_token": "O0S2bHK6Ca5UiCsABPLcZtYhn6d",
-        "table_id": "tbl11SKGWMVVllf3",
-        "table_name": "设备维护保养方案",
+        "app_token": "Cencb8KRja1vL8s7DLqcXiQtnMf",
+        "table_id": "tblaLERnzZEp7JcL",
+        "table_name": "QC检测仪器维护保养周期表",
     },
-    "qc_instr_assets": {
-        "app_token": "O0S2bHK6Ca5UiCsABPLcZtYhn6d",
-        "table_id": "tblkdru2FMOSIzxo",
-        "table_name": "固资台账",
+    # Base 二：QC 年度内部校验计划（内校 / 内部计划 / 外部校准检定）
+    "qc_instr_calibration": {
+        "app_token": "Vyn1bfLOwaUG15sWXGMcwy5Gnah",
+        "table_id": "tblRELoVEYKJ6fHB",
+        "table_name": "内校汇总",
+    },
+    "qc_instr_cal_plan": {
+        "app_token": "Vyn1bfLOwaUG15sWXGMcwy5Gnah",
+        "table_id": "tblcztwNpMGXLQ8j",
+        "table_name": "内部校验计划",
+    },
+    "qc_instr_cal_external": {
+        "app_token": "Vyn1bfLOwaUG15sWXGMcwy5Gnah",
+        "table_id": "tblvF1h7klsT2TuP",
+        "table_name": "外部校准、检定",
     },
     # 成品检验（固定 Base 配置 - 所有成品检验子表共用同一 Base）
     "qc_finished_internal": {

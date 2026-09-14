@@ -7,11 +7,13 @@ export default function InstrPlansPage() {
   return (
     <QualityQueryProvider>
       <InspectionFeishuTable
-        title="设备维护保养方案"
+        title="QC检测仪器维护保养周期表"
         listApi="/api/v1/quality/instruments/plans"
         pullApi="/api/v1/quality/instruments/plans/pull"
         entityCode="qc_instr_plans"
         editable
+        enableTextPreview
+        showLastSyncTime
       />
     </QualityQueryProvider>
   )

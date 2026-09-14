@@ -34,16 +34,18 @@ const sections: Section[] = [
   },
   {
     title: '仪器管理',
-    description: '管理仪器设备、资产、校准、维护和维修。',
+    description: '管理仪器设备、维保、维修与校验计划（含内校与外部校准附件）。',
     href: '/quality/inspection/instruments/equipment',
     icon: <ToolOutlined />,
     links: [
       { label: '仪器设备', href: '/quality/inspection/instruments/equipment' },
-      { label: '资产台账', href: '/quality/inspection/instruments/assets' },
-      { label: '校准计划', href: '/quality/inspection/instruments/calibration' },
-      { label: '维护保养', href: '/quality/inspection/instruments/maintenance' },
+      { label: '维护保养记录', href: '/quality/inspection/instruments/maintenance' },
       { label: '维修记录', href: '/quality/inspection/instruments/repair' },
-      { label: '年度计划', href: '/quality/inspection/instruments/plans' },
+      { label: '维保合同', href: '/quality/inspection/instruments/contracts' },
+      { label: '维保周期表', href: '/quality/inspection/instruments/plans' },
+      { label: '内校汇总', href: '/quality/inspection/instruments/calibration' },
+      { label: '内部校验计划', href: '/quality/inspection/instruments/cal-plan' },
+      { label: '外部校准检定', href: '/quality/inspection/instruments/cal-external' },
     ],
   },
   {

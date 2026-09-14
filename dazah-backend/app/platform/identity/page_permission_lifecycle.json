@@ -467,7 +467,10 @@
       "module_code": "registration",
       "route_path": "/registration/settings",
       "actions": {
-        "sync_config": { "status": "active", "category": "integration_admin" }
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
       }
     },
     "quality:feishu-settings": {
@@ -617,7 +620,7 @@
       "actions": {}
     },
     "quality:inspection:inspection-instruments:inspection-instruments-assets": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/instruments/assets",
       "actions": {}
@@ -626,6 +629,18 @@
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/instruments/calibration",
+      "actions": {}
+    },
+    "quality:inspection:inspection-instruments:inspection-instruments-cal-plan": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/instruments/cal-plan",
+      "actions": {}
+    },
+    "quality:inspection:inspection-instruments:inspection-instruments-cal-external": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/instruments/cal-external",
       "actions": {}
     },
     "quality:inspection:inspection-instruments:inspection-instruments-maintenance": {
@@ -641,7 +656,7 @@
       "actions": {}
     },
     "quality:inspection:inspection-instruments:inspection-instruments-change": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/instruments/change",
       "actions": {}
@@ -728,127 +743,127 @@
       "actions": {}
     },
     "quality:inspection:inspection-solid:inspection-solid-raw": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/solid/raw-inspection",
       "actions": {}
     },
     "quality:inspection:inspection-solid:inspection-solid-ys-000": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/solid/ys-000",
       "actions": {}
     },
     "quality:inspection:inspection-solid:inspection-solid-ys-100": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/solid/ys-100",
       "actions": {}
     },
     "quality:inspection:inspection-solid:inspection-solid-ys-200": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/solid/ys-200",
       "actions": {}
     },
     "quality:inspection:inspection-solid:inspection-solid-ys-300": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/solid/ys-300",
       "actions": {}
     },
     "quality:inspection:inspection-solid:inspection-solid-ys-400": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/solid/ys-400",
       "actions": {}
     },
     "quality:inspection:inspection-solid:inspection-solid-ys-500": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/solid/ys-500",
       "actions": {}
     },
     "quality:inspection:inspection-solid:inspection-solid-ys-600": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/solid/ys-600",
       "actions": {}
     },
     "quality:inspection:inspection-solid:inspection-solid-ys-700": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/solid/ys-700",
       "actions": {}
     },
     "quality:inspection:inspection-solid:inspection-solid-ys-800": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/solid/ys-800",
       "actions": {}
     },
     "quality:inspection:inspection-solid:inspection-solid-manual": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/solid/manual",
       "actions": {}
     },
     "quality:inspection:inspection-liquid:inspection-liquid-raw": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/liquid/raw-inspection",
       "actions": {}
     },
     "quality:inspection:inspection-liquid:inspection-liquid-yl-0xx": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/liquid/yl-0xx",
       "actions": {}
     },
     "quality:inspection:inspection-liquid:inspection-liquid-yl-1xx": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/liquid/yl-1xx",
       "actions": {}
     },
     "quality:inspection:inspection-liquid:inspection-liquid-yl-2xx": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/liquid/yl-2xx",
       "actions": {}
     },
     "quality:inspection:inspection-liquid:inspection-liquid-yl-3xx": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/liquid/yl-3xx",
       "actions": {}
     },
     "quality:inspection:inspection-liquid:inspection-liquid-yl-4xx": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/liquid/yl-4xx",
       "actions": {}
     },
     "quality:inspection:inspection-liquid:inspection-liquid-yl-5xx": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/liquid/yl-5xx",
       "actions": {}
     },
     "quality:inspection:inspection-liquid:inspection-liquid-yl-6xx": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/liquid/yl-6xx",
       "actions": {}
     },
     "quality:inspection:inspection-liquid:inspection-liquid-yl-7xx": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/liquid/yl-7xx",
       "actions": {}
     },
     "quality:inspection:inspection-liquid:inspection-liquid-yl-8xx": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/liquid/yl-8xx",
       "actions": {}
@@ -1271,8 +1286,14 @@
       "module_code": "warehouse",
       "route_path": "/warehouse/materials/liquid-raw-inbound",
       "actions": {
-        "delete": { "status": "active", "category": "destructive" },
-        "sync_config": { "status": "active", "category": "integration_admin" }
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
       }
     },
     "warehouse:materials:liquid-sugar-inbound": {
@@ -1280,8 +1301,14 @@
       "module_code": "warehouse",
       "route_path": "/warehouse/materials/liquid-sugar-inbound",
       "actions": {
-        "delete": { "status": "active", "category": "destructive" },
-        "sync_config": { "status": "active", "category": "integration_admin" }
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
       }
     },
     "warehouse:materials:qualified-suppliers": {
@@ -2848,10 +2875,22 @@
       "module_code": "hr",
       "route_path": "/hr/profile",
       "actions": {
-        "delete": { "status": "active", "category": "destructive" },
-        "sensitive_export": { "status": "active", "category": "sensitive_export" },
-        "bulk_import": { "status": "active", "category": "bulk_change" },
-        "sync_config": { "status": "active", "category": "integration_admin" }
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
       }
     },
     "hr:employee-management:feishu-contacts": {
@@ -2859,10 +2898,22 @@
       "module_code": "hr",
       "route_path": "/hr/feishu-contacts",
       "actions": {
-        "delete": { "status": "active", "category": "destructive" },
-        "sensitive_export": { "status": "active", "category": "sensitive_export" },
-        "bulk_import": { "status": "active", "category": "bulk_change" },
-        "sync_config": { "status": "active", "category": "integration_admin" }
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
       }
     },
     "hr:contracts:contracts-ledger": {
@@ -2870,9 +2921,18 @@
       "module_code": "hr",
       "route_path": "/hr/contracts",
       "actions": {
-        "delete": { "status": "active", "category": "destructive" },
-        "sensitive_export": { "status": "active", "category": "sensitive_export" },
-        "bulk_import": { "status": "active", "category": "bulk_change" }
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
       }
     },
     "hr:contracts:contract-approval-results": {
@@ -2880,145 +2940,375 @@
       "module_code": "hr",
       "route_path": "/hr/contracts/approval-results",
       "actions": {
-        "approve": { "status": "active", "category": "decision" },
-        "reject": { "status": "active", "category": "decision" },
-        "delete": { "status": "active", "category": "destructive" },
-        "sensitive_export": { "status": "active", "category": "sensitive_export" }
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        },
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
       }
     },
     "hr:training:annual-plan": {
-      "status": "active", "module_code": "hr", "route_path": "/hr/training/annual-plan",
-      "actions": { "bulk_import": { "status": "active", "category": "bulk_change" } }
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/training/annual-plan",
+      "actions": {
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
     },
     "hr:training:sign-in-sheet": {
-      "status": "active", "module_code": "hr", "route_path": "/hr/training/sign-in",
-      "actions": { "bulk_import": { "status": "active", "category": "bulk_change" } }
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/training/sign-in",
+      "actions": {
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
     },
     "hr:training:new-employee-training": {
-      "status": "active", "module_code": "hr", "route_path": "/hr/training/new-employee",
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/training/new-employee",
       "actions": {
-        "delete": { "status": "active", "category": "destructive" },
-        "sensitive_export": { "status": "active", "category": "sensitive_export" },
-        "bulk_import": { "status": "active", "category": "bulk_change" }
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
       }
     },
     "hr:training:training-ledger": {
-      "status": "active", "module_code": "hr", "route_path": "/hr/training/ledger",
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/training/ledger",
       "actions": {
-        "delete": { "status": "active", "category": "destructive" },
-        "sensitive_export": { "status": "active", "category": "sensitive_export" },
-        "bulk_import": { "status": "active", "category": "bulk_change" }
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
       }
     },
     "hr:training:employee-training-list": {
-      "status": "active", "module_code": "hr", "route_path": "/hr/training/employee-training-list",
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/training/employee-training-list",
       "actions": {
-        "delete": { "status": "active", "category": "destructive" },
-        "sensitive_export": { "status": "active", "category": "sensitive_export" },
-        "bulk_import": { "status": "active", "category": "bulk_change" }
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
       }
     },
     "hr:training:trainer": {
-      "status": "active", "module_code": "hr", "route_path": "/hr/training/trainer",
-      "actions": { "bulk_import": { "status": "active", "category": "bulk_change" } }
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/training/trainer",
+      "actions": {
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
     },
     "hr:training:position-training": {
-      "status": "active", "module_code": "hr", "route_path": "/hr/training/position-training",
-      "actions": { "bulk_import": { "status": "active", "category": "bulk_change" } }
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/training/position-training",
+      "actions": {
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
     },
     "hr:training:plan-tracking": {
-      "status": "active", "module_code": "hr", "route_path": "/hr/training/plan-tracking",
-      "actions": { "bulk_import": { "status": "active", "category": "bulk_change" } }
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/training/plan-tracking",
+      "actions": {
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
     },
     "hr:hr-settings:hr-settings-feishu": {
-      "status": "active", "module_code": "hr", "route_path": "/hr/settings/feishu",
-      "actions": { "sync_config": { "status": "active", "category": "integration_admin" } }
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/settings/feishu",
+      "actions": {
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "hr:hr-settings:hr-settings-reminder": {
-      "status": "active", "module_code": "hr", "route_path": "/hr/settings/reminder",
-      "actions": { "sync_config": { "status": "active", "category": "integration_admin" } }
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/settings/reminder",
+      "actions": {
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "hr:hr-settings:hr-settings-approval": {
-      "status": "active", "module_code": "hr", "route_path": "/hr/settings/approval",
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/settings/approval",
       "actions": {
-        "approve": { "status": "active", "category": "decision" },
-        "reject": { "status": "active", "category": "decision" },
-        "sync_config": { "status": "active", "category": "integration_admin" }
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
       }
     },
     "hr:hr-settings:hr-settings-dept-mapping": {
-      "status": "active", "module_code": "hr", "route_path": "/hr/settings/dept-mapping",
-      "actions": { "sync_config": { "status": "active", "category": "integration_admin" } }
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/settings/dept-mapping",
+      "actions": {
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "hr:hr-settings:hr-settings-dept-scopes": {
-      "status": "active", "module_code": "hr", "route_path": "/hr/settings/dept-scopes",
-      "actions": { "sync_config": { "status": "active", "category": "integration_admin" } }
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/settings/dept-scopes",
+      "actions": {
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "warehouse:product-inventory:product-details:product-detail-l-phenylalanine": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/l-phenylalanine", "actions": {
-        "delete": { "status": "active", "category": "destructive" },
-        "sync_config": { "status": "active", "category": "integration_admin" }
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/product/details/l-phenylalanine",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
       }
     },
     "warehouse:product-inventory:product-details:product-detail-fumaric-acid": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/fumaric-acid", "actions": {
-        "delete": { "status": "active", "category": "destructive" },
-        "sync_config": { "status": "active", "category": "integration_admin" }
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/product/details/fumaric-acid",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
       }
     },
     "warehouse:product-inventory:product-details:product-detail-l-tryptophan": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/l-tryptophan", "actions": {
-        "delete": { "status": "active", "category": "destructive" },
-        "sync_config": { "status": "active", "category": "integration_admin" }
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/product/details/l-tryptophan",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
       }
     },
     "warehouse:product-inventory:product-details:product-detail-mevastatin": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/mevastatin", "actions": {
-        "delete": { "status": "active", "category": "destructive" },
-        "sync_config": { "status": "active", "category": "integration_admin" }
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/product/details/mevastatin",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
       }
     },
     "warehouse:product-inventory:product-details:product-detail-kitasamycin-hcl": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/kitasamycin-hcl", "actions": {
-        "delete": { "status": "active", "category": "destructive" },
-        "sync_config": { "status": "active", "category": "integration_admin" }
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/product/details/kitasamycin-hcl",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
       }
     },
     "warehouse:product-inventory:product-details:product-detail-doramectin": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/doramectin", "actions": {
-        "delete": { "status": "active", "category": "destructive" },
-        "sync_config": { "status": "active", "category": "integration_admin" }
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/product/details/doramectin",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
       }
     },
     "warehouse:product-inventory:product-details:product-detail-lovastatin": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/lovastatin", "actions": {
-        "delete": { "status": "active", "category": "destructive" },
-        "sync_config": { "status": "active", "category": "integration_admin" }
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/product/details/lovastatin",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
       }
     },
     "warehouse:product-inventory:product-details:product-detail-florfenicol-premix": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/florfenicol-premix", "actions": {
-        "delete": { "status": "active", "category": "destructive" },
-        "sync_config": { "status": "active", "category": "integration_admin" }
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/product/details/florfenicol-premix",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
       }
     },
     "warehouse:product-inventory:product-details:product-detail-demeclocycline-hcl": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/demeclocycline-hcl", "actions": {
-        "delete": { "status": "active", "category": "destructive" },
-        "sync_config": { "status": "active", "category": "integration_admin" }
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/product/details/demeclocycline-hcl",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
       }
     },
     "warehouse:product-inventory:product-details:product-detail-fenbendazole-powder": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/fenbendazole-powder", "actions": {
-        "delete": { "status": "active", "category": "destructive" },
-        "sync_config": { "status": "active", "category": "integration_admin" }
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/product/details/fenbendazole-powder",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
       }
     },
     "warehouse:product-inventory:product-inbound-detail": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/inbound-detail", "actions": {
-        "delete": { "status": "active", "category": "destructive" },
-        "sync_config": { "status": "active", "category": "integration_admin" }
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/product/inbound-detail",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
       }
+    },
+    "quality:inspection:inspection-solid": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/solid",
+      "actions": {}
+    },
+    "quality:inspection:inspection-liquid": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/liquid",
+      "actions": {}
     }
   }
 }

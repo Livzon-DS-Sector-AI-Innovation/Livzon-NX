@@ -22,6 +22,7 @@ from collections.abc import Awaitable
 from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
@@ -546,8 +547,9 @@ async def list_material_mirror(
             if fv:
                 items = [it for it in items if str(it.get(fk) or "") == fv]
 
-    # 与实时 _list_feishu 一致：按 updated_at 倒序（最新变更在前）
-    items.sort(key=lambda x: str(x.get("updated_at") or ""), reverse=True)
+    # 按批号文本倒序（最新批号在前），对齐飞书 records/search 的批号降序；
+    # 空批号排最后。
+    items.sort(key=lambda x: str(x.get("批号") or ""), reverse=True)
 
     total = len(items)
     start = (page - 1) * page_size
@@ -564,3 +566,74 @@ async def list_material_mirror(
         if snapshot.last_synced_at
         else None,
     }
+
+
+async def upsert_record_by_id(
+    db: AsyncSession,
+    entity_code: str,
+    record_id: str,
+) -> bool:
+    """按飞书记录 ID 拉取最新单条并写穿到本地镜像（编辑/新增后即时生效）。
+
+    增量同步按批号降序逐页拉取且整页无变更提前停止，编辑旧批号的行
+    往往拉不到；本函数单条 get_record 后直接 upsert 对应镜像行，
+    不受 early-stop 影响。无镜像快照/列结构时返回 False（由增量轮兜底）。
+    """
+    if entity_code not in MATERIAL_MIRROR_ENTITIES:
+        return False
+    snapshot = await repo.get_snapshot(db, entity_code)
+    if snapshot is None or snapshot.total_rows <= 0:
+        return False
+    # snapshot.columns 即 sync 时 _build_columns 的列结构（含 key/options），
+    # _normalize_record_cells 依赖 options 做单选 id→文字解析
+    columns = [col for col in (snapshot.columns or []) if col.get("key")]
+    if not columns or not record_id:
+        return False
+    runtime, entity = await _resolve_runtime_entity(db, entity_code, direction="pull")
+    client = BitableClient(
+        app_token=entity.app_token,
+        app_id=runtime.app_id,
+        app_secret=runtime.app_secret,
+    )
+    record = await client.get_record(
+        feishu_sync_service._require_table_id(entity), record_id
+    )
+    if not record or not record.get("record_id"):
+        return False
+    existing_row = await db.scalar(
+        select(QualityItemsPageRow).where(
+            QualityItemsPageRow.page_snapshot_id == snapshot.id,
+            QualityItemsPageRow.source_record_id == record_id,
+        )
+    )
+    cells = _normalize_record_cells(record, columns)
+    row = QualityItemsPageRow(
+        page_snapshot_id=snapshot.id,
+        source_record_id=record_id,
+        row_order=existing_row.row_order if existing_row else 0,
+        cells=cells,
+        search_text=_build_search_text(cells),
+        last_synced_at=datetime.now(UTC),
+    )
+    await repo.upsert_rows_incremental(db, snapshot.id, [row])
+    snapshot.total_rows = await repo.count_rows(db, snapshot.id)
+    await db.commit()
+    return True
+
+
+async def delete_mirror_record(
+    db: AsyncSession,
+    entity_code: str,
+    record_id: str,
+) -> bool:
+    """删除记录后立即软删对应镜像行（无需等全量删除对账）。"""
+    if entity_code not in MATERIAL_MIRROR_ENTITIES:
+        return False
+    snapshot = await repo.get_snapshot(db, entity_code)
+    if snapshot is None:
+        return False
+    deleted = await repo.delete_row_by_record_id(db, snapshot.id, record_id)
+    if deleted:
+        snapshot.total_rows = await repo.count_rows(db, snapshot.id)
+        await db.commit()
+    return deleted

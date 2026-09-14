@@ -877,7 +877,9 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
         render: (_: unknown, record: QualityFeishuEntitySettingItem) =>
           record.entity_code.startsWith('validation_master_plan_') ||
           record.entity_code === 'qc_items_inbound' ||
-          record.entity_code === 'qc_items_outbound' ? (
+          record.entity_code === 'qc_items_outbound' ||
+          // 仪器管理子表：可配飞书共享表单，新增记录直接打开表单录入
+          record.entity_code.startsWith('qc_instr_') ? (
             <Input
               value={entityDrafts[record.entity_code]?.feishu_form_url || ''}
               placeholder="飞书表单分享链接（shrcn...），新增记录时打开"

@@ -100,6 +100,27 @@ async def test_finished_mirror_generators_route_to_service(
 
 
 @pytest.mark.anyio
+async def test_instrument_mirror_generators_route_to_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sync_gen = scheduled.InspectionInstrumentMirrorSyncGenerator()
+    full_gen = scheduled.InspectionInstrumentMirrorFullSyncGenerator()
+    session = _session_with_settings(
+        [_setting("qc_instr_equipment"), _setting("qc_instr_calibration", False)]
+    )
+    assert await sync_gen.find_due(session) == ["qc_instr_equipment"]
+
+    exec_mock = AsyncMock()
+    monkeypatch.setattr(scheduled, "sync_instrument_page", exec_mock)
+    await sync_gen.execute_one(session, "qc_instr_equipment")
+    exec_mock.assert_awaited_once_with(
+        session, "qc_instr_equipment", incremental=True
+    )
+    await full_gen.execute_one(session, "qc_instr_equipment")
+    assert exec_mock.await_args_list[1].kwargs["incremental"] is False
+
+
+@pytest.mark.anyio
 async def test_escalation_generator_delegates_to_queue(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

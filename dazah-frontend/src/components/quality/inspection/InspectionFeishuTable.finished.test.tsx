@@ -5,8 +5,14 @@ import { App } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}))
+
 const apiClient = vi.hoisted(() => ({
   fetchInspectionFeishuFields: vi.fn(),
+  fetchInspectionMaterials: vi.fn(),
+  fetchInspectionFeishuRecordDetail: vi.fn(),
 }))
 
 const inspectionActions = vi.hoisted(() => ({

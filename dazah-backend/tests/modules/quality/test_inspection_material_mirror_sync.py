@@ -174,6 +174,99 @@ async def test_sync_full_writes_mirror_and_reads_local(
     assert first["不合格项目"] == "干燥失重超标"
 
 
+async def test_list_orders_by_batch_desc_not_updated_at(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """固体/液体列表按批号文本倒序（最大批号在前），不再按修改时间。
+
+    构造批号与 updated_at 反向的数据：小批号更新更晚、大批号更新更早。
+    若仍按 updated_at 排序会把小批号排在前；批号倒序应把大批号排在前。
+    """
+    records = _records(
+        [
+            {
+                "record_id": "rec_small_batch",
+                "fields": {
+                    "批号": "YS002-2505001",
+                    "生产厂家": "甲",
+                    "结果判断": "optP",
+                    "不合格项目": "",
+                },
+                "last_modified_time": 1_800_000_000_000,
+            },
+            {
+                "record_id": "rec_large_batch",
+                "fields": {
+                    "批号": "YS002-2509001",
+                    "生产厂家": "乙",
+                    "结果判断": "optP",
+                    "不合格项目": "",
+                },
+                "last_modified_time": 1_700_000_000_000,
+            },
+        ]
+    )
+    _install_feishu_mocks(monkeypatch, records, _fields())
+
+    await mirror.sync_material_page(db_session, ENTITY, incremental=False)
+    read = await mirror.list_material_mirror(db_session, ENTITY, page=1, page_size=20)
+    batches = [item["批号"] for item in read["items"]]
+    assert batches == ["YS002-2509001", "YS002-2505001"]
+    assert read["items"][0]["record_id"] == "rec_large_batch"
+
+
+async def test_upsert_and_delete_record_write_through(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """编辑/删除后单条写穿：upsert 即时更新镜像行（不受增量 early-stop
+    影响），删除即时软删镜像行。"""
+    records = _records(
+        [
+            {
+                "record_id": "rec1",
+                "fields": {
+                    "批号": "YS002-2506001",
+                    "生产厂家": "原厂商",
+                    "结果判断": "optP",
+                    "不合格项目": "",
+                },
+                "last_modified_time": 1_700_000_000_000,
+            },
+        ]
+    )
+    _install_feishu_mocks(monkeypatch, records, _fields())
+    await mirror.sync_material_page(db_session, ENTITY, incremental=False)
+
+    class _GetRecordClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def get_record(self, table_id, record_id):
+            return {
+                "record_id": record_id,
+                "fields": {
+                    "批号": "YS002-2506001",
+                    "生产厂家": "编辑后的厂商",
+                    "结果判断": "optF",
+                    "不合格项目": "灰分超标",
+                },
+            }
+
+    monkeypatch.setattr(mirror, "BitableClient", _GetRecordClient)
+
+    assert await mirror.upsert_record_by_id(db_session, ENTITY, "rec1") is True
+    read = await mirror.list_material_mirror(db_session, ENTITY, page=1, page_size=20)
+    row = next(it for it in read["items"] if it["record_id"] == "rec1")
+    assert row["生产厂家"] == "编辑后的厂商"
+    assert row["不合格项目"] == "灰分超标"
+
+    assert await mirror.delete_mirror_record(db_session, ENTITY, "rec1") is True
+    read = await mirror.list_material_mirror(db_session, ENTITY, page=1, page_size=20)
+    assert all(it["record_id"] != "rec1" for it in read["items"])
+    # 重复删除：行已软删，返回 False
+    assert await mirror.delete_mirror_record(db_session, ENTITY, "rec1") is False
+
+
 async def test_sync_incremental_only_writes_newer_rows(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:

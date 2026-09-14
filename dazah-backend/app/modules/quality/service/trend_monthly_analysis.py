@@ -1,16 +1,19 @@
-"""趋势 AI 月度定时分析：每月指定日对所有已启用产品线全量分析并发送。
+"""趋势 AI 月度定时分析：每月指定日对全部产品线全量分析并按 AI 终审推送。
 
 由 TrendAlertMonthlyAnalysisGenerator（每日 09:00 检查一次）驱动：
 当天日期 ≥ 通知设置的 monthly_day（默认 25 日，月底不足取当月最后一天）
-且当月尚未跑过时，遍历全部产品线趋势仪表盘数据（enable_trend_ai=True），
-复用页面路径触发产品级月度AI——一个产品一次分析、一张合并卡（全部指标
-合并，硬编码防飞书卡片限流），必定发送，不受手动重分析开关影响。
+且当月尚未跑过时，遍历**全部 15 条产品线目录**（FINISHED_DASHBOARD_LINE_CATALOG，
+逐 entity_code 而非只跑各入口默认线）拉取仪表盘数据（enable_trend_ai=True），
+复用页面路径：粗筛提名 → 产品级一次 AI 终审 → 只对判定异常的指标发一张
+合并卡（含各指标趋势图），全部正常的产品线不发卡。
 """
 
 from __future__ import annotations
 
+import asyncio
 import calendar
 import logging
+import time
 from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -19,6 +22,25 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.quality.models.trend_monthly_run import QualityTrendMonthlyRun
+from app.modules.quality.service import inspection_dashboard_calc as calc
+from app.modules.quality.service.inspection_dashboard_config import (
+    BBAS_FCC14_DASHBOARD_ENTITY_CODE,
+    BBAS_HANGUANG_K1_DASHBOARD_ENTITY_CODE,
+    DLS_GB_DASHBOARD_ENTITY_CODE,
+    DLS_VET_DASHBOARD_ENTITY_CODE,
+    FINISHED_DASHBOARD_LINE_CATALOG,
+    FORMULATIONS_FEN_DASHBOARD_ENTITY_CODE,
+    FORMULATIONS_FLU_DASHBOARD_ENTITY_CODE,
+    LFT_EP_DASHBOARD_ENTITY_CODE,
+    LFT_USP_DASHBOARD_ENTITY_CODE,
+    LKMS_VET_DASHBOARD_ENTITY_CODE,
+    MPA_HIGH_SPEC_DASHBOARD_ENTITY_CODE,
+    MPA_INTERNAL_DASHBOARD_ENTITY_CODE,
+    MVT_DASHBOARD_ENTITY_CODE,
+    TRYPTOPHAN_GRANULE_DASHBOARD_ENTITY_CODE,
+    TRYPTOPHAN_POWDER_DASHBOARD_ENTITY_CODE,
+    WATER_PURE_DASHBOARD_ENTITY_CODE,
+)
 from app.modules.quality.service.inspection_dashboard_entry import (
     get_bbas_dashboard_data,
     get_dls_dashboard_data,
@@ -38,18 +60,111 @@ logger = logging.getLogger(__name__)
 
 _TZ = ZoneInfo("Asia/Shanghai")
 
-# 与 api/inspection_feishu.py 的分组入口保持一致
-_GROUP_RUNNERS: list[tuple[str, Any, dict[str, Any]]] = [
-    ("mpa", get_mpa_dashboard_data, {}),
-    ("mvt", get_mvt_dashboard_data, {}),
-    ("lft", get_lft_dashboard_data, {}),
-    ("dls", get_dls_dashboard_data, {}),
-    ("lkms", get_lkms_dashboard_data, {}),
-    ("bbas", get_bbas_dashboard_data, {}),
-    ("tryptophan", get_tryptophan_dashboard_data, {}),
-    ("formulations", get_formulations_dashboard_data, {}),
-    ("water", get_water_dashboard_data, {}),
-]
+# entity_code → 分组入口（与 api/inspection_feishu.py 的分组入口一致）。
+# 必须逐 entity_code 跑：同一入口的备选线（高规/USP/兽药/K1/色氨酸粉末/芬苯达唑）
+# 不能只靠入口默认值覆盖，否则这些产品线永远拿不到月度分析。
+_ENTITY_GROUP_MAP: dict[str, str] = {
+    MPA_INTERNAL_DASHBOARD_ENTITY_CODE: "mpa",
+    MPA_HIGH_SPEC_DASHBOARD_ENTITY_CODE: "mpa",
+    MVT_DASHBOARD_ENTITY_CODE: "mvt",
+    LFT_EP_DASHBOARD_ENTITY_CODE: "lft",
+    LFT_USP_DASHBOARD_ENTITY_CODE: "lft",
+    DLS_GB_DASHBOARD_ENTITY_CODE: "dls",
+    DLS_VET_DASHBOARD_ENTITY_CODE: "dls",
+    LKMS_VET_DASHBOARD_ENTITY_CODE: "lkms",
+    BBAS_FCC14_DASHBOARD_ENTITY_CODE: "bbas",
+    BBAS_HANGUANG_K1_DASHBOARD_ENTITY_CODE: "bbas",
+    TRYPTOPHAN_POWDER_DASHBOARD_ENTITY_CODE: "tryptophan",
+    TRYPTOPHAN_GRANULE_DASHBOARD_ENTITY_CODE: "tryptophan",
+    FORMULATIONS_FLU_DASHBOARD_ENTITY_CODE: "formulations",
+    FORMULATIONS_FEN_DASHBOARD_ENTITY_CODE: "formulations",
+    WATER_PURE_DASHBOARD_ENTITY_CODE: "water",
+}
+
+_GROUP_ENTRIES: dict[str, Any] = {
+    "mpa": get_mpa_dashboard_data,
+    "mvt": get_mvt_dashboard_data,
+    "lft": get_lft_dashboard_data,
+    "dls": get_dls_dashboard_data,
+    "lkms": get_lkms_dashboard_data,
+    "bbas": get_bbas_dashboard_data,
+    "tryptophan": get_tryptophan_dashboard_data,
+    "formulations": get_formulations_dashboard_data,
+    "water": get_water_dashboard_data,
+}
+
+
+def resolve_line_group(entity_code: str) -> str | None:
+    """产品线 entity_code → 分组入口键；未匹配返回 None。"""
+    return _ENTITY_GROUP_MAP.get(entity_code)
+
+
+def iter_monthly_lines() -> list[tuple[str, str, Any]]:
+    """月度分析产品线清单：[(entity_code, 展示名, 入口函数)]，覆盖全部目录线。"""
+    lines: list[tuple[str, str, Any]] = []
+    for entity_code, label in FINISHED_DASHBOARD_LINE_CATALOG:
+        entry = _GROUP_ENTRIES.get(str(resolve_line_group(entity_code) or ""))
+        if entry is None:
+            logger.warning(
+                "月度分析跳过未登记分组的产品线：%s（%s）", entity_code, label
+            )
+            continue
+        lines.append((entity_code, label, entry))
+    return lines
+
+
+# 无人值守可靠性：逐线等待产品级 AI 任务到达终态（串行 = 上游不限流、连接池不吃紧）；
+# 任务因限流/超时失败时自动重试，避免月度卡片整条线漏发。
+_LINE_JOB_POLL_SECONDS = 5
+_LINE_JOB_WAIT_TIMEOUT = 900
+_LINE_JOB_MAX_ATTEMPTS = 2
+
+
+async def _wait_line_ai_job(
+    db: AsyncSession,
+    *,
+    entity_code: str,
+    period: str,
+) -> str:
+    """等待产品线当月产品级 AI 任务到达终态；failed/ai_failed 无结论则重试一次。
+
+    返回最终状态（none/终态名/timeout/exhausted）。轮询前 expire_all 以读到
+    任务进程写入数据库的最新状态。
+    """
+    for attempt in range(_LINE_JOB_MAX_ATTEMPTS):
+        deadline = time.monotonic() + _LINE_JOB_WAIT_TIMEOUT
+        while True:
+            db.expire_all()
+            row = await calc._get_existing_trend_ai(
+                db,
+                entity_code=entity_code,
+                metric_key=calc.TREND_PRODUCT_METRIC_KEY,
+                rule_type=calc.TREND_OVERALL_RULE,
+                trend_end_batch=period,
+            )
+            if row is None:
+                return "none"
+            status = str(row.notification_status or "")
+            if status != "pending":
+                if (
+                    status in {"failed", "ai_failed"}
+                    and not row.ai_summary
+                    and attempt + 1 < _LINE_JOB_MAX_ATTEMPTS
+                ):
+                    logger.warning(
+                        "月度分析 %s 任务状态 %s，自动重试（第 %s 次）",
+                        entity_code,
+                        status,
+                        attempt + 2,
+                    )
+                    await calc._submit_trend_ai_job(row, sender_user_open_id=None)
+                    await db.commit()
+                    break
+                return status
+            if time.monotonic() >= deadline:
+                return "timeout"
+            await asyncio.sleep(_LINE_JOB_POLL_SECONDS)
+    return "exhausted"
 
 
 async def find_due_trend_monthly_analysis(db: AsyncSession) -> list[str]:
@@ -97,25 +212,27 @@ async def run_trend_monthly_analysis(
 
     config = await load_inspection_trend_alert_config(db)
     stats: dict[str, Any] = {"lines": 0, "charts": 0, "enqueued": 0, "skipped": 0}
-    for _group, entry, kwargs in _GROUP_RUNNERS:
+    for entity_code, label, entry in iter_monthly_lines():
+        line_config = config.lines.get(entity_code) or {}
+        if not line_config.get("enabled", True):
+            continue  # 通知设置里停用的产品线不跑
         try:
             # enable_trend_ai=True：产品级月度AI在页面路径内自动建行并提交
-            # job（一个产品一次分析、一张合并卡），无指标命中则不触发
+            # job（粗筛 → AI 终审 → 只对真异常发一张合并卡）
             result = await entry(
                 db,
                 sender_user_open_id=None,
-                frontend_group=_group,
+                frontend_group=resolve_line_group(entity_code) or "",
+                source_entity_code=entity_code,
                 enable_trend_ai=True,
-                **kwargs,
             )
-        except Exception as exc:  # noqa: BLE001 —— 单组失败不阻塞其余产品线
-            logger.warning("月度分析拉取 %s 失败: %s", _group, type(exc).__name__)
+        except Exception as exc:  # noqa: BLE001 —— 单线失败不阻塞其余产品线
+            logger.warning(
+                "月度分析拉取 %s（%s）失败: %s", entity_code, label, type(exc).__name__
+            )
             stats["skipped"] += 1
             continue
         if not result.get("configured"):
-            continue
-        line_config = config.lines.get(result["source_entity_code"]) or {}
-        if not line_config.get("enabled", True):
             continue
         stats["lines"] += 1
         summary = result.get("summary") or {}
@@ -124,8 +241,15 @@ async def run_trend_monthly_analysis(
         if summary.get("trend_ai_pending_count") or summary.get(
             "trend_ai_completed_count"
         ):
-            # 该产品线当月命中判据并已触发产品级合并分析（一行/一卡）
+            # 该产品线当月已触发产品级 AI 终审（是否推卡由终审裁决决定）
             stats["enqueued"] += 1
+            # 串行等待到终态（失败自动重试），再进入下一条产品线
+            final_status = await _wait_line_ai_job(
+                db, entity_code=entity_code, period=period
+            )
+            if final_status in {"failed", "ai_failed", "timeout", "exhausted"}:
+                stats["skipped"] += 1
+                logger.warning("月度分析 %s 未成功：%s", entity_code, final_status)
 
     run_row.status = "done"
     run_row.finished_at = datetime.now(UTC)

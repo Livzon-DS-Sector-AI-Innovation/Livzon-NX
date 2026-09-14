@@ -167,6 +167,71 @@ async def test_sync_full_writes_mirror_and_reads_local(
     assert isinstance(att, list) and att[0]["file_token"] == "ft1"
 
 
+async def test_list_orders_by_batch_desc_not_updated_at(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """成品列表按批号文本倒序（SQL text_sort），不再按修改时间。
+
+    构造批号与 updated_at 反向的数据：小批号更新更晚、大批号更新更早。
+    批号倒序应把大批号排在前（与 updated_at 序相反）。
+    """
+    records = [
+        {
+            "record_id": "rec_small",
+            "fields": {"批号": "PF-2605001", "含量:≥70%": "72.0"},
+            "last_modified_time": 1_800_000_000_000,
+        },
+        {
+            "record_id": "rec_large",
+            "fields": {"批号": "PF-2609001", "含量:≥70%": "71.0"},
+            "last_modified_time": 1_700_000_000_000,
+        },
+    ]
+    _install_feishu_mocks(monkeypatch, records, _fields())
+
+    await mirror.sync_finished_page(db_session, ENTITY, incremental=False)
+    read = await mirror.list_finished_mirror(db_session, ENTITY, page=1, page_size=20)
+    batches = [item["批号"] for item in read["items"]]
+    assert batches == ["PF-2609001", "PF-2605001"]
+    assert read["items"][0]["record_id"] == "rec_large"
+
+
+async def test_upsert_and_delete_record_write_through(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """编辑/删除后单条写穿：upsert 即时更新镜像行，删除即时软删。"""
+    records = [
+        {
+            "record_id": "rec1",
+            "fields": {"批号": "PF-2608001", "含量:≥70%": "72.5"},
+            "last_modified_time": 1_700_000_000_000,
+        },
+    ]
+    _install_feishu_mocks(monkeypatch, records, _fields())
+    await mirror.sync_finished_page(db_session, ENTITY, incremental=False)
+
+    class _GetRecordClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def get_record(self, table_id, record_id):
+            return {
+                "record_id": record_id,
+                "fields": {"批号": "PF-2608001", "含量:≥70%": "75.0"},
+            }
+
+    monkeypatch.setattr(mirror, "BitableClient", _GetRecordClient)
+
+    assert await mirror.upsert_record_by_id(db_session, ENTITY, "rec1") is True
+    read = await mirror.list_finished_mirror(db_session, ENTITY, page=1, page_size=20)
+    row = next(it for it in read["items"] if it["record_id"] == "rec1")
+    assert row["含量:≥70%"] == "75.0"
+
+    assert await mirror.delete_mirror_record(db_session, ENTITY, "rec1") is True
+    read = await mirror.list_finished_mirror(db_session, ENTITY, page=1, page_size=20)
+    assert all(it["record_id"] != "rec1" for it in read["items"])
+
+
 async def test_sync_incremental_only_writes_new_batches(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:

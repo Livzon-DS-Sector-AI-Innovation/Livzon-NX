@@ -78,6 +78,29 @@ describe('QcValidationPage', () => {
   let container: HTMLElement
 
   beforeEach(() => {
+    // happy-dom 的 IntersectionObserver 不触发回调；stub 为「立即可见」
+    // 以模拟真实浏览器中表格单元格处于视口附近的行为。
+    class ImmediateObserver {
+      private callback: IntersectionObserverCallback
+      constructor(callback: IntersectionObserverCallback) {
+        this.callback = callback
+      }
+      observe(target: Element) {
+        this.callback(
+          [{ isIntersecting: true } as IntersectionObserverEntry],
+          this as unknown as IntersectionObserver,
+        )
+      }
+      disconnect() {}
+      unobserve() {}
+      takeRecords() {
+        return []
+      }
+      root: Element | null = null
+      rootMargin = ''
+      thresholds: number[] = []
+    }
+    vi.stubGlobal('IntersectionObserver', ImmediateObserver)
     apiClient.fetchQcValidationYears.mockResolvedValue([
       { year: 2025, entity_code: 'validation_qc_2025', table_configured: false, feishu_url: null },
       { year: 2026, entity_code: 'validation_qc_2026', table_configured: true, feishu_url: 'https://www.feishu.cn/base/tok_2026?table=tbl_2026' },

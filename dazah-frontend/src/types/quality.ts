@@ -1193,6 +1193,12 @@ export type InspectionFeishuFieldMeta = {
   field_name: string
   ui_type: string
   editable: boolean
+  /** 飞书字段 type 编码（如 3001 = 按钮，不展示也不可写） */
+  type?: number | null
+  /** 主字段：新增记录时必填，否则飞书拒绝写入 */
+  is_primary?: boolean
+  /** 公式字段的结果类型（ui_type='Formula' 时用于按结果类型渲染，如公式日期） */
+  result_ui_type?: string | null
   options?: { name: string }[] | null
 }
 
@@ -1204,6 +1210,15 @@ export type InspectionFeishuFieldsResult = {
 }
 
 export type InspectionFeishuFields = Record<string, unknown>
+
+/** 固体/液体原辅料（代码+名称 label、模块与分组），供新增检验选料。 */
+export type InspectionMaterialItem = {
+  entity_code: string
+  label: string
+  module: 'solid' | 'liquid'
+  group_key: string
+  group_label: string
+}
 
 // ============ 物品管理仪表盘 / 库存不足推送类型 ============
 export interface ItemsStockAlertItemRow {
@@ -1864,7 +1879,7 @@ export interface QualityNotificationSettingItem {
   stock_footer_template?: string | null;
   /** 预警判定口径：feishu | local_threshold */
   stock_warning_source?: string;
-  /** 趋势 AI 月度分析：每月该日定时全量分析并发送（默认 25，月底不足取当月最后一天） */
+  /** 趋势 AI 月度分析：每月该日定时检查，数据无更新则跳过（默认 25，月底不足取当月最后一天） */
   monthly_day: number | null;
   /** 手动「重新分析」是否发送消息（默认发送） */
   manual_rerun_send: boolean | null;

@@ -29,6 +29,9 @@ from app.modules.quality.api.deps import (
 from app.modules.quality.schemas.inspection_feishu_crud import (
     InspectionFeishuRecordBody,
 )
+from app.modules.quality.service.feishu_attachment_thumbnail import (
+    get_attachment_thumbnail,
+)
 from app.modules.quality.service.inspection_feishu_crud import (
     batch_create_record_share_links,
     build_feishu_base_url,
@@ -37,6 +40,7 @@ from app.modules.quality.service.inspection_feishu_crud import (
     get_bitable_entity_reference,
     get_inspection_entity_fields,
     get_inspection_feishu_attachment_content,
+    get_inspection_feishu_attachment_preview,
     get_inspection_feishu_record,
     list_bitable_feishu_records,
     update_inspection_feishu_record,
@@ -259,5 +263,66 @@ async def api_get_qc_validation_attachment_content(
             "Content-Disposition": (
                 f"attachment; filename=attachment; filename*=UTF-8''{encoded}"
             )
+        },
+    )
+
+
+@router.get(
+    "/validation-qc/records/{record_id}/attachments/{file_token}/preview",
+    summary="在线预览QC验证记录附件（图片/PDF 原样，office 转 PDF，inline 响应）",
+)
+async def api_get_qc_validation_attachment_preview(
+    record_id: str,
+    file_token: str,
+    year: int = Query(2026, description="QC验证年度"),
+    current_user: CurrentUser = None,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    _require_user(current_user)
+    content, content_type, filename = await get_inspection_feishu_attachment_preview(
+        db, _qc_entity_code(year), record_id, file_token
+    )
+    encoded = quote(filename)
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": (
+                f"inline; filename=preview; filename*=UTF-8''{encoded}"
+            )
+        },
+    )
+
+
+@router.get(
+    "/validation-qc/records/{record_id}/attachments/{file_token}/thumbnail",
+    summary="QC验证列表缩略图（PIL 缩放为小图，避免列表页拉取原图全量字节）",
+)
+async def api_get_qc_validation_attachment_thumbnail(
+    record_id: str,
+    file_token: str,
+    year: int = Query(2026, description="QC验证年度"),
+    max_width: int = Query(200, ge=16, le=512, description="缩略图最大宽度"),
+    max_height: int = Query(200, ge=16, le=512, description="缩略图最大高度"),
+    current_user: CurrentUser = None,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    _require_user(current_user)
+    result = await get_attachment_thumbnail(
+        db, _qc_entity_code(year), record_id, file_token, max_width, max_height
+    )
+    if result is None:
+        raise AppException(
+            message="该附件暂不支持生成缩略图，请下载后查看", status_code=400
+        )
+    content, content_type, filename = result
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": (
+                f"inline; filename=thumbnail; filename*=UTF-8''{quote(filename)}"
+            ),
+            "Cache-Control": "private, max-age=86400",
         },
     )

@@ -146,6 +146,86 @@ async def test_liquid_unqualified_writes_unqualified_items(
     ]
 
 
+async def test_liquid_falls_back_to_inbound_ledger_for_drum_liquids(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """槽车类台账（液体原辅料入库）未命中 → 桶装液体回退入库总账（代码+批号 匹配）。"""
+    service = WarehouseService(db_session)
+    updates: list[tuple[str, dict[str, Any]]] = []
+    searches: list[dict[str, Any]] = []
+
+    class _RoutedClient:
+        """按 table_id 路由：液体台账返回空，入库总账返回命中行。"""
+
+        def __init__(self, *, app_token, app_id, app_secret):
+            self.updates = updates
+
+        async def request(
+            self,
+            method,
+            path,
+            *,
+            params=None,
+            json_body=None,
+            force_token_refresh=False,
+            timeout=15.0,
+        ):
+            table_id = path.split("/tables/")[1].split("/")[0]
+            if method == "POST":
+                searches.append({"table_id": table_id, "body": json_body})
+                if table_id == "tblLiq":
+                    return {"items": [], "total": 0}
+                return {"items": [_row("rec-drum")], "total": 1}
+            if method == "PUT":
+                record_id = path.rsplit("/", 1)[-1]
+                self.updates.append((record_id, json_body.get("fields") or {}))
+                return {"record": {"record_id": record_id}}
+            raise AssertionError(f"unexpected method {method}")
+
+    async def fake_config(page_key: str):
+        table_id = {"liquid-raw-inbound": "tblLiq", "inbound-ledger": "tblInb"}[
+            page_key
+        ]
+        return SimpleNamespace(page_key=page_key, app_token="tok", table_id=table_id)
+
+    async def fake_client(_app_token):
+        return _RoutedClient(app_token=_app_token, app_id="a", app_secret="s")
+
+    async def fake_field_meta(_config):
+        return _fields_meta()
+
+    async def fake_mirror_sync(_page_key, *, incremental=True):
+        return None
+
+    monkeypatch.setattr(service, "_get_material_page_config", fake_config)
+    monkeypatch.setattr(service, "_get_material_client", fake_client)
+    monkeypatch.setattr(service, "_get_page_field_meta", fake_field_meta)
+    monkeypatch.setattr(service, "sync_material_page_to_local", fake_mirror_sync)
+
+    res = await service.update_inbound_inspection_result(
+        material_module="liquid",
+        material_code="",
+        batch_no="YL006-2609001",
+        result="不合格",
+        unqualified_items="色度超标",
+    )
+    assert res == {"matched": True, "updated": True, "record_id": "rec-drum"}
+    # 第一候选：液体原辅料入库按整串批号查，未命中
+    assert searches[0]["table_id"] == "tblLiq"
+    assert searches[0]["body"]["filter"]["conditions"] == [
+        {"field_name": "入库批号", "operator": "is", "value": ["YL006-2609001"]}
+    ]
+    # 第二候选：入库总账拆 代码+批号 查，命中
+    assert searches[1]["table_id"] == "tblInb"
+    assert searches[1]["body"]["filter"]["conditions"] == [
+        {"field_name": "厂内代码", "operator": "is", "value": ["YL006"]},
+        {"field_name": "厂内批号", "operator": "is", "value": ["2609001"]},
+    ]
+    assert updates == [
+        ("rec-drum", {"检测结果": "不合格", "不合格项目": "色度超标"})
+    ]
+
+
 async def test_no_match_returns_not_matched(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -7,17 +7,24 @@
 
 from __future__ import annotations
 
-from statistics import fmean
+from statistics import fmean, pstdev
 from typing import Any
 
 from app.modules.quality.service.trend_anomaly_rules import (
     parse_batch_month,
+    spec_direction,
     split_current_history,
 )
 
 # LLM 输出允许的严重度/规则白名单（超出即回退或丢弃，防编造）
 SEVERITY_LEVELS = ("low", "medium", "high")
 CONFIDENCE_LEVELS = ("low", "medium", "high")
+
+_DIRECTION_LABELS: dict[str, str] = {
+    "up_only": "越小越好（只给上限：下降=改善）",
+    "down_only": "越大越好（只给下限：上升=改善）",
+    "both": "双侧要求（上下限都要守，两个方向都可能超限）",
+}
 
 _RULE_LABELS: dict[str, str] = {
     "month_level": "当月较历史抬升/下移",
@@ -56,8 +63,8 @@ def _format_spec_lines(spec_lines: list[dict[str, Any]] | None) -> str:
     )
 
 
-def _format_month_vs_history(points: list[dict[str, Any]]) -> str | None:
-    """「本月 vs 历史」评估主轴文本；样本不足时返回 None。"""
+def _month_vs_history_stats(points: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """「本月 vs 历史」统计（评估主轴）；样本不足时返回 None。"""
     batches = [str(p.get("batch_no") or "") for p in points]
     vals = [float(p["value"]) for p in points if p.get("value") is not None]
     usable = [
@@ -74,15 +81,92 @@ def _format_month_vs_history(points: list[dict[str, Any]]) -> str | None:
         return None
     month_key = parse_batch_month(batches[current_idx[-1]])
     month_label = (
-        f"{month_key // 100}-{month_key % 100:02d}"
-        if month_key
-        else "最近批次"
+        f"{month_key // 100}-{month_key % 100:02d}" if month_key else "最近批次"
     )
+    return {
+        "month_label": month_label,
+        "time_basis": time_basis,
+        "current_mean": fmean(cur),
+        "current_count": len(cur),
+        "history_mean": fmean(hist),
+        "history_count": len(hist),
+        "delta": fmean(cur) - fmean(hist),
+    }
+
+
+def _parse_limit_values(
+    spec_lines: list[dict[str, Any]] | None,
+) -> tuple[float | None, float | None]:
+    """从 OOT/标准限度线取最紧的上限/下限（非"下限"标签按上限语义）。"""
+    upper: float | None = None
+    lower: float | None = None
+    for line in spec_lines or []:
+        label = str(line.get("label") or "")
+        try:
+            value = float(line.get("value"))
+        except (TypeError, ValueError):
+            continue
+        if "下限" in label:
+            lower = value if lower is None else max(lower, value)
+        else:
+            upper = value if upper is None else min(upper, value)
+    return upper, lower
+
+
+def _margin_text(
+    value: float | None,
+    upper: float | None,
+    lower: float | None,
+) -> str:
+    """距最近限度的余量（绝对值 + 占该限度的百分比），供 AI 判断风险紧迫度。"""
+    if value is None:
+        return "（无当前水平数据）"
+    candidates: list[tuple[str, float, float]] = []
+    if upper is not None:
+        candidates.append(("上限", upper, upper - value))
+    if lower is not None:
+        candidates.append(("下限", lower, value - lower))
+    if not candidates:
+        return "（无标准/OOT 限度线）"
+    label, limit, margin = min(candidates, key=lambda item: abs(item[2]))
+    ratio = (
+        f"（余量约占该限度 {margin / abs(limit) * 100:.0f}%）"
+        if abs(limit) > 0
+        else ""
+    )
+    return f"距{label} {limit:g} 还差 {margin:g}{ratio}"
+
+
+def _all_history_band_text(points: list[dict[str, Any]]) -> str | None:
+    """全历史（除评估月）均值±2σ 波动带：AI 判断"是否仍在正常波动内"。"""
+    batches = [str(p.get("batch_no") or "") for p in points]
+    values = [float(p["value"]) for p in points if p.get("value") is not None]
+    if len(values) < 6:
+        return None
+    current_idx, _baseline, _basis = split_current_history(batches, values)
+    current_set = set(current_idx)
+    history = [v for i, v in enumerate(values) if i not in current_set]
+    if len(history) < 3:
+        return None
+    mean = fmean(history)
+    sigma = pstdev(history)
+    return (
+        f"全历史波动带（除评估月）≈ {mean - 2 * sigma:g} ~ {mean + 2 * sigma:g}"
+        f"（均值 {mean:g}）"
+    )
+
+
+def _format_month_vs_history(points: list[dict[str, Any]]) -> str | None:
+    """「本月 vs 历史」评估主轴文本；样本不足时返回 None。"""
+    stats = _month_vs_history_stats(points)
+    if stats is None:
+        return None
     compare = [
-        f"评估月：{month_label}（口径 {time_basis}，{len(cur)} 批）",
-        f"本月均值：{fmean(cur):g}",
-        f"历史均值：{fmean(hist):g}（{len(hist)} 批）",
-        f"本月均值 − 历史均值：{fmean(cur) - fmean(hist):+g}",
+        f"评估月：{stats['month_label']}（口径 {stats['time_basis']}，"
+        f"{stats['current_count']} 批）",
+        f"本月均值：{stats['current_mean']:g}",
+        f"历史均值：{stats['history_mean']:g}（{stats['history_count']} 批）",
+        f"本月均值 − 历史均值：{stats['delta']:+g}",
     ]
     return "\n".join(compare)
 
@@ -233,6 +317,10 @@ def build_product_trend_ai_prompt(
     blocks: list[str] = []
     for index, metric in enumerate(metrics, start=1):
         points = list(metric.get("points") or [])
+        spec_lines = list(metric.get("spec_lines") or [])
+        upper, lower = _parse_limit_values(spec_lines)
+        stats = _month_vs_history_stats(points)
+        cur_mean = stats["current_mean"] if stats else metric.get("mean")
         lines = [
             f"指标{index}：{metric.get('metric_label')}",
             f"样本数：{len(points)}",
@@ -241,11 +329,18 @@ def build_product_trend_ai_prompt(
             "控制限（均值±3σ）："
             f"{_fmt(metric.get('lower_control_limit'))} ~ "
             f"{_fmt(metric.get('upper_control_limit'))}",
-            "限度线（OOT/标准）："
-            f"{_format_spec_lines(metric.get('spec_lines'))}",
+            "限度线（OOT/标准）：" f"{_format_spec_lines(spec_lines)}",
+            f"指标方向：{_DIRECTION_LABELS.get(spec_direction(spec_lines), '-')}",
+            f"当前水平距限度余量：{_margin_text(cur_mean, upper, lower)}",
         ]
+        band_text = _all_history_band_text(points)
+        if band_text:
+            lines.append(band_text)
         month_vs_history = _format_month_vs_history(points)
         if month_vs_history:
+            if stats and stats["history_mean"]:
+                pct = stats["delta"] / abs(stats["history_mean"]) * 100
+                month_vs_history += f"\n偏移幅度：{pct:+.1f}%（占历史均值）"
             lines.append("本月 vs 历史：\n" + month_vs_history)
         anomalies = list(metric.get("anomalies") or [])
         if anomalies:
@@ -266,20 +361,25 @@ def build_product_trend_ai_prompt(
                 if evidence:
                     line += f"；证据：{evidence}"
                 rule_lines.append(line)
-            lines.append("确定性趋势判据命中：\n" + "\n".join(rule_lines))
+            lines.append("粗筛提名（待终审，非既定结论）：\n" + "\n".join(rule_lines))
         else:
-            lines.append("确定性趋势判据命中：（无）")
+            lines.append("粗筛提名（待终审）：（无，仅按统计事实研判）")
         blocks.append("\n".join(lines))
-    parts.append("【各指标统计事实与判据命中】\n" + "\n\n".join(blocks))
+    parts.append("【各指标统计事实与粗筛提名】\n" + "\n\n".join(blocks))
 
     parts.append(
-        "评估口径以各指标「本月 vs 历史」为主轴：先逐指标判断本月均值较历史"
-        "是否抬升/下移、当月批次内是否持续上升/下降、斜率是否突变、近几个月"
-        "月度均值整体走向及按此外推是否逼近限度线；已命中的判据都经过"
-        "「朝限度方向 + 幅度显著超噪声」过滤且全部锚定本月，请围绕它们展开；"
+        "你是本批趋势复核的**终审**：确定性粗筛只做提名，判据命中只是候选，"
+        "是否算异常由你逐项复核裁决。裁决标准（业务第一，不认「统计显著」本身）：\n"
+        "- abnormal（真异常）：变化朝限度方向、幅度有业务意义，且余量在被消耗；\n"
+        "- normal（正常）：仍属正常波动（如落在全历史波动带内，或基线恰处低谷"
+        "而本月只是回归常态）；\n"
+        "- improved（改善）：变化方向是改善（如「越小越好」的指标在下降）。\n"
+        "若偏移方向是改善、或距最近限度余量还很充足（如余量 >80%）且无恶化证据，"
+        "应判 normal/improved，并在结论中明确「平稳、风险可控」，不要把它写成"
+        "需要关注的异常；只有真正朝限度逼近的才判 abnormal 并列入 signals。"
         "历史段已发生的波动属既成事实，不要作为本次异常解读；逐批超出 "
         "均值±3σ/OOT 限度由系统即时告警，无需逐点复述。最后给出产品整体"
-        "研判（以最严重指标为主导）与逐指标一句话结论。"
+        "研判（以最严重指标为主导）与逐指标裁决。"
     )
     parts.append(
         "只输出 JSON，不要任何多余文字，结构严格如下：\n"
@@ -287,9 +387,10 @@ def build_product_trend_ai_prompt(
         '  "summary": "产品整体趋势一句话研判（<=60字）",\n'
         '  "trend_reading": "自然语言解读整体趋势与风险（<=300字）",\n'
         '  "signals": [\n'
-        '    {"batch_no": "代表批次号", "rule_type": '
-        '"month_level|month_slope|slope_change|month_over_month", '
-        '"severity": "low|medium|high", "note": "信号说明，注明所属指标（<=120字）"}\n'
+        '    {"metric_index": "所属指标序号（必填，与输入一致）",\n'
+        '     "batch_no": "代表批次号", "rule_type": '
+        '"month_level|month_slope|slope_change|month_over_month",\n'
+        '     "severity": "low|medium|high", "note": "信号说明（<=120字）"}\n'
         "  ],\n"
         '  "outlook": {"direction": "up|down|flat", '
         '"batches_to_limit": "逼近限度线预计剩余批次数(整数,无法判断填null)", '
@@ -297,9 +398,15 @@ def build_product_trend_ai_prompt(
         '  "recommendation": "建议动作（<=150字）",\n'
         '  "confidence": "low|medium|high",\n'
         '  "metric_findings": [\n'
-        '    {"metric_label": "指标名（与输入一致）",\n'
-        '     "summary": "该指标一句话结论（<=60字）"}\n'
+        '    {"metric_index": "指标序号（必填，与输入一致）",\n'
+        '     "metric_label": "指标名（与输入一致）",\n'
+        '     "verdict": "abnormal|normal|improved",\n'
+        '     "summary": "该指标的裁决结论（<=60字）"}\n'
         "  ]\n"
         "}"
+    )
+    parts.append(
+        "metric_findings 必须覆盖输入的每一个指标序号（不得遗漏）；判据候选即使"
+        "被你判为 normal/improved 也要给出该条结论。signals 只列 abnormal 的。"
     )
     return "\n\n".join(parts)

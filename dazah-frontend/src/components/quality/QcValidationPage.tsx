@@ -22,9 +22,12 @@ import {
 } from '@/actions/quality-validation-qc'
 import { QcValidationDetailDrawer, QC_LIST_FIELD_ORDER } from './QcValidationDetailDrawer'
 import { QcValidationFormModal } from './QcValidationFormModal'
+import { FeishuAttachmentPreviewModal } from './FeishuAttachmentPreviewModal'
 import {
   renderFeishuValue,
   type FeishuAttachmentUrlBuilder,
+  type FeishuAttachmentPreviewContext,
+  type RenderFeishuValueOptions,
 } from './inspection/renderFeishuValue'
 import { TableEmptyState } from './TableEmptyState'
 
@@ -62,6 +65,11 @@ export function QcValidationPage() {
   const [pageSize, setPageSize] = useState(20)
   const [detailRecord, setDetailRecord] = useState<QcValidationRecord | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
+  const [previewFile, setPreviewFile] = useState<{
+    recordId: string
+    fileName: string
+    fileToken: string
+  } | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingRecord, setEditingRecord] = useState<QcValidationRecord | null>(null)
   const [saving, setSaving] = useState(false)
@@ -93,6 +101,24 @@ export function QcValidationPage() {
   const openDetail = (record: QcValidationRecord) => {
     setDetailRecord(record)
     setDetailOpen(true)
+  }
+
+  /** 附件点击进入弹窗预览（图片/PDF 原样，office 由后端转 PDF） */
+  const handleAttachmentPreview: RenderFeishuValueOptions['onAttachmentPreview'] = ({
+    record,
+    attachment,
+  }: FeishuAttachmentPreviewContext) => {
+    const recordId = String(record.record_id ?? '')
+    const fileToken = attachment.file_token || ''
+    if (!recordId || !fileToken) {
+      message.warning('该附件缺少文件标识，无法预览')
+      return
+    }
+    setPreviewFile({
+      recordId,
+      fileName: attachment.name || '附件',
+      fileToken,
+    })
   }
 
   /** 生成并打开该记录在飞书中的行级链接（share link 形式） */
@@ -172,6 +198,7 @@ export function QcValidationPage() {
                 {renderFeishuValue(record[fieldName], record, undefined, message, {
                   uiType: meta?.ui_type,
                   attachmentUrlBuilder: qcAttachmentUrlBuilder(year),
+                  onAttachmentPreview: handleAttachmentPreview,
                 })}
               </a>
             ) : (
@@ -179,6 +206,7 @@ export function QcValidationPage() {
                 {renderFeishuValue(record[fieldName], record, undefined, message, {
                   uiType: meta?.ui_type,
                   attachmentUrlBuilder: qcAttachmentUrlBuilder(year),
+                  onAttachmentPreview: handleAttachmentPreview,
                 })}
               </div>
             )
@@ -329,10 +357,27 @@ export function QcValidationPage() {
         record={detailRecord}
         fieldMetas={fieldMetas}
         attachmentUrlBuilder={qcAttachmentUrlBuilder(year)}
+        onAttachmentPreview={handleAttachmentPreview}
         onClose={() => {
           setDetailOpen(false)
           setDetailRecord(null)
         }}
+      />
+
+      <FeishuAttachmentPreviewModal
+        open={previewFile !== null}
+        fileName={previewFile?.fileName ?? ''}
+        previewSrc={
+          previewFile
+            ? `/api/v1/quality/validation-qc/records/${encodeURIComponent(previewFile.recordId)}/attachments/${encodeURIComponent(previewFile.fileToken)}/preview?year=${year}`
+            : ''
+        }
+        downloadSrc={
+          previewFile
+            ? qcAttachmentUrlBuilder(year)('', previewFile.recordId, previewFile.fileToken)
+            : ''
+        }
+        onClose={() => setPreviewFile(null)}
       />
 
       <QcValidationFormModal
