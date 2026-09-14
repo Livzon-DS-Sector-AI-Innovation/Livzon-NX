@@ -39,7 +39,7 @@ async def test_identity_precedes_stale_wildcard_cache(
         {
             "type": "http",
             "method": "GET",
-            "path": "/api/v1/hr/test",
+            "path": "/api/v1/identity/admin/roles",
             "headers": [(b"authorization", f"Bearer {token}".encode())],
             "app": SimpleNamespace(dependency_overrides={}),
         }
@@ -54,9 +54,6 @@ async def test_identity_precedes_stale_wildcard_cache(
     monkeypatch.setattr(permission_cache, "set_cached_permissions", AsyncMock())
     resolve = AsyncMock(return_value=[])
     monkeypatch.setattr(middleware, "resolve_user_permissions", resolve)
-    monkeypatch.setattr(
-        middleware.PagePermissionRepository, "get_rollout", AsyncMock(return_value=None)
-    )
     instance = middleware.PermissionMiddleware(None)
     monkeypatch.setattr(
         instance, "_maybe_renew", AsyncMock(return_value=Response(status_code=200))

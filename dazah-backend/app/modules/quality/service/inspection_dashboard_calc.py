@@ -10,9 +10,10 @@ import asyncio
 import logging
 import re
 import uuid as uuid_module
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from statistics import StatisticsError, fmean, pstdev
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -28,6 +29,9 @@ from app.modules.quality.feishu_notification import (
 )
 from app.modules.quality.models.finished_trend_ai_analysis import (
     FinishedTrendAIAnalysis,
+)
+from app.modules.quality.models.finished_trend_alert_escalation import (
+    QualityTrendAlertEscalation,
 )
 from app.modules.quality.models.finished_trend_alert_notification import (
     FinishedTrendAlertNotification,
@@ -62,9 +66,16 @@ from app.modules.quality.service.quality_feishu_pages import (
 )
 from app.modules.quality.service.quality_notification_settings import (
     load_inspection_trend_alert_config,
+    load_inspection_trend_alert_escalation_config,
 )
-from app.modules.quality.service.trend_ai_analysis import run_trend_ai_analysis
-from app.modules.quality.service.trend_anomaly_rules import detect_trend_anomalies
+from app.modules.quality.service.trend_ai_analysis import (
+    run_product_trend_ai_analysis,
+    run_trend_ai_analysis,
+)
+from app.modules.quality.service.trend_anomaly_rules import (
+    batch_is_current_month,
+    detect_trend_anomalies,
+)
 from app.modules.quality.service.trend_chart_render import render_trend_chart_png
 
 logger = logging.getLogger(__name__)
@@ -364,26 +375,48 @@ async def _resolve_dashboard_recipients(
                     email=item.get("email"),
                 )
             )
-        return recipients
-
-    override_configs = FINISHED_DASHBOARD_RECIPIENT_OVERRIDES.get(entity_code)
-    if override_configs:
-        recipients = []
-        for item in override_configs:
-            recipients.append(
-                await _resolve_recipient_by_name(
-                    db,
-                    name=str(item["name"]),
-                    open_id=item.get("open_id"),
-                    email=item.get("email"),
+    else:
+        override_configs = FINISHED_DASHBOARD_RECIPIENT_OVERRIDES.get(entity_code)
+        if override_configs:
+            recipients = []
+            for item in override_configs:
+                recipients.append(
+                    await _resolve_recipient_by_name(
+                        db,
+                        name=str(item["name"]),
+                        open_id=item.get("open_id"),
+                        email=item.get("email"),
+                    )
                 )
-            )
-        return recipients
+        else:
+            recipient = await _resolve_refining_recipient(db, batch_no)
+            recipients = [recipient] if recipient is not None else []
 
-    recipient = await _resolve_refining_recipient(db, batch_no)
-    if recipient is None:
-        return []
-    return [recipient]
+    # 产品QA（每条产品线可单独设置）并入收件人；同名/同 open_id 去重。
+    # 单人解析失败只跳过该人，不拖垮整波告警
+    qa_configs: list[Any] = (
+        line_config.get("qa_recipients") if isinstance(line_config, dict) else None
+    ) or []
+    seen = {
+        str(item.get("open_id") or item.get("name") or "").strip()
+        for item in recipients
+    }
+    for item in qa_configs:
+        name = str(item.get("name") or "")
+        open_id = str(item.get("open_id") or "").strip()
+        key = open_id or name
+        if not key or key in seen:
+            continue
+        try:
+            resolved = await _resolve_recipient_by_name(
+                db, name=name, open_id=open_id or None, email=item.get("email")
+            )
+        except Exception as exc:  # noqa: BLE001 —— 人员目录异常时跳过该 QA
+            logger.warning("QA 收件人解析失败（%s）: %s", key, type(exc).__name__)
+            continue
+        seen.add(str(resolved.get("open_id") or resolved.get("name") or "").strip())
+        recipients.append(resolved)
+    return recipients
 
 
 def _join_recipient_field(
@@ -400,6 +433,258 @@ def _join_recipient_field(
     if not values:
         return None
     return delimiter.join(dict.fromkeys(values))
+
+
+async def _materialize_merged_dashboard_alerts(
+    db: AsyncSession,
+    *,
+    sender_user_open_id: str | None,
+    source_label: str,
+    entity_code: str,
+    points: list[dict[str, Any]],
+    mean: float | None,
+    std_dev: float | None,
+    upper_control_limit: float | None,
+    lower_control_limit: float | None,
+    spec_lines: list[dict[str, float | str]],
+    line_config: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """同一产品的当月超标点**合并为一张飞书卡**发送；逐点写去重行。
+
+    - dedup：已有通知记录且状态非 unmapped/missing_open_id 的点不再发送；
+    - unmapped/missing_open_id 旧记录随本次合并卡一并补发并更新状态；
+    - 发送成功后每个超标点入升级队列（2 小时复检仍异常 → 部门负责人）。
+    """
+    trend_config = await load_inspection_trend_alert_config(db)
+    notifications_paused = not trend_config.is_enabled
+    line_paused = bool(line_config and not line_config.get("enabled", True))
+    if notifications_paused or line_paused:
+        error = (
+            "该产品线趋势异常提醒已停用"
+            if line_paused
+            else "趋势异常提醒通知已停用"
+        )
+        return [
+            _build_paused_dashboard_alert(
+                entity_code=entity_code,
+                batch_no=p["batch_no"],
+                metric_key=p["metric_key"],
+                metric_label=p["metric_label"],
+                actual_value=p["actual_value"],
+                mean=mean,
+                std_dev=std_dev,
+                upper_control_limit=upper_control_limit,
+                lower_control_limit=lower_control_limit,
+                spec_lines=spec_lines,
+                error=error,
+            )
+            for p in points
+        ]
+
+    fresh: list[dict[str, Any]] = []
+    retry_rows: list[FinishedTrendAlertNotification] = []
+    dedup_alerts: list[dict[str, Any]] = []
+    for p in points:
+        existing = await _get_existing_dashboard_notification(
+            db, entity_code, p["batch_no"], p["metric_key"]
+        )
+        if existing is None:
+            fresh.append(p)
+        elif existing.notification_status in {"unmapped", "missing_open_id"}:
+            retry_rows.append(existing)
+        else:
+            dedup_alerts.append(
+                _serialize_dashboard_alert(
+                    notification=existing,
+                    mean=mean,
+                    std_dev=std_dev,
+                    spec_lines=spec_lines,
+                    notification_deduplicated=True,
+                )
+            )
+    if dedup_alerts and not fresh and not retry_rows:
+        return dedup_alerts
+
+    first_batch = (
+        (fresh[0]["batch_no"] if fresh else "")
+        or (retry_rows[0].batch_no if retry_rows else "")
+        or ""
+    )
+    recipients = await _resolve_dashboard_recipients(
+        db, entity_code=entity_code, batch_no=first_batch, line_config=line_config
+    )
+    if not recipients:
+        rows = []
+        for p in fresh or points:
+            rows.append(
+                await _create_dashboard_notification(
+                    db,
+                    entity_code=entity_code,
+                    batch_no=p["batch_no"],
+                    metric_key=p["metric_key"],
+                    metric_label=p["metric_label"],
+                    actual_value=p["actual_value"],
+                    upper_control_limit=upper_control_limit,
+                    lower_control_limit=lower_control_limit,
+                    notification_status="unmapped",
+                )
+            )
+        return [
+            _serialize_dashboard_alert(
+                notification=row,
+                mean=mean,
+                std_dev=std_dev,
+                spec_lines=spec_lines,
+                notification_deduplicated=False,
+                notification_error="未找到通知对象",
+            )
+            for row in rows
+        ]
+    if not any(
+        r.get("open_id") or r.get("email") for r in recipients
+    ):
+        rows = []
+        for p in fresh:
+            rows.append(
+                await _create_dashboard_notification(
+                    db,
+                    entity_code=entity_code,
+                    batch_no=p["batch_no"],
+                    metric_key=p["metric_key"],
+                    metric_label=p["metric_label"],
+                    actual_value=p["actual_value"],
+                    upper_control_limit=upper_control_limit,
+                    lower_control_limit=lower_control_limit,
+                    notification_status="missing_open_id",
+                )
+            )
+        return [
+            _serialize_dashboard_alert(
+                notification=row,
+                mean=mean,
+                std_dev=std_dev,
+                spec_lines=spec_lines,
+                notification_deduplicated=False,
+                notification_error="未找到通知对象 open_id 或邮箱",
+            )
+            for row in rows
+        ]
+
+    # 合并卡正文：按指标分组列出超标批次
+    by_metric: dict[str, list[dict[str, Any]]] = {}
+    for p in fresh:
+        by_metric.setdefault(p["metric_label"], []).append(p)
+    metric_lines = [
+        f"- {m}："
+        + "、".join(
+            f"{p['batch_no']}（{_fmt2(p['actual_value'])}）" for p in items
+        )
+        + f"｜±3σ {_fmt2(lower_control_limit)} ~ {_fmt2(upper_control_limit)}"
+        for m, items in by_metric.items()
+    ]
+    spec_line_text = " / ".join(
+        f"{str(item['label'])} {_fmt2(float(item['value']))}"
+        for item in (spec_lines or [])
+    ) or "-"
+    sigma_text = (
+        "\n**平均值±3σ：**"
+        f"{_fmt2(lower_control_limit)} ~ {_fmt2(upper_control_limit)}\n"
+    )
+    content = (
+        f"**产品系列：**{source_label}\n"
+        f"**当月超标批次：**共 {len(fresh)} 批 / {len(by_metric)} 项指标\n"
+        + "\n".join(metric_lines)
+        + sigma_text
+        + f"**限度线：**{spec_line_text}\n"
+        "请进入质量检验页面查看趋势仪表盘明细。"
+    )
+
+    sent_ids: list[str] = []
+    failed_names: list[str] = []
+    for r in recipients:
+        name = str(r.get("name") or "").strip() or "未知对象"
+        message_id = None
+        if (r.get("open_id") or "").strip():
+            message_id = await send_user_card_with_message_id(
+                open_id=str(r["open_id"]),
+                title=f"{source_label}趋势异常提醒",
+                content=content,
+            )
+        if not message_id and (r.get("email") or "").strip():
+            message_id = await send_user_card_with_message_id(
+                open_id=str(r["email"]),
+                title=f"{source_label}趋势异常提醒",
+                content=content,
+                receive_id_type="email",
+            )
+        if message_id:
+            sent_ids.append(message_id)
+        else:
+            failed_names.append(name)
+
+    if sent_ids:
+        status = "sent" if not failed_names else "partial"
+        error = (
+            f"以下通知对象发送失败：{'、'.join(failed_names)}"
+            if failed_names
+            else None
+        )
+    else:
+        status = "failed"
+        error = (
+            f"以下通知对象发送失败：{'、'.join(failed_names)}"
+            if failed_names
+            else "飞书通知发送失败"
+        )
+    message_id = ",".join(sent_ids) or None
+    notified_at = datetime.now(UTC) if sent_ids else None
+
+    rows: list[FinishedTrendAlertNotification] = []
+    for p in fresh:
+        rows.append(
+            await _create_dashboard_notification(
+                db,
+                entity_code=entity_code,
+                batch_no=p["batch_no"],
+                metric_key=p["metric_key"],
+                metric_label=p["metric_label"],
+                actual_value=p["actual_value"],
+                upper_control_limit=upper_control_limit,
+                lower_control_limit=lower_control_limit,
+                recipient_name=_join_recipient_field(
+                    recipients, "name", delimiter="、"
+                ),
+                recipient_open_id=_join_recipient_field(
+                    recipients, "open_id", delimiter=","
+                ),
+                notification_status=status,
+                feishu_message_id=message_id,
+                notified_at=notified_at,
+            )
+        )
+    for row in retry_rows:
+        row.notification_status = status
+        row.feishu_message_id = message_id
+        row.notified_at = notified_at
+        await db.commit()
+        refreshed = await db.execute(
+            select(FinishedTrendAlertNotification).where(
+                FinishedTrendAlertNotification.id == row.id
+            )
+        )
+        rows.append(refreshed.scalar_one())
+
+    return [
+        _serialize_dashboard_alert(
+            notification=row,
+            mean=mean,
+            std_dev=std_dev,
+            spec_lines=spec_lines,
+            notification_deduplicated=False,
+            notification_error=error,
+        )
+        for row in rows
+    ]
 
 
 async def _send_dashboard_alert_notifications(
@@ -494,6 +779,13 @@ async def _resolve_refining_recipient(
     }
 
 
+def _fmt2(value: float | None) -> str:
+    """卡片数值统一保留 2 位小数（去除多余的尾零）。"""
+    if value is None:
+        return "-"
+    return f"{float(value):.2f}"
+
+
 async def _send_mpa_alert_notification(
     *,
     db: AsyncSession,
@@ -510,7 +802,7 @@ async def _send_mpa_alert_notification(
 ) -> dict[str, str | None]:
     spec_line_text = (
         " / ".join(
-            f"{str(item['label'])} {float(item['value']):g}"
+            f"{str(item['label'])} {_fmt2(float(item['value']))}"
             for item in (spec_lines or [])
         )
         or "-"
@@ -519,10 +811,9 @@ async def _send_mpa_alert_notification(
         f"**产品系列：**{source_label}\n"
         f"**批号：**{batch_no}\n"
         f"**异常指标：**{metric_label}\n"
-        f"**实际值：**{actual_value}\n"
-        "**控制边界：**"
-        f"{lower_control_limit if lower_control_limit is not None else '-'}"
-        f" ~ {upper_control_limit if upper_control_limit is not None else '-'}\n"
+        f"**实际值：**{_fmt2(actual_value)}\n"
+        "**平均值±3σ：**"
+        f"{_fmt2(lower_control_limit)} ~ {_fmt2(upper_control_limit)}\n"
         f"**限度线：**{spec_line_text}\n"
         f"请进入质量检验页面查看趋势仪表盘明细。"
     )
@@ -899,6 +1190,41 @@ async def _materialize_dashboard_alert(
             notification_error="未找到通知对象",
         )
 
+    # 升级推送：首波并入首推人（通知设置页可配置）
+    escalation_hours: int | None = None
+    try:
+        escalation_config = await load_inspection_trend_alert_escalation_config(db)
+    except Exception as exc:  # noqa: BLE001 —— 配置读取失败不影响首波告警
+        logger.warning("升级配置读取失败: %s", type(exc).__name__)
+        escalation_config = None
+    if (
+        escalation_config is not None
+        and escalation_config.is_enabled
+        and escalation_config.first_recipients
+    ):
+        escalation_hours = escalation_config.escalation_hours
+        seen = {
+            str(item.get("open_id") or item.get("name") or "").strip()
+            for item in recipients
+        }
+        for item in escalation_config.first_recipients:
+            name = str(item.get("name") or "")
+            open_id = str(item.get("open_id") or "").strip()
+            key = open_id or name
+            if not key or key in seen:
+                continue
+            try:
+                resolved = await _resolve_recipient_by_name(
+                    db, name=name, open_id=open_id or None
+                )
+            except Exception as exc:  # noqa: BLE001 —— 单人解析失败跳过，不拖垮首波
+                logger.warning("首推人解析失败（%s）: %s", key, type(exc).__name__)
+                continue
+            seen.add(
+                str(resolved.get("open_id") or resolved.get("name") or "").strip()
+            )
+            recipients.append(resolved)
+
     recipient_name = _join_recipient_field(recipients, "name", delimiter="、")
     recipient_open_id = _join_recipient_field(recipients, "open_id", delimiter=",")
 
@@ -957,6 +1283,36 @@ async def _materialize_dashboard_alert(
         feishu_message_id=send_result.get("message_id"),
         notified_at=notified_at,
     )
+    if send_result["status"] in {"sent", "partial"} and escalation_hours:
+        # 首波成功后入升级队列：到点由周期 Generator 复检，仍异常推各部门负责人
+        try:
+            db.add(
+                QualityTrendAlertEscalation(
+                    entity_code=entity_code,
+                    source_label=source_label,
+                    batch_no=batch_no,
+                    metric_key=metric_key,
+                    metric_label=metric_label,
+                    payload={
+                        "actual_value": actual_value,
+                        "mean": mean,
+                        "std_dev": std_dev,
+                        "upper_control_limit": upper_control_limit,
+                        "lower_control_limit": lower_control_limit,
+                        "spec_lines": spec_lines,
+                        "escalation_hours": escalation_hours,
+                    },
+                    first_message_id=send_result.get("message_id"),
+                    first_notified_at=notified_at,
+                    status="pending",
+                    escalate_at=datetime.now(UTC)
+                    + timedelta(hours=escalation_hours),
+                )
+            )
+            await db.commit()
+        except Exception as exc:  # noqa: BLE001 —— 入队失败不影响首波告警
+            logger.warning("升级队列入队失败: %s", type(exc).__name__)
+            await db.rollback()
     return _serialize_dashboard_alert(
         notification=record,
         mean=mean,
@@ -971,9 +1327,20 @@ async def _materialize_dashboard_alert(
 
 # 趋势 AI 后台任务整单超时保护（渲染 + 上传 + 一次 LLM + 推送），秒
 _TREND_AI_TOTAL_TIMEOUT = 240
-_TREND_AI_TERMINAL_STATUSES = {"sent", "partial", "failed", "unmapped", "ai_failed"}
+_TREND_AI_TERMINAL_STATUSES = {
+    "sent",
+    "partial",
+    "failed",
+    "unmapped",
+    "ai_failed",
+    "completed",
+}
 # AI 按月固定：整体分析行的规则类型与周期键（trend_end_batch 孈YYYY-MM）
 TREND_OVERALL_RULE = "monthly_overall"
+# 产品级月度AI行的指标哨兵：一个产品每月只建一行、只调一次模型、只发一张合并卡
+# （全部指标合并），硬编码防止逐指标多卡触发飞书限流
+TREND_PRODUCT_METRIC_KEY = "__product__"
+TREND_PRODUCT_METRIC_LABEL = "全部指标"
 
 
 def _trend_period() -> str:
@@ -1092,21 +1459,50 @@ def _build_trend_ai_markdown(
     metric_label: str,
     anomaly: FinishedTrendAIAnalysis,
 ) -> str:
-    lines = [
-        f"**产品系列：**{source_label}",
-        f"**检测指标：**{metric_label}",
-        f"**趋势判据：**{anomaly.description or anomaly.rule_type}",
-        f"**触发区间：**{anomaly.trend_start_batch or '-'} ~ {anomaly.trend_end_batch}",
-    ]
     summary = anomaly.ai_summary or {}
-    if summary.get("summary"):
-        lines.append(f"**AI 研判：**{summary['summary']}")
-    outlook = summary.get("outlook") or {}
-    btl = outlook.get("batches_to_limit") if isinstance(outlook, dict) else None
-    if btl is not None:
-        lines.append(f"**趋势外推：**按当前方向预计约 {btl} 批后逼近限度线")
-    if summary.get("recommendation"):
-        lines.append(f"**建议：**{summary['recommendation']}")
+    lines: list[str]
+    if anomaly.metric_key == TREND_PRODUCT_METRIC_KEY:
+        # 产品级合并卡：整体研判 + 逐指标结论，一张卡覆盖全部指标
+        lines = [
+            f"**产品系列：**{source_label}",
+            f"**分析周期：**{anomaly.trend_end_batch}",
+            f"**覆盖指标：**{metric_label}",
+        ]
+        if summary.get("summary"):
+            lines.append(f"**AI 整体研判：**{summary['summary']}")
+        findings = [
+            item
+            for item in (summary.get("metric_findings") or [])
+            if isinstance(item, dict) and item.get("summary")
+        ]
+        if findings:
+            finding_lines = [
+                f"- {item.get('metric_label')}：{item.get('summary')}"
+                for item in findings
+            ]
+            lines.append("**各指标结论：**\n" + "\n".join(finding_lines))
+        outlook = summary.get("outlook") or {}
+        btl = outlook.get("batches_to_limit") if isinstance(outlook, dict) else None
+        if btl is not None:
+            lines.append(f"**趋势外推：**按当前方向预计约 {btl} 批后逼近限度线")
+        if summary.get("recommendation"):
+            lines.append(f"**建议：**{summary['recommendation']}")
+    else:
+        lines = [
+            f"**产品系列：**{source_label}",
+            f"**检测指标：**{metric_label}",
+            f"**趋势判据：**{anomaly.description or anomaly.rule_type}",
+            "**触发区间：**"
+            f"{anomaly.trend_start_batch or '-'} ~ {anomaly.trend_end_batch}",
+        ]
+        if summary.get("summary"):
+            lines.append(f"**AI 研判：**{summary['summary']}")
+        outlook = summary.get("outlook") or {}
+        btl = outlook.get("batches_to_limit") if isinstance(outlook, dict) else None
+        if btl is not None:
+            lines.append(f"**趋势外推：**按当前方向预计约 {btl} 批后逼近限度线")
+        if summary.get("recommendation"):
+            lines.append(f"**建议：**{summary['recommendation']}")
     lines.append("点开下方按钮查看完整趋势仪表盘与 AI 分析。")
     return "\n".join(lines)
 
@@ -1117,7 +1513,7 @@ async def _send_trend_ai_card(
     sender_user_open_id: str | None,
     anomaly: FinishedTrendAIAnalysis,
     payload: dict[str, Any],
-    image_key: str | None,
+    chart_images: list[tuple[str, str]] | None,
 ) -> dict[str, str | None]:
     line_config = (await load_inspection_trend_alert_config(db)).lines.get(
         anomaly.entity_code
@@ -1145,9 +1541,15 @@ async def _send_trend_ai_card(
         anomaly=anomaly,
     )
     elements: list[dict[str, Any]] = []
-    if image_key:
+    for chart_label, chart_img_key in chart_images or []:
+        # 产品级多图：每张图前加指标小标题，避免多图堆叠分不清归属
+        if len(chart_images or []) > 1:
+            elements.append(
+                {"tag": "markdown", "content": f"**趋势图：{chart_label}**"}
+            )
+        # 飞书卡片图片组件的字段是 img_key（image_key 是上传接口的响应字段名）
         elements.append(
-            {"tag": "img", "image_key": image_key, "alt": {"content": "趋势图"}}
+            {"tag": "img", "img_key": chart_img_key, "alt": {"content": "趋势图"}}
         )
     deep_link = _build_trend_deep_link(
         payload.get("frontend_group"),
@@ -1171,7 +1573,11 @@ async def _send_trend_ai_card(
 
     sent_ids: list[str] = []
     failed_names: list[str] = []
-    title = f"{payload.get('source_label') or anomaly.source_label or ''}趋势异常提醒"
+    label = str(payload.get("source_label") or anomaly.source_label or "")
+    if anomaly.metric_key == TREND_PRODUCT_METRIC_KEY:
+        title = f"{label}月度趋势AI分析（{anomaly.trend_end_batch}）"
+    else:
+        title = f"{label}趋势异常提醒"
     for recipient in recipients:
         name = str(recipient.get("name") or "").strip() or "未知对象"
         message_id = None
@@ -1247,12 +1653,106 @@ async def _run_trend_ai_job(
             return {"status": "failed", "error": type(exc).__name__}
 
 
+async def _execute_product_trend_job(
+    db: AsyncSession,
+    anomaly: FinishedTrendAIAnalysis,
+    payload: dict[str, Any],
+    sender_user_open_id: str | None,
+) -> None:
+    """产品级月度AI job：一次模型调用汇总全部命中指标 → 一张合并卡。
+
+    硬编码一个产品只发一张卡（含各指标结论+首图），防止逐指标多卡
+    触发飞书卡片限流。
+    """
+    metrics = [
+        dict(item)
+        for item in (payload.get("metrics") or [])
+        if isinstance(item, dict)
+    ]
+    # 1. AI 汇总分析（无论是否推送都执行，供页面回看）
+    ai_result = await run_product_trend_ai_analysis(
+        source_label=str(payload.get("source_label") or anomaly.source_label or ""),
+        period=str(anomaly.trend_end_batch),
+        metrics=metrics,
+    )
+    if ai_result["status"] == "completed":
+        summary = dict(ai_result["ai_summary"] or {})
+        summary["affected_batches"] = list(anomaly.affected_batches or [])
+        anomaly.ai_summary = summary
+        anomaly.model_name = ai_result.get("model_name")
+    else:
+        anomaly.ai_summary = None
+        anomaly.model_name = ai_result.get("model_name")
+
+    # 2. 通知开关检查（全局 + 产品线）+ 手动重分析的"不发消息"开关
+    suppress_send = bool(payload.get("suppress_send"))
+    trend_config = await load_inspection_trend_alert_config(db)
+    line_config = trend_config.lines.get(anomaly.entity_code)
+    line_paused = bool(line_config and not line_config.get("enabled", True))
+    if not trend_config.is_enabled or line_paused:
+        anomaly.notification_status = "paused"
+        return
+    if suppress_send:
+        # 手动「重新分析」+ 设置关闭发送：只更新结论，不推送
+        anomaly.notification_status = "completed"
+        return
+
+    # 3. 趋势图：每个命中指标各渲染一张，全部并入同一张卡（不逐指标发卡）
+    chart_images: list[tuple[str, str]] = []
+    source = str(payload.get("source_label") or anomaly.source_label or "")
+    for chart_metric in metrics:
+        if not chart_metric.get("anomalies") or not chart_metric.get("categories"):
+            continue  # 未命中/无数据的指标不出图
+        png = render_trend_chart_png(
+            metric_label=str(chart_metric.get("metric_label") or ""),
+            source_label=source,
+            categories=list(chart_metric.get("categories") or []),
+            actual_series=list(chart_metric.get("actual_series") or []),
+            mean=chart_metric.get("mean"),
+            upper_control_limit=chart_metric.get("upper_control_limit"),
+            lower_control_limit=chart_metric.get("lower_control_limit"),
+            spec_lines=list(chart_metric.get("spec_lines") or []),
+            highlight_batches=[
+                b
+                for a in (chart_metric.get("anomalies") or [])
+                for b in (a.get("affected_batches") or [])
+            ],
+        )
+        if not png:
+            continue
+        image_key = await upload_image(png, file_name="trend_product_ai.png")
+        if image_key:
+            chart_images.append(
+                (str(chart_metric.get("metric_label") or ""), image_key)
+            )
+    anomaly.feishu_image_key = chart_images[0][1] if chart_images else None
+
+    # 4. 推送（一张合并卡，含全部指标趋势图）
+    send_result = await _send_trend_ai_card(
+        db,
+        sender_user_open_id=sender_user_open_id,
+        anomaly=anomaly,
+        payload=payload,
+        chart_images=chart_images,
+    )
+    anomaly.notification_status = str(send_result["status"])
+    anomaly.feishu_message_id = send_result.get("message_id")
+    if send_result["status"] in {"sent", "partial"}:
+        anomaly.notified_at = datetime.now(UTC)
+
+
+_SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
+
+
 async def _execute_trend_ai_job(
     db: AsyncSession,
     anomaly: FinishedTrendAIAnalysis,
     payload: dict[str, Any],
     sender_user_open_id: str | None,
 ) -> None:
+    if anomaly.metric_key == TREND_PRODUCT_METRIC_KEY:
+        await _execute_product_trend_job(db, anomaly, payload, sender_user_open_id)
+        return
     # 1. AI 分析（无论是否推送都执行，供页面回看）；整体分析带上当月全部判据命中
     job_anomalies = list(payload.get("anomalies") or [])
     if not job_anomalies:
@@ -1286,12 +1786,17 @@ async def _execute_trend_ai_job(
         anomaly.ai_summary = None
         anomaly.model_name = ai_result.get("model_name")
 
-    # 2. 通知开关检查（全局 + 产品线）
+    # 2. 通知开关检查（全局 + 产品线）+ 手动重分析的"不发消息"开关
+    suppress_send = bool(payload.get("suppress_send"))
     trend_config = await load_inspection_trend_alert_config(db)
     line_config = trend_config.lines.get(anomaly.entity_code)
     line_paused = bool(line_config and not line_config.get("enabled", True))
     if not trend_config.is_enabled or line_paused:
         anomaly.notification_status = "paused"
+        return
+    if suppress_send:
+        # 手动「重新分析」+ 设置关闭发送：只更新结论，不推送
+        anomaly.notification_status = "completed"
         return
 
     # 3. 渲染趋势图 + 上传（失败降级为无图仍发送）
@@ -1311,13 +1816,16 @@ async def _execute_trend_ai_job(
         image_key = await upload_image(png, file_name="trend_anomaly.png")
     anomaly.feishu_image_key = image_key
 
-    # 4. 推送
+    # 4. 推送（单指标兜底路径：一张图）
+    chart_images = (
+        [(anomaly.metric_label, image_key)] if image_key else []
+    )
     send_result = await _send_trend_ai_card(
         db,
         sender_user_open_id=sender_user_open_id,
         anomaly=anomaly,
         payload=payload,
-        image_key=image_key,
+        chart_images=chart_images,
     )
     anomaly.notification_status = str(send_result["status"])
     anomaly.feishu_message_id = send_result.get("message_id")
@@ -1342,80 +1850,72 @@ async def _submit_trend_ai_job(
     )
 
 
-async def _process_metric_trend(
+async def _process_product_trend(
     db: AsyncSession,
     *,
     sender_user_open_id: str | None,
     source_label: str,
     entity_code: str,
     frontend_group: str | None,
-    metric_key: str,
-    metric_label: str,
-    points: list[dict[str, Any]],
-    mean: float | None,
-    std_dev: float | None,
-    upper_control_limit: float | None,
-    lower_control_limit: float | None,
-    spec_lines: list[dict[str, float | str]],
-) -> tuple[list[dict[str, Any]], InspectionDashboardTrendAI | None, str]:
-    """对单指标跑确定性趋势规则，并按「每月一次」维护整体 AI 分析。
+    metric_ctxs: list[dict[str, Any]],
+    period: str,
+) -> tuple[InspectionDashboardTrendAI | None, str]:
+    """产品级月度AI：一个产品一次分析、一张合并卡（硬编码防卡片限流）。
 
-    - 规则命中每次打开都实时重算（确定性、零成本），随响应返回供图表展示；
-    - AI 结论按 (entity, metric, 月份) 固定：当月已有分析记录就直接用缓存，
-      页面刷新不重复触发；当月首次出现命中、或上月 AI 失败时才提交后台任务；
-    - 无任何命中则不做 AI。
-    返回 (序列化的 trend_anomalies, 整体 trend_ai 展示模型, trend_ai_status)。
+    - 各指标的确定性判据在页面循环里已实时算好并随响应返回；
+    - AI 按 (entity, __product__, 月) 一行固定：当月已有记录直接用缓存，
+      页面刷新不重复触发；任一指标命中判据才建行提交后台任务（一次模型
+      调用汇总全部命中指标，一张合并卡推送），无命中则不做 AI；
+    - 返回 (产品级 trend_ai 展示模型, status)，供该产品全部指标 chart 共享。
     """
-    anomalies = detect_trend_anomalies(
-        points,
-        mean=mean,
-        std_dev=std_dev,
-        upper_control_limit=upper_control_limit,
-        lower_control_limit=lower_control_limit,
-        spec_lines=spec_lines,
-    )
-    serialized = [
-        InspectionDashboardTrendAnomaly(
-            rule_type=anomaly.rule_type,
-            severity=anomaly.severity,
-            start_batch=anomaly.start_batch,
-            end_batch=anomaly.end_batch,
-            description=anomaly.description,
-            evidence=anomaly.evidence,
-            affected_batches=list(anomaly.affected_batches),
-        ).model_dump(mode="json")
-        for anomaly in anomalies
+    hit_metrics = [
+        ctx for ctx in metric_ctxs if ctx.get("serialized_anomalies")
     ]
-    if not anomalies:
-        return serialized, None, "none"
+    if not hit_metrics:
+        return None, "none"
 
-    period = _trend_period()
-    snapshot = {
-        "points": points,
-        "categories": [str(p["batch_no"]) for p in points],
-        "actual_series": [float(p["value"]) for p in points],
-        "mean": mean,
-        "std_dev": std_dev,
-        "upper_control_limit": upper_control_limit,
-        "lower_control_limit": lower_control_limit,
-        "spec_lines": spec_lines,
+    payload = {
         "source_label": source_label,
         "frontend_group": frontend_group,
-        # 整体分析：把当月全部判据命中一起交给 AI
-        "anomalies": serialized,
+        "metrics": [
+            {
+                "metric_key": ctx["metric_key"],
+                "metric_label": ctx["metric_label"],
+                "points": ctx["points"],
+                "categories": ctx["categories"],
+                "actual_series": ctx["actual_series"],
+                "mean": ctx["mean"],
+                "std_dev": ctx["std_dev"],
+                "upper_control_limit": ctx["upper_control_limit"],
+                "lower_control_limit": ctx["lower_control_limit"],
+                "spec_lines": ctx["spec_lines"],
+                "anomalies": ctx["serialized_anomalies"],
+            }
+            for ctx in hit_metrics
+        ],
     }
-    affected = sorted({b for a in anomalies for b in a.affected_batches})
-    severity_order = {"high": 0, "medium": 1, "low": 2}
+    affected = sorted(
+        {
+            str(batch)
+            for ctx in hit_metrics
+            for item in ctx["serialized_anomalies"]
+            for batch in (item.get("affected_batches") or [])
+        }
+    )
+    all_anomalies = [
+        item for ctx in hit_metrics for item in ctx["serialized_anomalies"]
+    ]
     top_severity = min(
-        (str(a["severity"]) for a in serialized),
-        key=lambda s: severity_order.get(s, 3),
+        (str(item["severity"]) for item in all_anomalies),
+        key=lambda s: _SEVERITY_ORDER.get(s, 3),
         default="medium",
     )
+    hit_labels = [str(ctx["metric_label"]) for ctx in hit_metrics]
 
     row = await _get_existing_trend_ai(
         db,
         entity_code=entity_code,
-        metric_key=metric_key,
+        metric_key=TREND_PRODUCT_METRIC_KEY,
         rule_type=TREND_OVERALL_RULE,
         trend_end_batch=period,
     )
@@ -1424,15 +1924,18 @@ async def _process_metric_trend(
             entity_code=entity_code,
             source_label=source_label,
             frontend_group=frontend_group,
-            metric_key=metric_key,
-            metric_label=metric_label,
+            metric_key=TREND_PRODUCT_METRIC_KEY,
+            metric_label=TREND_PRODUCT_METRIC_LABEL,
             rule_type=TREND_OVERALL_RULE,
             severity=top_severity,
-            trend_start_batch=serialized[0]["start_batch"] or "",
+            trend_start_batch=affected[0] if affected else "",
             trend_end_batch=period,
-            description=f"月度整体趋势分析（{period}，命中 {len(serialized)} 项判据）",
-            evidence={"period": period, "anomalies": serialized},
-            payload=snapshot,
+            description=(
+                f"月度整体趋势分析（{period}，{len(hit_metrics)} 项指标命中："
+                f"{'、'.join(hit_labels)}）"
+            ),
+            evidence={"period": period, "hit_metrics": hit_labels},
+            payload=payload,
             affected_batches=affected,
             notification_status="pending",
         )
@@ -1445,7 +1948,7 @@ async def _process_metric_trend(
             row = await _get_existing_trend_ai(
                 db,
                 entity_code=entity_code,
-                metric_key=metric_key,
+                metric_key=TREND_PRODUCT_METRIC_KEY,
                 rule_type=TREND_OVERALL_RULE,
                 trend_end_batch=period,
             )
@@ -1464,38 +1967,42 @@ async def _process_metric_trend(
 
     merged = _trend_ai_row_to_chart_model([row])
     if merged is not None:
-        return serialized, merged, "completed"
+        return merged, "completed"
     if row.notification_status == "ai_failed":
-        return serialized, None, "failed"
+        return None, "failed"
     if row.notification_status == "paused":
-        return serialized, None, "paused"
-    return serialized, None, "pending"
+        return None, "paused"
+    return None, "pending"
 
 
 async def reanalyze_trend_ai(
     db: AsyncSession,
     *,
     entity_code: str,
-    metric_key: str,
+    metric_key: str | None = None,
     sender_user_open_id: str | None = None,
 ) -> dict[str, str]:
-    """手动「再次分析」：作废当月整体分析记录并立即重跑（AI + 推送）。
+    """手动「再次分析」：作废当月产品级整体分析记录并立即重跑（AI + 推送）。
 
-    页面刷新不会走到这里——只有前端显式调用才触发。
+    月度AI为产品级合并（一个产品一张卡）：无论传入什么 metric_key，
+    都按产品行（metric_key=__product__）定位。页面刷新不会走到这里。
     """
     period = _trend_period()
     row = await _get_existing_trend_ai(
         db,
         entity_code=entity_code,
-        metric_key=metric_key,
+        metric_key=TREND_PRODUCT_METRIC_KEY,
         rule_type=TREND_OVERALL_RULE,
         trend_end_batch=period,
     )
     if row is None:
         raise AppException(
-            message=f"当月（{period}）尚无该指标的趋势 AI 分析记录", status_code=404
+            message=f"当月（{period}）尚无该产品的趋势 AI 分析记录", status_code=404
         )
     payload = row.payload or {}
+    trend_config = await load_inspection_trend_alert_config(db)
+    # 手动「重新分析」是否发消息由通知设置开关控制（默认发送）
+    payload["suppress_send"] = not trend_config.manual_rerun_send
     row.is_deleted = True
     await db.commit()
     record = FinishedTrendAIAnalysis(
@@ -1515,7 +2022,23 @@ async def reanalyze_trend_ai(
         notification_status="pending",
     )
     db.add(record)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # 并发重分析竞态：软删行仍占唯一键（旧索引）或另一请求已重建
+        await db.rollback()
+        existing = await _get_existing_trend_ai(
+            db,
+            entity_code=entity_code,
+            metric_key=TREND_PRODUCT_METRIC_KEY,
+            rule_type=TREND_OVERALL_RULE,
+            trend_end_batch=period,
+        )
+        if existing is None:
+            raise AppException(
+                message="重新分析冲突，请刷新后重试", status_code=409
+            )
+        record = existing
     await _submit_trend_ai_job(record, sender_user_open_id=sender_user_open_id)
     await db.commit()
     return {"job_id": record.job_id or "", "period": period}
@@ -1574,6 +2097,8 @@ async def _get_finished_dashboard_data(
     trend_alert_metric_count = 0
     trend_ai_pending_count = 0
     trend_ai_completed_count = 0
+    # 各指标趋势检测上下文：供循环后产品级月度AI一次汇总（一个产品一张卡）
+    metric_ctxs: list[dict[str, Any]] = []
     oot_limit_items = await _get_oot_limit_items_by_product_code(db, oot_product_code)
 
     for metric_config in metric_configs:
@@ -1635,7 +2160,24 @@ async def _get_finished_dashboard_data(
             else [None for _ in categories]
         )
 
-        for point in points:
+        # 即时告警仅针对**当月批次**：部署上线后，历史超标批次一律不再补发
+        # （dedup 表为空也不会触发），历史问题由趋势 AI 月度分析整体评估。
+        # 批号解析不出年月时，兜底仅看末尾 5 批。
+        now_sh = datetime.now(ZoneInfo("Asia/Shanghai"))
+        recent = [
+            i
+            for i, batch in enumerate(categories)
+            if batch_is_current_month(batch, reference=now_sh)
+        ]
+        if not recent:
+            recent = list(range(max(0, len(categories) - 5), len(categories)))
+        recent_indices = set(recent)
+
+        # 收集当月超标点，稍后按产品合并为**一张卡**发送（避免逐点逐卡触发飞书频控）
+        product_alert_points: list[dict[str, Any]] = []
+        for index, point in enumerate(points):
+            if index not in recent_indices:
+                continue  # 历史批次超标不推送
             point_value = float(point["value"])
             out_of_control_limit = False
             if upper_control_limit is not None and lower_control_limit is not None:
@@ -1647,60 +2189,76 @@ async def _get_finished_dashboard_data(
             )
             if not out_of_control_limit and not out_of_oot_limit:
                 continue
-            try:
-                alert = await _materialize_dashboard_alert(
+            product_alert_points.append(
+                {
+                    "batch_no": str(point["batch_no"]),
+                    "metric_key": metric_key,
+                    "metric_label": str(metric_config["metric_label"]),
+                    "actual_value": point_value,
+                    "out_of_oot_limit": out_of_oot_limit,
+                }
+            )
+
+        if product_alert_points:
+            alerts.extend(
+                await _materialize_merged_dashboard_alerts(
                     db,
                     sender_user_open_id=sender_user_open_id,
                     source_label=source_label,
                     entity_code=source_entity_code,
-                    batch_no=str(point["batch_no"]),
-                    metric_key=metric_key,
-                    metric_label=str(metric_config["metric_label"]),
-                    actual_value=point_value,
+                    points=product_alert_points,
                     mean=mean_value,
                     std_dev=stats["std_dev"],
                     upper_control_limit=upper_control_limit,
                     lower_control_limit=lower_control_limit,
-                    spec_lines=spec_lines if out_of_oot_limit else standard_spec_lines,
+                    spec_lines=spec_lines,
+                    line_config=(
+                        await load_inspection_trend_alert_config(db)
+                    ).lines.get(source_entity_code),
                 )
-                alerts.append(alert)
-            except Exception as e:
-                logger.warning(
-                    "Failed to materialize dashboard alert for "
-                    f"{source_entity_code}/{metric_key}: {e}"
-                )
-                # Alert materialization failed (e.g. feishu auth), skip this alert
+            )
 
-        # ── 趋势规则 + AI 分析（确定性判据先算，AI/推送后台化，不阻塞首屏） ──
+        # ── 趋势规则检测（确定性判据即时算好随响应返回；AI 按「一个产品一次
+        # 分析、一张合并卡」在全部指标循环结束后统一触发） ──
         trend_anomalies: list[dict[str, Any]] = []
-        trend_ai_model: InspectionDashboardTrendAI | None = None
-        trend_ai_status = "none"
         if enable_trend_ai:
             try:
-                (
-                    trend_anomalies,
-                    trend_ai_model,
-                    trend_ai_status,
-                ) = await _process_metric_trend(
-                    db,
-                    sender_user_open_id=sender_user_open_id,
-                    source_label=source_label,
-                    entity_code=source_entity_code,
-                    frontend_group=frontend_group,
-                    metric_key=metric_key,
-                    metric_label=str(metric_config["metric_label"]),
-                    points=points,
+                anomalies = detect_trend_anomalies(
+                    points,
                     mean=mean_value,
                     std_dev=stats["std_dev"],
                     upper_control_limit=upper_control_limit,
                     lower_control_limit=lower_control_limit,
                     spec_lines=spec_lines,
                 )
+                trend_anomalies = [
+                    InspectionDashboardTrendAnomaly(
+                        rule_type=anomaly.rule_type,
+                        severity=anomaly.severity,
+                        start_batch=anomaly.start_batch,
+                        end_batch=anomaly.end_batch,
+                        description=anomaly.description,
+                        evidence=anomaly.evidence,
+                        affected_batches=list(anomaly.affected_batches),
+                    ).model_dump(mode="json")
+                    for anomaly in anomalies
+                ]
+                metric_ctxs.append(
+                    {
+                        "metric_key": metric_key,
+                        "metric_label": str(metric_config["metric_label"]),
+                        "points": points,
+                        "categories": categories,
+                        "actual_series": actual_series,
+                        "mean": mean_value,
+                        "std_dev": stats["std_dev"],
+                        "upper_control_limit": upper_control_limit,
+                        "lower_control_limit": lower_control_limit,
+                        "spec_lines": spec_lines,
+                        "serialized_anomalies": trend_anomalies,
+                    }
+                )
                 trend_alert_metric_count += len(trend_anomalies)
-                if trend_ai_status == "pending":
-                    trend_ai_pending_count += 1
-                elif trend_ai_status == "completed":
-                    trend_ai_completed_count += 1
             except Exception as exc:  # noqa: BLE001 —— 趋势分析失败降级，不影响图表
                 logger.warning(
                     f"Trend analysis failed {source_entity_code}/{metric_key}: {exc}"
@@ -1735,10 +2293,39 @@ async def _get_finished_dashboard_data(
                 InspectionDashboardTrendAnomaly.model_validate(item)
                 for item in trend_anomalies
             ],
-            trend_ai=trend_ai_model,
-            trend_ai_status=trend_ai_status,
+            # 产品级 AI 结论在全部指标循环结束后统一回填
+            trend_ai=None,
+            trend_ai_status="none",
         )
         charts.append(chart.model_dump(mode="json"))
+
+    # ── 产品级月度AI：一个产品一次分析、一张合并卡（全部指标合并），结论
+    # 共享给该产品全部指标 chart；无任何指标命中判据则不做 AI。 ──
+    if enable_trend_ai and metric_ctxs:
+        try:
+            product_trend_ai, product_trend_status = await _process_product_trend(
+                db,
+                sender_user_open_id=sender_user_open_id,
+                source_label=source_label,
+                entity_code=source_entity_code,
+                frontend_group=frontend_group,
+                metric_ctxs=metric_ctxs,
+                period=_trend_period(),
+            )
+        except Exception as exc:  # noqa: BLE001 —— AI 失败降级，不影响图表
+            logger.warning(f"Product trend AI failed {source_entity_code}: {exc}")
+            product_trend_ai, product_trend_status = None, "none"
+        if product_trend_status == "pending":
+            trend_ai_pending_count = 1
+        elif product_trend_status == "completed":
+            trend_ai_completed_count = 1
+        for chart in charts:
+            chart["trend_ai"] = (
+                product_trend_ai.model_dump(mode="json")
+                if product_trend_ai is not None
+                else None
+            )
+            chart["trend_ai_status"] = product_trend_status
 
     summary = InspectionDashboardSummary(
         source_entity_code=source_entity_code,

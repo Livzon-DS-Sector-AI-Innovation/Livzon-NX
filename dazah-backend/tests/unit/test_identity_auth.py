@@ -119,18 +119,18 @@ def test_module_access_mode_defaults_to_explicit_grants() -> None:
     assert test.effective_module_access_mode == "roles"
 
 
-def test_module_access_mode_accepts_explicit_override() -> None:
+def test_module_access_mode_keeps_legacy_override_out_of_production() -> None:
     development = Settings.model_construct(
         APP_ENV="development",
-        MODULE_ACCESS_MODE="roles",
+        MODULE_ACCESS_MODE="all",
     )
     production = Settings.model_construct(
         APP_ENV="production",
         MODULE_ACCESS_MODE="all",
     )
 
-    assert development.effective_module_access_mode == "roles"
-    assert production.effective_module_access_mode == "all"
+    assert development.effective_module_access_mode == "all"
+    assert production.effective_module_access_mode == "roles"
 
 
 def test_sso_admin_whitelist_matches_feishu_union_id_and_delimiters() -> None:

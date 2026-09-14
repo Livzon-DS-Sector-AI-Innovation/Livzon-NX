@@ -160,6 +160,9 @@ jobs:
       - name: Run TypeScript type checking
         run: pnpm typecheck
 
+      - name: Verify bounded build failure and type coverage guards
+        run: pnpm test:build
+
       - name: Run unit tests and coverage gates
         run: |
           pnpm test:coverage
@@ -812,3 +815,36 @@ jobs:
           HERMES_QUALITY_RESULT: ${{ needs.hermes-quality.result }}
           HERMES_CONTRACT_RESULT: ${{ needs.hermes-contract.result }}
         run: python3 .github/scripts/ci_gate.py
+
+  cd-candidate:
+    name: Register CD Candidate
+    needs: ci-gate
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.ci-gate.result == 'success' }}
+    runs-on:
+      group: dazah-production-cd-nx
+      labels: [self-hosted, linux, x64, dazah-cd]
+    environment: single-host-cd
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    steps:
+      # No checkout and no production credentials/socket on the runner.
+      - name: Submit candidate hint to independent host controller
+        env:
+          CD_SHA: ${{ github.sha }}
+          CD_RUN_ID: ${{ github.run_id }}
+          CD_REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path('/var/lib/dazah-candidates')
+          sha = os.environ['CD_SHA']
+          temp = root / (sha + '.tmp')
+          temp.write_text(json.dumps({
+              'sha': os.environ['CD_SHA'],
+              'run_id': int(os.environ['CD_RUN_ID']),
+              'repository': os.environ['CD_REPOSITORY'],
+          }))
+          os.replace(temp, root / (sha + '.json'))
+          PY

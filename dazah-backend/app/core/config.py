@@ -3,7 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent  # dazah-backend/
@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/dazah"
     TEST_DATABASE_URL: str | None = None
+    DATABASE_POOL_SIZE: int = Field(default=5, ge=1, le=30)
+    DATABASE_MAX_OVERFLOW: int = Field(default=5, ge=0, le=30)
+    DATABASE_POOL_TIMEOUT: float = Field(default=5, gt=0, le=60)
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -115,9 +118,8 @@ class Settings(BaseSettings):
     # Use admin_only only for a time-boxed production recovery window.
     LOCAL_LOGIN_MODE: Literal["disabled", "admin_only", "enabled"] | None = None
 
-    # All authenticated users can access business modules in the current
-    # development and production deployment. Set this to ``roles`` only when
-    # grant-based module access is explicitly required.
+    # Module access is grant-based in production. ``all`` is retained only as
+    # a development compatibility override for older local environments.
     MODULE_ACCESS_MODE: Literal["roles", "all"] | None = None
 
     # Local auth bootstrap (development or emergency administrator accounts)
@@ -158,8 +160,6 @@ class Settings(BaseSettings):
     # Feishu Bitable — 质量模块环境兜底。质量模块仍以模块内配置表为主；
     # 这些字段仅用于兼容既有部署和初始化预填。
     QUALITY_FEISHU_APP_TOKEN: str = ""
-    QUALITY_SOLID_BASE_TOKEN: str = ""
-    QUALITY_LIQUID_BASE_TOKEN: str = ""
     QUALITY_FEISHU_DEVIATION_REPORT_TABLE_ID: str = ""
     QUALITY_FEISHU_DEVIATION_INVESTIGATION_PUSH_TABLE_ID: str = ""
     QUALITY_FEISHU_DEVIATION_TABLE_ID: str = ""
@@ -266,6 +266,11 @@ class Settings(BaseSettings):
 
     @property
     def effective_module_access_mode(self) -> Literal["roles", "all"]:
+        # Never let a stale production .env disable the module authorization
+        # fact source. This also makes upgrades safe when the host kept the
+        # former MODULE_ACCESS_MODE=all value from an older release.
+        if self.is_production:
+            return "roles"
         if self.MODULE_ACCESS_MODE is not None:
             return self.MODULE_ACCESS_MODE
         return "roles"

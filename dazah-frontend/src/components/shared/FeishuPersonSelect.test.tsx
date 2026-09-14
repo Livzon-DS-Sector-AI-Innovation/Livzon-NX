@@ -129,6 +129,20 @@ describe('FeishuPersonSelect', () => {
     expect(optionLabels()).not.toContain('张三')
   })
 
+  it('filters locally without re-querying the directory api on search', async () => {
+    renderSelect()
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    mocks.fetchValidationPersonOptions.mockClear()
+
+    await openDropdown()
+    await typeInSearch('李四')
+    // 搜索为客户端过滤（拼音/首字母），不再触发目录 API 请求
+    expect(mocks.fetchValidationPersonOptions).not.toHaveBeenCalled()
+    expect(optionLabels()).toContain('李四（生产部）')
+  })
+
   it('merges record prefill entries into the options', async () => {
     const prefill: FeishuPersonValue[] = [{ id: 'bid_legacy', name: '赵六' }]
     renderSelect({ extraOptions: prefill, value: prefill })

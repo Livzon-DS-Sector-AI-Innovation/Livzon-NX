@@ -9,9 +9,10 @@ import re
 import shutil
 import tempfile
 from copy import copy
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 from uuid import UUID
 
 from fastapi import UploadFile
@@ -25,6 +26,7 @@ from app.core.exceptions import AppException, NotFoundException
 from app.core.upload_security import read_upload_secure
 from app.modules.registration.models import (
     RegistrationCertificateEntry,
+    RegistrationCertificateReminderNotification,
 )
 from app.modules.registration.repository import RegistrationCertificateRepository
 from app.modules.registration.schemas.certificate import (
@@ -44,6 +46,8 @@ from app.modules.registration.schemas.certificate import (
     CertificateWorkbookOverview,
     CertificateWorkbookSheet,
 )
+from app.platform.identity.public_api import resolve_feishu_notification_recipient
+from app.platform.integrations.feishu.notification import send_user_card
 
 logger = logging.getLogger(__name__)
 
@@ -447,15 +451,43 @@ def _build_entry_response(
     )
 
 
+_DEFAULT_REMINDER_HEADER = (
+    "以下证书已进入**到期前 {reminder_days} 天**提醒窗口，请及时处理："
+)
+_REMINDER_PREVIEW_LIMIT = 10
+
+
+def _render_template(
+    template: str | None,
+    default: str,
+    replacements: dict[str, str],
+) -> str:
+    """渲染消息模板：空白回退默认文案，支持 {key} 占位符，未知占位符原样保留。"""
+    text = (template or "").strip() or default
+    for key, value in replacements.items():
+        text = text.replace("{" + key + "}", value)
+    return text
+
+
 def _build_reminder_content(
     entries: list[RegistrationCertificateEntry],
     reminder_days: int,
+    *,
+    header_template: str | None = None,
+    footer_template: str | None = None,
 ) -> str:
-    lines = [
-        f"以下证书已进入**到期前 {reminder_days} 天**提醒窗口，请及时处理：",
-        "",
-    ]
-    preview_entries = entries[:10]
+    count = len(entries)
+    template_vars = {
+        "date": date.today().isoformat(),
+        "count": str(count),
+        "reminder_days": str(reminder_days),
+        "overflow_count": str(max(count - _REMINDER_PREVIEW_LIMIT, 0)),
+    }
+    header = _render_template(
+        header_template, _DEFAULT_REMINDER_HEADER, template_vars
+    )
+    lines = [header, ""]
+    preview_entries = entries[:_REMINDER_PREVIEW_LIMIT]
     for index, entry in enumerate(preview_entries, start=1):
         lines.append(
             "\n".join(
@@ -467,11 +499,15 @@ def _build_reminder_content(
                 ]
             )
         )
-    if len(entries) > len(preview_entries):
+
+    footer = (footer_template or "").strip()
+    if footer:
+        lines.extend(["", _render_template(footer, "", template_vars)])
+    elif count > len(preview_entries):
         lines.extend(
             [
                 "",
-                f"其余还有 **{len(entries) - len(preview_entries)}** 份，"
+                f"其余还有 **{count - len(preview_entries)}** 份，"
                 "请到系统 `注册管理 -> 证书管理` 查看。",
             ]
         )
@@ -786,6 +822,8 @@ class CertificateWorkbookService:
                 recipient_name=None,
                 recipient_department=None,
                 pending_count=0,
+                header_template=None,
+                footer_template=None,
             )
 
         pending_count = 0
@@ -800,6 +838,8 @@ class CertificateWorkbookService:
             recipient_name=setting.recipient_name,
             recipient_department=setting.recipient_department,
             pending_count=pending_count,
+            header_template=setting.header_template,
+            footer_template=setting.footer_template,
         )
 
     async def list_reminder_recipient_options(
@@ -837,6 +877,8 @@ class CertificateWorkbookService:
             recipient_open_id=recipient_open_id,
             recipient_name=recipient_name,
             recipient_department=recipient_department,
+            header_template=(data.header_template or "").strip() or None,
+            footer_template=(data.footer_template or "").strip() or None,
         )
         await self.session.commit()
         return await self.get_reminder_settings()
@@ -1111,14 +1153,225 @@ class CertificateWorkbookService:
         await self.session.commit()
 
     async def find_due_reminder_batch(self) -> list[dict[str, object]]:
-        # 独立通知应用尚未接入；不生成任务或写入已发送记录。
-        return []
+        await self.ensure_seeded()
+        setting = await self.repository.get_reminder_setting()
+        if (
+            setting is None
+            or not setting.is_enabled
+            or not (setting.recipient_open_id or "").strip()
+            or setting.reminder_days <= 0
+        ):
+            return []
+
+        entries = await self.repository.list_entries()
+        due_entries: list[RegistrationCertificateEntry] = []
+        recipient_open_id = str(setting.recipient_open_id).strip()
+        for entry in entries:
+            expiry = _extract_date(entry.expiry_date)
+            if expiry is None:
+                continue
+            days_until_expiry = (expiry - date.today()).days
+            if days_until_expiry < 0 or days_until_expiry > setting.reminder_days:
+                continue
+            if await self.repository.reminder_notification_exists(
+                entry.id,
+                recipient_open_id,
+                setting.reminder_days,
+            ):
+                continue
+            due_entries.append(entry)
+
+        if not due_entries:
+            return []
+
+        due_entries.sort(key=lambda item: _extract_date(item.expiry_date) or date.max)
+        return [
+            {
+                "recipient_open_id": recipient_open_id,
+                "recipient_name": setting.recipient_name,
+                "reminder_days": setting.reminder_days,
+                "header_template": setting.header_template,
+                "footer_template": setting.footer_template,
+                "entries": due_entries,
+            }
+        ]
 
     async def send_due_reminder_batch(self, item: dict[str, object]) -> None:
-        raise AppException(
-            status_code=503,
-            message="注册证书飞书提醒暂未启用，待配置独立业务应用后恢复",
+        recipient_open_id = str(item["recipient_open_id"])
+        reminder_days = int(str(item["reminder_days"]))
+        entries = item["entries"]
+        if not isinstance(entries, list) or not entries:
+            return
+
+        certificate_entries = [
+            entry
+            for entry in entries
+            if isinstance(entry, RegistrationCertificateEntry)
+        ]
+        if not certificate_entries:
+            return
+
+        # 发送借用质量模块飞书应用；接收人 open_id 属登录应用命名空间，
+        # 须经平台标识解析换出跨应用可用的 user_id/邮箱后再发送。
+        from app.modules.quality.public_api import get_module_feishu_app_credentials
+
+        app_id, app_secret = await get_module_feishu_app_credentials(self.session)
+        if not app_id or not app_secret:
+            logger.warning("质量模块飞书应用未配置或已停用，证书到期提醒跳过发送")
+            return
+
+        resolved = await resolve_feishu_notification_recipient(
+            self.session, recipient_open_id, "open_id"
         )
+        if resolved is None:
+            logger.warning(
+                "证书到期提醒接收人缺少可用飞书标识（open_id=%s…）",
+                recipient_open_id[:16],
+            )
+            return
+
+        receive_id, receive_id_type = resolved
+        content = _build_reminder_content(
+            certificate_entries,
+            reminder_days,
+            header_template=str(item.get("header_template") or "") or None,
+            footer_template=str(item.get("footer_template") or "") or None,
+        )
+        success = await send_user_card(
+            open_id=receive_id,
+            title="证书到期提醒",
+            content=content,
+            receive_id_type=receive_id_type,
+            app_id=app_id,
+            app_secret=app_secret,
+        )
+        if not success:
+            return
+
+        await self.repository.create_reminder_notifications(
+            [
+                RegistrationCertificateReminderNotification(
+                    entry_id=entry.id,
+                    recipient_open_id=recipient_open_id,
+                    recipient_name=str(item.get("recipient_name") or "").strip()
+                    or None,
+                    reminder_days=reminder_days,
+                    expiry_date=entry.expiry_date,
+                )
+                for entry in certificate_entries
+            ]
+        )
+        await self.session.commit()
+
+    async def _list_sample_entries(self) -> list[RegistrationCertificateEntry]:
+        """测试消息样例：到期日最近的 3 条台账，无数据时用合成样例。"""
+        entries = await self.repository.list_entries()
+        dated = [
+            entry
+            for entry in entries
+            if _extract_date(entry.expiry_date) is not None
+        ]
+
+        def _abs_days(item: RegistrationCertificateEntry) -> int:
+            expiry = _extract_date(item.expiry_date)
+            assert expiry is not None
+            return abs((expiry - date.today()).days)
+
+        if dated:
+            return sorted(dated, key=_abs_days)[:3]
+
+        today = date.today()
+        return [
+            RegistrationCertificateEntry(
+                sheet_key="sample",
+                sheet_name="样例子表",
+                sheet_title="样例子表",
+                certificate_name=f"【测试样例】证书示例 {index}",
+                certificate_number=f"SAMPLE-{index:03d}",
+                issuing_authority="样例发证机关",
+                expiry_date=(today + timedelta(days=30 * index)).isoformat(),
+                product_scope="样例产品范围",
+            )
+            for index in range(1, 4)
+        ]
+
+    async def send_test_notification(
+        self,
+        *,
+        recipient_open_id: str,
+        header_template: str | None = None,
+        footer_template: str | None = None,
+    ) -> dict[str, object]:
+        """向指定接收人发送测试提醒消息；不写发送记录，不影响真实提醒幂等。"""
+        normalized_open_id = (recipient_open_id or "").strip()
+        if not normalized_open_id:
+            raise AppException(message="测试发送前请先选择通知人")
+
+        recipient = await self._get_qa_reminder_recipient_by_open_id(
+            normalized_open_id
+        )
+        if recipient is None:
+            # 与真实发送一致：已保存的通知人即使之后调离 QA 名单也允许测试验证
+            setting = await self.repository.get_reminder_setting()
+            if setting and (
+                str(setting.recipient_open_id or "").strip() == normalized_open_id
+            ):
+                recipient = SimpleNamespace(
+                    open_id=normalized_open_id,
+                    name=str(setting.recipient_name or "已配置通知人"),
+                    department=str(setting.recipient_department or "") or None,
+                    enterprise_email=None,
+                )
+        if recipient is None:
+            raise AppException(message="所选通知人不在 QA 联系人范围内")
+
+        from app.modules.quality.public_api import get_module_feishu_app_credentials
+
+        app_id, app_secret = await get_module_feishu_app_credentials(self.session)
+        if not app_id or not app_secret:
+            return {
+                "sent": False,
+                "recipient_name": recipient.name,
+                "detail": "质量模块飞书应用未配置或已停用，无法发送测试消息",
+            }
+
+        resolved = await resolve_feishu_notification_recipient(
+            self.session, normalized_open_id, "open_id"
+        )
+        if resolved is None:
+            return {
+                "sent": False,
+                "recipient_name": recipient.name,
+                "detail": "接收人缺少可用飞书标识（平台账号未绑定飞书且无企业邮箱）",
+            }
+
+        setting = await self.repository.get_reminder_setting()
+        reminder_days = setting.reminder_days if setting else 90
+        receive_id, receive_id_type = resolved
+        success = await send_user_card(
+            open_id=receive_id,
+            title="证书到期提醒（测试）",
+            content=_build_reminder_content(
+                await self._list_sample_entries(),
+                reminder_days,
+                header_template=header_template,
+                footer_template=footer_template,
+            ),
+            receive_id_type=receive_id_type,
+            app_id=app_id,
+            app_secret=app_secret,
+        )
+        if not success:
+            return {
+                "sent": False,
+                "recipient_name": recipient.name,
+                "detail": "飞书消息发送失败，请检查质量模块飞书应用配置",
+            }
+        return {
+            "sent": True,
+            "recipient_name": recipient.name,
+            "detail": f"测试消息已发送至 {recipient.name}",
+        }
 
 
 async def find_due_certificate_reminder_batches(

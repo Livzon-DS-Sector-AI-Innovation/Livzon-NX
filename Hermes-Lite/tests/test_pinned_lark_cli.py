@@ -64,9 +64,18 @@ def test_lark_cli_manifest_and_dockerfile_are_exact() -> None:
         MANIFEST_PATH, platform_key="windows-amd64"
     )
     dockerfile = (PROJECT_ROOT.parent / "Dockerfile").read_text(encoding="utf-8")
-    lark_stage = dockerfile.split(
-        "FROM python:3.12-slim-bookworm AS hermes-lark-cli", 1
-    )[1].split("FROM python:3.12-slim-bookworm AS hermes-upstream", 1)[0]
+    dockerfile_lines = dockerfile.splitlines()
+    lark_start = next(
+        index
+        for index, line in enumerate(dockerfile_lines)
+        if line.strip().endswith("AS hermes-lark-cli")
+    )
+    lark_end = next(
+        index
+        for index in range(lark_start + 1, len(dockerfile_lines))
+        if dockerfile_lines[index].startswith("FROM ")
+    )
+    lark_stage = "\n".join(dockerfile_lines[lark_start:lark_end])
 
     assert linux_manifest["version"] == "1.0.76"
     assert (

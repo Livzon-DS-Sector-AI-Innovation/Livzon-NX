@@ -9,6 +9,7 @@ from app.modules.agent.access_scope import AgentAccessScopeService
 from app.modules.agent.schemas import AgentToolExecuteRequest
 from app.modules.agent.tools import ToolExecutor, tool_registry
 from app.platform.identity.models import User
+from app.platform.identity.schemas import EffectivePageGrantOut, PageDataScopeInput
 
 
 @pytest.mark.asyncio
@@ -116,41 +117,50 @@ async def test_current_snapshot_still_requires_workflow_permission(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_unpublished_business_tool_cannot_fall_back_to_legacy_grant(monkeypatch):
+async def test_saved_page_grant_authorizes_tool_without_publication(monkeypatch):
     spec = tool_registry.require("procurement.list_purchase_requests")
     monkeypatch.setattr(
-        "app.modules.agent.tools.PagePermissionRepository.get_rollout",
-        AsyncMock(return_value=SimpleNamespace(status="draft")),
+        "app.modules.agent.tools.PagePermissionService.effective_grants",
+        AsyncMock(
+            return_value=[
+                EffectivePageGrantOut(
+                    page_key=spec.page_keys[0],
+                    module_code="procurement",
+                    permissions=["access", "query"],
+                    sensitive_actions=[],
+                    data_scope=PageDataScopeInput(scope_type="department_tree"),
+                    source="user",
+                )
+            ]
+        ),
     )
-    with pytest.raises(HTTPException) as error:
-        await ToolExecutor._resolve_tool_page_grant(
-            None,
-            spec=spec,
-            request=AgentToolExecuteRequest.model_validate(
-                {
-                    "operation": spec.name,
-                    "subject": {
-                        "tenant_id": "local",
-                        "user_id": uuid4(),
-                        "source": "internal",
-                    },
-                }
-            ),
-            validated=spec.input_model.model_validate({}),
-            user=SimpleNamespace(id=uuid4(), role="user"),
-        )
-    assert error.value.status_code == 403
-    assert "尚未发布" in error.value.detail
+    grant = await ToolExecutor._resolve_tool_page_grant(
+        None,
+        spec=spec,
+        request=AgentToolExecuteRequest.model_validate(
+            {
+                "operation": spec.name,
+                "subject": {
+                    "tenant_id": "local",
+                    "user_id": uuid4(),
+                    "source": "internal",
+                },
+            }
+        ),
+        validated=spec.input_model.model_validate({}),
+        user=SimpleNamespace(id=uuid4(), role="user"),
+    )
+    assert grant.page_key == spec.page_keys[0]
 
 
 @pytest.mark.asyncio
-async def test_admin_tool_permission_does_not_require_page_publication(monkeypatch):
+async def test_admin_tool_permission_does_not_query_page_grants(monkeypatch):
     spec = tool_registry.require("procurement.list_purchase_requests")
-    rollout = AsyncMock(
+    page_grants = AsyncMock(
         side_effect=AssertionError("administrator does not use page grants")
     )
     monkeypatch.setattr(
-        "app.modules.agent.tools.PagePermissionRepository.get_rollout", rollout
+        "app.modules.agent.tools.PagePermissionService.effective_grants", page_grants
     )
     user = SimpleNamespace(id=uuid4(), role="admin")
     grant = await ToolExecutor._resolve_tool_page_grant(
@@ -170,7 +180,7 @@ async def test_admin_tool_permission_does_not_require_page_publication(monkeypat
         user=user,
     )
     assert grant is None
-    rollout.assert_not_awaited()
+    page_grants.assert_not_awaited()
 
 
 @pytest.mark.asyncio

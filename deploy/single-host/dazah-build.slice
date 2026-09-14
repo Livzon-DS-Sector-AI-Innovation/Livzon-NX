@@ -1,0 +1,9 @@
+[Unit]
+Description=Combined Dazah BuildKit daemon and build client budget
+[Slice]
+MemoryMax=2G
+MemorySwapMax=0
+CPUQuota=100%
+CPUWeight=10
+IOWeight=10
+TasksMax=256

@@ -697,6 +697,63 @@ export async function syncOotLimitProductToFeishu(
   return result
 }
 
+export interface OotLimitImportPreviewItem {
+  display_order: number
+  item_group: string | null
+  item_name: string
+  standard_value: string
+  oot_limit_value: string
+}
+
+export interface OotLimitImportPreviewFile {
+  filename: string
+  status: 'ok' | 'error'
+  error?: string | null
+  mode?: 'create' | 'update'
+  matched_product_code?: string | null
+  product_name?: string
+  document_title?: string
+  document_year?: number | null
+  item_count?: number
+  items?: OotLimitImportPreviewItem[]
+  row_errors?: string[]
+  warnings?: string[]
+}
+
+export interface OotLimitImportPreview {
+  files: OotLimitImportPreviewFile[]
+}
+
+export interface OotLimitImportConfirm {
+  created_count: number
+  update_count: number
+  error_count: number
+  error_details: Array<{ filename: string; error: string }>
+}
+
+export async function previewOotLimitImport(
+  formData: FormData,
+): Promise<OotLimitImportPreview> {
+  const result = await actionFetchForm<OotLimitImportPreview>(
+    `${API_BASE_URL}/api/v1/quality/oos-oot/oot-limit-products/import/preview`,
+    formData,
+  )
+  if (!result) throw new Error('未收到 OOT 限度告知单预览结果')
+  return result
+}
+
+export async function confirmOotLimitImport(
+  formData: FormData,
+): Promise<OotLimitImportConfirm> {
+  const result = await actionFetchForm<OotLimitImportConfirm>(
+    `${API_BASE_URL}/api/v1/quality/oos-oot/oot-limit-products/import/confirm`,
+    formData,
+  )
+  if (!result) throw new Error('未收到 OOT 限度告知单导入结果')
+  revalidatePath('/quality/oos-oot')
+  return result
+}
+
 // ============ External Quality Actions ============
 export async function createQualitySupplier(
   data: components['schemas']['CreateSupplierRequest'],

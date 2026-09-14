@@ -14,7 +14,10 @@ from app.core.database import get_db
 from app.core.deps import CurrentUser
 from app.core.response import success_response
 from app.modules.quality.api.deps import require_user as _require_user
-from app.modules.quality.service.person_directory import get_person_options
+from app.modules.quality.service.person_directory import (
+    get_person_options,
+    get_qa_reminder_recipients,
+)
 from app.shared.schemas import ApiResponseEnvelope
 
 router = APIRouter()
@@ -33,4 +36,18 @@ async def list_person_options(
 ) -> JSONResponse:
     _require_user(current_user)
     items = await get_person_options(db, keyword=keyword, limit=limit)
+    return success_response(data=items)
+
+
+@router.get(
+    "/person-options/qa",
+    summary="获取 QA 部门人员（产品QA 默认候选）",
+    response_model=ApiResponseEnvelope[list[dict[str, Any]]],
+)
+async def list_qa_person_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    _require_user(current_user)
+    items = await get_qa_reminder_recipients(db)
     return success_response(data=items)

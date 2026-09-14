@@ -17,6 +17,9 @@ class InspectionLineNotificationPayload(BaseModel):
     entity_label: str = ""
     enabled: bool = True
     recipients: list[QualityNotificationRecipientItem] = Field(default_factory=list)
+    # 产品QA（每条产品线可单独设置；人员来自人事-飞书联系人目录）。
+    # None = 调用方未携带，保存时保留库中已有值（兼容旧调用方）
+    qa_recipients: list[QualityNotificationRecipientItem] | None = None
 
 
 class QualityNotificationSettingItem(BaseModel):
@@ -32,6 +35,22 @@ class QualityNotificationSettingItem(BaseModel):
     inspection_lines: list[InspectionLineNotificationPayload] = Field(
         default_factory=list
     )
+    # 成品/纯化水异常升级推送（仅该类型有值）
+    first_recipients: list[QualityNotificationRecipientItem] = Field(
+        default_factory=list
+    )
+    escalation_hours: int | None = None
+    # 物品库存不足预警推送（仅该类型有值）
+    stock_recipients: list[QualityNotificationRecipientItem] = Field(
+        default_factory=list
+    )
+    stock_header_template: str | None = None
+    stock_footer_template: str | None = None
+    # 预警判定口径：feishu=用飞书"库存报警"字段，local_threshold=当前库存≤警戒库存
+    stock_warning_source: str = "feishu"
+    # 趋势 AI 月度分析（仅 inspection_trend_alert 有值）
+    monthly_day: int | None = None
+    manual_rerun_send: bool | None = None
 
 
 class UpdateQualityNotificationSettingRequest(BaseModel):
@@ -45,3 +64,14 @@ class UpdateQualityNotificationSettingRequest(BaseModel):
     )
     fallback_recipients: list[QualityNotificationRecipientItem] | None = None
     inspection_lines: list[InspectionLineNotificationPayload] | None = None
+    first_recipients: list[QualityNotificationRecipientItem] | None = None
+    escalation_hours: int | None = Field(default=None, ge=1, le=72)
+    monthly_day: int | None = Field(default=None, ge=1, le=31)
+    manual_rerun_send: bool | None = None
+    # 物品库存不足预警推送
+    stock_recipients: list[QualityNotificationRecipientItem] | None = None
+    stock_header_template: str | None = Field(default=None, max_length=500)
+    stock_footer_template: str | None = Field(default=None, max_length=500)
+    stock_warning_source: str | None = Field(
+        default=None, pattern=r"^(feishu|local_threshold)$"
+    )

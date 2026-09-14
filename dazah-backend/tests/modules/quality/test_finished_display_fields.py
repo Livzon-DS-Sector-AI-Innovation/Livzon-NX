@@ -84,7 +84,7 @@ def test_metric_cap_at_five_with_priority_order() -> None:
     assert metrics[4] == "杂质1:≤0.5%"
 
 
-def _fields_meta_fake():
+def _fields_meta_fake() -> dict:
     return {
         "items": [
             {"record_id": "rec_1", "批号": "B-001", "含量（干品）:97.0%-103.0%": "99.2"}
@@ -96,11 +96,19 @@ def _fields_meta_fake():
     }
 
 
+def _mirror_meta_fake() -> dict:
+    result = _fields_meta_fake()
+    result["configured"] = True
+    result["last_sync_time"] = "2026-09-11T02:50:00+00:00"
+    return result
+
+
 @pytest.mark.anyio
-async def test_finished_records_list_meta_includes_display_fields(
+async def test_finished_records_list_meta_returns_all_fields(
     client,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """成品列表不再裁剪 display_fields，前端展示 meta.fields 全部列。"""
     from app.modules.quality import api as quality_api
 
     monkeypatch.setattr(
@@ -114,10 +122,34 @@ async def test_finished_records_list_meta_includes_display_fields(
     )
     assert resp.status_code == 200
     meta = resp.json()["meta"]
-    assert "display_fields" in meta
-    assert "批号" in meta["display_fields"]
-    assert "含量（干品）:97.0%-103.0%" in meta["display_fields"]
-    assert "年" not in meta["display_fields"]
+    assert "display_fields" not in meta
+    # 全列返回
+    assert "批号" in meta["fields"]
+    assert "年" in meta["fields"]
+    assert "含量（干品）:97.0%-103.0%" in meta["fields"]
+
+
+@pytest.mark.anyio
+async def test_finished_records_list_meta_mirror_status(
+    client,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.modules.quality import api as quality_api
+
+    monkeypatch.setattr(
+        quality_api.inspection_feishu,
+        "list_finished_by_entity",
+        AsyncMock(return_value=_mirror_meta_fake()),
+    )
+
+    resp = await client.get(
+        "/api/v1/quality/inspection-finished/mpa/records?entity_code=qc_finished_internal"
+    )
+    assert resp.status_code == 200
+    meta = resp.json()["meta"]
+    assert meta["configured"] is True
+    assert meta["source"] == "local_mirror"
+    assert meta["last_sync_time"] == "2026-09-11T02:50:00+00:00"
 
 
 def test_spec_falls_back_to_package_unit_field() -> None:

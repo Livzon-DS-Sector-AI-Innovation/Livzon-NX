@@ -160,6 +160,15 @@
                 "permission_code": null,
                 "disabled": false,
                 "children": null
+              },
+              {
+                "key": "inspection-items-dashboard",
+                "name": "物品仪表盘",
+                "path": "/quality/inspection/items/dashboard",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
               }
             ]
           },
@@ -329,6 +338,15 @@
                 "key": "inspection-finished-water",
                 "name": "纯化水",
                 "path": "/quality/inspection/finished/water",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-finished-pf",
+                "name": "PF",
+                "path": "/quality/inspection/finished/pf",
                 "icon": null,
                 "permission_code": null,
                 "disabled": false,
@@ -1202,6 +1220,24 @@
             "key": "inbound-ledger",
             "name": "入库总账",
             "path": "/warehouse/materials/inbound-ledger",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "liquid-raw-inbound",
+            "name": "液体原辅料入库",
+            "path": "/warehouse/materials/liquid-raw-inbound",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "liquid-sugar-inbound",
+            "name": "液糖入库",
+            "path": "/warehouse/materials/liquid-sugar-inbound",
             "icon": null,
             "permission_code": null,
             "disabled": false,

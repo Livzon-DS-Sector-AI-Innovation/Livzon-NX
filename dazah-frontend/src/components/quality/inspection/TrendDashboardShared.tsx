@@ -271,6 +271,7 @@ export function TrendAiPanel({
   onReanalyze?: (metricKey: string) => Promise<unknown> | void
 }) {
   const [reanalyzing, setReanalyzing] = useState(false)
+  const [reanalyzeError, setReanalyzeError] = useState('')
   const anomalies = chart.trend_anomalies ?? []
   const ai = chart.trend_ai
   const status = chart.trend_ai_status ?? 'none'
@@ -278,8 +279,13 @@ export function TrendAiPanel({
   const handleReanalyze = async () => {
     if (!onReanalyze || reanalyzing) return
     setReanalyzing(true)
+    setReanalyzeError('')
     try {
       await onReanalyze(chart.metric_key)
+    } catch (error) {
+      setReanalyzeError(
+        `重新分析失败：${error instanceof Error ? error.message : '未知错误'}，请稍后重试`
+      )
     } finally {
       setReanalyzing(false)
     }
@@ -328,16 +334,23 @@ export function TrendAiPanel({
             </Space>
           </Descriptions.Item>
           <Descriptions.Item label="分析周期">
-            <Space size={8} wrap>
-              <span>
-                {ai.period || '-'}
-                {ai.analyzed_at ? ` · 完成于 ${new Date(ai.analyzed_at).toLocaleString('zh-CN')}` : ''}
-                （每月固定一次，期间结论不变）
-              </span>
-              {onReanalyze ? (
-                <Button size="small" loading={reanalyzing} onClick={() => void handleReanalyze()}>
-                  重新分析
-                </Button>
+            <Space orientation="vertical" size={4}>
+              <Space size={8} wrap>
+                <span>
+                  {ai.period || '-'}
+                  {ai.analyzed_at ? ` · 完成于 ${new Date(ai.analyzed_at).toLocaleString('zh-CN')}` : ''}
+                  （每月固定一次，期间结论不变）
+                </span>
+                {onReanalyze ? (
+                  <Button size="small" loading={reanalyzing} onClick={() => void handleReanalyze()}>
+                    重新分析
+                  </Button>
+                ) : null}
+              </Space>
+              {reanalyzeError ? (
+                <Typography.Text type="danger" style={{ fontSize: 12 }}>
+                  {reanalyzeError}
+                </Typography.Text>
               ) : null}
             </Space>
           </Descriptions.Item>

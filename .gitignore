@@ -34,6 +34,8 @@ desktop.ini
 /docs/runbooks/*
 !/docs/runbooks/hermes-native-feishu-gateway-phase0-runbook.md
 !/docs/runbooks/production-offline-deployment.md
+!/docs/runbooks/single-host-cd.md
+!/docs/runbooks/single-host-cd-acceptance.md
 !/docs/runbooks/feishu-login-credential-boundary.md
 !/docs/runbooks/edbo-retirement.md
 !/docs/runbooks/page-permission-implementation-status.md
@@ -46,6 +48,7 @@ desktop.ini
 !/scripts/dev-native.ps1
 !/scripts/deploy-production.ps1
 !/scripts/deploy-production-remote.sh
+!/scripts/cd/
 !/scripts/check-coverage-floor.py
 !/scripts/check-diff-coverage.py
 !/scripts/check-agent-v2-residuals.py
@@ -61,6 +64,13 @@ desktop.ini
 !/scripts/tests/test_production_image_package.py
 !/scripts/tests/test_edbo_retirement.py
 !/scripts/tests/test_frontend_development_runtime.py
+!/scripts/tests/test_cd_controller.py
+!/scripts/tests/test_cd_watchdog_docker.py
+!/scripts/tests/test_cd_readiness.py
+!/scripts/tests/test_cd_stage_site.py
+!/scripts/tests/test_conversion_limit.py
+!/scripts/tests/load_single_host.py
+!/scripts/tests/run_single_host_load.sh
 !/scripts/wait-for-database.sh
 
 # Python

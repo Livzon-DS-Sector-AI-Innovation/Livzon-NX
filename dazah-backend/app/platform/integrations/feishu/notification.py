@@ -159,12 +159,28 @@ async def send_user_card_with_message_id(
         )
         request.headers["Authorization"] = f"Bearer {token}"
         response = await client.im.v1.message.acreate(request)
+        if not response.success() and response.code == 99992361:
+            # 飞书频控（发消息太频繁）：等待后重试一次
+            import asyncio as _asyncio
+
+            await _asyncio.sleep(2)
+            request.headers["Authorization"] = f"Bearer {token}"
+            response = await client.im.v1.message.acreate(request)
         if not response.success():
             logger.error(
                 "send_user_card_with_message_id failed: code=%s",
                 response.code,
             )
             return None
+        if response.data and response.data.message_id:
+            logger.info(
+                "send_user_card_with_message_id SENT: title=%s receive_id=%s "
+                "receive_id_type=%s message_id=%s",
+                title,
+                open_id,
+                receive_id_type,
+                response.data.message_id,
+            )
         return response.data.message_id if response.data else None
     except Exception as exc:
         logger.error("send_user_card_with_message_id failed: %s", type(exc).__name__)

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { qualityTokens } from '../themeTokens'
-import { Avatar, Image, Space } from 'antd'
+import { Avatar, Image, Space, Tag } from 'antd'
 import type { App } from 'antd'
 import dayjs from 'dayjs'
 
@@ -36,10 +36,14 @@ export interface FeishuAttachmentPreviewContext {
 export interface RenderFeishuValueOptions {
   /** 字段 ui_type，用于按类型格式化日期/勾选等原始值 */
   uiType?: string
+  /** 字段名，用于对「结果判断」等结论类字段做语义着色 */
+  fieldName?: string
   /** 附件代理下载地址构造器，默认走检验模块通用接口 */
   attachmentUrlBuilder?: FeishuAttachmentUrlBuilder
   /** 提供时非图片附件点击进入弹窗预览；不提供则保持下载行为 */
   onAttachmentPreview?: (context: FeishuAttachmentPreviewContext) => void
+  /** 提供时纯文本值可点击，弹窗查看完整内容（长文本截断场景） */
+  onTextPreview?: (fieldName: string | undefined, value: string) => void
 }
 
 /** 通过后端代理下载飞书附件并以新标签页打开（附件 url 需带 token）。 */
@@ -169,7 +173,8 @@ function AttachmentImage({
   )
 }
 
-/** 把飞书字段值渲染为可读内容：附件可点击、链接可点击、人员显示姓名、其余为文本。 */
+/** 把飞书字段值渲染为可读内容：附件可点击、链接可点击、人员显示姓名、
+ * 「结果判断」按语义着色（fieldName 传入时）、其余为文本。 */
 export function renderFeishuValue(
   value: unknown,
   record: Record<string, unknown>,
@@ -178,6 +183,7 @@ export function renderFeishuValue(
   options?: RenderFeishuValueOptions,
 ): ReactNode {
   const uiType = options?.uiType
+  const fieldName = options?.fieldName
   const attachmentUrlBuilder =
     options?.attachmentUrlBuilder ?? DEFAULT_ATTACHMENT_URL_BUILDER
   if (Array.isArray(value)) {
@@ -285,5 +291,39 @@ export function renderFeishuValue(
   if (uiType === 'Checkbox') {
     return formatCheckboxValue(value)
   }
-  return String(value)
+  // 「结果判断」为检验结论语义字段：合格/不合格着色展示（固体/液体等物料检验表）
+  if (
+    fieldName === '结果判断' &&
+    (value === '合格' || value === '不合格' || value === '待判定')
+  ) {
+    const color = value === '合格' ? 'success' : value === '不合格' ? 'error' : 'default'
+    return <Tag color={color}>{value}</Tag>
+  }
+  const text = String(value)
+  if (options?.onTextPreview && text.trim()) {
+    return (
+      <button
+        type="button"
+        title="点击查看完整内容"
+        style={{
+          padding: 0,
+          border: 'none',
+          background: 'transparent',
+          color: 'inherit',
+          textAlign: 'inherit',
+          cursor: 'pointer',
+          textDecoration: 'underline dotted rgba(0, 0, 0, 0.25)',
+          textUnderlineOffset: 3,
+          whiteSpace: 'normal',
+          wordBreak: 'break-word',
+          lineHeight: 1.4,
+          width: '100%',
+        }}
+        onClick={() => options.onTextPreview?.(fieldName, text)}
+      >
+        {text}
+      </button>
+    )
+  }
+  return text
 }

@@ -29,6 +29,7 @@ const sections: Section[] = [
       { label: '库存台账', href: '/quality/inspection/items/inventory' },
       { label: '入库记录', href: '/quality/inspection/items/inbound' },
       { label: '出库记录', href: '/quality/inspection/items/outbound' },
+      { label: '物品仪表盘', href: '/quality/inspection/items/dashboard' },
     ],
   },
   {

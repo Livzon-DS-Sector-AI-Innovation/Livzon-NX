@@ -11,6 +11,7 @@ export default function ItemsInboundPage() {
         listApi="/api/v1/quality/items/inbound"
         pullApi="/api/v1/quality/items/inbound/pull"
         entityCode="qc_items_inbound"
+        createLabel="新增入库"
         editable
       />
     </QualityQueryProvider>

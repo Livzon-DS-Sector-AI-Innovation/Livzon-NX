@@ -951,6 +951,16 @@ export interface AnomalyDashboardProduct {
   types: AnomalyDashboardProductType[];
 }
 
+/** 未关闭异常记录行（口径：无调查报告说明 且 未结案） */
+export interface AnomalyOpenRecord {
+  id: string;
+  year: number;
+  date: string;
+  product: string;
+  anomaly_type: string;
+  desc: string;
+}
+
 export interface AnomalyDashboardData {
   years: number[];
   total: number;
@@ -960,6 +970,9 @@ export interface AnomalyDashboardData {
   last_analyzed_at: string | null;
   products: AnomalyDashboardProduct[];
   type_totals: AnomalyDashboardProductType[];
+  open_count: number;
+  by_year_open: Array<{ year: number; open_count: number; total: number }>;
+  open_recent: AnomalyOpenRecord[];
 }
 
 /** 成品异常 AI 分析后台任务状态 */
@@ -1180,14 +1193,54 @@ export type InspectionFeishuFieldMeta = {
   field_name: string
   ui_type: string
   editable: boolean
+  options?: { name: string }[] | null
 }
 
 export type InspectionFeishuFieldsResult = {
   fields: InspectionFeishuFieldMeta[]
   can_push: boolean
+  // 新增记录走外链飞书共享表单时返回；为空则用页面内表单
+  form_url?: string | null
 }
 
 export type InspectionFeishuFields = Record<string, unknown>
+
+// ============ 物品管理仪表盘 / 库存不足推送类型 ============
+export interface ItemsStockAlertItemRow {
+  record_id: string
+  name?: string | null
+  specification?: string | null
+  location?: string | null
+  current_stock?: string | null
+  warning_stock?: string | null
+  unit?: string | null
+}
+
+export interface ItemsMonthlyPointRow {
+  month: number
+  inbound: number
+  outbound: number
+}
+
+export interface ItemsDashboardData {
+  configured: boolean
+  total_items: number
+  alert_count: number
+  warning_source: string
+  low_stock_items: ItemsStockAlertItemRow[]
+  year?: number | null
+  monthly: ItemsMonthlyPointRow[]
+  last_sync_time?: string | null
+}
+
+export interface ItemsLowStockPushResult {
+  status: string
+  sent: number
+  skipped: number
+  failed: number
+  item_count: number
+  message?: string | null
+}
 
 // ============ Department Weekly Confirmation Types ============
 export type ProductionStatus = 'production' | 'stopped';
@@ -1786,6 +1839,8 @@ export interface InspectionLineNotificationConfig {
   entity_label?: string;
   enabled: boolean;
   recipients: QualityNotificationRecipient[];
+  /** 产品QA（每条产品线可单独设置，人员来自人事-飞书联系人目录） */
+  qa_recipients?: QualityNotificationRecipient[];
 }
 
 export interface QualityNotificationSettingItem {
@@ -1797,6 +1852,22 @@ export interface QualityNotificationSettingItem {
   send_time: string;
   fallback_recipients: QualityNotificationRecipient[];
   inspection_lines: InspectionLineNotificationConfig[];
+  /** 成品/纯化水异常升级推送：首推接收人（可改，默认李文昊） */
+  first_recipients: QualityNotificationRecipient[];
+  /** 异常后多少小时复检仍异常则升级推送 */
+  escalation_hours: number | null;
+  /** 物品库存不足预警推送：接收人（可改） */
+  stock_recipients?: QualityNotificationRecipient[];
+  /** 预警卡片抬头文案模板（{date} {count} 占位） */
+  stock_header_template?: string | null;
+  /** 预警卡片结尾文案模板 */
+  stock_footer_template?: string | null;
+  /** 预警判定口径：feishu | local_threshold */
+  stock_warning_source?: string;
+  /** 趋势 AI 月度分析：每月该日定时全量分析并发送（默认 25，月底不足取当月最后一天） */
+  monthly_day: number | null;
+  /** 手动「重新分析」是否发送消息（默认发送） */
+  manual_rerun_send: boolean | null;
 }
 
 export interface UpdateQualityNotificationSettingPayload {
@@ -1809,5 +1880,14 @@ export interface UpdateQualityNotificationSettingPayload {
     entity_code: string;
     enabled: boolean;
     recipients: QualityNotificationRecipient[];
+    qa_recipients?: QualityNotificationRecipient[];
   }[];
+  first_recipients?: QualityNotificationRecipient[];
+  escalation_hours?: number | null;
+  monthly_day?: number | null;
+  manual_rerun_send?: boolean | null;
+  stock_recipients?: QualityNotificationRecipient[];
+  stock_header_template?: string | null;
+  stock_footer_template?: string | null;
+  stock_warning_source?: string;
 }

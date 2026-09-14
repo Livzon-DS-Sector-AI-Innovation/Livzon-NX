@@ -22,6 +22,8 @@ from app.modules.regulatory_tracker.schemas.notification import (
     RegulatoryTrackerNotificationRecipientOption,
     RegulatoryTrackerNotificationSettingRead,
     RegulatoryTrackerNotificationSettingUpdate,
+    RegulatoryTrackerNotificationTestRequest,
+    RegulatoryTrackerNotificationTestResult,
 )
 from app.modules.regulatory_tracker.schemas.regulatory_document import (
     RegulatoryDocumentRead,
@@ -50,6 +52,8 @@ __all__ = [
     "RegulatoryTrackerNotificationRecipientOption",
     "RegulatoryTrackerNotificationSettingRead",
     "RegulatoryTrackerNotificationSettingUpdate",
+    "RegulatoryTrackerNotificationTestRequest",
+    "RegulatoryTrackerNotificationTestResult",
     "TrackerManualSyncAnalysisRead",
     "TrackerManualSyncBootstrapRead",
     "TrackerManualSyncResponse",

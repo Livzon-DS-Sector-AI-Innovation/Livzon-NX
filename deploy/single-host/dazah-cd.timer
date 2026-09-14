@@ -1,0 +1,10 @@
+[Unit]
+Description=Dazah maintenance window scheduler
+
+[Timer]
+OnCalendar=*-*-* 02:00:00 Asia/Shanghai
+Persistent=false
+Unit=dazah-cd.service
+
+[Install]
+WantedBy=timers.target

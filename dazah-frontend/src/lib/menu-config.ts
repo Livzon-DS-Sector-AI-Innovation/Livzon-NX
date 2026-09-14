@@ -340,6 +340,7 @@ export const moduleMenus: ModuleMenu[] = [
         ],
       },
       { key: "knowledge", label: "注册知识库", path: "/registration/knowledge" },
+      { key: "registration-settings", label: "注册设置", path: "/registration/settings" },
     ],
   },
   {
@@ -392,6 +393,7 @@ export const moduleMenus: ModuleMenu[] = [
               { key: "inspection-items-inventory", label: "库存台账", path: "/quality/inspection/items/inventory" },
               { key: "inspection-items-inbound", label: "入库记录", path: "/quality/inspection/items/inbound" },
               { key: "inspection-items-outbound", label: "出库记录", path: "/quality/inspection/items/outbound" },
+              { key: "inspection-items-dashboard", label: "物品仪表盘", path: "/quality/inspection/items/dashboard" },
             ],
           },
           {
@@ -423,6 +425,7 @@ export const moduleMenus: ModuleMenu[] = [
               { key: "inspection-finished-formulations", label: "预混剂", path: "/quality/inspection/finished/formulations" },
               { key: "inspection-finished-tryptophan", label: "色氨酸", path: "/quality/inspection/finished/tryptophan" },
               { key: "inspection-finished-water", label: "纯化水", path: "/quality/inspection/finished/water" },
+              { key: "inspection-finished-pf", label: "PF", path: "/quality/inspection/finished/pf" },
             ],
           },
           {
@@ -626,6 +629,8 @@ export const moduleMenus: ModuleMenu[] = [
           { key: "packaging-detail", label: "包材库存明细表", path: "/warehouse/materials/packaging-detail", feishuPageKey: "packaging-detail" },
           { key: "packaging-ledger", label: "包材出库总账", path: "/warehouse/materials/packaging-ledger", feishuPageKey: "packaging-ledger" },
           { key: "inbound-ledger", label: "入库总账", path: "/warehouse/materials/inbound-ledger", feishuPageKey: "inbound-ledger" },
+          { key: "liquid-raw-inbound", label: "液体原辅料入库", path: "/warehouse/materials/liquid-raw-inbound", feishuPageKey: "liquid-raw-inbound" },
+          { key: "liquid-sugar-inbound", label: "液糖入库", path: "/warehouse/materials/liquid-sugar-inbound", feishuPageKey: "liquid-sugar-inbound" },
           { key: "qualified-suppliers", label: "原辅材料合格供应商一览表", path: "/warehouse/materials/qualified-suppliers", feishuPageKey: "qualified-suppliers" },
           { key: "material-name-code-map", label: "物料名称及代码对应表", path: "/warehouse/materials/material-name-code-map", feishuPageKey: "material-name-code-map" },
         ],
@@ -900,11 +905,10 @@ function filterPageChildren(
   })
 }
 
-/** 已发布模块按页面访问权限裁剪；旧规则和草稿模块保持原模块菜单。 */
+/** 模块入口按模块授权显示，模块内菜单始终按已保存的页面访问权限裁剪。 */
 export function getAuthorizedPageMenus(
   moduleCodes: string[] | undefined,
   pagePermissions: PageAccessSummary[] | undefined,
-  rollouts: Record<string, string> | undefined,
 ): ModuleMenu[] {
   const allowedModules = getAuthorizedModuleMenus(moduleCodes)
   const allowedPageKeys = new Set(
@@ -913,7 +917,6 @@ export function getAuthorizedPageMenus(
       .map((grant) => grant.page_key),
   )
   return allowedModules.flatMap((module) => {
-    if (rollouts?.[module.moduleCode] !== "enforced") return [module]
     const children = filterPageChildren(module.children, module.key, allowedPageKeys)
     return children.length ? [{ ...module, children }] : []
   })
@@ -933,7 +936,6 @@ export function getFirstAuthorizedModulePath(user: ModuleLandingAccess): string 
     : getAuthorizedPageMenus(
         user.module_codes,
         user.page_permissions,
-        user.page_permission_rollouts,
       )
   return visibleModules[0]?.path || "/production"
 }

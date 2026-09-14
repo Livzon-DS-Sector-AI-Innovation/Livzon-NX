@@ -56,6 +56,37 @@ def _format_spec_lines(spec_lines: list[dict[str, Any]] | None) -> str:
     )
 
 
+def _format_month_vs_history(points: list[dict[str, Any]]) -> str | None:
+    """「本月 vs 历史」评估主轴文本；样本不足时返回 None。"""
+    batches = [str(p.get("batch_no") or "") for p in points]
+    vals = [float(p["value"]) for p in points if p.get("value") is not None]
+    usable = [
+        (b, v)
+        for b, p, v in zip(batches, points, vals, strict=False)
+        if p.get("value") is not None
+    ]
+    if len(usable) < 6:
+        return None
+    current_idx, baseline_idx, time_basis = split_current_history(batches, vals)
+    cur = [v for i, v in enumerate(vals) if i in set(current_idx)]
+    hist = [v for i, v in enumerate(vals) if i in set(baseline_idx)]
+    if not cur or not hist:
+        return None
+    month_key = parse_batch_month(batches[current_idx[-1]])
+    month_label = (
+        f"{month_key // 100}-{month_key % 100:02d}"
+        if month_key
+        else "最近批次"
+    )
+    compare = [
+        f"评估月：{month_label}（口径 {time_basis}，{len(cur)} 批）",
+        f"本月均值：{fmean(cur):g}",
+        f"历史均值：{fmean(hist):g}（{len(hist)} 批）",
+        f"本月均值 − 历史均值：{fmean(cur) - fmean(hist):+g}",
+    ]
+    return "\n".join(compare)
+
+
 def build_trend_ai_prompt(
     *,
     source_label: str,
@@ -91,33 +122,9 @@ def build_trend_ai_prompt(
     parts.append("【统计事实】\n" + "\n".join(facts))
 
     # 本月 vs 历史：评估口径的主轴（评估月=数据中最后一个有批号的月份）
-    batches = [str(p.get("batch_no") or "") for p in points]
-    vals = [float(p["value"]) for p in points if p.get("value") is not None]
-    usable = [
-        (b, v)
-        for b, p, v in zip(batches, points, vals, strict=False)
-        if p.get("value") is not None
-    ]
-    if len(usable) >= 6:
-        from statistics import fmean as _fmean
-
-        current_idx, baseline_idx, time_basis = split_current_history(batches, vals)
-        cur = [v for i, v in enumerate(vals) if i in set(current_idx)]
-        hist = [v for i, v in enumerate(vals) if i in set(baseline_idx)]
-        if cur and hist:
-            month_key = parse_batch_month(batches[current_idx[-1]])
-            month_label = (
-                f"{month_key // 100}-{month_key % 100:02d}"
-                if month_key
-                else "最近批次"
-            )
-            compare = [
-                f"评估月：{month_label}（口径 {time_basis}，{len(cur)} 批）",
-                f"本月均值：{_fmean(cur):g}",
-                f"历史均值：{_fmean(hist):g}（{len(hist)} 批）",
-                f"本月均值 − 历史均值：{_fmean(cur) - _fmean(hist):+g}",
-            ]
-            parts.append("【本月 vs 历史（评估主轴）】\n" + "\n".join(compare))
+    month_vs_history = _format_month_vs_history(points)
+    if month_vs_history:
+        parts.append("【本月 vs 历史（评估主轴）】\n" + month_vs_history)
 
     # 月度均值（按批号年月汇总）：月度趋势是整体评估的主线
     month_groups: dict[int, list[float]] = {}
@@ -196,6 +203,103 @@ def build_trend_ai_prompt(
         '"risk": "风险说明(<=120字)"},\n'
         '  "recommendation": "建议动作（如关注/加严监测/结合偏差评估，<=150字）",\n'
         '  "confidence": "low|medium|high"\n'
+        "}"
+    )
+    return "\n\n".join(parts)
+
+
+def build_product_trend_ai_prompt(
+    *,
+    source_label: str,
+    period: str,
+    metrics: list[dict[str, Any]],
+) -> str:
+    """组装产品级（多指标合并一次分析）趋势 AI 提示词。
+
+    ``metrics`` 每项需含 metric_label/points/mean/std_dev/upper_control_limit/
+    lower_control_limit/spec_lines/anomalies（确定性命中，已转 dict）。
+    一个产品只做一次模型调用、产出一版整体结论 + 逐指标结论，
+    避免逐指标多次调用与逐指标推送触发飞书卡片限流。
+    """
+    parts: list[str] = []
+    parts.append(
+        "你是原料药工厂质量管理（QC）趋势分析专家。给定同一产品的多个检测"
+        "指标的统计事实与已算好的确定性趋势判据命中，请对整个产品做一次"
+        "汇总趋势研判，并逐指标给出简短结论；只做辅助分析，不替代放行/"
+        "偏差/OOT 判定等责任决定。"
+    )
+    parts.append(f"【产品系列】{source_label}\n【分析周期】{period}")
+
+    blocks: list[str] = []
+    for index, metric in enumerate(metrics, start=1):
+        points = list(metric.get("points") or [])
+        lines = [
+            f"指标{index}：{metric.get('metric_label')}",
+            f"样本数：{len(points)}",
+            f"均值：{_fmt(metric.get('mean'))}",
+            f"标准差：{_fmt(metric.get('std_dev'))}",
+            "控制限（均值±3σ）："
+            f"{_fmt(metric.get('lower_control_limit'))} ~ "
+            f"{_fmt(metric.get('upper_control_limit'))}",
+            "限度线（OOT/标准）："
+            f"{_format_spec_lines(metric.get('spec_lines'))}",
+        ]
+        month_vs_history = _format_month_vs_history(points)
+        if month_vs_history:
+            lines.append("本月 vs 历史：\n" + month_vs_history)
+        anomalies = list(metric.get("anomalies") or [])
+        if anomalies:
+            rule_lines = []
+            for item in anomalies:
+                evidence = item.get("evidence") or {}
+                start = (
+                    item.get("trend_start_batch")
+                    or item.get("start_batch")
+                    or "-"
+                )
+                end = item.get("trend_end_batch") or item.get("end_batch") or "-"
+                line = (
+                    f"- 规则[{_rule_label(str(item.get('rule_type')))}] "
+                    f"严重度[{item.get('severity')}] 批次[{start}~{end}] "
+                    f"事实：{item.get('description')}"
+                )
+                if evidence:
+                    line += f"；证据：{evidence}"
+                rule_lines.append(line)
+            lines.append("确定性趋势判据命中：\n" + "\n".join(rule_lines))
+        else:
+            lines.append("确定性趋势判据命中：（无）")
+        blocks.append("\n".join(lines))
+    parts.append("【各指标统计事实与判据命中】\n" + "\n\n".join(blocks))
+
+    parts.append(
+        "评估口径以各指标「本月 vs 历史」为主轴：先逐指标判断本月均值较历史"
+        "是否抬升/下移、当月批次内是否持续上升/下降、斜率是否突变、近几个月"
+        "月度均值整体走向及按此外推是否逼近限度线；已命中的判据都经过"
+        "「朝限度方向 + 幅度显著超噪声」过滤且全部锚定本月，请围绕它们展开；"
+        "历史段已发生的波动属既成事实，不要作为本次异常解读；逐批超出 "
+        "均值±3σ/OOT 限度由系统即时告警，无需逐点复述。最后给出产品整体"
+        "研判（以最严重指标为主导）与逐指标一句话结论。"
+    )
+    parts.append(
+        "只输出 JSON，不要任何多余文字，结构严格如下：\n"
+        "{\n"
+        '  "summary": "产品整体趋势一句话研判（<=60字）",\n'
+        '  "trend_reading": "自然语言解读整体趋势与风险（<=300字）",\n'
+        '  "signals": [\n'
+        '    {"batch_no": "代表批次号", "rule_type": '
+        '"month_level|month_slope|slope_change|month_over_month", '
+        '"severity": "low|medium|high", "note": "信号说明，注明所属指标（<=120字）"}\n'
+        "  ],\n"
+        '  "outlook": {"direction": "up|down|flat", '
+        '"batches_to_limit": "逼近限度线预计剩余批次数(整数,无法判断填null)", '
+        '"risk": "风险说明(<=120字)"},\n'
+        '  "recommendation": "建议动作（<=150字）",\n'
+        '  "confidence": "low|medium|high",\n'
+        '  "metric_findings": [\n'
+        '    {"metric_label": "指标名（与输入一致）",\n'
+        '     "summary": "该指标一句话结论（<=60字）"}\n'
+        "  ]\n"
         "}"
     )
     return "\n\n".join(parts)

@@ -19,8 +19,9 @@ import json
 import logging
 import uuid
 from collections import Counter
-from datetime import datetime
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, TypedDict
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -416,6 +417,48 @@ async def run_analysis_job(
     }
 
 
+# 各年子表的记录日期字段（未关闭看板排序与聊天月份过滤共用）
+YEAR_DATE_FIELD = {2025: "发现时间", 2026: "提交时间"}
+
+# 飞书毫秒时间戳为用户时区（东八区）语义；按本地时区解析在 UTC 容器下会少一天
+# （先例：a8bba08 合同同步时区修复）
+_CHINA_TZ = ZoneInfo("Asia/Shanghai")
+
+
+def record_date_millis(item: dict[str, Any], year: int) -> int | None:
+    """取记录日期毫秒值（飞书 DateTime/CreatedTime 为 ms 数字或数字字符串）。"""
+    field = YEAR_DATE_FIELD.get(year)
+    if not field:
+        return None
+    value = item.get(field)
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    text = str(value or "").strip()
+    if text.isdigit():
+        return int(text)
+    return None
+
+
+def _has_investigation_report(item: dict[str, Any]) -> bool:
+    """调查结果说明（附件字段）是否有内容——未关闭看板分流与行标签共用同一判定。"""
+    investigation = item.get("调查结果说明")
+    if isinstance(investigation, (list, dict)):
+        return bool(investigation)
+    if isinstance(investigation, str):
+        return bool(investigation.strip())
+    return False
+
+
+def _is_open_record(item: dict[str, Any]) -> bool:
+    """未关闭口径（用户确认，2026-09-09 修订）：无调查结果说明 **且** 未结案
+    （是否结案≠是）才计入看板；有报告或已结案任占其一，即不算未关闭。"""
+    if _field_text(item.get("是否结案")) == "是":
+        return False
+    return not _has_investigation_report(item)
+
+
 async def get_dashboard_aggregation(
     db: AsyncSession, year: int | None
 ) -> dict[str, Any]:
@@ -433,6 +476,9 @@ async def get_dashboard_aggregation(
     total = 0
     analyzed = 0
     last_analyzed_at: datetime | None = None
+    open_count = 0
+    by_year_open: dict[int, dict[str, int]] = {}
+    open_rows: list[dict[str, Any]] = []
 
     for item_year in years:
         try:
@@ -440,12 +486,14 @@ async def get_dashboard_aggregation(
         except AppException:
             # 未配置的年份直接跳过，不影响已配置年份的聚合
             continue
+        year_open = by_year_open.setdefault(item_year, {"open_count": 0, "total": 0})
         record_ids = [str(item.get("record_id") or "") for item in items]
         cached = await _load_cached_classifications(db, item_year, record_ids)
         for item in items:
             snapshot = _record_snapshot(item, item_year)
             record_id = snapshot["record_id"]
             total += 1
+            year_open["total"] += 1
             hint = snapshot["product_hint"]
             previous = cached.get(record_id)
             if (
@@ -470,6 +518,30 @@ async def get_dashboard_aggregation(
             product_counter[product] += 1
             type_counter[anomaly_type] += 1
             product_type_counter[(product, anomaly_type)] += 1
+            if _is_open_record(item):
+                open_count += 1
+                year_open["open_count"] += 1
+                date_millis = record_date_millis(item, item_year)
+                open_rows.append(
+                    {
+                        "id": record_id,
+                        "year": item_year,
+                        "date": (
+                            datetime.fromtimestamp(
+                                date_millis / 1000, tz=_CHINA_TZ
+                            ).strftime("%Y-%m-%d")
+                            if date_millis
+                            else ""
+                        ),
+                        "date_millis": date_millis or 0,
+                        "product": product,
+                        "anomaly_type": anomaly_type,
+                        "desc": snapshot["desc"][:200],
+                    }
+                )
+    open_rows.sort(key=lambda row: row["date_millis"], reverse=True)
+    for row in open_rows:
+        row.pop("date_millis", None)
 
     products = [
         {
@@ -498,4 +570,140 @@ async def get_dashboard_aggregation(
         "last_analyzed_at": last_analyzed_at.isoformat() if last_analyzed_at else None,
         "products": products,
         "type_totals": type_totals,
+        "open_count": open_count,
+        "by_year_open": [
+            {"year": year, "open_count": stat["open_count"], "total": stat["total"]}
+            for year, stat in sorted(by_year_open.items())
+        ],
+        "open_recent": open_rows[:_OPEN_RECENT_LIMIT],
     }
+
+
+_OPEN_RECENT_LIMIT = 500
+
+
+class ClassificationExportRow(TypedDict):
+    year: int
+    record_id: str
+    content_hash: str
+    product: str
+    anomaly_type: str
+    reason: str
+    model_name: str
+
+
+async def export_classifications(db: AsyncSession) -> dict[str, Any]:
+    """导出全部已完成的成品异常分类结果（每记录取最新一条），供环境间搬运。"""
+    result = await db.execute(
+        select(QualityAiAnalysisLog)
+        .where(
+            QualityAiAnalysisLog.entity_type == ENTITY_TYPE,
+            QualityAiAnalysisLog.status == "completed",
+        )
+        .order_by(QualityAiAnalysisLog.created_at.desc())
+    )
+    rows: list[ClassificationExportRow] = []
+    seen: set[uuid.UUID] = set()
+    for log in result.scalars().all():
+        if log.entity_id in seen:
+            continue
+        seen.add(log.entity_id)
+        snapshot = log.input_snapshot or {}
+        payload = log.output_payload or {}
+        if not payload.get("anomaly_type"):
+            continue
+        rows.append(
+            {
+                "year": int(snapshot.get("year") or 0),
+                "record_id": str(snapshot.get("record_id") or ""),
+                "content_hash": str(snapshot.get("content_hash") or ""),
+                "product": str(payload.get("product") or ""),
+                "anomaly_type": str(payload.get("anomaly_type") or ""),
+                "reason": str(payload.get("reason") or ""),
+                "model_name": log.model_name,
+            }
+        )
+    return {
+        "entity_type": ENTITY_TYPE,
+        "exported_at": datetime.now(UTC).isoformat(),
+        "count": len(rows),
+        "rows": rows,
+    }
+
+
+_MAX_IMPORT_ROWS = 1000
+
+
+async def import_classifications_from_rows(
+    db: AsyncSession, payload_rows: list[dict[str, Any]]
+) -> dict[str, int]:
+    """导入分类结果（幂等）：本环境已有 completed 分类的记录直接跳过（不覆盖）。
+
+    导入行的 content_hash 原样携带（由源环境按同一快照算法算得），保证导入后
+    classify_year/看板 的去重判定命中、不触发 AI 重跑；行未带 hash 时以行内快照
+    重算兜底（仅对手工附快照字段的行有效，标准导出行必须带 hash）。
+    """
+    if not isinstance(payload_rows, list):
+        raise AppException(message="导入数据格式错误：rows 必须是数组", status_code=400)
+    if len(payload_rows) > _MAX_IMPORT_ROWS:
+        raise AppException(
+            message=f"单批导入行数不能超过 {_MAX_IMPORT_ROWS}", status_code=400
+        )
+    existing = await db.execute(
+        select(QualityAiAnalysisLog.entity_id).where(
+            QualityAiAnalysisLog.entity_type == ENTITY_TYPE,
+            QualityAiAnalysisLog.status == "completed",
+        )
+    )
+    existing_keys = set(existing.scalars().all())
+    imported = 0
+    skipped = 0
+    for raw in payload_rows:
+        if not isinstance(raw, dict):
+            raise AppException(
+                message="导入数据格式错误：行必须是对象", status_code=400
+            )
+        year_value = raw.get("year")
+        record_id = str(raw.get("record_id") or "").strip()
+        anomaly_type = str(raw.get("anomaly_type") or "").strip()
+        if (
+            not isinstance(year_value, int)
+            or year_value not in ANALYSIS_YEARS
+            or not record_id
+            or not anomaly_type
+        ):
+            raise AppException(
+                message=f"导入行缺少必要字段或年份不支持: {record_id or '(无记录ID)'}",
+                status_code=400,
+            )
+        entity_uuid = _entity_uuid(year_value, record_id)
+        if entity_uuid in existing_keys:
+            skipped += 1
+            continue
+        snapshot = {
+            "year": year_value,
+            "record_id": record_id,
+            "desc": str(raw.get("desc") or ""),
+            "product_hint": str(raw.get("product_hint") or ""),
+            "source": str(raw.get("source") or ""),
+        }
+        content_hash = str(raw.get("content_hash") or "") or _content_hash(snapshot)
+        db.add(
+            QualityAiAnalysisLog(
+                entity_type=ENTITY_TYPE,
+                entity_id=entity_uuid,
+                analysis_type=ANALYSIS_TYPE,
+                input_snapshot={**snapshot, "content_hash": content_hash},
+                output_payload={
+                    "product": str(raw.get("product") or ""),
+                    "anomaly_type": anomaly_type,
+                    "reason": str(raw.get("reason") or ""),
+                },
+                model_name=str(raw.get("model_name") or "imported")[:128],
+                status="completed",
+            )
+        )
+        existing_keys.add(entity_uuid)
+        imported += 1
+    await db.commit()
+    return {"imported": imported, "skipped": skipped}

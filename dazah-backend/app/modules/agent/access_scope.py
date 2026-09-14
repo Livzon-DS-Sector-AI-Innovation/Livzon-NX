@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.agent.models import AgentAccessScopeSnapshot
 from app.modules.agent.schemas import AgentAccessScopeOut, AgentModuleScopeOut
 from app.platform.identity.models import User
-from app.platform.identity.page_permission_repository import PagePermissionRepository
 from app.platform.identity.page_permissions import PagePermissionService
 from app.platform.identity.permission_repository import PermissionGrantRepository
 from app.shared.module_registry import BUSINESS_MODULES, MODULES_BY_CODE
@@ -49,30 +48,14 @@ class AgentAccessScopeService:
         registry_version = self._registry_version(
             [spec.public_dict() for spec in specs]
         )
-        rollouts = {
-            item.module_code: item.status
-            for item in await PagePermissionRepository().list_rollouts(db)
-        }
         page_grants = await PagePermissionService().effective_grants(db, user=user)
         page_grants_by_key = {grant.page_key: grant for grant in page_grants}
-        enforced_modules = {
-            module_code
-            for module_code, state in rollouts.items()
-            if state == "enforced"
-        }
-        modules = [
-            {
-                "module_code": module_code,
-                "module_name": MODULES_BY_CODE[module_code].name,
-                "permissions": sorted(set(grant.permissions or [])),
-                "data_scope": dict(grant.data_scope or {}),
-            }
-            for module_code, grant in sorted(grants_by_module.items())
-            if module_code not in enforced_modules
-            and "module.view" in set(grant.permissions or [])
-        ]
+        modules = []
         for module in BUSINESS_MODULES:
-            if module.code not in enforced_modules:
+            module_grant = grants_by_module.get(module.code)
+            if module_grant is None or "module.view" not in set(
+                module_grant.permissions or []
+            ):
                 continue
             module_page_grants = [
                 grant
@@ -123,46 +106,32 @@ class AgentAccessScopeService:
                 if spec.workflow_allowed and not spec.human_decision_required:
                     workflow_tool_names.append(spec.name)
                 continue
-            if spec.module in enforced_modules:
-                if not spec.page_keys:
-                    continue
-                required_permission = (
-                    "operate" if spec.write or spec.sensitive_action else "query"
+            module_grant = grants_by_module.get(spec.module)
+            if module_grant is None or "module.view" not in set(
+                module_grant.permissions or []
+            ):
+                continue
+            if not spec.page_keys:
+                continue
+            required_permission = (
+                "operate" if spec.write or spec.sensitive_action else "query"
+            )
+            matching_grants = [
+                page_grants_by_key.get(page_key) for page_key in spec.page_keys
+            ]
+            allowed_by_page = any(
+                grant is not None
+                and required_permission in grant.permissions
+                and (
+                    spec.sensitive_action is None
+                    or spec.sensitive_action in grant.sensitive_actions
                 )
-                matching_grants = [
-                    page_grants_by_key.get(page_key) for page_key in spec.page_keys
-                ]
-                allowed_by_page = any(
-                    grant is not None
-                    and required_permission in grant.permissions
-                    and (
-                        spec.sensitive_action is None
-                        or spec.sensitive_action in grant.sensitive_actions
-                    )
-                    for grant in matching_grants
-                )
-                if not allowed_by_page:
-                    continue
-                tool_names.append(spec.name)
-                if spec.workflow_allowed and not spec.human_decision_required:
-                    workflow_tool_names.append(spec.name)
-                continue
-            # 首批模块仍处于草稿期时，继续执行原有模块权限规则；发布为
-            # enforced 后才切换到上面的页面权限规则。
-            grant = grants_by_module.get(spec.module)
-            if grant is None:
-                continue
-            permissions = set(grant.permissions or [])
-            if "module.view" not in permissions:
-                continue
-            if spec.permission_key and spec.permission_key not in permissions:
+                for grant in matching_grants
+            )
+            if not allowed_by_page:
                 continue
             tool_names.append(spec.name)
-            if (
-                "module.agent.automate" in permissions
-                and spec.workflow_allowed
-                and not spec.human_decision_required
-            ):
+            if spec.workflow_allowed and not spec.human_decision_required:
                 workflow_tool_names.append(spec.name)
 
         snapshot = await self.get_snapshot(db, user_id=user_id, for_update=True)

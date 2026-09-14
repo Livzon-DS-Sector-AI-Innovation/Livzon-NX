@@ -13,12 +13,10 @@ import {
   Descriptions,
   Drawer,
   Empty,
-  InputNumber,
   Input,
   Row,
   Select,
   Space,
-  Switch,
   Table,
   Tag,
   Typography,
@@ -30,15 +28,12 @@ import {
   analyzeRegulatoryDocumentClient,
   fetchRegulatoryTrackerDocumentDetailClient,
   fetchRegulatoryTrackerDocumentsClient,
-  fetchRegulatoryTrackerNotificationRecipientsClient,
   fetchRegulatoryTrackerSyncStatusClient,
   manualSyncRegulatoryTrackerClient,
-  updateRegulatoryTrackerNotificationSettingsClient,
   type RegulatoryTrackerDetail,
   type RegulatoryTrackerListItem,
   type RegulatoryTrackerListParams,
   type RegulatoryTrackerManualSyncResult,
-  type RegulatoryTrackerNotificationRecipientOption,
   type RegulatoryTrackerNotificationSetting,
   type RegulatoryTrackerPagedResult,
 } from '@/lib/api/client/regulatoryTracker'
@@ -67,7 +62,6 @@ const INITIAL_FILTERS: TrackerFilters = {
 interface RegulationTrackerPageProps {
   initialResult: RegulatoryTrackerPagedResult<RegulatoryTrackerListItem>
   initialNotificationSettings: RegulatoryTrackerNotificationSetting
-  notificationRecipients: RegulatoryTrackerNotificationRecipientOption[]
 }
 
 export function formatDate(value?: string | null, withTime?: boolean) {
@@ -145,7 +139,6 @@ export function buildQueryParams(input: TrackerFilters): RegulatoryTrackerListPa
 export default function RegulationTrackerPage({
   initialResult,
   initialNotificationSettings,
-  notificationRecipients,
 }: RegulationTrackerPageProps) {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
@@ -157,7 +150,6 @@ export default function RegulationTrackerPage({
   const [refreshing, setRefreshing] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [analyzingSelected, setAnalyzingSelected] = useState(false)
-  const [savingNotificationSettings, setSavingNotificationSettings] = useState(false)
 
   const [keyword, setKeyword] = useState('')
   const [sourceSite, setSourceSite] = useState<string>()
@@ -166,11 +158,6 @@ export default function RegulationTrackerPage({
   const [isNew, setIsNew] = useState<boolean>()
   const [appliedFilters, setAppliedFilters] = useState<TrackerFilters>(INITIAL_FILTERS)
 
-  const [notificationEnabled, setNotificationEnabled] = useState(initialNotificationSettings.is_enabled)
-  const [notificationRecentDays, setNotificationRecentDays] = useState(initialNotificationSettings.recent_days)
-  const [notificationRecipientOpenId, setNotificationRecipientOpenId] = useState<string | undefined>(
-    initialNotificationSettings.recipient_open_id || undefined
-  )
   const [notificationSettingSnapshot, setNotificationSettingSnapshot] =
     useState<RegulatoryTrackerNotificationSetting>(initialNotificationSettings)
 
@@ -218,17 +205,9 @@ export default function RegulationTrackerPage({
     enabled: !!selectedDocumentId && detailOpen,
   })
 
-  const recipientsQuery = useQuery({
-    queryKey: ['registration-regulation', 'recipients'],
-    queryFn: () => fetchRegulatoryTrackerNotificationRecipientsClient(),
-    initialData: notificationRecipients,
-  })
-
   const documents = listQuery.data?.items ?? []
   const total = listQuery.data?.total ?? 0
   const loading = listQuery.isFetching
-  const notificationRecipientsState = recipientsQuery.data ?? []
-  const loadingNotificationRecipients = recipientsQuery.isFetching
   const detailRecord = (detailQuery.data ?? selectedRecordFromList(documents, selectedDocumentId)) as RegulatoryTrackerDetail | null
 
   const selectedRecord = useMemo(
@@ -251,19 +230,8 @@ export default function RegulationTrackerPage({
       })),
     [documents]
   )
-  const notificationRecipientOptions = useMemo(
-    () =>
-      notificationRecipientsState.map((item) => ({
-        label: item.department ? `${item.name} / ${item.department}` : item.name,
-        value: item.open_id,
-      })),
-    [notificationRecipientsState]
-  )
 
   useEffect(() => {
-    setNotificationEnabled(initialNotificationSettings.is_enabled)
-    setNotificationRecentDays(initialNotificationSettings.recent_days)
-    setNotificationRecipientOpenId(initialNotificationSettings.recipient_open_id || undefined)
     setNotificationSettingSnapshot(initialNotificationSettings)
   }, [initialNotificationSettings])
 
@@ -278,12 +246,6 @@ export default function RegulationTrackerPage({
       message.error(detailQuery.error instanceof Error ? detailQuery.error.message : '加载法规详情失败')
     }
   }, [detailQuery.error, message])
-
-  useEffect(() => {
-    if (recipientsQuery.error && notificationRecipients.length === 0) {
-      message.warning(recipientsQuery.error instanceof Error ? recipientsQuery.error.message : '通知人列表加载失败')
-    }
-  }, [recipientsQuery.error, message, notificationRecipients.length])
 
   useEffect(() => {
     return () => {
@@ -437,31 +399,6 @@ export default function RegulationTrackerPage({
       message.error(error instanceof Error ? error.message : '触发法规分析失败')
     } finally {
       setAnalyzingSelected(false)
-    }
-  }
-
-  async function handleSaveNotificationSettings() {
-    setSavingNotificationSettings(true)
-    try {
-      const result = await updateRegulatoryTrackerNotificationSettingsClient({
-        is_enabled: notificationEnabled,
-        recent_days: notificationRecentDays,
-        recipient_open_id: notificationRecipientOpenId || null,
-      })
-      if (!result) {
-        message.warning('推送配置未返回结果，请稍后刷新确认')
-        return
-      }
-
-      setNotificationSettingSnapshot(result)
-      setNotificationEnabled(result.is_enabled)
-      setNotificationRecentDays(result.recent_days)
-      setNotificationRecipientOpenId(result.recipient_open_id || undefined)
-      message.success('法规更新推送配置已保存')
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '保存推送配置失败')
-    } finally {
-      setSavingNotificationSettings(false)
     }
   }
 
@@ -728,57 +665,14 @@ export default function RegulationTrackerPage({
         />
       </Card>
 
-      <Card
-        size="small"
-        title="推送设置"
-        extra={
-          <Button type="primary" onClick={() => void handleSaveNotificationSettings()} loading={savingNotificationSettings}>
-            保存设置
-          </Button>
-        }
-      >
+      <Card size="small" title="法规更新推送状态">
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Alert
             type="info"
             showIcon
             title="系统会在每天 00:10 自动抓取法规网站更新内容，02:00 自动 AI 分析；若存在新增或更新法规，将在每天 10:00 推送到指定 QA 接收人。"
           />
-          <Row gutter={[12, 12]} align="middle">
-            <Col xs={24} md={6}>
-              <Space>
-                <Typography.Text strong>启用自动推送</Typography.Text>
-                <Switch checked={notificationEnabled} onChange={setNotificationEnabled} />
-              </Space>
-            </Col>
-            <Col xs={24} md={6}>
-              <Space>
-                <Typography.Text strong>抓取最近</Typography.Text>
-                <InputNumber
-                  min={1}
-                  max={30}
-                  value={notificationRecentDays}
-                  onChange={(value) => setNotificationRecentDays(value || 7)}
-                  style={{ width: 110 }}
-                />
-                <Typography.Text>天</Typography.Text>
-              </Space>
-            </Col>
-            <Col xs={24} md={12}>
-              <Select
-                showSearch
-                allowClear
-                style={{ width: '100%' }}
-                placeholder="选择通知人（仅显示 QA 人员）"
-                loading={loadingNotificationRecipients}
-                value={notificationRecipientOpenId}
-                onChange={(value) => setNotificationRecipientOpenId(value)}
-                optionFilterProp="label"
-                options={notificationRecipientOptions}
-              />
-            </Col>
-          </Row>
-
-          <Space wrap size={[8, 8]}>
+          <Space wrap size={[8, 8]} align="center">
             <Tag color={notificationSettingSnapshot.is_enabled ? 'processing' : 'default'}>
               {notificationSettingSnapshot.is_enabled ? '已启用' : '未启用'}
             </Tag>
@@ -792,19 +686,10 @@ export default function RegulationTrackerPage({
                   : ''}
               </Tag>
             ) : null}
+            <Typography.Text type="secondary">
+              推送开关、接收人与消息模板请在「注册管理 → 注册设置 → 通知设置」中维护。
+            </Typography.Text>
           </Space>
-
-          <Typography.Text type="secondary">
-            通知人直接取自质量管理中的 QA 飞书联系人。人员变动后，直接在这里重新选择即可。
-          </Typography.Text>
-
-          {!notificationRecipientOptions.length ? (
-            <Alert
-              type="warning"
-              showIcon
-              title="当前没有可用的 QA 飞书联系人，暂时无法启用法规更新自动推送。"
-            />
-          ) : null}
         </Space>
       </Card>
 

@@ -23,8 +23,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from statistics import fmean, pstdev
 from typing import Any
+from zoneinfo import ZoneInfo
 
 # ─── 规则与严重度常量 ─────────────────────────────────────────────
 
@@ -141,6 +143,18 @@ def parse_batch_month(batch_no: str) -> int | None:
     return None
 
 
+def batch_is_current_month(
+    batch_no: str, reference: datetime | None = None
+) -> bool:
+    """批号是否属于参照时间（默认北京时间当前月）所在月份。
+
+    批号解析不出年月时返回 False（调用方可用"末尾 N 批"兜底）。
+    """
+    reference_dt = reference or datetime.now(ZoneInfo("Asia/Shanghai"))
+    current_ym = reference_dt.year * 100 + reference_dt.month
+    return parse_batch_month(batch_no) == current_ym
+
+
 # ─── 内部工具 ─────────────────────────────────────────────────────
 
 
@@ -243,12 +257,15 @@ def split_current_history(
         return _sequence_fallback()
 
     base: list[int] = []
-    # 依次向前取最近的 1~3 个日历月作为基线，直到点数足够
-    for key in reversed(keys[:-1]):
+    # 依次向前取最近的 1~3 个日历月作为基线（超出 3 个月的历史不再纳入，
+    # 避免旧台阶污染近期基线）；点数仍不足时继续向后兼容至点数足够
+    prior_keys = list(reversed(keys[:-1]))
+    for month_count, key in enumerate(prior_keys, start=1):
         base = groups[key] + base
         if len(base) >= max(MIN_CURRENT_POINTS * 2, 10):
             break
-        _ = key
+        if month_count >= 3:
+            break
     if len(base) < MIN_CURRENT_POINTS:
         return _sequence_fallback()
     return current, base, "batch_month"
@@ -375,7 +392,7 @@ def _detect_slope_change(
     noise = (noise_current + noise_history) / 2 or max(noise_current, noise_history)
     if noise <= 0:
         return None
-    se = (  # type: ignore[name-defined]
+    se = (
         _slope_se(current, noise) ** 2 + _slope_se(history, noise) ** 2
     ) ** 0.5
     t_like = abs(delta_slope) / se if se > 0 else float("inf")
@@ -502,7 +519,7 @@ def detect_trend_anomalies(
     values: list[float] = []
     for item in points:
         try:
-            value = float(item["value"])  # type: ignore[index]
+            value = float(item["value"])
         except (KeyError, TypeError, ValueError):
             continue
         batches.append(str(item.get("batch_no") or ""))

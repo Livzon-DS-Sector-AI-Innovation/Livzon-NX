@@ -81,6 +81,15 @@ describe('application shell permission boundary', () => {
     expect(denied).not.toContain('业务内容')
   })
 
+  it('builds navigation from the current user page grant', () => {
+    const html = renderToStaticMarkup(<AppShell user={makeUser({
+      page_permissions: pageGrant(['access', 'query']),
+    })}>业务内容</AppShell>)
+    expect(html).toContain('业务内容')
+    expect(html).toContain('href="/purchasing"')
+    expect(html).not.toContain('href="/quality"')
+  })
+
   it('keeps page denial and query-only states in the shell', () => {
     const sourcePath = fileURLToPath(new URL('./AppShell.tsx', import.meta.url))
     const source = readFileSync(sourcePath, 'utf8')

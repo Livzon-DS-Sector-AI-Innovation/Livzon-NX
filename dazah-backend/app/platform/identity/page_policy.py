@@ -56,6 +56,8 @@ WAREHOUSE_MATERIAL_PAGE_ALIASES = {
             "packaging-detail",
             "packaging-ledger",
             "inbound-ledger",
+            "liquid-raw-inbound",
+            "liquid-sugar-inbound",
             "qualified-suppliers",
             "material-name-code-map",
         )

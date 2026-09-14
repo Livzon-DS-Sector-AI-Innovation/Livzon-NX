@@ -1,0 +1,13 @@
+[Unit]
+Description=Dazah isolated backup restore drill
+After=docker.service
+[Service]
+Slice=dazah-control.slice
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/dazah/control/controller.py drill
+UMask=0077
+Nice=15
+CPUWeight=10
+IOWeight=10
+TimeoutStartSec=1800
+MemoryMax=256M

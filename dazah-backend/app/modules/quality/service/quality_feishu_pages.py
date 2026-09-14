@@ -518,7 +518,7 @@ async def create_deviation_report_record(
 
     只需填写偏差内容、涉及产品名称/批号、报告人。
     偏差编号自动生成（PC-YYMM###），报告时间为提交时间，
-    部门根据报告人从部门联系人中自动填充。
+    部门根据报告人从人员目录中自动填充。
     """
     description = str(payload.get("description") or "").strip()
     product_batch = str(payload.get("product_batch") or "").strip()
@@ -1668,7 +1668,7 @@ async def _apply_ai_validation_categories(
 ) -> None:
     """对缺少"验证类别"列的记录按确认名称做 AI 分类（带 DB 缓存）。
 
-    顺带用部门联系人补全人员/负责人的头像（飞书用户字段本身不含头像）。
+    顺带用人员目录补全人员/负责人的头像（飞书用户字段本身不含头像）。
     """
     inferred_titles = sorted(
         {
@@ -1702,7 +1702,7 @@ async def _enrich_participants_avatars(
     """用 HR 飞书人员缓存（hr_feishu_members）按姓名补全人员/负责人头像。
 
     飞书 user 字段本身不含 avatar_url；HR 模块已把飞书通讯录（含头像）
-    缓存到本地表，按姓名匹配即可取到头像，不依赖部门联系人表配置。
+    缓存到本地表，按姓名匹配即可取到头像。
     """
     try:
         from sqlalchemy import select as _select

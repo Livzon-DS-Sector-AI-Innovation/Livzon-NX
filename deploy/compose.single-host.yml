@@ -1,0 +1,41 @@
+# Operator-owned overlay; apply after the site's existing Compose files.
+services:
+  migrate:
+    mem_limit: 1792m
+    memswap_limit: 1792m
+    cpus: 1.75
+    pids_limit: 256
+  app:
+    mem_limit: 1792m
+    cpus: 1.75
+    pids_limit: 256
+    command: [".venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--limit-concurrency", "64", "--timeout-keep-alive", "5"]
+    environment:
+      DATABASE_POOL_SIZE: "5"
+      DATABASE_MAX_OVERFLOW: "5"
+      DATABASE_POOL_TIMEOUT: "5"
+  db:
+    mem_limit: 768m
+    cpus: 0.75
+    command: ["postgres", "-c", "max_connections=80"]
+  hermes-lite:
+    mem_limit: 512m
+    cpus: 0.5
+  frontend:
+    mem_limit: 512m
+    cpus: 0.5
+  minio:
+    mem_limit: 384m
+    cpus: 0.5
+  redis:
+    mem_limit: 192m
+    cpus: 0.25
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"]
+  nginx:
+    mem_limit: 96m
+    cpus: 0.25
+    volumes:
+      - /var/lib/dazah-cd/public:/run/dazah:ro
+      - /opt/dazah/control/nginx-capacity.conf:/etc/nginx/conf.d/dazah-capacity.conf:ro
+      - /opt/dazah/control/nginx-server-guard.conf:/etc/nginx/dazah-server-guard.conf:ro
+      - /opt/dazah/control/nginx-api-guard.conf:/etc/nginx/dazah-api-guard.conf:ro

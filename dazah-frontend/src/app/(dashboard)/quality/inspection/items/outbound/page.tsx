@@ -11,6 +11,7 @@ export default function ItemsOutboundPage() {
         listApi="/api/v1/quality/items/outbound"
         pullApi="/api/v1/quality/items/outbound/pull"
         entityCode="qc_items_outbound"
+        createLabel="新增出库"
         editable
       />
     </QualityQueryProvider>

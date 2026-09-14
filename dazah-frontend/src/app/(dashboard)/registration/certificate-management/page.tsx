@@ -2,12 +2,10 @@ import { Alert, Space } from 'antd'
 
 import { CertificateDashboardPage } from '@/components/registration'
 import {
-  fetchCertificateReminderRecipientsServer,
   fetchCertificateReminderSettingsServer,
   fetchCertificateWorkbookOverviewServer,
 } from '@/lib/api/server/registration'
 import type {
-  CertificateReminderRecipientOption,
   CertificateReminderSetting,
   CertificateWorkbookOverview,
 } from '@/types/registration'
@@ -17,13 +15,11 @@ export const dynamic = 'force-dynamic'
 export default async function RegistrationCertificateManagementPage() {
   let overview: CertificateWorkbookOverview
   let reminderSettings: CertificateReminderSetting
-  let reminderRecipients: CertificateReminderRecipientOption[]
 
   try {
-    ;[overview, reminderSettings, reminderRecipients] = await Promise.all([
+    ;[overview, reminderSettings] = await Promise.all([
       fetchCertificateWorkbookOverviewServer(),
       fetchCertificateReminderSettingsServer(),
-      fetchCertificateReminderRecipientsServer(),
     ])
   } catch (error) {
     return (
@@ -46,11 +42,7 @@ export default async function RegistrationCertificateManagementPage() {
           description="尚未配置药政证书台账，请点击页面右上角「导入药政证书台账」上传 Excel 完成初始化。"
         />
       ) : null}
-      <CertificateDashboardPage
-        overview={overview}
-        reminderSettings={reminderSettings}
-        reminderRecipients={reminderRecipients}
-      />
+      <CertificateDashboardPage overview={overview} reminderSettings={reminderSettings} />
     </Space>
   )
 }

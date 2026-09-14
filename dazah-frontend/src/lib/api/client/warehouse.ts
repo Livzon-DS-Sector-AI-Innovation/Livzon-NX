@@ -54,6 +54,14 @@ export async function fetchWarehousePageFeishuConfigs(): Promise<WarehousePageFe
   return body.data
 }
 
+/** 人员姓名 → 飞书头像 URL 映射（人事-飞书联系人，在职），供文本人员字段渲染真实头像 */
+export async function fetchWarehousePersonAvatarMap(): Promise<Record<string, string>> {
+  const res = await fetch('/api/v1/warehouse/person-avatar-map')
+  if (!res.ok) throw new Error('获取人员头像映射失败')
+  const body = await res.json()
+  return (body.data ?? {}) as Record<string, string>
+}
+
 export async function fetchWarehouseMaterialPage(
   pageKey: string,
   params?: WarehouseMaterialPageQueryParams,

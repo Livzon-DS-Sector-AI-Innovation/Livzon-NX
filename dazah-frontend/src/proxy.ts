@@ -101,9 +101,9 @@ export async function proxy(request: NextRequest) {
     } catch {
       return denied('暂时无法验证页面权限，请稍后重试。', 503)
     }
-    if (user.role !== 'admin' && user.page_permission_rollouts?.[currentModule.moduleCode] === 'enforced') {
+    if (user.role !== 'admin') {
       if (request.nextUrl.pathname.replace(/\/$/, '') === currentModule.path) {
-        const visible = getAuthorizedPageMenus(user.module_codes, user.page_permissions, user.page_permission_rollouts)
+        const visible = getAuthorizedPageMenus(user.module_codes, user.page_permissions)
           .find((item) => item.moduleCode === currentModule.moduleCode)
         if (visible && hasModuleLandingEntry(visible.children, currentModule.path)) {
           return NextResponse.next({ request: { headers: requestHeaders } })

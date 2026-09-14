@@ -468,7 +468,7 @@ export function DeviationInvestigationPushPage({
               disabled={!selectedDeviationCode}
               placeholder={
                 selectedReportRecord?.department
-                  ? `请选择${selectedReportRecord.department}部门联系人中的提交人`
+                  ? `请选择${selectedReportRecord.department}的提交人`
                   : '如需修改提交人，请重新选择'
               }
             />

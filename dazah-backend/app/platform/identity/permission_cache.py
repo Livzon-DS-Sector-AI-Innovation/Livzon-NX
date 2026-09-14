@@ -28,7 +28,7 @@ def _cache_key(user_id: Any) -> str:
 
 
 def _cache_ts_key(user_id: Any) -> str:
-    """缓存写入时间戳 key（与权限缓存同 TTL，记录“生效时间”供权限验证台预览）。"""
+    """缓存写入时间戳 key（与权限缓存同 TTL，记录“生效时间”供权限接入检查预览）。"""
     return f"{PERMISSION_CACHE_PREFIX}ts:{user_id}"
 
 

@@ -67,7 +67,12 @@ async def test_export_uses_business_names_and_neutralizes_spreadsheet_formulas(
     assert rows[1][0] == "'=formula"
     assert rows[1][3] == "采购管理"
     assert rows[1][4:7] == ["是", "是", "是"]
-    assert rows[1][8:12] == ["不适用", "角色基线", "采购经办", "草稿（尚未生效）"]
+    assert rows[1][8:12] == [
+        "不适用",
+        "角色基线",
+        "采购经办",
+        "待核验（不影响权限生效）",
+    ]
     assert "bulk_import" not in response.text
     assert "purchasing:supplier" not in response.text
     assert "采购" in rows[1][3]

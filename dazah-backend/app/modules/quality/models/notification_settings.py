@@ -13,7 +13,12 @@ class QualityNotificationSetting(BaseModel):
 
     recipients 的 JSON 形状按 notification_type 约定：
     - change_action_plan_due: {"fallback_recipients": [{"open_id", "name"}]}
-    - inspection_trend_alert: {"lines": {"<entity_code>": {"enabled", "recipients"}}}
+    - inspection_trend_alert: {"lines": {"<entity_code>": {"enabled", "recipients",
+      "qa_recipients"}}}
+    - inspection_trend_alert_escalation: {"first_recipients": [{"open_id", "name"}],
+      "escalation_hours": int}
+    - items_stock_alert: {"recipients": [...], "header_template", "footer_template",
+      "warning_source"}
     """
 
     __tablename__ = "quality_notification_settings"

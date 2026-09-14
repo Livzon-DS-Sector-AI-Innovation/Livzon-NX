@@ -50,8 +50,8 @@ interface ApiResponse<T> {
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     if (res.status === 401) {
-      // 401 拦截：清除 cookie + 跳转登录页
-      window.location.href = "/login"
+      // 完整导航以丢弃失效会话的客户端状态，且不保留过期页面的历史项。
+      window.location.replace("/login")
       throw new Error("未登录或登录已过期")
     }
     let detail = `请求失败 (${res.status})`

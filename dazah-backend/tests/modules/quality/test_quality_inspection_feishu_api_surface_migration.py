@@ -62,9 +62,6 @@ async def test_inspection_list_pull_and_subtable_routes_use_safe_contract(
     request = _request()
 
     list_routes = (
-        (api.api_list_items, "list_items"),
-        (api.api_list_inbounds, "list_inbounds"),
-        (api.api_list_outbounds, "list_outbounds"),
         (api.api_list_equipment, "list_equipment"),
         (api.api_list_maintenance, "list_maintenance"),
         (api.api_list_calibrations, "list_calibrations"),
@@ -89,9 +86,6 @@ async def test_inspection_list_pull_and_subtable_routes_use_safe_contract(
         assert _body(response)["meta"]["fields"] == ["状态"]  # type: ignore[index]
 
     pull_routes = (
-        (api.api_pull_items, "pull_items"),
-        (api.api_pull_inbounds, "pull_inbounds"),
-        (api.api_pull_outbounds, "pull_outbounds"),
         (api.api_pull_equipment, "pull_equipment"),
         (api.api_pull_maintenance, "pull_maintenance"),
         (api.api_pull_calibrations, "pull_calibrations"),

@@ -153,8 +153,11 @@ GitHub Step Summary。Quarantine 不在 Gate 的 `needs` 中。
 6. 新 Gate 稳定后，移除旧的 `Frontend Test`、`Backend Test`、
    `Backend Docker Build`、`Hermes Test` 等 Required Checks。
 
-Workflow 没有生产发布逻辑。以后接入发布时，发布 Job 必须
-`needs: ci-gate`，并只允许在目标分支的 `push` 事件执行。
+`Register CD Candidate` 显式依赖 `ci-gate`，仅在 main 的 push 事件执行。
+它在受限 self-hosted runner 上登记候选 SHA/run ID，不执行发布、不 checkout 代码。
+本机 root-owned controller 再验证 protected main 和 CI 来源，并在维护窗口处理候选。
+首次演练及容量验收完成前保持 controller 的 `enabled=false`，详见
+`docs/runbooks/single-host-cd.md`。
 
 ## Nightly
 

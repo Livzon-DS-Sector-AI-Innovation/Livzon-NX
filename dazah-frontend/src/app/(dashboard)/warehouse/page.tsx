@@ -22,21 +22,35 @@ const quickActions = [
     title: '原辅料及包材入库',
     subtitle: '入库总账',
     direction: '入库' as const,
-    feishuFormId: 'shrcnw9CyyTl8PdAvOyQZqK9oie',
+    feishuFormId: 'shrcnLl9xrz5e60vRG4P8Cy85FC',
   },
   {
     key: 'raw-outbound',
     title: '原辅料出库',
     subtitle: '出库总账',
     direction: '出库' as const,
-    feishuFormId: 'shrcnHN5pqjlDlKc3iyUi7Fts7b',
+    feishuFormId: 'shrcnsJ8U9aoOqqEBS5b1mpG2Zd',
   },
   {
     key: 'packaging-outbound',
     title: '包材出库',
     subtitle: '出库总账',
     direction: '出库' as const,
-    feishuFormId: 'shrcneDAUnAAhPs1yFMfOq0Uhkf',
+    feishuFormId: 'shrcnOZBGw46qWth2auB1F09kNd',
+  },
+  {
+    key: 'liquid-raw-inbound',
+    title: '液体原辅料入库',
+    subtitle: '液体原辅料入库',
+    direction: '入库' as const,
+    feishuFormId: 'shrcnfWaTJinJrjFh0hcqvYG0De',
+  },
+  {
+    key: 'liquid-sugar-inbound',
+    title: '液糖入库',
+    subtitle: '液糖入库',
+    direction: '入库' as const,
+    feishuFormId: 'shrcnPdocHXYzag4Uyj0biU9bYc',
   },
   {
     key: 'product-inbound',
@@ -109,12 +123,12 @@ export default function WarehousePage() {
         </p>
       </div>
 
-      {/* 快捷操作区：CSS Grid 五等分撑满整行，随页面宽度自适应 */}
+      {/* 快捷操作区：CSS Grid 四等分撑满整行（7 张表单卡 + 1 张外部系统卡 = 两行整齐），随页面宽度自适应 */}
       <div>
         <h2 className="text-[16px] font-semibold text-[var(--color-charcoal)] mb-3">
           快捷操作
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
           {quickActions.map((action) => (
             <a
               href={FEISHU_FORM_BASE + action.feishuFormId}

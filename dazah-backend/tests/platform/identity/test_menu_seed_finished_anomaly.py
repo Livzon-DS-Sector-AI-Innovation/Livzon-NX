@@ -46,6 +46,27 @@ def test_anomaly_report_keys_do_not_collide() -> None:
     assert keys.count("anomaly-report-ledger") == 1
 
 
+def test_liquid_inbound_and_registration_settings_seeded() -> None:
+    """液体入库两页与注册设置页进入种子菜单（配合 page_policy 放行）。"""
+    keys: list[str] = []
+    paths: list[str] = []
+
+    def walk(nodes: list[dict[str, Any]]) -> None:
+        for node in nodes:
+            keys.append(node["key"])
+            paths.append(node.get("path") or "")
+            if node.get("children"):
+                walk(node["children"])
+
+    walk(SEED_MENUS)
+    assert "liquid-raw-inbound" in keys
+    assert "liquid-sugar-inbound" in keys
+    assert "/warehouse/materials/liquid-raw-inbound" in paths
+    assert "/warehouse/materials/liquid-sugar-inbound" in paths
+    assert "registration-settings" in keys
+    assert "/registration/settings" in paths
+
+
 def test_department_contacts_menu_removed() -> None:
     """部门联系人功能整体下线：种子树与页面目录都不得再出现该入口。"""
     keys: list[str] = []

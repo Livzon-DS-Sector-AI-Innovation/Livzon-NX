@@ -14,7 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import CurrentUser
 from app.core.exceptions import AppException
-from app.core.llm import LLMConfigError, LLMProviderError, LLMRateLimitError
+from app.core.llm import (
+    LLMConfigError,
+    LLMOutputError,
+    LLMProviderError,
+    LLMRateLimitError,
+)
 from app.modules.quality.service.finished_product_anomaly_chat import (
     build_chat_system_prompt,
     run_anomaly_chat_loop,
@@ -111,6 +116,10 @@ async def anomaly_chat_stream(
         except LLMProviderError:
             logger.exception("Anomaly AI chat provider error")
             yield _sse({"content": "AI 服务暂时不可用，请检查 LLM 配置或稍后重试。"})
+            yield _sse({"done": True})
+        except LLMOutputError:
+            logger.warning("Anomaly AI chat invalid output")
+            yield _sse({"content": "AI 返回格式异常，请重试或换一种问法。"})
             yield _sse({"done": True})
         except Exception:
             logger.exception("Anomaly AI chat unknown error")

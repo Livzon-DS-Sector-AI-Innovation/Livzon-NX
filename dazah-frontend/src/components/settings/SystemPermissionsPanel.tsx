@@ -39,8 +39,8 @@ export const SYSTEM_PERMISSION_PAGES = [
   },
   {
     href: '/system/permission-verification',
-    title: '权限验证台',
-    description: '按用户、页面和业务动作验证授权结果。',
+    title: '权限接入检查',
+    description: '查看各模块的权限接入详情与门禁结果。',
   },
 ] as const
 
@@ -128,10 +128,10 @@ export default function SystemPermissionsPanel({
           },
           {
             key: '/system/permission-verification',
-            label: '权限验证台',
+            label: '权限接入检查',
             children: (
               <PermissionTabContent description={SYSTEM_PERMISSION_PAGES[4].description}>
-                <PermissionVerification users={users} />
+                <PermissionVerification />
               </PermissionTabContent>
             ),
           },

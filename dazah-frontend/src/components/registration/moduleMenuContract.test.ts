@@ -12,6 +12,7 @@ describe('registration migrated menu contract', () => {
       '法规跟踪',
       '注册费用',
       '注册知识库',
+      '注册设置',
     ])
   })
 

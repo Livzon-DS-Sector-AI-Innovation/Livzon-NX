@@ -3,6 +3,14 @@ import { fetchRoles, fetchAdminUsers } from './admin'
 
 afterEach(() => vi.unstubAllGlobals())
 
+it('replaces the expired page with login on unauthorized responses', async () => {
+  const replace = vi.fn()
+  vi.stubGlobal('window', { location: { replace } })
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 401 })))
+  await expect(fetchRoles()).rejects.toThrow('未登录或登录已过期')
+  expect(replace).toHaveBeenCalledWith('/login')
+})
+
 it('preserves the role authorization version for page permission edits', async () => {
   const role = { id: 'role-1', name: '查询员', code: 'reader', is_system: false, permissions: [], grant_version: 7 }
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 200, message: 'ok', data: [role] }))))

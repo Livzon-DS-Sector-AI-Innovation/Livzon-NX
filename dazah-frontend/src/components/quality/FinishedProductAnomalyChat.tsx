@@ -72,7 +72,6 @@ async function streamAnomalyChat(
 }
 
 /** 成品异常 AI 助手聊天抽屉：查询全部成品异常数据 + 不合格项 AI 分析。 */
-const CHAT_UI_VERSION = 'v2'
 export function FinishedProductAnomalyChat({ open, year, onClose }: FinishedProductAnomalyChatProps) {
   const { message } = App.useApp()
   const [messages, setMessages] = useState<ChatMessageItem[]>([
@@ -152,9 +151,6 @@ export function FinishedProductAnomalyChat({ open, year, onClose }: FinishedProd
         <span style={{ fontSize: 15 }}>
           <RobotOutlined style={{ marginRight: 8 }} />
           成品异常 AI 助手
-          <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--color-steel)' }}>
-            {CHAT_UI_VERSION}
-          </span>
         </span>
       }
       size={720}

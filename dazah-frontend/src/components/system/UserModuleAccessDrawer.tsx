@@ -138,7 +138,7 @@ export default function UserModuleAccessDrawer({
       setSelectedCodes(selectedModuleCodes(next))
       setReason('')
       setErrorMessage('')
-      message.success('模块访问权限已保存')
+      message.success('模块访问权限已保存并生效')
     } catch (error) {
       if (version !== sessionVersion.current) return
       setErrorMessage(`${error instanceof Error ? error.message : '保存模块访问权限失败'}。本地修改已保留，请核对后重试。`)

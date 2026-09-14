@@ -1,4 +1,4 @@
-"""权限验证台测试：账号权限预览 / 接口准入模拟 / 权限清单导出 / admin 前缀 403。"""
+"""权限接入检查测试：账号权限预览 / 接口准入模拟 / 权限清单导出 / admin 前缀 403。"""
 
 import json
 from datetime import UTC, datetime, timedelta

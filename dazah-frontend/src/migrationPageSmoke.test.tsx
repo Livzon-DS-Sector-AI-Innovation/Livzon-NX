@@ -3,9 +3,10 @@ import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import { useAuthStore } from '@/stores/auth'
 
 vi.mock('next/navigation', () => ({
-  usePathname: () => '/warehouse/raw-materials',
+  usePathname: () => '/warehouse/materials/raw-summary',
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
 }))
@@ -54,6 +55,7 @@ vi.mock('@/actions/quality', () => ({
 vi.mock('@/lib/api/client/warehouse', () => ({
   fetchWarehouseMaterialPage: vi.fn(async () => undefined),
   fetchWarehouseRecordDetail: vi.fn(async () => undefined),
+  fetchWarehousePersonAvatarMap: vi.fn(async () => ({})),
 }))
 
 vi.mock('@/actions/warehouse', () => ({
@@ -117,6 +119,19 @@ describe('migrated page smoke contracts', () => {
     const { WarehouseFeishuTablePage } = await import(
       './components/warehouse/WarehouseFeishuTablePage'
     )
+    useAuthStore.getState().setUser({
+      id: 'smoke-user',
+      name: '权限测试用户',
+      role: 'user',
+      page_permissions: [{
+        page_key: 'warehouse:materials:raw-summary',
+        module_code: 'warehouse',
+        permissions: ['access', 'query'],
+        sensitive_actions: [],
+        data_scope: { scope_type: 'not_applicable' },
+        source: 'user',
+      }],
+    })
     const html = renderWithAntdApp(
       React.createElement(WarehouseFeishuTablePage, {
         pageKey: 'raw-summary',
@@ -136,6 +151,7 @@ describe('migrated page smoke contracts', () => {
         } as never,
       })
     )
+    useAuthStore.getState().clearUser()
     expect(html).toContain('原辅料库存')
   })
 
@@ -186,7 +202,6 @@ describe('migrated page smoke contracts', () => {
         schedule_time: '09:00',
         pending_count: 0,
       },
-      notificationRecipients: [],
     }))).toContain('法规')
     expect(renderWithAntdApp(React.createElement(WarehouseFeishuConfigPage, {
       initialConfigs: [],

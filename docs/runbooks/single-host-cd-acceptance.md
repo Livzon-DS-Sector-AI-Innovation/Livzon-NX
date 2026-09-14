@@ -1,0 +1,184 @@
+# 剩余 CD 验收执行单
+
+当前正式发布关闭。2026-09-10 13:28 CST 核验：Runner active，controller enabled=false。
+用户已确认平台日常使用正常，专用组仅允许 Livzon-NX 的 ci.yml@refs/heads/main。
+
+## GitHub 实际门禁
+
+必须先取得本次提交、推送、PR 与合并授权，遵守根 AGENTS.md 全部流程。
+不调整组织组策略，不授予额外凭据，不执行任何正式部署命令。
+
+1. 在单独测试 PR 中将 scripts/cd/runner-denial-probe.yml 复制为
+   .github/workflows/runner-denial-probe.yml。该文件不 checkout、不访问密钥、不读写业务数据；
+   如果误调度，只输出失败标记并退出。测试 PR 不合并。
+2. 记录 GitHub run/job ID、head SHA、组名、实际错误和 runner_id。
+   必须取得明确的访问拒绝证据；仅 queued、skipped、timeout 或未触发不算通过。
+   排队超过 5 分钟时取消本次测试并记录为未定，不能将其误报为隔离成功。
+3. 另在 ci.yml 的 PR 版本放入相同无副作用探针，保持文件路径相同，
+   验证 refs/pull/... 不因 ci.yml 文件名匹配而取得 main 的执行权限。
+   该临时探针不进入正式变更，测试 PR 均关闭，不自动删除远端分支。
+4. 正式 CD 变更通过独立 PR 和 CI 后进入 main。对应 push 的 CI Gate 成功后，
+   Register CD Candidate 应由 dazah-251-cd 执行成功，并生成相同 SHA/run ID 的候选。
+   此时 controller 继续 enabled=false，不开启发布。
+5. 正向执行成功和两组明确拒绝证据齐全后，才将调度门禁标记通过。
+
+## 首次正式维护窗口
+
+### 经用户授权的过渡修复
+
+不改写 c9d400000026 等历史迁移。deploy/migration-policy.json 的 deployment_hold
+限定源码 head=c9d400000026、实际 upgrade 目标=c9d400000025；从 a7c100000021
+或已处于 c9d400000025 的数据库进入。任何后续源码 head、未知数据库 revision 都拒绝沿用。
+控制器副本验证和正式迁移均使用同一个明确 revision，不使用 upgrade head，不 stamp、不 downgrade。
+新增源码迁移时必须重新审查目标，不能假装已应用被暂缓的删除表迁移。
+
+副本验证已确认升级到 c9d400000025 后部门联系人表行数与内容摘要不变；
+新应用导入成功，旧开发镜像中的 DepartmentContact ORM 查询、插入、更新及回滚通过，
+检查后内容摘要仍不变。这证明联系人表的兼容性，不代表全部旧业务路径回退验收通过。
+当前 transitions 仍为空，完整迁移兼容声明在进一步验收前不启用。
+
+固定北京时间 02:00–05:00，04:30 后不开始切换。当前白天不执行切换。
+不能直接调用现有无人值守控制器绕过 EDBO 首次切换门禁。
+
+前置条件：受保护 main 的对应 CI Gate 通过；不可变发布包校验完成；
+当前版本镜像及配置归档可恢复；副本迁移通过且旧应用写入兼容性经过审查。
+当前 migration-policy transitions 为空；批次血缘唯一约束的兼容性仍未确认，
+不能为了赶窗口填写 backward_compatible=true。
+
+1. 核对数据盘 UUID、磁盘余量、运行镜像和所有写入源；记录旧配置校验值和备份引用。
+2. 安装已验证的维护入口，启用维护响应并等待请求排空。停止全部应用写入源，包含 EDBO。
+3. 完成 writers_stopped 一致备份；失败恢复原应用，不执行迁移。
+4. 在服务器专属配置中精确移除 EDBO 服务及依赖，只删除 dazah-edbo-service-1，保留业务表。
+5. 单次执行新版本迁移，核对 revision 后依次启动应用和新入口。
+6. 内部就绪和业务冒烟通过后开放流量，观察至少 5 分钟并由用户核对业务。
+7. 完整回退验收需要再次维护及停止写入；仅对确认兼容的数据库回退应用镜像。
+   不为演练自动覆盖开放流量后的数据库；不在正式库注入迁移失败。
+8. 记录维护、恢复耗时及所有失败分支证据。未达到目标或兼容性未知，继续关闭无人值守发布。
+
+本执行单不代表实际调度、正式切换或回退已经通过。
+
+## 2026-09-10 授权后的实际执行
+
+- 用户已授权验收所需 Git 操作。主工作区以 feature/single-host-cd 保存现有未提交改动。
+- fetch 后 main 为 5ab657ab66db92adc85f412fe18147ea2cf6c1fc，比旧基线增加 #73、#74。
+  新迁移 c9d400000026 会删除 quality.department_contacts，downgrade 只重建空表，
+  不能恢复数据；旧版本仍定义并使用该表。暂停正式 CD 合并/发布，不能沿用之前兼容性结论。
+- 独立工作目录 .deploy-tmp/runner-access-test，测试分支 feature/runner-access-acceptance，
+  提交 1210d12df6f45726334d593fb8c2df5ca5a90dd9，仅含两个工作流探针。
+  该工作目录内 test-impact 和 diff 检查通过；首次误在主工作区执行的 test-impact 不适用于测试提交，
+  已切换正确工作目录重跑，不将其失败当作通过。
+- 测试 PR：https://github.com/Livzon-DS-Sector-AI-Innovation/Livzon-NX/pull/75 。
+  CI run 34441508225 的 job 102757334970、独立 run 34441508314 的 job 102757334648
+  均 queued，runner_id=null，无拒绝 annotation；没有发生探针执行。
+  此结果仅表示未调度，不证明策略明确拒绝。
+- 因主线破坏性迁移阻断首次发布，提前取消测试运行并关闭 PR（未合并），保留测试分支供后续审计。
+  没有修改组织策略、正式数据库或 EDBO。CD 仍关闭。
+
+### 后续隔离恢复验收
+
+- Runner 实际 cgroup 为 `/dazah.slice/dazah-control.slice/actions.runner.Livzon-DS-Sector-AI-Innovation.dazah-251-cd.service`。
+  同主机普通进程连接 `192.168.40.251:80` 成功；将独立探针放入该 cgroup 并降权为
+  `dazah-runner` 后连接超时，符合 IPAddressDeny 丢弃流量的行为。此对照仅证明主机网络隔离，
+  不替代 GitHub 工作流访问拒绝证据。首次探针因路径断言提前退出，未计入成功结果。
+- `DAZAH_DOCKER_TESTS=1 python -m pytest scripts/tests/test_cd_watchdog_docker.py -q`：
+  1 项通过，129.06 秒。实际开发容器持续不健康时重启三次，随后停止并设置 restart=no，
+  写入临时维护标记，后续巡检没有拉起已阻断的容器。测试结束删除该临时容器。
+  依赖健康状态使用夹具，冷却时间通过调整测试状态文件推进；未声称验证真实 30 秒调度节奏，
+  未操作正式容器、正式维护标记或数据库。
+- root 管理控制器已从通过 CI 的 `995a90f` 单独更新，SHA-256 为
+  `e12b0d17e712f39810bd233342a70f1ee027d580de6922c99aad1d41d7b2ccae`。
+  旧文件保留为 `/opt/dazah/control/controller.py.before-995a90f`；在部署锁内完成原子替换，
+  服务器 Python 编译和挂载检查通过，调度返回 `deployment_disabled_pending_acceptance`。
+  CD/watchdog timer 继续 disabled，未通过发布包替换特权控制程序。
+- `addf5b1` 的单机构建命令在开发容器中实际完成，1792 MiB、1 CPU、无 swap，
+  约 400 秒，退出 0、OOMKilled=false；类型检查 77 秒，静态页面 66 个。
+  早期无原生线程限制的命令及三阶段 compile/generate 试验失败，不计为通过。
+- standalone 开发产物的登录页和静态脚本返回 200；匿名跳转探针缺少 401 后端夹具，
+  整体未通过。补充 HTTP 夹具命令被工具自动审批以 blocked by policy 拒绝，未执行；
+  随后改用仓库现有 Playwright/mock-api-server 流程，在服务器实际构建产物上运行关键 E2E：
+  32 项通过（1.2 分钟），覆盖失效会话跳转、模块/页面权限、采购、助手及模型配置。
+  容器限制 512 MiB / 0.5 CPU / 无 swap，OOM=false、重启 0；使用模拟后端，无正式凭据。
+  此后续验证完成前述权限路径检查，但不替代真实后端全平台验收。
+- 服务器首次 rootless 实构建在 Docker Hub 连接被拒绝时停止，6 秒，构建内存采样峰值
+  120 MiB、OOM 计数 0，正式业务保持健康。随后按固定 digest 提供只读 OCI 缓存重新验证，
+  第二次完整构建通过：1674 秒，进程树限额 2 GiB、1 CPU、无 swap，OOM/OOM kill 均为 0，
+  全程正式业务健康。采样峰值触及 2048 MiB（含缓存），因此不能据此宣称仍有构建内存余量。
+  编译约 9.6 分钟、类型检查约 201 秒、生成 66 页；HDD 镜像导出约 533 秒。
+  开发镜像 `dazah/frontend:acceptance-addf5b1-dev` 已归档于
+  `/data/dazah/releases/acceptance-addf5b1-dev/frontend-dev.tar`，大小 297267712 字节，
+  SHA-256 `dc3bf334595a5b3c26aeeb9dcef97cba4b1a9515a183579ccfbe714d0deb7fea`。
+  同目录 acceptance.json 保存资源结果。构建后已停止独立 BuildKit，没有载入正式 Docker 或切换服务。
+- 服务器三份只读 OCI 输入（Dockerfile frontend、Node 20、Python 3.12）均通过新控制器辅助函数的
+  blob 摘要、固定 digest、linux/amd64 内容完整性及 root 所有权/不可组写检查。
+  辅助函数仅从临时文件执行；新增控制器尚未替换正式 root 控制程序。
+- `c22cc312` 的 CI 34453440898 中，前端 Dockerfile 构建发生 JS heap OOM，其他适用任务通过；
+  CI Gate 正确阻止合并，Stable Frontend E2E 因前置失败跳过，不计为通过。
+  本地原命令的 4 CPU / 2 GiB 对照构建未复现该失败，不能断言只由 CPU 数或 Dockerfile 引起。
+  后续将 Webpack 模块并发单独限制为 1；与 Dockerfile 前端交付阶段相同的开发验收镜像
+  `dazah/frontend:delivery-verify-dev` 构建通过，关键 E2E 32 项通过（1.0 分钟），
+  512 MiB / 0.5 CPU 运行，无 OOM 或重启；最新 CI 仍须重新验证，不能沿用旧提交结果。
+
+## 2026-09-11 隧道与继续验收
+
+- 用户在 Windows 建立 SSH 远程转发：服务器 `127.0.0.1:17897` 转到本机
+  `127.0.0.1:7897`。服务器 GitHub 请求返回 200。隧道依赖本机在线，未配置为
+  无人值守网络保障，也没有修改系统全局代理或正式应用的代理环境。
+- 验收期间，root 管理的 Unix socket `/run/dazah-build-proxy.sock` 仅允许
+  `dazah-build` 访问（0600）；namespace 内转接到 `127.0.0.1:17898`，通过显式
+  BuildKit proxy build-arg 下载。保留 RootlessKit `--disable-host-loopback`，
+  Runner 无权读取 socket。本机代理桥接为本次验收运维配置，尚未集成到 CD 控制器。
+- Hermes 固定上游包下载及校验通过，`addf5b1` 服务器开发镜像构建通过：613 秒，
+  2 GiB / 1 CPU / 无 swap，OOM 和 OOM kill 均为 0，全程正式业务健康。
+  产物 `/data/dazah/releases/acceptance-addf5b1-dev/hermes-dev.tar` 为 177672704 字节，
+  SHA-256 `367c4d8ae3891471ccec1287eedac5a31987fd72d22575363634e49aeb031a6e`。
+  下载回本机再次校验后，在 network=none、512 MiB / 0.5 CPU 的临时开发容器中
+  启动并验证 `/health` 返回 200，OOM=false、重启 0；容器已删除。
+  Hermes 源码及对应 Dockerfile.dev 相对同步主线后的 `c4e1ab45` 无变化。
+- 01:00 日备份执行成功（01:00:37 结束），最新备份 8 个文件的 SHA-256 校验通过。
+  controller enabled=false，CD/watchdog timer disabled；备份与恢复演练 timer enabled。
+- `05f960e` 的 CI 34455677108 全部适用任务成功。随后主线新增 #77，已无冲突同步
+  `dcfc6aac`，得到 `c4e1ab45`；该提交的新 CI 为 34548164458，需以其最终结果为准。
+  本地复验：前端定向测试 59 项、后端 Service/迁移结构测试 21 项、控制器测试
+  48 项通过（Windows 相关跳过 1 项），测试影响检查通过。
+  将过期 `.next/dev/types` 缓存移出构建目录后，经 Next typegen 重新生成，完整类型检查通过。
+- 独立临时 PostgreSQL 空库升级到 `957e2da4f7c7` 成功，发酵看板接口测试 16 项通过。
+  临时数据库 OOM=false、重启 0，已删除；没有迁移正式数据库。
+  新主线 migration head 已变化，旧 deployment_hold 必须拒绝沿用。该空库测试不代表
+  正式数据迁移、部门联系人保留或旧应用写入兼容性通过；无人值守发布继续关闭。
+
+### 实构建、故障保护与 main 候选登记
+
+- `c4e1ab45` 服务器前端构建通过，1297 秒；后端构建通过，752 秒。
+  两次均为 2 GiB / 1 CPU / 无 swap，OOM=0，正式业务全程健康。
+  应用、Dockerfile 和控制器内容与 #76 合并后的 `e250f939` 相同（仅历史和文档差异）。
+  产物及资源记录在 `/data/dazah/releases/acceptance-c4e1ab45-dev/`：
+  前端 SHA-256 `002fb4f172e4f1816c258a38f38614f23defe40800e637d81b6fc6cabaa60f3c`，
+  后端 SHA-256 `4a0f72452b11fa9fa2911ef487d27b74e661c741005be4f28755f33eafba51b8`。
+- 前端实际产物 E2E 32 项通过（1.0 分钟），512 MiB / 0.5 CPU，无 OOM/重启。
+  后端实际产物在独立 DB/Redis/MinIO 网络内升级到 `957e2da4f7c7`，完整启动及就绪检查、
+  匿名 401、合成账号登录和三项只读接口通过；四个临时容器无 OOM/重启，已全部清理。
+- 独立构建 OOM 演练通过：41 秒，构建退出 1，构建 cgroup 的 OOM kill 增加 1。
+  八个正式容器的镜像 ID、启动时间和重启次数与演练前完全一致，健康检查正常。
+  `/var/tmp/dazah-oom-acceptance-05f960e.json` 中 passed 表示故障被隔离，不能解释为构建成功。
+- 实际挂载命名空间测试发现旧 UUID 检查会忽略叠加 tmpfs 的空 UUID 行，误认被覆盖的磁盘有效。
+  修复改用结构化挂载清单，拒绝叠加挂载，并核对 ext4 根挂载及实际路径的块设备身份。
+  临时控制器在服务器通过正常挂载、叠加挂载拒绝、缺失挂载拒绝和不写入回退目录的验证。
+  测试使用 private mount namespace，主机原 `/data` 始终正常，未迁移正式数据库。
+- Runner 原规则遗漏 IPv4 回环限制，新增 SSH 代理后可被其连接；现已补上。
+  系统 DNS 使用 `127.0.0.53`，仅禁全部回环会破坏域名解析，因此使用专用 nftables 表
+  `inet dazah_runner_loopback` 将此地址例外限定为 TCP/UDP 53，并保留其余回环拒绝。
+  规则仅匹配 `dazah-runner` 的 UID 1002，Runner 启动依赖 `dazah-runner-loopback.service`。
+  在实际 Runner cgroup 内复测：SSH 代理拒绝、DNS 地址其他端口拒绝、正式服务拒绝，
+  公网 DNS/TLS 成功；Runner 无 OOM。这不替代 GitHub 负向工作流调度证据。
+- #76 经最新提交的 CI 34549045024 全部适用任务成功后压缩合并，未使用管理员绕过。
+  main 与本地均同步到 `e250f939a4c182f0fd5a50c31af49b53af24cddc`。
+  main CI 34550027777 的候选任务由 `dazah-251-cd`（runner_id=123）实际执行成功，
+  服务器已出现同 SHA/run ID 的候选文件，控制器经服务器直连独立复核通过。
+  发布开关仍关闭，候选登记不等于正式发布。
+- 代理出口的 GitHub API 曾返回 403 rate limit exceeded，未据此认定候选有效；
+  服务器直连复核随后通过。新增可选 ssh_build_proxy 仅让源码/依赖下载走隧道。
+  新控制器在服务器通过代理前置检查、固定 e250f939 源码下载和独立网络命名空间内
+  代理不可用时的拒绝验证。归档大小 10345945 字节，SHA-256 为
+  `5b11e6be8ac36d63d0a6df8ca4fc00c16721e9cbb50bf52687243de008999678`。
+  单测验证代理不可用时不创建工作目录或部署状态；不开启业务代理或全局系统代理。
+  仓库脚本测试 119 项通过、6 项平台/可选环境跳过，11 项 subtest 通过。

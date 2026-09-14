@@ -353,3 +353,148 @@ async def test_unconfigured_year_table_raises_400(
     with pytest.raises(AppException) as exc_info:
         await svc.classify_year(db, 2027)
     assert exc_info.value.status_code == 400
+
+
+# ── 未关闭看板 ─────────────────────────────────────────────
+
+
+def _open_item(
+    record_id: str, closed: str | None, investigation, desc: str = "残渣超标"
+) -> dict:
+    item = _item(record_id, desc)
+    if closed is not None:
+        item["是否结案"] = closed
+    if investigation is not None:
+        item["调查结果说明"] = investigation
+    return item
+
+
+@pytest.mark.asyncio
+async def test_dashboard_open_stats_uses_and_semantics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    items = [
+        # 未结案但有调查报告 → 不计
+        _open_item("rec-a", "否", [{"file_token": "t"}]),
+        # 已结案但缺调查报告 → 不计
+        _open_item("rec-b", "是", []),
+        # 两者均缺 → 计入
+        _open_item("rec-c", None, None),
+        # 已结案且有报告 → 不计
+        _open_item("rec-d", "是", [{"file_token": "t2"}]),
+    ]
+
+    async def _items(db, year):
+        return items
+
+    monkeypatch.setattr(svc, "_list_year_items", _items)
+    monkeypatch.setattr(svc, "_load_cached_classifications", AsyncMock(return_value={}))
+    monkeypatch.setattr(
+        svc, "get_config", AsyncMock(return_value=SimpleNamespace(model_name="q"))
+    )
+    data = await svc.get_dashboard_aggregation(_FakeDB(), 2026)
+    assert data["open_count"] == 1
+    assert data["by_year_open"] == [{"year": 2026, "open_count": 1, "total": 4}]
+    ids = {row["id"] for row in data["open_recent"]}
+    assert ids == {"rec-c"}
+    rec_c = data["open_recent"][0]
+    assert rec_c["desc"] == "残渣超标"
+    # 三桶构成字段已随 AND 口径删除
+    assert "open_missing_close" not in data
+
+
+def test_is_open_record_semantics() -> None:
+    # AND 口径（2026-09-09 用户修订）：有报告或已结案任占其一即不算未关闭
+    has_report = [{"file_token": "t"}]
+    assert svc._is_open_record({"是否结案": "是", "调查结果说明": has_report}) is False
+    assert svc._is_open_record({"是否结案": "否", "调查结果说明": has_report}) is False
+    assert svc._is_open_record({"是否结案": "是", "调查结果说明": []}) is False
+    assert svc._is_open_record({"是否结案": "否", "调查结果说明": []}) is True
+    assert svc._is_open_record({}) is True
+
+
+# ── 导出 / 导入 ─────────────────────────────────────────────
+
+
+def _log(entity_id, snapshot, payload, model="q-test", status="completed"):
+    return SimpleNamespace(
+        entity_id=entity_id,
+        input_snapshot=snapshot,
+        output_payload=payload,
+        model_name=model,
+        status=status,
+    )
+
+
+@pytest.mark.asyncio
+async def test_export_classifications_dedups_latest_rows() -> None:
+    import uuid as uuid_lib
+
+    eid = uuid_lib.uuid4()
+    newer = _log(
+        eid,
+        {"year": 2026, "record_id": "rec-1", "content_hash": "h2"},
+        {"product": "霉酚酸", "anomaly_type": "杂质异常", "reason": "RRT 超标"},
+    )
+    older = _log(
+        eid,
+        {"year": 2026, "record_id": "rec-1", "content_hash": "h1"},
+        {"product": "霉酚酸", "anomaly_type": "旧口径"},
+    )
+    db = _FakeDB(cached_rows=[newer, older])
+    payload = await svc.export_classifications(db)
+    assert payload["count"] == 1
+    row = payload["rows"][0]
+    assert row["record_id"] == "rec-1"
+    assert row["content_hash"] == "h2"
+    assert row["anomaly_type"] == "杂质异常"
+
+
+@pytest.mark.asyncio
+async def test_import_recomputes_hash_and_skips_existing() -> None:
+    import uuid as uuid_lib
+
+    target_uuid = uuid_lib.uuid5(svc._UUID_NAMESPACE, "2026:rec-1")
+    snapshot = {
+        "year": 2026,
+        "record_id": "rec-9",
+        "desc": "残渣0.53%不合格",
+        "product_hint": "",
+        "source": "QC",
+    }
+    expected_hash = svc._content_hash(snapshot)
+    rows = [
+        {**snapshot, "content_hash": "SNAPSHOT-HASH-FROM-SOURCE-ENV",
+         "product": "色氨酸",
+         "anomaly_type": "检验结果超标（OOS）",
+         "reason": "超标准"},
+        {"year": 2026, "record_id": "rec-1", "content_hash": "whatever",
+         "product": "霉酚酸", "anomaly_type": "杂质异常"},  # 已存在 → skip
+    ]
+    db = _FakeDB(cached_rows=[target_uuid])
+    result = await svc.import_classifications_from_rows(db, rows)
+    assert result == {"imported": 1, "skipped": 1}
+    log = db.added[0]
+    # 导出行自带 hash（导出时由源环境快照算得）→ 原样携带，保证导入环境去重匹配不重跑
+    assert log.input_snapshot["content_hash"] == "SNAPSHOT-HASH-FROM-SOURCE-ENV"
+    # 手工行无 hash 时以行内快照重算兜底
+    row_no_hash = {
+        **snapshot,
+        "product": "色氨酸",
+        "anomaly_type": "检验结果超标（OOS）",
+    }
+    db2 = _FakeDB()
+    await svc.import_classifications_from_rows(db2, [row_no_hash])
+    assert db2.added[0].input_snapshot["content_hash"] == expected_hash
+
+
+@pytest.mark.asyncio
+async def test_import_rejects_bad_rows() -> None:
+    from app.core.exceptions import AppException
+
+    with pytest.raises(AppException):
+        await svc.import_classifications_from_rows(
+            _FakeDB(), [{"year": 1999, "record_id": "x", "anomaly_type": "杂质异常"}]
+        )
+    with pytest.raises(AppException):
+        await svc.import_classifications_from_rows(_FakeDB(), [{"rows": "bad"}] * 1200)

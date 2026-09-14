@@ -858,40 +858,9 @@ WATER_DASHBOARD_ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
     },
 }
 
-FINISHED_DASHBOARD_RECIPIENT_OVERRIDES: dict[str, tuple[dict[str, str], ...]] = {
-    MPA_INTERNAL_DASHBOARD_ENTITY_CODE: (
-        {"name": "陈连平"},
-        {"name": "席晓"},
-    ),
-    MPA_HIGH_SPEC_DASHBOARD_ENTITY_CODE: (
-        {"name": "陈连平"},
-        {"name": "席晓"},
-    ),
-    MVT_DASHBOARD_ENTITY_CODE: (
-        {"name": "罗勇"},
-        {"name": "周方圆"},
-    ),
-    LFT_EP_DASHBOARD_ENTITY_CODE: (
-        {"name": "罗勇"},
-        {"name": "周方圆"},
-    ),
-    LFT_USP_DASHBOARD_ENTITY_CODE: (
-        {"name": "罗勇"},
-        {"name": "周方圆"},
-    ),
-    DLS_GB_DASHBOARD_ENTITY_CODE: (
-        {"name": "梁友辉"},
-        {"name": "席晓"},
-    ),
-    DLS_VET_DASHBOARD_ENTITY_CODE: (
-        {"name": "梁友辉"},
-        {"name": "席晓"},
-    ),
-    LKMS_VET_DASHBOARD_ENTITY_CODE: (
-        {"name": "刘伟"},
-        {"name": "严红玲"},
-    ),
-}
+# 成品趋势告警不再内置写死的默认收件人：一律以「质量设置-通知设置」中
+# 每条产品线配置的收件人为准；未配置的产品线回落到按批号解析提炼部门负责人。
+FINISHED_DASHBOARD_RECIPIENT_OVERRIDES: dict[str, tuple[dict[str, str], ...]] = {}
 
 
 # 成品检验趋势异常提醒的产品线目录（通知设置用）：

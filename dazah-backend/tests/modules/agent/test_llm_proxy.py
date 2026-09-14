@@ -1,3 +1,5 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from typing import Any
 
@@ -6,7 +8,7 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from httpx import ASGITransport, AsyncClient
 
-from app.core.llm.exceptions import LLMConfigError
+from app.core.llm.exceptions import LLMConfigError, LLMRateLimitError
 from app.modules.agent import api as agent_api
 from app.modules.agent import llm_proxy
 from app.modules.agent.llm_proxy import (
@@ -16,6 +18,38 @@ from app.modules.agent.llm_proxy import (
     payload_has_images,
     should_retry_without_auto_thinking,
 )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stream", [False, True])
+async def test_proxy_capacity_returns_429_before_provider_call(
+    monkeypatch: pytest.MonkeyPatch, stream: bool
+) -> None:
+    async def configured(_kind: str = "text") -> SimpleNamespace:
+        return _proxy_config()
+
+    @asynccontextmanager
+    async def busy() -> AsyncIterator[None]:
+        raise LLMRateLimitError("busy", status_code=429)
+        yield
+
+    monkeypatch.setattr(llm_proxy, "get_config", configured)
+    monkeypatch.setattr(llm_proxy, "hold_capacity", busy)
+    test_app = FastAPI()
+    test_app.include_router(agent_api.router, prefix="/api/v1/agent")
+    test_app.dependency_overrides[agent_api.get_settings] = lambda: SimpleNamespace(
+        AGENT_LLM_PROXY_TOKEN="test-token"
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/agent/llm/chat/completions",
+            headers={"Authorization": "Bearer test-token"},
+            json={"messages": [{"role": "user", "content": "test"}], "stream": stream},
+        )
+    assert response.status_code == 429
+    assert response.json()["detail"] == "AI 服务繁忙，请稍后重试"
 
 
 def _proxy_config(model_name: str = "kimi-k2.6") -> SimpleNamespace:

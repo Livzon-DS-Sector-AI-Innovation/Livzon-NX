@@ -2,11 +2,14 @@
 
 成品异常报告按年分表（finished_product_anomaly_2025..2028），复用检验模块的
 通用飞书记录读写能力：字段元数据 / 原始记录列表 / 单条详情 / 新增 / 编辑 /
-删除 / 附件代理下载。字段名 = 飞书表真实字段名。
+删除 / 附件代理下载与在线预览 / 记录分享链接。字段名 = 飞书表真实字段名。
+另提供：仪表盘产品×异常类型聚合（含未关闭看板）、AI 分类触发与进度、
+AI 分类结果导出/导入（跨环境搬运，避免重复消耗 AI 调用）。
 """
 
 from __future__ import annotations
 
+import json
 from typing import Any
 from urllib.parse import quote
 
@@ -20,6 +23,8 @@ from app.core.jobs import get_job_status, is_job_running, submit_job
 from app.core.response import success_response
 from app.modules.quality.api.deps import (
     QUALITY_QA_SCOPE_PERMISSIONS,
+    release_action_lock,
+    try_acquire_action_lock,
 )
 from app.modules.quality.api.deps import (
     assert_quality_edit_scope as _assert_quality_edit_scope,
@@ -27,12 +32,18 @@ from app.modules.quality.api.deps import (
 from app.modules.quality.api.deps import (
     require_user as _require_user,
 )
+from app.modules.quality.schemas.finished_product_anomaly import (
+    AnomalyClassificationImportBody,
+)
 from app.modules.quality.schemas.inspection_feishu_crud import (
     InspectionFeishuRecordBody,
 )
 from app.modules.quality.service.finished_product_anomaly_analysis import (
     ANALYSIS_YEARS,
+    ENTITY_TYPE,
+    export_classifications,
     get_dashboard_aggregation,
+    import_classifications_from_rows,
     run_analysis_job,
 )
 from app.modules.quality.service.inspection_feishu_crud import (
@@ -134,6 +145,59 @@ async def api_list_anomaly_records(
             page_size=page_size,
         )
     )
+
+
+@router.get(
+    "/finished-product-anomaly/analysis/export",
+    summary="导出成品异常 AI 分类结果（环境间搬运，避免生产重新跑 AI）",
+)
+async def api_export_anomaly_classifications(
+    current_user: CurrentUser = None,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["product_qa"],
+    )
+    payload = await export_classifications(db)
+    return Response(
+        content=json.dumps(payload, ensure_ascii=False),
+        media_type="application/json",
+        headers={
+            "Content-Disposition": (
+                "attachment; filename=anomaly_classifications.json"
+            )
+        },
+    )
+
+
+@router.post(
+    "/finished-product-anomaly/analysis/import",
+    summary="导入成品异常 AI 分类结果（幂等：本环境已有分类的记录跳过）",
+)
+async def api_import_anomaly_classifications(
+    body: AnomalyClassificationImportBody,
+    current_user: CurrentUser = None,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["product_qa"],
+    )
+    if body.entity_type != ENTITY_TYPE:
+        raise AppException(message="未知 entity_type，无法导入", status_code=400)
+    if not await try_acquire_action_lock("fp-anomaly-import", timeout=600):
+        raise AppException(message="导入正在进行中，请稍候", status_code=409)
+    try:
+        return success_response(
+            data=await import_classifications_from_rows(db, body.rows)
+        )
+    finally:
+        await release_action_lock("fp-anomaly-import")
 
 
 @router.get(

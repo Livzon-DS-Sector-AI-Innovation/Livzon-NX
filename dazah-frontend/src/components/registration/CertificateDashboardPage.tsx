@@ -1,32 +1,25 @@
 'use client'
 
-import { useMemo, useRef, useState, useTransition, type ChangeEvent } from 'react'
+import { useRef, useState, type ChangeEvent } from 'react'
 import {
   Alert,
   App,
   Button,
   Card,
   Col,
-  InputNumber,
   Row,
-  Select,
   Space,
-  Switch,
   Table,
   Tag,
   Typography,
 } from 'antd'
 import { useRouter } from 'next/navigation'
 
-import {
-  importCertificateWorkbook,
-  updateCertificateReminderSettings,
-} from '@/actions/registration'
+import { importCertificateWorkbook } from '@/actions/registration'
 import { CertificateManagementDashboard } from '@/components/registration'
 import { fetchCertificateWorkbookExport } from '@/lib/api/client/registration'
 import type {
   CertificateRecordSummary,
-  CertificateReminderRecipientOption,
   CertificateReminderSetting,
   CertificateWorkbookOverview,
 } from '@/types/registration'
@@ -34,7 +27,6 @@ import type {
 interface CertificateDashboardPageProps {
   overview: CertificateWorkbookOverview
   reminderSettings: CertificateReminderSetting
-  reminderRecipients: CertificateReminderRecipientOption[]
 }
 
 function renderExpiryTag(status: string) {
@@ -112,47 +104,16 @@ const recordColumns = [
 export default function CertificateDashboardPage({
   overview,
   reminderSettings,
-  reminderRecipients,
 }: CertificateDashboardPageProps) {
   const router = useRouter()
   const { message } = App.useApp()
-  const [pending, startTransition] = useTransition()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const [reminderEnabled, setReminderEnabled] = useState(reminderSettings.is_enabled)
-  const [reminderDays, setReminderDays] = useState(reminderSettings.reminder_days)
-  const [recipientOpenId, setRecipientOpenId] = useState<string | undefined>(
-    reminderSettings.recipient_open_id || undefined
-  )
   const [importingWorkbook, setImportingWorkbook] = useState(false)
   const [exportingWorkbook, setExportingWorkbook] = useState(false)
 
   const latestIssuedColumns = recordColumns.filter(
     (column) => column.key !== 'expiry_date' && column.key !== 'expiry_status'
   )
-  const recipientOptions = useMemo(
-    () =>
-      reminderRecipients.map((item) => ({
-        label: item.department ? `${item.name} / ${item.department}` : item.name,
-        value: item.open_id,
-      })),
-    [reminderRecipients]
-  )
-
-  function handleSaveReminderSettings() {
-    startTransition(async () => {
-      try {
-        await updateCertificateReminderSettings({
-          is_enabled: reminderEnabled,
-          reminder_days: reminderDays,
-          recipient_open_id: recipientOpenId || null,
-        })
-        message.success('证书到期提醒配置已保存')
-        router.refresh()
-      } catch (error) {
-        message.error(error instanceof Error ? error.message : '提醒配置保存失败')
-      }
-    })
-  }
 
   async function handleWorkbookImport(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -225,76 +186,24 @@ export default function CertificateDashboardPage({
 
       <CertificateManagementDashboard overview={overview} />
 
-      <Card
-        size="small"
-        title="到期提醒设置"
-        extra={
-          <Button type="primary" onClick={handleSaveReminderSettings} loading={pending}>
-            保存设置
-          </Button>
-        }
-      >
-        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-          <Row gutter={[12, 12]} align="middle">
-            <Col xs={24} md={6}>
-              <Space>
-                <Typography.Text strong>启用自动提醒</Typography.Text>
-                <Switch checked={reminderEnabled} onChange={setReminderEnabled} />
-              </Space>
-            </Col>
-            <Col xs={24} md={6}>
-              <Space>
-                <Typography.Text strong>到期前</Typography.Text>
-                <InputNumber
-                  min={1}
-                  max={365}
-                  value={reminderDays}
-                  onChange={(value) => setReminderDays(value || 90)}
-                  style={{ width: 110 }}
-                />
-                <Typography.Text>天通知</Typography.Text>
-              </Space>
-            </Col>
-            <Col xs={24} md={12}>
-              <Select
-                showSearch
-                allowClear
-                style={{ width: '100%' }}
-                placeholder="选择通知人（仅显示 QA 人员）"
-                value={recipientOpenId}
-                onChange={(value) => setRecipientOpenId(value)}
-                optionFilterProp="label"
-                options={recipientOptions}
-              />
-            </Col>
-          </Row>
-
-          <Space wrap size={[8, 8]}>
-            <Tag color={reminderSettings.is_enabled ? 'processing' : 'default'}>
-              {reminderSettings.is_enabled ? '已启用' : '未启用'}
+      <Card size="small" title="到期提醒状态">
+        <Space wrap size={[8, 8]} align="center">
+          <Tag color={reminderSettings.is_enabled ? 'processing' : 'default'}>
+            {reminderSettings.is_enabled ? '已启用' : '未启用'}
+          </Tag>
+          <Tag color="purple">到期前 {reminderSettings.reminder_days} 天提醒</Tag>
+          <Tag color="purple">当前规则命中 {reminderSettings.pending_count} 份待提醒证书</Tag>
+          {reminderSettings.recipient_name ? (
+            <Tag color="blue">
+              当前通知人：{reminderSettings.recipient_name}
+              {reminderSettings.recipient_department
+                ? ` / ${reminderSettings.recipient_department}`
+                : ''}
             </Tag>
-            <Tag color="purple">当前规则命中 {reminderSettings.pending_count} 份待提醒证书</Tag>
-            {reminderSettings.recipient_name ? (
-              <Tag color="blue">
-                当前通知人：{reminderSettings.recipient_name}
-                {reminderSettings.recipient_department
-                  ? ` / ${reminderSettings.recipient_department}`
-                  : ''}
-              </Tag>
-            ) : null}
-          </Space>
-
-          <Typography.Text type="secondary">
-            通知人直接取自质量管理中的 QA 飞书联系人。人员变动后，直接在这里重新选择即可。
-          </Typography.Text>
-
-          {!recipientOptions.length ? (
-            <Alert
-              type="warning"
-              showIcon
-              title="当前没有可用的 QA 飞书联系人，暂时无法启用自动提醒。"
-            />
           ) : null}
+          <Typography.Text type="secondary">
+            提醒开关、通知人与消息模板请在「注册管理 → 注册设置 → 通知设置」中维护。
+          </Typography.Text>
         </Space>
       </Card>
 

@@ -1,0 +1,8 @@
+[Unit]
+Description=Dazah service health polling
+[Timer]
+OnBootSec=120
+OnUnitInactiveSec=30
+Unit=dazah-watchdog.service
+[Install]
+WantedBy=timers.target

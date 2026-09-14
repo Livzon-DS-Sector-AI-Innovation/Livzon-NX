@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from datetime import date, timedelta
 from typing import Any
@@ -9,34 +10,160 @@ from urllib.parse import urlparse
 
 from app.modules.regulatory_tracker.crawler.types import CrawledRegulationRecord
 
+# 排除内容（用户要求）：医疗器械、中药、生物制品、抗肿瘤药物、儿童用药、
+# 罕见病、新药/创新药、生物类似药、临床试验、疫苗。
+# 每条均覆盖常见中英文变体（单复数、法规正式用语、缩写），匹配时统一转小写
+# 子串匹配，避免因同义表达漏判；同时禁止出现超宽泛词（如 device、child、
+# orphan 单独出现），防止误伤正常原料药/质量类文件。
 EXCLUDED_KEYWORDS: tuple[str, ...] = (
+    # 1. 医疗器械 / IVD
     "医疗器械",
+    "医用器械",
+    "体外诊断",
     "medical device",
     "medical devices",
+    "medical-device",
+    "in vitro diagnostic",
+    "in-vitro diagnostic",
+    "ivd",
+    # 2. 中药 / 植物药
     "中药",
+    "中药材",
+    "中草药",
+    "中医药",
+    "天然药物",
+    "植物药",
     "traditional chinese medicine",
+    "chinese herbal",
+    "herbal medicine",
+    "herbal medicines",
+    "botanical drug",
+    "botanical drugs",
+    "phytomedicine",
+    "phytomedicines",
+    # 3. 生物制品（含血液制品、细胞/基因治疗等先进疗法）
     "生物制品",
+    "生物制剂",
+    "血液制品",
+    "细胞治疗",
+    "基因治疗",
+    "advanced therapy medicinal product",
+    "advanced therapy medicinal products",
+    "atmp",
+    "atmps",
     "biologic",
+    "biologics",
     "biological",
+    "biological product",
+    "biological products",
+    "biologicals",
+    "blood product",
+    "blood products",
+    "cell therapy",
+    "gene therapy",
+    "somatic cell",
+    "tissue engineered",
+    # 4. 抗肿瘤药物
     "抗肿瘤",
-    "oncology",
+    "抗肿瘤药",
+    "抗肿瘤药物",
+    "抗癌",
+    "肿瘤药",
     "anti-tumor",
+    "antitumor",
+    "anti-cancer",
+    "anticancer",
+    "anti cancer",
+    "oncology",
+    "oncologic",
+    "neoplasm",
+    "cancer therapy",
+    "tumour",
+    # 5. 儿童用药
     "儿童用药",
+    "儿童",
+    "儿科",
+    "小儿",
+    "新生儿",
     "pediatric",
     "paediatric",
+    "pediatrics",
+    "paediatrics",
+    "pediatric drug",
+    "paediatric drug",
+    "pediatric medicines",
+    "paediatric medicines",
+    "neonatal",
+    "neonate",
+    "infant",
+    "juvenile",
+    # 6. 罕见病 / 孤儿药
     "罕见病",
+    "罕见疾病",
+    "孤儿药",
     "rare disease",
+    "rare diseases",
+    "rare disorder",
+    "rare disorders",
+    "orphan drug",
+    "orphan drugs",
+    "orphan medicinal product",
+    "orphan medicinal products",
+    "ultrarare",
+    "ultra-rare",
+    # 7. 新药 / 创新药
     "新药",
-    "new drug",
     "创新药",
+    "首创药",
+    "新分子实体",
+    "new drug",
+    "new drugs",
     "innovative drug",
+    "innovative drugs",
     "novel drug",
+    "novel drugs",
+    "first-in-class",
+    "new molecular entity",
+    "new molecular entities",
+    "nme",
+    # 8. 生物类似药
     "生物类似药",
+    "生物类似",
+    "类似药",
     "biosimilar",
+    "biosimilars",
+    "biosimilarity",
+    "similar biological",
+    # 9. 临床试验（含 EU 正式用语 clinical investigation / IMP / FIH）
     "临床试验",
+    "临床调查",
+    "临床研究",
+    "临床实验",
+    "临床探究",
     "clinical trial",
+    "clinical trials",
+    "clinical investigation",
+    "clinical investigations",
+    "clinical study",
+    "clinical studies",
+    "clinical research",
+    "investigational medicinal product",
+    "investigational medicinal products",
+    "investigational drug",
+    "investigational drugs",
+    "investigational new drug",
+    "first-in-human",
+    "first in human",
+    "fih",
+    "imp",
+    # 10. 疫苗
     "疫苗",
+    "免疫接种",
     "vaccine",
+    "vaccines",
+    "vaccination",
+    "immunization",
+    "immunisation",
 )
 
 TARGET_KEYWORDS: tuple[str, ...] = (
@@ -188,8 +315,20 @@ def _flatten_text_values(value: Any) -> list[str]:
     return []
 
 
+def _match_keyword(text: str, keyword: str) -> bool:
+    """单个关键词匹配：短 ASCII 缩写按整词匹配，其余按子串匹配。
+
+    短缩写（imp/ivd/fih/nme/atmp/api 等）若按子串匹配会命中
+    important、capital 等无关单词，导致大量正常文件被误拒；
+    这里仅对 ≤4 位的纯英文缩写启用 \\b 词边界。
+    """
+    if len(keyword) <= 4 and re.fullmatch(r"[a-z0-9]+", keyword):
+        return re.search(rf"\b{re.escape(keyword)}\b", text) is not None
+    return keyword in text
+
+
 def _find_keyword(text: str, keywords: tuple[str, ...]) -> str | None:
     for keyword in keywords:
-        if keyword.lower() in text:
+        if _match_keyword(text, keyword):
             return keyword
     return None

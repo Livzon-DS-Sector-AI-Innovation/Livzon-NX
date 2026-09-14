@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { App, Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Typography } from 'antd'
+import { DownloadOutlined, UploadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { createOotLimitItem, createOotLimitProduct, deleteOotLimitItem, deleteOotLimitProduct, updateOotLimitItem, updateOotLimitProduct } from '@/actions/quality'
-import { fetchOotLimitItems, fetchOotLimitProducts } from '@/lib/api/client/quality'
+import { fetchOotLimitItems, fetchOotLimitProductExport, fetchOotLimitProducts, fetchOotLimitProductsExportAll } from '@/lib/api/client/quality'
+import { OotLimitImportDrawer } from './OotLimitImportDrawer'
 
 interface OotLimitProduct {
   id: string
@@ -73,6 +75,9 @@ export default function OotLimitManagementPage() {
   const [itemSearchKeyword, setItemSearchKeyword] = useState('')
   const [productModalVisible, setProductModalVisible] = useState(false)
   const [itemModalVisible, setItemModalVisible] = useState(false)
+  const [importDrawerVisible, setImportDrawerVisible] = useState(false)
+  const [exportingCurrent, setExportingCurrent] = useState(false)
+  const [exportingAll, setExportingAll] = useState(false)
   const [editingProduct, setEditingProduct] = useState<OotLimitProduct | null>(null)
   const [editingItem, setEditingItem] = useState<OotLimitItem | null>(null)
   const [productForm] = Form.useForm<ProductFormValues>()
@@ -202,6 +207,46 @@ export default function OotLimitManagementPage() {
     setEditingItem(null)
     itemForm.resetFields()
   }, [itemForm])
+
+  const downloadBlob = useCallback((blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = filename
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }, [])
+
+  const handleExportCurrent = useCallback(async () => {
+    if (!selectedProduct) return
+    try {
+      setExportingCurrent(true)
+      const { blob, filename } = await fetchOotLimitProductExport(selectedProduct.id)
+      downloadBlob(blob, filename)
+      message.success('OOT限度告知单已导出')
+    } catch (error: unknown) {
+      message.error(getErrorMessage(error, '导出OOT限度告知单失败'))
+    } finally {
+      setExportingCurrent(false)
+    }
+  }, [downloadBlob, message, selectedProduct])
+
+  const handleExportAll = useCallback(async () => {
+    try {
+      setExportingAll(true)
+      const { blob, filename } = await fetchOotLimitProductsExportAll()
+      downloadBlob(blob, filename)
+      message.success('全部OOT限度告知单已导出')
+    } catch (error: unknown) {
+      message.error(getErrorMessage(error, '导出全部OOT限度告知单失败'))
+    } finally {
+      setExportingAll(false)
+    }
+  }, [downloadBlob, message])
+
+  const handleImportSuccess = useCallback(() => {
+    void loadProducts()
+  }, [loadProducts])
 
   const handleSubmitProduct = useCallback(async () => {
     const values = await productForm.validateFields()
@@ -413,6 +458,18 @@ export default function OotLimitManagementPage() {
               <Button danger disabled={!selectedProduct}>删除当前产品</Button>
             </Popconfirm>
             <Button type="primary" onClick={openCreateItem} disabled={!selectedProductId}>新增限度明细</Button>
+            <Button icon={<UploadOutlined />} onClick={() => setImportDrawerVisible(true)}>导入告知单</Button>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={() => void handleExportCurrent()}
+              disabled={!selectedProduct}
+              loading={exportingCurrent}
+            >
+              导出当前产品
+            </Button>
+            <Button icon={<DownloadOutlined />} onClick={() => void handleExportAll()} loading={exportingAll}>
+              导出全部
+            </Button>
           </Space>
           <Input.Search
             allowClear
@@ -518,6 +575,12 @@ export default function OotLimitManagementPage() {
           </Form.Item>
         </Form>
       </Modal>
+
+      <OotLimitImportDrawer
+        isOpen={importDrawerVisible}
+        onClose={() => setImportDrawerVisible(false)}
+        onSuccess={handleImportSuccess}
+      />
     </div>
   )
 }

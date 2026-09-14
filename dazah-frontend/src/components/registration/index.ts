@@ -26,6 +26,7 @@ export {
   type RegistrationStackedChartDatum,
   type RegistrationStackedChartSeries,
 } from './RegistrationDashboardCharts'
+export { default as RegistrationSettingsPage } from './RegistrationSettingsPage'
 export { default as RegulationTrackerPage } from './RegulationTrackerPage'
 export { RegistrationLanding } from './RegistrationLanding'
 export { RegistrationQueryProvider } from './RegistrationQueryProvider'

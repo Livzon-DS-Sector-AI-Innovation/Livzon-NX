@@ -124,7 +124,7 @@ function propsFor(path: string, exportName: string): Record<string, unknown> {
   if (path.includes('AiFillPanel')) Object.assign(props, { chapterId: 'chapter-1', chapterCode: 'C01', assets: [], onAssetsChange: vi.fn() })
   if (path.includes('AuthorizationLetterDashboard')) Object.assign(props, { filteredFdaRecords: [], filteredLedgerRecords: [] })
   if (path.includes('CertificateManagementDashboard')) props.overview = { total_records: 0, sheet_count: 0, issuer_count: 0, product_count: 0, expired_count: 0, due_90_count: 0, total_pages: 0, sheet_summaries: [] }
-  if (path.includes('CertificateDashboardPage')) Object.assign(props, { overview: { total_records: 0, sheet_count: 0, issuer_count: 0, product_count: 0, expired_count: 0, due_90_count: 0, total_pages: 0, sheet_summaries: [], records: [] }, reminderSettings: { is_enabled: false, reminder_days: 90, recipient_open_id: null, recipient_name: null, recipient_department: null, pending_count: 0 }, reminderRecipients: [] })
+  if (path.includes('CertificateDashboardPage')) Object.assign(props, { overview: { total_records: 0, sheet_count: 0, issuer_count: 0, product_count: 0, expired_count: 0, due_90_count: 0, total_pages: 0, sheet_summaries: [], records: [] }, reminderSettings: { is_enabled: false, reminder_days: 90, recipient_open_id: null, recipient_name: null, recipient_department: null, pending_count: 0 } })
   if (path.includes('CertificateSheetPage')) props.detail = { sheet_key: 'certificates', sheet_name: '证书', columns: [], rows: [], summary: { total_records: 0 }, total: 0, page: 1, page_size: 20, total_pages: 0 }
   if (path.includes('DeclarationProgressDashboardPage')) props.overview = { sheets: [{ sheet_key: 'declarations', sheet_name: '申报', columns: [{ label: '项目', key: 'project' }], records: [record], summary: { total_records: 1, total_history_versions: 1 } }] }
   if (path.includes('DeclarationProgressPage')) props.detail = { sheet_key: 'declarations', sheet_name: '申报', columns: [{ label: '项目', key: 'project_name' }], records: [record], total: 1, page: 1, page_size: 20, total_pages: 1 }
@@ -136,7 +136,15 @@ function propsFor(path: string, exportName: string): Record<string, unknown> {
   if (path.includes('ProjectLedgerDashboardPage')) props.overview = { sheets: [{ sheet_key: 'projects', sheet_name: '项目', columns: [{ label: '项目', key: 'project' }], records: [record], summary: { total_records: 1, records_with_history: 1 } }] }
   if (path.includes('ProjectLedgerSheetPage')) props.detail = { sheet_key: 'projects', sheet_name: '项目', columns: [{ label: '项目', key: 'project_name' }], records: [record], total: 1, page: 1, page_size: 20, total_pages: 1 }
   if (path.includes('RegistrationDashboardCharts') && exportName === 'RegistrationSummaryHero') props.metrics = []
-  if (path.includes('RegulationTrackerPage')) Object.assign(props, { initialResult: { items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 }, initialNotificationSettings: { is_enabled: false, recent_days: 7, recipient_open_id: null, recipient_name: null, recipient_department: null, schedule_time: '09:00', pending_count: 0 }, notificationRecipients: [] })
+  if (path.includes('RegulationTrackerPage')) Object.assign(props, { initialResult: { items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 }, initialNotificationSettings: { is_enabled: false, recent_days: 7, recipient_open_id: null, recipient_name: null, recipient_department: null, schedule_time: '09:00', pending_count: 0 } })
+  if (path.includes('CertificateReminderSettingsCard')) Object.assign(props, { reminderSettings: { is_enabled: false, reminder_days: 90, recipient_open_id: null, recipient_name: null, recipient_department: null, pending_count: 0, header_template: null, footer_template: null }, reminderRecipients: [] })
+  if (path.includes('RegulationNotificationSettingsCard')) Object.assign(props, { initialNotificationSettings: { is_enabled: false, recent_days: 7, recipient_open_id: null, recipient_name: null, recipient_department: null, schedule_time: '10:00', pending_count: 0, header_template: null, footer_template: null }, notificationRecipients: [] })
+  if (path.includes('RegistrationSettingsPage')) Object.assign(props, {
+    reminderSettings: { is_enabled: false, reminder_days: 90, recipient_open_id: null, recipient_name: null, recipient_department: null, pending_count: 0, header_template: null, footer_template: null },
+    reminderRecipients: [],
+    notificationSettings: { is_enabled: false, recent_days: 7, recipient_open_id: null, recipient_name: null, recipient_department: null, schedule_time: '10:00', pending_count: 0, header_template: null, footer_template: null },
+    notificationRecipients: [],
+  })
   if (path.includes('ValidationAuditDetailClient')) Object.assign(props, { task: { id: 'task-1', task_name: '验证审计', status: 'pending', audit_mode: 'full' }, initialFiles: [], initialIssues: [], initialReport: null })
   return props
 }

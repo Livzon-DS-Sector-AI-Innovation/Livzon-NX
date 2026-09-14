@@ -6,7 +6,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.core.database import get_db
 from app.main import app
 from app.modules.agent.access_scope import AgentAccessScopeService
@@ -15,6 +15,10 @@ from app.platform.identity.models import User, UserModuleGrant
 from app.platform.identity.permissions import (
     ADMIN_DEFAULT_MODULE_PERMISSIONS,
     IdentityPermissionService,
+)
+from app.platform.identity.schemas import (
+    ModulePermissionGrantInput,
+    UserModulePermissionsUpdate,
 )
 from app.shared.module_registry import MODULES_BY_CODE
 
@@ -145,6 +149,102 @@ async def test_current_user_exposes_all_module_codes_in_all_mode(
             app.dependency_overrides.pop(get_db, None)
         else:
             app.dependency_overrides[get_db] = original_db_override
+        if original_settings_override is None:
+            app.dependency_overrides.pop(get_settings, None)
+        else:
+            app.dependency_overrides[get_settings] = original_settings_override
+
+
+@pytest.mark.anyio
+async def test_production_uses_saved_module_grants_even_with_legacy_all_setting(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """A stale production ``MODULE_ACCESS_MODE=all`` cannot bypass grants."""
+
+    admin = User(
+        name="生产权限管理员",
+        username=f"production-module-admin-{uuid.uuid4().hex[:12]}",
+        role="admin",
+        status="active",
+        auth_source="local",
+    )
+    target = User(
+        name="生产权限目标用户",
+        username=f"production-module-user-{uuid.uuid4().hex[:12]}",
+        role="user",
+        status="active",
+        auth_source="local",
+    )
+    db_session.add_all([admin, target])
+    await db_session.flush()
+
+    async def override_db() -> Any:
+        yield db_session
+
+    async def override_target() -> User:
+        return target
+
+    original_db_override = app.dependency_overrides.get(get_db)
+    original_user_override = app.dependency_overrides.get(get_current_user)
+    original_settings_override = app.dependency_overrides.get(get_settings)
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = override_target
+    app.dependency_overrides[get_settings] = lambda: Settings.model_construct(
+        APP_ENV="production",
+        MODULE_ACCESS_MODE="all",
+    )
+
+    async def replace(grants: list[ModulePermissionGrantInput]) -> None:
+        updated, _, _ = await IdentityPermissionService().replace_user_permissions(
+            db_session,
+            target_user_id=target.id,
+            request=UserModulePermissionsUpdate(
+                expected_grant_version=target.grant_version,
+                grants=grants,
+                reason="生产模块授权回归测试",
+            ),
+            current_user=admin,
+        )
+        target.grant_version = updated.grant_version
+
+    try:
+        initial = await client.get("/api/v1/identity/me")
+        assert initial.status_code == 200
+        assert initial.json()["data"]["module_codes"] == []
+        assert (await client.get("/api/v1/warehouse/")).status_code == 403
+
+        await replace(
+            [
+                ModulePermissionGrantInput(
+                    module_code="warehouse",
+                    permissions=["module.view"],
+                )
+            ]
+        )
+        granted = await client.get("/api/v1/identity/me")
+        assert granted.status_code == 200
+        assert granted.json()["data"]["module_codes"] == ["warehouse"]
+        # The saved module grant now passes the module boundary immediately;
+        # page authorization is a separate mandatory layer and rejects this
+        # context-free request before the endpoint runs.
+        assert (await client.get("/api/v1/warehouse/")).status_code == 400
+        assert (await client.get("/api/v1/production/")).status_code == 403
+
+        await replace([])
+        revoked = await client.get("/api/v1/identity/me")
+        assert revoked.status_code == 200
+        assert revoked.json()["data"]["module_codes"] == []
+        assert (await client.get("/api/v1/warehouse/")).status_code == 403
+    finally:
+        if original_db_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = original_db_override
+        if original_user_override is None:
+            app.dependency_overrides.pop(get_current_user, None)
+        else:
+            app.dependency_overrides[get_current_user] = original_user_override
         if original_settings_override is None:
             app.dependency_overrides.pop(get_settings, None)
         else:

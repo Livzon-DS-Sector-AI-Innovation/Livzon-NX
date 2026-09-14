@@ -91,12 +91,16 @@ export interface RegulatoryTrackerNotificationSetting {
   recipient_department?: string | null
   schedule_time: string
   pending_count: number
+  header_template?: string | null
+  footer_template?: string | null
 }
 
 export interface RegulatoryTrackerNotificationSettingInput {
   is_enabled: boolean
   recent_days: number
   recipient_open_id?: string | null
+  header_template?: string | null
+  footer_template?: string | null
 }
 
 export interface RegulatoryTrackerAnalyzeSingleResult {

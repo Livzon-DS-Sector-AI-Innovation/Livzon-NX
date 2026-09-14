@@ -17,8 +17,9 @@ def _build_engine_kwargs(app_env: str) -> dict[str, object]:
     kwargs: dict[str, object] = {
         "echo": settings.DEBUG,
         "pool_pre_ping": True,
-        "pool_size": 10,
-        "max_overflow": 20,
+        "pool_size": settings.DATABASE_POOL_SIZE,
+        "max_overflow": settings.DATABASE_MAX_OVERFLOW,
+        "pool_timeout": settings.DATABASE_POOL_TIMEOUT,
         "connect_args": {"server_settings": {"search_path": _search_path}},
     }
     if app_env == "test":
@@ -26,6 +27,7 @@ def _build_engine_kwargs(app_env: str) -> dict[str, object]:
         kwargs.pop("pool_size", None)
         kwargs.pop("max_overflow", None)
         kwargs.pop("pool_pre_ping", None)
+        kwargs.pop("pool_timeout", None)
     return kwargs
 
 

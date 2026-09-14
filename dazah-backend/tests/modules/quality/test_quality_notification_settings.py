@@ -78,7 +78,12 @@ _CHANGE_ACTION_PLANS_DDL = """
     )
 """
 
-_SETTING_TYPES = ("change_action_plan_due", "inspection_trend_alert")
+_SETTING_TYPES = (
+    "change_action_plan_due",
+    "inspection_trend_alert",
+    "inspection_trend_alert_escalation",
+    "items_stock_alert",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -176,10 +181,8 @@ async def test_list_notification_settings_seeds_defaults(
     inspection_item = data[1]
     lines = {line["entity_code"]: line for line in inspection_item["inspection_lines"]}
     assert len(lines) == 15
-    assert [item["name"] for item in lines["qc_finished_internal"]["recipients"]] == [
-        "陈连平",
-        "席晓",
-    ]
+    # 写死的默认收件人已删除：种子行收件人为空，由通知设置页配置
+    assert lines["qc_finished_internal"]["recipients"] == []
     assert lines["qc_finished_pure_water"]["recipients"] == []
 
 
@@ -266,7 +269,11 @@ async def test_update_inspection_lines_roundtrip(
         "ou_water"
     )
     # 未提交配置的产品线保持默认启用、无接收人（走系统默认解析）
-    assert config.lines["qc_finished_mvt"] == {"enabled": True, "recipients": []}
+    assert config.lines["qc_finished_mvt"] == {
+        "enabled": True,
+        "recipients": [],
+        "qa_recipients": [],
+    }
 
 
 # ── 变更计划到期提醒消费配置 ────────────────────────────────
@@ -480,13 +487,15 @@ async def test_resolve_recipients_falls_back_to_overrides(
     )
     monkeypatch.setattr(calc, "_resolve_recipient_by_name", resolve_by_name)
 
-    recipients = await calc._resolve_dashboard_recipients(
-        db_session,
-        entity_code="qc_finished_internal",
-        batch_no="B-001",
-        line_config={"enabled": True, "recipients": []},
-    )
-    assert [item["name"] for item in recipients] == ["陈连平", "席晓"]
+    # 写死的默认收件人已删除：未配置且 QA/提炼负责人兜底不可用时 → 空收件人
+    # （提炼负责人兜底依赖飞书 Base，测试库未配置会抛异常，属预期降级）
+    with pytest.raises(calc.AppException):
+        await calc._resolve_dashboard_recipients(
+            db_session,
+            entity_code="qc_finished_internal",
+            batch_no="B-001",
+            line_config={"enabled": True, "recipients": []},
+        )
 
 
 def _make_notification(status: str = "sent") -> FinishedTrendAlertNotification:
@@ -632,6 +641,7 @@ async def test_materialize_uses_configured_line_recipients(
         spec_lines=[],
     )
     assert result == {"notification_status": "unmapped"}
+    # 首波收件人 = 线路配置人 + 升级首推人（默认李文昊，仅姓名需解析）
     resolve_by_name.assert_awaited_once_with(
         db_session, name="线路配置人", open_id="ou_line", email=None
     )

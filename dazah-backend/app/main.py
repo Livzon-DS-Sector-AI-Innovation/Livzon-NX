@@ -8,7 +8,9 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
+from redis.exceptions import OutOfMemoryError as RedisMemoryError
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import TimeoutError as DatabaseTimeoutError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import app.modules.agent.models as _agent_models  # noqa: F401
@@ -200,8 +202,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     from app.modules.quality.scheduled import (
         ChangeActionPlanReminderGenerator,
+        InspectionFinishedMirrorFullSyncGenerator,
+        InspectionFinishedMirrorSyncGenerator,
+        InspectionItemsMirrorFullSyncGenerator,
+        InspectionItemsMirrorSyncGenerator,
+        InspectionMaterialMirrorFullSyncGenerator,
+        InspectionMaterialMirrorSyncGenerator,
+        ItemsStockAlertPushGenerator,
         SupplierQualificationMirrorFullSyncGenerator,
         SupplierQualificationMirrorSyncGenerator,
+        TrendAlertEscalationGenerator,
+        TrendAlertMonthlyAnalysisGenerator,
     )
     from app.modules.registration.scheduled import CertificateReminderGenerator
     from app.modules.warehouse.scheduler import (
@@ -228,12 +239,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_registry.register_generator(QualityFeishuReadDailySyncGenerator())
     scheduler_registry.register_generator(CertificateReminderGenerator())
     scheduler_registry.register_generator(ChangeActionPlanReminderGenerator())
+    scheduler_registry.register_generator(TrendAlertEscalationGenerator())
+    scheduler_registry.register_generator(TrendAlertMonthlyAnalysisGenerator())
     scheduler_registry.register_generator(
         SupplierQualificationMirrorSyncGenerator()
     )
     scheduler_registry.register_generator(
         SupplierQualificationMirrorFullSyncGenerator()
     )
+    scheduler_registry.register_generator(InspectionItemsMirrorSyncGenerator())
+    scheduler_registry.register_generator(InspectionItemsMirrorFullSyncGenerator())
+    scheduler_registry.register_generator(InspectionMaterialMirrorSyncGenerator())
+    scheduler_registry.register_generator(InspectionMaterialMirrorFullSyncGenerator())
+    scheduler_registry.register_generator(InspectionFinishedMirrorSyncGenerator())
+    scheduler_registry.register_generator(InspectionFinishedMirrorFullSyncGenerator())
+    scheduler_registry.register_generator(ItemsStockAlertPushGenerator())
     scheduler_registry.register_generator(OffboardingReminderGenerator())
     scheduler_registry.register_generator(ContractExpiryReminderGenerator())
     scheduler_registry.register_generator(ContractSignReminderGenerator())
@@ -371,7 +391,7 @@ app.add_middleware(AuditMiddleware)
 
 # Enforce the same RBAC decision used by the permission simulator. Module
 # access defaults to explicit grants; ``MODULE_ACCESS_MODE=all`` is retained
-# only as an intentional compatibility override.
+# only as a development compatibility override and is ignored in production.
 from app.platform.identity.permission_middleware import PermissionMiddleware  # noqa: E402
 
 app.add_middleware(PermissionMiddleware)
@@ -428,6 +448,19 @@ async def database_integrity_exception_handler(
         message="数据状态冲突，请刷新后重试",
         status_code=409,
     )
+
+
+@app.exception_handler(DatabaseTimeoutError)
+@app.exception_handler(RedisMemoryError)
+async def database_capacity_exception_handler(
+    request: Request, _exc: DatabaseTimeoutError | RedisMemoryError
+) -> JSONResponse:
+    logger.warning(
+        "storage capacity exhausted: %s %s", request.method, request.url.path
+    )
+    response = error_response(message="服务繁忙，请稍后重试", status_code=503)
+    response.headers["Retry-After"] = "5"
+    return response
 
 
 def _llm_error_response(message: str, status_code: int) -> JSONResponse:

@@ -441,7 +441,7 @@ export function OosOotLedgerPageBase({ config }: { config: OosOotLedgerConfig })
             <Select
               showSearch
               allowClear
-              placeholder="输入姓名搜索部门联系人"
+              placeholder="输入姓名搜索人员"
               filterOption={(input, option) =>
                 (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
               }

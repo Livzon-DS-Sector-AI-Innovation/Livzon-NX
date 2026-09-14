@@ -33,6 +33,23 @@ describe('warehouse migrated menu contract', () => {
     const rawSummary = materials?.children?.find((item) => item.key === 'raw-summary')
     expect(rawSummary?.feishuPageKey).toBe('raw-summary')
 
+    // 液体入库两页：挂在原辅料及包材下、紧跟入库总账，feishuPageKey 用裸 key
+    const materialKeys = materials?.children?.map((item) => item.key) ?? []
+    expect(materialKeys).toContain('liquid-raw-inbound')
+    expect(materialKeys).toContain('liquid-sugar-inbound')
+    expect(materialKeys.indexOf('liquid-raw-inbound')).toBe(
+      materialKeys.indexOf('inbound-ledger') + 1,
+    )
+    expect(materialKeys.indexOf('liquid-sugar-inbound')).toBe(
+      materialKeys.indexOf('liquid-raw-inbound') + 1,
+    )
+    expect(
+      materials?.children?.find((item) => item.key === 'liquid-raw-inbound')?.feishuPageKey,
+    ).toBe('liquid-raw-inbound')
+    expect(
+      materials?.children?.find((item) => item.key === 'liquid-sugar-inbound')?.feishuPageKey,
+    ).toBe('liquid-sugar-inbound')
+
     const hardware = topLevelItems.find((item) => item.key === 'hardware')
     // 菜单 key 带 hardware- 前缀（hardware- + pageKey），但 feishuPageKey 用裸 key
     const hardwareChild = hardware?.children?.find(

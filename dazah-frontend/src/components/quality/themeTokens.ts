@@ -3,7 +3,7 @@
  * 颜色值应与 antd 主题 token 语义对齐；一次性特殊色保留在组件内。
  */
 export const qualityTokens = {
-  /** 品牌紫（部门联系人/登录品牌） */
+  /** 品牌紫（登录品牌） */
   brand: '#6f5ef9',
   /** 品牌紫浅底 */
   brandSoft: '#f3f0ff',

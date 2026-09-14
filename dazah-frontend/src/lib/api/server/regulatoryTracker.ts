@@ -96,6 +96,8 @@ export interface RegulatoryTrackerNotificationSetting {
   recipient_department?: string | null
   schedule_time: string
   pending_count: number
+  header_template?: string | null
+  footer_template?: string | null
 }
 
 interface TrackerLedgerPageRead {

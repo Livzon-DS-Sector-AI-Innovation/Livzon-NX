@@ -1,12 +1,36 @@
 from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager
 from typing import Any
 
 import httpx
 from fastapi import HTTPException, status
 from fastapi.responses import StreamingResponse
+from starlette.types import Receive, Scope, Send
 
+from app.core.llm.capacity import hold_capacity
 from app.core.llm.config import get_config
-from app.core.llm.exceptions import LLMConfigError
+from app.core.llm.exceptions import LLMConfigError, LLMRateLimitError
+
+
+class _CapacityStream(StreamingResponse):
+    """Release admission even when the client disconnects before the first byte."""
+
+    def __init__(
+        self, content: AsyncIterator[bytes], lease: AbstractAsyncContextManager[None]
+    ) -> None:
+        super().__init__(content, media_type="text/event-stream")
+        self.lease = lease
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            try:
+                close = getattr(self.body_iterator, "aclose", None)
+                if close is not None:
+                    await close()
+            finally:
+                await self.lease.__aexit__(None, None, None)
 
 SUPPORTED_FIELDS = {
     "messages",
@@ -81,12 +105,17 @@ async def forward_chat_completion(payload: dict[str, Any]) -> Any:
     }
     timeout = httpx.Timeout(config.timeout_seconds)
     if body.get("stream"):
-        return StreamingResponse(
+        lease = hold_capacity()
+        try:
+            await lease.__aenter__()
+        except LLMRateLimitError as exc:
+            raise HTTPException(429, "AI 服务繁忙，请稍后重试") from exc
+        return _CapacityStream(
             _stream_chat(url, headers, body, timeout, retry_without_thinking),
-            media_type="text/event-stream",
+            lease,
         )
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with hold_capacity(), httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(url, headers=headers, json=body)
             if response.status_code >= 400 and retry_without_thinking:
                 response = await client.post(
@@ -94,6 +123,8 @@ async def forward_chat_completion(payload: dict[str, Any]) -> Any:
                     headers=headers,
                     json=body_without_thinking(body),
                 )
+    except LLMRateLimitError as exc:
+        raise HTTPException(429, "AI 服务繁忙，请稍后重试") from exc
     except httpx.TimeoutException as exc:
         raise HTTPException(
             status.HTTP_504_GATEWAY_TIMEOUT,

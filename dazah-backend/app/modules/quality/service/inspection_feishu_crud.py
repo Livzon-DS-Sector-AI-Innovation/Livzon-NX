@@ -13,6 +13,7 @@ import uuid
 from typing import Any
 
 import httpx
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException, NotFoundException
@@ -32,6 +33,9 @@ from app.modules.quality.service.quality_feishu_pages import (
     _delete_entity_record,
     _resolve_runtime_entity,
     _search_entity_records,
+)
+from app.modules.quality.service.warehouse_result_sync import (
+    maybe_sync_result_to_warehouse,
 )
 from app.platform.audit.service import record_audit_log
 from app.platform.integrations.feishu.auth import FeishuAuth
@@ -109,7 +113,7 @@ def _coerce_write_value(field_meta: dict[str, Any], value: Any) -> Any:
     """按飞书 ui_type 转换前端传入值；返回 SKIP_REMOTE_FIELD 表示跳过该字段。"""
     ui_type = str(field_meta.get("ui_type") or "").strip()
     if ui_type == "User":
-        # 人员字段：前端通过部门联系人解析出 bitable user id 后按 [{id}] 提交
+        # 人员字段：前端从人员目录选人后按 [{id}] 提交，后端统一换发 union_id
         if (
             isinstance(value, list)
             and value
@@ -362,7 +366,28 @@ async def get_inspection_entity_fields(
                 or None,
             }
         )
-    return {"fields": fields, "can_push": bool(entity.enable_push_to_feishu)}
+    return {
+        "fields": fields,
+        "can_push": bool(entity.enable_push_to_feishu),
+        "form_url": await _get_entity_form_url(db, entity_code),
+    }
+
+
+async def _get_entity_form_url(db: AsyncSession, entity_code: str) -> str | None:
+    """读取实体配置的飞书共享表单链接（新增记录走外链表单录入时用）。"""
+    from app.modules.quality.models.feishu_settings import (
+        QualityFeishuEntitySetting,
+    )
+
+    row = (
+        await db.execute(
+            select(QualityFeishuEntitySetting).where(
+                QualityFeishuEntitySetting.entity_code == entity_code,
+                QualityFeishuEntitySetting.is_deleted.is_(False),
+            )
+        )
+    ).scalar_one_or_none()
+    return (row.feishu_form_url or "").strip() or None if row else None
 
 
 async def create_inspection_feishu_record(
@@ -397,6 +422,10 @@ async def create_inspection_feishu_record(
         },
     )
     await db.commit()
+    # 质量检验结果 → 仓储入库台账 即时联动（best-effort，失败不影响质量写入）
+    await maybe_sync_result_to_warehouse(
+        db, entity_code=entity_code, record_id=record_id, fields=fields
+    )
     return {"record_id": record_id}
 
 
@@ -434,6 +463,10 @@ async def update_inspection_feishu_record(
         },
     )
     await db.commit()
+    # 质量检验结果 → 仓储入库台账 即时联动（best-effort，失败不影响质量写入）
+    await maybe_sync_result_to_warehouse(
+        db, entity_code=entity_code, record_id=next_record_id, fields=fields
+    )
     return {"record_id": next_record_id}
 
 

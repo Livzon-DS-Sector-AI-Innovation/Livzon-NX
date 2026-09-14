@@ -15,6 +15,7 @@ from app.core.llm import (
 )
 from app.modules.quality.service import trend_ai_analysis as svc
 from app.modules.quality.service.trend_ai_analysis import (
+    run_product_trend_ai_analysis,
     run_trend_ai_analysis,
     validate_trend_ai_payload,
 )
@@ -217,3 +218,65 @@ async def test_run_trend_ai_timeout(monkeypatch) -> None:
     result = await run_trend_ai_analysis(**_base_kwargs())
     assert result["status"] == "failed"
     assert result["error"] == "timeout"
+
+
+# ─── 产品级（多指标合并一次分析） ────────────────────────────────
+
+
+def _valid_product_raw() -> dict:
+    raw = _valid_raw()
+    raw["metric_findings"] = [
+        {"metric_label": "含量（干品）", "summary": "持续上升，逼近上限"},
+        {"metric_label": "", "summary": "缺指标名 → 丢弃"},
+        "not-a-dict",
+    ]
+    return raw
+
+
+def test_validate_product_level_cleans_metric_findings() -> None:
+    clean = validate_trend_ai_payload(_valid_product_raw(), product_level=True)
+    assert len(clean["metric_findings"]) == 1
+    assert clean["metric_findings"][0]["metric_label"] == "含量（干品）"
+    # 非产品级：不产出 findings 键
+    plain = validate_trend_ai_payload(_valid_product_raw())
+    assert "metric_findings" not in plain
+
+
+def _product_kwargs() -> dict:
+    return {
+        "source_label": "霉酚酸（内控）",
+        "period": "2026-09",
+        "metrics": [
+            {
+                "metric_label": "含量（干品）",
+                "points": _base_kwargs()["points"],
+                "mean": 97.8,
+                "std_dev": 0.5,
+                "upper_control_limit": 99.3,
+                "lower_control_limit": 96.3,
+                "spec_lines": [{"label": "标准上限", "value": 103.0}],
+                "anomalies": _base_kwargs()["anomalies"],
+            }
+        ],
+    }
+
+
+@pytest.mark.anyio
+async def test_run_product_trend_ai_completed(monkeypatch) -> None:
+    chat_json = AsyncMock(return_value=_valid_product_raw())
+    _patch_llm(monkeypatch, chat_json=chat_json)
+    result = await run_product_trend_ai_analysis(**_product_kwargs())
+    assert result["status"] == "completed"
+    assert len(result["ai_summary"]["metric_findings"]) == 1
+    # 一次模型调用，expected_keys 含 metric_findings
+    chat_json.assert_awaited_once()
+    assert "metric_findings" in chat_json.await_args.kwargs["expected_keys"]
+
+
+@pytest.mark.anyio
+async def test_run_product_trend_ai_no_config(monkeypatch) -> None:
+    monkeypatch.setattr(svc, "get_config", AsyncMock(side_effect=LLMConfigError("no")))
+    monkeypatch.setattr(type(svc.llm_client), "chat_json", AsyncMock())
+    result = await run_product_trend_ai_analysis(**_product_kwargs())
+    assert result["status"] == "failed"
+    assert result["error"] == "no_config"

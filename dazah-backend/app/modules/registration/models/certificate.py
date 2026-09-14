@@ -118,6 +118,16 @@ class RegistrationCertificateReminderSetting(BaseModel):
         nullable=True,
         comment="接收人部门快照",
     )
+    header_template: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="消息开头语模板（空用内置默认）",
+    )
+    footer_template: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="消息结尾语模板（空用内置默认）",
+    )
 
 
 class RegistrationCertificateReminderNotification(BaseModel):

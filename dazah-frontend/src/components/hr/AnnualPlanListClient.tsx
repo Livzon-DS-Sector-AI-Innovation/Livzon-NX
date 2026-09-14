@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { App, AutoComplete, Button, Row, Col, Popconfirm, Spin, Modal, Form, Select, Upload, Input } from 'antd'
 import { PlusOutlined, ImportOutlined, FileTextOutlined } from '@ant-design/icons'
 import Link from 'next/link'
@@ -14,6 +15,7 @@ const CURRENT_YEAR = new Date().getFullYear()
 const YEAR_OPTIONS = Array.from({ length: 7 }, (_, i) => CURRENT_YEAR - 1 + i)
 
 export default function AnnualPlanListClient() {
+  const router = useRouter()
   const { message } = App.useApp()
 
   const [plans, setPlans] = useState<AnnualTrainingPlan[]>([])
@@ -85,7 +87,7 @@ export default function AnnualPlanListClient() {
       form.resetFields()
       const planId = res.data?.id
       if (planId) {
-        window.location.href = `/hr/training/annual-plan?id=${planId}`
+        router.push(`/hr/training/annual-plan?id=${planId}`)
       } else {
         loadPlans()
       }
@@ -186,7 +188,7 @@ export default function AnnualPlanListClient() {
                            onClick={(e) => {
                              // 只在点击卡片内部时跳转；Popconfirm 确认浮层在卡片 DOM 外，点击确定不会误跳转
                              if (!e.currentTarget.contains(e.target as Node)) return
-                             window.location.href = `/hr/training/annual-plan?id=${plan.id}`
+                             router.push(`/hr/training/annual-plan?id=${plan.id}`)
                            }}>
                         <div className="flex items-start gap-3 mb-3">
                           <div className="w-9 h-9 rounded-lg bg-blue-500 flex items-center justify-center flex-shrink-0">
@@ -252,7 +254,7 @@ export default function AnnualPlanListClient() {
                            onClick={(e) => {
                              // 只在点击卡片内部时跳转；Popconfirm 确认浮层在卡片 DOM 外，点击确定不会误跳转
                              if (!e.currentTarget.contains(e.target as Node)) return
-                             window.location.href = `/hr/training/annual-plan?id=${plan.id}`
+                             router.push(`/hr/training/annual-plan?id=${plan.id}`)
                            }}>
                         <div className="flex items-start gap-3 mb-3">
                           <div className="w-9 h-9 rounded-lg bg-emerald-500 flex items-center justify-center flex-shrink-0">

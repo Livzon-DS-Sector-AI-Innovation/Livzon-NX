@@ -4,8 +4,12 @@ import json
 from typing import Any
 
 import pytest
+from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from httpx import ASGITransport, AsyncClient
+from redis.exceptions import OutOfMemoryError as RedisMemoryError
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import TimeoutError as DatabaseTimeoutError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import Request
 
@@ -17,11 +21,32 @@ from app.core.exceptions import (
 )
 from app.core.response import error_response, paginated_response, success_response
 from app.main import (
+    app,
     app_exception_handler,
     database_integrity_exception_handler,
     http_exception_handler,
     validation_exception_handler,
 )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", [DatabaseTimeoutError, RedisMemoryError])
+async def test_database_capacity_is_503_without_internal_details(
+    failure: type[Exception],
+) -> None:
+    test_app = FastAPI(exception_handlers=app.exception_handlers)
+
+    @test_app.get("/capacity-test")
+    async def saturated() -> None:
+        raise failure("internal storage diagnostic must not be returned")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.get("/capacity-test")
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "5"
+    assert response.json() == {"code": 503, "message": "服务繁忙，请稍后重试"}
 
 
 def _request(method: str = "GET", path: str = "/api/v1/test") -> Request:

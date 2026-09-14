@@ -1,0 +1,13 @@
+[Unit]
+Description=Dazah local backup (not an off-host backup)
+After=docker.service
+[Service]
+Slice=dazah-control.slice
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/dazah/control/controller.py backup
+UMask=0077
+Nice=15
+CPUWeight=10
+IOWeight=10
+TimeoutStartSec=3600
+MemoryMax=256M

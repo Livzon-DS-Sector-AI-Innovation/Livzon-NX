@@ -20,18 +20,20 @@ class TestBuildEngineKwargs:
         assert "pool_size" not in kwargs
         assert "max_overflow" not in kwargs
         assert "pool_pre_ping" not in kwargs
+        assert "pool_timeout" not in kwargs
 
     def test_development_env_keeps_queue_pool(self) -> None:
         kwargs = _build_engine_kwargs("development")
         assert "poolclass" not in kwargs
-        assert kwargs["pool_size"] == 10
-        assert kwargs["max_overflow"] == 20
+        assert kwargs["pool_size"] == 5
+        assert kwargs["max_overflow"] == 5
+        assert kwargs["pool_timeout"] == 5
         assert kwargs["pool_pre_ping"] is True
 
     def test_production_env_keeps_queue_pool(self) -> None:
         kwargs = _build_engine_kwargs("production")
         assert "poolclass" not in kwargs
-        assert kwargs["pool_size"] == 10
+        assert kwargs["pool_size"] == 5
 
     def test_search_path_always_set(self) -> None:
         for env in ("test", "development", "production"):

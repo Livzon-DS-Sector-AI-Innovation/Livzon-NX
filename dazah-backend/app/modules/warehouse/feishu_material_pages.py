@@ -1,12 +1,15 @@
 from dataclasses import dataclass
 
-FEISHU_WAREHOUSE_APP_TOKEN = "IpMdbEFSlaZRoJstpFLcbTzPn2e"
+# 2026-09 原辅料及包材整体迁移到新 Base；液体入库为独立 Base。
+FEISHU_WAREHOUSE_APP_TOKEN = "ZWuBb4cziadvVqsRGP8c93JOnOb"
+FEISHU_LIQUID_WAREHOUSE_APP_TOKEN = "NX5GbfHJhaYrnLszxbZcrmwvnKf"
 FEISHU_FINISHED_PRODUCT_APP_TOKEN = "S9KobSXEIaU9K4sgohycpiLqnhg"
 FEISHU_HARDWARE_APP_TOKEN = "DPjgbn78nao1lWsU7a3c3JUdnSb"
 
 # 多维表格 Base 展示名称（页面数据来源标识）
 FEISHU_WAREHOUSE_BASE_NAMES = {
     FEISHU_WAREHOUSE_APP_TOKEN: "原辅料",
+    FEISHU_LIQUID_WAREHOUSE_APP_TOKEN: "液体入库",
     FEISHU_FINISHED_PRODUCT_APP_TOKEN: "成品",
     FEISHU_HARDWARE_APP_TOKEN: "五金",
 }
@@ -22,31 +25,44 @@ class FeishuWarehouseMaterialPage:
 
 FEISHU_WAREHOUSE_MATERIAL_PAGES = {
     "raw-summary": FeishuWarehouseMaterialPage(
-        "raw-summary", "原辅料库存总表", "tblVpo4DkpnA4MY9"
+        "raw-summary", "原辅料库存总表", "tblNVZtUlnxa5Ns4"
     ),
     "raw-detail": FeishuWarehouseMaterialPage(
-        "raw-detail", "原辅料库存明细表", "tblatUqySt3gsszt"
+        "raw-detail", "原辅料库存明细表", "tblkF2KW1cBxdJEg"
     ),
     "raw-ledger": FeishuWarehouseMaterialPage(
-        "raw-ledger", "原辅料出库总账", "tblVAr4M5pxZC5Bh"
+        "raw-ledger", "原辅料出库总账", "tblzUX7nFyqh8xXS"
     ),
     "packaging-summary": FeishuWarehouseMaterialPage(
-        "packaging-summary", "包材库存总表", "tbl1kBwhko7730gI"
+        "packaging-summary", "包材库存总表", "tblUaz61VSpEeN7f"
     ),
     "packaging-detail": FeishuWarehouseMaterialPage(
-        "packaging-detail", "包材库存明细表", "tblseg0I5JhtVvc0"
+        "packaging-detail", "包材库存明细表", "tbljexvunCpHRbOp"
     ),
     "packaging-ledger": FeishuWarehouseMaterialPage(
-        "packaging-ledger", "包材出库总账", "tblwecS4CubKojaE"
+        "packaging-ledger", "包材出库总账", "tblRJD4O9Vuq9wzd"
     ),
     "inbound-ledger": FeishuWarehouseMaterialPage(
-        "inbound-ledger", "入库总账", "tblIqPXnlcHNd5cO"
+        "inbound-ledger", "入库总账", "tblf9MZF7GsYSCIT"
     ),
     "qualified-suppliers": FeishuWarehouseMaterialPage(
-        "qualified-suppliers", "原辅材料合格供应商一览表", "tblwSK3AMuhoflO6"
+        "qualified-suppliers", "原辅材料合格供应商一览表", "tbl2DcZz8sjdT53w"
     ),
     "material-name-code-map": FeishuWarehouseMaterialPage(
-        "material-name-code-map", "物料名称及代码对应表", "tblDs6dg1S8z3HMz"
+        "material-name-code-map", "物料名称及代码对应表", "tblrAtixkBUDQaSW"
+    ),
+    # 液体入库（独立 Base）：列表仅展示到备注列，其余字段在详情弹窗查看
+    "liquid-raw-inbound": FeishuWarehouseMaterialPage(
+        "liquid-raw-inbound",
+        "液体原辅料入库",
+        "tbljj75DiA6BDt4D",
+        FEISHU_LIQUID_WAREHOUSE_APP_TOKEN,
+    ),
+    "liquid-sugar-inbound": FeishuWarehouseMaterialPage(
+        "liquid-sugar-inbound",
+        "液糖入库",
+        "tblRX5IjxkjaFkqp",
+        FEISHU_LIQUID_WAREHOUSE_APP_TOKEN,
     ),
     "hardware-summary": FeishuWarehouseMaterialPage(
         "hardware-summary", "五金", "tbl7H8wRnEyVwfIk", FEISHU_HARDWARE_APP_TOKEN

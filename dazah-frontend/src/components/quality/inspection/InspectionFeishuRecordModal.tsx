@@ -117,6 +117,11 @@ function FieldControl({
   field: InspectionFeishuFieldMeta
 }) {
   const label = field.field_name
+  // 飞书 SingleSelect/MultiSelect 的可选项来自字段元数据（如「结果判断」= 合格/不合格）
+  const selectOptions = (field.options ?? []).map((opt) => ({
+    label: opt.name,
+    value: opt.name,
+  }))
   if (field.ui_type === 'DateTime') {
     return (
       <Form.Item name={field.field_name} label={label}>
@@ -141,14 +146,14 @@ function FieldControl({
   if (field.ui_type === 'MultiSelect') {
     return (
       <Form.Item name={field.field_name} label={label}>
-        <Select mode="multiple" allowClear placeholder={`请选择${label}`} />
+        <Select mode="multiple" allowClear placeholder={`请选择${label}`} options={selectOptions} />
       </Form.Item>
     )
   }
   if (field.ui_type === 'SingleSelect') {
     return (
       <Form.Item name={field.field_name} label={label}>
-        <Select allowClear placeholder={`请选择${label}`} />
+        <Select allowClear placeholder={`请选择${label}`} options={selectOptions} />
       </Form.Item>
     )
   }

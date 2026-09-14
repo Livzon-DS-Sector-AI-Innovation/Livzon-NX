@@ -634,6 +634,8 @@ async def save_notification_setting(
     recipient_name: str | None,
     recipient_department: str | None,
     schedule_time: str = "10:00",
+    header_template: str | None = None,
+    footer_template: str | None = None,
 ) -> RegulatoryTrackerNotificationSetting:
     """创建或更新法规跟踪推送配置。"""
     if setting is None:
@@ -644,6 +646,8 @@ async def save_notification_setting(
             recipient_name=recipient_name,
             recipient_department=recipient_department,
             schedule_time=schedule_time,
+            header_template=header_template,
+            footer_template=footer_template,
         )
         db.add(setting)
         await db.flush()
@@ -655,6 +659,8 @@ async def save_notification_setting(
     setting.recipient_name = recipient_name
     setting.recipient_department = recipient_department
     setting.schedule_time = schedule_time
+    setting.header_template = header_template
+    setting.footer_template = footer_template
     await db.flush()
     return setting
 
