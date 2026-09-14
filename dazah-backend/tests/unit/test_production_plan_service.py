@@ -67,11 +67,10 @@ def test_extract_number_variants() -> Any:
 
 
 def test_extract_date_variants() -> Any:
-    from datetime import datetime
-
     assert _extract_date(None) is None
-    # 毫秒时间戳 → 本地时区日期（与实现同源计算期望值）
-    assert _extract_date(1700000000000) == datetime.fromtimestamp(1700000000).date()
+    # 毫秒时间戳按飞书口径 = 北京时间零点；不锚定时区会差一天
+    assert _extract_date(1782835200000) == date(2026, 7, 1)  # 2026-07-01 00:00 +08:00
+    assert _extract_date(1700000000000) == date(2023, 11, 15)  # 2023-11-15 06:13 +08:00
     assert _extract_date(0) is None
     assert _extract_date(-5) is None
     assert _extract_date("2026-03-01") == date(2026, 3, 1)
@@ -175,6 +174,65 @@ def test_sync_production_plan_creates_and_paginates() -> Any:
         )
     assert result["created"] == 2
     assert client.list_records.await_args_list[1].kwargs["page_token"] == "tok1"
+
+
+def test_sync_production_plan_assigns_row_order() -> Any:
+    """飞书行序跨分页累加写入 row_order，用于台账稳定排序。"""
+    import asyncio
+
+    session = make_session(scalar_result=None)
+    client = MagicMock()
+    client.list_records = AsyncMock(
+        side_effect=[
+            _records_page(
+                [
+                    {
+                        "fields": {
+                            "车间": "201-1车间",
+                            "产品": "洛伐他汀",
+                            "日期": "2026-07-01",
+                        }
+                    },
+                    {
+                        "fields": {
+                            "车间": "201-2车间",
+                            "产品": "霉酚酸",
+                            "日期": "2026-07-01",
+                        }
+                    },
+                ],
+                has_more=True,
+                page_token="tok1",
+            ),
+            _records_page(
+                [
+                    {
+                        "fields": {
+                            "车间": "菌种中心",
+                            "产品": "供种/接种/培养基",
+                            "日期": "2026-07-01",
+                        }
+                    }
+                ],
+                has_more=False,
+            ),
+        ]
+    )
+    with (
+        patch(
+            "app.modules.production.production_plan_service.decrypt_secret",
+            return_value="secret",
+        ),
+        patch(
+            "app.modules.production.production_plan_service.ProductionFeishuClient",
+            return_value=client,
+        ),
+    ):
+        result = asyncio.run(_sync_production_plan(make_config(), session))
+
+    assert result["created"] == 3
+    row_orders = [call.args[0].row_order for call in session.add.call_args_list]
+    assert row_orders == [1, 2, 3]
 
 
 def test_sync_production_plan_updates_existing_and_skips() -> Any:

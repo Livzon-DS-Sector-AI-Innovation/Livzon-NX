@@ -23,6 +23,7 @@ import type {
   FermentationQueryParams,
   BatchQueryParams,
   PlanQueryParams,
+  PlanMonthlySummary,
   ProcessSpecQueryParams,
   ApiResponse,
   ScheduleExcelArchive,
@@ -140,10 +141,16 @@ export async function getPlans(params: PlanQueryParams = {}) {
   if (params.page_size) searchParams.set('page_size', String(params.page_size))
   if (params.product_name) searchParams.set('product_name', params.product_name)
   if (params.workshop) searchParams.set('workshop', params.workshop)
+  if (params.month) searchParams.set('month', params.month)
 
   const queryString = searchParams.toString()
   const endpoint = `/api/v1/production/plans${queryString ? `?${queryString}` : ''}`
   return fetchApi<ProductionPlan[]>(endpoint)
+}
+
+export async function getPlanMonthlySummary(month: string) {
+  const endpoint = `/api/v1/production/plans/monthly-summary?month=${encodeURIComponent(month)}`
+  return fetchApi<PlanMonthlySummary[]>(endpoint)
 }
 
 export async function getPlan(id: string) {
@@ -484,11 +491,17 @@ export async function upsertFermentationBatchActual(
     {
       method: 'POST',
       headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      // 仅透传调用方显式给出的字段：后端按显式字段做部分更新与工段权限校验
       body: JSON.stringify({
         batch_no: data.batch_no,
-        dump_date: data.dump_date || null,
-        yield_kg: data.yield_kg ?? null,
-        remark: data.remark || null,
+        ...(data.dump_date !== undefined
+          ? { dump_date: data.dump_date || null }
+          : {}),
+        ...(data.yield_kg !== undefined ? { yield_kg: data.yield_kg ?? null } : {}),
+        ...(data.extract_kg !== undefined
+          ? { extract_kg: data.extract_kg ?? null }
+          : {}),
+        ...(data.remark !== undefined ? { remark: data.remark || null } : {}),
       }),
     },
   )

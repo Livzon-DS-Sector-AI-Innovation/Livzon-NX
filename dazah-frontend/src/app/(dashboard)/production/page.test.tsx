@@ -17,6 +17,7 @@ const actions = vi.hoisted(() => ({
   upsertFermentationBatchActual: vi.fn(),
   deleteFermentationBatchActual: vi.fn(),
   setFermentationMonthCapacity: vi.fn(),
+  getPlans: vi.fn(),
 }))
 
 vi.mock('@/actions/production', () => actions)
@@ -31,6 +32,22 @@ vi.mock('echarts-for-react', () => ({
     createElement('pre', null, JSON.stringify(option ?? {})),
 }))
 
+// 认证 store：默认管理员（通配权限），工段矩阵用例直接改 state.user.permissions
+const authStore = vi.hoisted(() => {
+  const state = {
+    user: {
+      id: 'u-test',
+      name: '测试用户',
+      permissions: ['*'] as string[],
+    },
+  }
+  return {
+    state,
+    useAuthStore: (selector: (s: typeof state) => unknown) => selector(state),
+  }
+})
+vi.mock('@/stores/auth', () => authStore)
+
 import ProductionHomePage from './page'
 
 const BOARD = {
@@ -38,6 +55,7 @@ const BOARD = {
   period: { start: '2026-08-27', end: '2026-09-26', label: '8月27日～9月26日' },
   is_current_period: true,
   month_planned_capacity_kg: 930000,
+  extract_finished_inbound_kg: null,
   kpis: {
     month_planned: 31,
     month_done_planned: 10,
@@ -92,6 +110,8 @@ const BOARD = {
       dump_date: '2026-09-06',
       tank_no: '303A',
       yield_kg: null,
+      extract_kg: 88.0,
+      batch_yield_rate: null,
       yield_rate: null,
       result: '计划放罐',
     },
@@ -101,6 +121,28 @@ const BOARD = {
     { batch_no: 'FA26231', dump_date: '2026-09-08' },
     { batch_no: 'FA26230', dump_date: '2026-09-07' },
   ],
+  extraction_ledger: [
+    {
+      batch_no: 'FA26233',
+      dump_date: '2026-09-10',
+      yield_kg: 32569.5,
+      extract_kg: null,
+    },
+    {
+      batch_no: 'FA26232',
+      dump_date: '2026-09-09',
+      yield_kg: 31058.32,
+      extract_kg: 28100,
+    },
+  ],
+  extraction: {
+    ferment_total_kg: 298531.0,
+    extract_total_kg: 265000.0,
+    ferment_batches: 9,
+    extract_batches: 8,
+    rate_realtime: 88.8,
+    rate_paired: 90.2,
+  },
   alerts: [
     { level: 'info', text: '待接种批次 FA26235 今日 20:00 进种子罐（202A）' },
   ],
@@ -112,10 +154,18 @@ describe('ProductionHomePage (fermentation board)', () => {
   let container: HTMLElement
 
   beforeEach(() => {
+    authStore.state.user.permissions = ['*']
     actions.getFermentationBoard.mockResolvedValue({
       code: 200,
       message: 'success',
       data: BOARD,
+    })
+    // 生产计划默认无数据：提炼计划产量卡显示"待更新"占位
+    actions.getPlans.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [],
+      meta: { total: 0 },
     })
     container = document.createElement('div')
     document.body.append(container)
@@ -126,6 +176,7 @@ describe('ProductionHomePage (fermentation board)', () => {
     act(() => root.unmount())
     container?.remove()
     vi.clearAllMocks()
+    window.localStorage.clear()
   })
 
   async function render() {
@@ -153,24 +204,33 @@ describe('ProductionHomePage (fermentation board)', () => {
     expect(text).toContain('达成率 32%')
     expect(text).not.toContain('按计划放罐时间+2h口径')
     expect(text).toContain('已完成产能')
-    expect(text).toContain('298.5 t')
+    expect(text).toContain('298,531.00 kg')
     // 产能达成率 = 已完成产能 / 计划产能（298531/930000 ≈ 32.1%），在右栏产能值下方
-    expect(text).toContain('产能达成率 32.1%')
-    expect(text).not.toContain('（298.5 t/930.0 t）')
+    expect(text).toContain('产能达成率 32.10%')
+    expect(text).not.toContain('（298,531.00 kg/930,000 kg）')
     expect(text).not.toContain('染菌数｜染菌率')
-    expect(text).not.toContain('设备利用率')
+    // 理论批次卡：一天一批，截至今天（随运行日期浮动）、已完成÷理论=设备利用率
+    expect(text).toContain('理论批次')
+    expect(text).toContain('设备利用率')
+    expect(text).toMatch(/截至 \d{2}-\d{2} · 一天一批/)
+    expect(text).toContain('已完成 10 ÷ 理论')
+    expect(text).toMatch(/设备利用率\s*\n?\s*\d+(\.\d+)?%/)
+    expect(text).not.toContain('当前运行批次')
+    expect(text).not.toContain('待启动排产批次')
     // 本月批次进度条：产能口径（绿色段=已完成产能/计划产能），汇总行已删除
     expect(text).toContain('本月批次进度')
     expect(text).not.toContain('已放罐 10/31')
-    expect(text).toContain('已完成 9 批｜298.5 t')
+    expect(text).toContain('已完成 9 批｜298,531.00 kg')
     expect(text).toContain('待出产量 1 批')
     expect(text).toContain('未开始 19 批')
-    // 右侧计划产能：未设置显示 --，有设置显示吨
+    // 右侧计划产能：未设置显示 --，有设置显示 kg
     expect(text).toContain('本月计划产能')
     expect(container.textContent || '').toContain('--')
     // 箭头位置 = 产能进度点 298531/930000 ≈ 32.1%
     const arrow = container.querySelector('.relative .absolute[style*="left: 32"]')
     expect(arrow).toBeTruthy()
+    // 进度条粒子脉冲层（Canvas）随进度条渲染
+    expect(container.querySelectorAll('[data-testid="progress-particles"]').length).toBe(1)
     // 顶部保留历史数据入口
     const historyBtn = Array.from(container.querySelectorAll('button')).find((b) =>
       b.textContent?.includes('历史数据'),
@@ -370,7 +430,7 @@ describe('ProductionHomePage (fermentation board)', () => {
     })
     await render()
     const text = (container.textContent || '') + (document.body.textContent || '')
-    expect(text).toContain('930.0 t')
+    expect(text).toContain('930,000 kg')
     // 打开编辑弹窗并保存
     const editBtn = Array.from(container.querySelectorAll('button')).find((b) =>
       b.getAttribute('title') === '设置本月计划产能',
@@ -815,5 +875,215 @@ describe('ProductionHomePage (fermentation board)', () => {
         b.textContent?.includes('标记检修'),
       ),
     ).toBe(false)
+  })
+
+  it('hides the extraction card for fermentation-only role', async () => {
+    authStore.state.user.permissions = ['production:fermentation-yield']
+    actions.getFermentationBoard.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: { ...BOARD, extraction: null },
+    })
+    await render()
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('提炼计划产量')
+    expect(text).toContain('本月计划批次')
+    expect(text).toContain('发酵罐实时状态')
+    expect(text).not.toContain('提炼已出成品')
+    expect(text).not.toContain('提炼收率（实时）')
+    // 收率分析占位对发酵岗可见（无敏感数据）
+    expect(text).toContain('收率分析（待接入）')
+    expect(text).not.toContain('批次台账')
+    expect(text).not.toContain('成品日报')
+  })
+
+  it('shows only extraction summary for extraction-only role', async () => {
+    authStore.state.user.permissions = ['production:extraction-yield']
+    actions.getFermentationBoard.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: {
+        ...BOARD,
+        kpis: null,
+        tanks: [],
+        recent: [],
+        trend: null,
+        month_planned_capacity_kg: null,
+      },
+    })
+    await render()
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('提炼已出成品（仓储成品入库）')
+    expect(text).toContain('数据源待接入')
+    // 批次台账/饼状图/成品日报卡片已下线
+    expect(text).not.toContain('批次台账')
+    expect(text).not.toContain('成品日报')
+    // 收率分析占位卡对提炼岗可见
+    expect(text).toContain('收率分析（待接入）')
+    // 发酵模块（KPI/罐状态/图表）对提炼岗不可见
+    expect(text).not.toContain('本月计划批次')
+    expect(text).not.toContain('发酵罐实时状态')
+    expect(text).not.toContain('单批产量（最多 31 批）')
+    expect(text).not.toContain('提炼计划产量')
+    expect(text).not.toContain('提炼收率（实时）')
+  })
+
+  it('shows the full extraction trio for leadership (both permissions)', async () => {
+    await render()
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('提炼计划产量')
+    expect(text).toContain('提炼已出成品')
+    // 收率卡已改为占位，不再展示实时/配对口径数值
+    expect(text).not.toContain('提炼收率（实时）')
+    expect(text).not.toContain('88.8%')
+    expect(text).toContain('收率分析（待接入）')
+    // 最近完成批次表已移除提炼成品/单批收率列
+    expect(text).not.toContain('提炼成品(kg)')
+    expect(text).not.toContain('单批收率')
+    // 批次台账/成品日报卡片已下线
+    expect(text).not.toContain('批次台账')
+    expect(text).not.toContain('成品日报')
+  })
+
+  it('shows warehouse inbound total when wired (FA product)', async () => {
+    actions.getFermentationBoard.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: { ...BOARD, extract_finished_inbound_kg: 410490 },
+    })
+    actions.getPlans.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [
+        {
+          id: 'p-rate',
+          workshop: '203车间',
+          product_name: 'L-苯丙氨酸',
+          plan_date: '2026-09-01',
+          planned_yield: 790000,
+          unit: 'KG',
+          remarks: '',
+          source: 'feishu',
+        },
+      ],
+      meta: { total: 1 },
+    })
+    await render()
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('提炼已出成品（仓储成品入库）')
+    expect(text).toContain('410,490')
+    expect(text).toContain('L-苯丙氨酸 · 本月合计(kg)')
+    // 右栏完成率 = 410,490 ÷ 790,000，保留两位小数
+    expect(text).toContain('完成率')
+    expect(text).toContain('51.96%')
+    expect(text).toContain('已出成品 ÷ 计划产量')
+  })
+
+  it('keeps placeholder text when warehouse inbound is not wired', async () => {
+    await render()
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('提炼已出成品（仓储成品入库）')
+    expect(text).toContain('数据源待接入')
+    // 已出成品或计划产量缺数据时完成率显示 --
+    expect(text).toContain('完成率')
+    expect(text).toContain('--')
+  })
+
+  it('shows plan yield with workshop-product picker when month plans exist', async () => {
+    actions.getPlans.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [
+        {
+          id: 'p-1',
+          workshop: '201-2车间',
+          product_name: '霉酚酸',
+          plan_date: '2026-09-01',
+          planned_yield: 61000,
+          unit: 'KG',
+          actual_completion: 6920,
+          completion_rate: 0.11,
+          remarks: '',
+          source: 'feishu',
+        },
+        {
+          id: 'p-2',
+          workshop: '101-2发酵车间',
+          product_name: '霉酚酸',
+          plan_date: '2026-09-01',
+          planned_yield: 30,
+          unit: '批',
+          actual_completion: 7,
+          completion_rate: 0.23,
+          remarks: '',
+          source: 'feishu',
+        },
+      ],
+      meta: { total: 2 },
+    })
+    await render()
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('提炼计划产量')
+    // 默认选中第一行（201-2车间 霉酚酸），显示其计划产量与单位
+    expect(text).toContain('61,000')
+    expect(text).toContain('KG · 9月计划')
+    // 下拉选中值带车间+产品（渲染在 Select 文本中）
+    expect(text).toContain('201-2车间 霉酚酸')
+    // 月份查询参数随概览自然月
+    expect(actions.getPlans).toHaveBeenCalledWith(
+      expect.objectContaining({ month: expect.stringMatching(/^\d{4}-\d{2}$/) }),
+    )
+  })
+
+  it('shows month-pending hint when no plans for the overview month', async () => {
+    await render()
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('提炼计划产量')
+    expect(text).toMatch(/\d+月生产计划待更新/)
+    // 无计划数据时不显示"单位 · X月计划"取数文案（KPI 卡的"发酵本月计划产能"不受影响）
+    expect(text).not.toContain('KG · ')
+    expect(text).not.toContain('批 · ')
+  })
+
+  it('restores the remembered plan selection after reload', async () => {
+    actions.getPlans.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [
+        {
+          id: 'p-1',
+          workshop: '201-1车间',
+          product_name: '洛伐他汀',
+          plan_date: '2026-09-01',
+          planned_yield: 45200,
+          unit: 'KG',
+          remarks: '',
+          source: 'feishu',
+        },
+        {
+          id: 'p-2',
+          workshop: '203车间',
+          product_name: 'L-苯丙氨酸',
+          plan_date: '2026-09-01',
+          planned_yield: 790000,
+          unit: 'KG',
+          remarks: '',
+          source: 'feishu',
+        },
+      ],
+      meta: { total: 2 },
+    })
+    // 预置本月记忆：上次选的是第二行（203车间 L-苯丙氨酸）
+    const month = new Date().toISOString().slice(0, 7)
+    window.localStorage.setItem(
+      'dazah.production.plan-card.selection',
+      JSON.stringify({ [month]: '203车间|L-苯丙氨酸' }),
+    )
+    await render()
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    // 恢复记忆行而非默认第一行
+    expect(text).toContain('790,000')
+    expect(text).toContain('203车间 L-苯丙氨酸')
+    expect(text).not.toContain('45,200')
   })
 })

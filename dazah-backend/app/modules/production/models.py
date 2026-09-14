@@ -172,6 +172,13 @@ class ProductionPlan(BaseModel):
     workshop: Mapped[str | None] = mapped_column(
         String(64), nullable=True, comment="车间"
     )
+    row_order: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="飞书表行序（同步写入，用于稳定排序）",
+    )
     product_name: Mapped[str] = mapped_column(
         String(128), nullable=False, comment="产品"
     )

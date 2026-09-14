@@ -15,6 +15,7 @@
 """
 from __future__ import annotations
 
+import logging
 import re
 from datetime import date, datetime, time, timedelta
 from typing import Any
@@ -32,6 +33,12 @@ from app.modules.production.schedule_excel_models import ScheduleExcelArchive
 from app.modules.production.tank_maintenance_models import TankMaintenance
 
 FERMENT_TANKS = ("302A", "303A", "304A")
+
+logger = logging.getLogger(__name__)
+
+# 「提炼已出成品（仓储成品入库）」卡片：看板产品代码 → 仓储成品入库总账产品名。
+# 仅维护已接入产品；未在映射内的产品卡片维持"数据源待接入"。
+WAREHOUSE_INBOUND_PRODUCT_NAMES: dict[str, str] = {"FA": "L-苯丙氨酸"}
 
 # 放罐窗口：计划放罐时间起 2 小时内为「放罐中」（批次仍在罐上，不算完成）；
 # 窗口结束后批次才视为「已放罐/完成」（罐状态、recent 最近完成、完成 KPI 同口径）。
@@ -243,6 +250,106 @@ def collect_dump_tanks(
     return mapping
 
 
+# ═══════════════════ 重复存档合并（冻结历史日列） ═══════════════════
+
+
+def _index_blocks(rows: list[list[Any]]) -> dict[date, dict[str, Any]]:
+    """全表周期块索引：块起始日期 → 块定位（同起始周期取首个）。"""
+    blocks: dict[date, dict[str, Any]] = {}
+    for index, row in enumerate(rows):
+        if not row:
+            continue
+        span = parse_period_title(str(row[0]))
+        if span and span[0] not in blocks:
+            blocks[span[0]] = {"start_row": index, "start": span[0]}
+    return blocks
+
+
+def _block_day_columns(
+    rows: list[list[Any]], block: dict[str, Any]
+) -> list[tuple[int, date]]:
+    """块内日列 → (相对日列的列序, 日期)；日期行无法解析的占位列跳过。"""
+    days_row = (
+        rows[block["start_row"] + _ROW_DATE]
+        if block["start_row"] + _ROW_DATE < len(rows)
+        else []
+    )
+    block_start = block["start"]
+    result: list[tuple[int, date]] = []
+    for offset, value in enumerate(days_row[2:]):
+        try:
+            day = int(str(value).strip())
+        except ValueError:
+            continue
+        if day >= 27:
+            result.append((offset, block_start.replace(day=day)))
+            continue
+        if block_start.month == 12:
+            nxt = block_start.replace(year=block_start.year + 1, month=1)
+        else:
+            nxt = block_start.replace(month=block_start.month + 1)
+        result.append((offset, nxt.replace(day=day)))
+    return result
+
+
+def _cell_at(rows: list[list[Any]], row_index: int, col_index: int) -> Any:
+    row = rows[row_index] if row_index < len(rows) else []
+    return row[col_index] if col_index < len(row) else ""
+
+
+def _set_cell(
+    grid: list[list[Any]], row_index: int, col_index: int, value: Any
+) -> None:
+    while row_index >= len(grid):
+        grid.append([])
+    row = grid[row_index]
+    while col_index >= len(row):
+        row.append("")
+    row[col_index] = value
+
+
+def merge_schedule_rows_preserve_past(
+    new_rows: list[list[Any]],
+    old_rows: list[list[Any]],
+    today: date,
+) -> list[list[Any]]:
+    """重新存档排产表时，冻结「今天之前」的日列，仅采用新文件当天及以后的计划。
+
+    防止车间重发的排产漏带或改动历史放罐/移种记录，覆盖看板已依赖的
+    历史口径（罐完成状态、最近完成、完成 KPI、批次产量归属周期）：
+    - 按扎帐周期块标题匹配新旧文件中同一起始周期的块；
+    - 块内日期 < today 的列整体沿用旧存档（日期行～排产备注行）；
+    - 旧存档无对应周期块时该块保持新文件原样（无更可信的历史来源）。
+    返回深拷贝，不修改入参。
+    """
+    merged = [list(row) if isinstance(row, list) else row for row in new_rows]
+    old_blocks = _index_blocks(old_rows)
+    for start, new_block in _index_blocks(new_rows).items():
+        old_block = old_blocks.get(start)
+        if old_block is None:
+            continue
+        old_cols = {
+            day: offset for offset, day in _block_day_columns(old_rows, old_block)
+        }
+        for offset, day in _block_day_columns(new_rows, new_block):
+            if day >= today:
+                continue
+            old_offset = old_cols.get(day)
+            if old_offset is None:
+                continue
+            for row_offset in range(_ROW_DATE, _ROW_NOTE + 1):
+                value = _cell_at(
+                    old_rows, old_block["start_row"] + row_offset, old_offset + 2
+                )
+                _set_cell(
+                    merged,
+                    new_block["start_row"] + row_offset,
+                    offset + 2,
+                    value,
+                )
+    return merged
+
+
 def _ferm_events(days: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """发酵罐移种事件（罐号、批号、移种 datetime）。"""
     events: list[dict[str, Any]] = []
@@ -343,6 +450,12 @@ def build_board(
             cycle = (
                 (running["dump_at"] - running["start"]).total_seconds() / 3600
             )
+            if remain <= 0.5:
+                note = "即将放罐"
+            elif remain < 1:
+                note = "不足 1h"
+            else:
+                note = f"距放罐约 {int(remain)}h"
             tanks.append(
                 {
                     "tank_no": tank_no,
@@ -352,7 +465,7 @@ def build_board(
                     "cultured_hours": round(hours, 1),
                     "cycle_hours": round(cycle, 1),
                     "dump_at": running["dump_at"],
-                    "note": f"距放罐约 {max(0, int(remain))}h",
+                    "note": note,
                 }
             )
         elif dumping:
@@ -471,17 +584,22 @@ def build_board(
             continue
         dump_at = datetime.combine(item["date"], item["dump_time"] or time(10, 0))
         if dump_at + DUMP_WINDOW <= now:
+            batch_actual = actual_by_batch.get(item["dump_batch"]) or {}
+            batch_yield = batch_actual.get("yield_kg")
+            batch_extract = batch_actual.get("extract_kg")
             recent.append(
                 {
                     "batch_no": item["dump_batch"],
                     "dump_date": item["date"].isoformat(),
                     "tank_no": item["dump_tank"] or "",
-                    "yield_kg": (
-                        actual_by_batch.get(item["dump_batch"]) or {}
-                    ).get("yield_kg"),
-                    "remark": (
-                        actual_by_batch.get(item["dump_batch"]) or {}
-                    ).get("remark"),
+                    "yield_kg": batch_yield,
+                    "extract_kg": batch_extract,
+                    "batch_yield_rate": (
+                        round(float(batch_extract) / float(batch_yield) * 100, 1)
+                        if batch_yield and batch_extract is not None
+                        else None
+                    ),
+                    "remark": batch_actual.get("remark"),
                     "yield_rate": None,
                     "result": "计划放罐",
                 }
@@ -652,9 +770,147 @@ def build_board(
         "recent": recent,
         "trend": trend,
         "dumped_batches": dumped_batches,
+        "extraction_ledger": [
+            {
+                "batch_no": entry["batch_no"],
+                "dump_date": entry["dump_date"],
+                "yield_kg": (actual_by_batch.get(entry["batch_no"]) or {}).get(
+                    "yield_kg"
+                ),
+                "extract_kg": (actual_by_batch.get(entry["batch_no"]) or {}).get(
+                    "extract_kg"
+                ),
+            }
+            for entry in dumped_batches
+        ],
+        "extraction": summarize_extraction(actuals or []),
         "alerts": alerts,
         "maintenance": maintenance,
     }
+
+
+def summarize_extraction(actuals: list[dict[str, Any]]) -> dict[str, Any]:
+    """提炼工段汇总：当期发酵放罐产量 vs 提炼成品产量与两种口径收率。
+
+    - rate_realtime（实时口径）= Σ提炼成品 ÷ Σ发酵放罐（含尚未提炼的批次，
+      反映实时进度，随放罐批数增大暂时走低）；
+    - rate_paired（配对口径）= 已出成品批次内 Σ提炼成品 ÷ Σ对应放罐产量，
+      反映真实工艺收率，不受在途批次影响。
+
+    注意：提炼已出成品的权威数据源是成品日报（apply_daily_extract_source
+    会在 API 层用日报合计覆盖本函数基于批次台账的成品合计）。
+    """
+    yields = [
+        float(a["yield_kg"]) for a in actuals if a.get("yield_kg") is not None
+    ]
+    extracts = [
+        float(a["extract_kg"]) for a in actuals if a.get("extract_kg") is not None
+    ]
+    paired = [
+        (float(a["yield_kg"]), float(a["extract_kg"]))
+        for a in actuals
+        if a.get("yield_kg") is not None and a.get("extract_kg") is not None
+    ]
+    ferment_total = round(sum(yields), 2) if yields else None
+    extract_total = round(sum(extracts), 2) if extracts else None
+
+    def _rate(numerator: float | None, denominator: float | None) -> float | None:
+        if numerator is None or not denominator:
+            return None
+        return round(numerator / denominator * 100, 1)
+
+    paired_extract = sum(e for _, e in paired) if paired else None
+    paired_yield = sum(y for y, _ in paired) if paired else None
+    return {
+        "ferment_total_kg": ferment_total,
+        "extract_total_kg": extract_total,
+        "ferment_batches": len(yields),
+        "extract_batches": len(extracts),
+        "rate_realtime": _rate(extract_total, ferment_total),
+        "rate_paired": _rate(paired_extract, paired_yield),
+    }
+
+
+async def sum_extraction_daily_reports(
+    session: AsyncSession,
+    period_start: date,
+    period_end: date,
+    product_code: str = "FA",
+) -> list[float]:
+    """当期成品日报的成品量列表（「提炼已出成品」KPI 的权威数据源）。"""
+    from app.modules.production.extraction_report_models import (
+        ExtractionDailyReport,
+    )
+
+    result = await session.execute(
+        select(ExtractionDailyReport.quantity_kg).where(
+            ExtractionDailyReport.is_deleted.is_(False),
+            ExtractionDailyReport.product_code == product_code,
+            ExtractionDailyReport.report_date >= period_start,
+            ExtractionDailyReport.report_date <= period_end,
+        )
+    )
+    return [float(value) for value in result.scalars().all()]
+
+
+def apply_daily_extract_source(
+    extraction: dict[str, Any] | None, daily_quantities: list[float]
+) -> dict[str, Any] | None:
+    """「提炼已出成品」以成品日报为唯一数据源。
+
+    用日报合计覆盖提炼汇总中的成品合计、记录天数与实时收率；
+    当期无日报记录时合计记为空（卡片显示 --），不回退批次台账口径。
+    配对口径收率依赖批次级配对，仍取自批次台账。
+    """
+    if extraction is None:
+        return None
+    updated = {**extraction}
+    if daily_quantities:
+        daily_total = round(sum(daily_quantities), 2)
+        updated["extract_total_kg"] = daily_total
+        updated["extract_batches"] = len(daily_quantities)
+        ferment_total = updated.get("ferment_total_kg")
+        updated["rate_realtime"] = (
+            round(daily_total / ferment_total * 100, 1) if ferment_total else None
+        )
+    else:
+        updated["extract_total_kg"] = None
+        updated["extract_batches"] = 0
+        updated["rate_realtime"] = None
+    return updated
+
+
+async def get_warehouse_finished_inbound_kg(
+    session: AsyncSession,
+    *,
+    product_code: str,
+    period_start: date,
+    period_end: date,
+) -> float | None:
+    """「提炼已出成品（仓储成品入库）」卡片取数：当期仓储入库合计（KG）。
+
+    跨模块只读仓储成品入库总账快照（走 warehouse.public_api）；
+    未接入产品返回 None。仓储侧异常时降级为 None 并记录日志，
+    看板其余模块不因仓储故障不可用。
+    """
+    product_name = WAREHOUSE_INBOUND_PRODUCT_NAMES.get(product_code)
+    if product_name is None:
+        return None
+    from app.modules.warehouse.public_api import get_finished_inbound_kg_total
+
+    try:
+        return await get_finished_inbound_kg_total(
+            session,
+            product_name=product_name,
+            start_date=period_start,
+            end_date=period_end,
+        )
+    except Exception:  # noqa: BLE001 —— 看板卡片降级，仓储故障不阻断看板
+        logger.exception(
+            "warehouse finished inbound total failed",
+            extra={"product_code": product_code},
+        )
+        return None
 
 
 # ═══════════════════ 检修标注 CRUD ═══════════════════
@@ -773,6 +1029,7 @@ def serialize_batch_actual(item: FermentationBatchActual) -> dict[str, Any]:
         "batch_no": item.batch_no,
         "dump_date": item.dump_date.isoformat() if item.dump_date else None,
         "yield_kg": item.yield_kg,
+        "extract_kg": item.extract_kg,
         "remark": item.remark,
     }
 
@@ -806,11 +1063,24 @@ async def upsert_batch_actual(
     batch_no: str,
     dump_date: date | None = None,
     yield_kg: float | None = None,
+    extract_kg: float | None = None,
     remark: str | None = None,
     product_code: str = "FA",
     created_by: Any = None,
+    provided_fields: set[str] | None = None,
 ) -> FermentationBatchActual:
-    """同一产品下批次已存在进行中记录则更新（产品内批号唯一）。"""
+    """同一产品下批次已存在进行中记录则更新（产品内批号唯一）。
+
+    provided_fields 为请求体中显式给出的字段集合（缺省视为全量）；
+    更新时仅覆盖显式给出的字段，防止某工段岗保存自身字段时
+    清掉其他工段已录入的产量。
+    """
+    fields = provided_fields or {
+        "dump_date",
+        "yield_kg",
+        "extract_kg",
+        "remark",
+    }
     result = await session.execute(
         select(FermentationBatchActual).where(
             FermentationBatchActual.batch_no == batch_no,
@@ -822,17 +1092,23 @@ async def upsert_batch_actual(
     if item is None:
         item = FermentationBatchActual(
             batch_no=batch_no,
-            dump_date=dump_date,
-            yield_kg=yield_kg,
-            remark=remark,
+            dump_date=dump_date if "dump_date" in fields else None,
+            yield_kg=yield_kg if "yield_kg" in fields else None,
+            extract_kg=extract_kg if "extract_kg" in fields else None,
+            remark=remark if "remark" in fields else None,
             product_code=product_code,
             created_by=created_by,
         )
         session.add(item)
     else:
-        item.dump_date = dump_date
-        item.yield_kg = yield_kg
-        item.remark = remark
+        if "dump_date" in fields:
+            item.dump_date = dump_date
+        if "yield_kg" in fields:
+            item.yield_kg = yield_kg
+        if "extract_kg" in fields:
+            item.extract_kg = extract_kg
+        if "remark" in fields:
+            item.remark = remark
         item.updated_by = created_by
     await session.commit()
     await session.refresh(item)

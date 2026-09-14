@@ -16,6 +16,7 @@ import openpyxl  # type: ignore[import-untyped]
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.production import fermentation_board_service
 from app.modules.production.schedule_excel_models import ScheduleExcelArchive
 
 
@@ -139,6 +140,15 @@ async def create_archive(
     col_count: int,
     created_by: uuid.UUID | None = None,
 ) -> ScheduleExcelArchive:
+    # 同产品重复存档时冻结历史：今天之前的日列沿用当前最新存档，
+    # 避免重发的排产改动/漏带历史放罐记录覆盖看板历史口径。
+    latest = await fermentation_board_service.load_latest_archive(
+        session, product_code=product_code
+    )
+    if latest is not None and latest.rows:
+        rows = fermentation_board_service.merge_schedule_rows_preserve_past(
+            rows, latest.rows, date.today()
+        )
     archive = ScheduleExcelArchive(
         product_code=product_code,
         file_name=file_name,
