@@ -1,6 +1,7 @@
 """Production API routes."""
 
 import uuid
+from datetime import date, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -234,23 +235,70 @@ async def delete_batch_material(
 # ============ ProductionPlan Routes ============
 
 
+def _parse_month_range(month: str) -> tuple[date, date] | None:
+    """解析 YYYY-MM 为该自然月的起止日期；格式非法返回 None。"""
+    if len(month) != 7 or month[4] != "-":
+        return None
+    try:
+        year, mon = int(month[:4]), int(month[5:])
+        start = date(year, mon, 1)
+    except ValueError:
+        return None
+    if mon == 12:
+        end = date(year, 12, 31)
+    else:
+        end = date(year, mon + 1, 1) - timedelta(days=1)
+    return start, end
+
+
 @router.get("/plans", response_model=ApiResponse, summary="获取生产计划列表")
 async def get_plans(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
     product_name: str | None = None,
     workshop: str | None = None,
+    month: str | None = Query(
+        None, description="按自然月筛选（YYYY-MM），日期落在哪个月即哪个月的计划"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> Any:
     """获取生产计划列表"""
+    date_from = date_to = None
+    if month is not None:
+        parsed = _parse_month_range(month)
+        if parsed is None:
+            return ApiResponse(code=400, message="月份格式应为 YYYY-MM")
+        date_from, date_to = parsed
     service = ProductionService(db)
     skip = (page - 1) * page_size
-    plans, total = await service.get_plans(skip, page_size, product_name, workshop)
+    plans, total = await service.get_plans(
+        skip, page_size, product_name, workshop, date_from, date_to
+    )
     return ApiResponse(
         data=[ProductionPlanResponse.model_validate(p) for p in plans],
         meta={"page": page, "page_size": page_size, "total": total},
     )
+
+
+@router.get(
+    "/plans/monthly-summary",
+    response_model=ApiResponse,
+    summary="生产计划月度汇总（按单位分组）",
+)
+async def get_plan_monthly_summary(
+    month: str = Query(..., description="月份，格式 YYYY-MM"),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> Any:
+    """按自然月汇总计划产量/实际完成/完成率；KG 与批等不同单位分开统计。"""
+    parsed = _parse_month_range(month)
+    if parsed is None:
+        return ApiResponse(code=400, message="月份格式应为 YYYY-MM")
+    date_from, date_to = parsed
+    service = ProductionService(db)
+    data = await service.get_plan_monthly_summary(date_from=date_from, date_to=date_to)
+    return ApiResponse(data=data)
 
 
 @router.get("/plans/{plan_id}", response_model=ApiResponse, summary="获取生产计划详情")
@@ -1043,4 +1091,13 @@ from app.modules.production.fermentation_board_api import (  # noqa: E402
 
 router.include_router(
     fermentation_board_router, tags=["生产管理 - 发酵车间看板"]
+)
+
+
+from app.modules.production.extraction_report_api import (  # noqa: E402
+    router as extraction_report_router,
+)
+
+router.include_router(
+    extraction_report_router, tags=["生产管理 - 提炼工段"]
 )

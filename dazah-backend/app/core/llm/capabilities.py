@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import re
+import secrets
 import struct
 import zlib
 from dataclasses import dataclass
@@ -24,10 +26,11 @@ class LLMCapabilities:
         return "vision" if self.supports_vision else "text"
 
 
-_VISION_PROBE_BANDS: tuple[tuple[str, tuple[int, int, int]], ...] = (
+_VISION_PROBE_PALETTE: tuple[tuple[str, tuple[int, int, int]], ...] = (
     ("blue", (37, 99, 235)),
     ("yellow", (234, 179, 8)),
     ("red", (220, 38, 38)),
+    ("green", (22, 163, 74)),
 )
 _VISION_COLOR_TOKEN_PATTERN = re.compile(
     r"\b(?:red|blue|green|yellow)\b|红色?|蓝色?|绿色?|黄色?"
@@ -48,13 +51,16 @@ _VISION_COLOR_TOKEN_NAMES = {
 }
 
 
-def _probe_png_data_url() -> str:
-    """Create a small three-band color chart without an imaging dependency."""
-    width, height = 96, 48
-    band_width = width // len(_VISION_PROBE_BANDS)
+def _probe_png_data_url(bands: tuple[str, ...]) -> str:
+    """Create a random six-band color chart without an imaging dependency."""
+    width, height = 384, 192
+    band_width = width // len(bands)
     raw = b"".join(
         b"\x00"
-        + b"".join(bytes(rgb) * band_width for _, rgb in _VISION_PROBE_BANDS)
+        + b"".join(
+            (bytes(dict(_VISION_PROBE_PALETTE)[color]) * (band_width - 2) + b"\xff" * 6)
+            for color in bands
+        )
         for _ in range(height)
     )
 
@@ -95,8 +101,7 @@ def _response_text(payload: Any) -> str:
         )
         if content_text:
             return content_text
-    reasoning_content = message.get("reasoning_content")
-    return reasoning_content if isinstance(reasoning_content, str) else ""
+    return ""
 
 
 def _error_detail(response: httpx.Response) -> str:
@@ -164,109 +169,94 @@ def _is_max_tokens_rejection(text: str) -> bool:
     return any(marker in normalized for marker in markers)
 
 
-def _is_thinking_rejection(text: str) -> bool:
-    normalized = text.lower()
-    if (
-        "thinking" not in normalized
-        and "reasoning" not in normalized
-        and "思考" not in normalized
-    ):
-        return False
-    markers = (
-        "unsupported",
-        "not support",
-        "not allowed",
-        "unknown",
-        "unrecognized",
-        "invalid",
-        "不支持",
-        "不允许",
-        "无效",
-    )
-    return any(marker in normalized for marker in markers)
-
-
-def _normalized_model_name(model_name: str) -> str:
-    normalized = model_name.strip().lower()
-    return normalized.rsplit("/", 1)[-1]
-
-
-def _uses_completion_tokens(model_name: str) -> bool:
-    return _normalized_model_name(model_name).startswith("gpt-5")
-
-
-def _uses_disabled_thinking(model_name: str) -> bool:
-    normalized = _normalized_model_name(model_name)
-    return normalized.startswith(("kimi-k2.5", "kimi-k2.6"))
-
-
 def _build_vision_probe_payload(
     *,
     model_name: str,
-    image_type: str = "image_url",
+    bands: tuple[str, ...],
     image_first: bool = True,
-    image_shorthand: bool = False,
-    token_field: str | None = None,
-    include_model_thinking: bool = True,
 ) -> dict[str, Any]:
-    token_field = token_field or (
-        "max_completion_tokens" if _uses_completion_tokens(model_name) else "max_tokens"
-    )
-    image_url = _probe_png_data_url()
-    image_part = (
-        {"type": "input_image", "image_url": image_url}
-        if image_type == "input_image"
-        else (
-            {"type": "image_url", "image_url": image_url}
-            if image_shorthand
-            else {"type": "image_url", "image_url": {"url": image_url}}
-        )
-    )
+    image_part = {"type": "image_url", "image_url": {"url": _probe_png_data_url(bands)}}
     text_part = {
         "type": "text",
         "text": (
-            "请观察附带的测试图像，按从左到右识别三个色块。"
-            "仅输出三个英文颜色名称，用逗号分隔，不要解释。"
+            "Identify the six colored rectangles in the attached image from left "
+            "to right, ignoring white separators. Reply with exactly six English "
+            "color names separated by commas. "
+            "If the image is unavailable, say UNAVAILABLE. Do not guess."
         ),
     }
-    content = [image_part, text_part] if image_first else [text_part, image_part]
-    payload: dict[str, Any] = {
+    return {
         "model": model_name,
         "messages": [
             {
                 "role": "user",
-                "content": content,
+                "content": [image_part, text_part]
+                if image_first
+                else [text_part, image_part],
             }
         ],
-        token_field: 32,
         "stream": False,
     }
-    if include_model_thinking and _uses_disabled_thinking(model_name):
-        payload["thinking"] = {"type": "disabled"}
-    return payload
 
 
-def _vision_response_text(response: httpx.Response) -> str:
-    try:
-        return _response_text(response.json())
-    except ValueError as exc:
-        raise LLMConfigError("视觉能力检测失败：响应格式无效") from exc
-
-
-def _extract_vision_probe_colors(text: str) -> tuple[str, ...]:
-    return tuple(
+def _matches_vision_probe(text: str, expected: tuple[str, ...]) -> bool:
+    actual = tuple(
         _VISION_COLOR_TOKEN_NAMES[token]
         for token in _VISION_COLOR_TOKEN_PATTERN.findall(text.lower())
     )
+    return not _is_image_rejection(text) and actual == expected
 
 
-def _matches_vision_probe(text: str) -> bool:
-    """Require the model to identify the actual image, not just accept it."""
-    if not text.strip() or _is_image_rejection(text):
-        return False
-    expected = tuple(color for color, _ in _VISION_PROBE_BANDS)
-    actual = _extract_vision_probe_colors(text)
-    return len(actual) >= len(expected) and actual[-len(expected) :] == expected
+@dataclass
+class _ProbeSession:
+    client: httpx.AsyncClient
+    url: str
+    headers: dict[str, str]
+    token_field: str = "max_tokens"
+
+    async def post(self, payload: dict[str, Any]) -> httpx.Response:
+        """Negotiate only from server feedback, with bounded output and retries."""
+        budget = 2048
+        switched = False
+        for _ in range(4):
+            response = await self.client.post(
+                self.url,
+                headers=self.headers,
+                json={**payload, self.token_field: budget},
+            )
+            if (
+                response.status_code in {400, 422}
+                and _is_max_tokens_rejection(_error_detail(response))
+                and not switched
+            ):
+                self.token_field = (
+                    "max_completion_tokens"
+                    if self.token_field == "max_tokens"
+                    else "max_tokens"
+                )
+                switched = True
+                continue
+            if response.is_success:
+                try:
+                    data = response.json()
+                except ValueError as exc:
+                    raise LLMConfigError("能力检测失败：响应格式无效") from exc
+                choices = data.get("choices") if isinstance(data, dict) else None
+                if (
+                    not isinstance(choices, list)
+                    or not choices
+                    or not isinstance(choices[0], dict)
+                ):
+                    raise LLMConfigError("能力检测失败：响应格式无效")
+                if choices[0].get("finish_reason") == "length":
+                    if budget < 8192:
+                        budget = 8192
+                        continue
+                    raise LLMConfigError("能力检测未完成：模型输出被截断，请重试")
+                if not _response_text(data).strip():
+                    raise LLMConfigError("能力检测未完成：未收到有效最终答案，请重试")
+            return response
+        raise LLMConfigError("能力检测未完成：请求参数协商失败")
 
 
 async def probe_api_base_url(
@@ -307,151 +297,87 @@ async def detect_model_capabilities(
     timeout_seconds: int,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> LLMCapabilities:
-    url = api_base_url.rstrip("/") + "/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    timeout = httpx.Timeout(min(timeout_seconds, 60))
-    async with httpx.AsyncClient(timeout=timeout, transport=transport) as client:
-        try:
-            text_token_field = (
-                "max_completion_tokens"
-                if _uses_completion_tokens(model_name)
-                else "max_tokens"
+    # The deadline covers all probes/retries, not just each network operation.
+    deadline = max(1, min(timeout_seconds, 180))
+    try:
+        async with (
+            asyncio.timeout(deadline),
+            httpx.AsyncClient(
+                timeout=httpx.Timeout(deadline),
+                transport=transport,
+            ) as client,
+        ):
+            session = _ProbeSession(
+                client=client,
+                url=api_base_url.rstrip("/") + "/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"},
             )
-            text_response = await client.post(
-                url,
-                headers=headers,
-                json={
+            text_response = await session.post(
+                {
                     "model": model_name,
-                    "messages": [{"role": "user", "content": "只回复 OK"}],
-                    text_token_field: 16,
+                    "messages": [{"role": "user", "content": "Reply only OK"}],
                     "stream": False,
-                },
+                }
             )
-        except httpx.HTTPError as exc:
-            raise LLMConfigError(f"模型连接失败：{type(exc).__name__}") from exc
-        if text_response.status_code >= 400:
-            raise LLMConfigError(
-                f"文本能力检测失败（{text_response.status_code}）："
-                f"{_error_detail(text_response)}"
-            )
+            if not text_response.is_success:
+                raise LLMConfigError(
+                    f"文本能力检测失败（HTTP {text_response.status_code}）"
+                )
 
-        try:
-            image_type = "image_url"
+            previous: tuple[str, ...] | None = None
             image_first = True
-            image_shorthand = False
-            token_field = (
-                "max_completion_tokens"
-                if _uses_completion_tokens(model_name)
-                else "max_tokens"
-            )
-            include_model_thinking = True
-
-            async def post_vision_probe(
-                *, include_thinking: bool
-            ) -> httpx.Response:
-                payload = _build_vision_probe_payload(
-                    model_name=model_name,
-                    image_type=image_type,
-                    image_first=image_first,
-                    image_shorthand=image_shorthand,
-                    token_field=token_field,
-                    include_model_thinking=include_thinking,
-                )
-                return await client.post(
-                    url,
-                    headers=headers,
-                    json=payload,
-                )
-
-            vision_response = await post_vision_probe(
-                include_thinking=include_model_thinking
-            )
-            if vision_response.status_code in {400, 422} and _is_max_tokens_rejection(
-                _error_detail(vision_response)
-            ):
-                token_field = (
-                    "max_tokens"
-                    if token_field == "max_completion_tokens"
-                    else "max_completion_tokens"
-                )
-                vision_response = await post_vision_probe(
-                    include_thinking=include_model_thinking
-                )
-            if vision_response.status_code in {400, 422} and _is_thinking_rejection(
-                _error_detail(vision_response)
-            ):
-                include_model_thinking = False
-                vision_response = await post_vision_probe(
-                    include_thinking=include_model_thinking
-                )
-            if vision_response.status_code in {400, 415, 422} and _is_image_rejection(
-                _error_detail(vision_response)
-            ):
-                if image_type == "image_url" and not image_shorthand:
-                    image_shorthand = True
-                    vision_response = await post_vision_probe(
-                        include_thinking=include_model_thinking
-                    )
-                if (
-                    vision_response.status_code in {400, 415, 422}
-                    and _is_image_rejection(_error_detail(vision_response))
-                ):
-                    image_type = "input_image"
-                    image_shorthand = False
-                    vision_response = await post_vision_probe(
-                        include_thinking=include_model_thinking
-                    )
-
-            if vision_response.status_code < 400:
-                vision_content = _vision_response_text(vision_response)
-                if _matches_vision_probe(vision_content):
-                    return LLMCapabilities(supports_text=True, supports_vision=True)
-
-                # Some OpenAI-compatible adapters require image parts before
-                # text parts (Kimi is one example). Retry one alternate order
-                # when the response did not explicitly reject image input.
-                if not _is_image_rejection(vision_content):
-                    image_first = not image_first
-                    alternate_response = await post_vision_probe(
-                        include_thinking=include_model_thinking
-                    )
-                    if alternate_response.status_code < 400 and _matches_vision_probe(
-                        _vision_response_text(alternate_response)
-                    ):
-                        return LLMCapabilities(
-                            supports_text=True,
-                            supports_vision=True,
+            for round_index in range(2):
+                # Answers live only in pixels; aliases and prompts reveal no answer.
+                palette = tuple(color for color, _ in _VISION_PROBE_PALETTE)
+                bands = tuple(secrets.choice(palette) for _ in range(6))
+                if bands == previous:
+                    bands = (palette[(palette.index(bands[0]) + 1) % 4], *bands[1:])
+                previous = bands
+                for attempt in range(2):
+                    response = await session.post(
+                        _build_vision_probe_payload(
+                            model_name=model_name,
+                            bands=bands,
+                            image_first=image_first,
                         )
-            elif vision_response.status_code in {400, 422} and not _is_image_rejection(
-                _error_detail(vision_response)
-            ):
-                # A few gateways report an invalid content ordering as a
-                # generic validation error rather than an image error.
-                image_first = not image_first
-                alternate_response = await post_vision_probe(
-                    include_thinking=include_model_thinking
-                )
-                if alternate_response.status_code < 400:
-                    vision_response = alternate_response
-        except httpx.HTTPError as exc:
-            raise LLMConfigError(f"视觉能力检测失败：{type(exc).__name__}") from exc
-    if vision_response.status_code >= 400:
-        detail = _error_detail(vision_response)
-        if _is_image_rejection(detail) or vision_response.status_code in {
-            400,
-            415,
-            422,
-        }:
-            return LLMCapabilities(supports_text=True, supports_vision=False)
-        raise LLMConfigError(
-            f"视觉能力检测失败（{vision_response.status_code}）：{detail}"
-        )
-
-    content = _vision_response_text(vision_response)
-    return LLMCapabilities(
-        supports_text=True,
-        supports_vision=_matches_vision_probe(content),
-    )
+                    )
+                    if not response.is_success:
+                        detail = _error_detail(response)
+                        # Schema/transport errors cannot establish model incapability.
+                        explicit_rejection = any(
+                            marker in detail.lower()
+                            for marker in (
+                                "image input is not supported",
+                                "vision input is not supported",
+                                "不支持图像输入",
+                                "不支持图片输入",
+                            )
+                        )
+                        explicit_rejection = explicit_rejection or bool(
+                            re.search(
+                                r"does not support (?:vision|images?)"
+                                r"(?: input)?(?:[.,; ]|$)",
+                                detail.lower(),
+                            )
+                        )
+                        if (
+                            response.status_code in {400, 415, 422}
+                            and explicit_rejection
+                        ):
+                            if round_index == 0:
+                                return LLMCapabilities(True, False)
+                            raise LLMConfigError("能力检测结果不一致，请重试")
+                        raise LLMConfigError(
+                            f"视觉能力检测未完成（HTTP {response.status_code}）："
+                            "请检查接口及图片输入兼容性后重试"
+                        )
+                    if _matches_vision_probe(_response_text(response.json()), bands):
+                        break
+                    if attempt == 1:
+                        raise LLMConfigError(
+                            "视觉能力检测未完成：未能验证图片内容，保留原有能力配置"
+                        )
+                    image_first = not image_first
+            return LLMCapabilities(True, True)
+    except (httpx.HTTPError, TimeoutError) as exc:
+        raise LLMConfigError(f"能力检测未完成：{type(exc).__name__}，请重试") from exc

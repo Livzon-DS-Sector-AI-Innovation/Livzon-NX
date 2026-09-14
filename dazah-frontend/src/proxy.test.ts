@@ -30,12 +30,12 @@ it('lets a query-authorized page render with server-supplied context', async () 
   expect(response.headers.get('x-middleware-request-x-dazah-page-path')).toBe('/hr/profile')
 })
 
-it('derives module landing from an authorized child and preserves draft routing', async () => {
+it('derives module landing from an authorized child and enforces saved grants in draft status', async () => {
   me(['access', 'query'])
   expect((await proxy(new NextRequest('http://frontend.test/hr'))).headers.get('location'))
     .toBe('http://frontend.test/hr/employee-management')
   me([], 'draft')
-  expect((await proxy(new NextRequest('http://frontend.test/hr/profile'))).headers.get('x-middleware-next')).toBe('1')
+  expect((await proxy(new NextRequest('http://frontend.test/hr/profile'))).status).toBe(403)
 })
 
 it('fails closed when authorization cannot be checked', async () => {

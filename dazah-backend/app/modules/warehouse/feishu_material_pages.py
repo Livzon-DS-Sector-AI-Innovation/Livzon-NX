@@ -288,3 +288,9 @@ FEISHU_WAREHOUSE_MATERIAL_PAGES = {
         FEISHU_FINISHED_PRODUCT_APP_TOKEN,
     ),
 }
+
+# 成品入库总账（跨模块聚合口径，供 public_api 使用；字段名与飞书表头保持一致）
+FINISHED_INBOUND_LEDGER_PAGE_KEY = "product-inbound-ledger"
+FINISHED_INBOUND_PRODUCT_FIELD = "产品名称"
+FINISHED_INBOUND_DATE_FIELD = "入库日期"
+FINISHED_INBOUND_KG_FIELD = "入库数量（KG）"

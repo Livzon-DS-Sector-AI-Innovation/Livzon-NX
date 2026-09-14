@@ -44,9 +44,9 @@ const scopeNames: Record<string, string> = {
   departments: '指定部门及下级', all: '全部部门', self: '仅本人',
 }
 const rolloutNames: Record<string, { label: string; color: string }> = {
-  legacy: { label: '旧规则', color: 'default' },
-  draft: { label: '配置草稿', color: 'warning' },
-  enforced: { label: '已发布', color: 'success' },
+  legacy: { label: '接入未标记', color: 'default' },
+  draft: { label: '接入待核验', color: 'warning' },
+  enforced: { label: '门禁已记录', color: 'success' },
 }
 
 function normalizePermissions(values: PermissionLevel[]): PermissionLevel[] {
@@ -217,7 +217,7 @@ export default function ModulePermissionsDrawer({ user, open, onClose }: {
       setEditable(initialPageEditableState(next))
       setReason('')
       setErrorMessage('')
-      message.success('页面权限已保存')
+      message.success('页面权限已保存并生效')
     } catch (error) {
       if (version !== loadVersion.current) return
       setErrorMessage(`${error instanceof Error ? error.message : '保存页面权限失败'}。本地修改已保留；如版本冲突，请刷新最新授权后重新调整。`)
@@ -322,7 +322,7 @@ export default function ModulePermissionsDrawer({ user, open, onClose }: {
     {systemAdmin && <Alert className="mb-4" type="info" showIcon title="系统管理员拥有全部权限，无需逐页配置；页面覆盖不会限制此身份。" />}
     <Alert className="mb-4" type="info" showIcon
       title="角色提供基线，用户覆盖会完整替换单页基线"
-      description="选择“用户覆盖”后，权限全部不勾选表示明确拒绝；恢复“角色基线”即可删除覆盖。高风险业务动作在展开行中单独授权。" />
+      description="保存后权限立即生效，无需经过权限接入检查。选择“用户覆盖”后，权限全部不勾选表示明确拒绝；恢复“角色基线”即可删除覆盖。高风险业务动作在展开行中单独授权。" />
     {errorMessage && <Alert className="mb-4" type="error" showIcon title={errorMessage} />}
     {loading ? <Skeleton active paragraph={{ rows: 10 }} /> : result?.user_id === user?.id && result?.definitions?.length ? <ConfigProvider componentDisabled={systemAdmin || saving}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

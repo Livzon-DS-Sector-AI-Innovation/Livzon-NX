@@ -131,7 +131,7 @@ it('adds module access while preserving existing advanced permissions and data s
       ]),
     })
   )
-  expect(mocks.message.success).toHaveBeenCalledWith('模块访问权限已保存')
+  expect(mocks.message.success).toHaveBeenCalledWith('模块访问权限已保存并生效')
 })
 
 it('requires an audit reason before saving access changes', async () => {

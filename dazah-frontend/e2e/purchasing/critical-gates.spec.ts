@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 test.describe('采购高风险操作门禁', () => {
-  test('无模块权限时显示明确拒绝状态', async ({ context, page }) => {
+  test('无模块权限时在服务端返回明确拒绝状态', async ({ context, page }) => {
     await context.addCookies([
       {
         name: 'auth_token',
@@ -10,10 +10,11 @@ test.describe('采购高风险操作门禁', () => {
       },
     ])
 
-    await page.goto('/purchasing/invoice-recognition')
+    const response = await page.goto('/purchasing/invoice-recognition')
 
-    await expect(page.getByRole('heading', { name: '暂无模块访问权限' })).toBeVisible()
-    await expect(page.getByText('请联系管理员调整模块授权')).toBeVisible()
+    expect(response?.status()).toBe(403)
+    await expect(page.getByRole('heading', { name: '页面访问受限' })).toBeVisible()
+    await expect(page.getByText('未获得当前菜单页面的访问权限。')).toBeVisible()
   })
 
   test('驳回必须确认、填写原因，并显示后端失败', async ({ page }) => {

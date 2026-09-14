@@ -159,9 +159,21 @@ class ProductionService:
         limit: int = 20,
         product_name: str | None = None,
         workshop: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
     ) -> tuple[list[ProductionPlan], int]:
         """获取生产计划列表"""
-        return await self.repo.get_plans(skip, limit, product_name, workshop)
+        return await self.repo.get_plans(
+            skip, limit, product_name, workshop, date_from, date_to
+        )
+
+    async def get_plan_monthly_summary(
+        self, *, date_from: datetime, date_to: datetime
+    ) -> list[dict[str, Any]]:
+        """按自然月汇总生产计划（按单位分组，KG 与批分开统计）。"""
+        return await self.repo.get_plan_monthly_summary(
+            date_from=date_from, date_to=date_to
+        )
 
     async def get_plan(self, plan_id: uuid.UUID) -> ProductionPlan | None:
         """获取生产计划详情"""

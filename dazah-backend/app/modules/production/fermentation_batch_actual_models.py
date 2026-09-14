@@ -44,6 +44,9 @@ class FermentationBatchActual(BaseModel):
     yield_kg: Mapped[float | None] = mapped_column(
         Float(), nullable=True, comment="放罐产量(kg)"
     )
+    extract_kg: Mapped[float | None] = mapped_column(
+        Float(), nullable=True, comment="提炼成品产量(kg)"
+    )
     remark: Mapped[str | None] = mapped_column(
         String(255), nullable=True, comment="备注"
     )

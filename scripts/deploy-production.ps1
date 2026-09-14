@@ -14,6 +14,7 @@ param(
   [string]$SshKey = "$env:USERPROFILE\.ssh\id_ed25519",
   [string]$Builder = 'dazah-builder',
   [string]$BuildContext,
+  [string]$BuildProxy,
   [string]$ReuseUnchangedFrom,
   [string]$ReleaseRoot,
   [switch]$SkipUpload,
@@ -27,6 +28,7 @@ Set-StrictMode -Version Latest
 $Root = Split-Path -Parent $PSScriptRoot
 $ComposeFile = Join-Path $Root 'compose.yml'
 $Dockerfile = Join-Path $Root 'Dockerfile'
+$BakeFile = Join-Path $Root 'docker-bake.hcl'
 $BuildRoot = if ($BuildContext) {
   (Resolve-Path -LiteralPath $BuildContext).Path
 }
@@ -79,6 +81,22 @@ function Invoke-Scp([string]$Source, [string]$Destination) {
   }
 }
 
+function Get-ProxyBuildArguments {
+  if (-not $BuildProxy) {
+    return @()
+  }
+  return @(
+    '--build-arg', "HTTP_PROXY=$BuildProxy",
+    '--build-arg', "HTTPS_PROXY=$BuildProxy",
+    '--build-arg', "ALL_PROXY=$BuildProxy",
+    '--build-arg', 'NO_PROXY=localhost,127.0.0.1',
+    '--build-arg', "http_proxy=$BuildProxy",
+    '--build-arg', "https_proxy=$BuildProxy",
+    '--build-arg', "all_proxy=$BuildProxy",
+    '--build-arg', 'no_proxy=localhost,127.0.0.1'
+  )
+}
+
 function Ensure-Builder {
   $existing = docker buildx ls --format '{{.Name}}' 2>$null | Where-Object { $_ -eq $Builder }
   if (-not $existing) {
@@ -93,16 +111,81 @@ function Ensure-Builder {
 
 function Build-Image([string]$Target, [string]$Image) {
   Write-Step "构建 $Image`:$Version（使用本地缓存）"
-  docker buildx build `
-    --builder $Builder `
-    --platform linux/amd64 `
-    --target $Target `
-    --tag "$Image`:$Version" `
-    --file $Dockerfile `
-    --load `
-    $BuildRoot
+  $buildArguments = @(
+    'buildx', 'build',
+    '--builder', $Builder,
+    '--platform', 'linux/amd64',
+    '--target', $Target,
+    '--tag', "$Image`:$Version",
+    '--file', $Dockerfile
+  )
+  $buildArguments += Get-ProxyBuildArguments
+  $buildArguments += '--load', $BuildRoot
+  & docker @buildArguments
   if ($LASTEXITCODE -ne 0) {
     Fail "构建失败: $Image"
+  }
+}
+
+function Build-Images {
+  $targets = @('backend', 'frontend')
+  if (-not $ReuseUnchangedFrom) {
+    $targets += 'hermes'
+  }
+
+  if ($BuildContext) {
+    Write-Step '使用自定义构建上下文，保留逐目标构建模式'
+    foreach ($target in $targets) {
+      $image = switch ($target) {
+        'backend' { 'dazah/backend' }
+        'frontend' { 'dazah/frontend' }
+        'hermes' { 'dazah/hermes-lite' }
+        default { Fail "未知构建目标: $target" }
+      }
+      Build-Image $target $image
+    }
+    return
+  }
+
+  Write-Step "使用一次 Buildx Bake 构建应用镜像（共享依赖缓存）"
+  $bakeArguments = @(
+    '--builder', $Builder,
+    '--file', $BakeFile,
+    '--load'
+  )
+  foreach ($target in $targets) {
+    $image = switch ($target) {
+      'backend' { 'dazah/backend' }
+      'frontend' { 'dazah/frontend' }
+      'hermes' { 'dazah/hermes-lite' }
+      default { Fail "未知构建目标: $target" }
+    }
+    $bakeArguments += '--set'
+    $bakeArguments += "$target.tags=$image`:$Version"
+  }
+  if ($BuildProxy) {
+    foreach ($name in @('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy')) {
+      $bakeArguments += '--set'
+      $bakeArguments += "*.args.$name=$BuildProxy"
+    }
+    $bakeArguments += '--set'
+    $bakeArguments += '*.args.NO_PROXY=localhost,127.0.0.1'
+    $bakeArguments += '--set'
+    $bakeArguments += '*.args.no_proxy=localhost,127.0.0.1'
+  }
+  $bakeArguments += $targets
+
+  $bakeExitCode = 1
+  Push-Location -LiteralPath $Root
+  try {
+    & docker buildx bake @bakeArguments
+    $bakeExitCode = $LASTEXITCODE
+  }
+  finally {
+    Pop-Location
+  }
+  if ($bakeExitCode -ne 0) {
+    Fail 'Buildx Bake 构建失败'
   }
 }
 
@@ -192,11 +275,7 @@ function Build-Action {
     Require-Command scp
   }
   Ensure-Builder
-  Build-Image 'backend' 'dazah/backend'
-  Build-Image 'frontend' 'dazah/frontend'
-  if (-not $ReuseUnchangedFrom) {
-    Build-Image 'hermes' 'dazah/hermes-lite'
-  }
+  Build-Images
   $releaseDir = Prepare-Release
   if (-not $SkipUpload) {
     Upload-Release $releaseDir
@@ -264,6 +343,9 @@ Dazah 生产离线部署脚本
 
 仅本地构建并保留发布包：
   .\scripts\deploy-production.ps1 Build -Version 20260813-a1b2c3d -SkipUpload -SkipDeploy
+
+如果 Docker Desktop 的默认代理不可用，可显式传入构建代理：
+  .\scripts\deploy-production.ps1 Build -Version 20260813-a1b2c3d -BuildProxy http://http.docker.internal:3128
 
 注意：
   - 生产 .env 始终只保留在服务器，不会被脚本下载或覆盖。

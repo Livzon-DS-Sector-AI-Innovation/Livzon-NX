@@ -8,6 +8,7 @@ import re
 import statistics
 import time
 from datetime import UTC, date, datetime, timedelta
+from datetime import time as dt_time
 from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
 from zoneinfo import ZoneInfo
@@ -33,6 +34,10 @@ from app.modules.warehouse.feishu_fields import (
 from app.modules.warehouse.feishu_material_pages import (
     FEISHU_WAREHOUSE_BASE_NAMES,
     FEISHU_WAREHOUSE_MATERIAL_PAGES,
+    FINISHED_INBOUND_DATE_FIELD,
+    FINISHED_INBOUND_KG_FIELD,
+    FINISHED_INBOUND_LEDGER_PAGE_KEY,
+    FINISHED_INBOUND_PRODUCT_FIELD,
     FeishuWarehouseMaterialPage,
 )
 from app.modules.warehouse.inspection_progress import (
@@ -1475,6 +1480,41 @@ class WarehouseService:
             source="local_snapshot",
             base_name=self._get_base_name(page_key),
             stats=self._build_page_stats(page_key, filtered_rows),
+        )
+
+    async def get_finished_inbound_kg_total(
+        self,
+        *,
+        product_name: str,
+        start_date: date,
+        end_date: date,
+    ) -> float | None:
+        """成品入库总账中指定产品在闭区间日期内的入库合计（KG）。
+
+        读取本地飞书快照（约 10 分钟同步延迟），不实时访问飞书；
+        返回 None 表示快照尚未建立（从未同步成功），调用方按无数据处理。
+        日期按北京时间零点取毫秒边界，与飞书日期字段口径一致。
+        """
+        snapshot = await self.repo.get_material_page_snapshot(
+            FINISHED_INBOUND_LEDGER_PAGE_KEY
+        )
+        if snapshot is None:
+            return None
+        tz = ZoneInfo("Asia/Shanghai")
+        start_ms = int(
+            datetime.combine(start_date, dt_time.min, tzinfo=tz).timestamp() * 1000
+        )
+        end_ms = int(
+            datetime.combine(end_date, dt_time.min, tzinfo=tz).timestamp() * 1000
+        )
+        return await self.repo.sum_finished_inbound_kg(
+            snapshot,
+            product_field=FINISHED_INBOUND_PRODUCT_FIELD,
+            product_name=product_name,
+            date_field=FINISHED_INBOUND_DATE_FIELD,
+            kg_field=FINISHED_INBOUND_KG_FIELD,
+            start_ms=start_ms,
+            end_ms=end_ms,
         )
 
     async def get_feishu_material_page(

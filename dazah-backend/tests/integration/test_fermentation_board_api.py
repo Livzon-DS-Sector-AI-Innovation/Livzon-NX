@@ -19,6 +19,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from httpx import AsyncClient
 
+import app.platform.identity.rbac as identity_rbac
 from app.main import app
 from app.modules.production import fermentation_board_service as board
 from app.platform.identity.deps import get_current_user
@@ -55,10 +56,27 @@ def mock_db_service(monkeypatch: Any) -> None:
     monkeypatch.setattr(board, "get_batch_actual", AsyncMock(return_value=None))
     monkeypatch.setattr(board, "get_month_setting", AsyncMock(return_value=None))
     monkeypatch.setattr(board, "upsert_month_setting", AsyncMock())
+    monkeypatch.setattr(
+        board, "sum_extraction_daily_reports", AsyncMock(return_value=[])
+    )
+    monkeypatch.setattr(
+        board,
+        "get_warehouse_finished_inbound_kg",
+        AsyncMock(return_value=None),
+    )
 
 
 @pytest.fixture
-async def auth_client(client: AsyncClient) -> AsyncIterator[AsyncClient]:
+async def auth_client(
+    client: AsyncClient, monkeypatch: Any
+) -> AsyncIterator[AsyncClient]:
+    # 默认按管理员（通配权限）解析工段数据权限，工段矩阵用 stage_perms 覆盖
+    monkeypatch.setattr(
+        identity_rbac,
+        "resolve_user_permissions",
+        AsyncMock(return_value=["*"]),
+    )
+
     async def _override_current_user() -> User:
         return User(
             id=uuid.uuid4(),
@@ -75,6 +93,20 @@ async def auth_client(client: AsyncClient) -> AsyncIterator[AsyncClient]:
         yield client
     finally:
         app.dependency_overrides.pop(get_current_user, None)
+
+
+@pytest.fixture
+def stage_perms(monkeypatch: Any):
+    """设定当前用户的工段数据权限码（覆盖默认通配）。"""
+
+    def _set(perms: list[str]) -> None:
+        monkeypatch.setattr(
+            identity_rbac,
+            "resolve_user_permissions",
+            AsyncMock(return_value=perms),
+        )
+
+    return _set
 
 
 @pytest.mark.anyio
@@ -201,6 +233,7 @@ async def test_board_passes_actuals_to_build_board(
                     batch_no="FA26232",
                     dump_date=None,
                     yield_kg=88.5,
+                    extract_kg=None,
                     remark=None,
                 )
             ]
@@ -301,6 +334,7 @@ async def test_batch_actuals_crud_endpoints(
         batch_no="FA26232",
         dump_date=date(2026, 9, 9),
         yield_kg=100.0,
+        extract_kg=None,
         remark="染菌批",
     )
     monkeypatch.setattr(board, "list_batch_actuals", AsyncMock(return_value=[item]))
@@ -542,3 +576,362 @@ async def test_month_capacity_requires_existing_archive(
     )
     assert res.status_code == 400
     assert "尚未上传排产 Excel" in res.json()["message"]
+
+
+# ═══════════════════ 工段数据权限（发酵/提炼） ═══════════════════
+
+
+def _full_board_payload() -> dict[str, Any]:
+    return {
+        "now": "2026-09-11T12:00:00",
+        "period": {
+            "start": "2026-08-27",
+            "end": "2026-09-26",
+            "label": "8月27日～9月26日",
+        },
+        "kpis": {"month_planned": 31, "month_done_yield_kg": 449600.0},
+        "tanks": [{"tank_no": "302A", "status": "running"}],
+        "recent": [
+            {
+                "batch_no": "FA26233",
+                "yield_kg": 100.0,
+                "extract_kg": 88.0,
+                "batch_yield_rate": 88.0,
+            }
+        ],
+        "trend": {"batches": ["FA26233"], "outputs": [100.0]},
+        "dumped_batches": [{"batch_no": "FA26233"}],
+        "extraction": {
+            "ferment_total_kg": 100.0,
+            "extract_total_kg": 88.0,
+            "rate_realtime": 88.0,
+            "rate_paired": 88.0,
+        },
+        "alerts": [{"level": "info", "text": "车间运行正常，无待处理播报"}],
+        "maintenance": [],
+    }
+
+
+@pytest.mark.anyio
+async def test_board_hides_extraction_without_extract_permission(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+    stage_perms,
+) -> None:
+    """发酵岗：发酵模块全可见；提炼汇总与单批提炼字段不出接口。"""
+    stage_perms(["production:fermentation-yield"])
+    _patch_period(monkeypatch, date(2026, 8, 27), date(2026, 9, 26))
+    monkeypatch.setattr(
+        board, "build_board", MagicMock(return_value=_full_board_payload())
+    )
+
+    res = await auth_client.get(f"{API}/fermentation-board")
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["kpis"]["month_planned"] == 31
+    assert data["tanks"][0]["tank_no"] == "302A"
+    assert data["extraction"] is None
+    assert data["recent"][0]["yield_kg"] == 100.0
+    assert "extract_kg" not in data["recent"][0]
+    assert "batch_yield_rate" not in data["recent"][0]
+
+
+@pytest.mark.anyio
+async def test_board_hides_fermentation_without_ferm_permission(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+    stage_perms,
+) -> None:
+    """提炼岗：仅提炼汇总可见，发酵模块字段不出接口。"""
+    stage_perms(["production:extraction-yield"])
+    _patch_period(monkeypatch, date(2026, 8, 27), date(2026, 9, 26))
+    monkeypatch.setattr(
+        board, "build_board", MagicMock(return_value=_full_board_payload())
+    )
+    monkeypatch.setattr(
+        board,
+        "get_month_setting",
+        AsyncMock(return_value=SimpleNamespace(planned_capacity_kg=930000.0)),
+    )
+    # 「提炼已出成品」以成品日报为唯一数据源：返回当期日报记录
+    monkeypatch.setattr(
+        board, "sum_extraction_daily_reports", AsyncMock(return_value=[88.0])
+    )
+
+    res = await auth_client.get(f"{API}/fermentation-board")
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["kpis"] is None
+    assert data["tanks"] == []
+    assert data["recent"] == []
+    assert data["trend"] is None
+    assert data["maintenance"] == []
+    assert data["month_planned_capacity_kg"] is None
+    # 已放罐批次下拉属排产信息，提炼岗录入时同样需要
+    assert data["dumped_batches"] == [{"batch_no": "FA26233"}]
+    assert data["extraction"]["extract_total_kg"] == 88.0
+    assert data["extraction"]["extract_batches"] == 1
+    # 提炼岗能看到跑马灯（排产节奏信息，非产量数据）
+    assert data["alerts"]
+
+
+@pytest.mark.anyio
+async def test_board_full_view_with_both_permissions(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+    stage_perms,
+) -> None:
+    """领导（双权限）：全部数据可见。"""
+    stage_perms(
+        ["production:fermentation-yield", "production:extraction-yield"]
+    )
+    _patch_period(monkeypatch, date(2026, 8, 27), date(2026, 9, 26))
+    monkeypatch.setattr(
+        board, "build_board", MagicMock(return_value=_full_board_payload())
+    )
+
+    res = await auth_client.get(f"{API}/fermentation-board")
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["kpis"]["month_planned"] == 31
+    assert data["extraction"]["rate_paired"] == 88.0
+    assert data["recent"][0]["extract_kg"] == 88.0
+    assert data["recent"][0]["batch_yield_rate"] == 88.0
+
+
+@pytest.mark.anyio
+async def test_board_carries_warehouse_inbound_for_extract_permission(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+    stage_perms,
+) -> None:
+    """提炼权限 + 已接入产品：看板携带当期仓储入库合计。"""
+    stage_perms(["production:extraction-yield"])
+    _patch_period(monkeypatch, date(2026, 8, 27), date(2026, 9, 26))
+    monkeypatch.setattr(
+        board, "build_board", MagicMock(return_value=_full_board_payload())
+    )
+    inbound_mock = AsyncMock(return_value=410490.0)
+    monkeypatch.setattr(
+        board, "get_warehouse_finished_inbound_kg", inbound_mock
+    )
+
+    res = await auth_client.get(f"{API}/fermentation-board?product=FA")
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["extract_finished_inbound_kg"] == 410490.0
+    # 取数跟随所选扎帐周期与产品上下文
+    assert inbound_mock.call_args.kwargs["product_code"] == "FA"
+    assert inbound_mock.call_args.kwargs["period_start"] == date(2026, 8, 27)
+    assert inbound_mock.call_args.kwargs["period_end"] == date(2026, 9, 26)
+
+
+@pytest.mark.anyio
+async def test_board_warehouse_inbound_hidden_without_extract_permission(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+    stage_perms,
+) -> None:
+    """无提炼权限：仓储入库合计不出接口（卡片本就不可见）。"""
+    stage_perms(["production:fermentation-yield"])
+    _patch_period(monkeypatch, date(2026, 8, 27), date(2026, 9, 26))
+    monkeypatch.setattr(
+        board, "build_board", MagicMock(return_value=_full_board_payload())
+    )
+    inbound_mock = AsyncMock(return_value=410490.0)
+    monkeypatch.setattr(
+        board, "get_warehouse_finished_inbound_kg", inbound_mock
+    )
+
+    res = await auth_client.get(f"{API}/fermentation-board?product=FA")
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["extract_finished_inbound_kg"] is None
+    inbound_mock.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_board_warehouse_inbound_none_for_unwired_product(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+    stage_perms,
+) -> None:
+    """未接入产品（真实映射）：衔接函数返回 None，卡片维持待接入。"""
+    stage_perms(["production:extraction-yield"])
+    _patch_period(monkeypatch, date(2026, 8, 27), date(2026, 9, 26))
+    monkeypatch.setattr(
+        board, "build_board", MagicMock(return_value=_full_board_payload())
+    )
+
+    res = await auth_client.get(f"{API}/fermentation-board?product=MC")
+    assert res.status_code == 200
+    assert res.json()["data"]["extract_finished_inbound_kg"] is None
+
+
+@pytest.mark.anyio
+async def test_actuals_list_filters_stage_fields(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+    stage_perms,
+) -> None:
+    """历史数据列表按工段权限过滤字段。"""
+    item = SimpleNamespace(
+        id="x",
+        batch_no="FA26232",
+        dump_date=date(2026, 9, 9),
+        yield_kg=100.0,
+        extract_kg=88.0,
+        remark="染菌批",
+    )
+    monkeypatch.setattr(board, "list_batch_actuals", AsyncMock(return_value=[item]))
+
+    stage_perms(["production:fermentation-yield"])
+    ferm_view = await auth_client.get(f"{API}/fermentation-batch-actuals")
+    row = ferm_view.json()["data"][0]
+    assert row["yield_kg"] == 100.0
+    assert "extract_kg" not in row
+
+    stage_perms(["production:extraction-yield"])
+    extract_view = await auth_client.get(f"{API}/fermentation-batch-actuals")
+    row = extract_view.json()["data"][0]
+    assert "yield_kg" not in row
+    assert row["extract_kg"] == 88.0
+    assert row["batch_no"] == "FA26232"
+
+
+@pytest.mark.anyio
+async def test_upsert_rejects_cross_stage_field_writes(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+    stage_perms,
+) -> None:
+    """无对应工段权限时禁止写入对方字段（403），且不触达服务层。"""
+    monkeypatch.setattr(board, "upsert_batch_actual", AsyncMock())
+    body = {"batch_no": "FA26234", "yield_kg": 100.0}
+    stage_perms(["production:extraction-yield"])
+    denied = await auth_client.post(f"{API}/fermentation-batch-actuals", json=body)
+    assert denied.status_code == 403
+    assert "发酵" in denied.json()["message"]
+    board.upsert_batch_actual.assert_not_called()
+
+    stage_perms(["production:fermentation-yield"])
+    denied = await auth_client.post(
+        f"{API}/fermentation-batch-actuals",
+        json={"batch_no": "FA26234", "extract_kg": 88.0},
+    )
+    assert denied.status_code == 403
+    board.upsert_batch_actual.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_upsert_passes_provided_fields_and_filters_response(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+    stage_perms,
+) -> None:
+    """允许时按显式字段更新，响应按权限过滤。"""
+    saved = SimpleNamespace(
+        id="x",
+        batch_no="FA26234",
+        dump_date=None,
+        yield_kg=None,
+        extract_kg=88.0,
+        remark=None,
+    )
+    monkeypatch.setattr(board, "upsert_batch_actual", AsyncMock(return_value=saved))
+
+    # 提炼岗只提交提炼字段 → 放行且 provided_fields 不含发酵字段
+    stage_perms(["production:extraction-yield"])
+    ok = await auth_client.post(
+        f"{API}/fermentation-batch-actuals",
+        json={"batch_no": "FA26234", "extract_kg": 88.0},
+    )
+    assert ok.status_code == 200
+    kwargs = board.upsert_batch_actual.call_args.kwargs
+    assert kwargs["provided_fields"] == {"extract_kg"}
+    assert ok.json()["data"]["extract_kg"] == 88.0
+    assert "yield_kg" not in ok.json()["data"]
+
+    # 发酵岗提交发酵字段组 → 放行
+    stage_perms(["production:fermentation-yield"])
+    ok = await auth_client.post(
+        f"{API}/fermentation-batch-actuals",
+        json={"batch_no": "FA26234", "yield_kg": 100.0, "remark": "正常"},
+    )
+    assert ok.status_code == 200
+    kwargs = board.upsert_batch_actual.call_args.kwargs
+    assert kwargs["provided_fields"] == {"yield_kg", "remark"}
+
+
+@pytest.mark.anyio
+async def test_upsert_rejects_empty_stage_fields(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+) -> None:
+    """只有批号、无任何产量字段时拒绝保存。"""
+    res = await auth_client.post(
+        f"{API}/fermentation-batch-actuals", json={"batch_no": "FA26234"}
+    )
+    assert res.status_code == 400
+    assert "产量字段" in res.json()["message"]
+
+
+@pytest.mark.anyio
+async def test_partial_upsert_preserves_other_stage_data() -> None:
+    """真库冒烟：按 provided_fields 部分更新，跨工段数据互不清除。"""
+    from sqlalchemy import pool as sa_pool
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.core.config import get_settings
+    from tests.db_safety import get_pytest_database_url
+
+    engine = create_async_engine(
+        get_pytest_database_url(get_settings()),
+        poolclass=sa_pool.NullPool,
+    )
+    try:
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with factory() as session:
+            # 提炼岗视角：仅录提炼成品
+            item = await board.upsert_batch_actual(
+                session,
+                batch_no="FA-STAGE",
+                extract_kg=88.0,
+                provided_fields={"extract_kg"},
+            )
+            assert item.extract_kg == 88.0
+            assert item.yield_kg is None
+
+            # 发酵岗视角：仅录放罐产量 → 提炼数据保留
+            item = await board.upsert_batch_actual(
+                session,
+                batch_no="FA-STAGE",
+                yield_kg=100.0,
+                provided_fields={"yield_kg"},
+            )
+            assert item.yield_kg == 100.0
+            assert item.extract_kg == 88.0
+
+            # 不传 provided_fields 保持旧的全量替换语义
+            item = await board.upsert_batch_actual(
+                session,
+                batch_no="FA-STAGE",
+                dump_date=date(2026, 9, 11),
+                yield_kg=95.0,
+                remark="复核",
+            )
+            assert item.yield_kg == 95.0
+            assert item.extract_kg is None
+
+            await board.delete_batch_actual(session, item)
+    finally:
+        await engine.dispose()

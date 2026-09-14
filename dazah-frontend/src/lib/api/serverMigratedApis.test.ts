@@ -110,6 +110,16 @@ describe('migrated server API contracts', () => {
     expect(calls.some(([url]) => String(url).includes('/warehouse/material-pages/raw-summary'))).toBe(true)
   })
 
+  it('loads the admin user list with the authenticated server request contract', async () => {
+    await admin.serverFetchAdminUsers()
+    const [url, init] = vi.mocked(fetch).mock.calls[0]
+    expect(String(url)).toContain('/api/v1/identity/admin/users?limit=500')
+    expect(init).toEqual(expect.objectContaining({
+      cache: 'no-store',
+      headers: { Authorization: 'Bearer migration-server-token' },
+    }))
+  })
+
   it('constructs registration and regulatory reads plus protected writes', async () => {
     await registration.serverApiGet('/api/v1/registration/ping')
     await registration.serverApiPost('/api/v1/registration/items', { name: '项目' })

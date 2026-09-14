@@ -14,7 +14,11 @@ from starlette.requests import Request
 from app.platform.identity import deps
 from app.platform.identity.permission_repository import PermissionGrantRepository
 from app.platform.identity.permissions import IdentityPermissionService
-from app.platform.identity.schemas import UserModulePermissionsUpdate
+from app.platform.identity.schemas import (
+    EffectivePageGrantOut,
+    PageDataScopeInput,
+    UserModulePermissionsUpdate,
+)
 
 SimpleNamespace: Any = _SimpleNamespace
 
@@ -130,12 +134,33 @@ async def test_required_user_and_admin_matrix() -> None:
 
 @pytest.mark.asyncio
 async def test_module_view_supports_all_mode_and_role_grants(monkeypatch) -> None:
-    module_dependency = deps.require_module_view("energy")
+    module_dependency = deps.require_module_view("hr")
     request = Request(
-        {"type": "http", "method": "GET", "path": "/api/v1/energy", "headers": []}
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/api/v1/hr/employees",
+            "route": SimpleNamespace(path="/api/v1/hr/employees"),
+            "headers": [
+                (b"x-dazah-page-key", b"hr:employee-management:profile")
+            ],
+        }
     )
     monkeypatch.setattr(
-        deps.PagePermissionRepository, "get_rollout", AsyncMock(return_value=None)
+        deps.PagePermissionService,
+        "effective_grants",
+        AsyncMock(
+            return_value=[
+                EffectivePageGrantOut(
+                    page_key="hr:employee-management:profile",
+                    module_code="hr",
+                    permissions=["access", "query"],
+                    sensitive_actions=[],
+                    data_scope=PageDataScopeInput(scope_type="department_tree"),
+                    source="user",
+                )
+            ]
+        ),
     )
 
     async def dependency(**kwargs):

@@ -18,7 +18,6 @@ from app.platform.identity.data_scope import (
     current_page_key,
 )
 from app.platform.identity.models import User
-from app.platform.identity.page_permission_repository import PagePermissionRepository
 from app.platform.identity.page_permissions import PagePermissionService
 from app.platform.identity.page_policy import (
     ToolPageBinding,
@@ -680,11 +679,6 @@ class ToolExecutor:
     ) -> EffectivePageGrantOut | None:
         if spec.module is None or (user is not None and user.role == "admin"):
             return None
-        rollout = await PagePermissionRepository().get_rollout(
-            db, module_code=spec.module
-        )
-        if rollout is None or rollout.status != "enforced":
-            raise HTTPException(403, "工具关联页面尚未发布，暂不可执行")
         if user is None or not spec.page_keys:
             raise HTTPException(403, "工具尚未绑定有效页面或责任主体")
         required = "operate" if spec.write or spec.sensitive_action else "query"

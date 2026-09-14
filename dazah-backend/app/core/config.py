@@ -118,9 +118,8 @@ class Settings(BaseSettings):
     # Use admin_only only for a time-boxed production recovery window.
     LOCAL_LOGIN_MODE: Literal["disabled", "admin_only", "enabled"] | None = None
 
-    # All authenticated users can access business modules in the current
-    # development and production deployment. Set this to ``roles`` only when
-    # grant-based module access is explicitly required.
+    # Module access is grant-based in production. ``all`` is retained only as
+    # a development compatibility override for older local environments.
     MODULE_ACCESS_MODE: Literal["roles", "all"] | None = None
 
     # Local auth bootstrap (development or emergency administrator accounts)
@@ -280,6 +279,11 @@ class Settings(BaseSettings):
 
     @property
     def effective_module_access_mode(self) -> Literal["roles", "all"]:
+        # Never let a stale production .env disable the module authorization
+        # fact source. This also makes upgrades safe when the host kept the
+        # former MODULE_ACCESS_MODE=all value from an older release.
+        if self.is_production:
+            return "roles"
         if self.MODULE_ACCESS_MODE is not None:
             return self.MODULE_ACCESS_MODE
         return "roles"

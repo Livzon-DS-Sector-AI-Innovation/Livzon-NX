@@ -103,7 +103,7 @@ async def resolve_visible_dept_alias_set(
     session: AsyncSession,
     user: Any,
 ) -> set[str] | None:
-    """解析用户 HR 可见培训部门别名集合（跨模块调用入口，供权限验证台等使用）。
+    """解析用户 HR 可见培训部门别名集合（跨模块调用入口，供权限接入检查等使用）。
 
     返回 None 表示管理员全部可见，与 hr/api.py `_resolve_visible_scope` 语义一致。
     延迟导入 hr.api 避免模块级循环依赖。

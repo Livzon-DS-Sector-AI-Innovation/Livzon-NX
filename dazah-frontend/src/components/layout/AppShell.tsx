@@ -47,7 +47,6 @@ export function AppShell({ children, user }: AppShellProps) {
     : getAuthorizedPageMenus(
         user.module_codes,
         user.page_permissions,
-        user.page_permission_rollouts,
       )
   const isModuleDenied = Boolean(
     currentModule &&
@@ -60,15 +59,12 @@ export function AppShell({ children, user }: AppShellProps) {
   const pageGrant = user.page_permissions?.find(
     (grant) => grant.page_key === currentPageKey,
   )
-  const isPagePolicyEnforced = Boolean(
-    user.role !== 'admin' && currentModule && user.page_permission_rollouts?.[currentModule.moduleCode] === "enforced",
-  )
   const isPageDenied = Boolean(
-    isPagePolicyEnforced &&
+    user.role !== 'admin' &&
       (!currentPageKey || !pageGrant?.permissions?.includes("access")),
   )
   const isQueryDenied = Boolean(
-    isPagePolicyEnforced &&
+    user.role !== 'admin' &&
       pageGrant?.permissions?.includes("access") &&
       !pageGrant.permissions.includes("query"),
   )

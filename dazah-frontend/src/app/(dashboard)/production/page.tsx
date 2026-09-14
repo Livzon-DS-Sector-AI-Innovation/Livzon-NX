@@ -4,7 +4,7 @@
 // 数据源：最新排产 Excel 存档（当前扎帐周期块）+ 人工检修标注。
 // 实际完成/收率/合格率等指标待实际数据接入后启用（当前显示 --）。
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Card,
@@ -40,7 +40,9 @@ import {
 import dayjs from 'dayjs'
 import ReactECharts from 'echarts-for-react'
 import BoardNavBlocks from '@/components/production/board-nav-blocks'
+import ProgressParticles from '@/components/production/progress-particles'
 import { useProductContextStore } from '@/stores/product-context'
+import { usePermission } from '@/hooks/usePermission'
 import {
   getFermentationBoard,
   markTankMaintenance,
@@ -49,11 +51,14 @@ import {
   upsertFermentationBatchActual,
   deleteFermentationBatchActual,
   setFermentationMonthCapacity,
+  getPlans,
 } from '@/actions/production'
 import type {
   FermentationBoard,
   BoardTank,
   FermentationBatchActual,
+  FermentationBatchActualFormData,
+  ProductionPlan,
 } from '@/types/production'
 
 const { Title, Text } = Typography
@@ -118,6 +123,9 @@ const workshopItems = [
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000
 
+// 提炼计划产量卡的下拉选择记忆（按月份存 {月份: "车间|产品"}），刷新后恢复
+const PLAN_SELECTION_STORAGE_KEY = 'dazah.production.plan-card.selection'
+
 // 当前产品（第 5 个导航位）：看板标题与产品入口共用
 const PRODUCT_NAME = 'L-苯丙氨酸'
 
@@ -150,7 +158,7 @@ function batchSeqNo(batchNo: string | null): number | null {
 const STATUS_META: Record<string, { label: string; color: string }> = {
   running: { label: '运行中', color: 'success' },
   dumping: { label: '放罐中', color: 'processing' },
-  idle: { label: '空闲待投料', color: 'default' },
+  idle: { label: '检修待投料', color: 'default' },
   maintenance: { label: '检修维护', color: 'warning' },
   dumped: { label: '已放罐', color: 'default' },
 }
@@ -158,6 +166,10 @@ const STATUS_META: Record<string, { label: string; color: string }> = {
 export default function ProductionDashboard() {
   const router = useRouter()
   const { message } = App.useApp()
+  // 工段数据权限：发酵模块挂发酵权限，提炼汇总挂提炼权限，收率需双权限
+  const { has } = usePermission()
+  const canFerm = has('production:fermentation-yield')
+  const canExtract = has('production:extraction-yield')
   const [board, setBoard] = useState<FermentationBoard | null>(null)
   const [boardMessage, setBoardMessage] = useState<string>('')
   const [loading, setLoading] = useState(true)
@@ -181,6 +193,14 @@ export default function ProductionDashboard() {
   const [actualRemark, setActualRemark] = useState('')
   const [capacityModalOpen, setCapacityModalOpen] = useState(false)
   const [capacityKg, setCapacityKg] = useState<number | null>(null)
+  // 提炼计划产量卡：生产计划（飞书同步）按概览自然月取数，下拉选"车间 产品"行
+  const [planRows, setPlanRows] = useState<ProductionPlan[]>([])
+  const [selectedPlanKey, setSelectedPlanKey] = useState('')
+  const planMonth = viewDate
+    ? dayjs(viewDate).format('YYYY-MM')
+    : dayjs().format('YYYY-MM')
+  const planKey = (row: ProductionPlan) =>
+    `${row.workshop ?? ''}|${row.product_name}`
 
   const loadBoard = useCallback(async () => {
     try {
@@ -206,6 +226,61 @@ export default function ProductionDashboard() {
     const timer = setInterval(() => void loadBoard(), REFRESH_INTERVAL_MS)
     return () => clearInterval(timer)
   }, [loadBoard])
+
+  // 提炼计划产量：跟随概览自然月拉生产计划；选择按月记入本地存储，
+  // 页面刷新后恢复所选行，仅当该行不在当月数据时才回退第一行
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      let remembered = ''
+      try {
+        const store = JSON.parse(
+          window.localStorage.getItem(PLAN_SELECTION_STORAGE_KEY) || '{}',
+        )
+        remembered = typeof store[planMonth] === 'string' ? store[planMonth] : ''
+      } catch {
+        // 存储不可用则当作无记录
+      }
+      try {
+        const res = await getPlans({ month: planMonth, page_size: 200 })
+        if (res.code === 200 && !cancelled) {
+          const rows = res.data || []
+          setPlanRows(rows)
+          setSelectedPlanKey((prev) => {
+            if (rows.length === 0) return ''
+            for (const key of [prev, remembered]) {
+              if (key && rows.some((r) => planKey(r) === key)) return key
+            }
+            return planKey(rows[0])
+          })
+        }
+      } catch {
+        if (!cancelled) setPlanRows([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [planMonth])
+
+  // 显式选择时写入本地存储（按月份分开记忆）
+  const handlePlanSelect = useCallback(
+    (key: string) => {
+      setSelectedPlanKey(key)
+      try {
+        const raw = window.localStorage.getItem(PLAN_SELECTION_STORAGE_KEY)
+        const store = raw ? JSON.parse(raw) : {}
+        store[planMonth] = key
+        window.localStorage.setItem(
+          PLAN_SELECTION_STORAGE_KEY,
+          JSON.stringify(store),
+        )
+      } catch {
+        // 存储不可用时仅当次会话生效
+      }
+    },
+    [planMonth],
+  )
 
   useEffect(() => {
     const update = () => setClock(fmtDateTime(new Date().toISOString()))
@@ -280,12 +355,18 @@ export default function ProductionDashboard() {
       message.warning('请填写批次号')
       return
     }
-    const res = await upsertFermentationBatchActual({
+    // 仅提交当前账号有权限的字段：后端按显式字段更新，跨工段数据互不清除
+    const payload: FermentationBatchActualFormData = {
       batch_no: actualBatchNo.trim(),
-      dump_date: actualDumpDate ? actualDumpDate.format('YYYY-MM-DD') : null,
-      yield_kg: actualYieldKg,
-      remark: actualRemark.trim() || null,
-    })
+    }
+    if (canFerm) {
+      payload.dump_date = actualDumpDate
+        ? actualDumpDate.format('YYYY-MM-DD')
+        : null
+      payload.yield_kg = actualYieldKg
+      payload.remark = actualRemark.trim() || null
+    }
+    const res = await upsertFermentationBatchActual(payload)
     if (res.code === 200) {
       message.success('已保存批次产量')
       setActualModalOpen(false)
@@ -327,6 +408,16 @@ export default function ProductionDashboard() {
   // 周期回看：写操作（检修、产能设置）仅当前扎帐月开放
   const isCurrent = board?.is_current_period ?? true
   const dash = '--'
+  // 「提炼已出成品（仓储成品入库）」：当期仓储入库合计；仅接入产品有值
+  const extractInboundKg = board?.extract_finished_inbound_kg ?? null
+  // 「提炼计划产量」当前选中行（车间+产品）
+  const selectedPlan =
+    planRows.find((r) => planKey(r) === selectedPlanKey) ?? null
+  // 完成率 = 已出成品 ÷ 当前选中行的计划产量，百分比保留两位小数
+  const extractPlanRate =
+    extractInboundKg != null && selectedPlan?.planned_yield
+      ? `${((extractInboundKg / selectedPlan.planned_yield) * 100).toFixed(2)}%`
+      : dash
 
   // 发酵罐实时状态：三台发酵罐 + 最近已放罐的一批（凑齐 4 批）
   // 行序按批次顺序（批次号后三位从小到大）；无批号的罐（空闲/检修）保持罐号顺序排在最后
@@ -363,10 +454,19 @@ export default function ProductionDashboard() {
   const plannedCapacityKg = board?.month_planned_capacity_kg ?? null
   const capacityRate =
     doneYieldKg != null && plannedCapacityKg
-      ? `${((doneYieldKg / plannedCapacityKg) * 100).toFixed(1)}%`
+      ? `${((doneYieldKg / plannedCapacityKg) * 100).toFixed(2)}%`
       : null
-  const fmtTon = (kg: number | null) =>
-    kg == null ? '--' : kg >= 1000 ? `${(kg / 1000).toFixed(1)} t` : String(kg)
+  // 产能口径统一按 kg 展示（千分位 + 单位）；已完成产能等实测口径保留两位小数
+  const fmtKg = (kg: number | null, decimals = 0) =>
+    kg == null
+      ? '--'
+      : `${kg.toLocaleString('zh-CN', {
+          minimumFractionDigits: decimals,
+          maximumFractionDigits: decimals,
+        })} kg`
+  // 历史数据/产量数值：两位小数
+  const fmtNum2 = (v: number | null | undefined) =>
+    v == null ? '-' : v.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
   // 本月批次进度条：已完成（产量已录）→ 待出产量（已放罐未录产量）→ 运行中 → 未开始
   // 产能口径：已完成段宽度 = 已完成产能/计划产能，箭头随之；
@@ -378,6 +478,11 @@ export default function ProductionDashboard() {
   const notStarted = Math.max(0, planned - doneWithYield - yieldPending - runningCount)
   const segPct = (count: number) => (planned > 0 ? (count / planned) * 100 : 0)
   const capacityMode = plannedCapacityKg != null && plannedCapacityKg > 0
+  // 产能达成率 ≥ 100% 时进度条粒子进入最高密度模式（Ultra）
+  const capacityUltra =
+    capacityMode && doneYieldKg != null && plannedCapacityKg != null
+      ? doneYieldKg >= plannedCapacityKg
+      : false
   const greenPct =
     capacityMode && doneYieldKg != null
       ? Math.min(100, (doneYieldKg / plannedCapacityKg) * 100)
@@ -389,7 +494,7 @@ export default function ProductionDashboard() {
     restBatches > 0 ? (count / restBatches) * restPct : 0
   const greenLabel =
     capacityMode && doneYieldKg != null
-      ? `已完成 ${doneWithYield} 批｜${fmtTon(doneYieldKg)}`
+      ? `已完成 ${doneWithYield} 批｜${fmtKg(doneYieldKg, 2)}`
       : `${doneWithYield}`
 
   const progressSegments = [
@@ -404,6 +509,24 @@ export default function ProductionDashboard() {
   )
   const arrowNotchColor = nextSegment?.color ?? '#f0f0f0'
 
+  // 理论批次：一天一批，当前周期截至今天、历史周期截至周期末
+  const asOfDay = isCurrent ? dayjs() : dayjs(board?.period.end ?? undefined)
+  const asOfLabel = asOfDay.isValid() ? asOfDay.format('MM-DD') : '--'
+  const theoryBatches =
+    board?.period.start && board?.period.end
+      ? Math.max(
+          0,
+          Math.min(
+            asOfDay.diff(dayjs(board.period.start), 'day') + 1,
+            dayjs(board.period.end).diff(dayjs(board.period.start), 'day') + 1,
+          ),
+        )
+      : null
+  const utilizationRate =
+    theoryBatches && kpi?.month_done_planned != null
+      ? Math.round((kpi.month_done_planned / theoryBatches) * 100)
+      : null
+
   const kpiCards: {
     title: string
     value: string | number | null
@@ -412,30 +535,39 @@ export default function ProductionDashboard() {
     extra?: { label: string; value: string; sub?: string; editable?: boolean }
   }[] = [
     {
-      title: '本月计划批次',
+      title: '发酵本月计划批次',
       value: kpi?.month_planned ?? dash,
       sub: board?.period.label,
       span: 8,
       extra: {
-        label: '本月计划产能',
-        value: fmtTon(plannedCapacityKg),
+        label: '发酵本月计划产能',
+        value: fmtKg(plannedCapacityKg),
         sub: '按扎帐月保存，可修改',
         editable: true,
       },
     },
     {
-      title: '本月已完成批次',
+      title: '发酵本月已完成批次',
       value: kpi?.month_done_planned ?? dash,
       sub: achievementRate != null ? `达成率 ${achievementRate}%` : undefined,
       span: 8,
       extra: {
-        label: '已完成产能',
-        value: fmtTon(doneYieldKg),
+        label: '发酵已完成产能',
+        value: fmtKg(doneYieldKg, 2),
         sub: `产能达成率 ${capacityRate ?? '--'}`,
       },
     },
-    { title: '当前运行批次', value: kpi?.running ?? dash, span: 4 },
-    { title: '待启动排产批次', value: kpi?.pending ?? dash, span: 4 },
+    {
+      title: '发酵理论批次',
+      value: theoryBatches != null ? theoryBatches : dash,
+      sub: `截至 ${asOfLabel} · 一天一批`,
+      span: 8,
+      extra: {
+        label: '发酵设备利用率',
+        value: utilizationRate != null ? `${utilizationRate}%` : dash,
+        sub: `已完成 ${kpi?.month_done_planned ?? dash} ÷ 理论 ${theoryBatches ?? dash}`,
+      },
+    },
   ]
 
   const tankColumns = [
@@ -458,7 +590,7 @@ export default function ProductionDashboard() {
       render: (v: string | null) => v || '-',
     },
     {
-      title: '接种时间',
+      title: '移种时间',
       dataIndex: 'inoculate_at',
       key: 'inoculate_at',
       width: 124,
@@ -542,7 +674,7 @@ export default function ProductionDashboard() {
       dataIndex: 'yield_kg',
       key: 'yield_kg',
       width: 96,
-      render: (v: number | null) => (v == null ? '--' : v),
+      render: (v: number | null) => fmtNum2(v),
     },
     {
       title: '备注',
@@ -576,13 +708,17 @@ export default function ProductionDashboard() {
       width: 110,
       render: (v: string | null) => v || '-',
     },
-    {
-      title: '产量(kg)',
-      dataIndex: 'yield_kg',
-      key: 'yield_kg',
-      width: 100,
-      render: (v: number | null) => (v == null ? '-' : v),
-    },
+    ...(canFerm
+      ? [
+          {
+            title: '产量(kg)',
+            dataIndex: 'yield_kg',
+            key: 'yield_kg',
+            width: 100,
+            render: (v: number | null) => fmtNum2(v),
+          },
+        ]
+      : []),
     {
       title: '备注',
       dataIndex: 'remark',
@@ -759,6 +895,18 @@ export default function ProductionDashboard() {
           0% { transform: translateX(100%); }
           100% { transform: translateX(-100%); }
         }
+        /* 计划卡的产品下拉：压缩到 24px，标题行不高于普通卡片标题 */
+        .plan-product-select.ant-select-single {
+          height: 24px;
+        }
+        .plan-product-select .ant-select-selector {
+          height: 24px !important;
+          min-height: 24px !important;
+          padding: 0 6px;
+        }
+        .plan-product-select .ant-select-selection-item {
+          line-height: 22px;
+        }
         /* 最近完成批次：表格区域撑满卡片高度，滚动条贴卡片右缘上下撑满 */
         .recent-batches-card {
           display: flex;
@@ -785,6 +933,27 @@ export default function ProductionDashboard() {
           min-height: 0;
           overflow-y: auto;
         }
+        /* 收率分析预留位：撑满卡片，虚线框占位 */
+        .extraction-rate-placeholder {
+          height: 100%;
+          min-height: 72px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px dashed var(--color-hairline);
+          border-radius: 8px;
+        }
+        /* 提炼工段卡片行：与上方 KPI 行保持同一高度 */
+        .extraction-summary-row > .ant-col {
+          height: 108px;
+        }
+        .extraction-summary-row .ant-card {
+          height: 100%;
+          overflow: hidden;
+        }
+        .extraction-summary-row .extraction-rate-placeholder {
+          min-height: 0;
+        }
       `}</style>
 
       {/* 主体 */}
@@ -798,6 +967,8 @@ export default function ProductionDashboard() {
         </Card>
       ) : (
         <>
+          {canFerm && (
+            <>
           {/* KPI 卡片区 */}
           <Row gutter={[12, 12]}>
             {kpiCards.map((card) => (
@@ -862,7 +1033,143 @@ export default function ProductionDashboard() {
               </Col>
             ))}
           </Row>
+            </>
+          )}
 
+          {/* 提炼工段卡片行：各卡按工段权限渲染（发酵产量=发酵岗，提炼成品=提炼岗，收率=双权限） */}
+          {(canFerm || canExtract) && (
+            <Row gutter={[12, 12]} className="extraction-summary-row">
+              {canFerm && (
+                <Col xs={24} md={8}>
+                  <Card
+                    variant="borderless"
+                    className="shadow-sm h-full"
+                    styles={{ body: { padding: '10px 14px' } }}
+                  >
+                    {/* 标题行 25px 顶部对齐（21px 文字 + 4px 间距），与 KPI 卡 Statistic 标题同构 */}
+                    <div
+                      className="flex items-start justify-between gap-2"
+                      style={{ height: 25 }}
+                    >
+                      <span
+                        style={{ fontSize: 12, lineHeight: '21px', marginTop: 2 }}
+                      >
+                        提炼计划产量
+                      </span>
+                      <Select
+                        size="small"
+                        variant="borderless"
+                        className="plan-product-select"
+                        value={selectedPlanKey || undefined}
+                        onChange={handlePlanSelect}
+                        placeholder="车间 · 产品"
+                        style={{ width: 168, fontSize: 12 }}
+                        options={planRows.map((r) => ({
+                          value: planKey(r),
+                          label: `${r.workshop ?? ''} ${r.product_name}`,
+                        }))}
+                        disabled={planRows.length === 0}
+                      />
+                    </div>
+                    <Statistic
+                      value={
+                        selectedPlan?.planned_yield != null
+                          ? selectedPlan.planned_yield.toLocaleString('zh-CN')
+                          : dash
+                      }
+                      styles={{ content: { fontSize: 26, fontWeight: 600 } }}
+                    />
+                    <Text type="secondary" style={{ fontSize: 11 }}>
+                      {planRows.length === 0
+                        ? `${Number(planMonth.slice(5))}月生产计划待更新`
+                        : selectedPlan?.planned_yield != null
+                          ? `${selectedPlan.unit ?? ''} · ${Number(planMonth.slice(5))}月计划`
+                          : '该行未填计划产量'}
+                    </Text>
+                  </Card>
+                </Col>
+              )}
+              {canExtract && (
+                <Col xs={24} md={8}>
+                  <Card
+                    variant="borderless"
+                    className="shadow-sm h-full"
+                    styles={{ body: { padding: '10px 14px' } }}
+                  >
+                    {/* 双栏结构（与 KPI 卡同构）：左=已出成品，右=完成率 */}
+                    <div className="flex items-stretch">
+                      <div className="flex-1 min-w-0">
+                        <Statistic
+                          title={
+                            <span style={{ fontSize: 12 }}>
+                              提炼已出成品（仓储成品入库）
+                            </span>
+                          }
+                          value={extractInboundKg != null ? extractInboundKg : dash}
+                          precision={extractInboundKg != null ? 0 : undefined}
+                          styles={{ content: { fontSize: 26, fontWeight: 600 } }}
+                        />
+                        <Text type="secondary" style={{ fontSize: 11 }}>
+                          {extractInboundKg != null
+                            ? 'L-苯丙氨酸 · 本月合计(kg)'
+                            : '数据源待接入'}
+                        </Text>
+                      </div>
+                      <div className="flex-1 min-w-0 pl-3 border-l border-[var(--color-hairline)]">
+                        <Text
+                          type="secondary"
+                          style={{
+                            fontSize: 12,
+                            display: 'block',
+                            marginBottom: 7,
+                          }}
+                        >
+                          完成率
+                        </Text>
+                        <div
+                          className="flex items-center gap-1"
+                          style={{ marginBottom: 4, minHeight: 35 }}
+                        >
+                          <div
+                            style={{
+                              fontSize: 26,
+                              fontWeight: 600,
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            {extractPlanRate}
+                          </div>
+                        </div>
+                        <Text type="secondary" style={{ fontSize: 11 }}>
+                          已出成品 ÷ 计划产量
+                        </Text>
+                      </div>
+                    </div>
+                  </Card>
+                </Col>
+              )}
+              {(canFerm || canExtract) && (
+                <Col xs={24} md={8}>
+                  <Card
+                    variant="borderless"
+                    className="shadow-sm h-full"
+                    styles={{ body: { padding: '10px 14px' } }}
+                  >
+                    {/* 收率分析预留位：内容待后续接入 */}
+                    <div className="extraction-rate-placeholder">
+                      <Empty
+                        description="收率分析（待接入）"
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      />
+                    </div>
+                  </Card>
+                </Col>
+              )}
+            </Row>
+          )}
+
+          {canFerm && (
+            <>
           {/* 本月批次进度条 */}
           <Card
             variant="borderless"
@@ -934,6 +1241,8 @@ export default function ProductionDashboard() {
                   </div>
                 ))}
               </div>
+              {/* 粒子脉冲层：深蓝已完成段内的思考粒子（Codex 滑块同款动效） */}
+              <ProgressParticles progressPct={arrowPct} ultra={capacityUltra} />
               {/* 箭头：轨道本身是横杠，大三角头（轨道2倍高）跨骑轨道、方向向右，
                   尖落在分界点；上下两个斜角填右侧段颜色 */}
               <div
@@ -965,7 +1274,7 @@ export default function ProductionDashboard() {
                   <Text type="secondary" style={{ fontSize: 12 }}>
                     {seg.key === 'done'
                       ? `已完成 ${doneWithYield} 批${
-                          capacityMode && doneYieldKg != null ? `｜${fmtTon(doneYieldKg)}` : ''
+                          capacityMode && doneYieldKg != null ? `｜${fmtKg(doneYieldKg, 2)}` : ''
                         }`
                       : `${seg.label} ${seg.count} 批`}
                   </Text>
@@ -991,7 +1300,11 @@ export default function ProductionDashboard() {
               pagination={false}
             />
           </Card>
+            </>
+          )}
 
+          {canFerm && (
+            <>
           {/* 单批产量图表 + 最近完成批次：图表占 2/3，最近批次缩为 1/3 */}
           <Row gutter={[12, 12]}>
             <Col xs={24} lg={16}>
@@ -1031,6 +1344,8 @@ export default function ProductionDashboard() {
               </Card>
             </Col>
           </Row>
+            </>
+          )}
         </>
       )}
 
@@ -1109,32 +1424,38 @@ export default function ProductionDashboard() {
               if (found?.dump_date) setActualDumpDate(dayjs(found.dump_date))
             }}
           />
-          <DatePicker
-            placeholder="放罐日期（可选）"
-            style={{ width: '100%' }}
-            value={actualDumpDate}
-            onChange={(d) => setActualDumpDate(d)}
-          />
-          <InputNumber
-            placeholder="放罐产量 (kg)"
-            style={{ width: '100%' }}
-            min={0}
-            value={actualYieldKg}
-            onChange={(v) => setActualYieldKg(v)}
-          />
-          <Input.TextArea
-            placeholder="备注（可选，如：染菌批）"
-            rows={2}
-            maxLength={255}
-            value={actualRemark}
-            onChange={(e) => setActualRemark(e.target.value)}
-          />
+          {canFerm && (
+            <>
+              <DatePicker
+                placeholder="放罐日期（可选）"
+                style={{ width: '100%' }}
+                value={actualDumpDate}
+                onChange={(d) => setActualDumpDate(d)}
+              />
+              <InputNumber
+                placeholder="放罐产量 (kg)"
+                style={{ width: '100%' }}
+                min={0}
+                precision={2}
+                value={actualYieldKg}
+                onChange={(v) => setActualYieldKg(v)}
+              />
+            </>
+          )}
+          {canFerm && (
+            <Input.TextArea
+              placeholder="备注（可选，如：染菌批）"
+              rows={2}
+              maxLength={255}
+              value={actualRemark}
+              onChange={(e) => setActualRemark(e.target.value)}
+            />
+          )}
         </Space>
         <Text type="secondary" style={{ fontSize: 12 }}>
           同一批次重复录入会更新原记录；保存后看板图表立即刷新。
         </Text>
       </Modal>
-
       {/* 本月计划产能设置弹窗 */}
       <Modal
         title={`设置本月计划产能：${board?.period.label ?? ''}`}

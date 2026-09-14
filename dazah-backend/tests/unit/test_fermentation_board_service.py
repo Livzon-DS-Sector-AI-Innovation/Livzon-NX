@@ -141,6 +141,25 @@ async def test_dump_window_gates_completion() -> None:
 
 
 @pytest.mark.anyio
+async def test_running_note_counts_down_to_dump() -> None:
+    """运行中备注分级：≥1h 按小时取整；30min~1h「不足 1h」；≤30min「即将放罐」"""
+    rows = _mini_rows()
+    # FA-M0 计划 8/30 10:00 放罐
+    cases = [
+        (datetime(2026, 8, 30, 9, 0), "距放罐约 1h"),
+        (datetime(2026, 8, 30, 9, 20), "不足 1h"),
+        (datetime(2026, 8, 30, 9, 30), "即将放罐"),
+        (datetime(2026, 8, 30, 9, 40), "即将放罐"),
+    ]
+    for now, expected in cases:
+        payload = board.build_board(rows, [], now)
+        assert payload is not None
+        tanks = {t["tank_no"]: t for t in payload["tanks"]}
+        assert tanks["302A"]["status"] == "running"
+        assert tanks["302A"]["note"] == expected
+
+
+@pytest.mark.anyio
 async def test_tank_dumped_when_last_batch_window_passed() -> None:
     """罐的最后批次放罐窗口已结束且无后续移种 → 已放罐（历史回看语义）。"""
     rows = _mini_rows()
@@ -332,3 +351,177 @@ async def test_build_board_excludes_actuals_with_unparseable_dump_date() -> None
     assert payload["trend"] is not None
     assert "FA-ZZZ" not in payload["trend"]["batches"]
     assert "FA-M1" in payload["trend"]["batches"]
+
+
+# ═══════════════════ 提炼工段汇总（收率两口径） ═══════════════════
+
+
+def test_summarize_extraction_rates_and_counts() -> None:
+    """Σ放罐、Σ成品、实时/配对收率与批数统计。"""
+    actuals = [
+        {"batch_no": "FA26231", "yield_kg": 100.0, "extract_kg": 90.0},
+        {"batch_no": "FA26232", "yield_kg": 200.0, "extract_kg": 170.0},
+        {"batch_no": "FA26233", "yield_kg": 300.0, "extract_kg": None},
+        {"batch_no": "FA26234", "yield_kg": None, "extract_kg": 50.0},
+    ]
+    summary = board.summarize_extraction(actuals)
+    assert summary["ferment_total_kg"] == 600.0
+    assert summary["extract_total_kg"] == 310.0
+    assert summary["ferment_batches"] == 3
+    assert summary["extract_batches"] == 3
+    # 实时口径：Σ成品 ÷ Σ放罐（含未提炼批次）
+    assert summary["rate_realtime"] == pytest.approx(310 / 600 * 100, abs=0.1)
+    # 配对口径：仅已出成品批次 90+170 ÷ 100+200
+    assert summary["rate_paired"] == pytest.approx(260 / 300 * 100, abs=0.1)
+
+
+def test_summarize_extraction_empty_and_partial() -> None:
+    """无数据/仅单边数据时 totals 为 None、收率为 None。"""
+    assert board.summarize_extraction([])["ferment_total_kg"] is None
+    assert board.summarize_extraction([])["rate_paired"] is None
+
+    only_ferment = board.summarize_extraction(
+        [{"batch_no": "FA1", "yield_kg": 100.0, "extract_kg": None}]
+    )
+    assert only_ferment["ferment_total_kg"] == 100.0
+    assert only_ferment["extract_total_kg"] is None
+    assert only_ferment["rate_realtime"] is None
+
+
+def test_build_board_recent_carries_extract_fields() -> None:
+    """最近完成批次带提炼成品与单批收率（最近完成表新增列的数据源）。"""
+    rows = _mini_rows()
+    # FA-PREV 已于 8/27 10:00 放罐（窗口外）→ 进入 recent
+    now = datetime(2026, 8, 28, 12, 0)
+    payload = board.build_board(
+        rows,
+        [],
+        now,
+        actuals=[
+            {
+                "batch_no": "FA-PREV",
+                "yield_kg": 100.0,
+                "extract_kg": 88.0,
+                "remark": None,
+            }
+        ],
+    )
+    assert payload is not None
+    recent = {item["batch_no"]: item for item in payload["recent"]}
+    assert recent["FA-PREV"]["extract_kg"] == 88.0
+    assert recent["FA-PREV"]["batch_yield_rate"] == 88.0
+    # 提炼汇总块随看板返回
+    assert payload["extraction"]["ferment_total_kg"] == 100.0
+    assert payload["extraction"]["extract_total_kg"] == 88.0
+    # 提炼批次台账：已放罐批次逐批带放罐产量与成品量（FA-EX 格式转换在前端展示层做）
+    ledger = {row["batch_no"]: row for row in payload["extraction_ledger"]}
+    assert ledger["FA-PREV"]["yield_kg"] == 100.0
+    assert ledger["FA-PREV"]["extract_kg"] == 88.0
+    assert ledger["FA-PREV"]["dump_date"] == "2026-08-27"
+
+
+# ═══════════════════ 成品日报作为「提炼已出成品」权威数据源 ═══════════════════
+
+
+def test_apply_daily_extract_source_overrides_totals() -> None:
+    """有日报记录时：成品合计/天数/实时收率按日报口径覆盖，配对口径保留台账值。"""
+    summary = board.summarize_extraction(
+        [{"batch_no": "FA1", "yield_kg": 600.0, "extract_kg": 500.0}]
+    )
+    updated = board.apply_daily_extract_source(summary, [300.0, 250.0])
+    assert updated["extract_total_kg"] == 550.0
+    assert updated["extract_batches"] == 2  # 两天，而非批次
+    assert updated["rate_realtime"] == pytest.approx(550 / 600 * 100, abs=0.1)
+    # 配对口径仍来自批次台账
+    assert updated["rate_paired"] == pytest.approx(500 / 600 * 100, abs=0.1)
+    assert updated["ferment_total_kg"] == 600.0
+
+
+def test_apply_daily_extract_source_empty_and_none() -> None:
+    """无日报记录时成品合计记空；汇总块缺失时原样返回 None。"""
+    summary = board.summarize_extraction(
+        [{"batch_no": "FA1", "yield_kg": 600.0, "extract_kg": 500.0}]
+    )
+    emptied = board.apply_daily_extract_source(summary, [])
+    assert emptied["extract_total_kg"] is None
+    assert emptied["extract_batches"] == 0
+    assert emptied["rate_realtime"] is None
+
+    assert board.apply_daily_extract_source(None, [100.0]) is None
+
+
+@pytest.mark.anyio
+async def test_warehouse_inbound_skips_unwired_product() -> None:
+    """未接入产品：不触碰仓储模块，直接返回 None。"""
+    from unittest.mock import AsyncMock, MagicMock
+
+    import app.modules.warehouse.public_api as warehouse_public
+
+    original = warehouse_public.get_finished_inbound_kg_total
+    inbound_mock = AsyncMock(
+        side_effect=AssertionError("未接入产品不应调用仓储公开接口")
+    )
+    warehouse_public.get_finished_inbound_kg_total = inbound_mock
+    try:
+        result = await board.get_warehouse_finished_inbound_kg(
+            MagicMock(),
+            product_code="MC",
+            period_start=date(2026, 8, 27),
+            period_end=date(2026, 9, 26),
+        )
+    finally:
+        warehouse_public.get_finished_inbound_kg_total = original
+    assert result is None
+    inbound_mock.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_warehouse_inbound_passes_period_and_product() -> None:
+    """已接入产品：透传产品名与周期边界，返回仓储合计。"""
+    from unittest.mock import AsyncMock, MagicMock
+
+    import app.modules.warehouse.public_api as warehouse_public
+
+    session = MagicMock()
+    original = warehouse_public.get_finished_inbound_kg_total
+    inbound_mock = AsyncMock(return_value=410490.0)
+    warehouse_public.get_finished_inbound_kg_total = inbound_mock
+    try:
+        result = await board.get_warehouse_finished_inbound_kg(
+            session,
+            product_code="FA",
+            period_start=date(2026, 8, 27),
+            period_end=date(2026, 9, 26),
+        )
+    finally:
+        warehouse_public.get_finished_inbound_kg_total = original
+    assert result == 410490.0
+    inbound_mock.assert_awaited_once_with(
+        session,
+        product_name="L-苯丙氨酸",
+        start_date=date(2026, 8, 27),
+        end_date=date(2026, 9, 26),
+    )
+
+
+@pytest.mark.anyio
+async def test_warehouse_inbound_degrades_on_warehouse_failure() -> None:
+    """仓储侧异常：降级为 None，不向看板传播故障。"""
+    from unittest.mock import AsyncMock, MagicMock
+
+    import app.modules.warehouse.public_api as warehouse_public
+
+    original = warehouse_public.get_finished_inbound_kg_total
+    warehouse_public.get_finished_inbound_kg_total = AsyncMock(
+        side_effect=RuntimeError("warehouse down")
+    )
+    try:
+        result = await board.get_warehouse_finished_inbound_kg(
+            MagicMock(),
+            product_code="FA",
+            period_start=date(2026, 8, 27),
+            period_end=date(2026, 9, 26),
+        )
+    finally:
+        warehouse_public.get_finished_inbound_kg_total = original
+    assert result is None

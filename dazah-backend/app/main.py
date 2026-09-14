@@ -197,6 +197,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         OffboardingReminderGenerator,
         ResumeFolderScanner,
     )
+    from app.modules.production.scheduled import (
+        ProductionPlanHourlySyncGenerator,
+    )
     from app.modules.quality.scheduled import (
         AttachmentCacheWarmupGenerator,
         ChangeActionPlanReminderGenerator,
@@ -231,6 +234,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_registry.register_generator(AgentAccessScopeSyncGenerator())
     scheduler_registry.register_generator(AgentAutomationGenerator())
     scheduler_registry.register_generator(AgentPushDeliveryGenerator())
+    scheduler_registry.register_generator(ProductionPlanHourlySyncGenerator())
     scheduler_registry.register_generator(InspectionScheduleGenerator())
     scheduler_registry.register_generator(EnergyWikiSyncGenerator())
     scheduler_registry.register_generator(WarehouseFeishuDailySyncGenerator())
@@ -393,7 +397,7 @@ app.add_middleware(AuditMiddleware)
 
 # Enforce the same RBAC decision used by the permission simulator. Module
 # access defaults to explicit grants; ``MODULE_ACCESS_MODE=all`` is retained
-# only as an intentional compatibility override.
+# only as a development compatibility override and is ignored in production.
 from app.platform.identity.permission_middleware import PermissionMiddleware  # noqa: E402
 
 app.add_middleware(PermissionMiddleware)

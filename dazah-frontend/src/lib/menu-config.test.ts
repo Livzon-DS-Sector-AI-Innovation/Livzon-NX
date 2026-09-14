@@ -22,7 +22,7 @@ describe('page permission menu boundary', () => {
     expect(getPermissionModuleName('administration')).toBe('行政管理')
     expect(getPermissionModuleName('unknown')).toBe('未命名模块')
   })
-  it('filters an enforced module down to authorized leaf pages and ancestors', () => {
+  it('filters a module down to authorized leaf pages and ancestors immediately', () => {
     const menus = getAuthorizedPageMenus(
       ['hr'],
       [
@@ -32,7 +32,6 @@ describe('page permission menu boundary', () => {
           permissions: ['access'],
         },
       ],
-      { hr: 'enforced' }
     )
     expect(menus).toHaveLength(1)
     expect(menus[0].children.map((item) => item.key)).toEqual([
@@ -40,16 +39,20 @@ describe('page permission menu boundary', () => {
     ])
   })
 
-  it('keeps draft modules on the legacy menu rule', () => {
-    const menus = getAuthorizedPageMenus(['hr'], [], { hr: 'draft' })
-    expect(menus[0].children.length).toBeGreaterThan(1)
+  it('does not let verification status bypass saved page grants', () => {
+    const menus = getAuthorizedPageMenus(['hr'], [])
+    expect(menus).toEqual([])
   })
 
   it('uses navigation order for the post-login module landing page', () => {
     expect(getFirstAuthorizedModulePath({
       role: 'user',
       module_codes: ['quality', 'administration', 'research'],
-      page_permissions: [],
+      page_permissions: [{
+        page_key: 'rd:project-initiation',
+        module_code: 'research',
+        permissions: ['access'],
+      }],
       page_permission_rollouts: {},
     })).toBe('/rd')
   })

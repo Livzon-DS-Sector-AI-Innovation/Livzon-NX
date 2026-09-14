@@ -16,7 +16,7 @@ describe('authentication display store', () => {
     expect(useAuthStore.getState().hasPermission('quality.write')).toBe(false)
   })
 
-  it('requires explicit page operations and high-risk rights after publication', () => {
+  it('requires explicit saved page operations and high-risk rights regardless of verification status', () => {
     const pageKey = 'purchasing:supplier'
     expect(useAuthStore.getState().hasPagePermission(pageKey, 'query')).toBe(false)
     useAuthStore.getState().setUser({ id: 'user', name: '经办员', permissions: ['*'],
@@ -28,7 +28,7 @@ describe('authentication display store', () => {
     expect(useAuthStore.getState().hasPagePermission(pageKey, 'operate', 'bulk_import')).toBe(false)
     expect(useAuthStore.getState().hasPagePermission('purchasing:order', 'query')).toBe(false)
     useAuthStore.getState().setUser({ id: 'user', name: '经办员', page_permission_rollouts: { procurement: 'draft' } })
-    expect(useAuthStore.getState().hasPagePermission(pageKey, 'operate')).toBe(true)
+    expect(useAuthStore.getState().hasPagePermission(pageKey, 'operate')).toBe(false)
   })
 
   it('only reports explicitly granted permissions or the wildcard', () => {

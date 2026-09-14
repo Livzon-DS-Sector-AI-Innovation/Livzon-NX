@@ -13,83 +13,39 @@ vi.mock('@/components/production/SyncSettingsButton', () => ({
 }))
 const prodActions = vi.hoisted(() => ({
   getPlans: vi.fn(),
-  createPlan: vi.fn(),
-  updatePlan: vi.fn(),
-  deletePlan: vi.fn(),
 }))
 vi.mock('@/actions/production', () => prodActions)
 
 import PlanPage from './page'
 
-const ROWS = [
-  {
-    id: 'sp-1',
-    product_name: '霉酚酸',
-    unit: 'kg',
-    last_month_delivered_uninvoiced: 100,
-    current_year_delivered: 500,
-    month_planned_delivery: 600,
-    month_delivered_qty: 300,
-    undelivered_qty: 300,
-    month_planned_invoice: 600,
-    invoiced_qty: 280,
-    delivery_completion_rate: 50,
-    last_month_end_inventory: 50,
-    month_planned_capacity: 700,
-    month_end_inventory: 80,
-    remarks: '',
-  },
-]
-
 const PLANS = [
   {
     id: 'pl-1',
-    workshop: '101-1发酵车间',
-    product_name: '洛伐他汀',
+    workshop: '203车间',
+    product_name: 'L-苯丙氨酸',
     plan_date: '2026-07-01',
-    planned_yield: 800,
-    unit: 'kg',
-    actual_completion: 720,
-    completion_rate: 0.9,
-    safety_status: '正常',
-    quality_status: '合格',
+    planned_yield: 800000,
+    unit: 'KG',
+    actual_completion: 92400,
+    completion_rate: 0.1155,
+    safety_status: '无异常',
+    quality_status: '无异常',
     remarks: '',
     source: 'feishu',
   },
 ]
 
-function jsonResponse(body: unknown) {
-  return new Response(JSON.stringify(body), {
-    status: 200,
-    headers: { 'content-type': 'application/json' },
-  })
-}
-
 describe('PlanPage', () => {
   let root: Root
   let container: HTMLElement
-  let fetchMock: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
-    prodActions.getPlans.mockResolvedValue({ code: 200, message: 'success', data: PLANS, meta: { total: 1 } })
-    prodActions.deletePlan.mockResolvedValue({ code: 200, message: 'success', data: null })
-    prodActions.createPlan.mockResolvedValue({ code: 200, message: 'success', data: null })
-    prodActions.updatePlan.mockResolvedValue({ code: 200, message: 'success', data: null })
-
-    fetchMock = vi.fn((url: string, opts?: Request) => {
-      const method = opts?.method || 'GET'
-      if (url.includes('/sales-plan-details') && method === 'GET') {
-        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: ROWS, meta: { total: 1 } }))
-      }
-      if (url.includes('/sales-plan-details') && method === 'POST') {
-        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: null }))
-      }
-      if (url.includes('/sales-plan-details') && method === 'DELETE') {
-        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: null }))
-      }
-      return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: null }))
+    prodActions.getPlans.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: PLANS,
+      meta: { total: 1 },
     })
-
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -101,79 +57,136 @@ describe('PlanPage', () => {
     vi.clearAllMocks()
   })
 
-  it('renders the sales plan detail ledger with loaded rows', async () => {
-    prodActions.getPlans.mockResolvedValue({ code: 200, message: 'success', data: [], meta: { total: 0 } })
-    vi.stubGlobal('fetch', fetchMock)
-
+  async function renderAndSettle() {
     act(() => {
       root.render(<App><PlanPage /></App>)
     })
-
-    // 切换到销售执行 Tab
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 50))
+      await new Promise((r) => setTimeout(r, 80))
     })
-    const salesTab = Array.from(container.querySelectorAll('.ant-tabs-tab')).find((t) => t.textContent?.includes('产销计划')) as HTMLElement | undefined
-    if (salesTab) {
-      await act(async () => { salesTab.click(); await new Promise((r) => setTimeout(r, 60)) })
-    }
+  }
 
+  it('renders the synced plan ledger with feishu columns (read-only)', async () => {
+    await renderAndSettle()
     const text = container.textContent || ''
-    expect(text).toContain('生产计划')
-    expect(text).toContain('霉酚酸')
-    expect(text).toContain('500')
-    // SyncSettingsButton 展示
+    // 飞书原表列头
+    expect(text).toContain('车间')
+    expect(text).toContain('产品')
+    expect(text).toContain('日期')
+    expect(text).toContain('单位')
+    expect(text).toContain('计划产量')
+    expect(text).toContain('实际完成')
+    expect(text).toContain('完成率')
+    expect(text).toContain('安环情况')
+    expect(text).toContain('质量情况')
+    expect(text).toContain('备注')
+    // 行数据：千分位产量 + 完成率百分比
+    expect(text).toContain('203车间')
+    expect(text).toContain('800,000')
+    expect(text).toContain('92,400')
+    expect(text).toContain('11.6%')
+    expect(text).toContain('无异常')
+    // 同步入口保留；只读无新增
     expect(text).toContain('同步设置')
+    expect(text).not.toContain('新建计划')
   })
 
-  it('renders the production-plan tab with rows and handles plan edit/delete/apply filters', async () => {
-    vi.stubGlobal('fetch', fetchMock)
-
-    act(() => {
-      root.render(<App><PlanPage /></App>)
-    })
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 60))
-    })
-
+  it('shows six placeholder summary cards without values', async () => {
+    await renderAndSettle()
     const text = container.textContent || ''
-    expect(text).toContain('洛伐他汀')
-    expect(text).toContain('90.0%')
-    expect(text).toContain('飞书')
-
-    // 点击删除按钮触发 deletePlan
-    const delBtn = Array.from(container.querySelectorAll('.ant-popover-open')).length > 0
-    const deleteBtns = Array.from(container.querySelectorAll('button')).filter((b) => b.textContent?.includes('删除'))
-    if (deleteBtns.length > 0) {
-      act(() => { (deleteBtns[0] as HTMLButtonElement).click() })
-      await act(async () => { await new Promise((r) => setTimeout(r, 40)) })
-      // Popconfirm confirm
-      const okBtn = Array.from(container.querySelectorAll('.ant-popover-buttons button')).find((b) => b.textContent?.includes('确定')) as HTMLButtonElement | undefined
-      if (okBtn) {
-        await act(async () => { okBtn.click(); await new Promise((r) => setTimeout(r, 40)) })
-      }
-      expect(prodActions.deletePlan).toHaveBeenCalled()
-    }
+    // 占位卡标题（KG 与批分开）
+    expect(text).toContain('计划产量（KG）')
+    expect(text).toContain('实际完成（KG）')
+    expect(text).toContain('完成率（KG）')
+    expect(text).toContain('计划产量（批）')
+    expect(text).toContain('实际完成（批）')
+    expect(text).toContain('完成率（批）')
+    // 占位样式：-- + 数据源待接入，无真实汇总数值
+    expect(text).toContain('数据源待接入')
+    expect(text).not.toContain('861,000')
+    expect(text).not.toContain('11.5%')
+    const summaryCards = Array.from(container.querySelectorAll('.ant-card')).filter(
+      (c) => c.textContent?.includes('数据源待接入'),
+    )
+    expect(summaryCards).toHaveLength(6)
   })
 
-  it('creates a new production plan through the modal', async () => {
-    vi.stubGlobal('fetch', fetchMock)
-    prodActions.getPlans.mockResolvedValue({ code: 200, message: 'success', data: [], meta: { total: 0 } })
-
-    act(() => {
-      root.render(<App><PlanPage /></App>)
+  it('keeps the sync entry and shows empty table when no plans synced', async () => {
+    prodActions.getPlans.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [],
+      meta: { total: 0 },
     })
+    await renderAndSettle()
+    const text = container.textContent || ''
+    expect(text).toContain('同步设置')
+    // 占位卡不受数据影响
+    expect(text).toContain('数据源待接入')
+    expect(container.querySelectorAll('.ant-table-row')).toHaveLength(0)
+  })
+
+  it('reloads the ledger when the month changes', async () => {
+    await renderAndSettle()
+    prodActions.getPlans.mockClear()
+    const pickerRoot = container.querySelector('.ant-picker') as HTMLElement
+    expect(pickerRoot).toBeTruthy()
+    const input = pickerRoot.querySelector('input') as HTMLInputElement
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 50))
+      input.focus()
+      pickerRoot.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      pickerRoot.click()
+      await new Promise((r) => setTimeout(r, 120))
     })
+    const monthCell = Array.from(
+      document.body.querySelectorAll('.ant-picker-cell'),
+    ).find((c) => c.getAttribute('title') === '2026-10') as HTMLElement | undefined
+    expect(monthCell).toBeTruthy()
+    await act(async () => {
+      ;(monthCell!.querySelector('.ant-picker-cell-inner') as HTMLElement | null)?.click()
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    const lastCall = prodActions.getPlans.mock.calls.at(-1)?.[0] as
+      | { month?: string }
+      | undefined
+    expect(lastCall?.month).toBe('2026-10')
+  })
 
-    // 触发所有可能的「新建计划」按钮
-    const newBtns = Array.from(container.querySelectorAll('button')).filter((b) => b.textContent?.trim() === '新建计划')
-    for (const btn of newBtns) {
-      await act(async () => { btn.click(); await new Promise((r) => setTimeout(r, 60)) })
-    }
-    const text = document.body.textContent || ''
-    expect(text).toContain('新建生产计划')
-    expect(text).toContain('生产计划')
+  it('paginates to the second page when there are more than 20 rows', async () => {
+    const rows = Array.from({ length: 25 }, (_, i) => ({
+      id: `pl-${i + 1}`,
+      workshop: '203车间',
+      product_name: `产品${i + 1}`,
+      plan_date: '2026-09-01',
+      planned_yield: 100,
+      unit: 'KG',
+      actual_completion: 0,
+      completion_rate: 0,
+      safety_status: '无异常',
+      quality_status: '无异常',
+      remarks: '',
+      source: 'feishu',
+    }))
+    prodActions.getPlans.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: rows,
+      meta: { total: 25 },
+    })
+    await renderAndSettle()
+    prodActions.getPlans.mockClear()
+    const page2 = document.body.querySelector(
+      '.ant-pagination-item-2',
+    ) as HTMLElement | undefined
+    expect(page2).toBeTruthy()
+    await act(async () => {
+      page2!.querySelector('a')?.click()
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    expect(prodActions.getPlans).toHaveBeenCalledTimes(1)
+    const lastCall = prodActions.getPlans.mock.calls[0]?.[0] as
+      | { page?: number }
+      | undefined
+    expect(lastCall?.page).toBe(2)
   })
 })

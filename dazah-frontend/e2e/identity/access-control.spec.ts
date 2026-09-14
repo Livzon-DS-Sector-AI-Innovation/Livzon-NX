@@ -33,24 +33,27 @@ test.describe('身份认证与模块权限', () => {
   test('模块授权同时约束导航入口和直接访问', async ({ context, page }) => {
     await useAuthToken(context, 'procurement-only')
 
-    await page.goto('/purchasing')
+    const purchasingResponse = await page.goto('/purchasing')
 
-    await expect(page.getByRole('heading', { name: '采购管理工作台' })).toBeVisible()
+    expect(purchasingResponse?.status()).toBe(200)
+    await expect(page).toHaveURL(`${applicationUrl}/purchasing/supplier`)
+    await expect(page.getByRole('heading', { name: '供应商管理' })).toBeVisible()
     await expect(page.getByRole('link', { name: '采购管理' })).toBeVisible()
     await expect(page.getByRole('link', { name: '质量管理' })).toHaveCount(0)
 
-    await page.goto('/quality')
+    const qualityResponse = await page.goto('/quality')
 
-    await expect(page.getByRole('heading', { name: '暂无模块访问权限' })).toBeVisible()
-    await expect(page.getByText('当前账号未获“质量管理”的查看权限')).toBeVisible()
-    await expect(page.getByRole('heading', { name: '质量管理' })).toHaveCount(0)
+    expect(qualityResponse?.status()).toBe(403)
+    await expect(page.getByRole('heading', { name: '页面访问受限' })).toBeVisible()
+    await expect(page.getByText('未获得本模块的任何页面访问权限。')).toBeVisible()
   })
 
   test('兼容登录参数会从地址栏移除并写入安全 Cookie', async ({ context, page }) => {
-    await page.goto('/purchasing?auth_token=procurement-only')
+    const response = await page.goto('/purchasing?auth_token=procurement-only')
 
-    await expect(page).toHaveURL(`${applicationUrl}/purchasing`)
-    await expect(page.getByRole('heading', { name: '采购管理工作台' })).toBeVisible()
+    expect(response?.status()).toBe(200)
+    await expect(page).toHaveURL(`${applicationUrl}/purchasing/supplier`)
+    await expect(page.getByRole('heading', { name: '供应商管理' })).toBeVisible()
 
     const authCookie = (await context.cookies()).find(
       (cookie) => cookie.name === 'auth_token',
