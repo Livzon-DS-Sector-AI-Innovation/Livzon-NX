@@ -98,6 +98,21 @@ describe('FeishuAttachmentPreviewModal', () => {
     vi.unstubAllGlobals()
   })
 
+  it('shows failure alert when the text preview request fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')))
+    renderModal({
+      fileName: '损坏记录.txt',
+      previewSrc: '/preview/txt-fail',
+      downloadSrc: '/download/txt-fail',
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(document.body.textContent).toContain('文本内容加载失败')
+    expect(document.body.textContent).toContain('请点击下方按钮下载原文件查看')
+    vi.unstubAllGlobals()
+  })
+
   it('falls back to download hint for unsupported extensions', async () => {
     const openMock = vi.fn()
     vi.stubGlobal('open', openMock)

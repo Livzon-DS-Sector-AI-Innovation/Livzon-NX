@@ -80,7 +80,7 @@ def test_text_extensions_previewable_and_decoded() -> None:
     assert body.decode("utf-8") == "中文校准记录\nline2"
     assert filename == "记录.txt"
 
-    assert decode_text_preview("plain".encode("utf-8")) == "plain"
+    assert decode_text_preview(b"plain") == "plain"
 
     # 超限文本提示下载
     big = b"x" * (2 * 1024 * 1024 + 1)

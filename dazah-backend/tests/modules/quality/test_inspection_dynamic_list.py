@@ -71,7 +71,9 @@ async def test_dynamic_list_maps_all_real_fields(
     )
 
     # 列 = 记录真实字段（首次出现顺序），全空占位行被过滤
-    assert result["fields"] == ["设备名称", "入厂日期", "使用负责人", "附件", "设备状态"]
+    assert result["fields"] == [
+        "设备名称", "入厂日期", "使用负责人", "附件", "设备状态"
+    ]
     assert result["total"] == 2
     first = result["items"][0]
     assert first["record_id"] == "rec2"
