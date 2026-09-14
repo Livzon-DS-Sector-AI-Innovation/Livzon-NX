@@ -336,4 +336,20 @@ describe('quality client - oot limit notice export', () => {
       '暂无可导出的OOT限度产品'
     )
   })
+
+  it('fetches inspection materials and falls back to empty list', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ code: 200, data: [{ entity_code: 'qc_solid_ys001', name: '固体物料' }] }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { fetchInspectionMaterials } = await import('./quality')
+    await expect(fetchInspectionMaterials()).resolves.toEqual([
+      { entity_code: 'qc_solid_ys001', name: '固体物料' },
+    ])
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/quality/inspection/materials')
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }))
+    await expect(fetchInspectionMaterials()).resolves.toEqual([])
+    vi.unstubAllGlobals()
+  })
 })

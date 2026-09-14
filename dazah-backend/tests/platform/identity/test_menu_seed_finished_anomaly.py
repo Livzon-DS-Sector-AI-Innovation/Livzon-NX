@@ -82,3 +82,27 @@ def test_department_contacts_menu_removed() -> None:
     walk(SEED_MENUS)
     assert "department-contacts" not in keys
     assert "/quality/department-contacts" not in paths
+def test_retired_inspection_menu_keys_removed() -> None:
+    """仪器管理/固液检验旧菜单已随新 Base 迁移移除。"""
+    keys: list[str] = []
+
+    def walk(nodes: list[dict[str, Any]]) -> None:
+        for node in nodes:
+            keys.append(node["key"])
+            if node.get("children"):
+                walk(node["children"])
+
+    walk(SEED_MENUS)
+    for retired in (
+        "inspection-instruments-assets",
+        "inspection-instruments-change",
+        "inspection-liquid-raw",
+        "inspection-solid-raw",
+        "inspection-solid-manual",
+    ):
+        assert retired not in keys
+    # 校准页保留（换新 Base 数据源），并新增外部/计划两子页
+    assert "inspection-instruments-calibration" in keys
+    assert "inspection-instruments-cal-external" in keys
+    assert "inspection-instruments-cal-plan" in keys
+
