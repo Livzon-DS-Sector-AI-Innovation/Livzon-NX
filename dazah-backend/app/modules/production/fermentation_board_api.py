@@ -36,7 +36,42 @@ class BatchActualBody(BaseModel):
     batch_no: str = Field(..., min_length=1, max_length=64, description="批次号")
     dump_date: date | None = Field(None, description="放罐日期")
     yield_kg: float | None = Field(None, ge=0, description="放罐产量(kg)")
+    extract_kg: float | None = Field(None, ge=0, description="提炼成品产量(kg)")
     remark: str | None = Field(None, max_length=255, description="备注")
+
+
+FERM_YIELD_PERMISSION = "production:fermentation-yield"
+EXTRACT_YIELD_PERMISSION = "production:extraction-yield"
+# 发酵产量组字段：放罐产量及发酵侧台账信息，整体挂发酵权限
+_FERM_FIELDS = frozenset({"dump_date", "yield_kg", "remark"})
+
+
+async def _stage_permissions(
+    db: AsyncSession, current_user: CurrentUser
+) -> tuple[bool, bool]:
+    """解析当前用户的工段产量权限：(发酵可见, 提炼可见)。"""
+    if current_user is None:
+        return (False, False)
+    from app.platform.identity.rbac import resolve_user_permissions
+
+    perms = await resolve_user_permissions(db, current_user.id)
+    if "*" in perms:
+        return (True, True)
+    return (
+        FERM_YIELD_PERMISSION in perms,
+        EXTRACT_YIELD_PERMISSION in perms,
+    )
+
+
+def _filter_actual_payload(
+    item: dict[str, Any], has_ferm: bool, has_extract: bool
+) -> dict[str, Any]:
+    """按工段权限过滤批次产量字段：无权字段不出接口。"""
+    if not has_ferm:
+        item.pop("yield_kg", None)
+    if not has_extract:
+        item.pop("extract_kg", None)
+    return item
 
 
 class MonthCapacityBody(BaseModel):
@@ -52,7 +87,9 @@ async def get_fermentation_board(
         None, description="查看周期内任意日期（YYYY-MM-DD）；缺省为今天所在周期"
     ),
     product: str = Query("FA", description="产品代码（如 FA/MC/DR）"),
+    current_user: CurrentUser = None,
 ) -> Any:
+    has_ferm, has_extract = await _stage_permissions(db, current_user)
     now = datetime.now(BEIJING_TZ).replace(tzinfo=None)
     ref_date = date or now.date()
     archive = await board.load_archive_covering(db, ref_date, product)
@@ -105,6 +142,44 @@ async def get_fermentation_board(
     payload["month_planned_capacity_kg"] = (
         setting.planned_capacity_kg if setting else None
     )
+    # 「提炼已出成品（仓储成品入库）」：当期仓储成品入库合计（KG），
+    # 跟随所选扎帐周期；仅提炼权限返回，仓储侧异常已在 service 内降级为 None
+    payload["extract_finished_inbound_kg"] = (
+        await board.get_warehouse_finished_inbound_kg(
+            db,
+            product_code=product,
+            period_start=block["start"],
+            period_end=block["end"],
+        )
+        if has_extract
+        else None
+    )
+    # 「提炼已出成品」以成品日报为唯一数据源：合计/天数/实时收率按日报覆盖
+    if has_extract:
+        daily_quantities = await board.sum_extraction_daily_reports(
+            db, block["start"], block["end"], product
+        )
+        payload["extraction"] = board.apply_daily_extract_source(
+            payload.get("extraction"), daily_quantities
+        )
+    # 工段数据权限：发酵侧模块（KPI/罐状态/产量图表/最近完成）挂发酵权限，
+    # 提炼汇总挂提炼权限，收率需双权限（有任一权限缺失时字段不出接口）
+    if not has_extract:
+        payload["extraction"] = None
+        payload["extraction_ledger"] = None
+        for item in payload.get("recent") or []:
+            item.pop("extract_kg", None)
+            item.pop("batch_yield_rate", None)
+    if not has_ferm:
+        payload["kpis"] = None
+        payload["tanks"] = []
+        payload["recent"] = []
+        payload["trend"] = None
+        payload["maintenance"] = []
+        payload["month_planned_capacity_kg"] = None
+        # 提炼台账仍返回（提炼岗需要），但剥离发酵侧放罐产量
+        for row in payload.get("extraction_ledger") or []:
+            row.pop("yield_kg", None)
     return success_response(data=payload)
 
 
@@ -159,7 +234,9 @@ async def list_fermentation_batch_actuals(
     period_start: date | None = Query(None, description="周期起始日（含）"),
     period_end: date | None = Query(None, description="周期结束日（含）"),
     product: str = Query("FA", description="产品代码（如 FA/MC/DR）"),
+    current_user: CurrentUser = None,
 ) -> Any:
+    has_ferm, has_extract = await _stage_permissions(db, current_user)
     items = await board.list_batch_actuals(
         db,
         period_start=period_start,
@@ -169,10 +246,14 @@ async def list_fermentation_batch_actuals(
     archive = await board.load_latest_archive(db, product)
     tank_map = board.collect_dump_tanks(archive.rows) if archive else {}
     data = [
-        {
-            **board.serialize_batch_actual(item),
-            "tank_no": tank_map.get(item.batch_no) or None,
-        }
+        _filter_actual_payload(
+            {
+                **board.serialize_batch_actual(item),
+                "tank_no": tank_map.get(item.batch_no) or None,
+            },
+            has_ferm,
+            has_extract,
+        )
         for item in items
     ]
     return success_response(data=data)
@@ -187,17 +268,36 @@ async def upsert_fermentation_batch_actual(
     current_user: CurrentUser = None,
     product: str = Query("FA", description="产品代码（如 FA/MC/DR）"),
 ) -> Any:
+    # 字段级工段权限：发酵字段组挂发酵权限，提炼成品挂提炼权限；
+    # 仅请求中显式给出的字段参与更新，防止跨工段覆盖对方已录数据
+    has_ferm, has_extract = await _stage_permissions(db, current_user)
+    provided = set(body.model_fields_set) - {"batch_no", "product_code"}
+    if provided & _FERM_FIELDS and not has_ferm:
+        raise HTTPException(
+            status_code=403, detail="无发酵产量权限，不能修改放罐产量信息"
+        )
+    if "extract_kg" in provided and not has_extract:
+        raise HTTPException(
+            status_code=403, detail="无提炼产量权限，不能修改提炼成品产量"
+        )
+    if not provided & (_FERM_FIELDS | {"extract_kg"}):
+        raise HTTPException(status_code=400, detail="没有可保存的产量字段")
     item = await board.upsert_batch_actual(
         db,
         batch_no=body.batch_no.strip(),
         dump_date=body.dump_date,
         yield_kg=body.yield_kg,
+        extract_kg=body.extract_kg,
         remark=body.remark,
         product_code=product,
         created_by=current_user.id if current_user else None,
+        provided_fields=provided,
     )
     return success_response(
-        data=board.serialize_batch_actual(item), message="已保存批次产量"
+        data=_filter_actual_payload(
+            board.serialize_batch_actual(item), has_ferm, has_extract
+        ),
+        message="已保存批次产量",
     )
 
 

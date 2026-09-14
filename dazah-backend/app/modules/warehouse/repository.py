@@ -5,7 +5,18 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import asc, delete, func, or_, select, update
+from sqlalchemy import (
+    BigInteger,
+    Numeric,
+    asc,
+    case,
+    cast,
+    delete,
+    func,
+    or_,
+    select,
+    update,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.warehouse.inspection_progress import (
@@ -537,6 +548,41 @@ class WarehouseRepository:
             )
         )
         return result.scalar_one_or_none()
+
+    async def sum_finished_inbound_kg(
+        self,
+        snapshot: MaterialPageSnapshot,
+        *,
+        product_field: str,
+        product_name: str,
+        date_field: str,
+        kg_field: str,
+        start_ms: int,
+        end_ms: int,
+    ) -> float:
+        """按产品名与日期区间（飞书毫秒时间戳，闭区间）聚合行内 KG 数值。
+
+        KG 列以文本兜底解析（空值/非数值按 0 计），避免脏行导致整表聚合失败。
+        """
+        date_ms = cast(MaterialPageRow.cells[date_field].as_string(), BigInteger)
+        kg_text = MaterialPageRow.cells[kg_field].as_string()
+        kg_value = cast(
+            case(
+                (kg_text.regexp_match(r"^-?\d+(\.\d+)?$"), kg_text),
+                else_="0",
+            ),
+            Numeric,
+        )
+        result = await self.session.execute(
+            select(func.coalesce(func.sum(kg_value), 0.0)).where(
+                MaterialPageRow.page_snapshot_id == snapshot.id,
+                MaterialPageRow.is_deleted.is_(False),
+                func.btrim(MaterialPageRow.cells[product_field].as_string())
+                == product_name,
+                date_ms.between(start_ms, end_ms),
+            )
+        )
+        return float(result.scalar_one())
 
     async def upsert_material_page_snapshot(
         self,

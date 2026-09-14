@@ -197,6 +197,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         OffboardingReminderGenerator,
         ResumeFolderScanner,
     )
+    from app.modules.production.scheduled import (
+        ProductionPlanHourlySyncGenerator,
+    )
     from app.modules.quality.scheduled import (
         ChangeActionPlanReminderGenerator,
         InspectionFinishedMirrorFullSyncGenerator,
@@ -228,6 +231,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_registry.register_generator(AgentAccessScopeSyncGenerator())
     scheduler_registry.register_generator(AgentAutomationGenerator())
     scheduler_registry.register_generator(AgentPushDeliveryGenerator())
+    scheduler_registry.register_generator(ProductionPlanHourlySyncGenerator())
     scheduler_registry.register_generator(InspectionScheduleGenerator())
     scheduler_registry.register_generator(EnergyWikiSyncGenerator())
     scheduler_registry.register_generator(WarehouseFeishuDailySyncGenerator())

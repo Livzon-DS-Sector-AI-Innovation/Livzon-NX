@@ -216,13 +216,11 @@ def test_safe_col_name() -> Any:
 
 
 def test_extract_value_variants() -> Any:
-    from datetime import datetime
+    from datetime import date
 
     assert auto._extract_value(None, 1) is None
-    assert (
-        auto._extract_value(1700000000000, 5)
-        == datetime.fromtimestamp(1700000000).date()
-    )
+    # 飞书日期毫秒时间戳按北京时间取日期（1700000000 = 2023-11-15 06:13 +08:00）
+    assert auto._extract_value(1700000000000, 5) == date(2023, 11, 15)
     assert auto._extract_value(-1, 5) is None
     assert auto._extract_value({"type": 2, "value": [4.5]}, 2) == 4.5
     assert auto._extract_value(7.5, 3) == 7.5

@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -19,6 +19,20 @@ from app.modules.production.models import (
     ProductionRecord,
 )
 from app.modules.production.production_feishu_models import ProductionFeishuConfig
+
+# 生产计划台账的车间展示顺序（业务约定，严格按此排序；
+# 未在清单内的车间排在已知车间之后，按名称排序）
+PRODUCTION_PLAN_WORKSHOP_ORDER = (
+    "201-1车间",
+    "201-2车间",
+    "203车间",
+    "203-3车间",
+    "102-2车间",
+    "101-2发酵车间",
+    "102-1发酵车间",
+    "103发酵车间",
+    "菌种中心",
+)
 
 
 class ProductionRepository:
@@ -176,14 +190,20 @@ class ProductionRepository:
         limit: int = 20,
         product_name: str | None = None,
         workshop: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
     ) -> tuple[list[ProductionPlan], int]:
-        """获取生产计划列表"""
+        """获取生产计划列表（按车间业务顺序 + 飞书行序稳定排序）"""
         query = select(ProductionPlan).where(ProductionPlan.is_deleted.is_(False))
 
         if product_name:
             query = query.where(ProductionPlan.product_name == product_name)
         if workshop:
             query = query.where(ProductionPlan.workshop == workshop)
+        if date_from is not None:
+            query = query.where(ProductionPlan.plan_date >= date_from)
+        if date_to is not None:
+            query = query.where(ProductionPlan.plan_date <= date_to)
 
         count_query = select(func.count(ProductionPlan.id)).where(
             ProductionPlan.is_deleted.is_(False)
@@ -192,19 +212,79 @@ class ProductionRepository:
             count_query = count_query.where(ProductionPlan.product_name == product_name)
         if workshop:
             count_query = count_query.where(ProductionPlan.workshop == workshop)
+        if date_from is not None:
+            count_query = count_query.where(ProductionPlan.plan_date >= date_from)
+        if date_to is not None:
+            count_query = count_query.where(ProductionPlan.plan_date <= date_to)
 
         total = await self.session.scalar(count_query)
+        workshop_rank = case(
+            {
+                name: index
+                for index, name in enumerate(PRODUCTION_PLAN_WORKSHOP_ORDER)
+            },
+            value=ProductionPlan.workshop,
+            else_=len(PRODUCTION_PLAN_WORKSHOP_ORDER),
+        )
         query = (
             query.offset(skip)
             .limit(limit)
             .order_by(
+                # 与插入时间无关：日期倒序 + 车间业务顺序 + 飞书行序
                 ProductionPlan.plan_date.desc().nullslast(),
-                ProductionPlan.created_at.desc(),
+                workshop_rank.asc(),
+                ProductionPlan.row_order.asc(),
+                ProductionPlan.product_name.asc().nullslast(),
+                ProductionPlan.id.asc(),
             )
         )
         result = await self.session.execute(query)
         plans = list(result.scalars().all())
         return plans, total or 0
+
+    async def get_plan_monthly_summary(
+        self, *, date_from: datetime, date_to: datetime
+    ) -> list[dict[str, Any]]:
+        """按自然月汇总生产计划：计划/实际/完成率，按单位分组（KG 与批分开）。"""
+        result = await self.session.execute(
+            select(
+                ProductionPlan.unit,
+                func.coalesce(func.sum(ProductionPlan.planned_yield), 0.0),
+                func.coalesce(func.sum(ProductionPlan.actual_completion), 0.0),
+            ).where(
+                ProductionPlan.is_deleted.is_(False),
+                ProductionPlan.plan_date >= date_from,
+                ProductionPlan.plan_date <= date_to,
+            )
+            .group_by(ProductionPlan.unit)
+        )
+        summary: list[dict[str, Any]] = []
+        for unit, planned, actual in result.all():
+            planned_total = float(planned or 0.0)
+            actual_total = float(actual or 0.0)
+            # 无单位且无产量的行（如"供种/接种/培养基"类目行）不进汇总
+            if not unit and planned_total == 0 and actual_total == 0:
+                continue
+            summary.append(
+                {
+                    "unit": unit or "",
+                    "planned_yield": planned_total,
+                    "actual_completion": actual_total,
+                    "completion_rate": (
+                        round(actual_total / planned_total, 4)
+                        if planned_total
+                        else None
+                    ),
+                }
+            )
+        # KG 类在前，批次在后，其余单位按名称
+        summary.sort(
+            key=lambda item: (
+                {"KG": 0, "kg": 1, "批": 2}.get(item["unit"], 3),
+                item["unit"],
+            )
+        )
+        return summary
 
     async def get_plan_by_id(self, plan_id: uuid.UUID) -> ProductionPlan | None:
         """获取生产计划详情"""

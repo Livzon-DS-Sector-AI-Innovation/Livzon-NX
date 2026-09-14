@@ -97,3 +97,76 @@ def test_serialize_archive_roundtrip_shape() -> None:
     summary.pop("col_widths")
     assert "rows" not in summary
     assert "file_name" in summary
+
+
+# ═══════════ 重复存档合并：冻结历史日列（merge_schedule_rows） ═══════════
+
+
+def _schedule_rows(dump_row: list, ferm_time_row: list, seed_row: list) -> list[list]:
+    """单块排产表（8/27~8/30），放罐/移种/种子三行可定制。"""
+    return [
+        ["2026年08月27日～2026年09月26日", "", "", "", ""],
+        ["", "日期", 27, 28, 29, 30],
+        ["时间", "罐号", "", "", "", ""],
+        ["种子罐", *seed_row],
+        ["罐号", "", "202A", "201A", "202A", "201A"],
+        ["接种时间", "", "20:00", "20:00", "20:00", "20:00"],
+        ["发酵罐", "", "FA-M0", "FA-M1", "FA-M2", "FA-M3"],
+        ["罐号", "", "302A", "303A", "304A", "302A"],
+        ["移种时间", *ferm_time_row],
+        ["放罐", *dump_row],
+        ["罐号", "", "302A", "", "", "302A"],
+        ["放罐时间", "", "10:00", "", "", "10:00"],
+        ["备注", "本周期共放罐2批", "", "", "", ""],
+    ]
+
+
+def test_merge_preserves_past_days_and_takes_new_today_onwards() -> None:
+    """今天之前的日列沿用旧存档；当天及以后采用新文件。"""
+    from app.modules.production.fermentation_board_service import (
+        merge_schedule_rows_preserve_past,
+    )
+
+    today = date(2026, 8, 29)
+    old_rows = _schedule_rows(
+        dump_row=["", "FA-PREV", "", "", "FA-M0"],
+        ferm_time_row=["", "21:00", "21:00", "21:00", "21:00"],
+        seed_row=["", "FA-S0", "FA-S1", "FA-S2", "FA-S3"],
+    )
+    # 新文件：漏带 8/27 放罐 FA-PREV；当天(8/29)换种子批号；8/30 移种改 22:00
+    new_rows = _schedule_rows(
+        dump_row=["", "", "", "", "FA-M0"],
+        ferm_time_row=["", "21:00", "21:00", "21:00", "22:00"],
+        seed_row=["", "FA-S0", "FA-S1", "FA-S2X", "FA-S3"],
+    )
+
+    merged = merge_schedule_rows_preserve_past(new_rows, old_rows, today)
+
+    # 8/27（过去）：新文件漏带的放罐批号从旧存档回填
+    assert merged[9][2] == "FA-PREV"
+    # 8/29（当天）：采用新文件
+    assert merged[3][4] == "FA-S2X"
+    # 8/30（未来）：采用新文件
+    assert merged[8][5] == "22:00"
+    # 入参不被修改
+    assert new_rows[9][2] == ""
+    assert old_rows[8][5] == "21:00"
+
+
+def test_merge_keeps_new_file_without_matching_old_block() -> None:
+    """旧存档无同周期块（首次存档/换月表）时保持新文件原样。"""
+    from app.modules.production.fermentation_board_service import (
+        merge_schedule_rows_preserve_past,
+    )
+
+    today = date(2026, 8, 29)
+    new_rows = _schedule_rows(
+        dump_row=["", "FA-PREV", "", "", "FA-M0"],
+        ferm_time_row=["", "21:00", "21:00", "21:00", "21:00"],
+        seed_row=["", "FA-S0", "FA-S1", "FA-S2", "FA-S3"],
+    )
+    old_rows = [["与排产无关的表", "", ""]]
+
+    merged = merge_schedule_rows_preserve_past(new_rows, old_rows, today)
+
+    assert merged == new_rows

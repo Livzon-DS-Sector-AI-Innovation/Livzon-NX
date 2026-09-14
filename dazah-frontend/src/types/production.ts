@@ -369,6 +369,17 @@ export interface PlanQueryParams {
   page_size?: number
   product_name?: string
   workshop?: string
+  /** 按自然月筛选（YYYY-MM）：日期落在哪个月即哪个月的计划 */
+  month?: string
+}
+
+/** 生产计划月度汇总（按单位分组：KG 与批分开统计） */
+export interface PlanMonthlySummary {
+  unit: string
+  planned_yield: number
+  actual_completion: number
+  /** 完成率 = Σ实际 ÷ Σ计划；当月无计划产量时为 null */
+  completion_rate: number | null
 }
 
 export interface ProcessSpecQueryParams {
@@ -489,6 +500,10 @@ export interface BoardRecentBatch {
   dump_date: string
   tank_no: string
   yield_kg: number | null
+  /** 提炼成品产量(kg)，仅持提炼产量权限时返回 */
+  extract_kg?: number | null
+  /** 单批收率(%) = 提炼成品 ÷ 放罐产量 ×100，仅持提炼产量权限时返回 */
+  batch_yield_rate?: number | null
   remark: string | null
   yield_rate: number | null
   result: string
@@ -513,6 +528,8 @@ export interface FermentationBatchActual {
   tank_no: string | null
   dump_date: string | null
   yield_kg: number | null
+  /** 提炼成品产量(kg)，仅持提炼产量权限时返回 */
+  extract_kg?: number | null
   remark: string | null
 }
 
@@ -520,23 +537,46 @@ export interface FermentationBatchActualFormData {
   batch_no: string
   dump_date?: string | null
   yield_kg?: number | null
+  extract_kg?: number | null
   remark?: string | null
 }
+
+/** 提炼工段汇总（收率两口径）；无提炼产量权限时为 null */
+export interface BoardExtraction {
+  /** 当期发酵已放罐产量合计(kg) */
+  ferment_total_kg: number | null
+  /** 当期提炼已出成品合计(kg) */
+  extract_total_kg: number | null
+  /** 已录放罐产量的批次数 */
+  ferment_batches: number
+  /** 已录提炼成品的批次数 */
+  extract_batches: number
+  /** 实时口径收率(%) = Σ成品 ÷ Σ放罐（含在途批次） */
+  rate_realtime: number | null
+  /** 配对口径收率(%) = 已出成品批次内 Σ成品 ÷ Σ对应放罐 */
+  rate_paired: number | null
+}
+
 
 export interface FermentationBoard {
   now: string
   period: { start: string; end: string; label: string }
-  kpis: BoardKpis
+  /** 发酵工段 KPI；无发酵产量权限时为 null */
+  kpis: BoardKpis | null
   /** 所查看周期是否为当前扎帐月（写操作仅当前月开放） */
   is_current_period: boolean
-  /** 当前扎帐月计划产能(kg)，未设置时为 null */
+  /** 当前扎帐月计划产能(kg)，未设置或无发酵产量权限时为 null */
   month_planned_capacity_kg: number | null
+  /** 当期仓储成品入库合计(kg)（提炼已出成品卡片，仅接入产品返回；未接入/无提炼权限/仓储异常时为 null） */
+  extract_finished_inbound_kg?: number | null
   tanks: BoardTank[]
   recent: BoardRecentBatch[]
   /** 已录入实际产量的最近 12 批（按批次顺序升序），outputs 单位 kg */
   trend: { batches: string[]; outputs: number[] } | null
   /** 当前周期内已放罐（放罐窗口已结束）的批次，供产量录入下拉 */
   dumped_batches: { batch_no: string; dump_date: string }[]
+  /** 提炼工段汇总；无提炼产量权限时为 null */
+  extraction: BoardExtraction | null
   alerts: BoardAlert[]
   maintenance: BoardMaintenance[]
 }
