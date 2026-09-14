@@ -31,9 +31,6 @@ def admin_mutation_lock(monkeypatch):
 async def test_http_enforcement_uses_exact_route_and_page_binding(monkeypatch):
     user = SimpleNamespace(id=uuid4())
 
-    async def rollout(*args, **kwargs):
-        return SimpleNamespace(status="enforced")
-
     async def grants(*args, **kwargs):
         return [
             EffectivePageGrantOut(
@@ -46,15 +43,19 @@ async def test_http_enforcement_uses_exact_route_and_page_binding(monkeypatch):
             )
         ]
 
-    monkeypatch.setattr(PagePermissionRepository, "get_rollout", rollout)
     monkeypatch.setattr(PagePermissionService, "effective_grants", grants)
+    monkeypatch.setattr(
+        deps.PermissionGrantRepository,
+        "has_module_view",
+        AsyncMock(return_value=True),
+    )
     # Test an absent contract explicitly; the real employee route is now reviewed.
     monkeypatch.setattr(page_policy, "PAGE_API_BINDINGS", ())
     app = FastAPI()
     app.dependency_overrides[deps.get_current_user] = lambda: user
     app.dependency_overrides[get_db] = lambda: None
     app.dependency_overrides[deps.get_settings] = lambda: SimpleNamespace(
-        effective_module_access_mode="all"
+        effective_module_access_mode="roles"
     )
 
     @app.get(

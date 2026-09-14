@@ -387,7 +387,7 @@ app.add_middleware(AuditMiddleware)
 
 # Enforce the same RBAC decision used by the permission simulator. Module
 # access defaults to explicit grants; ``MODULE_ACCESS_MODE=all`` is retained
-# only as an intentional compatibility override.
+# only as a development compatibility override and is ignored in production.
 from app.platform.identity.permission_middleware import PermissionMiddleware  # noqa: E402
 
 app.add_middleware(PermissionMiddleware)

@@ -1317,7 +1317,7 @@ async def export_permissions(
             "数据范围",
             "授权来源",
             "角色来源",
-            "发布状态",
+            "接入门禁记录",
         ]
     )
     service = PagePermissionService()
@@ -1338,9 +1338,9 @@ async def export_permissions(
         "super_admin": "系统管理员",
     }
     status_names = {
-        "legacy": "旧规则（页面授权仅供预配置）",
-        "draft": "草稿（尚未生效）",
-        "enforced": "已发布",
+        "legacy": "未记录通过（不影响权限生效）",
+        "draft": "待核验（不影响权限生效）",
+        "enforced": "已记录通过（不影响权限生效）",
     }
     for user in users:
         grants = await service.effective_grants(db, user=user)

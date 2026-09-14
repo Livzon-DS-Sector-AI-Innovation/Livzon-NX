@@ -103,7 +103,11 @@ describe('AuthCompletion', () => {
           name: '普通用户',
           role: 'user',
           module_codes: ['quality', 'administration', 'research'],
-          page_permissions: [],
+          page_permissions: [{
+            page_key: 'rd:project-initiation',
+            module_code: 'research',
+            permissions: ['access'],
+          }],
           page_permission_rollouts: {},
         },
       }),

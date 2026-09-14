@@ -17,8 +17,9 @@ from app.modules.agent.automation_schema import (
     compile_automation_definition,
 )
 from app.modules.agent.tools import ToolContext, ToolRegistry, agent_tool
-from app.platform.identity.models import User
+from app.platform.identity.models import User, UserPageGrant
 from app.platform.identity.permissions import IdentityPermissionService
+from app.platform.identity.rbac import seed_menus
 from app.platform.identity.schemas import (
     ModulePermissionGrantInput,
     UserModulePermissionsUpdate,
@@ -279,6 +280,18 @@ async def test_admin_grant_change_syncs_livzon_scope_with_versioned_outbox(
         ),
         current_user=admin,
     )
+    await seed_menus(db_session)
+    db_session.add(
+        UserPageGrant(
+            user_id=target.id,
+            page_key="quality:deviations:deviation-ledger",
+            permissions=["access", "query"],
+            sensitive_actions=[],
+            scope_type="department_tree",
+            department_ids=[],
+        )
+    )
+    await db_session.flush()
 
     snapshot = await AgentAccessScopeService().synchronize(
         db_session,
@@ -295,19 +308,22 @@ async def test_admin_grant_change_syncs_livzon_scope_with_versioned_outbox(
     assert event.event_type == "identity.user_module_grants.changed.v1"
     assert snapshot.source_grant_version == 1
     assert snapshot.sync_status == "synced"
-    # 质量模块仍处于草稿期，Agent 快照继续按旧模块授权规则派生工具能力。
+    # 页面权限保存后立即参与 Livzon 工具范围派生，无需模块发布。
     assert "quality.list_deviations" in snapshot.tool_names
     assert "quality.list_deviations" in snapshot.workflow_tool_names
     assert snapshot.modules == [
         {
             "module_code": "quality",
             "module_name": "质量管理",
-            "permissions": [
-                "module.agent.automate",
-                "module.agent.read",
-                "module.view",
-            ],
-            "data_scope": {"factory_ids": ["F-1"]},
+            "permissions": ["page.access"],
+            "data_scope": {
+                "pages": {
+                    "quality:deviations:deviation-ledger": {
+                        "scope_type": "department_tree",
+                        "department_ids": [],
+                    }
+                }
+            },
         }
     ]
 

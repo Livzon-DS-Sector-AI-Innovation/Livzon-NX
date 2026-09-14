@@ -1155,7 +1155,7 @@ describe('migrated component coverage', () => {
     await settle()
     closeRendered(menuView)
 
-    const verificationView = renderClient(createElement(PermissionVerification, { users: [user] as never }))
+    const verificationView = renderClient(createElement(PermissionVerification))
     await settle()
     const account = Array.from(verificationView.container.querySelectorAll('select')).find((select) => select.querySelector('option[value="user-1"]'))
     if (account) {

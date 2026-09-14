@@ -1,7 +1,6 @@
 'use client'
 
 import { create } from 'zustand'
-import { getModuleByKey } from '@/lib/menu-config'
 import type { User } from '@/types/user'
 
 interface AuthUser {
@@ -36,10 +35,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   hasPagePermission: (pageKey, level, sensitiveAction) => {
     const user = get().user
     if (!user) return false
-    const currentModule = getModuleByKey(pageKey.split(':')[0])
-    if (!currentModule) return false
     if (user.role === 'admin') return true
-    if (user.page_permission_rollouts?.[currentModule.moduleCode] !== 'enforced') return true
     const grant = user.page_permissions?.find((item) => item.page_key === pageKey)
     return Boolean(grant?.permissions?.includes(level)
       && (!sensitiveAction || (grant.permissions.includes('operate') && grant.sensitive_actions?.includes(sensitiveAction))))

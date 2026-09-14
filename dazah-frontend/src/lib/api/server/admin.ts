@@ -123,7 +123,7 @@ export async function serverFetchMenus(): Promise<MenuFlatItem[]> {
   return handleResponse<MenuFlatItem[]>(res)
 }
 
-/** 账号列表（含角色；权限验证台账号选择用） */
+/** 账号列表（含角色；权限管理账号选择用） */
 export async function serverFetchAdminUsers(): Promise<AdminUserItem[]> {
   const res = await fetch(`${API_BASE}/api/v1/identity/admin/users?limit=500`, {
     cache: "no-store",

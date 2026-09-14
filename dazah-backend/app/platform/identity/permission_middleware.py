@@ -24,7 +24,6 @@ from app.core.database import async_session_factory
 from app.core.response import error_response
 from app.platform.identity.access_check import check_access
 from app.platform.identity.deps import get_current_user
-from app.platform.identity.page_permission_repository import PagePermissionRepository
 from app.platform.identity.rbac import (
     is_public_path,
     match_module,
@@ -58,6 +57,28 @@ def _matches_registered_route(request: Request) -> bool:
         route.matches(request.scope)[0] in {Match.FULL, Match.PARTIAL}
         for route in request.app.router.routes
     )
+
+
+def _has_module_access_dependency(request: Any, module_code: str | None) -> bool:
+    """Detect the route-level module guard before middleware dispatch continues.
+
+    Business routers mounted by ``include_business_router`` perform the exact
+    page/API authorization in ``require_module_view``.  A separately mounted
+    legacy route may not have that dependency; retain the middleware RBAC
+    fallback for those routes so omitting the new guard cannot open access.
+    """
+    if not module_code:
+        return False
+    for route in request.app.router.routes:
+        match, _ = route.matches(request.scope)
+        if match is not Match.FULL:
+            continue
+        dependant = getattr(route, "dependant", None)
+        for dependency in getattr(dependant, "dependencies", ()):
+            call = getattr(dependency, "call", None)
+            if getattr(call, "_dazah_module_code", None) == module_code:
+                return True
+    return False
 
 
 async def _check_login_rate_limit(request: Any) -> bool:
@@ -162,19 +183,13 @@ class PermissionMiddleware(BaseHTTPMiddleware):
                 permissions = await resolve_user_permissions(db, user_id)
                 await set_cached_permissions(user_id, permissions)
             module_code = match_module(path)
-            rollout = (
-                await PagePermissionRepository().get_rollout(
-                    db, module_code=module_code
-                )
-                if module_code
-                else None
-            )
-            page_policy_enforced = rollout is not None and rollout.status == "enforced"
 
-        # New page authorization replaces legacy business permissions. The
-        # mounted module dependency authenticates the user and checks the exact
-        # page/API contract; bypassing only the obsolete RBAC decision is safe.
-        if page_policy_enforced:
+        # Saved module and page grants are authoritative immediately. The
+        # mounted module dependency checks both the module grant and exact
+        # page/API contract, independently of the verification-console status.
+        if module_code and module_code != "identity" and _has_module_access_dependency(
+            request, module_code
+        ):
             return await self._maybe_renew(request, call_next, payload, user_id)
 
         # Preserve the current deployment's explicit "all authenticated

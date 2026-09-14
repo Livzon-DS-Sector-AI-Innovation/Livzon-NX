@@ -13,6 +13,7 @@ from app.modules.agent.models import AgentWorkflow
 from app.modules.agent.schemas import AgentAutomationDraftCreate
 from app.platform.identity.models import User, UserPageGrant
 from app.platform.identity.permissions import IdentityPermissionService
+from app.platform.identity.rbac import seed_menus
 from app.platform.identity.schemas import (
     ModulePermissionGrantInput,
     UserModulePermissionsUpdate,
@@ -27,6 +28,13 @@ def _user(*, role: str = "user") -> User:
         status="active",
         auth_source="local",
     )
+
+
+@pytest.fixture(autouse=True)
+async def _seed_page_menu_catalog(db_session: AsyncSession) -> None:
+    # ``seed_menus`` commits by design; seed before each test creates any
+    # business rows so the shared rollback fixture remains effective.
+    await seed_menus(db_session)
 
 
 def _definition(name: str) -> dict[str, Any]:
@@ -81,7 +89,7 @@ async def _grant_quality_automation(
             page_key="quality:deviations:deviation-ledger",
             permissions=["access", "query"],
             sensitive_actions=[],
-            scope_type="not_applicable",
+            scope_type="department_tree",
             department_ids=[],
         )
     )

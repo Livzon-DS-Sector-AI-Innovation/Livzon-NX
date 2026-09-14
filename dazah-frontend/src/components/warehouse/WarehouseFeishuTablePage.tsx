@@ -45,13 +45,8 @@ import type {
   WarehouseRecordDetail,
   WarehouseRecordFieldValue,
 } from '@/types/warehouse'
-import { usePermission } from '@/hooks/usePermission'
 import { useAuthStore } from '@/stores/auth'
 import { getPageKeyByPath } from '@/lib/menu-config'
-import {
-  warehouseScopeOf,
-  warehouseScopeWritePermission,
-} from './warehouseScope'
 import {
   fetchWarehouseMaterialPage,
   fetchWarehousePersonAvatarMap,
@@ -1094,31 +1089,20 @@ export function WarehouseFeishuTablePage({
   pageKey,
 }: WarehouseFeishuTablePageProps) {
   const { message } = App.useApp()
-  const { hasAny } = usePermission()
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
   const currentKeyword = searchParams.get('keyword') ?? ''
   const resolvedPageKey = pageKey ?? data.page_key
-  const { user, hasPagePermission } = useAuthStore()
+  const { hasPagePermission } = useAuthStore()
   const permissionPageKey = getPageKeyByPath(pathname) ?? ''
-  const pagePolicyEnforced = user?.page_permission_rollouts?.warehouse === 'enforced'
-  const canQueryThisPage = !pagePolicyEnforced || hasPagePermission(permissionPageKey, 'query')
+  const canQueryThisPage = hasPagePermission(permissionPageKey, 'query')
   // 编辑权限：本页面所属子领域（成品/五金/原辅料及包材）细分码或模块级 write；
   // 由后台部门角色映射决定，无权限时隐藏写按钮（后端端点校验为最终边界）
-  const canEditThisPage = pagePolicyEnforced
-    ? hasPagePermission(permissionPageKey, 'operate')
-    : hasAny([
-    warehouseScopeWritePermission(warehouseScopeOf(resolvedPageKey)),
-    'warehouse:write',
-  ])
-  const canDeleteThisPage = pagePolicyEnforced
-    ? hasPagePermission(permissionPageKey, 'operate', 'delete')
-    : canEditThisPage
-  const canSyncThisPage = pagePolicyEnforced
-    ? hasPagePermission(permissionPageKey, 'operate', 'sync_config')
-    : canEditThisPage
+  const canEditThisPage = hasPagePermission(permissionPageKey, 'operate')
+  const canDeleteThisPage = hasPagePermission(permissionPageKey, 'operate', 'delete')
+  const canSyncThisPage = hasPagePermission(permissionPageKey, 'operate', 'sync_config')
   const isCompactPage = Boolean(PAGE_COLUMN_RULES[resolvedPageKey]?.length)
   const currentDateField = searchParams.get('date_field') ?? ''
   const currentDateFilterType = (searchParams.get('date_filter_type') as DateFilterType | null) ?? ''

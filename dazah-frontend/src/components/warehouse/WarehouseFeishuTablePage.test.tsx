@@ -236,6 +236,7 @@ describe('WarehouseFeishuTablePage', () => {
     mocks.fetchWarehouseRecordDetail.mockResolvedValue(detail)
     mocks.updateWarehouseRecordAction.mockResolvedValue({ code: 200 })
     mocks.deleteWarehouseRecordAction.mockResolvedValue({ code: 200 })
+    authorize('operate', ['delete', 'sync_config'])
     localStorage.clear()
     container = document.createElement('div')
     document.body.append(container)
@@ -497,6 +498,7 @@ describe('WarehouseFeishuTablePage', () => {
   })
 
   it('renders snapshot/no-permission and error branches without exposing write controls', async () => {
+    authorize('query')
     mocks.hasAny.mockReturnValue(false)
     mocks.fetchWarehouseRecordDetail.mockRejectedValue(new Error('detail unavailable'))
     const snapshot = { ...(tableData as Record<string, unknown>), source: 'local_snapshot', rows: [], total: 0, stats: undefined } as never

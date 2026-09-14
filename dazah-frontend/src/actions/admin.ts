@@ -272,7 +272,7 @@ export async function deleteDataScope(ruleId: string) {
   return result
 }
 
-// ── 权限验证台 ──────────────────────────────────────────────────────
+// ── 权限接入检查 ────────────────────────────────────────────────────
 
 // 基于 generated schema 的 ViewModel：后端 openapi.json 对
 // permission-preview / permission-simulate 的 200 响应未声明具体结构

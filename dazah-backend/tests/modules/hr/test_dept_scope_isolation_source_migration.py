@@ -29,8 +29,9 @@ from app.modules.hr.api import _assert_dept_in_scope
 from app.modules.hr.models import Employee, HrUserDeptScope, TrainingLedger
 from app.modules.hr.training_dept_resolver import resolve_visible_dept_alias_set
 from app.platform.identity.deps import get_current_user
-from app.platform.identity.models import User
+from app.platform.identity.models import Department, User, UserPageGrant
 from app.platform.identity.permission_repository import PermissionGrantRepository
+from app.platform.identity.rbac import seed_menus
 
 # 独有虚拟部门，真实数据不会命中
 DEPT_A = "SPEC隔离车间A"
@@ -46,6 +47,9 @@ async def _share_db_session(
 ) -> AsyncIterator[None]:
     """Make API calls observe rows seeded through the test session."""
 
+    # Seed the live page catalog before creating the persistent dev fixture;
+    # ``seed_menus`` commits by design.
+    await seed_menus(db_session)
     if await db_session.get(User, UUID(DEV_USER_ID)) is None:
         db_session.add(
             User(
@@ -185,6 +189,42 @@ def _use_non_admin_test_user(monkeypatch) -> None:
         "has_module_view",
         AsyncMock(return_value=True),
     )
+
+
+async def _seed_employee_page_grant(
+    session: AsyncSession, department_ids: list[str]
+) -> None:
+    for department_id in department_ids:
+        existing_department = await session.scalar(
+            select(Department).where(
+                Department.feishu_department_id == department_id
+            )
+        )
+        if existing_department is None:
+            session.add(
+                Department(
+                    feishu_department_id=department_id,
+                    name=department_id,
+                )
+            )
+    existing = await session.scalar(
+        select(UserPageGrant).where(
+            UserPageGrant.user_id == UUID(DEV_USER_ID),
+            UserPageGrant.page_key == "hr:employee-management:profile",
+        )
+    )
+    if existing is None:
+        session.add(
+            UserPageGrant(
+                user_id=UUID(DEV_USER_ID),
+                page_key="hr:employee-management:profile",
+                permissions=["access", "query"],
+                sensitive_actions=[],
+                scope_type="departments",
+                department_ids=department_ids,
+            )
+        )
+    await session.flush()
 
 
 # ─── 可见范围解析三分支（单元测试，mock session）───
@@ -344,14 +384,23 @@ async def test_employee_list_filtered_by_scope(
     _patch_rbac(monkeypatch, ["hr:read", "hr:employee:read"])
     await _seed_employees(db_session)
     await _seed_scope(db_session, DEV_USER_ID, [DEPT_A])
+    await _seed_employee_page_grant(db_session, [DEPT_A])
 
-    resp = await client.get("/api/v1/hr/employees", params={"page_size": 100})
+    resp = await client.get(
+        "/api/v1/hr/employees",
+        params={"page_size": 100},
+        headers={"X-Dazah-Page-Key": "hr:employee-management:profile"},
+    )
     assert resp.status_code == 200, resp.text
     names = {e["name"] for e in resp.json()["data"]}
     assert "测隔离甲" in names
     assert "测隔离乙" not in names
 
-    resp403 = await client.get("/api/v1/hr/employees", params={"department": DEPT_B})
+    resp403 = await client.get(
+        "/api/v1/hr/employees",
+        params={"department": DEPT_B},
+        headers={"X-Dazah-Page-Key": "hr:employee-management:profile"},
+    )
     assert resp403.status_code == 403
 
 
@@ -364,7 +413,11 @@ async def test_employee_list_admin_sees_all(
     await _seed_employees(db_session)
     await _seed_scope(db_session, DEV_USER_ID, [DEPT_A])
 
-    resp = await client.get("/api/v1/hr/employees", params={"page_size": 100})
+    resp = await client.get(
+        "/api/v1/hr/employees",
+        params={"page_size": 100},
+        headers={"X-Dazah-Page-Key": "hr:employee-management:profile"},
+    )
     assert resp.status_code == 200
     names = {e["name"] for e in resp.json()["data"]}
     assert "测隔离甲" in names
@@ -569,8 +622,11 @@ async def test_whitelist_no_config_sees_nothing(
     await db_session.flush()
     # 不配置任何可见部门
 
-    resp = await client.get("/api/v1/hr/employees", params={"page_size": 100})
-    assert resp.status_code == 200
-    names = {e["name"] for e in resp.json()["data"]}
-    assert "测隔离甲" not in names
-    assert "测隔离乙" not in names
+    resp = await client.get(
+        "/api/v1/hr/employees",
+        params={"page_size": 100},
+        headers={"X-Dazah-Page-Key": "hr:employee-management:profile"},
+    )
+    # A page grant without a department range fails closed before the list
+    # query; it must not silently widen to all employees.
+    assert resp.status_code == 403
