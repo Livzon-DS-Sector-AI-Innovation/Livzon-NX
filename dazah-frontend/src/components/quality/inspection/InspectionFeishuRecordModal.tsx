@@ -1,174 +1,27 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import {
-  App, Button, DatePicker, Descriptions, Form, Input, InputNumber, Modal,
-  Select, Space, Switch,
-} from 'antd'
-import dayjs, { type Dayjs } from 'dayjs'
+import { App, Descriptions, Form, Modal } from 'antd'
 
 import { createInspectionFeishuRecord, updateInspectionFeishuRecord } from '@/actions/quality-inspection'
 import { fetchInspectionFeishuFields } from '@/lib/api/client/quality'
 import type { InspectionFeishuFieldMeta } from '@/types/quality'
+import {
+  FieldControl,
+  renderReadOnlyValue,
+  toApiValue,
+  toFormValue,
+} from './inspectionFeishuFormFields'
 
 interface InspectionFeishuRecordModalProps {
   open: boolean
   entityCode: string
   mode: 'create' | 'edit'
   initialValues?: Record<string, unknown>
+  /** 开启后人员字段（User）可搜索选人；关闭时与旧版一致只读展示 */
+  editablePersonFields?: boolean
   onClose: () => void
   onSuccess: () => void
-}
-
-function renderReadOnlyValue(
-  value: unknown,
-  onOpenAttachment: (att: { name?: string; url?: string; file_token?: string }) => void
-): React.ReactNode {
-  if (Array.isArray(value)) {
-    if (value.length === 0) return '-'
-    if (value.some((v) => (v as { url?: string })?.url)) {
-      return (
-        <Space orientation="vertical" size={4}>
-          {value.map((v, i) => {
-            const att = v as { name?: string; url?: string; file_token?: string }
-            return (
-              <Button
-                key={i}
-                type="link"
-                size="small"
-                style={{
-                  padding: 0,
-                  height: 'auto',
-                  textAlign: 'left',
-                  whiteSpace: 'normal',
-                  wordBreak: 'break-all',
-                  lineHeight: 1.4,
-                  maxWidth: 220,
-                }}
-                onClick={() => onOpenAttachment(att)}
-              >
-                {att.name || '附件'}
-              </Button>
-            )
-          })}
-        </Space>
-      )
-    }
-    if (value.some((v) => (v as { name?: string })?.name)) {
-      const names = (value as { name?: string }[])
-        .map((v) => v.name)
-        .filter((n): n is string => Boolean(n))
-      return names.length ? names.join('、') : '-'
-    }
-    return (value as unknown[]).join('、')
-  }
-  if (typeof value === 'object' && value !== null) {
-    const obj = value as { link?: string; text?: string }
-    if (obj.link) {
-      return (
-        <a href={obj.link} target="_blank" rel="noopener noreferrer">
-          {obj.text || obj.link}
-        </a>
-      )
-    }
-  }
-  if (value === null || value === undefined || value === '') return '-'
-  return String(value)
-}
-
-function toFormValue(field: InspectionFeishuFieldMeta, value: unknown): unknown {
-  if (value === null || value === undefined || value === '') return undefined
-  if (field.ui_type === 'DateTime') {
-    const d = dayjs(String(value))
-    return d.isValid() ? d : undefined
-  }
-  if (field.ui_type === 'Checkbox') {
-    if (typeof value === 'boolean') return value
-    const s = String(value).trim()
-    return s === '是' || s === 'true' || s === '1'
-  }
-  if (field.ui_type === 'Number' || field.ui_type === 'Currency') {
-    const n = Number(value)
-    return Number.isNaN(n) ? undefined : n
-  }
-  if (field.ui_type === 'MultiSelect' && Array.isArray(value)) {
-    return value.map((v) => String(v))
-  }
-  if (field.ui_type === 'Url') {
-    const obj = value as { link?: string; text?: string }
-    return obj?.link || String(value)
-  }
-  return String(value)
-}
-
-function toApiValue(field: InspectionFeishuFieldMeta, value: unknown): unknown {
-  if (field.ui_type === 'DateTime' && value) {
-    return (value as Dayjs).format('YYYY-MM-DD')
-  }
-  if (field.ui_type === 'Number' || field.ui_type === 'Currency') {
-    return typeof value === 'number' ? value : Number(value)
-  }
-  return value
-}
-
-function FieldControl({
-  field,
-}: {
-  field: InspectionFeishuFieldMeta
-}) {
-  const label = field.field_name
-  // 飞书 SingleSelect/MultiSelect 的可选项来自字段元数据（如「结果判断」= 合格/不合格）
-  const selectOptions = (field.options ?? []).map((opt) => ({
-    label: opt.name,
-    value: opt.name,
-  }))
-  if (field.ui_type === 'DateTime') {
-    return (
-      <Form.Item name={field.field_name} label={label}>
-        <DatePicker style={{ width: '100%' }} />
-      </Form.Item>
-    )
-  }
-  if (field.ui_type === 'Checkbox') {
-    return (
-      <Form.Item name={field.field_name} label={label} valuePropName="checked">
-        <Switch checkedChildren="是" unCheckedChildren="否" />
-      </Form.Item>
-    )
-  }
-  if (field.ui_type === 'Number' || field.ui_type === 'Currency') {
-    return (
-      <Form.Item name={field.field_name} label={label}>
-        <InputNumber style={{ width: '100%' }} />
-      </Form.Item>
-    )
-  }
-  if (field.ui_type === 'MultiSelect') {
-    return (
-      <Form.Item name={field.field_name} label={label}>
-        <Select mode="multiple" allowClear placeholder={`请选择${label}`} options={selectOptions} />
-      </Form.Item>
-    )
-  }
-  if (field.ui_type === 'SingleSelect') {
-    return (
-      <Form.Item name={field.field_name} label={label}>
-        <Select allowClear placeholder={`请选择${label}`} options={selectOptions} />
-      </Form.Item>
-    )
-  }
-  if (field.ui_type === 'Text' || field.ui_type === 'LongText' || field.ui_type === 'Paragraph') {
-    return (
-      <Form.Item name={field.field_name} label={label}>
-        <Input.TextArea autoSize={{ minRows: 1, maxRows: 4 }} placeholder={`请输入${label}`} />
-      </Form.Item>
-    )
-  }
-  return (
-    <Form.Item name={field.field_name} label={label}>
-      <Input placeholder={`请输入${label}`} />
-    </Form.Item>
-  )
 }
 
 export function InspectionFeishuRecordModal({
@@ -176,6 +29,7 @@ export function InspectionFeishuRecordModal({
   entityCode,
   mode,
   initialValues,
+  editablePersonFields = false,
   onClose,
   onSuccess,
 }: InspectionFeishuRecordModalProps) {
@@ -184,6 +38,11 @@ export function InspectionFeishuRecordModal({
   const [fieldsMeta, setFieldsMeta] = useState<InspectionFeishuFieldMeta[]>([])
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+
+  // 人员字段（User）元数据标为只读（附件上传等才是真只读），但通用写接口支持
+  // 按 [{id}] 提交并换发 union_id，因此页面开启 editablePersonFields 时放开为可选人
+  const isFieldEditable = (f: InspectionFeishuFieldMeta) =>
+    f.editable || (editablePersonFields && f.ui_type === 'User')
 
   useEffect(() => {
     if (!open || !entityCode) return
@@ -197,7 +56,7 @@ export function InspectionFeishuRecordModal({
       setFieldsMeta(meta)
       const values: Record<string, unknown> = {}
       for (const f of meta) {
-        if (!f.editable) continue
+        if (!isFieldEditable(f)) continue
         const v = toFormValue(f, initialValues?.[f.field_name])
         if (v !== undefined) values[f.field_name] = v
       }
@@ -207,10 +66,19 @@ export function InspectionFeishuRecordModal({
     return () => {
       cancelled = true
     }
-  }, [open, entityCode, initialValues, form])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, entityCode, initialValues, form, editablePersonFields])
 
-  const editableFields = useMemo(() => fieldsMeta.filter((f) => f.editable), [fieldsMeta])
-  const readOnlyFields = useMemo(() => fieldsMeta.filter((f) => !f.editable), [fieldsMeta])
+  const editableFields = useMemo(
+    () => fieldsMeta.filter((f) => isFieldEditable(f)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fieldsMeta, editablePersonFields],
+  )
+  const readOnlyFields = useMemo(
+    () => fieldsMeta.filter((f) => !isFieldEditable(f)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fieldsMeta, editablePersonFields],
+  )
 
   const handleOk = async () => {
     try {
@@ -282,7 +150,7 @@ export function InspectionFeishuRecordModal({
           size="small"
           column={1}
           style={{ marginBottom: 16 }}
-          title="只读字段（附件/人员/关联等）"
+          title="只读字段（附件/公式/关联等）"
         >
           {readOnlyFields.map((f) => (
             <Descriptions.Item key={f.field_name} label={f.field_name}>
@@ -293,7 +161,12 @@ export function InspectionFeishuRecordModal({
       )}
       <Form form={form} layout="vertical" disabled={loading}>
         {editableFields.map((f) => (
-          <FieldControl key={f.field_name} field={f} />
+          <FieldControl
+            key={f.field_name}
+            field={f}
+            initialValue={initialValues?.[f.field_name]}
+            required={Boolean(f.is_primary)}
+          />
         ))}
       </Form>
     </Modal>

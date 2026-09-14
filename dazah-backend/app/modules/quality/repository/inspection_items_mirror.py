@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import TIMESTAMP, asc, func, or_, select
+from sqlalchemy import TIMESTAMP, asc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.quality.models.inspection_items_mirror import (
@@ -139,6 +139,28 @@ async def upsert_rows_incremental(
     await db.flush()
 
 
+async def delete_row_by_record_id(
+    db: AsyncSession,
+    snapshot_id: Any,
+    source_record_id: str,
+) -> bool:
+    """按飞书记录 ID 软删镜像行（用户删除记录后立即从列表消失）。
+
+    与全量删除对账语义一致（软删）；返回是否确有行被删。
+    """
+    result = await db.execute(
+        update(QualityItemsPageRow)
+        .where(
+            QualityItemsPageRow.page_snapshot_id == snapshot_id,
+            QualityItemsPageRow.source_record_id == source_record_id,
+            QualityItemsPageRow.is_deleted.is_(False),
+        )
+        .values(is_deleted=True)
+    )
+    await db.flush()
+    return bool(result.rowcount)
+
+
 async def list_rows(
     db: AsyncSession,
     snapshot_id: Any,
@@ -193,6 +215,7 @@ async def list_rows_filtered(
     keyword: str | None = None,
     filters: dict[str, str] | None = None,
     updated_sort_field: str = "__last_modified",
+    text_sort_field: str | None = None,
     offset: int = 0,
     limit: int | None = 50,
 ) -> tuple[list[QualityItemsPageRow], int]:
@@ -201,7 +224,9 @@ async def list_rows_filtered(
     cells 以飞书中文列名为键，动态列通过 JSONB ->> 过滤：
     - 占位行：所有业务列均为空的行跳过（等价内存版 _has_visible_cell）；
     - filters：列值精确匹配（NULL 视为不匹配）；
-    - 排序：默认按镜像内部更新时间字段（__last_modified）倒序，缺失排最后。
+    - 排序：text_sort_field 给定时按该文本列倒序（对齐飞书批号文本降序），
+      缺失排最后、次键回落更新时间；未指定时默认按镜像更新时间字段
+      （__last_modified）倒序。
     相比 list_rows 的全表载入 + Python 过滤，本方法把过滤/排序/分页下沉到 SQL，
     避免列表页把整张镜像表传输进应用进程。
     """
@@ -238,17 +263,35 @@ async def list_rows_filtered(
             count_stmt = count_stmt.where(condition)
             stmt = stmt.where(condition)
 
-    stmt = stmt.order_by(
-        # ISO 字符串按 collation 排序不可靠（如 "+00:00" 与 ".100000" 顺序颠倒），
-        # cast 成 timestamptz 精确排序；__last_modified 由本模块以合法 ISO 写入
-        func.nullif(
-            QualityItemsPageRow.cells[updated_sort_field].astext, ""
+    if text_sort_field:
+        # 按文本列（如批号）倒序：与飞书 records/search 的批号降序对齐；
+        # 次键回落到更新时间，保证同批号/空批号行顺序稳定。
+        stmt = stmt.order_by(
+            func.nullif(
+                QualityItemsPageRow.cells[text_sort_field].astext, ""
+            )
+            .desc()
+            .nullslast(),
+            func.nullif(
+                QualityItemsPageRow.cells[updated_sort_field].astext, ""
+            )
+            .cast(TIMESTAMP(timezone=True))
+            .desc()
+            .nullslast(),
+            QualityItemsPageRow.row_order.asc(),
         )
-        .cast(TIMESTAMP(timezone=True))
-        .desc()
-        .nullslast(),
-        QualityItemsPageRow.updated_at.desc().nullslast(),
-    )
+    else:
+        stmt = stmt.order_by(
+            # ISO 字符串按 collation 排序不可靠（如 "+00:00" 与 ".100000" 顺序颠倒），
+            # cast 成 timestamptz 精确排序；__last_modified 由本模块以合法 ISO 写入
+            func.nullif(
+                QualityItemsPageRow.cells[updated_sort_field].astext, ""
+            )
+            .cast(TIMESTAMP(timezone=True))
+            .desc()
+            .nullslast(),
+            QualityItemsPageRow.updated_at.desc().nullslast(),
+        )
     if offset:
         stmt = stmt.offset(offset)
     if limit is not None:

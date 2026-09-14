@@ -7,9 +7,12 @@ assembly for the finished product trend dashboard.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 import re
 import uuid as uuid_module
+import weakref
 from datetime import UTC, datetime, timedelta
 from statistics import StatisticsError, fmean, pstdev
 from typing import Any
@@ -1325,14 +1328,15 @@ async def _materialize_dashboard_alert(
 
 # ─── 趋势规则 + AI 分析（编排：确定性判据先算，AI/渲染/推送后台化） ───
 
-# 趋势 AI 后台任务整单超时保护（渲染 + 上传 + 一次 LLM + 推送），秒
-_TREND_AI_TOTAL_TIMEOUT = 240
+# 趋势 AI 后台任务整单超时保护（渲染 + 上传 + 一次 LLM + 推送），秒。
+# 上游模型在批量调用时可能限流/变慢（内部单次 120s × 最多 3 次尝试），
+# 外层预算必须覆盖重试最坏情况，否则慢而成功的调用会被误判为失败。
+_TREND_AI_TOTAL_TIMEOUT = 600
+# 幂等保护只拦"已交付/已完成"：failed/unmapped/ai_failed 必须可重跑
+# （页面打开时的 AI 失败自动重试依赖此语义，旧口径把 ai_failed 也拦掉导致重试失效）
 _TREND_AI_TERMINAL_STATUSES = {
     "sent",
     "partial",
-    "failed",
-    "unmapped",
-    "ai_failed",
     "completed",
 }
 # AI 按月固定：整体分析行的规则类型与周期键（trend_end_batch 孈YYYY-MM）
@@ -1341,6 +1345,24 @@ TREND_OVERALL_RULE = "monthly_overall"
 # （全部指标合并），硬编码防止逐指标多卡触发飞书限流
 TREND_PRODUCT_METRIC_KEY = "__product__"
 TREND_PRODUCT_METRIC_LABEL = "全部指标"
+# 趋势 AI 任务并发闸门：LLM 调用期间任务会一直占用数据库连接，月度全量触发
+# （15 条产品线并发）会把连接池（size+overflow=10）打满导致 QueuePool TimeoutError。
+# 按事件循环懒建信号量（模块级 asyncio 原语跨 loop 复用会报 "bound to a different
+# event loop"，测试每个用例都是新 loop）。
+_TREND_AI_JOB_CONCURRENCY = 2
+_TREND_AI_JOB_SLOTS: weakref.WeakKeyDictionary[Any, asyncio.Semaphore] = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def _trend_ai_job_semaphore() -> asyncio.Semaphore:
+    """取当前事件循环的趋势 AI 并发闸门（懒建，每 loop 一个）。"""
+    loop = asyncio.get_running_loop()
+    semaphore = _TREND_AI_JOB_SLOTS.get(loop)
+    if semaphore is None:
+        semaphore = asyncio.Semaphore(_TREND_AI_JOB_CONCURRENCY)
+        _TREND_AI_JOB_SLOTS[loop] = semaphore
+    return semaphore
 
 
 def _trend_period() -> str:
@@ -1383,10 +1405,108 @@ async def _get_existing_trend_ai(
     return result.scalars().first()
 
 
+# 跨周期「同内容去重」扫描的历史行数上限（产品级行每月最多一条，20 条足够）
+_TREND_REUSE_SCAN_LIMIT = 20
+
+
+def _signature_value(value: Any) -> float | None:
+    """签名用数值归一：JSONB 往返会把 90.0 存成整数 90，统一转 float。"""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _product_content_signature(metrics: list[dict[str, Any]]) -> str:
+    """命中指标的数据内容指纹：同内容只自动分析一次（跨周期去重）。
+
+    只取送入 AI 的实质输入——指标键、数据点（批号+数值）、限度线；不包含
+    周期/文案等随月份变化的字段。ctx（serialized_anomalies 形态）与已落库行
+    payload.metrics 共用同一投影，旧数据行无需回填签名即可比对。
+    """
+    canonical: list[dict[str, Any]] = []
+    for metric in metrics or []:
+        points: list[list[Any]] = []
+        for point in metric.get("points") or []:
+            value = _signature_value(point.get("value"))
+            if value is None:
+                continue
+            points.append([str(point.get("batch_no") or ""), value])
+        spec_lines: list[list[Any]] = []
+        for line in metric.get("spec_lines") or []:
+            value = _signature_value(line.get("value"))
+            if value is None:
+                continue
+            spec_lines.append([str(line.get("label") or ""), value])
+        canonical.append(
+            {
+                "metric_key": str(metric.get("metric_key") or ""),
+                "points": points,
+                "spec_lines": sorted(spec_lines),
+            }
+        )
+    blob = json.dumps(
+        canonical, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+async def _find_reusable_product_analysis(
+    db: AsyncSession,
+    *,
+    entity_code: str,
+    metrics: list[dict[str, Any]],
+) -> FinishedTrendAIAnalysis | None:
+    """找「同一数据内容」且已有 AI 结论的历史分析行（跨周期复用）。
+
+    数据（指标/批次/数值/限度线）与某条已有结论的行完全一致即视为已分析过：
+    自动触发（月度定时、打开页面）直接复用该结论，不重复调模型、不重复推送；
+    结论为空（进行中/失败）的行不算已分析，仍走原有建行/重试路径。
+    手动「重新分析」不受此限制。
+    """
+    signature = _product_content_signature(metrics)
+    result = await db.execute(
+        select(FinishedTrendAIAnalysis)
+        .where(
+            FinishedTrendAIAnalysis.entity_code == entity_code,
+            FinishedTrendAIAnalysis.metric_key == TREND_PRODUCT_METRIC_KEY,
+            FinishedTrendAIAnalysis.rule_type == TREND_OVERALL_RULE,
+            FinishedTrendAIAnalysis.is_deleted.is_(False),
+        )
+        .order_by(FinishedTrendAIAnalysis.created_at.desc())
+        .limit(_TREND_REUSE_SCAN_LIMIT)
+    )
+    for row in result.scalars():
+        if not isinstance(row.ai_summary, dict) or not row.ai_summary:
+            continue
+        payload_metrics = list((row.payload or {}).get("metrics") or [])
+        if _product_content_signature(payload_metrics) == signature:
+            return row
+    return None
+
+
+def _product_row_verdicts(row: FinishedTrendAIAnalysis) -> dict[str, dict[str, Any]]:
+    """取产品行的 AI 终审裁决映射（metric_key → {verdict, batches}）。"""
+    summary = row.ai_summary if isinstance(row.ai_summary, dict) else {}
+    raw_verdicts = summary.get("metric_verdicts")
+    if not isinstance(raw_verdicts, dict):
+        return {}
+    return {
+        str(key): dict(item)
+        for key, item in raw_verdicts.items()
+        if isinstance(item, dict)
+    }
+
+
 def _trend_ai_row_to_chart_model(
     rows: list[FinishedTrendAIAnalysis],
 ) -> InspectionDashboardTrendAI | None:
-    """把一个指标的已完成 AI 记录合并为展示模型（供前端高亮 + 折叠区）。"""
+    """把已完成的 AI 记录合并为展示模型（供前端高亮 + 折叠区）。
+
+    红点（highlight_batches）与 signals **只认 AI 终审裁决为 abnormal 的指标**：
+    未裁决（模型漏判/输出被清洗）与 normal/improved 一律不上图——粗筛提名在
+    未经 AI 点头前不得呈现为异常。
+    """
     completed = [row for row in rows if isinstance(row.ai_summary, dict)]
     if not completed:
         return None
@@ -1402,15 +1522,38 @@ def _trend_ai_row_to_chart_model(
     best_confidence = "low"
     for row in completed:
         summary = row.ai_summary or {}
-        highlights.update(str(b) for b in (row.affected_batches or []))
-        highlights.update(
-            str(s.get("batch_no"))
-            for s in (summary.get("signals") or [])
-            if s.get("batch_no")
+        metrics = list((row.payload or {}).get("metrics") or [])
+        verdicts = (
+            summary.get("metric_verdicts")
+            if isinstance(summary.get("metric_verdicts"), dict)
+            else {}
         )
+        approved_keys = {
+            str(key)
+            for key, item in verdicts.items()
+            if isinstance(item, dict) and item.get("verdict") == "abnormal"
+        }
+        approved_batches = {
+            str(batch)
+            for key, item in verdicts.items()
+            if isinstance(item, dict) and item.get("verdict") == "abnormal"
+            for batch in (item.get("batches") or [])
+        }
+        approved_indexes = {
+            index
+            for index, metric in enumerate(metrics, start=1)
+            if str(metric.get("metric_key") or "") in approved_keys
+        }
+        highlights.update(approved_batches)
         for s in summary.get("signals") or []:
-            if isinstance(s, dict):
-                signals.append(s)
+            if not isinstance(s, dict):
+                continue
+            index = s.get("metric_index")
+            if index is not None and index not in approved_indexes:
+                continue  # 非终审异常的指标信号不上图
+            if s.get("batch_no") and str(s.get("batch_no")) not in approved_batches:
+                s = {**s, "batch_no": ""}  # 批次白名单：只认该指标被点头的批次
+            signals.append(s)
         if summary.get("summary"):
             summaries.append(str(summary["summary"]))
         if summary.get("trend_reading"):
@@ -1462,7 +1605,7 @@ def _build_trend_ai_markdown(
     summary = anomaly.ai_summary or {}
     lines: list[str]
     if anomaly.metric_key == TREND_PRODUCT_METRIC_KEY:
-        # 产品级合并卡：整体研判 + 逐指标结论，一张卡覆盖全部指标
+        # 产品级合并卡：整体研判 + AI 终审判定异常的逐指标结论（含复核口径）
         lines = [
             f"**产品系列：**{source_label}",
             f"**分析周期：**{anomaly.trend_end_batch}",
@@ -1470,20 +1613,42 @@ def _build_trend_ai_markdown(
         ]
         if summary.get("summary"):
             lines.append(f"**AI 整体研判：**{summary['summary']}")
+        verdicts = (
+            summary.get("metric_verdicts")
+            if isinstance(summary.get("metric_verdicts"), dict)
+            else {}
+        )
+        approved_labels = {
+            str(key)
+            for key, item in verdicts.items()
+            if isinstance(item, dict) and item.get("verdict") == "abnormal"
+        }
         findings = [
             item
             for item in (summary.get("metric_findings") or [])
-            if isinstance(item, dict) and item.get("summary")
+            if isinstance(item, dict)
+            and item.get("summary")
+            and item.get("verdict") == "abnormal"
         ]
         if findings:
             finding_lines = [
                 f"- {item.get('metric_label')}：{item.get('summary')}"
                 for item in findings
             ]
-            lines.append("**各指标结论：**\n" + "\n".join(finding_lines))
+            lines.append("**各指标结论（AI 判定异常）：**\n" + "\n".join(finding_lines))
+        counts = summary.get("review_counts") or {}
+        if counts:
+            reviewed_line = (
+                f"**AI 复核：**候选 {counts.get('candidates', 0)} 项 → 判定异常 "
+                f"{counts.get('abnormal', 0)} 项、正常/改善 "
+                f"{counts.get('normal', 0) + counts.get('improved', 0)} 项"
+            )
+            if counts.get("unreviewed"):
+                reviewed_line += f"、未裁决 {counts['unreviewed']} 项（按未确认处理）"
+            lines.append(reviewed_line)
         outlook = summary.get("outlook") or {}
         btl = outlook.get("batches_to_limit") if isinstance(outlook, dict) else None
-        if btl is not None:
+        if btl is not None and approved_labels:
             lines.append(f"**趋势外推：**按当前方向预计约 {btl} 批后逼近限度线")
         if summary.get("recommendation"):
             lines.append(f"**建议：**{summary['recommendation']}")
@@ -1623,7 +1788,23 @@ async def _run_trend_ai_job(
     analysis_id: uuid_module.UUID,
     sender_user_open_id: str | None,
 ) -> dict[str, str]:
-    """后台任务：渲染趋势图 → 上传 → AI 解读 → 飞书推送 → 幂等回写。"""
+    """后台任务：渲染趋势图 → 上传 → AI 解读 → 飞书推送 → 幂等回写。
+
+    并发闸门：LLM 调用期间任务独占一个数据库连接，月度全量（多产品线）同时
+    触发会打满连接池，故同一时刻最多跑 ``_TREND_AI_JOB_CONCURRENCY`` 个任务。
+    """
+    async with _trend_ai_job_semaphore():
+        return await _run_trend_ai_job_locked(
+            analysis_id=analysis_id,
+            sender_user_open_id=sender_user_open_id,
+        )
+
+
+async def _run_trend_ai_job_locked(
+    *,
+    analysis_id: uuid_module.UUID,
+    sender_user_open_id: str | None,
+) -> dict[str, str]:
     async with async_session_factory() as db:
         anomaly = await db.get(FinishedTrendAIAnalysis, analysis_id)
         if anomaly is None:
@@ -1675,14 +1856,45 @@ async def _execute_product_trend_job(
         period=str(anomaly.trend_end_batch),
         metrics=metrics,
     )
+    approved_metrics: list[dict[str, Any]] = []
     if ai_result["status"] == "completed":
         summary = dict(ai_result["ai_summary"] or {})
         summary["affected_batches"] = list(anomaly.affected_batches or [])
+        # AI 终审裁决：逐指标 abnormal/normal/improved（缺条目的按"未裁决"），
+        # 单个产品的标红/出图/推送口径全部以此为准
+        verdicts, approved_metrics, review_counts = _build_metric_verdicts(
+            metrics, summary.get("metric_findings")
+        )
+        if review_counts["candidates"] and (
+            review_counts["unreviewed"] == review_counts["candidates"]
+        ):
+            # 模型输出无法回填任何指标裁决：按 AI 失败处理（可重试），
+            # 避免"全部未裁决"被当成"无异常"整条线静默漏报
+            logger.warning(
+                "trend ai product verdicts unmappable: %s（候选 %s 项全部未裁决）",
+                anomaly.entity_code,
+                review_counts["candidates"],
+            )
+            anomaly.ai_summary = None
+            anomaly.model_name = ai_result.get("model_name")
+            anomaly.notification_status = "ai_failed"
+            return
+        summary["metric_verdicts"] = verdicts
+        summary["review_counts"] = review_counts
+        summary["signals"] = _sanitize_product_signals(
+            summary.get("signals"), metrics, verdicts
+        )
         anomaly.ai_summary = summary
         anomaly.model_name = ai_result.get("model_name")
     else:
         anomaly.ai_summary = None
         anomaly.model_name = ai_result.get("model_name")
+
+    if ai_result["status"] != "completed":
+        # AI 未完成（无配置/限流/输出非法）：标记可重试失败，不推送；
+        # 页面打开时（ai_summary 为空 + ai_failed）会自动重新提交
+        anomaly.notification_status = "ai_failed"
+        return
 
     # 2. 通知开关检查（全局 + 产品线）+ 手动重分析的"不发消息"开关
     suppress_send = bool(payload.get("suppress_send"))
@@ -1696,13 +1908,17 @@ async def _execute_product_trend_job(
         # 手动「重新分析」+ 设置关闭发送：只更新结论，不推送
         anomaly.notification_status = "completed"
         return
+    if not approved_metrics:
+        # AI 终审未判出任何真实异常：结论只留页面回看，不推送（正常不打扰）
+        anomaly.notification_status = "completed"
+        return
 
-    # 3. 趋势图：每个命中指标各渲染一张，全部并入同一张卡（不逐指标发卡）
+    # 3. 趋势图：只渲染 AI 终审判定异常的指标，全部并入同一张卡（不逐指标发卡）
     chart_images: list[tuple[str, str]] = []
     source = str(payload.get("source_label") or anomaly.source_label or "")
-    for chart_metric in metrics:
-        if not chart_metric.get("anomalies") or not chart_metric.get("categories"):
-            continue  # 未命中/无数据的指标不出图
+    for chart_metric in approved_metrics:
+        if not chart_metric.get("categories"):
+            continue
         png = render_trend_chart_png(
             metric_label=str(chart_metric.get("metric_label") or ""),
             source_label=source,
@@ -1727,7 +1943,7 @@ async def _execute_product_trend_job(
             )
     anomaly.feishu_image_key = chart_images[0][1] if chart_images else None
 
-    # 4. 推送（一张合并卡，含全部指标趋势图）
+    # 4. 推送（一张合并卡，含 AI 认可指标的趋势图）
     send_result = await _send_trend_ai_card(
         db,
         sender_user_open_id=sender_user_open_id,
@@ -1739,6 +1955,96 @@ async def _execute_product_trend_job(
     anomaly.feishu_message_id = send_result.get("message_id")
     if send_result["status"] in {"sent", "partial"}:
         anomaly.notified_at = datetime.now(UTC)
+
+
+def _build_metric_verdicts(
+    metrics: list[dict[str, Any]],
+    findings: Any,
+) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
+    """把 AI 逐指标裁决回填为 metric_key 索引表，并列出"判定异常"的指标。
+
+    返回 (verdicts, approved_metrics, review_counts)：
+    - verdicts[metric_key] = {"verdict": abnormal|normal|improved|unreviewed,
+      "batches": [...]}；batches 只对 abnormal 取该指标粗筛命中批次（红点白名单）；
+    - approved_metrics = 判定 abnormal 的指标（出图与卡片只含它们）；
+    - review_counts 供卡片/摘要展示"候选 X → 异常 N、正常/改善 M、未裁决 U"。
+    """
+    by_index: dict[int, dict[str, Any]] = {}
+    by_label: dict[str, dict[str, Any]] = {}
+    if isinstance(findings, list):
+        for item in findings:
+            if not isinstance(item, dict):
+                continue
+            index = item.get("metric_index")
+            if isinstance(index, int) and index >= 1 and index not in by_index:
+                by_index[index] = item
+            label = str(item.get("metric_label") or "").strip()
+            if label and label not in by_label:
+                by_label[label] = item
+    verdicts: dict[str, dict[str, Any]] = {}
+    approved: list[dict[str, Any]] = []
+    counts = {
+        "candidates": len(metrics),
+        "abnormal": 0,
+        "normal": 0,
+        "improved": 0,
+        "unreviewed": 0,
+    }
+    for index, metric in enumerate(metrics, start=1):
+        key = str(metric.get("metric_key") or "")
+        label = str(metric.get("metric_label") or "").strip()
+        # 序号优先；模型偶尔只回指标名（或序号写成非数字）时按名称兜底回填
+        finding = by_index.get(index) or by_label.get(label)
+        if finding is None:
+            verdicts[key] = {"verdict": "unreviewed", "batches": []}
+            counts["unreviewed"] += 1
+            continue
+        verdict = str(finding.get("verdict") or "normal")
+        if verdict not in {"abnormal", "normal", "improved"}:
+            verdict = "normal"
+        if verdict == "abnormal":
+            batches = sorted(
+                {
+                    str(batch)
+                    for item in (metric.get("anomalies") or [])
+                    for batch in (item.get("affected_batches") or [])
+                }
+            )
+            verdicts[key] = {"verdict": "abnormal", "batches": batches}
+            approved.append(metric)
+            counts["abnormal"] += 1
+        else:
+            verdicts[key] = {"verdict": verdict, "batches": []}
+            counts[verdict] += 1
+    return verdicts, approved, counts
+
+
+def _sanitize_product_signals(
+    signals: Any,
+    metrics: list[dict[str, Any]],
+    verdicts: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """信号白名单：只保留终审 abnormal 指标的信号，批次须在该指标认可批次内。"""
+    if not isinstance(signals, list):
+        return []
+    approved: dict[int, set[str]] = {}
+    for index, metric in enumerate(metrics, start=1):
+        item = verdicts.get(str(metric.get("metric_key") or "")) or {}
+        if item.get("verdict") == "abnormal":
+            approved[index] = {str(b) for b in (item.get("batches") or [])}
+    cleaned: list[dict[str, Any]] = []
+    for signal in signals:
+        if not isinstance(signal, dict):
+            continue
+        index = signal.get("metric_index")
+        if index not in approved:
+            continue
+        signal = dict(signal)
+        batch = str(signal.get("batch_no") or "")
+        if batch and batch not in approved[index]:
+            signal["batch_no"] = ""
+        cleaned.append(signal)
+    return cleaned
 
 
 _SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
@@ -1859,24 +2165,43 @@ async def _process_product_trend(
     frontend_group: str | None,
     metric_ctxs: list[dict[str, Any]],
     period: str,
-) -> tuple[InspectionDashboardTrendAI | None, str]:
+    suppress_send: bool = False,
+    manual_rerun: bool = False,
+) -> tuple[InspectionDashboardTrendAI | None, str, dict[str, dict[str, Any]]]:
     """产品级月度AI：一个产品一次分析、一张合并卡（硬编码防卡片限流）。
 
     - 各指标的确定性判据在页面循环里已实时算好并随响应返回；
     - AI 按 (entity, __product__, 月) 一行固定：当月已有记录直接用缓存，
       页面刷新不重复触发；任一指标命中判据才建行提交后台任务（一次模型
-      调用汇总全部命中指标，一张合并卡推送），无命中则不做 AI；
-    - 返回 (产品级 trend_ai 展示模型, status)，供该产品全部指标 chart 共享。
+      调用汇总全部命中指标，AI 终审后只推真异常，一张合并卡），无命中则不做 AI；
+    - 数据内容与历史结论完全一致时（跨周期去重）不再自动重复分析，直接
+      复用最近一次结论；只有数据有更新或手动「重新分析」才会重跑；
+    - 返回 (产品级 trend_ai 展示模型, status, metric_key→{verdict,batches})：
+      裁决映射供响应组装按指标隔离红点与判据（AI 没点头的必须清空）。
     """
     hit_metrics = [
         ctx for ctx in metric_ctxs if ctx.get("serialized_anomalies")
     ]
     if not hit_metrics:
-        return None, "none"
+        return None, "none", {}
+
+    if not manual_rerun:
+        # 已经分析过的内容不再自动重复分析：直接沿用最近一次同内容的结论
+        # （页面照常展示，含其分析周期；不建行、不调模型、不推送）。
+        reused = await _find_reusable_product_analysis(
+            db, entity_code=entity_code, metrics=hit_metrics
+        )
+        if reused is not None:
+            return (
+                _trend_ai_row_to_chart_model([reused]),
+                "completed",
+                _product_row_verdicts(reused),
+            )
 
     payload = {
         "source_label": source_label,
         "frontend_group": frontend_group,
+        "suppress_send": suppress_send,
         "metrics": [
             {
                 "metric_key": ctx["metric_key"],
@@ -1960,19 +2285,26 @@ async def _process_product_trend(
             )
             await db.commit()
             row = record
-    elif row.ai_summary is None and row.notification_status == "ai_failed":
-        # 当月 AI 失败：打开页面自动重试，直至成功；成功后当月固定不再触发
+    elif row.ai_summary is None and row.notification_status in {
+        "ai_failed",
+        "failed",
+    }:
+        # 当月 AI/任务失败（无配置/限流/连接池超时等）：打开页面自动重试，
+        # 直至成功；成功后当月固定不再触发。
+        # 先标 pending：让页面显示"分析中"、月度运行器据此等待该任务到终态
+        row.notification_status = "pending"
         await _submit_trend_ai_job(row, sender_user_open_id=sender_user_open_id)
         await db.commit()
 
     merged = _trend_ai_row_to_chart_model([row])
+    verdicts = _product_row_verdicts(row)
     if merged is not None:
-        return merged, "completed"
+        return merged, "completed", verdicts
     if row.notification_status == "ai_failed":
-        return None, "failed"
+        return None, "failed", verdicts
     if row.notification_status == "paused":
-        return None, "paused"
-    return None, "pending"
+        return None, "paused", verdicts
+    return None, "pending", verdicts
 
 
 async def reanalyze_trend_ai(
@@ -1986,6 +2318,8 @@ async def reanalyze_trend_ai(
 
     月度AI为产品级合并（一个产品一张卡）：无论传入什么 metric_key，
     都按产品行（metric_key=__product__）定位。页面刷新不会走到这里。
+    手动重分析不受「同内容不重复自动分析」限制：当月尚无记录时同样
+    强制重跑（不报 404），分组按最近一次历史分析行/产品线目录兜底。
     """
     period = _trend_period()
     row = await _get_existing_trend_ai(
@@ -1995,53 +2329,89 @@ async def reanalyze_trend_ai(
         rule_type=TREND_OVERALL_RULE,
         trend_end_batch=period,
     )
-    if row is None:
-        raise AppException(
-            message=f"当月（{period}）尚无该产品的趋势 AI 分析记录", status_code=404
-        )
-    payload = row.payload or {}
-    trend_config = await load_inspection_trend_alert_config(db)
-    # 手动「重新分析」是否发消息由通知设置开关控制（默认发送）
-    payload["suppress_send"] = not trend_config.manual_rerun_send
-    row.is_deleted = True
-    await db.commit()
-    record = FinishedTrendAIAnalysis(
-        entity_code=row.entity_code,
-        source_label=row.source_label,
-        frontend_group=row.frontend_group,
-        metric_key=row.metric_key,
-        metric_label=row.metric_label,
-        rule_type=TREND_OVERALL_RULE,
-        severity=row.severity,
-        trend_start_batch=row.trend_start_batch,
-        trend_end_batch=period,
-        description=row.description,
-        evidence=row.evidence,
-        payload=payload,
-        affected_batches=row.affected_batches,
-        notification_status="pending",
-    )
-    db.add(record)
-    try:
+    # 真重算：重拉数据 + 重跑粗筛（不复用旧候选/旧 payload），再交 AI 终审。
+    # 旧行先软删，随后复用页面入口重建行并提交 job（同一套口径与推送规则）。
+    # 当月尚无记录（如同内容被跨月去重跳过）时手动重分析始终可用：分组取
+    # 最近一次历史分析行，仍取不到再按产品线目录推断。
+    group = ""
+    if row is not None:
+        group = str(row.frontend_group or "")
+        row.is_deleted = True
         await db.commit()
-    except IntegrityError:
-        # 并发重分析竞态：软删行仍占唯一键（旧索引）或另一请求已重建
-        await db.rollback()
-        existing = await _get_existing_trend_ai(
-            db,
-            entity_code=entity_code,
-            metric_key=TREND_PRODUCT_METRIC_KEY,
-            rule_type=TREND_OVERALL_RULE,
-            trend_end_batch=period,
-        )
-        if existing is None:
-            raise AppException(
-                message="重新分析冲突，请刷新后重试", status_code=409
+    else:
+        latest_result = await db.execute(
+            select(FinishedTrendAIAnalysis)
+            .where(
+                FinishedTrendAIAnalysis.entity_code == entity_code,
+                FinishedTrendAIAnalysis.metric_key == TREND_PRODUCT_METRIC_KEY,
+                FinishedTrendAIAnalysis.rule_type == TREND_OVERALL_RULE,
+                FinishedTrendAIAnalysis.is_deleted.is_(False),
             )
-        record = existing
-    await _submit_trend_ai_job(record, sender_user_open_id=sender_user_open_id)
-    await db.commit()
-    return {"job_id": record.job_id or "", "period": period}
+            .order_by(FinishedTrendAIAnalysis.created_at.desc())
+            .limit(1)
+        )
+        latest = latest_result.scalars().first()
+        group = str(latest.frontend_group or "") if latest is not None else ""
+        if not group:
+            from app.modules.quality.service.trend_monthly_analysis import (
+                resolve_line_group,
+            )
+
+            group = str(resolve_line_group(entity_code) or "")
+    from app.modules.quality.service.inspection_dashboard_entry import (
+        get_bbas_dashboard_data,
+        get_dls_dashboard_data,
+        get_formulations_dashboard_data,
+        get_lft_dashboard_data,
+        get_lkms_dashboard_data,
+        get_mpa_dashboard_data,
+        get_mvt_dashboard_data,
+        get_tryptophan_dashboard_data,
+        get_water_dashboard_data,
+    )
+
+    runners = {
+        "mpa": get_mpa_dashboard_data,
+        "mvt": get_mvt_dashboard_data,
+        "lft": get_lft_dashboard_data,
+        "dls": get_dls_dashboard_data,
+        "lkms": get_lkms_dashboard_data,
+        "bbas": get_bbas_dashboard_data,
+        "tryptophan": get_tryptophan_dashboard_data,
+        "formulations": get_formulations_dashboard_data,
+        "water": get_water_dashboard_data,
+    }
+    entry = runners.get(str(group or ""))
+    if entry is None:
+        raise AppException(
+            message=f"该产品线（{group or '-'}）不支持重新分析", status_code=400
+        )
+    trend_config = await load_inspection_trend_alert_config(db)
+    try:
+        await entry(
+            db,
+            sender_user_open_id=sender_user_open_id,
+            frontend_group=group,
+            source_entity_code=entity_code,
+            enable_trend_ai=True,
+            # 手动「重新分析」是否发消息由通知设置开关控制（默认发送）
+            suppress_send=not trend_config.manual_rerun_send,
+            # 手动重分析不受「同内容不重复自动分析」限制
+            manual_rerun=True,
+        )
+    finally:
+        await db.commit()
+    rebuilt = await _get_existing_trend_ai(
+        db,
+        entity_code=entity_code,
+        metric_key=TREND_PRODUCT_METRIC_KEY,
+        rule_type=TREND_OVERALL_RULE,
+        trend_end_batch=period,
+    )
+    return {
+        "job_id": (rebuilt.job_id if rebuilt is not None else "") or "",
+        "period": period,
+    }
 
 
 async def _get_finished_dashboard_data(
@@ -2054,6 +2424,8 @@ async def _get_finished_dashboard_data(
     oot_product_code: str | None = None,
     frontend_group: str | None = None,
     enable_trend_ai: bool = False,
+    suppress_send: bool = False,
+    manual_rerun: bool = False,
 ) -> dict[str, Any]:
     try:
         await _resolve_runtime_entity(db, source_entity_code, direction="pull")
@@ -2258,7 +2630,6 @@ async def _get_finished_dashboard_data(
                         "serialized_anomalies": trend_anomalies,
                     }
                 )
-                trend_alert_metric_count += len(trend_anomalies)
             except Exception as exc:  # noqa: BLE001 —— 趋势分析失败降级，不影响图表
                 logger.warning(
                     f"Trend analysis failed {source_entity_code}/{metric_key}: {exc}"
@@ -2299,11 +2670,16 @@ async def _get_finished_dashboard_data(
         )
         charts.append(chart.model_dump(mode="json"))
 
-    # ── 产品级月度AI：一个产品一次分析、一张合并卡（全部指标合并），结论
-    # 共享给该产品全部指标 chart；无任何指标命中判据则不做 AI。 ──
+    # ── 产品级月度AI：一个产品一次分析、AI 终审后一张合并卡（只含真异常）。
+    # 结论共享给该产品全部指标 chart；无任何指标命中判据则不做 AI。 ──
     if enable_trend_ai and metric_ctxs:
+        verdicts: dict[str, dict[str, Any]] = {}
         try:
-            product_trend_ai, product_trend_status = await _process_product_trend(
+            (
+                product_trend_ai,
+                product_trend_status,
+                verdicts,
+            ) = await _process_product_trend(
                 db,
                 sender_user_open_id=sender_user_open_id,
                 source_label=source_label,
@@ -2311,6 +2687,8 @@ async def _get_finished_dashboard_data(
                 frontend_group=frontend_group,
                 metric_ctxs=metric_ctxs,
                 period=_trend_period(),
+                suppress_send=suppress_send,
+                manual_rerun=manual_rerun,
             )
         except Exception as exc:  # noqa: BLE001 —— AI 失败降级，不影响图表
             logger.warning(f"Product trend AI failed {source_entity_code}: {exc}")
@@ -2319,13 +2697,36 @@ async def _get_finished_dashboard_data(
             trend_ai_pending_count = 1
         elif product_trend_status == "completed":
             trend_ai_completed_count = 1
+        approved_count = 0
         for chart in charts:
-            chart["trend_ai"] = (
+            chart_key = str(chart.get("metric_key") or "")
+            verdict_item = verdicts.get(chart_key) or {}
+            approved = (
+                product_trend_status == "completed"
+                and verdict_item.get("verdict") == "abnormal"
+            )
+            # 标红口径（按指标隔离）：只有 AI 终审判定 abnormal 的指标才保留
+            # 判据与红点；AI 未完成 / 未裁决 / normal / improved 一律清空——
+            # 产品级模型是各图共享的，红点必须逐图按该指标被点头的批次覆盖
+            if not approved:
+                chart["trend_anomalies"] = []
+            if chart["trend_anomalies"]:
+                approved_count += 1
+            model = (
                 product_trend_ai.model_dump(mode="json")
                 if product_trend_ai is not None
                 else None
             )
+            if model is not None:
+                model["highlight_batches"] = (
+                    [str(b) for b in (verdict_item.get("batches") or [])]
+                    if approved
+                    else []
+                )
+            chart["trend_ai"] = model
             chart["trend_ai_status"] = product_trend_status
+        # 计数与红点口径一致：AI 认可的异常指标数（不再用粗筛候选数）
+        trend_alert_metric_count = approved_count
 
     summary = InspectionDashboardSummary(
         source_entity_code=source_entity_code,

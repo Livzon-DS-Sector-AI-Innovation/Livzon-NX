@@ -1,23 +1,28 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { TableEmptyState } from '../TableEmptyState'
 import { qualityTokens } from '../themeTokens'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Table, Card, Button, Input, Space, Typography, Alert, Select, App, Modal, Popconfirm } from 'antd'
-import { SyncOutlined, SearchOutlined, FilterOutlined, PlusOutlined } from '@ant-design/icons'
+import { SyncOutlined, SearchOutlined, FilterOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import type { TablePaginationConfig } from 'antd'
 import type { ColumnsType, ColumnType } from 'antd/es/table'
 import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { deleteInspectionFeishuRecord, pullInspectionFeishuRecords } from '@/actions/quality-inspection'
-import { fetchInspectionFeishuFields } from '@/lib/api/client/quality'
+import { fetchInspectionFeishuFields, fetchInspectionFeishuRecordDetail } from '@/lib/api/client/quality'
 import type { InspectionFeishuFieldMeta } from '@/types/quality'
 import { InspectionFeishuRecordModal } from './InspectionFeishuRecordModal'
 import { InspectionFeishuRecordDetailDrawer } from './InspectionFeishuRecordDetailDrawer'
+import {
+  InspectionCreateByMaterialModal,
+  type InspectionMaterialCreated,
+} from './InspectionCreateByMaterialModal'
 import { FeishuAttachmentPreviewModal } from '../FeishuAttachmentPreviewModal'
 import { renderFeishuValue } from './renderFeishuValue'
-import type { FeishuAttachmentPreviewContext } from './renderFeishuValue'
+import type { FeishuAttachmentPreviewContext, FeishuFieldTypeMap } from './renderFeishuValue'
 
 export interface FilterConfig {
   key: string
@@ -44,6 +49,16 @@ interface Props {
   enableAttachmentPreview?: boolean
   /** 开启后工具栏展示镜像最近同步时间（成品页） */
   showLastSyncTime?: boolean
+  /** 开启后新增/编辑弹窗里人员字段可搜索选人（写飞书时后端换发 union_id） */
+  editablePersonFields?: boolean
+  /** 开启后「新增」改按物料名称/代码选料（固体/液体原辅料） */
+  createWithMaterialPicker?: boolean
+  /** 选料弹窗的物料范围：固体页只列固体、液体页只列液体 */
+  materialPickerModule?: 'solid' | 'liquid'
+  /** 跳转携带的新建记录 ID：加载后自动打开该记录详情抽屉 */
+  highlightRecordId?: string | null
+  /** 跳转携带的物料 entity_code（用于与当前列表实体一致后才打开详情） */
+  highlightEntityCode?: string | null
 }
 
 interface FetchResult {
@@ -70,9 +85,15 @@ export function InspectionFeishuTable({
   enableTextPreview = false,
   enableAttachmentPreview = false,
   showLastSyncTime = false,
+  editablePersonFields = false,
+  createWithMaterialPicker = false,
+  materialPickerModule,
+  highlightRecordId = null,
+  highlightEntityCode = null,
 }: Props) {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
+  const router = useRouter()
   const [syncing, setSyncing] = useState(false)
   const [keyword, setKeyword] = useState('')
   const [filterValues, setFilterValues] = useState<Record<string, string>>({})
@@ -87,6 +108,8 @@ export function InspectionFeishuTable({
     previewSrc: string
     downloadSrc: string
   } | null>(null)
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const handledHighlightRef = useRef<string | null>(null)
 
   const openAttachmentPreview = (context: FeishuAttachmentPreviewContext) => {
     const recordId = String(context.record.record_id ?? '')
@@ -99,13 +122,38 @@ export function InspectionFeishuTable({
     })
   }
 
+  // 字段元数据：供新增/编辑弹窗判断可写入、列按类型渲染（含公式日期序列号换算）
+  // 与筛选下拉选项；因此只要有 entityCode 就取，不再限定 editable。
   const { data: fieldsData } = useQuery<{ fields: InspectionFeishuFieldMeta[]; can_push: boolean; form_url?: string | null } | null>({
     queryKey: ['quality-inspection', 'fields', entityCode],
     queryFn: () => fetchInspectionFeishuFields(entityCode as string),
-    enabled: editable && Boolean(entityCode),
+    enabled: Boolean(entityCode),
   })
   const canPush = fieldsData?.can_push ?? false
   const formUrl = fieldsData?.form_url ?? null
+  const fieldMetaMap = useMemo<FeishuFieldTypeMap>(() => {
+    const map: FeishuFieldTypeMap = {}
+    for (const field of fieldsData?.fields ?? []) {
+      map[field.field_name] = {
+        uiType: field.ui_type,
+        resultUiType: field.result_ui_type ?? undefined,
+      }
+    }
+    return map
+  }, [fieldsData])
+  // 单选/多选字段的可选项（筛选下拉用；公式派生列没有选项时回退文本筛选）
+  const fieldOptionsMap = useMemo(() => {
+    const map: Record<string, { label: string; value: string }[]> = {}
+    for (const field of fieldsData?.fields ?? []) {
+      if (field.options && field.options.length > 0) {
+        map[field.field_name] = field.options.map(option => ({
+          label: option.name,
+          value: option.name,
+        }))
+      }
+    }
+    return map
+  }, [fieldsData])
 
   const { data: queryData, isFetching: loading, error } = useQuery<FetchResult>({
     queryKey: ['quality-inspection', 'list', listApi, { page: pagination.page, pageSize: pagination.pageSize, keyword, filterValues, entityCode }],
@@ -172,7 +220,16 @@ export function InspectionFeishuTable({
     }
   }
 
+  /** 刷新：仅重新加载当前列表（读本地镜像最新数据），不回拉飞书。 */
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['quality-inspection', 'list', listApi] })
+  }
+
   const openCreate = () => {
+    if (createWithMaterialPicker) {
+      setCreateModalOpen(true)
+      return
+    }
     if (formUrl) {
       window.open(formUrl, '_blank', 'noopener,noreferrer')
       return
@@ -180,6 +237,12 @@ export function InspectionFeishuTable({
     setModalMode('create')
     setEditingRecord(undefined)
     setModalOpen(true)
+  }
+
+  const handleMaterialCreated = (result: InspectionMaterialCreated) => {
+    router.push(
+      `/quality/inspection/${result.module}?recordId=${encodeURIComponent(result.recordId)}&entityCode=${encodeURIComponent(result.entityCode)}`
+    )
   }
 
   const openEdit = (record: Record<string, unknown>) => {
@@ -235,6 +298,43 @@ export function InspectionFeishuTable({
     setDetailRecord(record)
     setDetailOpen(true)
   }
+  // 详情字段：列表行优先取列表列（保持既有顺序）；直读飞书的记录展示其全部业务字段
+  const detailFields = useMemo(() => {
+    if (!detailRecord) return serverFields
+    const recordKeys = Object.keys(detailRecord).filter(
+      key => key !== 'record_id' && key !== 'created_at' && key !== 'updated_at',
+    )
+    const listed = recordKeys.filter(key => serverFields.includes(key))
+    return listed.length > 0 ? listed : recordKeys
+  }, [detailRecord, serverFields])
+
+  // 跳转「列表并弹详情」：按 record_id 打开详情抽屉；列表镜像未刷新时直读飞书详情。
+  // handledHighlightRef 防重复触发（数据 refetch 不会再次打开）。
+  useEffect(() => {
+    if (!highlightRecordId) return
+    if (handledHighlightRef.current === highlightRecordId) return
+    if (highlightEntityCode && highlightEntityCode !== entityCode) return
+    const target = data.find((row) => String(row.record_id) === String(highlightRecordId))
+    if (target) {
+      handledHighlightRef.current = highlightRecordId
+      openDetail(target)
+      return
+    }
+    // 列表仍在加载时先等待数据到位，避免对新记录出现前就直读详情
+    if (loading) return
+    if (!entityCode) return
+    let cancelled = false
+    fetchInspectionFeishuRecordDetail(entityCode, String(highlightRecordId))
+      .then((record) => {
+        if (cancelled || !record) return
+        handledHighlightRef.current = highlightRecordId
+        openDetail(record)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [highlightRecordId, highlightEntityCode, data, entityCode, loading])
 
   const buildAutoColumn = (field: string): ColumnType<Record<string, unknown>> => {
     const width = autoColumnPreset === 'finished' ? getFinishedColumnWidth(field) : undefined
@@ -269,6 +369,8 @@ export function InspectionFeishuTable({
         >
           {renderFeishuValue(value, record, entityCode, message, {
             fieldName: field,
+            uiType: fieldMetaMap[field]?.uiType,
+            resultUiType: fieldMetaMap[field]?.resultUiType,
             onAttachmentPreview:
               enableAttachmentPreview ? openAttachmentPreview : undefined,
             onTextPreview: enableTextPreview
@@ -315,7 +417,11 @@ export function InspectionFeishuTable({
     ),
   }
 
-  const columnFields = displayFields.length > 0 ? displayFields : serverFields
+  const fieldNames = displayFields.length > 0 ? displayFields : serverFields
+  // 飞书「按钮」列无值也不可编辑（自动化触发按钮），不进列表
+  const columnFields = fieldNames.filter(
+    field => fieldMetaMap[field]?.uiType !== 'Button',
+  )
   const baseColumns: ColumnsType<Record<string, unknown>> = (columns && columns.length > 0)
     ? columns
     : columnFields.map(buildAutoColumn)
@@ -352,6 +458,9 @@ export function InspectionFeishuTable({
               {createLabel}
             </Button>
           )}
+          <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
+            刷新
+          </Button>
           {pullApi && entityCode && (
             <Button type="primary" icon={<SyncOutlined />} onClick={handlePull} loading={syncing}>
               同步飞书数据
@@ -367,29 +476,36 @@ export function InspectionFeishuTable({
       {showFilters && filters.length > 0 && (
         <Card size="small" style={{ marginBottom: 16, background: qualityTokens.bgSoft }}>
           <Space wrap>
-            {filters.map(f => (
-              <Space key={f.key} size={4}>
-                <span style={{ fontSize: 13 }}>{f.label}:</span>
-                {f.type === 'select' && f.options ? (
-                  <Select
-                    allowClear
-                    placeholder={f.label}
-                    value={filterValues[f.key] || undefined}
-                    onChange={val => handleFilter(f.key, val ?? '')}
-                    style={{ width: 140 }}
-                    options={f.options}
-                  />
-                ) : (
-                  <Input
-                    allowClear
-                    placeholder={f.label}
-                    value={filterValues[f.key] || ''}
-                    onChange={e => handleFilter(f.key, e.target.value)}
-                    style={{ width: 140 }}
-                  />
-                )}
-              </Space>
-            ))}
+            {filters.map(f => {
+              // 配置给了选项就用配置；否则取字段元数据的单选选项
+              //（设备状态/维修状态/是否知晓等）；都没有则回退文本精确筛选
+              const options = f.options ?? fieldOptionsMap[f.key]
+              return (
+                <Space key={f.key} size={4}>
+                  <span style={{ fontSize: 13 }}>{f.label}:</span>
+                  {options ? (
+                    <Select
+                      allowClear
+                      showSearch
+                      optionFilterProp="label"
+                      placeholder={f.label}
+                      value={filterValues[f.key] || undefined}
+                      onChange={val => handleFilter(f.key, val ?? '')}
+                      style={{ width: 150 }}
+                      options={options}
+                    />
+                  ) : (
+                    <Input
+                      allowClear
+                      placeholder={f.label}
+                      value={filterValues[f.key] || ''}
+                      onChange={e => handleFilter(f.key, e.target.value)}
+                      style={{ width: 150 }}
+                    />
+                  )}
+                </Space>
+              )
+            })}
             <Button onClick={() => { setFilterValues({}); setPagination(prev => ({ ...prev, page: 1 })) }}>
               清除筛选
             </Button>
@@ -441,22 +557,32 @@ export function InspectionFeishuTable({
         />
       </Card>
       {editable && entityCode && (
-        <InspectionFeishuRecordModal
+              <InspectionFeishuRecordModal
           open={modalOpen}
           entityCode={entityCode}
           mode={modalMode}
           initialValues={editingRecord}
+          editablePersonFields={editablePersonFields}
           onClose={() => setModalOpen(false)}
           onSuccess={() =>
             queryClient.invalidateQueries({ queryKey: ['quality-inspection', 'list', listApi] })
           }
         />
       )}
+      {editable && createWithMaterialPicker && (
+        <InspectionCreateByMaterialModal
+          open={createModalOpen}
+          onClose={() => setCreateModalOpen(false)}
+          onCreated={handleMaterialCreated}
+          module={materialPickerModule}
+        />
+      )}
       <InspectionFeishuRecordDetailDrawer
         open={detailOpen}
         entityCode={entityCode}
         record={detailRecord}
-        allFields={serverFields}
+        allFields={detailFields}
+        fieldMeta={fieldMetaMap}
         onAttachmentPreview={
           enableAttachmentPreview ? openAttachmentPreview : undefined
         }

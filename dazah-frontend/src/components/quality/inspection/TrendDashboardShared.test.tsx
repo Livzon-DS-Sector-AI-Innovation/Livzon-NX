@@ -114,9 +114,10 @@ describe('TrendAiPanel', () => {
   it('无异常时提示未发现趋势异常', () => {
     render(makeChart())
     expect(container.textContent).toContain('未发现趋势异常')
+    expect(container.textContent).toContain('未触发连续趋势')
   })
 
-  it('有异常且 pending 时提示分析中', () => {
+  it('pending 时只提示分析中，不展示未裁决的判据（AI 终审前不标红）', () => {
     render(
       makeChart({
         trend_ai_status: 'pending',
@@ -133,8 +134,21 @@ describe('TrendAiPanel', () => {
         ],
       })
     )
-    expect(container.textContent).toContain('连续 3 批上升')
     expect(container.textContent).toContain('分析中')
+    expect(container.textContent).not.toContain('连续 3 批上升')
+    expect(container.textContent).not.toContain('未发现趋势异常')
+  })
+
+  it('failed 时提示 AI 终审未完成，不落进未发现异常空态', () => {
+    render(makeChart({ trend_ai_status: 'failed' }))
+    expect(container.textContent).toContain('趋势 AI 分析失败')
+    expect(container.textContent).toContain('暂不判定趋势异常')
+    expect(container.textContent).not.toContain('未发现趋势异常')
+  })
+
+  it('completed 且无异常时说明经 AI 终审复核为正常/改善', () => {
+    render(makeChart({ trend_ai_status: 'completed' }))
+    expect(container.textContent).toContain('经 AI 终审复核为正常 / 改善')
   })
 
   it('completed 时展示 AI 研判与建议', () => {

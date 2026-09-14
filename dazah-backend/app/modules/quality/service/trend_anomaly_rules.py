@@ -1,5 +1,9 @@
 """成品检测趋势异常确定性规则引擎 v3（纯 stdlib，不含 LLM）。
 
+**角色：粗筛提名器（不是终审）**——本引擎只把"值得复核"的指标提给 AI；
+标红与推送由 AI 终审裁决（AI 判 abnormal 才标红/进卡），见
+trend_ai_analysis / inspection_dashboard_calc。
+
 评估口径（2026-09-08 与业务对齐）：**近期历史做基线，本月对基线比**——基线
 是评估月前 1~2 个日历月（不是全部历史：台阶发生的当月会相对近期基线被报
 出，之后成为新平台便不再反复报旧事；全历史基线会被新平台污染且永久追着旧
@@ -12,6 +16,12 @@
 - 斜率较历史变化（slope_change）：本月斜率较历史斜率突变（t≥3）且方向朝
   限度；
 - 月度整体趋势（month_over_month）：≥3 个月度均值连续同向，给整体走向。
+
+2026-09-11 增补三道粗筛业务约束（治"正常波动被标异常"误报）：
+1. **方向**（spec_direction）：单边上限指标（越小越好）下降=改善不提名；
+   单边下限反之；仅双边/无限度线才双向提名；
+2. **全历史波动带**：当月均值仍在除当月外全部历史的 ±2σ 内 → 属正常波动；
+3. **相对幅度**：偏移/当月累计变化须达基线均值的 10% 才提名。
 
 逐批超出 均值±3σ / OOT 限度线属于点位异常，由仪表盘既有的即时告警链路
 （_materialize_dashboard_alert → 飞书推送 + 落库）"立即报告记录"，不在本
@@ -69,6 +79,16 @@ SLOPE_CHANGE_HIGH_T = 6.0
 MONTH_OVER_MONTH_MIN_MONTHS = 3
 MONTH_OVER_MONTH_CONSECUTIVE = 3
 MONTH_OVER_MONTH_LEVEL_SIGMA = 0.5
+
+# 粗筛业务约束（AI 终审前的提名门槛，防"正常波动被标异常"）：
+# 全历史波动带：当月均值仍落在"除当月外全部历史"±Nσ 内 → 不提名
+# （治"基线恰处低谷、回升到常态被报抬升"）
+MONTH_LEVEL_ALL_BAND_SIGMA = 2.0
+# 相对幅度：偏移/当月累计变化还须吃掉"距最近限度余量"的 N 倍才提名
+# （无限度线时退化为基线均值的 N 倍；治极平数据/极远限度的"数字游戏"误报，
+#  如干燥失重 σ≈0.005 偏 0.01 就统计显著）
+MONTH_LEVEL_MIN_REL_DELTA = 0.10
+MONTH_SLOPE_MIN_REL_MOVE = 0.10
 
 # 每规则/每图最多上报条数（防刷屏）；标红只取本期尾部批次数
 MAX_ANOMALIES_PER_RULE = 1
@@ -211,6 +231,56 @@ def _nearest_limits(
     return upper, lower
 
 
+def spec_direction(spec_lines: list[dict[str, Any]] | None) -> str:
+    """按标准/OOT 限度线判断指标业务方向（±3σ 控制限是统计带，不参与）。
+
+    - 只给上限（如 杂质 ≤3.0% / 水分 ≤0.5% / 警戒与纠偏限度）→ "up_only"：
+      越小越好，此时**下降是改善**，不应作为异常提名；
+    - 只给下限（如 ≥90.0%）→ "down_only"：越大越好，上升是改善；
+    - 双边（范围）或无限度线 → "both"：两个方向都可能是风险。
+    """
+    labels = [str(line.get("label") or "") for line in spec_lines or []]
+    has_lower = any("下限" in label for label in labels)
+    # 非"下限"标签（标准上限/OOT上限/警戒限度/纠偏限度）都按上限语义处理
+    has_upper = any("下限" not in label for label in labels)
+    if has_lower and not has_upper:
+        return "down_only"
+    if has_upper and not has_lower:
+        return "up_only"
+    return "both"
+
+
+def _is_worsening(direction: str, delta: float) -> bool:
+    """按业务方向判断变化方向是否为"恶化"（只有恶化才提名）。"""
+    if direction == "up_only":
+        return delta > 0
+    if direction == "down_only":
+        return delta < 0
+    return True
+
+
+def _amplitude_reference(
+    hist_mean: float,
+    upper_limit: float | None,
+    lower_limit: float | None,
+) -> float:
+    """相对幅度门槛的参照量：优先"距最近限度的余量"，无限度线时退化 |基线均值|。
+
+    业务含义="偏移至少要吃掉一定比例的剩余余量"才算有业务意义——这样
+    0.100±0.002 的极平数据（余量 0.4）偏 0.005 会被拦（数字游戏），而
+    100.5%（余量 3.5）掉到 97.5% 这种真实漂移仍会提名。
+    """
+    margins = [
+        abs(limit - hist_mean)
+        for limit in (upper_limit, lower_limit)
+        if limit is not None
+    ]
+    positive = [m for m in margins if m > 0]
+    if positive:
+        return min(positive)
+    return abs(hist_mean)
+
+
 def _cap_batches(batches: list[str]) -> list[str]:
     return batches[-HIGHLIGHT_TAIL_BATCHES:]
 
@@ -281,16 +351,37 @@ def _detect_month_level(
     hist_sigma: float,
     band: float | None,
     labels: dict[str, Any],
+    *,
+    direction: str,
+    all_history: list[float],
+    amplitude_reference: float,
 ) -> TrendAnomaly | None:
-    """当月 vs 历史：本月均值较历史均值抬升/下移。"""
+    """当月 vs 历史：本月均值较历史均值抬升/下移（粗筛提名，AI 终审）。"""
     if hist_sigma <= 0 or not current or not history:
         return None
     cur_mean = fmean(current)
     delta = cur_mean - hist_mean
+    # 方向约束：单边上限指标下移=改善、单边下限指标抬升=改善，不提名
+    if not _is_worsening(direction, delta):
+        return None
+    # 全历史波动带：当月均值仍在除当月外全部历史的 ±Nσ 内 → 属正常波动
+    if len(all_history) >= 3:
+        all_sigma = pstdev(all_history)
+        if all_sigma > 0 and (
+            abs(cur_mean - fmean(all_history))
+            < MONTH_LEVEL_ALL_BAND_SIGMA * all_sigma
+        ):
+            return None
     delta_gate = MONTH_LEVEL_DELTA_SIGMA * hist_sigma
     if band is not None and band > 0:
         delta_gate = max(delta_gate, MONTH_LEVEL_BAND_RATIO * band)
     if abs(delta) < delta_gate:
+        return None
+    # 相对幅度：偏移须吃掉距最近限度余量的 N 倍（防极平数据/极远限度的数字游戏）
+    if (
+        amplitude_reference > 0
+        and abs(delta) < MONTH_LEVEL_MIN_REL_DELTA * amplitude_reference
+    ):
         return None
     noise = _diff_noise(list(history) + list(current))
     se = noise * ((1 / len(current) + 1 / len(history)) ** 0.5)
@@ -331,15 +422,28 @@ def _detect_month_level(
 
 def _detect_month_slope(
     current: list[float],
+    hist_mean: float,
     hist_sigma: float,
     labels: dict[str, Any],
+    *,
+    direction: str,
+    amplitude_reference: float,
 ) -> TrendAnomaly | None:
-    """当月内趋势：本月批次自身呈持续上升/下降。"""
+    """当月内趋势：本月批次自身呈持续上升/下降（粗筛提名，AI 终审）。"""
     if len(current) < MIN_CURRENT_POINTS or hist_sigma <= 0:
         return None
     slope = _linear_slope(current)
+    # 方向约束：单边上限指标当月下降=改善、单边下限指标上升=改善，不提名
+    if not _is_worsening(direction, slope):
+        return None
     move = slope * len(current)
     if abs(move) < MONTH_SLOPE_MOVE_SIGMA * hist_sigma:
+        return None
+    # 相对幅度：当月累计变化须吃掉距最近限度余量的 N 倍
+    if (
+        amplitude_reference > 0
+        and abs(move) < MONTH_SLOPE_MIN_REL_MOVE * amplitude_reference
+    ):
         return None
     noise = _diff_noise(current)
     se = _slope_se(current, noise)
@@ -378,11 +482,16 @@ def _detect_slope_change(
     history: list[float],
     hist_mean: float,
     labels: dict[str, Any],
+    *,
+    direction: str,
 ) -> TrendAnomaly | None:
     """斜率较历史变化：本月斜率与历史斜率显著不同且朝限度方向。"""
     if len(current) < MIN_CURRENT_POINTS or len(history) < MIN_CURRENT_POINTS:
         return None
     slope_current = _linear_slope(current)
+    # 方向约束：单边上限指标当月下降加速=改善，单边下限指标上升加速=改善
+    if not _is_worsening(direction, slope_current):
+        return None
     slope_history = _linear_slope(history)
     delta_slope = slope_current - slope_history
     if delta_slope == 0:
@@ -436,6 +545,8 @@ def _detect_month_over_month(
     values: list[float],
     hist_mean: float,
     hist_sigma: float,
+    *,
+    direction: str,
 ) -> TrendAnomaly | None:
     """月度整体趋势：≥3 个月度均值连续同向，给整体走向。"""
     months = [parse_batch_month(b) for b in batches]
@@ -466,6 +577,9 @@ def _detect_month_over_month(
         else:
             consecutive += 1 if consecutive > 0 else -1
     if abs(consecutive) < MONTH_OVER_MONTH_CONSECUTIVE:
+        return None
+    # 方向约束：单边上限指标连续下降=改善、单边下限指标连续上升=改善
+    if not _is_worsening(direction, float(consecutive)):
         return None
     level_offset = abs(mean_series[-1] - hist_mean)
     if hist_sigma > 0 and level_offset < MONTH_OVER_MONTH_LEVEL_SIGMA * hist_sigma:
@@ -551,8 +665,16 @@ def detect_trend_anomalies(
         if upper_limit is not None and lower_limit is not None
         else None
     )
+    # 指标业务方向（只认标准/OOT 限度线）：越小越好 / 越大越好 / 双向
+    direction = spec_direction(spec_lines)
+    # 除当月外的全部历史（用于"是否仍在历史正常波动带内"判定）
+    all_history = [values[i] for i in range(n) if i not in current_set]
+    # 粗筛相对幅度参照量：距最近限度的余量（无限度线时退化基线均值的绝对值）
+    amplitude_reference = _amplitude_reference(
+        hist_mean, upper_limit, lower_limit
+    )
 
-    extra = {"time_basis": time_basis}
+    extra = {"time_basis": time_basis, "direction_mode": direction}
     labels = {
         "current_start": batches[current_idx[0]],
         "current_end": batches[current_idx[-1]],
@@ -562,14 +684,33 @@ def detect_trend_anomalies(
 
     by_rule: dict[str, TrendAnomaly | None] = {
         RULE_MONTH_LEVEL: _detect_month_level(
-            current, history, hist_mean, hist_sigma, band, labels
+            current,
+            history,
+            hist_mean,
+            hist_sigma,
+            band,
+            labels,
+            direction=direction,
+            all_history=all_history,
+            amplitude_reference=amplitude_reference,
         ),
-        RULE_MONTH_SLOPE: _detect_month_slope(current, hist_sigma, labels),
+        RULE_MONTH_SLOPE: _detect_month_slope(
+            current,
+            hist_mean,
+            hist_sigma,
+            labels,
+            direction=direction,
+            amplitude_reference=amplitude_reference,
+        ),
         RULE_SLOPE_CHANGE: _detect_slope_change(
-            current, history, hist_mean, labels
+            current, history, hist_mean, labels, direction=direction
         ),
         RULE_MONTH_OVER_MONTH: _detect_month_over_month(
-            batches, values, hist_mean, hist_sigma
+            batches,
+            values,
+            hist_mean,
+            hist_sigma,
+            direction=direction,
         ),
     }
 

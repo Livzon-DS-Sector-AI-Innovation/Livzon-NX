@@ -4,6 +4,7 @@
 - 图片（jpg/png/gif/webp/bmp）原样返回（inline）；
 - PDF 原样返回；
 - doc/docx/wps/xls/xlsx/csv/ppt/pptx 用 LibreOffice headless 转 PDF 后返回；
+- 文本（txt/log/md/json/xml/yaml）解码为 UTF-8 纯文本返回；
 - 其余扩展名不支持在线预览，端点返回 400 提示下载。
 """
 
@@ -22,7 +23,14 @@ PREVIEW_PDF_EXTS = frozenset({".pdf"})
 PREVIEW_OFFICE_EXTS = frozenset(
     {".doc", ".docx", ".wps", ".xls", ".xlsx", ".csv", ".ppt", ".pptx"}
 )
-PREVIEWABLE_EXTS = PREVIEW_IMAGE_EXTS | PREVIEW_PDF_EXTS | PREVIEW_OFFICE_EXTS
+PREVIEW_TEXT_EXTS = frozenset({".txt", ".log", ".md", ".json", ".xml", ".yaml", ".yml"})
+PREVIEWABLE_EXTS = (
+    PREVIEW_IMAGE_EXTS | PREVIEW_PDF_EXTS | PREVIEW_OFFICE_EXTS | PREVIEW_TEXT_EXTS
+)
+
+# 文本预览体积上限（超出提示下载，避免把大文件塞进 iframe）
+_TEXT_PREVIEW_MAX_BYTES = 2 * 1024 * 1024
+_TEXT_DECODE_ENCODINGS = ("utf-8", "gb18030", "utf-16")
 
 # soffice 子进程超时（秒）；转换失败换新 profile 重试一次
 _SOFFICE_TIMEOUT = 60
@@ -41,6 +49,7 @@ _IMAGE_MIME_BY_EXT = {
 __all__ = [
     "PREVIEWABLE_EXTS",
     "convert_office_to_pdf",
+    "decode_text_preview",
     "resolve_preview_content",
 ]
 
@@ -107,6 +116,16 @@ def convert_office_to_pdf(content: bytes, file_name: str) -> bytes:
     return b""
 
 
+def decode_text_preview(content: bytes) -> str:
+    """把文本附件字节解码为可显示的字符串（UTF-8/GB18030/UTF-16 依次尝试）。"""
+    for encoding in _TEXT_DECODE_ENCODINGS:
+        try:
+            return content.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return content.decode("utf-8", errors="replace")
+
+
 def resolve_preview_content(
     content: bytes, content_type: str, filename: str
 ) -> tuple[bytes, str, str]:
@@ -114,7 +133,7 @@ def resolve_preview_content(
 
     返回 (content, content_type, filename)。
     office 文档转 PDF（文件名同步改为 .pdf）；转换失败抛 502；
-    不支持预览的扩展名抛 400 提示下载。
+    支持预览的扩展名抛 400 提示下载。
     """
     ext = os.path.splitext(filename)[1].lower()
     if ext not in PREVIEWABLE_EXTS:
@@ -129,6 +148,13 @@ def resolve_preview_content(
             )
         base = os.path.splitext(filename)[0] or filename
         return pdf, "application/pdf", f"{base}.pdf"
+    if ext in PREVIEW_TEXT_EXTS:
+        if len(content) > _TEXT_PREVIEW_MAX_BYTES:
+            raise AppException(
+                message="文本内容过大，请下载后查看", status_code=400
+            )
+        text = decode_text_preview(content)
+        return text.encode("utf-8"), "text/plain; charset=utf-8", filename
     if ext in PREVIEW_IMAGE_EXTS:
         mime = (
             content_type

@@ -454,12 +454,6 @@ _TABLE_FIELDS_CACHE: dict[str, tuple[datetime, list[dict[str, Any]]]] = {}
 # 仪表盘聚合结果缓存（TTL 300s，force 强制刷新）
 _DASHBOARD_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 
-# 质量检验结果联动目标页：固体→入库总账 / 液体→液体原辅料入库
-_INBOUND_RESULT_SYNC_PAGES: dict[str, str] = {
-    "solid": "inbound-ledger",
-    "liquid": "liquid-raw-inbound",
-}
-
 
 class WarehouseService:
     def __init__(self, session: AsyncSession) -> None:
@@ -2734,47 +2728,112 @@ class WarehouseService:
         result: str,
         unqualified_items: str | None = None,
     ) -> dict[str, Any]:
-        """质量物料检验结果 → 仓储入库台账联动（固体→入库总账 / 液体→液体原辅料入库）。
+        """质量物料检验结果 → 仓储入库台账联动（目标页按批次实际所在台账决定）。
 
-        按 物料代码+厂内批号（固体）或 入库批号（液体）定位台账记录，多行取
-        入库日期最新一条；把 检测结果 更新为 合格/不合格；不合格时写入
+        - 固体 → 入库总账（厂内代码+厂内批号 匹配）；
+        - 液体 → 先查 液体原辅料入库（槽车大宗，「入库批号」=质量批号整串），
+          未命中再查 入库总账（桶装液体，批号拆 代码+批号 按 厂内代码+厂内批号
+          匹配）。
+
+        多行取入库日期最新一条；把 检测结果 更新为 合格/不合格；不合格时写入
         不合格项目，合格不动该列。只更新已存在行，无匹配记日志返回。
         """
-        page_key = _INBOUND_RESULT_SYNC_PAGES.get(material_module)
-        if page_key is None:
+        if material_module not in ("solid", "liquid"):
             raise AppException(
                 message=f"不支持的检验结果联动模块：{material_module}", status_code=400
             )
-        if material_module == "solid":
-            conditions: list[dict[str, Any]] = [
-                {"field_name": "厂内代码", "operator": "is", "value": [material_code]},
-                {"field_name": "厂内批号", "operator": "is", "value": [batch_no]},
-            ]
-        else:
-            # 液体：调用方把质量批号整串（即台账「入库批号」）作为 batch_no 传入
-            conditions = [
-                {"field_name": "入库批号", "operator": "is", "value": [batch_no]}
-            ]
 
-        page_config = await self._get_material_page_config(page_key)
-        client = await self._get_material_client(page_config.app_token)
+        # 候选（页, 匹配条件）按优先级排列，首个命中的台账即为目标
+        candidates: list[tuple[str, list[dict[str, Any]]]] = []
+        if material_module == "solid":
+            candidates.append(
+                (
+                    "inbound-ledger",
+                    [
+                        {
+                            "field_name": "厂内代码",
+                            "operator": "is",
+                            "value": [material_code],
+                        },
+                        {
+                            "field_name": "厂内批号",
+                            "operator": "is",
+                            "value": [batch_no],
+                        },
+                    ],
+                )
+            )
+        else:
+            # 液体：调用方把质量批号整串（即液体台账「入库批号」）作为 batch_no 传入
+            candidates.append(
+                (
+                    "liquid-raw-inbound",
+                    [
+                        {
+                            "field_name": "入库批号",
+                            "operator": "is",
+                            "value": [batch_no],
+                        }
+                    ],
+                )
+            )
+            # 桶装液体入在入库总账：批号拆 代码+批号（如 YL006-2609001 → YL006/2609001）
+            if "-" in batch_no:
+                drum_code, _, drum_batch = batch_no.rpartition("-")
+                candidates.append(
+                    (
+                        "inbound-ledger",
+                        [
+                            {
+                                "field_name": "厂内代码",
+                                "operator": "is",
+                                "value": [drum_code],
+                            },
+                            {
+                                "field_name": "厂内批号",
+                                "operator": "is",
+                                "value": [drum_batch],
+                            },
+                        ],
+                    )
+                )
+
         # 只过滤不排序：大表上 filter+服务端排序实测会超时；匹配行通常仅数行，
         # “多行取最新”改在内存按 入库日期 比较
-        data = await client.request(
-            "POST",
-            (
-                f"/bitable/v1/apps/{page_config.app_token}"
-                f"/tables/{page_config.table_id}/records/search"
-            ),
-            params={"page_size": 5, "field_name_type": "name"},
-            json_body={"filter": {"conjunction": "and", "conditions": conditions}},
-            timeout=30.0,
-        )
-        items = [item for item in (data.get("items") or []) if isinstance(item, dict)]
-        if not items:
-            logger.warning(
-                "quality result sync: no inbound row matched page=%s code=%s batch=%s",
+        items: list[dict[str, Any]] = []
+        matched_page: str | None = None
+        tried: list[str] = []
+        for page_key, conditions in candidates:
+            page_config = await self._get_material_page_config(page_key)
+            client = await self._get_material_client(page_config.app_token)
+            data = await client.request(
+                "POST",
+                (
+                    f"/bitable/v1/apps/{page_config.app_token}"
+                    f"/tables/{page_config.table_id}/records/search"
+                ),
+                params={"page_size": 5, "field_name_type": "name"},
+                json_body={"filter": {"conjunction": "and", "conditions": conditions}},
+                timeout=30.0,
+            )
+            tried.append(page_key)
+            items = [
+                item for item in (data.get("items") or []) if isinstance(item, dict)
+            ]
+            if items:
+                matched_page = page_key
+                break
+            logger.info(
+                "quality result sync: no inbound row on %s for code=%s batch=%s",
                 page_key,
+                material_code,
+                batch_no,
+            )
+
+        if not items or matched_page is None:
+            logger.warning(
+                "quality result sync: no inbound row matched pages=%s code=%s batch=%s",
+                tried,
                 material_code,
                 batch_no,
             )
@@ -2789,18 +2848,20 @@ class WarehouseService:
         fields: dict[str, Any] = {"检测结果": result}
         if result == "不合格":
             fields["不合格项目"] = unqualified_items or ""
-        await self.update_material_page_record(page_key, record_id, fields)
+        await self.update_material_page_record(matched_page, record_id, fields)
 
         # 写后 best-effort 刷新本地镜像，页面尽快可见（失败等下一轮定时同步）
         try:
-            await self.sync_material_page_to_local(page_key, incremental=True)
+            await self.sync_material_page_to_local(matched_page, incremental=True)
         except Exception as exc:  # noqa: BLE001
             logger.warning(
-                "quality result sync: mirror refresh failed for %s: %s", page_key, exc
+                "quality result sync: mirror refresh failed for %s: %s",
+                matched_page,
+                exc,
             )
         logger.info(
             "quality result synced to inbound ledger: page=%s record=%s result=%s",
-            page_key,
+            matched_page,
             record_id,
             result,
         )

@@ -226,8 +226,15 @@ async def test_run_trend_ai_timeout(monkeypatch) -> None:
 def _valid_product_raw() -> dict:
     raw = _valid_raw()
     raw["metric_findings"] = [
-        {"metric_label": "含量（干品）", "summary": "持续上升，逼近上限"},
-        {"metric_label": "", "summary": "缺指标名 → 丢弃"},
+        {
+            "metric_index": 1,
+            "metric_label": "含量（干品）",
+            "verdict": "abnormal",
+            "summary": "持续上升，逼近上限",
+        },
+        {"metric_index": 2, "verdict": "bogus", "summary": "非法裁决 → 丢弃"},
+        {"metric_label": "缺序号", "verdict": "normal", "summary": "缺序号 → 丢弃"},
+        {"metric_index": 3, "metric_label": "干燥失重", "verdict": "improved"},
         "not-a-dict",
     ]
     return raw
@@ -235,11 +242,31 @@ def _valid_product_raw() -> dict:
 
 def test_validate_product_level_cleans_metric_findings() -> None:
     clean = validate_trend_ai_payload(_valid_product_raw(), product_level=True)
-    assert len(clean["metric_findings"]) == 1
-    assert clean["metric_findings"][0]["metric_label"] == "含量（干品）"
+    # 序号+裁决枚举双白名单：非法裁决/缺 summary 的丢弃；
+    # 缺序号但有指标名的保留（供调用方按名称兜底回填）
+    assert [item["metric_index"] for item in clean["metric_findings"]] == [1, None]
+    assert clean["metric_findings"][0]["verdict"] == "abnormal"
+    assert clean["metric_findings"][1]["metric_label"] == "缺序号"
     # 非产品级：不产出 findings 键
     plain = validate_trend_ai_payload(_valid_product_raw())
     assert "metric_findings" not in plain
+
+
+def test_validate_product_signals_keep_metric_index() -> None:
+    raw = _valid_raw()
+    raw["signals"] = [
+        {
+            "metric_index": 2,
+            "batch_no": "MC260808",
+            "rule_type": "month_level",
+            "severity": "high",
+            "note": "x",
+        },
+        {"batch_no": "B", "rule_type": "month_level", "severity": "low", "note": "y"},
+    ]
+    clean = validate_trend_ai_payload(raw, product_level=True)
+    assert clean["signals"][0]["metric_index"] == 2
+    assert "metric_index" not in clean["signals"][1]  # 无序号信号保持原样
 
 
 def _product_kwargs() -> dict:
@@ -267,10 +294,18 @@ async def test_run_product_trend_ai_completed(monkeypatch) -> None:
     _patch_llm(monkeypatch, chat_json=chat_json)
     result = await run_product_trend_ai_analysis(**_product_kwargs())
     assert result["status"] == "completed"
-    assert len(result["ai_summary"]["metric_findings"]) == 1
+    assert result["ai_summary"]["metric_findings"][0]["verdict"] == "abnormal"
     # 一次模型调用，expected_keys 含 metric_findings
     chat_json.assert_awaited_once()
     assert "metric_findings" in chat_json.await_args.kwargs["expected_keys"]
+    # 提示词注入终审所需业务事实：方向 / 距限度余量 / 全历史波动带 / 判据为候选
+    prompt = chat_json.await_args.args[0][0]["content"]
+    assert "指标方向" in prompt
+    assert "当前水平距限度余量" in prompt
+    assert "全历史波动带" in prompt
+    assert "粗筛提名（待终审，非既定结论）" in prompt
+    assert "终审" in prompt
+    assert "abnormal|normal|improved" in prompt
 
 
 @pytest.mark.anyio

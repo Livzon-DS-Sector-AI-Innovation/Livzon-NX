@@ -291,6 +291,27 @@ export function TrendAiPanel({
     }
   }
 
+  // AI 未完成时"判据列表"被后端清空（AI 终审前不标红）：此时必须优先展示
+  // 分析中/失败状态，不能落进"未发现趋势异常"空态造成误导
+  if (status === 'pending') {
+    return (
+      <Spin spinning>
+        <Typography.Text type="secondary" style={{ paddingLeft: 8 }}>
+          趋势 AI 分析中，稍后刷新查看结论…
+        </Typography.Text>
+      </Spin>
+    )
+  }
+  if (status === 'failed') {
+    return (
+      <Alert
+        type="warning"
+        showIcon
+        title="趋势 AI 分析失败"
+        description="AI 终审未完成，本指标暂不判定趋势异常；可稍后重试。"
+      />
+    )
+  }
   if (anomalies.length === 0) {
     return (
       <Alert
@@ -298,7 +319,11 @@ export function TrendAiPanel({
         showIcon
         icon={<BulbOutlined />}
         title="未发现趋势异常"
-        description="该指标未触发连续趋势、斜率突变、均值偏移或周期环比判据。"
+        description={
+          status === 'completed'
+            ? '该指标经 AI 终审复核为正常 / 改善，未判定趋势异常。'
+            : '该指标未触发连续趋势、斜率突变、均值偏移或周期环比判据。'
+        }
       />
     )
   }
@@ -339,7 +364,7 @@ export function TrendAiPanel({
                 <span>
                   {ai.period || '-'}
                   {ai.analyzed_at ? ` · 完成于 ${new Date(ai.analyzed_at).toLocaleString('zh-CN')}` : ''}
-                  （每月固定一次，期间结论不变）
+                  （数据无更新时不重复分析）
                 </span>
                 {onReanalyze ? (
                   <Button size="small" loading={reanalyzing} onClick={() => void handleReanalyze()}>
@@ -355,19 +380,6 @@ export function TrendAiPanel({
             </Space>
           </Descriptions.Item>
         </Descriptions>
-      ) : status === 'pending' ? (
-        <Spin spinning>
-          <Typography.Text type="secondary" style={{ paddingLeft: 8 }}>
-            趋势 AI 分析中，稍后刷新查看结论…
-          </Typography.Text>
-        </Spin>
-      ) : status === 'failed' ? (
-        <Alert
-          type="warning"
-          showIcon
-          title="趋势 AI 分析失败"
-          description="已展示确定性统计结论，可稍后重试。"
-        />
       ) : null}
     </Space>
   )

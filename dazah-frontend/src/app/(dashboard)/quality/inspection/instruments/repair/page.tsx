@@ -12,6 +12,11 @@ export default function InstrRepairPage() {
         pullApi="/api/v1/quality/instruments/repair/pull"
         entityCode="qc_instr_repair"
         editable
+        editablePersonFields
+        enableTextPreview
+        enableAttachmentPreview
+        showLastSyncTime
+        filters={[{ key: '维修状态', label: '维修状态' }]}
       />
     </QualityQueryProvider>
   )

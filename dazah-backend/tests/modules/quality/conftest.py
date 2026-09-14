@@ -59,3 +59,25 @@ def _authenticate_quality_routes() -> Iterator[None]:
     app.dependency_overrides[get_current_user] = _override_current_user
     yield
     app.dependency_overrides.pop(get_current_user, None)
+
+
+@pytest.fixture(autouse=True)
+def _disable_attachment_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    """质量链路测试禁用附件字节缓存单例，避免跨用例共享污染。
+
+    缓存是可选加速层（默认开启），业务逻辑测试应直接走回源路径；
+    缓存自身的正确性由 tests/platform/integrations/feishu/test_attachment_cache.py
+    用独立实例覆盖。
+    """
+    from app.platform.integrations.feishu import attachment_cache as cache_mod
+
+    original = cache_mod._attachment_cache
+    cache_mod._attachment_cache = cache_mod.AttachmentCache(
+        enabled=False,
+        cache_dir="./data/feishu-attachment-cache-test",
+        max_memory_mb=1,
+        max_disk_mb=1,
+        ttl_seconds=1,
+    )
+    yield
+    cache_mod._attachment_cache = original

@@ -49,8 +49,9 @@ async def update_inbound_inspection_result(
 ) -> dict[str, Any]:
     """质量物料检验结果 → 仓储入库台账联动。
 
-    固体按 厂内代码+厂内批号、液体按 入库批号（质量批号整串作为 batch_no）
-    定位台账记录并更新 检测结果/不合格项目。详见
+    固体按 厂内代码+厂内批号（入库总账）匹配；液体先按 入库批号（质量批号
+    整串作为 batch_no，液体原辅料入库/槽车类）匹配，未命中再拆 代码+批号
+    到 入库总账（桶装液体）。定位后更新 检测结果/不合格项目。详见
     WarehouseService.update_inbound_inspection_result。
     """
     service = WarehouseService(db)

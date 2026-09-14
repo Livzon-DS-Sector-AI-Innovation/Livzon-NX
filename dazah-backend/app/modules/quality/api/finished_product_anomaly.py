@@ -13,7 +13,7 @@ import json
 from typing import Any
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, File, Query, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -38,6 +38,9 @@ from app.modules.quality.schemas.finished_product_anomaly import (
 from app.modules.quality.schemas.inspection_feishu_crud import (
     InspectionFeishuRecordBody,
 )
+from app.modules.quality.service.feishu_attachment_thumbnail import (
+    get_attachment_thumbnail,
+)
 from app.modules.quality.service.finished_product_anomaly_analysis import (
     ANALYSIS_YEARS,
     ENTITY_TYPE,
@@ -58,6 +61,7 @@ from app.modules.quality.service.inspection_feishu_crud import (
     get_inspection_feishu_record,
     list_bitable_feishu_records,
     update_inspection_feishu_record,
+    upload_inspection_feishu_attachment,
 )
 
 router = APIRouter()
@@ -198,6 +202,35 @@ async def api_import_anomaly_classifications(
         )
     finally:
         await release_action_lock("fp-anomaly-import")
+
+
+@router.post(
+    "/finished-product-anomaly/attachments",
+    summary="上传附件到成品异常多维表格（返回可写入附件字段的 file_token）",
+)
+async def api_upload_anomaly_attachment(
+    file: UploadFile = File(...),
+    year: int = Query(2025, description="成品异常报告年度"),
+    current_user: CurrentUser = None,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["product_qa"],
+    )
+    content = await file.read()
+    return success_response(
+        data=await upload_inspection_feishu_attachment(
+            db,
+            _anomaly_entity_code(year),
+            file.filename or "attachment",
+            content,
+            file.content_type or "",
+        ),
+        status_code=201,
+    )
 
 
 @router.get(
@@ -435,5 +468,39 @@ async def api_get_anomaly_attachment_preview(
             "Content-Disposition": (
                 f"inline; filename=preview; filename*=UTF-8''{encoded}"
             )
+        },
+    )
+
+
+@router.get(
+    "/finished-product-anomaly/records/{record_id}/attachments/{file_token}/thumbnail",
+    summary="成品异常列表缩略图（PIL 缩放为小图，避免列表页拉取原图全量字节）",
+)
+async def api_get_anomaly_attachment_thumbnail(
+    record_id: str,
+    file_token: str,
+    year: int = Query(2025, description="成品异常报告年度"),
+    max_width: int = Query(200, ge=16, le=512, description="缩略图最大宽度"),
+    max_height: int = Query(200, ge=16, le=512, description="缩略图最大高度"),
+    current_user: CurrentUser = None,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    _require_user(current_user)
+    result = await get_attachment_thumbnail(
+        db, _anomaly_entity_code(year), record_id, file_token, max_width, max_height
+    )
+    if result is None:
+        raise AppException(
+            message="该附件暂不支持生成缩略图，请下载后查看", status_code=400
+        )
+    content, content_type, filename = result
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": (
+                f"inline; filename=thumbnail; filename*=UTF-8''{quote(filename)}"
+            ),
+            "Cache-Control": "private, max-age=86400",
         },
     )

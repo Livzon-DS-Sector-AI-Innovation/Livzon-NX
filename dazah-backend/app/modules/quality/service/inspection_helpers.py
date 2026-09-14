@@ -78,7 +78,9 @@ def _smart_normalize_value(value: Any) -> Any:
         return _normalize(value)
     if isinstance(value, dict):
         link = value.get("link")
-        if link and value.get("type") == "url":
+        # 超链接字段：飞书回读为 {link,text,type}，但部分场景（主字段/公式）
+        # 不带 type，因此只要含 link 就按链接结构下发给前端，避免退化成纯文本
+        if link:
             return {"link": str(link), "text": str(value.get("text") or link)}
         # 单个人员对象（如 CreatedUser 字段，飞书返回单对象而非数组）→ 人员列表结构
         if _is_person_item(value):
@@ -305,8 +307,13 @@ async def _list_feishu(
     filters: dict[str, str] | None = None,
     page: int = 1,
     page_size: int = 20,
+    sort_field: str = "updated_at",
 ) -> dict[str, Any]:
-    """Generic Feishu list: fetch, map, filter, sort, paginate."""
+    """Generic Feishu list: fetch, map, filter, sort, paginate.
+
+    sort_field 默认按 updated_at 倒序；固体/液体/成品等检验页传 "批号"，
+    与镜像主路径的批号倒序保持一致（默认值不改动物品库存等其它调用方）。
+    """
     try:
         _, entity = await _resolve_runtime_entity(db, entity_code, direction="pull")
         # NOTE: 不将 field_names 传给飞书 API
@@ -340,7 +347,7 @@ async def _list_feishu(
                     it for it in items if str(it.get(field_key) or "") == field_value
                 ]
 
-    items.sort(key=lambda x: str(x.get("updated_at") or ""), reverse=True)
+    items.sort(key=lambda x: str(x.get(sort_field) or ""), reverse=True)
     start = (page - 1) * page_size
     result = _build_page_result(
         items[start : start + page_size], len(items), page, page_size
@@ -376,3 +383,100 @@ async def _pull_count(db: AsyncSession, entity_code: str) -> dict[str, int]:
     except Exception:
         return {"synced": 0, "failed": 0}
     return {"synced": len(records), "failed": 0}
+
+
+# 结果信封里的元字段（不算业务列）
+_RESULT_META_KEYS = frozenset({"record_id", "created_at", "updated_at"})
+
+
+def _map_all_fields(record: dict[str, Any], entity: Any) -> dict[str, Any]:
+    """动态映射：以飞书记录的真实字段名为键（不依赖硬编码字段清单）。
+
+    与 _base_map 的差别：字段清单来自记录本身，飞书表增删列后页面自动跟随。
+    硬编码清单一旦与真实列名不一致（改名/换表），_has_visible_field_value 会把
+    整张表的行都过滤掉，页面表现为"有数据但一条都不显示"。
+    """
+    fields = record.get("fields") or {}
+    modified_at = feishu_sync_service._get_record_modified_at(record)
+    created_at = (
+        _parse_dt(record.get("created_time")) or modified_at or datetime.now(UTC)
+    )
+    result: dict[str, Any] = {
+        "record_id": str(record.get("record_id") or ""),
+        "created_at": _dt_iso(created_at),
+        "updated_at": _dt_iso(modified_at or created_at),
+    }
+    for name in fields:
+        key = str(name or "").strip()
+        if not key:
+            continue
+        result[key] = _smart_normalize_value(_field(fields, entity, key))
+    return result
+
+
+def _collect_field_names(items: list[dict[str, Any]]) -> list[str]:
+    """按首次出现顺序汇总业务列名（飞书返回顺序即表内列顺序）。"""
+    names: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        for key in item:
+            if key in _RESULT_META_KEYS or key in seen:
+                continue
+            seen.add(key)
+            names.append(str(key))
+    return names
+
+
+async def _list_feishu_dynamic(
+    db: AsyncSession,
+    entity_code: str,
+    *,
+    keyword: str | None = None,
+    filters: dict[str, str] | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> dict[str, Any]:
+    """镜像未就绪时的实时兜底读取：列完全跟随飞书表真实字段。
+
+    附件列返回 [{name,url,file_token,type,size}]、人员列返回 [{name,avatar_url,id}]、
+    超链接返回 {link,text}，与镜像 cells 结构一致，前端渲染逻辑共用一套。
+    """
+    try:
+        _, entity = await _resolve_runtime_entity(db, entity_code, direction="pull")
+        records = await _search_entity_records_with_fallback(
+            db, entity_code, field_names=None
+        )
+        items = [_map_all_fields(record, entity) for record in records]
+    except Exception as e:
+        logger.warning("Feishu dynamic list failed for %s: %s", entity_code, e)
+        return _build_page_result([], 0, page, page_size)
+
+    field_names = _collect_field_names(items)
+    items = [
+        item
+        for item in items
+        if any(_normalize(item.get(name)) for name in field_names)
+    ]
+
+    if keyword:
+        kw = keyword.lower()
+        items = [
+            it
+            for it in items
+            if any(kw in str(it.get(name) or "").lower() for name in field_names)
+        ]
+
+    if filters:
+        for field_key, field_value in filters.items():
+            if field_value:
+                items = [
+                    it for it in items if str(it.get(field_key) or "") == field_value
+                ]
+
+    items.sort(key=lambda x: str(x.get("updated_at") or ""), reverse=True)
+    start = (page - 1) * page_size
+    result = _build_page_result(
+        items[start : start + page_size], len(items), page, page_size
+    )
+    result["fields"] = field_names
+    return result

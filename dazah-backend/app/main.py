@@ -201,9 +201,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         ProductionPlanHourlySyncGenerator,
     )
     from app.modules.quality.scheduled import (
+        AttachmentCacheWarmupGenerator,
         ChangeActionPlanReminderGenerator,
         InspectionFinishedMirrorFullSyncGenerator,
         InspectionFinishedMirrorSyncGenerator,
+        InspectionInstrumentMirrorFullSyncGenerator,
+        InspectionInstrumentMirrorSyncGenerator,
         InspectionItemsMirrorFullSyncGenerator,
         InspectionItemsMirrorSyncGenerator,
         InspectionMaterialMirrorFullSyncGenerator,
@@ -241,6 +244,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_registry.register_generator(ChangeActionPlanReminderGenerator())
     scheduler_registry.register_generator(TrendAlertEscalationGenerator())
     scheduler_registry.register_generator(TrendAlertMonthlyAnalysisGenerator())
+    scheduler_registry.register_generator(AttachmentCacheWarmupGenerator())
     scheduler_registry.register_generator(
         SupplierQualificationMirrorSyncGenerator()
     )
@@ -253,6 +257,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_registry.register_generator(InspectionMaterialMirrorFullSyncGenerator())
     scheduler_registry.register_generator(InspectionFinishedMirrorSyncGenerator())
     scheduler_registry.register_generator(InspectionFinishedMirrorFullSyncGenerator())
+    scheduler_registry.register_generator(InspectionInstrumentMirrorSyncGenerator())
+    scheduler_registry.register_generator(InspectionInstrumentMirrorFullSyncGenerator())
     scheduler_registry.register_generator(ItemsStockAlertPushGenerator())
     scheduler_registry.register_generator(OffboardingReminderGenerator())
     scheduler_registry.register_generator(ContractExpiryReminderGenerator())

@@ -451,3 +451,55 @@ def test_finished_product_anomaly_entities_seeded_and_prefilled() -> None:
         True,
         True,
     )
+
+
+def test_instrument_entities_seeded_prefilled_and_pullable() -> None:
+    """仪器管理 8 张子表必须在质量设置可见（DEFAULT 列表）且预填两个新 Base。"""
+    instrument_codes = {
+        "qc_instr_equipment",
+        "qc_instr_maintenance",
+        "qc_instr_repair",
+        "qc_instr_contracts",
+        "qc_instr_plans",
+        "qc_instr_calibration",
+        "qc_instr_cal_plan",
+        "qc_instr_cal_external",
+    }
+    default_map = {
+        item.entity_code: item
+        for item in service._build_default_entity_items()
+        if item.entity_code in instrument_codes
+    }
+    assert set(default_map) == instrument_codes
+    assert all(item.entity_group == "仪器管理" for item in default_map.values())
+    assert default_map["qc_instr_equipment"].entity_name == "设备数据管理"
+    assert default_map["qc_instr_cal_external"].entity_name == "外部校准、检定"
+    # 预填绑定齐全：ensure 建行时会以 (app_token and table_id) 决定 is_enabled
+    for item in default_map.values():
+        prefill = service.QUALITY_FEISHU_ENTITY_ENV_PREFILLS[item.entity_code]
+        assert prefill.get("app_token") and prefill.get("table_id"), item.entity_code
+
+    prefills = service.QUALITY_FEISHU_ENTITY_ENV_PREFILLS
+    equipment_base = "Cencb8KRja1vL8s7DLqcXiQtnMf"
+    calibration_base = "Vyn1bfLOwaUG15sWXGMcwy5Gnah"
+    for code in (
+        "qc_instr_equipment",
+        "qc_instr_maintenance",
+        "qc_instr_repair",
+        "qc_instr_contracts",
+        "qc_instr_plans",
+    ):
+        assert prefills[code]["app_token"] == equipment_base, code
+    for code in (
+        "qc_instr_calibration",
+        "qc_instr_cal_plan",
+        "qc_instr_cal_external",
+    ):
+        assert prefills[code]["app_token"] == calibration_base, code
+    assert prefills["qc_instr_calibration"]["table_id"] == "tblRELoVEYKJ6fHB"
+    assert prefills["qc_instr_cal_plan"]["table_id"] == "tblcztwNpMGXLQ8j"
+    assert prefills["qc_instr_cal_external"]["table_id"] == "tblvF1h7klsT2TuP"
+
+    # 页面可编辑：仪器实体不在 push-only 名单，默认双向开关开启
+    for code in instrument_codes:
+        assert service._get_default_sync_directions(code) == (True, True)

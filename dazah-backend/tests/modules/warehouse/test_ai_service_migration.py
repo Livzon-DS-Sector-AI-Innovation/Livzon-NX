@@ -416,6 +416,61 @@ async def test_get_product_line_trend_overview_and_summary(
 
 
 @pytest.mark.anyio
+async def test_trend_anomalies_exclude_low_risk_materials(
+    db_session, monkeypatch
+) -> None:
+    ai_service = WarehouseAIService(db_session)
+
+    low_raw = SimpleNamespace(
+        name="低风险原料", available=500.0, safety=50.0, product_line="FA"
+    )
+    medium_packaging = SimpleNamespace(
+        name="中风险包材", available=200.0, safety=80.0, product_line="MC"
+    )
+
+    async def _fake_usage(page_key, material_type, quantity_fields):
+        if material_type == "raw":
+            # 本周零消耗 + 历史有消耗 + 库存远高于安全线 → low
+            return {
+                "低风险原料": {
+                    "current_week_usage": 0.0,
+                    "history_week_avg_usage": 20.0,
+                    "material_type": "raw",
+                }
+            }
+        # 本周用量显著高于周均 → medium
+        return {
+            "中风险包材": {
+                "current_week_usage": 40.0,
+                "history_week_avg_usage": 15.0,
+                "material_type": "packaging",
+            }
+        }
+
+    monkeypatch.setattr(ai_service, "_collect_ledger_usage_by_period", _fake_usage)
+    monkeypatch.setattr(
+        ai_service.repo, "list_raw_materials", AsyncMock(return_value=[low_raw])
+    )
+    monkeypatch.setattr(
+        ai_service.repo,
+        "list_packaging_materials",
+        AsyncMock(return_value=[medium_packaging]),
+    )
+
+    anomalies = await ai_service.get_material_trend_anomalies()
+    assert [item["material_name"] for item in anomalies] == ["中风险包材"]
+
+    summary = await ai_service.get_trend_anomaly_summary()
+    assert summary == {
+        "total": 1,
+        "high_risk": 0,
+        "medium_risk": 1,
+        "raw_count": 0,
+        "packaging_count": 1,
+    }
+
+
+@pytest.mark.anyio
 async def test_parse_chat_question_hardware_cost_last_month() -> None:
     """Test parsing hardware cost question with last_month time range."""
     query = parse_chat_question("上月哪些车间五金领用费用异常偏高")

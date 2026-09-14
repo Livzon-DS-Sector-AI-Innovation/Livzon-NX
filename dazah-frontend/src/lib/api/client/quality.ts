@@ -28,6 +28,7 @@ import type {
   AnomalyDashboardData,
   InspectionFeishuFieldMeta,
   InspectionFeishuFieldsResult,
+  InspectionMaterialItem,
   ItemsDashboardData,
   ValidationReviewJobStatus,
   ValidationReviewListItem,
@@ -1641,6 +1642,27 @@ export async function fetchInspectionFeishuFields(
   if (!res.ok) return null
   const json = await res.json()
   return json.data as InspectionFeishuFieldsResult
+}
+
+/** 全部固体+液体原辅料（代码+名称 label、模块与分组），供新增检验选料。 */
+export async function fetchInspectionMaterials(): Promise<InspectionMaterialItem[]> {
+  const res = await fetch('/api/v1/quality/inspection/materials')
+  if (!res.ok) return []
+  const json = await res.json()
+  return Array.isArray(json.data) ? json.data as InspectionMaterialItem[] : []
+}
+
+/** 按 record_id 直读检验飞书记录详情（列表镜像未刷新时用于打开详情抽屉）。 */
+export async function fetchInspectionFeishuRecordDetail(
+  entityCode: string,
+  recordId: string
+): Promise<Record<string, unknown> | null> {
+  const res = await fetch(
+    `/api/v1/quality/inspection/feishu/${encodeURIComponent(entityCode)}/records/${encodeURIComponent(recordId)}`
+  )
+  if (!res.ok) return null
+  const json = await res.json()
+  return (json.data ?? null) as Record<string, unknown> | null
 }
 
 /** 库存台账动态筛选项（存放位置 / 库存报警去重值）。 */

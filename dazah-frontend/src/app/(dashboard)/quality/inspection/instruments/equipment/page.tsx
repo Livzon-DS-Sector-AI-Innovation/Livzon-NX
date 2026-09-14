@@ -12,9 +12,13 @@ export default function EquipmentPage() {
         pullApi="/api/v1/quality/instruments/equipment/pull"
         entityCode="qc_instr_equipment"
         editable
+        editablePersonFields
+        enableTextPreview
+        enableAttachmentPreview
+        showLastSyncTime
         filters={[
-          { key: '设备状态', label: '设备状态' },
           { key: '设备类型', label: '设备类型' },
+          { key: '设备状态', label: '设备状态' },
         ]}
       />
     </QualityQueryProvider>

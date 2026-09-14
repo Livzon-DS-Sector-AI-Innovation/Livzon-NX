@@ -104,11 +104,12 @@ def _mirror_meta_fake() -> dict:
 
 
 @pytest.mark.anyio
-async def test_finished_records_list_meta_returns_all_fields(
+async def test_finished_records_list_meta_returns_display_fields(
     client,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """成品列表不再裁剪 display_fields，前端展示 meta.fields 全部列。"""
+    """成品列表恢复精简展示列：meta.display_fields = 批号/批量/规格/检测项目，
+    meta.fields 仍返回全部列（详情抽屉用）。"""
     from app.modules.quality import api as quality_api
 
     monkeypatch.setattr(
@@ -122,11 +123,16 @@ async def test_finished_records_list_meta_returns_all_fields(
     )
     assert resp.status_code == 200
     meta = resp.json()["meta"]
-    assert "display_fields" not in meta
-    # 全列返回
+    # 全列保留在 fields
     assert "批号" in meta["fields"]
     assert "年" in meta["fields"]
     assert "含量（干品）:97.0%-103.0%" in meta["fields"]
+    # display_fields 精简列：批号 + 检测项目（含量/杂质），不含「年」
+    display = meta["display_fields"]
+    assert "批号" in display
+    assert "含量（干品）:97.0%-103.0%" in display
+    assert "年" not in display
+    assert len(display) <= 6
 
 
 @pytest.mark.anyio

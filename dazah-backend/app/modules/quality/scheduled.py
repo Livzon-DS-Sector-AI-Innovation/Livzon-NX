@@ -8,14 +8,23 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 
+from app.core.config import get_settings
 from app.modules.quality.models.feishu_settings import QualityFeishuEntitySetting
 from app.modules.quality.service.change_action_plan import (
     find_due_change_action_plan_reminders,
     send_change_action_plan_reminder,
 )
+from app.modules.quality.service.feishu_attachment_warmup import (
+    _cron_to_time_of_day,
+    warmup_attachment_cache,
+)
 from app.modules.quality.service.inspection_finished_mirror import (
     FINISHED_MIRROR_ENTITIES,
     sync_finished_page,
+)
+from app.modules.quality.service.inspection_instrument_mirror import (
+    INSTRUMENT_MIRROR_ENTITIES,
+    sync_instrument_page,
 )
 from app.modules.quality.service.inspection_items_mirror import (
     ITEMS_MIRROR_PAGES,
@@ -297,6 +306,50 @@ class InspectionFinishedMirrorFullSyncGenerator(TaskGenerator):
         await sync_finished_page(session, item, incremental=False)
 
 
+async def _instrument_pull_enabled(session: Any) -> list[str]:
+    """仪器管理实体启用且回拉开关打开时才调度镜像同步。"""
+    return await _mirror_entities_pull_enabled(session, INSTRUMENT_MIRROR_ENTITIES)
+
+
+class InspectionInstrumentMirrorSyncGenerator(TaskGenerator):
+    """仪器管理镜像增量同步（每 10 分钟）。
+
+    对齐物品镜像模式：records/search 单页双路（业务日期 + last_modified_time）
+    按上次同步水线过滤只写变更行；失败由镜像服务转 AppException，引擎记录并
+    标红设置页"最近状态"。
+    """
+
+    name = "quality.inspection_instrument_mirror_sync"
+    schedule = ScheduleConfig(
+        strategy=ScheduleStrategy.INTERVAL,
+        interval_seconds=600,
+        timezone="Asia/Shanghai",
+    )
+
+    async def find_due(self, session: Any) -> Any:
+        return await _instrument_pull_enabled(session)
+
+    async def execute_one(self, session: Any, item: Any) -> None:
+        await sync_instrument_page(session, item, incremental=True)
+
+
+class InspectionInstrumentMirrorFullSyncGenerator(TaskGenerator):
+    """仪器管理镜像每日全量兜底（凌晨 03:00 错峰），做删除对账与列结构刷新。"""
+
+    name = "quality.inspection_instrument_mirror_full_sync"
+    schedule = ScheduleConfig(
+        strategy=ScheduleStrategy.FIXED_TIME,
+        time_of_day="03:00",
+        timezone="Asia/Shanghai",
+    )
+
+    async def find_due(self, session: Any) -> Any:
+        return await _instrument_pull_enabled(session)
+
+    async def execute_one(self, session: Any, item: Any) -> None:
+        await sync_instrument_page(session, item, incremental=False)
+
+
 class ItemsStockAlertPushGenerator(TaskGenerator):
     """物品库存不足预警每日定时推送（每小时扫描一次）。
 
@@ -346,3 +399,28 @@ class TrendAlertMonthlyAnalysisGenerator(TaskGenerator):
 
     async def execute_one(self, session: Any, item: Any) -> None:
         await run_trend_monthly_analysis(session, item)
+
+
+class AttachmentCacheWarmupGenerator(TaskGenerator):
+    """质量列表页附件缓存每日预热（凌晨 02:00，可配置关闭）。
+
+    把固体/液体/成品/物品/入库/领用等镜像行附件字节与缩略图预写入本地缓存，
+    用户白天打开列表页时附件直接命中缓存，无需回源飞书。
+    """
+
+    name = "quality.attachment_cache_warmup"
+    schedule = ScheduleConfig(
+        strategy=ScheduleStrategy.FIXED_TIME,
+        time_of_day=_cron_to_time_of_day(
+            get_settings().QUALITY_ATTACHMENT_WARMUP_CRON
+        ),
+        timezone="Asia/Shanghai",
+    )
+
+    async def find_due(self, session: Any) -> Any:
+        if not get_settings().QUALITY_ATTACHMENT_WARMUP_ENABLED:
+            return []
+        return [True]
+
+    async def execute_one(self, session: Any, item: Any) -> None:
+        await warmup_attachment_cache()

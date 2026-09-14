@@ -63,6 +63,15 @@ QUALITY_PULL_ENTITY_LABELS: dict[str, str] = {
     "product_quality_bbas": "L-苯丙氨酸",
     "product_quality_sas": "L-色氨酸",
     "supplier_qualification": "供应商资质",
+    # 仪器管理（本地镜像回拉，两张 Base：设备台账 + QC 校验计划）
+    "qc_instr_equipment": "设备数据管理",
+    "qc_instr_maintenance": "设备维护保养记录",
+    "qc_instr_repair": "设备维修记录",
+    "qc_instr_contracts": "设备维保合同",
+    "qc_instr_plans": "QC检测仪器维护保养周期表",
+    "qc_instr_calibration": "内校汇总",
+    "qc_instr_cal_plan": "内部校验计划",
+    "qc_instr_cal_external": "外部校准、检定",
 }
 
 QUALITY_FEISHU_ENTITY_ENV_FALLBACKS: dict[str, str] = {
@@ -103,12 +112,12 @@ QUALITY_FEISHU_ENTITY_ENV_FALLBACKS: dict[str, str] = {
     # 仪器管理
     "qc_instr_equipment": "",
     "qc_instr_maintenance": "",
-    "qc_instr_calibration": "",
     "qc_instr_repair": "",
-    "qc_instr_change": "",
     "qc_instr_contracts": "",
     "qc_instr_plans": "",
-    "qc_instr_assets": "",
+    "qc_instr_calibration": "",
+    "qc_instr_cal_plan": "",
+    "qc_instr_cal_external": "",
     # 成品检验 - 仅保留 DEFAULT_ENTITIES 中存在的客户特定子表
     "qc_finished_bbas_hanguang_k1": "",
     "qc_finished_bbas_weiduo_k2": "",
@@ -1382,6 +1391,16 @@ async def pull_quality_records_from_feishu(
             "conflicts": 0,
         }
 
+    if entity_code in _instrument_entity_set():
+        result = await _pull_instrument_mirror(db, entity_code)
+        return {
+            "entity_code": entity_code,
+            "entity_label": QUALITY_PULL_ENTITY_LABELS.get(entity_code),
+            "synced": result["synced"],
+            "failed": 0,
+            "conflicts": 0,
+        }
+
     synced = 0
     failed = 0
     conflicts = 0
@@ -1820,6 +1839,10 @@ async def pull_quality_records_from_feishu(
     if entity_code == "deviation_report_record":
         synced += len(deviation_report_record_records)
 
+    if entity_code is None:
+        # 全部实体回拉（设置页「手动回拉已启用数据」）时顺带同步仪器镜像
+        synced += await _pull_instrument_mirrors(db, runtime)
+
     return {
         "entity_code": entity_code,
         "entity_label": QUALITY_PULL_ENTITY_LABELS.get(entity_code)
@@ -1978,3 +2001,44 @@ async def get_quality_sync_conflicts(
 
     results.sort(key=lambda item: item["updated_at"], reverse=True)
     return results[:limit]
+
+
+# ── 仪器管理镜像回拉（页面/设置页共用）─────────────────────────────────
+
+
+def _instrument_mirror_module() -> Any:
+    """仪器镜像服务（函数内导入，避免模块级循环依赖）。"""
+    from app.modules.quality.service import inspection_instrument_mirror as mirror
+
+    return mirror
+
+
+def _instrument_entity_set() -> frozenset[str]:
+    """仪器镜像实体集合；延迟到调用期解析，避免模块导入期互相依赖。"""
+    return frozenset(_instrument_mirror_module().INSTRUMENT_MIRROR_ENTITIES)
+
+
+async def _pull_instrument_mirror(
+    db: AsyncSession, entity_code: str
+) -> dict[str, int]:
+    """单个仪器子表镜像全量回拉（落本地镜像，供页面与附件预览使用）。"""
+    result = await _instrument_mirror_module().sync_instrument_page(
+        db, entity_code, incremental=False
+    )
+    return {"synced": int(result.get("synced") or 0)}
+
+
+async def _pull_instrument_mirrors(db: AsyncSession, runtime: Any) -> int:
+    """全部启用的仪器子表镜像全量回拉；逐个容错，返回同步行数合计。"""
+    mirror = _instrument_mirror_module()
+    total = 0
+    for code in mirror.INSTRUMENT_MIRROR_ENTITIES:
+        if runtime.get_entity_config(code, direction="pull") is None:
+            continue
+        try:
+            result = await mirror.sync_instrument_page(db, code, incremental=False)
+        except Exception as exc:  # noqa: BLE001 - 逐表容错并记录
+            logger.warning("instrument mirror pull failed (%s): %s", code, exc)
+            continue
+        total += int(result.get("synced") or 0)
+    return total
