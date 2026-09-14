@@ -10172,6 +10172,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/production/extraction-daily-reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 提炼成品日报列表（可按日期区间过滤） */
+        get: operations["list_extraction_daily_reports_api_v1_production_extraction_daily_reports_get"];
+        put?: never;
+        /** 录入提炼成品日报（同日覆盖更新） */
+        post: operations["upsert_extraction_daily_report_api_v1_production_extraction_daily_reports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/production/fa/acidification/flat-list": {
         parameters: {
             query?: never;
@@ -12193,6 +12211,26 @@ export interface paths {
          * @description 创建生产计划
          */
         post: operations["create_plan_api_v1_production_plans_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/plans/monthly-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 生产计划月度汇总（按单位分组）
+         * @description 按自然月汇总计划产量/实际完成/完成率；KG 与批等不同单位分开统计。
+         */
+        get: operations["get_plan_monthly_summary_api_v1_production_plans_monthly_summary_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -30168,6 +30206,11 @@ export interface components {
              */
             dump_date?: string | null;
             /**
+             * Extract Kg
+             * @description 提炼成品产量(kg)
+             */
+            extract_kg?: number | null;
+            /**
              * Remark
              * @description 备注
              */
@@ -35900,6 +35943,20 @@ export interface components {
              * @description 部门名称
              */
             name: string;
+        };
+        /** DailyReportBody */
+        DailyReportBody: {
+            /**
+             * Quantity Kg
+             * @description 成品量(kg)
+             */
+            quantity_kg: number;
+            /**
+             * Report Date
+             * Format: date
+             * @description 成品日期
+             */
+            report_date: string;
         };
         /**
          * DailyRiskReportCreate
@@ -86565,6 +86622,82 @@ export interface operations {
             };
         };
     };
+    list_extraction_daily_reports_api_v1_production_extraction_daily_reports_get: {
+        parameters: {
+            query?: {
+                /** @description 起始日（含） */
+                period_start?: string | null;
+                /** @description 结束日（含） */
+                period_end?: string | null;
+                /** @description 产品代码（如 FA/MC/DR） */
+                product?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_extraction_daily_report_api_v1_production_extraction_daily_reports_post: {
+        parameters: {
+            query?: {
+                /** @description 产品代码（如 FA/MC/DR） */
+                product?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DailyReportBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_acidification_api_v1_production_fa_acidification_flat_list_get: {
         parameters: {
             query?: {
@@ -91403,6 +91536,8 @@ export interface operations {
                 page_size?: number;
                 product_name?: string | null;
                 workshop?: string | null;
+                /** @description 按自然月筛选（YYYY-MM），日期落在哪个月即哪个月的计划 */
+                month?: string | null;
             };
             header?: never;
             path?: never;
@@ -91446,6 +91581,40 @@ export interface operations {
                 "application/json": components["schemas"]["ProductionPlanCreate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_plan_monthly_summary_api_v1_production_plans_monthly_summary_get: {
+        parameters: {
+            query: {
+                /** @description 月份，格式 YYYY-MM */
+                month: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

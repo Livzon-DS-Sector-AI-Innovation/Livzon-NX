@@ -2,6 +2,7 @@
 import logging
 from datetime import date, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -107,7 +108,11 @@ def _extract_date(ts: Any) -> date | None:
         return None
     if isinstance(ts, (int, float)) and ts > 0:
         try:
-            return datetime.fromtimestamp(ts / 1000).date()
+            # 飞书日期毫秒时间戳为北京时间零点；容器默认 UTC，
+            # 不显式给时区会把日期归到前一天
+            return datetime.fromtimestamp(
+                ts / 1000, ZoneInfo("Asia/Shanghai")
+            ).date()
         except (OSError, ValueError):
             return None
     text = _extract_text(ts)
@@ -133,11 +138,13 @@ async def _sync_production_plan(
     created = 0
     updated = 0
     page_token: str | None = None
+    row_order = 0
 
     while True:
         result = await client.list_records(config.table_id, page_token=page_token)
         items = result["items"]
         for item in items:
+            row_order += 1
             fields = item.get("fields") or {}
 
             mapped: dict[str, Any] = {}
@@ -153,6 +160,8 @@ async def _sync_production_plan(
                     mapped[db_name] = _extract_number(val)
                 else:
                     mapped[db_name] = _extract_text(val)
+            # 飞书原表行序（跨分页累加），用于列表稳定排序
+            mapped["row_order"] = row_order
 
             product_name = mapped.get("product_name") or config.product_name
             if not product_name:

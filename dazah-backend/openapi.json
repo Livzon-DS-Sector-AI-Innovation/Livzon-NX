@@ -9708,6 +9708,19 @@
             "description": "放罐日期",
             "title": "Dump Date"
           },
+          "extract_kg": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "提炼成品产量(kg)",
+            "title": "Extract Kg"
+          },
           "remark": {
             "anyOf": [
               {
@@ -24166,6 +24179,28 @@
           "name"
         ],
         "title": "CustomTrainingDepartmentCreate",
+        "type": "object"
+      },
+      "DailyReportBody": {
+        "properties": {
+          "quantity_kg": {
+            "description": "成品量(kg)",
+            "minimum": 0.0,
+            "title": "Quantity Kg",
+            "type": "number"
+          },
+          "report_date": {
+            "description": "成品日期",
+            "format": "date",
+            "title": "Report Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_date",
+          "quantity_kg"
+        ],
+        "title": "DailyReportBody",
         "type": "object"
       },
       "DailyRiskReportCreate": {
@@ -138248,6 +138283,176 @@
         ]
       }
     },
+    "/api/v1/production/extraction-daily-reports": {
+      "get": {
+        "operationId": "list_extraction_daily_reports_api_v1_production_extraction_daily_reports_get",
+        "parameters": [
+          {
+            "description": "起始日（含）",
+            "in": "query",
+            "name": "period_start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "起始日（含）",
+              "title": "Period Start"
+            }
+          },
+          {
+            "description": "结束日（含）",
+            "in": "query",
+            "name": "period_end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "结束日（含）",
+              "title": "Period End"
+            }
+          },
+          {
+            "description": "产品代码（如 FA/MC/DR）",
+            "in": "query",
+            "name": "product",
+            "required": false,
+            "schema": {
+              "default": "FA",
+              "description": "产品代码（如 FA/MC/DR）",
+              "title": "Product",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response List Extraction Daily Reports Api V1 Production Extraction Daily Reports Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "提炼成品日报列表（可按日期区间过滤）",
+        "tags": [
+          "生产管理",
+          "生产管理 - 提炼工段"
+        ]
+      },
+      "post": {
+        "operationId": "upsert_extraction_daily_report_api_v1_production_extraction_daily_reports_post",
+        "parameters": [
+          {
+            "description": "产品代码（如 FA/MC/DR）",
+            "in": "query",
+            "name": "product",
+            "required": false,
+            "schema": {
+              "default": "FA",
+              "description": "产品代码（如 FA/MC/DR）",
+              "title": "Product",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailyReportBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Upsert Extraction Daily Report Api V1 Production Extraction Daily Reports Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "录入提炼成品日报（同日覆盖更新）",
+        "tags": [
+          "生产管理",
+          "生产管理 - 提炼工段"
+        ]
+      }
+    },
     "/api/v1/production/fa/acidification/flat-list": {
       "get": {
         "description": "返回平铺列表，_is_first 标记 rowSpan 起始行",
@@ -147843,6 +148048,24 @@
             }
           },
           {
+            "description": "按自然月筛选（YYYY-MM），日期落在哪个月即哪个月的计划",
+            "in": "query",
+            "name": "month",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按自然月筛选（YYYY-MM），日期落在哪个月即哪个月的计划",
+              "title": "Month"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,
@@ -147940,6 +148163,67 @@
           }
         },
         "summary": "创建生产计划",
+        "tags": [
+          "生产管理"
+        ]
+      }
+    },
+    "/api/v1/production/plans/monthly-summary": {
+      "get": {
+        "description": "按自然月汇总计划产量/实际完成/完成率；KG 与批等不同单位分开统计。",
+        "operationId": "get_plan_monthly_summary_api_v1_production_plans_monthly_summary_get",
+        "parameters": [
+          {
+            "description": "月份，格式 YYYY-MM",
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "description": "月份，格式 YYYY-MM",
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "生产计划月度汇总（按单位分组）",
         "tags": [
           "生产管理"
         ]

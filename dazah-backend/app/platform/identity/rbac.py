@@ -209,6 +209,24 @@ def build_permission_catalog() -> list[dict[str, Any]]:
                     "name": f"{module}.{action}",
                 }
             )
+    # 工段级数据权限：控制看板产量字段可见性（角色在管理界面绑定）。
+    # 注意不要注册为按钮级菜单码，避免 {module}:write 自动并入导致串岗。
+    catalog.extend(
+        [
+            {
+                "code": "production:fermentation-yield",
+                "module": "production",
+                "action": "fermentation-yield",
+                "name": "发酵放罐产量可见",
+            },
+            {
+                "code": "production:extraction-yield",
+                "module": "production",
+                "action": "extraction-yield",
+                "name": "提炼成品产量可见",
+            },
+        ]
+    )
     return catalog
 
 

@@ -3,6 +3,7 @@ import logging
 import re
 from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -95,7 +96,10 @@ def _extract_value(val: Any, ftype: int) -> Any:
     if ftype == 5:  # date (timestamp millis)
         if isinstance(val, (int, float)) and val > 0:
             try:
-                return datetime.fromtimestamp(val / 1000).date()
+                # 飞书日期为北京时间零点，容器默认 UTC，需显式给时区
+                return datetime.fromtimestamp(
+                    val / 1000, ZoneInfo("Asia/Shanghai")
+                ).date()
             except (OSError, ValueError):
                 return None
         return None
