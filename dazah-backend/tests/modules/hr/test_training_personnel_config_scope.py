@@ -315,6 +315,50 @@ async def test_api_delete_other_forbidden(
     assert resp.status_code == 403, resp.text
 
 
+@pytest.mark.asyncio
+async def test_api_delete_own_config_allowed_for_normal_user(
+    client: AsyncClient, db_session: AsyncSession, monkeypatch
+):
+    """接口 delete：普通用户删除自己创建的配置 → 成功且从列表消失。
+
+    回归：created_by 是 UUID 列、接口层传的是字符串，两侧比较不统一会让
+    「删自己创建的配置」也被 403（前端表现为删除无反应、改名保存被中断）。
+    """
+    await _seed_user(db_session, DEV_USER_ID, "dev用户")
+    await _seed_config(
+        db_session,
+        name="我配的",
+        owner=DEV_USER_ID,
+        level="部门级",
+        department="101一车间",
+    )
+    await db_session.commit()
+
+    async def _fake_is_admin(db, user):
+        return False
+
+    monkeypatch.setattr("app.modules.hr.api._is_super_admin_user", _fake_is_admin)
+
+    cfg_id = (
+        await db_session.execute(
+            select(TrainingPersonnelConfig.id).where(
+                TrainingPersonnelConfig.config_name == "我配的"
+            )
+        )
+    ).scalar_one()
+
+    resp = await client.delete(f"/api/v1/hr/training-personnel-configs/{cfg_id}")
+    assert resp.status_code == 200, resp.text
+
+    # 接口会话不提交（client fixture 管理生命周期），同一会话内查列表确认已删除
+    listed = await client.get(
+        "/api/v1/hr/training-personnel-configs",
+        params={"level": "部门级", "department": "101一车间"},
+    )
+    assert listed.status_code == 200, listed.text
+    assert "我配的" not in {c["config_name"] for c in listed.json()["data"]}
+
+
 # ─── 二级培训会话 from-ledger（建会话+复制试卷+过滤人员）───
 
 
