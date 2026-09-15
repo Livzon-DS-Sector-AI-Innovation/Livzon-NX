@@ -84,7 +84,7 @@ async def test_seed_menus_structure_and_idempotent(db_session) -> None:
     batches = next(m for m in menus if m.key == "production:batches")
     assert batches.type == "directory"
     assert batches.parent_id == production.id
-    assert batches.route_path == ""
+    assert batches.route_path is None
     workshop = next(m for m in menus if m.key == "production:batches:workshop-101-1")
     assert workshop.type == "menu"
     assert workshop.parent_id == batches.id

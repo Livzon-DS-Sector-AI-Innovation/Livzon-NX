@@ -270,5 +270,14 @@ async def test_production_create_success(client: AsyncClient, path: str) -> None
     for key in payload:
         if isinstance(payload[key], str) and key not in ("log_date", "entry_date", "discharge_date"):  # noqa: E501
             payload[key] = f"{payload[key]}-{suffix}"
-    response = await client.post(path, json=payload)
+    page_key = (
+        "production:shift-log:shift-log-summary"
+        if path.endswith("/shift-logs")
+        else "production:overview"
+    )
+    response = await client.post(
+        path,
+        json=payload,
+        headers={"X-Dazah-Page-Key": page_key},
+    )
     assert response.status_code == 200, f"{path}: {response.status_code} {response.text[:300]}"  # noqa: E501
