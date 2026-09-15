@@ -165,7 +165,6 @@ export function InspectionMaterialPage({ module }: InspectionMaterialPageProps) 
       materialPickerModule={module}
       highlightRecordId={highlightRecordId}
       highlightEntityCode={highlightEntityCode}
-      enableTextPreview
       enableAttachmentPreview
     />
   )

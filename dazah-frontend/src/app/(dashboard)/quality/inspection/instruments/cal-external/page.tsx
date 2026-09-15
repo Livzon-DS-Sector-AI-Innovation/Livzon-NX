@@ -12,7 +12,6 @@ export default function InstrCalExternalPage() {
         pullApi="/api/v1/quality/instruments/cal-external/pull"
         entityCode="qc_instr_cal_external"
         editable
-        enableTextPreview
         enableAttachmentPreview
         showLastSyncTime
       />

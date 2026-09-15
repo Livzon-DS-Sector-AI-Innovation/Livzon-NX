@@ -13,7 +13,6 @@ export default function InstrContractsPage() {
         entityCode="qc_instr_contracts"
         editable
         editablePersonFields
-        enableTextPreview
         enableAttachmentPreview
         showLastSyncTime
       />

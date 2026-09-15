@@ -519,6 +519,8 @@ QUALITY_FEISHU_ENTITY_ENV_PREFILLS: dict[str, dict[str, str]] = {
         "app_token": "Cencb8KRja1vL8s7DLqcXiQtnMf",
         "table_id": "tblpyvFJI0tBZBhz",
         "table_name": "设备维保合同",
+        # 新增记录走飞书共享表单（可在质量设置-飞书设置中更换）
+        "form_url": "https://j0eukrlohu.feishu.cn/share/base/form/shrcnrm7ld6TLNwaoPuAWP36Z42",
     },
     "qc_instr_plans": {
         "app_token": "Cencb8KRja1vL8s7DLqcXiQtnMf",

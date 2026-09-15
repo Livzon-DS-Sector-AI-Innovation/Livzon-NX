@@ -86,7 +86,6 @@ async function renderTable(props: Record<string, unknown> = {}) {
             title="PF"
             listApi="/api/v1/quality/inspection-finished/pf/records"
             entityCode="qc_finished_pf"
-            enableTextPreview
             enableAttachmentPreview
             showLastSyncTime
             {...props}
@@ -112,36 +111,10 @@ async function waitFor(condition: () => unknown, timeoutMs = 1500) {
 }
 
 describe('InspectionFeishuTable 成品页增强', () => {
-  it('纯文本单元格可点击并在弹窗中展示完整内容', async () => {
-    await renderTable()
-    await waitFor(() => expect(container.textContent).toContain('PF-2607001'))
-
-    const textButton = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent?.includes('白色或类白色粉末'),
-    )
-    expect(textButton).toBeTruthy()
-    act(() => {
-      textButton?.click()
-    })
-    // 弹窗标题为字段名，正文展示完整文本（含被列宽截断的尾部）
-    await waitFor(() => expect(document.body.textContent).toContain('外观'))
-    expect(document.body.textContent).toContain('无可见异物')
-  })
-
   it('镜像最近同步时间展示在工具栏', async () => {
     await renderTable()
     await waitFor(() => expect(container.textContent).toContain('最近同步'))
     expect(container.textContent).toContain('2026')
-  })
-
-  it('未开启 enableTextPreview 时文本保持纯文本', async () => {
-    await renderTable({ enableTextPreview: false })
-    await waitFor(() => expect(container.textContent).toContain('PF-2607001'))
-    const textButton = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent?.includes('白色或类白色粉末'),
-    )
-    expect(textButton).toBeFalsy()
-    expect(container.textContent).toContain('白色或类白色粉末')
   })
 
   it('文档附件点击弹窗在线预览（office/PDF 走后端 preview 端点）', async () => {

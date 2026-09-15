@@ -44,8 +44,6 @@ export interface RenderFeishuValueOptions {
   attachmentUrlBuilder?: FeishuAttachmentUrlBuilder
   /** 提供时非图片附件点击进入弹窗预览；不提供则保持下载行为 */
   onAttachmentPreview?: (context: FeishuAttachmentPreviewContext) => void
-  /** 提供时纯文本值可点击，弹窗查看完整内容（长文本截断场景） */
-  onTextPreview?: (fieldName: string | undefined, value: string) => void
 }
 
 /** 字段渲染所需的类型信息（来自实体字段元数据接口） */
@@ -409,31 +407,5 @@ export function renderFeishuValue(
     const color = value === '合格' ? 'success' : value === '不合格' ? 'error' : 'default'
     return <Tag color={color}>{value}</Tag>
   }
-  const text = String(value)
-  if (options?.onTextPreview && text.trim()) {
-    return (
-      <button
-        type="button"
-        title="点击查看完整内容"
-        style={{
-          padding: 0,
-          border: 'none',
-          background: 'transparent',
-          color: 'inherit',
-          textAlign: 'inherit',
-          cursor: 'pointer',
-          textDecoration: 'underline dotted rgba(0, 0, 0, 0.25)',
-          textUnderlineOffset: 3,
-          whiteSpace: 'normal',
-          wordBreak: 'break-word',
-          lineHeight: 1.4,
-          width: '100%',
-        }}
-        onClick={() => options.onTextPreview?.(fieldName, text)}
-      >
-        {text}
-      </button>
-    )
-  }
-  return text
+  return String(value)
 }

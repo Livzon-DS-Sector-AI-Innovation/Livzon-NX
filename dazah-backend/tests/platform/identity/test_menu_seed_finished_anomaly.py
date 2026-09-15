@@ -105,4 +105,20 @@ def test_retired_inspection_menu_keys_removed() -> None:
     assert "inspection-instruments-calibration" in keys
     assert "inspection-instruments-cal-external" in keys
     assert "inspection-instruments-cal-plan" in keys
+def test_instrument_equipment_menu_renamed_to_ledger() -> None:
+    """仪器设备菜单改名为仪器台账（含档案/导入入口）。"""
+    keys: list[str] = []
+    names: list[str] = []
+
+    def walk(nodes: list[dict[str, Any]]) -> None:
+        for node in nodes:
+            keys.append(node["key"])
+            names.append(node.get("name") or "")
+            if node.get("children"):
+                walk(node["children"])
+
+    walk(SEED_MENUS)
+    assert "inspection-instruments-equipment" in keys
+    idx = keys.index("inspection-instruments-equipment")
+    assert names[idx] == "仪器台账"
 

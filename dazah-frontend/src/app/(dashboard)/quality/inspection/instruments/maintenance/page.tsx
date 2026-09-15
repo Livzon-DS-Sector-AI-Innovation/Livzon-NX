@@ -13,9 +13,9 @@ export default function InstrMaintenancePage() {
         entityCode="qc_instr_maintenance"
         editable
         editablePersonFields
-        enableTextPreview
         enableAttachmentPreview
         showLastSyncTime
+        hiddenFields={['父记录']}
         filters={[
           { key: '是否完成', label: '是否完成' },
           { key: '维保类型', label: '维保类型' },

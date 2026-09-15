@@ -389,7 +389,6 @@ export const moduleMenus: ModuleMenu[] = [
               { key: "inspection-items-inventory", label: "库存台账", path: "/quality/inspection/items/inventory" },
               { key: "inspection-items-inbound", label: "入库记录", path: "/quality/inspection/items/inbound" },
               { key: "inspection-items-outbound", label: "出库记录", path: "/quality/inspection/items/outbound" },
-              { key: "inspection-items-dashboard", label: "物品仪表盘", path: "/quality/inspection/items/dashboard" },
             ],
           },
           {
@@ -397,7 +396,7 @@ export const moduleMenus: ModuleMenu[] = [
             label: "仪器管理",
             path: "/quality/inspection/instruments",
             children: [
-              { key: "inspection-instruments-equipment", label: "仪器设备", path: "/quality/inspection/instruments/equipment" },
+              { key: "inspection-instruments-equipment", label: "仪器台账", path: "/quality/inspection/instruments/equipment" },
               { key: "inspection-instruments-maintenance", label: "维护保养记录", path: "/quality/inspection/instruments/maintenance" },
               { key: "inspection-instruments-repair", label: "维修记录", path: "/quality/inspection/instruments/repair" },
               { key: "inspection-instruments-contracts", label: "维保合同", path: "/quality/inspection/instruments/contracts" },

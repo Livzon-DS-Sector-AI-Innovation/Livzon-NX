@@ -90,7 +90,13 @@ export function toPersonExtraOptions(value: unknown): FeishuPersonValue[] {
 export function toFormValue(field: InspectionFeishuFieldMeta, value: unknown): unknown {
   if (value === null || value === undefined || value === '') return undefined
   if (field.ui_type === 'DateTime') {
-    const d = dayjs(String(value))
+    // 飞书 DateTime 回读为毫秒时间戳（number 或数字字符串，镜像归一化后是数字
+    // 字符串）。直接 dayjs(字符串) 会被日历正则误解析成错误年份（如 1771-10-14），
+    // 纯数字必须先转数字再解析
+    if (typeof value === 'number') return dayjs(value)
+    const text = String(value).trim()
+    if (/^\d+$/.test(text)) return dayjs(Number(text))
+    const d = dayjs(text)
     return d.isValid() ? d : undefined
   }
   if (field.ui_type === 'Checkbox') {

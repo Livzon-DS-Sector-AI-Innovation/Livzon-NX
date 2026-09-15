@@ -459,6 +459,26 @@ async def sync_instrument_page(
     else:
         records = await _fetch_or_fail(_fetch_full_records(client, table_id))
 
+    # 维护保养记录：把按周期表算出的「下次维保时间」回写飞书空值行
+    # （只填空、手动填过的不动；失败仅记日志不影响同步）
+    if entity_code == "qc_instr_maintenance" and records:
+        try:
+            from app.modules.quality.service.maintenance_schedule import (
+                backfill_next_maintenance_dates,
+            )
+
+            backfilled = await backfill_next_maintenance_dates(
+                db, client, table_id, records
+            )
+            if backfilled:
+                logger.info(
+                    "maintenance next-date backfilled rows=%d", backfilled
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "maintenance next-date backfill skipped (%s): %s", entity_code, exc
+            )
+
     now = datetime.now(UTC)
     row_models: list[QualityItemsPageRow] = []
     seen_ids: set[str] = set()
