@@ -55,6 +55,33 @@ def test_button_children_do_not_turn_a_menu_page_into_a_directory():
     assert active_menu_page_keys([parent, child, button]) == {child.key}
 
 
+def test_legacy_warehouse_hardware_menu_key_uses_canonical_page_identity():
+    parent = SimpleNamespace(
+        id=uuid4(),
+        key="warehouse",
+        name="仓储管理",
+        type="directory",
+        parent_id=None,
+        route_path="/warehouse",
+        status="active",
+        is_deleted=False,
+    )
+    child = SimpleNamespace(
+        id=uuid4(),
+        key="warehouse:hardware:hardware-101-1-workshop",
+        name="101-1车间",
+        type="menu",
+        parent_id=parent.id,
+        route_path="/warehouse/hardware/101-1-workshop",
+        status="active",
+        is_deleted=False,
+    )
+
+    assert active_menu_page_keys([parent, child]) == {
+        "warehouse:hardware:hardware-hardware-101-1-workshop"
+    }
+
+
 def test_active_menu_catalog_keeps_unregistered_leaf_for_publish_validation():
     parent, child = menu_pair()
     child.key = None
@@ -63,12 +90,8 @@ def test_active_menu_catalog_keeps_unregistered_leaf_for_publish_validation():
 
     catalog = active_menu_page_catalog([parent, child])
 
-    actual = [
-        (item.key, item.name, item.route_path, item.root_key) for item in catalog
-    ]
-    assert actual == [
-        (None, "新增员工页面", "/hr/new-employee-page", "hr")
-    ]
+    actual = [(item.key, item.name, item.route_path, item.root_key) for item in catalog]
+    assert actual == [(None, "新增员工页面", "/hr/new-employee-page", "hr")]
     assert active_menu_page_keys([parent, child]) == set()
 
 

@@ -66,6 +66,21 @@ describe('page permission menu boundary', () => {
       'hr:employee-management:profile'
     )
   })
+
+  it('resolves reviewed module landing routes to active leaf page keys', () => {
+    expect(getPageKeyByPath('/hr/employee-management')).toBe(
+      'hr:employee-management:profile'
+    )
+    expect(getPageKeyByPath('/warehouse/materials/dashboard')).toBe(
+      'warehouse:materials:raw-summary'
+    )
+    expect(getPageKeyByPath('/registration/project')).toBe(
+      'registration:project:project-ledger:international-associated-review'
+    )
+    expect(getPageKeyByPath('/registration/validation-audit/task-1')).toBe(
+      'registration:project:declaration-progress:international-planned-in-progress'
+    )
+  })
 })
 
 describe('procurement menu structure', () => {

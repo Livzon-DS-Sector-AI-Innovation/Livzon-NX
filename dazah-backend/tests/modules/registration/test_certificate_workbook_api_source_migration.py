@@ -64,6 +64,17 @@ SHEET_HEADERS: dict[str, list[str]] = {
 }
 
 
+@pytest.fixture(autouse=True)
+def _page_context(client: AsyncClient) -> None:
+    client.headers.update(
+        {
+            "X-Dazah-Page-Key": (
+                "registration:certificate-management:international-registration"
+            )
+        }
+    )
+
+
 def build_certificate_workbook_fixture(
     workbook_path: Path,
     rows_by_sheet: dict[str, list[list[str | int | None]]],

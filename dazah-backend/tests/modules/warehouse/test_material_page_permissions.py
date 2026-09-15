@@ -107,8 +107,8 @@ def test_material_page_catalog_matches_real_pages_and_scope_capabilities():
     )
     assert binding.sensitive_action == "delete"
     assert binding.permission == "operate"
-    # Partial adaptation must not silently make the whole warehouse publishable.
-    assert page_api_catalog_gaps("warehouse")
+    # The reviewed warehouse API catalog is fully registered.
+    assert not page_api_catalog_gaps("warehouse")
 
 
 @pytest.mark.asyncio

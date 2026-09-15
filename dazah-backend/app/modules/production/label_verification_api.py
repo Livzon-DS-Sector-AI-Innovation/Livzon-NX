@@ -21,7 +21,8 @@ from app.shared.schemas import PageParams
 logger = logging.getLogger(__name__)
 
 
-router = create_module_router(MODULES_BY_CODE["quality"])
+# 标签复核由生产管理页面承载，必须和页面权限目录使用同一业务模块。
+router = create_module_router(MODULES_BY_CODE["production"])
 
 
 def get_label_verification_service(

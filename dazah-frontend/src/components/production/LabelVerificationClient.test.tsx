@@ -10,5 +10,6 @@ describe('production label verification component contract', () => {
     expect(existsSync(sourcePath)).toBe(true)
     expect(source).toContain('export default function LabelVerificationClient')
     expect(source).toContain('autoCompareVideo')
+    expect(source).toContain('/api/v1/production/label-verifications/upload-video')
   })
 })
