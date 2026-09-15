@@ -149,7 +149,7 @@ export async function fetchDocumentDepartmentsServer(): Promise<import('@/types/
   }
 }
 
-// ============ Label Verification (标签复核，端点挂在 /quality 前缀下) ============
+// ============ Label Verification (标签复核，端点挂在 /production 前缀下) ============
 
 /** 标签复核记录分页列表（保留分页 meta，不使用解包版 serverFetch）。 */
 export async function fetchLabelVerificationsServer(params: {
@@ -161,6 +161,6 @@ export async function fetchLabelVerificationsServer(params: {
     page_size: params.page_size.toString(),
   })
   return serverApiFetch<import('@/types/label-verification').LabelVerification[]>(
-    `/api/v1/quality/label-verifications?${searchParams.toString()}`
+    `/api/v1/production/label-verifications?${searchParams.toString()}`
   )
 }

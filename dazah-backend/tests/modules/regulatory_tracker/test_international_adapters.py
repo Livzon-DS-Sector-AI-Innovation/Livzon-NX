@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -16,6 +16,7 @@ from app.modules.regulatory_tracker.crawler.types import CrawledRegulationRecord
 async def test_ema_adapter_maps_relevant_json_items(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    recent_update = date.today() - timedelta(days=1)
     payload = {
         "meta": {"total_records": 2},
         "data": [
@@ -24,7 +25,7 @@ async def test_ema_adapter_maps_relevant_json_items(
                 "summary": "This page provides guidance on GMP and GDP expectations for human and veterinary medicines.",
                 "categories": "Human;Veterinary",
                 "first_published_date": "31/12/2009",
-                "last_updated_date": "15/08/2026",
+                "last_updated_date": recent_update.strftime("%d/%m/%Y"),
                 "general_url": (
                     "https://www.ema.europa.eu/en/human-regulatory-overview/research-development/"
                     "compliance-research-development/good-manufacturing-practice/"
@@ -81,7 +82,7 @@ async def test_ema_adapter_maps_relevant_json_items(
                 "compliance-research-development/good-manufacturing-practice/"
                 "guidance-good-manufacturing-practice-good-distribution-practice-questions-answers"
             ),
-            publish_date=date(2026, 8, 15),
+            publish_date=recent_update,
             effective_date=None,
             version=None,
             summary="This page provides guidance on GMP and GDP expectations for human and veterinary medicines.",
@@ -93,7 +94,7 @@ async def test_ema_adapter_maps_relevant_json_items(
                     "and veterinary medicines."
                 ),
                 "first_published_date": "2009-12-31",
-                "last_updated_date": "2026-08-15",
+                "last_updated_date": recent_update.isoformat(),
                 "general_url": (
                     "https://www.ema.europa.eu/en/human-regulatory-overview/research-development/"
                     "compliance-research-development/good-manufacturing-practice/"

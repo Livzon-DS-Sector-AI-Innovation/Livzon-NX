@@ -27,7 +27,7 @@
 
 跨模块调用优先通过目标模块 `public_api.py`、模块注册表或既有扩展点。禁止直接复用其他模块的 repository、内部 service、handler、配置表或私有模型实现。
 
-修改 `app/core/`、`app/shared/`、`app/platform/`、`app/api/router.py` 或 `alembic/` 前，必须确认当前需求确实需要，并检查全部调用方和影响范围。
+修改 `app/core/`、`app/shared/`、`app/platform/`、`app/api/router.py` 或 `alembic/` 前，确认当前需求确实需要，并检查受影响调用链；公共契约变化或影响范围不明确时扩大调用方检查。
 
 业务模块的推荐结构见 `examples/module-structure.md`。
 
@@ -66,7 +66,7 @@
 
 HTTP 500 只用于未预期的服务端故障，不得把可预期的业务分支、输入错误或外部依赖失败统一包装成 500，也不得通过吞掉异常或返回 200 来掩盖故障。
 
-- 新增或修改接口前，必须检查从路由、Schema、Service、Repository 到响应序列化的完整调用链，尤其确认请求字段、查询结果、数据库模型和 `response_model` 一致。
+- 新增或修改接口前，检查本次变化涉及的路由、Schema、Service、Repository 和响应序列化路径，确认受影响字段与 `response_model` 一致；契约跨层变化或影响不明确时检查完整调用链。
 - 参数非法、资源不存在、权限不足、状态冲突、重复数据等可预期结果，必须使用 Pydantic 校验或 `app/core/exceptions.py` 中的统一异常映射为明确的 4xx 状态码。
 - 数据库唯一约束、外键约束和并发冲突等可预期持久化异常，必须在事务边界内回滚并转换为明确的业务异常；禁止将原始 SQLAlchemy 异常直接暴露给接口。
 - 异步 ORM 查询必须显式加载响应所需字段和关系。不得让响应序列化触发懒加载，也不得在会话关闭后访问未加载或已过期的 ORM 属性。
@@ -74,7 +74,7 @@ HTTP 500 只用于未预期的服务端故障，不得把可预期的业务分�
 - 禁止使用宽泛的 `except Exception` 静默降级、伪造成功响应或丢失异常上下文。确需在边界捕获未知异常时，必须保留异常链并记录可定位的上下文，同时对敏感信息脱敏。
 - 新增或修改接口必须使用项目的 `AsyncClient` 测试真实调用路由，至少覆盖成功路径和本次变更最可能出现的失败路径，并断言状态码与响应 Schema；仅测试 Service 或直接调用路由函数不足以证明接口不会返回 500。
 - 修复已出现的 500 时，必须先根据日志或可复现请求定位根因，补充能够复现该问题的回归测试，再修复根因并保留测试。不得只增加兜底异常捕获。
-- 交付前必须实际执行受影响接口测试，确认所有可预期分支均不会返回 500。无法运行测试时必须说明原因、未验证范围和风险，不得声称接口已验证。
+- 交付前实际执行受影响接口测试，验证本次变化涉及的成功、失败和关键边界及其状态码。无法运行测试时必须说明原因、未验证范围和风险，不得声称接口已验证。
 
 ## 数据库与异步 ORM
 
@@ -183,13 +183,14 @@ uv run alembic upgrade head
 uv run pytest --cov=app --cov-branch --cov-report=term-missing --cov-report=xml
 uv run python ../scripts/check-coverage-floor.py --coverage-file coverage.xml --min-lines 60 --min-branches 33.5
 uv run python ../scripts/check-diff-coverage.py --coverage-file coverage.xml --path-prefix dazah-backend/app --minimum 80
-docker build --file ../Dockerfile --target backend --tag dazah-backend:ci ..
+# 本地开发镜像；交付镜像仅在 CI 或明确授权的隔离交付验证中构建
+docker build --file ../Dockerfile.dev --target backend --tag dazah-backend:dev ..
 ```
 
 - `alembic heads` 必须且只能有一个 head；结构变更还要验证空库升级、`upgrade()`、`downgrade()` 和模块 schema 创建。
 - 全应用行覆盖率不得低于 60%，分支覆盖率不得低于 33.5%，PR 变更可执行行
   覆盖率不得低于 80%；低覆盖模块通过触达即补测逐步治理。
 - API、共享基础设施、数据库、依赖、测试配置或跨模块变更也应先按可收敛的实际影响选择定向证据；不能可靠界定影响范围时才运行全量测试。
-- Dockerfile、依赖锁、系统依赖、启动命令或运行时配置变化必须执行 Docker Build。
-- API 变化还要执行根目录契约生成脚本并验证前端生成类型。
+- Dockerfile、依赖锁、系统依赖、启动命令或运行时配置变化影响镜像构建或容器运行时，执行相应开发镜像构建或容器验证；交付镜像特有变化由 CI 或明确授权的隔离交付验证覆盖。
+- 仅端点、参数或请求/响应契约变化时执行根目录契约生成脚本并验证前端生成类型。
 - 交付时记录实际运行的命令、结果及其覆盖的变更表面；未运行完整门禁不等于未验证，但必须说明为何现有证据已经充分。无法执行所需检查时必须说明原因、未验证范围和风险，不得声称 CI 可通过。

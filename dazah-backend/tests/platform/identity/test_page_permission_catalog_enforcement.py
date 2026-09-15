@@ -180,9 +180,7 @@ async def test_preview_detects_registered_page_route_mismatch(monkeypatch):
             key=item.key,
             name=item.name,
             route_path=(
-                "/hr/changed-route"
-                if item.key == target.page_key
-                else item.route_path
+                "/hr/changed-route" if item.key == target.page_key else item.route_path
             ),
             root_key=item.root_key,
         )
@@ -197,6 +195,47 @@ async def test_preview_detects_registered_page_route_mismatch(monkeypatch):
     preview = await PagePermissionService().rollout_preview(None, module_code="hr")
 
     assert any("菜单页面路由与权限登记不一致" in gap for gap in preview.catalog_gaps)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("current_key", "legacy_key"),
+    [
+        (
+            "warehouse:hardware:hardware-hardware-101-1-workshop",
+            "warehouse:hardware:hardware-101-1-workshop",
+        ),
+        (
+            "warehouse:product-inventory:product-details:product-detail-l-phenylalanine",
+            "warehouse:product:product-details:product-detail-l-phenylalanine",
+        ),
+    ],
+)
+async def test_preview_accepts_legacy_warehouse_menu_keys(
+    monkeypatch, current_key, legacy_key
+):
+    _preview_facts(monkeypatch)
+    catalog = await PagePermissionRepository().active_menu_page_catalog(None)
+    changed = [
+        ActiveMenuPage(
+            key=legacy_key if item.key == current_key else item.key,
+            name=item.name,
+            route_path=item.route_path,
+            root_key=item.root_key,
+        )
+        for item in catalog
+    ]
+    monkeypatch.setattr(
+        PagePermissionRepository,
+        "active_menu_page_catalog",
+        AsyncMock(return_value=changed),
+    )
+
+    preview = await PagePermissionService().rollout_preview(
+        None, module_code="warehouse"
+    )
+
+    assert not any(legacy_key in gap for gap in preview.catalog_gaps)
 
 
 @pytest.mark.asyncio
@@ -241,11 +280,7 @@ async def test_preview_hash_tracks_live_menu_changes(monkeypatch):
     changed = [
         ActiveMenuPage(
             key=item.key,
-            name=(
-                f"更新后的菜单名称-{index}"
-                if item.root_key == "hr"
-                else item.name
-            ),
+            name=(f"更新后的菜单名称-{index}" if item.root_key == "hr" else item.name),
             route_path=item.route_path,
             root_key=item.root_key,
         )

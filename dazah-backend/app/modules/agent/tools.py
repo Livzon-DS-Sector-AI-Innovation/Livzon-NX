@@ -21,6 +21,7 @@ from app.platform.identity.models import User
 from app.platform.identity.page_permissions import PagePermissionService
 from app.platform.identity.page_policy import (
     ToolPageBinding,
+    canonical_page_key,
     get_page_definition,
     register_tool_catalog_provider,
 )
@@ -694,6 +695,8 @@ class ToolExecutor:
             )
         ]
         requested = request.execution_context.get("page_key")
+        if isinstance(requested, str):
+            requested = canonical_page_key(requested)
         if requested is not None:
             allowed = [grant for grant in allowed if grant.page_key == requested]
         else:

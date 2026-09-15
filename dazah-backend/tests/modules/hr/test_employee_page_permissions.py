@@ -244,8 +244,8 @@ async def test_employee_http_crud_stats_and_sync_share_real_department_scope(
         assert (await client.delete(f"{base}/{own.id}")).status_code == 200
         assert own.is_deleted
         assert not other.is_deleted and other.position == "操作工"
-        # Incomplete employee routes must not inherit broad CRUD permission.
-        assert (await client.get(base + "/max-seq")).status_code == 403
+        # The reviewed employee query catalog includes max-seq.
+        assert (await client.get(base + "/max-seq")).status_code == 200
     audits = list(
         (
             await db_session.execute(
@@ -325,7 +325,7 @@ def test_employee_policy_is_reviewed_but_hr_publish_gate_remains_closed():
         ).sensitive_action
         == "delete"
     )
-    assert page_api_catalog_gaps("hr")
+    assert not page_api_catalog_gaps("hr")
 
 
 @pytest.mark.parametrize(

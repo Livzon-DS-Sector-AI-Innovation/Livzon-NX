@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  cookies: vi.fn().mockResolvedValue({
-    get: vi.fn().mockReturnValue({ value: 'server-token' }),
+  getAuthHeaders: vi.fn().mockResolvedValue({
+    'Content-Type': 'application/json',
+    Authorization: 'Bearer server-token',
+    'X-Dazah-Page-Path': '/registration/authorization-letter',
   }),
 }))
 
-vi.mock('next/headers', () => ({ cookies: mocks.cookies }))
+vi.mock('@/lib/auth', () => ({ getAuthHeaders: mocks.getAuthHeaders }))
 
 import { ServerApiError, serverApiGet, serverApiPost } from './registration'
 
@@ -39,6 +41,9 @@ describe('registration server api client', () => {
     expect(init.method).toBe('POST')
     expect((init.headers as Record<string, string>).Authorization).toBe(
       'Bearer server-token',
+    )
+    expect((init.headers as Record<string, string>)['X-Dazah-Page-Path']).toBe(
+      '/registration/authorization-letter',
     )
     expect(init.body).toBe(JSON.stringify({ recipient_ids: ['ou-1'] }))
   })

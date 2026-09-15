@@ -18,6 +18,7 @@ from app.platform.identity.page_policy import (
     api_binding_for_route,
     api_bindings_for_module,
     api_route_catalog,
+    canonical_page_key,
     get_page_definition,
     page_key_for_route,
 )
@@ -124,6 +125,7 @@ def require_module_view(module_code: str) -> Callable[..., Awaitable[User]]:
                     key = binding.page_keys[0]
                 if not key:
                     raise HTTPException(400, "共享业务接口需要明确的页面上下文")
+                key = canonical_page_key(key)
                 if key not in binding.page_keys:
                     raise HTTPException(403, "当前页面不能调用此业务接口")
                 if key in binding.page_keys:
@@ -149,10 +151,11 @@ def require_module_view(module_code: str) -> Callable[..., Awaitable[User]]:
         page_path = request.headers.get("X-Dazah-Page-Path")
         if not page_key and page_path:
             page_key = page_key_for_route(page_path)
+        if page_key:
+            page_key = canonical_page_key(page_key)
         route_path = getattr(request.scope.get("route"), "path", "")
         route_has_page_contract = any(
-            item.method == request.method.upper()
-            and item.route_path == route_path
+            item.method == request.method.upper() and item.route_path == route_path
             for item in api_bindings_for_module(module_code)
         )
         if (

@@ -22,6 +22,17 @@ PROJECT_LEDGER_HEADERS = [
 ]
 
 
+@pytest.fixture(autouse=True)
+def _page_context(client: AsyncClient) -> None:
+    client.headers.update(
+        {
+            "X-Dazah-Page-Key": (
+                "registration:project:project-ledger:international-associated-review"
+            )
+        }
+    )
+
+
 def build_project_ledger_workbook_fixture(
     workbook_path: Path,
     rows_by_sheet: dict[str, list[list[str | int | None]]],

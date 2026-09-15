@@ -37,8 +37,15 @@ from app.platform.identity.models import (
     User,
 )
 from app.platform.identity.page_permission_repository import PagePermissionRepository
-from app.platform.identity.page_permissions import PagePermissionService
-from app.platform.identity.page_policy import PAGES_BY_MODULE, get_page_definition
+from app.platform.identity.page_permissions import (
+    REVIEW_PENDING_ROLLOUT_MODULES,
+    PagePermissionService,
+)
+from app.platform.identity.page_policy import (
+    PAGES_BY_MODULE,
+    canonical_page_key,
+    get_page_definition,
+)
 from app.platform.identity.permission_cache import (
     publish_permissions_changed,
     publish_permissions_changed_all,
@@ -1133,8 +1140,9 @@ async def simulate_page_permission(
     user = await _get_target_user_or_404(db, body.user_id)
     page_service = PagePermissionService()
     grants = await page_service.effective_grants(db, user=user)
-    effective = next((item for item in grants if item.page_key == body.page_key), None)
-    definition = get_page_definition(body.page_key)
+    page_key = canonical_page_key(body.page_key)
+    effective = next((item for item in grants if item.page_key == page_key), None)
+    definition = get_page_definition(page_key)
     module_allowed = bool(
         definition
         and (
@@ -1324,6 +1332,8 @@ async def export_permissions(
     repo = PagePermissionRepository()
     department_labels = await repo.department_labels(db)
     rollouts = {item.module_code: item.status for item in await repo.list_rollouts(db)}
+    for module_code in REVIEW_PENDING_ROLLOUT_MODULES:
+        rollouts.setdefault(module_code, "draft")
     scope_names = {
         "all": "全部部门",
         "department_tree": "本部门及下级",

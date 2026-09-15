@@ -18,6 +18,8 @@ from app.platform.identity.page_policy import (
     FIRST_BATCH_MODULES,
     PAGES_BY_KEY,
     PAGES_BY_MODULE,
+    canonical_page_key,
+    get_page_definition,
     normalize_permissions,
     page_key_for_route,
     sensitive_action_for_request,
@@ -55,9 +57,7 @@ async def test_system_admin_has_all_pages_even_with_explicit_denial(monkeypatch)
     monkeypatch.setattr(rbac, "resolve_user_roles", AsyncMock(return_value=[]))
     repo = _PageRepo(
         user_grants=[
-            SimpleNamespace(
-                page_key="hr:employee-management:profile", permissions=[]
-            )
+            SimpleNamespace(page_key="hr:employee-management:profile", permissions=[])
         ]
     )
     grants = await PagePermissionService(repo=repo).effective_grants(
@@ -79,6 +79,52 @@ def test_page_catalog_uses_stable_qualified_menu_keys() -> None:
     assert "hr:employee-management:profile" in PAGES_BY_KEY
     assert page_key_for_route("/hr/profile") == "hr:employee-management:profile"
     assert all(page.route_path for page in PAGES_BY_KEY.values())
+
+
+def test_reviewed_module_landing_routes_resolve_to_active_leaf_pages() -> None:
+    assert page_key_for_route("/hr/employee-management") == (
+        "hr:employee-management:profile"
+    )
+    assert page_key_for_route("/warehouse/materials/dashboard") == (
+        "warehouse:materials:raw-summary"
+    )
+    assert page_key_for_route("/registration/project") == (
+        "registration:project:project-ledger:international-associated-review"
+    )
+    assert page_key_for_route("/registration/validation-audit/task-1") == (
+        "registration:project:declaration-progress:international-planned-in-progress"
+    )
+
+
+def test_legacy_warehouse_hardware_menu_keys_resolve_to_current_page_identity() -> None:
+    legacy = "warehouse:hardware:hardware-101-1-workshop"
+    current = "warehouse:hardware:hardware-hardware-101-1-workshop"
+
+    assert canonical_page_key(legacy) == current
+    assert get_page_definition(legacy) == PAGES_BY_KEY[current]
+
+
+def test_legacy_warehouse_product_menu_keys_resolve_to_current_page_identity() -> None:
+    legacy = "warehouse:product:product-details:product-detail-l-phenylalanine"
+    current = (
+        "warehouse:product-inventory:product-details:product-detail-l-phenylalanine"
+    )
+
+    assert canonical_page_key(legacy) == current
+    assert get_page_definition(legacy) == PAGES_BY_KEY[current]
+
+
+@pytest.mark.asyncio
+async def test_missing_reviewed_module_rollout_is_pending_review() -> None:
+    repo = _PageRepo()
+    repo.get_rollout = AsyncMock(return_value=None)  # type: ignore[attr-defined]
+
+    result = await PagePermissionService(repo=repo).rollout_out(
+        None, module_code="registration"
+    )
+
+    assert result.status == "draft"
+    assert result.version == 0
 
 
 def test_page_permission_dependency_is_normalized() -> None:
@@ -299,7 +345,7 @@ async def test_saved_page_policy_rejects_missing_or_insufficient_page_context(
             "type": "http",
             "method": "GET",
             "path": "/api/v1/hr/employees",
-                "headers": [(b"x-dazah-page-path", b"/hr/profile")],
+            "headers": [(b"x-dazah-page-path", b"/hr/profile")],
         }
     )
     with pytest.raises(HTTPException) as exc_info:

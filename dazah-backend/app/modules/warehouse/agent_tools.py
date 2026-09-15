@@ -61,6 +61,7 @@ def _record_data(data: WarehouseFeishuRawRecordData) -> dict[str, Any]:
     summary="查询原辅料库存",
     method="GET",
     path="/warehouse/raw-materials",
+    page_keys=("warehouse:materials:raw-summary",),
     output_hint="返回原辅料库存条目列表。",
 )
 async def list_raw_materials(
@@ -75,6 +76,7 @@ async def list_raw_materials(
     summary="查询包材库存",
     method="GET",
     path="/warehouse/packaging-materials",
+    page_keys=("warehouse:materials:packaging-summary",),
     output_hint="返回包材库存条目列表。",
 )
 async def list_packaging_materials(
@@ -89,6 +91,7 @@ async def list_packaging_materials(
     summary="查询产品库存",
     method="GET",
     path="/warehouse/products",
+    page_keys=("warehouse:product-inventory:product-summary",),
     output_hint="返回产品库存条目列表。",
 )
 async def list_products(context: ToolContext, _: BaseModel) -> list[dict[str, Any]]:
@@ -102,6 +105,7 @@ async def list_products(context: ToolContext, _: BaseModel) -> list[dict[str, An
     input_model=WarehouseFeishuTablesInput,
     method="GET",
     path="/warehouse/feishu/tables",
+    page_keys=("warehouse:warehouse-settings",),
 )
 async def list_feishu_tables(
     context: ToolContext, data: WarehouseFeishuTablesInput
@@ -116,6 +120,7 @@ async def list_feishu_tables(
     input_model=WarehouseFeishuTableRecordsInput,
     method="GET",
     path="/warehouse/feishu/tables/{table_id}/records",
+    page_keys=("warehouse:warehouse-settings",),
 )
 async def get_feishu_table_records(
     context: ToolContext, data: WarehouseFeishuTableRecordsInput
@@ -137,6 +142,7 @@ async def get_feishu_table_records(
     summary="查询仓储飞书 WebSocket 状态",
     method="GET",
     path="/warehouse/feishu/ws/status",
+    page_keys=("warehouse:warehouse-settings",),
 )
 async def get_feishu_ws_status(context: ToolContext, _: BaseModel) -> dict[str, Any]:
     from app.modules.warehouse.ws_client import get_ws_status
@@ -152,6 +158,8 @@ async def get_feishu_ws_status(context: ToolContext, _: BaseModel) -> dict[str, 
     risk_level="medium",
     method="POST",
     path="/warehouse/feishu/tables/{table_id}/sync",
+    page_keys=("warehouse:warehouse-settings",),
+    sensitive_action="sync_config",
 )
 async def sync_feishu_table(
     context: ToolContext, data: WarehouseFeishuSyncInput
@@ -169,6 +177,8 @@ async def sync_feishu_table(
     human_decision_required=True,
     method="POST",
     path="/warehouse/feishu/ws/restart",
+    page_keys=("warehouse:warehouse-settings",),
+    sensitive_action="sync_config",
 )
 async def restart_feishu_ws(context: ToolContext, _: BaseModel) -> dict[str, Any]:
     from app.modules.warehouse.ws_client import restart_ws_from_db
