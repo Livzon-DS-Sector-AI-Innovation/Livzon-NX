@@ -5,7 +5,7 @@ import { TableEmptyState } from '../TableEmptyState'
 import { qualityTokens } from '../themeTokens'
 
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { Table, Card, Button, Input, Space, Typography, Alert, Select, App, Modal, Popconfirm } from 'antd'
+import { Table, Card, Button, Input, Space, Typography, Alert, Select, App, Popconfirm } from 'antd'
 import { SyncOutlined, SearchOutlined, FilterOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import type { TablePaginationConfig } from 'antd'
 import type { ColumnsType, ColumnType } from 'antd/es/table'
@@ -16,6 +16,7 @@ import { fetchInspectionFeishuFields, fetchInspectionFeishuRecordDetail } from '
 import type { InspectionFeishuFieldMeta } from '@/types/quality'
 import { InspectionFeishuRecordModal } from './InspectionFeishuRecordModal'
 import { InspectionFeishuRecordDetailDrawer } from './InspectionFeishuRecordDetailDrawer'
+import { InstrumentProfileDrawer } from './InstrumentProfileDrawer'
 import {
   InspectionCreateByMaterialModal,
   type InspectionMaterialCreated,
@@ -43,14 +44,14 @@ interface Props {
   filters?: FilterConfig[]
   editable?: boolean
   createLabel?: string
-  /** 开启后纯文本单元格可点击，弹窗查看完整内容 */
-  enableTextPreview?: boolean
   /** 开启后附件（报告单等文档）点击弹窗在线预览（office 由后端转 PDF） */
   enableAttachmentPreview?: boolean
   /** 开启后工具栏展示镜像最近同步时间（成品页） */
   showLastSyncTime?: boolean
   /** 开启后新增/编辑弹窗里人员字段可搜索选人（写飞书时后端换发 union_id） */
   editablePersonFields?: boolean
+  /** 开启后操作列增加「档案」：按设备编号查看维保/维修/校验/合同（仪器台账） */
+  enableEquipmentProfile?: boolean
   /** 开启后「新增」改按物料名称/代码选料（固体/液体原辅料） */
   createWithMaterialPicker?: boolean
   /** 选料弹窗的物料范围：固体页只列固体、液体页只列液体 */
@@ -59,6 +60,16 @@ interface Props {
   highlightRecordId?: string | null
   /** 跳转携带的物料 entity_code（用于与当前列表实体一致后才打开详情） */
   highlightEntityCode?: string | null
+  /** 不展示的列（如无业务含义的关联列「父记录」） */
+  hiddenFields?: string[]
+  /** 关闭「新增」入口（如库存台账：库存由入库/出库联动，无需手工新增） */
+  disableCreate?: boolean
+  /** 紧凑换行模式：无横向滚动、列内自动换行、超过 3 行截断（全文看详情） */
+  wrapColumns?: boolean
+  /** 指定列宽（字段名 -> 宽度，支持 px / 百分比），未指定的列平分剩余空间 */
+  columnWidths?: Record<string, number | string>
+  /** 表头文字居中 */
+  centerHeaders?: boolean
 }
 
 interface FetchResult {
@@ -67,6 +78,7 @@ interface FetchResult {
   configured: boolean
   serverFields: string[]
   displayFields: string[]
+  fieldMeta: Record<string, string>
   lastSyncTime?: string | null
 }
 
@@ -82,14 +94,19 @@ export function InspectionFeishuTable({
   filters = [],
   editable = false,
   createLabel = '新增',
-  enableTextPreview = false,
   enableAttachmentPreview = false,
   showLastSyncTime = false,
   editablePersonFields = false,
+  enableEquipmentProfile = false,
   createWithMaterialPicker = false,
   materialPickerModule,
   highlightRecordId = null,
   highlightEntityCode = null,
+  hiddenFields = [],
+  disableCreate = false,
+  wrapColumns = false,
+  columnWidths,
+  centerHeaders = false,
 }: Props) {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
@@ -102,7 +119,6 @@ export function InspectionFeishuTable({
   const [modalOpen, setModalOpen] = useState(false)
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create')
   const [editingRecord, setEditingRecord] = useState<Record<string, unknown>>()
-  const [textPreview, setTextPreview] = useState<{ title: string; content: string } | null>(null)
   const [attachmentPreview, setAttachmentPreview] = useState<{
     fileName: string
     previewSrc: string
@@ -172,6 +188,9 @@ export function InspectionFeishuTable({
         configured: json.meta?.configured !== false,
         serverFields: Array.isArray(json.meta?.fields) ? json.meta.fields as string[] : [],
         displayFields: Array.isArray(json.meta?.display_fields) ? json.meta.display_fields as string[] : [],
+        fieldMeta: (json.meta?.fieldMeta && typeof json.meta.fieldMeta === 'object'
+          ? json.meta.fieldMeta as Record<string, string>
+          : {}),
         lastSyncTime: typeof json.meta?.last_sync_time === 'string' ? json.meta.last_sync_time : null,
       }
     },
@@ -183,6 +202,7 @@ export function InspectionFeishuTable({
   const configured = queryData?.configured ?? true
   const serverFields = queryData?.serverFields ?? []
   const displayFields = queryData?.displayFields ?? []
+  const fieldMeta = queryData?.fieldMeta ?? {}
   const lastSyncTime = queryData?.lastSyncTime ?? null
 
   useEffect(() => {
@@ -294,6 +314,8 @@ export function InspectionFeishuTable({
 
   const [detailRecord, setDetailRecord] = useState<Record<string, unknown>>()
   const [detailOpen, setDetailOpen] = useState(false)
+  // 仪器档案（enableEquipmentProfile 时操作列「档案」按钮）
+  const [profileRecord, setProfileRecord] = useState<Record<string, unknown> | null>(null)
   const openDetail = (record: Record<string, unknown>) => {
     setDetailRecord(record)
     setDetailOpen(true)
@@ -337,8 +359,10 @@ export function InspectionFeishuTable({
   }, [highlightRecordId, highlightEntityCode, data, entityCode, loading])
 
   const buildAutoColumn = (field: string): ColumnType<Record<string, unknown>> => {
-    const width = autoColumnPreset === 'finished' ? getFinishedColumnWidth(field) : undefined
     const isFinishedPreset = autoColumnPreset === 'finished'
+    const width =
+      columnWidths?.[field] ??
+      (isFinishedPreset ? getFinishedColumnWidth(field) : undefined)
 
     return {
       title: (
@@ -347,7 +371,7 @@ export function InspectionFeishuTable({
             whiteSpace: 'normal',
             wordBreak: 'break-word',
             lineHeight: 1.35,
-            textAlign: isFinishedPreset ? 'center' : 'left',
+            textAlign: centerHeaders || isFinishedPreset ? 'center' : 'left',
           }}
         >
           {field}
@@ -357,29 +381,40 @@ export function InspectionFeishuTable({
       key: field,
       width,
       align: isFinishedPreset ? 'center' : undefined,
-      render: (value: unknown, record: Record<string, unknown>) => (
-        <div
-          style={{
-            whiteSpace: 'normal',
-            wordBreak: 'break-word',
-            lineHeight: 1.35,
-            textAlign: isFinishedPreset ? 'center' : 'left',
-            width: '100%',
-          }}
-        >
-          {renderFeishuValue(value, record, entityCode, message, {
-            fieldName: field,
-            uiType: fieldMetaMap[field]?.uiType,
-            resultUiType: fieldMetaMap[field]?.resultUiType,
-            onAttachmentPreview:
-              enableAttachmentPreview ? openAttachmentPreview : undefined,
-            onTextPreview: enableTextPreview
-              ? (fieldName, text) =>
-                  setTextPreview({ title: fieldName || '内容', content: text })
-              : undefined,
-          })}
-        </div>
-      ),
+      render: (value: unknown, record: Record<string, unknown>) => {
+        return (
+          <div
+            style={
+              wrapColumns
+                ? {
+                    // 紧凑换行模式：单元格内自动换行，超过 3 行截断（全文看详情）
+                    display: '-webkit-box',
+                    WebkitBoxOrient: 'vertical',
+                    WebkitLineClamp: 3,
+                    overflow: 'hidden',
+                    wordBreak: 'break-word',
+                    lineHeight: 1.35,
+                    width: '100%',
+                  }
+                : {
+                    whiteSpace: 'normal',
+                    wordBreak: 'break-word',
+                    lineHeight: 1.35,
+                    textAlign: isFinishedPreset ? 'center' : 'left',
+                    width: '100%',
+                  }
+            }
+          >
+            {renderFeishuValue(value, record, entityCode, message, {
+              fieldName: field,
+              uiType: fieldMetaMap[field]?.uiType,
+              resultUiType: fieldMetaMap[field]?.resultUiType,
+              onAttachmentPreview:
+                enableAttachmentPreview ? openAttachmentPreview : undefined,
+            })}
+          </div>
+        )
+      },
       onCell: () => ({
         style: {
           whiteSpace: 'normal',
@@ -392,14 +427,26 @@ export function InspectionFeishuTable({
     }
   }
 
+  const operationWidth = editable
+    ? enableEquipmentProfile
+      ? 200
+      : 160
+    : enableEquipmentProfile
+      ? 120
+      : 80
   const operationColumn: ColumnType<Record<string, unknown>> = {
     title: '操作',
     key: '__operation',
-    width: editable ? 160 : 80,
+    width: operationWidth,
     fixed: 'right',
     render: (_, record) => (
       <Space>
         <Button type="link" size="small" onClick={() => openDetail(record)}>详情</Button>
+        {enableEquipmentProfile && (
+          <Button type="link" size="small" onClick={() => setProfileRecord(record)}>
+            档案
+          </Button>
+        )}
         {editable && (
           <>
             <Button type="link" size="small" onClick={() => openEdit(record)}>编辑</Button>
@@ -418,18 +465,20 @@ export function InspectionFeishuTable({
   }
 
   const fieldNames = displayFields.length > 0 ? displayFields : serverFields
-  // 飞书「按钮」列无值也不可编辑（自动化触发按钮），不进列表
+  // 不展示：指定隐藏列（如「父记录」）+ 飞书「按钮」列（无回读值，操作列已有「详情」）
   const columnFields = fieldNames.filter(
-    field => fieldMetaMap[field]?.uiType !== 'Button',
+    (field) => !hiddenFields.includes(field) && fieldMetaMap[field]?.uiType !== 'Button',
   )
   const baseColumns: ColumnsType<Record<string, unknown>> = (columns && columns.length > 0)
     ? columns
     : columnFields.map(buildAutoColumn)
   const tableColumns: ColumnsType<Record<string, unknown>> = [...baseColumns, operationColumn]
 
-  const tableScrollX = tableColumns.every((column) => typeof column.width === 'number')
-    ? tableColumns.reduce((sum, column) => sum + Number(column.width), 0)
-    : 'max-content'
+  const tableScrollX = wrapColumns
+    ? undefined // 紧凑换行模式：不设横向滚动，列宽平分、内容换行
+    : tableColumns.every((column) => typeof column.width === 'number')
+      ? tableColumns.reduce((sum, column) => sum + Number(column.width), 0)
+      : 'max-content'
 
   const toolbarNode = (
     <>
@@ -453,7 +502,7 @@ export function InspectionFeishuTable({
               筛选
             </Button>
           )}
-          {editable && (canPush || formUrl) && (
+          {editable && !disableCreate && (canPush || formUrl) && (
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
               {createLabel}
             </Button>
@@ -552,8 +601,10 @@ export function InspectionFeishuTable({
             showTotal: (t) => `共 ${t} 条`,
           }}
           onChange={handleTableChange}
-          scroll={{ x: tableScrollX }}
-          tableLayout={autoColumnPreset === 'finished' ? 'fixed' : undefined}
+          scroll={wrapColumns ? undefined : { x: tableScrollX }}
+          tableLayout={
+            wrapColumns || autoColumnPreset === 'finished' ? 'fixed' : undefined
+          }
         />
       </Card>
       {editable && entityCode && (
@@ -588,6 +639,13 @@ export function InspectionFeishuTable({
         }
         onClose={() => setDetailOpen(false)}
       />
+      {enableEquipmentProfile && (
+        <InstrumentProfileDrawer
+          open={profileRecord !== null}
+          record={profileRecord}
+          onClose={() => setProfileRecord(null)}
+        />
+      )}
       <FeishuAttachmentPreviewModal
         open={attachmentPreview !== null}
         fileName={attachmentPreview?.fileName ?? ''}
@@ -595,25 +653,6 @@ export function InspectionFeishuTable({
         downloadSrc={attachmentPreview?.downloadSrc ?? ''}
         onClose={() => setAttachmentPreview(null)}
       />
-      <Modal
-        open={textPreview !== null}
-        title={textPreview?.title}
-        footer={null}
-        width={680}
-        onCancel={() => setTextPreview(null)}
-      >
-        <div
-          style={{
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            maxHeight: '60vh',
-            overflowY: 'auto',
-            lineHeight: 1.6,
-          }}
-        >
-          {textPreview?.content}
-        </div>
-      </Modal>
     </div>
   )
 }

@@ -499,6 +499,10 @@ def test_instrument_entities_seeded_prefilled_and_pullable() -> None:
     assert prefills["qc_instr_calibration"]["table_id"] == "tblRELoVEYKJ6fHB"
     assert prefills["qc_instr_cal_plan"]["table_id"] == "tblcztwNpMGXLQ8j"
     assert prefills["qc_instr_cal_external"]["table_id"] == "tblvF1h7klsT2TuP"
+    # 维保合同「新增」走飞书共享表单（质量设置-飞书设置中可更换）
+    assert prefills["qc_instr_contracts"]["form_url"] == (
+        "https://j0eukrlohu.feishu.cn/share/base/form/shrcnrm7ld6TLNwaoPuAWP36Z42"
+    )
 
     # 页面可编辑：仪器实体不在 push-only 名单，默认双向开关开启
     for code in instrument_codes:

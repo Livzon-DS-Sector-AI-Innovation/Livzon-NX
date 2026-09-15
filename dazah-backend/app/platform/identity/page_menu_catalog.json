@@ -160,15 +160,6 @@
                 "permission_code": null,
                 "disabled": false,
                 "children": null
-              },
-              {
-                "key": "inspection-items-dashboard",
-                "name": "物品仪表盘",
-                "path": "/quality/inspection/items/dashboard",
-                "icon": null,
-                "permission_code": null,
-                "disabled": false,
-                "children": null
               }
             ]
           },
@@ -182,7 +173,7 @@
             "children": [
               {
                 "key": "inspection-instruments-equipment",
-                "name": "仪器设备",
+                "name": "仪器台账",
                 "path": "/quality/inspection/instruments/equipment",
                 "icon": null,
                 "permission_code": null,

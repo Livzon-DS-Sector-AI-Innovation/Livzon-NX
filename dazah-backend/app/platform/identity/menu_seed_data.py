@@ -452,7 +452,7 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
                         children=[
                             _n(
                                 "inspection-instruments-equipment",
-                                "仪器设备",
+                                "仪器台账",
                                 "/quality/inspection/instruments/equipment",
                             ),
                             _n(

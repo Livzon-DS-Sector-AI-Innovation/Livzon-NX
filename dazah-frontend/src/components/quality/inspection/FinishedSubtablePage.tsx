@@ -137,7 +137,6 @@ export function FinishedSubtablePage({
         toolbarContent={toolbarContent}
         toolbarContainer={toolbarContainer}
         editable
-        enableTextPreview
         enableAttachmentPreview
         showLastSyncTime
       />

@@ -17090,6 +17090,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quality/instruments/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Api Get Instruments Dashboard
+         * @description 仪器管理仪表盘：概览/校验到期/维保/合同（读本地镜像聚合）。
+         */
+        get: operations["api_get_instruments_dashboard_api_v1_quality_instruments_dashboard_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quality/instruments/equipment": {
         parameters: {
             query?: never;
@@ -17107,6 +17127,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quality/instruments/equipment/import/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Api Confirm Instrument Import
+         * @description 仪器台账批量导入确认：按设备编号新增/更新写飞书并刷镜像。
+         */
+        post: operations["api_confirm_instrument_import_api_v1_quality_instruments_equipment_import_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/instruments/equipment/import/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Api Preview Instrument Import
+         * @description 仪器台账批量导入预览：解析 xlsx、识别列头、判新增/更新（不写数据）。
+         */
+        post: operations["api_preview_instrument_import_api_v1_quality_instruments_equipment_import_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quality/instruments/equipment/pull": {
         parameters: {
             query?: never;
@@ -17118,6 +17178,26 @@ export interface paths {
         put?: never;
         /** Api Pull Equipment */
         post: operations["api_pull_equipment_api_v1_quality_instruments_equipment_pull_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/instruments/equipment/{record_id}/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Api Get Instrument Profile
+         * @description 仪器档案：按设备编号匹配维护/维修/校验/合同情况。
+         */
+        get: operations["api_get_instrument_profile_api_v1_quality_instruments_equipment__record_id__profile_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -30780,6 +30860,16 @@ export interface components {
         };
         /** Body_analyze_literature_api_v1_research_literature_analyze_post */
         Body_analyze_literature_api_v1_research_literature_analyze_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_api_confirm_instrument_import_api_v1_quality_instruments_equipment_import_confirm_post */
+        Body_api_confirm_instrument_import_api_v1_quality_instruments_equipment_import_confirm_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_api_preview_instrument_import_api_v1_quality_instruments_equipment_import_preview_post */
+        Body_api_preview_instrument_import_api_v1_quality_instruments_equipment_import_preview_post: {
             /** File */
             file: string;
         };
@@ -104834,6 +104924,37 @@ export interface operations {
             };
         };
     };
+    api_get_instruments_dashboard_api_v1_quality_instruments_dashboard_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     api_list_equipment_api_v1_quality_instruments_equipment_get: {
         parameters: {
             query?: {
@@ -104871,11 +104992,114 @@ export interface operations {
             };
         };
     };
+    api_confirm_instrument_import_api_v1_quality_instruments_equipment_import_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_api_confirm_instrument_import_api_v1_quality_instruments_equipment_import_confirm_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_preview_instrument_import_api_v1_quality_instruments_equipment_import_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_api_preview_instrument_import_api_v1_quality_instruments_equipment_import_preview_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     api_pull_equipment_api_v1_quality_instruments_equipment_pull_post: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_get_instrument_profile_api_v1_quality_instruments_equipment__record_id__profile_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
             cookie?: {
                 auth_token?: string | null;
             };

@@ -13,7 +13,6 @@ export default function InstrCalPlanPage() {
         entityCode="qc_instr_cal_plan"
         editable
         editablePersonFields
-        enableTextPreview
         enableAttachmentPreview
         showLastSyncTime
         filters={[

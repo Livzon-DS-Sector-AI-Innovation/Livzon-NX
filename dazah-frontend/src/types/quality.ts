@@ -1229,6 +1229,7 @@ export interface ItemsStockAlertItemRow {
   current_stock?: string | null
   warning_stock?: string | null
   unit?: string | null
+  fields?: Record<string, unknown>
 }
 
 export interface ItemsMonthlyPointRow {
@@ -1246,6 +1247,78 @@ export interface ItemsDashboardData {
   year?: number | null
   monthly: ItemsMonthlyPointRow[]
   last_sync_time?: string | null
+}
+
+/** 仪器管理仪表盘：概览/校验到期/维保/合同（读本地镜像聚合） */
+export interface InstrumentDashboardData {
+  configured: boolean
+  equipment: { total: number; ok: number; repairing: number; key_count: number }
+  calibration_due: InstrumentCalibrationDueRow[]
+  calibration_expired: InstrumentCalibrationDueRow[]
+  maintenance: { total: number; unfinished: number; cycle_count: number }
+  contracts: { total: number; expiring: InstrumentContractDueRow[] }
+  last_sync_time?: string | null
+}
+
+export interface InstrumentCalibrationDueRow {
+  source: string
+  name: string
+  code: string
+  due_date: string | null
+  days: number
+  record_id: string
+}
+
+export interface InstrumentContractDueRow {
+  name: string
+  due_date: string | null
+  days: number
+  record_id: string
+}
+
+/** 仪器档案：按设备编号匹配的维保/维修/校验/合同情况 */
+export interface InstrumentProfileData {
+  equipment: Record<string, unknown> & { record_id?: string }
+  matched_code: string
+  maintenance: Record<string, unknown>[]
+  repairs: Record<string, unknown>[]
+  calibration: {
+    internal_summary: Record<string, unknown>[]
+    internal_plan: Record<string, unknown>[]
+    external: Record<string, unknown>[]
+  }
+  contracts: Record<string, unknown>[]
+  /** 合同表里的合同总数（档案只展示「涉及仪器及编号」命中的部分） */
+  contracts_total: number
+}
+
+/** 仪器台账批量导入预览 */
+export interface InstrumentImportPreview {
+  column_map: Record<string, string>
+  unmatched_columns: string[]
+  rows: {
+    row_number: number
+    values: Record<string, string>
+    warnings: string[]
+    error: string | null
+    mode: 'create' | 'update'
+  }[]
+  create_count: number
+  update_count: number
+  error_count: number
+  skipped_empty: number
+  person_unresolved: string[]
+}
+
+export interface InstrumentImportResult {
+  total_rows: number
+  success: number
+  failed: number
+  created: number
+  updated: number
+  error_details: { row_number: number; message: string }[]
+  skipped_empty: number
+  mirror_synced: number
 }
 
 export interface ItemsLowStockPushResult {

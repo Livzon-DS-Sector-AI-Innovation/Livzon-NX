@@ -13,7 +13,6 @@ export default function InstrCalibrationPage() {
         entityCode="qc_instr_calibration"
         editable
         editablePersonFields
-        enableTextPreview
         enableAttachmentPreview
         showLastSyncTime
       />
