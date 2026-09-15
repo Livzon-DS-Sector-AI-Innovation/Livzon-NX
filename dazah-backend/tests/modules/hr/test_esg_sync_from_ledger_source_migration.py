@@ -46,6 +46,7 @@ async def _share_db_session(
 ) -> AsyncIterator[None]:
     """Make API calls observe rows seeded through the test session."""
 
+    client.headers.update({"X-Dazah-Page-Key": "hr:training:training-ledger"})
     mappings = [
         {
             "source_name": "质量管理部",

@@ -7,6 +7,17 @@ from app.modules.registration.schemas import ProjectOverview
 from app.modules.registration.service.project import ProjectOverviewService
 
 
+@pytest.fixture(autouse=True)
+def _page_context(client: AsyncClient) -> None:
+    client.headers.update(
+        {
+            "X-Dazah-Page-Key": (
+                "registration:project:project-ledger:international-associated-review"
+            )
+        }
+    )
+
+
 @pytest.mark.asyncio
 async def test_project_overview_returns_aggregated_modules(
     client: AsyncClient,

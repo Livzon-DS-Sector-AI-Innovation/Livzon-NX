@@ -11,7 +11,7 @@ from app.core.database import get_db
 from app.main import app
 from app.modules.agent.access_scope import AgentAccessScopeService
 from app.platform.identity.deps import get_current_user
-from app.platform.identity.models import User, UserModuleGrant
+from app.platform.identity.models import User, UserModuleGrant, UserPageGrant
 from app.platform.identity.permissions import (
     ADMIN_DEFAULT_MODULE_PERMISSIONS,
     IdentityPermissionService,
@@ -55,16 +55,43 @@ async def test_business_module_routes_are_open_to_authenticated_users_in_all_mod
         )
         db_session.add(user)
         await db_session.flush()
+        db_session.add_all(
+            [
+                UserPageGrant(
+                    user_id=user.id,
+                    page_key="warehouse:materials:raw-summary",
+                    permissions=["access", "query", "operate"],
+                    sensitive_actions=[],
+                    scope_type="not_applicable",
+                    department_ids=[],
+                ),
+                UserPageGrant(
+                    user_id=user.id,
+                    page_key="production:overview",
+                    permissions=["access", "query", "operate"],
+                    sensitive_actions=[],
+                    scope_type="not_applicable",
+                    department_ids=[],
+                ),
+            ]
+        )
+        await db_session.flush()
 
         async def override_current_user() -> User:
             return user
 
         app.dependency_overrides[get_current_user] = override_current_user
-        allowed = await client.get("/api/v1/warehouse/")
+        allowed = await client.get(
+            "/api/v1/warehouse/",
+            headers={"X-Dazah-Page-Key": "warehouse:materials:raw-summary"},
+        )
         assert allowed.status_code == 200
         assert allowed.json()["code"] == "warehouse"
 
-        other_module = await client.get("/api/v1/production/")
+        other_module = await client.get(
+            "/api/v1/production/",
+            headers={"X-Dazah-Page-Key": "production:overview"},
+        )
         assert other_module.status_code == 200
 
         admin_endpoint = await client.get("/api/v1/identity/users")
@@ -280,7 +307,10 @@ async def test_system_admin_has_all_pages_and_registered_livzon_tools(
         assert me.status_code == 200
         assert me.json()["data"]["module_codes"] == sorted(MODULES_BY_CODE)
 
-        module_response = await client.get("/api/v1/warehouse/")
+        module_response = await client.get(
+            "/api/v1/warehouse/",
+            headers={"X-Dazah-Page-Key": "warehouse:materials:raw-summary"},
+        )
         assert module_response.status_code == 200
 
         scope = await AgentAccessScopeService().scope_out(db_session, user=admin)
