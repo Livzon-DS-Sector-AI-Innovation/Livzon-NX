@@ -1055,6 +1055,12 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
         sales_plan_page,
         scope_adapter="production.plan",
     )
+    add(
+        "GET",
+        "/plans/monthly-summary",
+        sales_plan_page,
+        scope_adapter="production.plan",
+    )
     add("POST", "/plans", sales_plan_page, "operate", scope_adapter="production.plan")
     add(
         "PUT",
@@ -1293,6 +1299,21 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
         "GET",
         ("/fermentation-board",),
         overview,
+        scope_adapter="production.dashboard",
+    )
+    # The extraction daily report is edited from the production dashboard and
+    # keeps its finer-grained extraction-yield check inside the module API.
+    add(
+        "GET",
+        "/extraction-daily-reports",
+        overview,
+        scope_adapter="production.dashboard",
+    )
+    add(
+        "POST",
+        "/extraction-daily-reports",
+        overview,
+        "operate",
         scope_adapter="production.dashboard",
     )
     add(
