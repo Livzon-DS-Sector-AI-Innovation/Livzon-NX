@@ -439,7 +439,7 @@
             "children": [
               {
                 "key": "inspection-instruments-equipment",
-                "name": "仪器设备",
+                "name": "仪器台账",
                 "path": "/quality/inspection/instruments/equipment",
                 "icon": null,
                 "permission_code": null,
