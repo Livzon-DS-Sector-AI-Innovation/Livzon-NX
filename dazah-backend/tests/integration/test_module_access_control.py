@@ -16,6 +16,7 @@ from app.platform.identity.permissions import (
     ADMIN_DEFAULT_MODULE_PERMISSIONS,
     IdentityPermissionService,
 )
+from app.platform.identity.rbac import seed_menus
 from app.platform.identity.schemas import (
     ModulePermissionGrantInput,
     UserModulePermissionsUpdate,
@@ -43,6 +44,7 @@ async def test_business_module_routes_are_open_to_authenticated_users_in_all_mod
     )
 
     try:
+        await seed_menus(db_session)
         unauthenticated = await client.get("/api/v1/warehouse/")
         assert unauthenticated.status_code == 401
 
