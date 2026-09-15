@@ -352,4 +352,55 @@ describe('quality client - oot limit notice export', () => {
     await expect(fetchInspectionMaterials()).resolves.toEqual([])
     vi.unstubAllGlobals()
   })
+
+  it('fetches the instrument profile and surfaces backend errors', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ code: 200, data: { matched_code: 'E1' } }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { fetchInstrumentProfile } = await import('./quality')
+    await expect(fetchInstrumentProfile('r1')).resolves.toEqual({ matched_code: 'E1' })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/quality/instruments/equipment/r1/profile',
+    )
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ message: '档案不存在' }, 404)),
+    )
+    await expect(fetchInstrumentProfile('r1')).rejects.toThrow('档案不存在')
+    vi.unstubAllGlobals()
+  })
+
+  it('previews and confirms an instrument workbook import', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () =>
+      jsonResponse({ code: 200, data: { create_count: 1, update_count: 0 } }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { confirmInstrumentImport, previewInstrumentImport } = await import('./quality')
+    const file = new File(['x'], 'instruments.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    await expect(previewInstrumentImport(file)).resolves.toEqual({
+      create_count: 1,
+      update_count: 0,
+    })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/quality/instruments/equipment/import/preview',
+      expect.objectContaining({ method: 'POST' }),
+    )
+    await expect(confirmInstrumentImport(file)).resolves.toEqual({
+      create_count: 1,
+      update_count: 0,
+    })
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/v1/quality/instruments/equipment/import/confirm',
+      expect.objectContaining({ method: 'POST' }),
+    )
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ message: '文件解析失败' }, 400)),
+    )
+    await expect(previewInstrumentImport(file)).rejects.toThrow('文件解析失败')
+    vi.unstubAllGlobals()
+  })
 })
