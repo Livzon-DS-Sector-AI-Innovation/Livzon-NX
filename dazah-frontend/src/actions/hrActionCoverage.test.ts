@@ -321,6 +321,26 @@ describe('migrated HR server action coverage', () => {
     expect(mocks.revalidatePath).not.toHaveBeenCalledWith('/hr/recruitment')
   })
 
+  it('surfaces backend reason for training personnel config failures and revalidates on success', async () => {
+    const forbidden = vi.fn().mockImplementation(async () =>
+      new Response(JSON.stringify({ message: '只能删除自己创建的培训人员配置' }), {
+        status: 403,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', forbidden)
+
+    await expect(call('saveTrainingPersonnelConfig', {})).rejects.toThrow('只能删除自己创建的培训人员配置')
+    await expect(call('deleteTrainingPersonnelConfig', 'config-1')).rejects.toThrow('只能删除自己创建的培训人员配置')
+    // 失败不刷新缓存，避免把失败当成功
+    expect(mocks.revalidatePath).not.toHaveBeenCalledWith('/hr/training/sign-in')
+
+    vi.clearAllMocks()
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => response()))
+    await call('deleteTrainingPersonnelConfig', 'config-1')
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/hr/training/sign-in')
+  })
+
   it('touches ledger and esg batch-delete actions', async () => {
     const fetchMock = vi.fn().mockImplementation(async () => response())
     vi.stubGlobal('fetch', fetchMock)

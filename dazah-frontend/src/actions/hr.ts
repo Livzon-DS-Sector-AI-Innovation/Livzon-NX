@@ -1588,7 +1588,11 @@ export async function saveTrainingPersonnelConfig(
     body: JSON.stringify(data),
     cache: 'no-store',
   })
-  if (!res.ok) throw new Error('保存培训人员配置失败')
+  if (!res.ok) {
+    // 透出后端业务原因（如无权限/配置名冲突），否则界面只能显示通用文案
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message || err.detail || '保存培训人员配置失败')
+  }
   revalidatePath('/hr/training/sign-in')
   return res.json()
 }
@@ -1600,7 +1604,11 @@ export async function deleteTrainingPersonnelConfig(
     method: 'DELETE',
     cache: 'no-store',
   })
-  if (!res.ok) throw new Error('删除培训人员配置失败')
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message || err.detail || '删除培训人员配置失败')
+  }
+  revalidatePath('/hr/training/sign-in')
   return res.json()
 }
 
