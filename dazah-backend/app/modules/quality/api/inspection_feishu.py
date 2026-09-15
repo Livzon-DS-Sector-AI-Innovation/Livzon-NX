@@ -44,6 +44,7 @@ from app.modules.quality.service import (
     ensure_material_entity_in_group,
     get_bbas_dashboard_data,
     get_dls_dashboard_data,
+    get_finished_display_fields,
     get_formulations_dashboard_data,
     get_lft_dashboard_data,
     get_lkms_dashboard_data,
@@ -51,33 +52,21 @@ from app.modules.quality.service import (
     get_mvt_dashboard_data,
     get_tryptophan_dashboard_data,
     get_water_dashboard_data,
-    list_calibrations,
-    list_equipment,
+    list_all_materials,
     list_finished_by_entity,
     list_finished_subtables,
     list_inbounds,
-    list_instr_assets,
-    list_instr_changes,
-    list_instr_contracts,
-    list_instr_plans,
+    list_instrument_mirror,
     list_items,
-    list_maintenance,
     list_material_records_by_entity,
     list_material_subtables,
     list_outbounds,
-    list_repairs,
-    pull_calibrations,
-    pull_equipment,
     pull_finished_by_entity,
-    pull_instr_assets,
-    pull_instr_changes,
-    pull_instr_contracts,
-    pull_instr_plans,
-    pull_maintenance,
     pull_material_records_by_entity,
-    pull_repairs,
+    sync_instrument_page,
 )
 from app.modules.quality.service.inspection_dashboard_calc import reanalyze_trend_ai
+from app.modules.quality.service.inspection_helpers import _list_feishu_dynamic
 from app.modules.quality.service.inspection_items_mirror import (
     PAGE_INBOUND,
     PAGE_INVENTORY,
@@ -179,7 +168,8 @@ def _parse_filter_params(request: Request | None) -> dict[str, str]:
     return filters
 
 
-def _items_mirror_response(result: dict[str, Any]) -> Any:
+def _mirror_response(result: dict[str, Any]) -> Any:
+    """镜像页列表响应信封（source=local_mirror，前端据此展示最近同步时间）。"""
     meta = {
         "total": result["total"],
         "page": result["page"],
@@ -205,17 +195,51 @@ async def _items_page_list(
     incremental: bool,
 ) -> Any:
     """物品页列表：镜像优先，可选触发同步；空镜像/未镜像降级实时读。"""
-    if force or incremental:
-        try:
-            await sync_items_page(db, page_key, incremental=incremental and not force)
-        except AppException as exc:
-            logger.info("items mirror sync skipped (%s): %s", page_key, exc)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("items mirror sync failed (%s): %s", page_key, exc)
-
-    mirror = await list_items_mirror(
+    return await _mirror_page_list(
         db,
         page_key,
+        list_mirror=list_items_mirror,
+        sync_page=sync_items_page,
+        live_coro=live_coro,
+        keyword=keyword,
+        filters=filters,
+        page=page,
+        page_size=page_size,
+        force=force,
+        incremental=incremental,
+    )
+
+
+async def _mirror_page_list(
+    db: AsyncSession,
+    entity_code: str,
+    *,
+    list_mirror: Any,
+    sync_page: Any,
+    live_coro: Any,
+    keyword: str | None,
+    filters: dict[str, str],
+    page: int,
+    page_size: int,
+    force: bool,
+    incremental: bool,
+) -> Any:
+    """镜像页通用列表：镜像优先，可选触发同步；空镜像/未镜像降级实时读。
+
+    force=True 强制全量同步后再读；incremental=True 走增量同步。
+    未同步（无快照）时降级实时读，保证首次进入不空屏。
+    """
+    if force or incremental:
+        try:
+            await sync_page(db, entity_code, incremental=incremental and not force)
+        except AppException as exc:
+            logger.info("mirror sync skipped (%s): %s", entity_code, exc)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("mirror sync failed (%s): %s", entity_code, exc)
+
+    mirror = await list_mirror(
+        db,
+        entity_code,
         keyword=keyword,
         filters=filters,
         page=page,
@@ -226,25 +250,29 @@ async def _items_page_list(
         return await _safe_list(
             live_coro,
             db,
+            entity_code,
             keyword=keyword,
             page=page,
             page_size=page_size,
             filters=filters,
         )
     empty_unfiltered = (
-        mirror["configured"]
-        and mirror["total"] == 0
-        and not keyword
-        and not filters
+        mirror["configured"] and mirror["total"] == 0 and not keyword and not filters
     )
     if not force and empty_unfiltered:
         # 镜像为空可能是尚未首跑：降级实时读探测一次
         live_probe = await _safe_list(
-            live_coro, db, keyword=keyword, page=1, page_size=1, filters=filters
+            live_coro,
+            db,
+            entity_code,
+            keyword=keyword,
+            page=1,
+            page_size=1,
+            filters=filters,
         )
         if _response_has_data(live_probe):
             return live_probe
-    return _items_mirror_response(mirror)
+    return _mirror_response(mirror)
 
 
 def _response_has_data(envelope: Any) -> bool:
@@ -445,8 +473,56 @@ async def api_push_low_stock_test(
 
 
 # ═══════════════════════════════════════
-#  仪器管理
+#  仪器管理（本地镜像优先，8 张飞书子表 / 两个 Base）
 # ═══════════════════════════════════════
+
+async def _instrument_page_list(
+    db: AsyncSession,
+    entity_code: str,
+    *,
+    keyword: str | None,
+    filters: dict[str, str],
+    page: int,
+    page_size: int,
+    force: bool,
+    incremental: bool,
+) -> Any:
+    """仪器子表列表：本地镜像优先，未同步时降级实时读（列跟随飞书真实字段）。"""
+    return await _mirror_page_list(
+        db,
+        entity_code,
+        list_mirror=list_instrument_mirror,
+        sync_page=sync_instrument_page,
+        live_coro=_list_feishu_dynamic,
+        keyword=keyword,
+        filters=filters,
+        page=page,
+        page_size=page_size,
+        force=force,
+        incremental=incremental,
+    )
+
+
+async def _safe_pull_mirror(sync_page: Any, entity_code: str, db: AsyncSession) -> Any:
+    """手动全量同步镜像页（幂等锁防连点）。"""
+    if not await try_acquire_action_lock(f"pull:mirror:{entity_code}", timeout=300):
+        return success_response(
+            data={"synced": 0, "failed": 0, "error": "同步正在进行中，请勿重复操作"}
+        )
+    try:
+        result = await sync_page(db, entity_code, incremental=False)
+        return success_response(
+            data={
+                "synced": result.get("synced", 0),
+                "failed": result.get("failed", 0),
+            }
+        )
+    except AppException as exc:
+        logger.info("mirror pull not configured (%s): %s", entity_code, exc)
+        return success_response(data={"synced": 0, "failed": 0, "error": "飞书未配置"})
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("mirror pull error (%s): %s", entity_code, exc)
+        return success_response(data={"synced": 0, "failed": 0, "error": str(exc)})
 
 
 @router.get(
@@ -456,18 +532,22 @@ async def api_list_equipment(
     keyword: str = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
+    force: bool = Query(False),
+    incremental: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     request: Request = cast(Request, None),
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    return await _safe_list(
-        list_equipment,
+    return await _instrument_page_list(
         db,
+        "qc_instr_equipment",
         keyword=keyword,
+        filters=_parse_filter_params(request),
         page=page,
         page_size=page_size,
-        filters=_parse_filter_params(request),
+        force=force,
+        incremental=incremental,
     )
 
 
@@ -479,7 +559,7 @@ async def api_pull_equipment(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    return await _safe_pull(pull_equipment, db)
+    return await _safe_pull_mirror(sync_instrument_page, "qc_instr_equipment", db)
 
 
 @router.get(
@@ -489,18 +569,22 @@ async def api_list_maintenance(
     keyword: str = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
+    force: bool = Query(False),
+    incremental: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     request: Request = cast(Request, None),
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    return await _safe_list(
-        list_maintenance,
+    return await _instrument_page_list(
         db,
+        "qc_instr_maintenance",
         keyword=keyword,
+        filters=_parse_filter_params(request),
         page=page,
         page_size=page_size,
-        filters=_parse_filter_params(request),
+        force=force,
+        incremental=incremental,
     )
 
 
@@ -512,7 +596,7 @@ async def api_pull_maintenance(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    return await _safe_pull(pull_maintenance, db)
+    return await _safe_pull_mirror(sync_instrument_page, "qc_instr_maintenance", db)
 
 
 @router.get(
@@ -522,18 +606,22 @@ async def api_list_calibrations(
     keyword: str = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
+    force: bool = Query(False),
+    incremental: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     request: Request = cast(Request, None),
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    return await _safe_list(
-        list_calibrations,
+    return await _instrument_page_list(
         db,
+        "qc_instr_calibration",
         keyword=keyword,
+        filters=_parse_filter_params(request),
         page=page,
         page_size=page_size,
-        filters=_parse_filter_params(request),
+        force=force,
+        incremental=incremental,
     )
 
 
@@ -545,7 +633,7 @@ async def api_pull_calibrations(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    return await _safe_pull(pull_calibrations, db)
+    return await _safe_pull_mirror(sync_instrument_page, "qc_instr_calibration", db)
 
 
 @router.get(
@@ -555,18 +643,22 @@ async def api_list_repairs(
     keyword: str = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
+    force: bool = Query(False),
+    incremental: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     request: Request = cast(Request, None),
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    return await _safe_list(
-        list_repairs,
+    return await _instrument_page_list(
         db,
+        "qc_instr_repair",
         keyword=keyword,
+        filters=_parse_filter_params(request),
         page=page,
         page_size=page_size,
-        filters=_parse_filter_params(request),
+        force=force,
+        incremental=incremental,
     )
 
 
@@ -578,40 +670,7 @@ async def api_pull_repairs(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    return await _safe_pull(pull_repairs, db)
-
-
-@router.get(
-    "/instruments/change", response_model=ApiResponseEnvelope[list[dict[str, Any]]]
-)
-async def api_list_instr_changes(
-    keyword: str = Query(None),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=200),
-    db: AsyncSession = Depends(get_db),
-    request: Request = cast(Request, None),
-    current_user: CurrentUser = None,
-) -> Any:
-    _require_user(current_user)
-    return await _safe_list(
-        list_instr_changes,
-        db,
-        keyword=keyword,
-        page=page,
-        page_size=page_size,
-        filters=_parse_filter_params(request),
-    )
-
-
-@router.post(
-    "/instruments/change/pull", response_model=ApiResponseEnvelope[dict[str, Any]]
-)
-async def api_pull_instr_changes(
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
-) -> Any:
-    _require_user(current_user)
-    return await _safe_pull(pull_instr_changes, db)
+    return await _safe_pull_mirror(sync_instrument_page, "qc_instr_repair", db)
 
 
 @router.get(
@@ -621,18 +680,22 @@ async def api_list_instr_contracts(
     keyword: str = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
+    force: bool = Query(False),
+    incremental: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     request: Request = cast(Request, None),
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    return await _safe_list(
-        list_instr_contracts,
+    return await _instrument_page_list(
         db,
+        "qc_instr_contracts",
         keyword=keyword,
+        filters=_parse_filter_params(request),
         page=page,
         page_size=page_size,
-        filters=_parse_filter_params(request),
+        force=force,
+        incremental=incremental,
     )
 
 
@@ -644,7 +707,7 @@ async def api_pull_instr_contracts(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    return await _safe_pull(pull_instr_contracts, db)
+    return await _safe_pull_mirror(sync_instrument_page, "qc_instr_contracts", db)
 
 
 @router.get(
@@ -654,18 +717,22 @@ async def api_list_instr_plans(
     keyword: str = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
+    force: bool = Query(False),
+    incremental: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     request: Request = cast(Request, None),
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    return await _safe_list(
-        list_instr_plans,
+    return await _instrument_page_list(
         db,
+        "qc_instr_plans",
         keyword=keyword,
+        filters=_parse_filter_params(request),
         page=page,
         page_size=page_size,
-        filters=_parse_filter_params(request),
+        force=force,
+        incremental=incremental,
     )
 
 
@@ -677,40 +744,82 @@ async def api_pull_instr_plans(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    return await _safe_pull(pull_instr_plans, db)
+    return await _safe_pull_mirror(sync_instrument_page, "qc_instr_plans", db)
 
 
 @router.get(
-    "/instruments/assets", response_model=ApiResponseEnvelope[list[dict[str, Any]]]
+    "/instruments/cal-plan", response_model=ApiResponseEnvelope[list[dict[str, Any]]]
 )
-async def api_list_instr_assets(
+async def api_list_instr_cal_plans(
     keyword: str = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
+    force: bool = Query(False),
+    incremental: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     request: Request = cast(Request, None),
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    return await _safe_list(
-        list_instr_assets,
+    return await _instrument_page_list(
         db,
+        "qc_instr_cal_plan",
         keyword=keyword,
+        filters=_parse_filter_params(request),
         page=page,
         page_size=page_size,
-        filters=_parse_filter_params(request),
+        force=force,
+        incremental=incremental,
     )
 
 
 @router.post(
-    "/instruments/assets/pull", response_model=ApiResponseEnvelope[dict[str, Any]]
+    "/instruments/cal-plan/pull", response_model=ApiResponseEnvelope[dict[str, Any]]
 )
-async def api_pull_instr_assets(
+async def api_pull_instr_cal_plans(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    return await _safe_pull(pull_instr_assets, db)
+    return await _safe_pull_mirror(sync_instrument_page, "qc_instr_cal_plan", db)
+
+
+@router.get(
+    "/instruments/cal-external",
+    response_model=ApiResponseEnvelope[list[dict[str, Any]]],
+)
+async def api_list_instr_cal_external(
+    keyword: str = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+    force: bool = Query(False),
+    incremental: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    request: Request = cast(Request, None),
+    current_user: CurrentUser = None,
+) -> Any:
+    _require_user(current_user)
+    return await _instrument_page_list(
+        db,
+        "qc_instr_cal_external",
+        keyword=keyword,
+        filters=_parse_filter_params(request),
+        page=page,
+        page_size=page_size,
+        force=force,
+        incremental=incremental,
+    )
+
+
+@router.post(
+    "/instruments/cal-external/pull", response_model=ApiResponseEnvelope[dict[str, Any]]
+)
+async def api_pull_instr_cal_external(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    _require_user(current_user)
+    return await _safe_pull_mirror(sync_instrument_page, "qc_instr_cal_external", db)
 
 
 # ═══════════════════════════════════════
@@ -1134,8 +1243,13 @@ async def api_list_finished_records(
     field_names = result.get("fields") or []
     if field_names:
         response_meta["fields"] = field_names
+        # 恢复精简展示列裁剪：批号/批量/规格/检测项目(≤5，优先仪表盘指标)，
+        # 其余列通过前端「详情」查看
+        response_meta["display_fields"] = get_finished_display_fields(
+            entity_code, field_names
+        )
     if "configured" in result:
-        # 镜像路径：附带同步状态；不返回 display_fields 裁剪，前端展示全部列
+        # 镜像路径：附带同步状态
         response_meta["configured"] = result["configured"]
         response_meta["last_sync_time"] = result.get("last_sync_time")
         response_meta["source"] = "local_mirror"
@@ -1163,6 +1277,24 @@ async def api_pull_finished(
 # ═══════════════════════════════════════
 #  固体/液体物料检验（编号段分组）
 # ═══════════════════════════════════════
+
+
+@router.get(
+    "/inspection/materials",
+    response_model=ApiResponseEnvelope[dict[str, Any]],
+)
+async def api_list_all_materials(
+    current_user: CurrentUser = None,  # optional_user
+) -> Any:
+    """全部固体+液体原辅料（代码+名称 label、模块与分组），供新增检验选料。"""
+    items = list_all_materials()
+    return success_response(
+        data=items,
+        meta={
+            "total": len(items),
+            "configured": True,
+        },
+    )
 
 
 @router.get(

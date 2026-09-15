@@ -53,7 +53,7 @@ async def anon_client(client: AsyncClient) -> AsyncIterator[AsyncClient]:
         ("POST", "/api/v1/quality/items/inbound/pull"),
         ("POST", "/api/v1/quality/instruments/maintenance/pull"),
         ("POST", "/api/v1/quality/instruments/repair/pull"),
-        ("GET", "/api/v1/quality/instruments/change"),
+        ("GET", "/api/v1/quality/instruments/cal-external"),
         (
             "POST",
             "/api/v1/quality/inspection-finished/mpa/pull?entity_code=qc_finished_internal",

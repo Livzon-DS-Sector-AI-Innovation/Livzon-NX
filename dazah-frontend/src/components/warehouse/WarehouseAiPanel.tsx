@@ -9,13 +9,16 @@ import {
   Col,
   Empty,
   Input,
+  Modal,
   Row,
   Space,
   Spin,
   Statistic,
+  Table,
   Tag,
   Typography,
 } from 'antd'
+import type { TableColumnsType } from 'antd'
 import {
   AlertOutlined,
   BarChartOutlined,
@@ -169,6 +172,22 @@ function getRiskLabel(level: WarehouseTrendAnomalyItem['risk_level']): string {
   return '低风险'
 }
 
+function shortageDetail(item: AnomalyItem, key: string): unknown {
+  return (item.details as Record<string, unknown> | undefined)?.[key]
+}
+
+function shortageDetailNumber(item: AnomalyItem, key: string): number | null {
+  const value = shortageDetail(item, key)
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function shortageDetailText(item: AnomalyItem, key: string): string {
+  const value = shortageDetail(item, key)
+  if (value === null || value === undefined || value === '') return '-'
+  return String(value)
+}
+
 export function WarehouseAiPanel() {
   const { message } = App.useApp()
   const [anomalies, setAnomalies] = useState<AnomalyItem[]>([])
@@ -185,6 +204,60 @@ export function WarehouseAiPanel() {
   const [chatQuestion, setChatQuestion] = useState('')
   const [chatResponse, setChatResponse] = useState('')
   const [activeTab, setActiveTab] = useState<'anomalies' | 'chat' | 'report'>('anomalies')
+  const [shortageModalOpen, setShortageModalOpen] = useState(false)
+
+  const shortageColumns: TableColumnsType<AnomalyItem> = [
+    {
+      title: '物料名称',
+      dataIndex: 'material_name',
+      key: 'material_name',
+      render: (name: string) => <Text strong>{name}</Text>,
+    },
+    {
+      title: '类型',
+      dataIndex: 'material_type',
+      key: 'material_type',
+      width: 80,
+      render: (type: string) => <Tag>{MATERIAL_TYPE_LABELS[type] || type}</Tag>,
+    },
+    {
+      title: '当前库存',
+      key: 'available',
+      width: 100,
+      render: (_: unknown, item) => shortageDetailNumber(item, 'available') ?? '-',
+    },
+    {
+      title: '安全库存',
+      key: 'safety',
+      width: 100,
+      render: (_: unknown, item) => shortageDetailNumber(item, 'safety') ?? '-',
+    },
+    {
+      title: '缺口',
+      key: 'gap',
+      width: 90,
+      render: (_: unknown, item) => {
+        const gap = shortageDetailNumber(item, 'gap')
+        return gap && gap > 0 ? (
+          <Text type="danger">{gap}</Text>
+        ) : (
+          '-'
+        )
+      },
+    },
+    {
+      title: '预警状态',
+      key: 'warning',
+      width: 120,
+      render: (_: unknown, item) => shortageDetailText(item, 'warning'),
+    },
+    {
+      title: '处理建议',
+      dataIndex: 'suggestion',
+      key: 'suggestion',
+      ellipsis: true,
+    },
+  ]
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -686,19 +759,55 @@ export function WarehouseAiPanel() {
             </Card>
           </Col>
           <Col span={6}>
-            <Card>
+            <Card
+              hoverable
+              onClick={() => setShortageModalOpen(true)}
+              styles={{ body: { cursor: 'pointer' } }}
+            >
               <Statistic
-                title="异常物料数"
+                title="缺货物料数"
                 value={summary.summary.anomaly_count}
                 styles={{
                   content: {
                     color: summary.summary.anomaly_count > 0 ? '#cf1322' : '#3f8600',
                   },
                 }}
+                suffix={
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    点击查看
+                  </Text>
+                }
               />
             </Card>
           </Col>
         </Row>
+      )}
+
+      {summary && (
+        <Modal
+          title={`缺货物料明细（${anomalies.length}）`}
+          open={shortageModalOpen}
+          onCancel={() => setShortageModalOpen(false)}
+          footer={
+            <Button type="primary" onClick={() => setShortageModalOpen(false)}>
+              关闭
+            </Button>
+          }
+          width={920}
+        >
+          <Paragraph type="secondary" style={{ marginBottom: 12 }}>
+            口径：已配置安全库存的原辅料 / 包材中，当前可用库存低于安全库存或已命中缺货预警的物料。
+          </Paragraph>
+          <Table<AnomalyItem>
+            rowKey={(item) => `${item.material_type}-${item.material_name}-${item.anomaly_type}`}
+            size="small"
+            columns={shortageColumns}
+            dataSource={anomalies}
+            pagination={false}
+            scroll={{ y: 420 }}
+            locale={{ emptyText: '当前没有缺货物料' }}
+          />
+        </Modal>
       )}
 
       {/* Tab Navigation */}

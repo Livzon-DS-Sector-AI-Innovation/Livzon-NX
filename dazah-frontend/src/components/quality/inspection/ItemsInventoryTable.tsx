@@ -29,6 +29,8 @@ export function ItemsInventoryTable() {
       entityCode="qc_items_inventory"
       filters={filters}
       editable
+      enableTextPreview
+      enableAttachmentPreview
     />
   )
 }

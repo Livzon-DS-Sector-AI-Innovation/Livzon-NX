@@ -10,7 +10,7 @@ import logging
 from typing import Any
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import async_session_factory, get_db
@@ -28,6 +28,9 @@ from app.modules.quality.api.deps import (
 )
 from app.modules.quality.schemas.inspection_feishu_crud import (
     InspectionFeishuRecordBody,
+)
+from app.modules.quality.service.feishu_attachment_thumbnail import (
+    get_attachment_thumbnail,
 )
 from app.modules.quality.service.inspection_feishu_crud import (
     create_inspection_feishu_record,
@@ -47,33 +50,88 @@ from app.modules.quality.service.inspection_items_mirror import (
     ITEMS_MIRROR_PAGES,
     sync_items_page,
 )
+from app.modules.quality.service.inspection_material_mirror import (
+    MATERIAL_MIRROR_ENTITIES,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-async def _maybe_refresh_entity_mirror(entity_code: str) -> None:
-    """物品/成品镜像页写飞书成功后顺带增量同步镜像，使列表即时反映改动。
+async def _maybe_refresh_entity_mirror(
+    entity_code: str,
+    record_id: str | None = None,
+    *,
+    deleted: bool = False,
+) -> None:
+    """写飞书成功后同步本地镜像，使列表即时反映改动。
+
+    - 物料/成品：record_id 给定时单条写穿（单条 get_record → upsert 该行，
+      删除则软删镜像行），不受增量同步"批号降序 + 整页无变更提前停止"
+      的影响，编辑旧批号也即时生效；其它行的漂移由定时增量与每日全量兜底；
+    - 物品/仪器：维持整页增量同步（按 last_modified 水位可捕捉编辑）。
 
     用独立会话执行：避免在请求事务里中途提交（主会话的写入已完成），
     同步失败不影响已成功的飞书写（写已提交），仅记日志。
     """
     try:
+        if record_id is not None and (
+            entity_code in MATERIAL_MIRROR_ENTITIES
+            or entity_code in FINISHED_MIRROR_ENTITIES
+        ):
+            await _sync_single_record_to_mirror(
+                entity_code, record_id, deleted=deleted
+            )
+            return
+        from app.modules.quality.service.inspection_instrument_mirror import (
+            INSTRUMENT_MIRROR_ENTITIES,
+            sync_instrument_page,
+        )
+
         in_scope = (
             entity_code in ITEMS_MIRROR_PAGES
             or entity_code in FINISHED_MIRROR_ENTITIES
+            or entity_code in INSTRUMENT_MIRROR_ENTITIES
         )
         if not in_scope:
             return
         async with async_session_factory() as sync_db:
             if entity_code in ITEMS_MIRROR_PAGES:
                 await sync_items_page(sync_db, entity_code, incremental=True)
-            else:
+            elif entity_code in FINISHED_MIRROR_ENTITIES:
                 await sync_finished_page(sync_db, entity_code, incremental=True)
+            else:
+                await sync_instrument_page(sync_db, entity_code, incremental=True)
     except AppException as exc:
         logger.info("mirror refresh skipped (%s): %s", entity_code, exc)
     except Exception as exc:  # noqa: BLE001
         logger.warning("mirror refresh failed (%s): %s", entity_code, exc)
+
+
+async def _sync_single_record_to_mirror(
+    entity_code: str,
+    record_id: str,
+    *,
+    deleted: bool = False,
+) -> None:
+    """编辑/新增/删除单条记录后把该行写穿到物料/成品镜像（独立会话）。"""
+    if entity_code in MATERIAL_MIRROR_ENTITIES:
+        from app.modules.quality.service.inspection_material_mirror import (
+            delete_mirror_record,
+            upsert_record_by_id,
+        )
+    elif entity_code in FINISHED_MIRROR_ENTITIES:
+        from app.modules.quality.service.inspection_finished_mirror import (
+            delete_mirror_record,
+            upsert_record_by_id,
+        )
+    else:
+        return
+    async with async_session_factory() as sync_db:
+        if deleted:
+            await delete_mirror_record(sync_db, entity_code, record_id)
+        else:
+            await upsert_record_by_id(sync_db, entity_code, record_id)
 
 
 @router.get(
@@ -119,7 +177,7 @@ async def api_create_inspection_feishu_record(
     data = await create_inspection_feishu_record(
         db, entity_code, body.fields, actor_user_id=user_id
     )
-    await _maybe_refresh_entity_mirror(entity_code)
+    await _maybe_refresh_entity_mirror(entity_code, str(data.get("record_id") or ""))
     return success_response(data=data, message="创建成功，已同步飞书")
 
 
@@ -143,7 +201,7 @@ async def api_update_inspection_feishu_record(
     data = await update_inspection_feishu_record(
         db, entity_code, record_id, body.fields, actor_user_id=user_id
     )
-    await _maybe_refresh_entity_mirror(entity_code)
+    await _maybe_refresh_entity_mirror(entity_code, record_id)
     return success_response(data=data, message="更新成功，已同步飞书")
 
 
@@ -166,7 +224,7 @@ async def api_delete_inspection_feishu_record(
     data = await delete_inspection_feishu_record(
         db, entity_code, record_id, actor_user_id=user_id
     )
-    await _maybe_refresh_entity_mirror(entity_code)
+    await _maybe_refresh_entity_mirror(entity_code, record_id, deleted=True)
     return success_response(data=data, message="删除成功，已同步飞书")
 
 
@@ -206,6 +264,40 @@ async def api_get_inspection_feishu_attachment_content(
             "Content-Disposition": (
                 f"attachment; filename=attachment; filename*=UTF-8''{encoded}"
             )
+        },
+    )
+
+
+@router.get(
+    "/inspection/feishu/{entity_code}/records/{record_id}/attachments/{file_token}/thumbnail",
+    summary="列表缩略图（PIL 缩放为小图，避免列表页拉取原图全量字节）",
+)
+async def api_get_inspection_feishu_attachment_thumbnail(
+    entity_code: str,
+    record_id: str,
+    file_token: str,
+    max_width: int = Query(200, ge=16, le=512, description="缩略图最大宽度"),
+    max_height: int = Query(200, ge=16, le=512, description="缩略图最大高度"),
+    current_user: CurrentUser = None,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    _require_user(current_user)
+    result = await get_attachment_thumbnail(
+        db, entity_code, record_id, file_token, max_width, max_height
+    )
+    if result is None:
+        raise AppException(
+            message="该附件暂不支持生成缩略图，请下载后查看", status_code=400
+        )
+    content, content_type, filename = result
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": (
+                f"inline; filename=thumbnail; filename*=UTF-8''{quote(filename)}"
+            ),
+            "Cache-Control": "private, max-age=86400",
         },
     )
 

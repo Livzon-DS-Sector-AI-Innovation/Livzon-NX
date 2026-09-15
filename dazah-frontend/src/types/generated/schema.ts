@@ -16108,6 +16108,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quality/finished-product-anomaly/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 上传附件到成品异常多维表格（返回可写入附件字段的 file_token） */
+        post: operations["api_upload_anomaly_attachment_api_v1_quality_finished_product_anomaly_attachments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quality/finished-product-anomaly/chat/stream": {
         parameters: {
             query?: never;
@@ -16245,6 +16262,23 @@ export interface paths {
         };
         /** 在线预览成品异常报告记录附件（图片/PDF 原样，office 转 PDF，inline 响应） */
         get: operations["api_get_anomaly_attachment_preview_api_v1_quality_finished_product_anomaly_records__record_id__attachments__file_token__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/finished-product-anomaly/records/{record_id}/attachments/{file_token}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 成品异常列表缩略图（PIL 缩放为小图，避免列表页拉取原图全量字节） */
+        get: operations["api_get_anomaly_attachment_thumbnail_api_v1_quality_finished_product_anomaly_records__record_id__attachments__file_token__thumbnail_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -16961,6 +16995,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quality/inspection/feishu/{entity_code}/records/{record_id}/attachments/{file_token}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 列表缩略图（PIL 缩放为小图，避免列表页拉取原图全量字节） */
+        get: operations["api_get_inspection_feishu_attachment_thumbnail_api_v1_quality_inspection_feishu__entity_code__records__record_id__attachments__file_token__thumbnail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/inspection/materials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Api List All Materials
+         * @description 全部固体+液体原辅料（代码+名称 label、模块与分组），供新增检验选料。
+         */
+        get: operations["api_list_all_materials_api_v1_quality_inspection_materials_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quality/inspections": {
         parameters: {
             query?: never;
@@ -16998,15 +17069,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/quality/instruments/assets": {
+    "/api/v1/quality/instruments/cal-external": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Api List Instr Assets */
-        get: operations["api_list_instr_assets_api_v1_quality_instruments_assets_get"];
+        /** Api List Instr Cal External */
+        get: operations["api_list_instr_cal_external_api_v1_quality_instruments_cal_external_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -17015,7 +17086,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/quality/instruments/assets/pull": {
+    "/api/v1/quality/instruments/cal-external/pull": {
         parameters: {
             query?: never;
             header?: never;
@@ -17024,8 +17095,42 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Api Pull Instr Assets */
-        post: operations["api_pull_instr_assets_api_v1_quality_instruments_assets_pull_post"];
+        /** Api Pull Instr Cal External */
+        post: operations["api_pull_instr_cal_external_api_v1_quality_instruments_cal_external_pull_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/instruments/cal-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Api List Instr Cal Plans */
+        get: operations["api_list_instr_cal_plans_api_v1_quality_instruments_cal_plan_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/instruments/cal-plan/pull": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Api Pull Instr Cal Plans */
+        post: operations["api_pull_instr_cal_plans_api_v1_quality_instruments_cal_plan_pull_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -17060,40 +17165,6 @@ export interface paths {
         put?: never;
         /** Api Pull Calibrations */
         post: operations["api_pull_calibrations_api_v1_quality_instruments_calibration_pull_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/instruments/change": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Api List Instr Changes */
-        get: operations["api_list_instr_changes_api_v1_quality_instruments_change_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/instruments/change/pull": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Api Pull Instr Changes */
-        post: operations["api_pull_instr_changes_api_v1_quality_instruments_change_pull_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -19166,6 +19237,40 @@ export interface paths {
         };
         /** 下载QC验证记录附件（后端代理，携带飞书 token） */
         get: operations["api_get_qc_validation_attachment_content_api_v1_quality_validation_qc_records__record_id__attachments__file_token__content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/validation-qc/records/{record_id}/attachments/{file_token}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 在线预览QC验证记录附件（图片/PDF 原样，office 转 PDF，inline 响应） */
+        get: operations["api_get_qc_validation_attachment_preview_api_v1_quality_validation_qc_records__record_id__attachments__file_token__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/validation-qc/records/{record_id}/attachments/{file_token}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** QC验证列表缩略图（PIL 缩放为小图，避免列表页拉取原图全量字节） */
+        get: operations["api_get_qc_validation_attachment_thumbnail_api_v1_quality_validation_qc_records__record_id__attachments__file_token__thumbnail_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -30658,6 +30763,11 @@ export interface components {
         };
         /** Body_analyze_literature_api_v1_research_literature_analyze_post */
         Body_analyze_literature_api_v1_research_literature_analyze_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_api_upload_anomaly_attachment_api_v1_quality_finished_product_anomaly_attachments_post */
+        Body_api_upload_anomaly_attachment_api_v1_quality_finished_product_anomaly_attachments_post: {
             /** File */
             file: string;
         };
@@ -102215,6 +102325,44 @@ export interface operations {
             };
         };
     };
+    api_upload_anomaly_attachment_api_v1_quality_finished_product_anomaly_attachments_post: {
+        parameters: {
+            query?: {
+                /** @description 成品异常报告年度 */
+                year?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_api_upload_anomaly_attachment_api_v1_quality_finished_product_anomaly_attachments_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     anomaly_chat_stream_api_v1_quality_finished_product_anomaly_chat_stream_post: {
         parameters: {
             query?: never;
@@ -102586,6 +102734,47 @@ export interface operations {
             query?: {
                 /** @description 成品异常报告年度 */
                 year?: number;
+            };
+            header?: never;
+            path: {
+                record_id: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_get_anomaly_attachment_thumbnail_api_v1_quality_finished_product_anomaly_records__record_id__attachments__file_token__thumbnail_get: {
+        parameters: {
+            query?: {
+                /** @description 成品异常报告年度 */
+                year?: number;
+                /** @description 缩略图最大宽度 */
+                max_width?: number;
+                /** @description 缩略图最大高度 */
+                max_height?: number;
             };
             header?: never;
             path: {
@@ -104422,6 +104611,77 @@ export interface operations {
             };
         };
     };
+    api_get_inspection_feishu_attachment_thumbnail_api_v1_quality_inspection_feishu__entity_code__records__record_id__attachments__file_token__thumbnail_get: {
+        parameters: {
+            query?: {
+                /** @description 缩略图最大宽度 */
+                max_width?: number;
+                /** @description 缩略图最大高度 */
+                max_height?: number;
+            };
+            header?: never;
+            path: {
+                entity_code: string;
+                record_id: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_list_all_materials_api_v1_quality_inspection_materials_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_inspections_api_v1_quality_inspections_get: {
         parameters: {
             query?: {
@@ -104602,12 +104862,14 @@ export interface operations {
             };
         };
     };
-    api_list_instr_assets_api_v1_quality_instruments_assets_get: {
+    api_list_instr_cal_external_api_v1_quality_instruments_cal_external_get: {
         parameters: {
             query?: {
                 keyword?: string;
                 page?: number;
                 page_size?: number;
+                force?: boolean;
+                incremental?: boolean;
             };
             header?: never;
             path?: never;
@@ -104637,7 +104899,75 @@ export interface operations {
             };
         };
     };
-    api_pull_instr_assets_api_v1_quality_instruments_assets_pull_post: {
+    api_pull_instr_cal_external_api_v1_quality_instruments_cal_external_pull_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_list_instr_cal_plans_api_v1_quality_instruments_cal_plan_get: {
+        parameters: {
+            query?: {
+                keyword?: string;
+                page?: number;
+                page_size?: number;
+                force?: boolean;
+                incremental?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_dict_str__Any___"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_pull_instr_cal_plans_api_v1_quality_instruments_cal_plan_pull_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -104674,6 +105004,8 @@ export interface operations {
                 keyword?: string;
                 page?: number;
                 page_size?: number;
+                force?: boolean;
+                incremental?: boolean;
             };
             header?: never;
             path?: never;
@@ -104734,78 +105066,14 @@ export interface operations {
             };
         };
     };
-    api_list_instr_changes_api_v1_quality_instruments_change_get: {
-        parameters: {
-            query?: {
-                keyword?: string;
-                page?: number;
-                page_size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponseEnvelope_list_dict_str__Any___"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_pull_instr_changes_api_v1_quality_instruments_change_pull_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     api_list_instr_contracts_api_v1_quality_instruments_contracts_get: {
         parameters: {
             query?: {
                 keyword?: string;
                 page?: number;
                 page_size?: number;
+                force?: boolean;
+                incremental?: boolean;
             };
             header?: never;
             path?: never;
@@ -104872,6 +105140,8 @@ export interface operations {
                 keyword?: string;
                 page?: number;
                 page_size?: number;
+                force?: boolean;
+                incremental?: boolean;
             };
             header?: never;
             path?: never;
@@ -104938,6 +105208,8 @@ export interface operations {
                 keyword?: string;
                 page?: number;
                 page_size?: number;
+                force?: boolean;
+                incremental?: boolean;
             };
             header?: never;
             path?: never;
@@ -105004,6 +105276,8 @@ export interface operations {
                 keyword?: string;
                 page?: number;
                 page_size?: number;
+                force?: boolean;
+                incremental?: boolean;
             };
             header?: never;
             path?: never;
@@ -105070,6 +105344,8 @@ export interface operations {
                 keyword?: string;
                 page?: number;
                 page_size?: number;
+                force?: boolean;
+                incremental?: boolean;
             };
             header?: never;
             path?: never;
@@ -111051,6 +111327,84 @@ export interface operations {
             query?: {
                 /** @description QC验证年度 */
                 year?: number;
+            };
+            header?: never;
+            path: {
+                record_id: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_get_qc_validation_attachment_preview_api_v1_quality_validation_qc_records__record_id__attachments__file_token__preview_get: {
+        parameters: {
+            query?: {
+                /** @description QC验证年度 */
+                year?: number;
+            };
+            header?: never;
+            path: {
+                record_id: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_get_qc_validation_attachment_thumbnail_api_v1_quality_validation_qc_records__record_id__attachments__file_token__thumbnail_get: {
+        parameters: {
+            query?: {
+                /** @description QC验证年度 */
+                year?: number;
+                /** @description 缩略图最大宽度 */
+                max_width?: number;
+                /** @description 缩略图最大高度 */
+                max_height?: number;
             };
             header?: never;
             path: {

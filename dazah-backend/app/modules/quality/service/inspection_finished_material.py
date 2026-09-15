@@ -35,6 +35,7 @@ from app.modules.quality.service.quality_feishu_finished_groups import (
     FINISHED_PRODUCT_GROUP_ENTITY_MAP,
 )
 from app.modules.quality.service.quality_feishu_material_groups import (
+    MATERIAL_ENTITY_GROUPS,
     MATERIAL_ENTITY_LABELS,
     MATERIAL_GROUP_ENTITY_MAP,
 )
@@ -837,6 +838,7 @@ async def _list_mirror_first(
         page=page,
         page_size=page_size,
         filters=filters,
+        sort_field="批号",
     )
 
 
@@ -897,6 +899,28 @@ def ensure_material_entity_in_group(module: str, group: str, entity_code: str) -
         raise KeyError(group)
     if entity_code not in entity_codes:
         raise AppException(message=f"{entity_code} 不属于 {module}:{group}")
+
+
+def list_all_materials() -> list[dict[str, str]]:
+    """返回全部固体+液体原辅料（代码+名称 label、模块与分组），供新增检验选料。"""
+    items: list[dict[str, str]] = []
+    for module, group_map in MATERIAL_GROUP_ENTITY_MAP.items():
+        for group_key, entity_codes in group_map.items():
+            for entity_code in entity_codes:
+                items.append(
+                    {
+                        "entity_code": entity_code,
+                        "label": MATERIAL_ENTITY_LABELS[module].get(
+                            entity_code, entity_code
+                        ),
+                        "module": module,
+                        "group_key": group_key,
+                        "group_label": MATERIAL_ENTITY_GROUPS[module].get(
+                            entity_code, group_key
+                        ),
+                    }
+                )
+    return items
 
 
 async def list_material_subtables(

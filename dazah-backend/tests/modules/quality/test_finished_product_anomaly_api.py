@@ -587,3 +587,37 @@ async def test_analysis_import_validates_and_reports_counts(
         json={"entity_type": "unknown_type", "rows": []},
     )
     assert resp.status_code == 400
+
+
+@pytest.mark.anyio
+async def test_attachment_upload_endpoint_returns_ref(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.modules.quality.api.finished_product_anomaly as api_mod
+
+    called: dict = {}
+
+    async def _upload(db, entity_code, file_name, content, content_type):
+        called["entity_code"] = entity_code
+        called["file_name"] = file_name
+        called["size"] = len(content)
+        return {
+            "file_token": "ft_new",
+            "name": file_name,
+            "size": len(content),
+            "type": content_type,
+        }
+
+    monkeypatch.setattr(api_mod, "upload_inspection_feishu_attachment", _upload)
+    resp = await client.post(
+        "/api/v1/quality/finished-product-anomaly/attachments?year=2026",
+        files={"file": ("照片.jpg", b"jpeg-bytes", "image/jpeg")},
+    )
+    assert resp.status_code == 201
+    data = resp.json()["data"]
+    assert data["file_token"] == "ft_new"
+    assert called == {
+        "entity_code": "finished_product_anomaly_2026",
+        "file_name": "照片.jpg",
+        "size": 10,
+    }

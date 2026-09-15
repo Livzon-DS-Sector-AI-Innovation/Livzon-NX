@@ -16,10 +16,10 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "c9d400000033"
-# The main branch now joins c9d400000032 with the production migration line
-# in f73ddeb82366; continue from that single published head.
-down_revision: str | None = "f73ddeb82366"
+revision: str = "c9d400000035"
+# Continue from the latest main-branch migration chain, which now ends at
+# c9d400000034 after the instrument and trend migrations.
+down_revision: str | None = "c9d400000034"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

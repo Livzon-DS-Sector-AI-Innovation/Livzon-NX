@@ -56,6 +56,10 @@ _VALID_RULE_TYPES = {
     "level_step",
 }
 _VALID_DIRECTIONS = {"up", "down", "flat"}
+# 产品级逐指标终审裁决：abnormal（真异常）/ normal（正常波动）/ improved（改善）
+_VALID_VERDICTS = {"abnormal", "normal", "improved"}
+# 产品级逐指标裁决条数上限（覆盖全部候选指标，防模型截断）
+_MAX_METRIC_FINDINGS = 24
 
 # 各文本字段最大长度（防超长输出撑爆卡片/前端）
 _LIMITS = {
@@ -81,12 +85,29 @@ def _clean_signal(item: Any) -> dict[str, Any] | None:
     severity = str(item.get("severity") or "").strip()
     if severity not in SEVERITY_LEVELS:
         severity = "medium"
-    return {
+    cleaned = {
         "batch_no": _clip(item.get("batch_no"), 128),
         "rule_type": rule_type,
         "severity": severity,
         "note": _clip(item.get("note"), _LIMITS["note"]),
     }
+    metric_index = _clean_index(item.get("metric_index"))
+    if metric_index is not None:
+        cleaned["metric_index"] = metric_index
+    return cleaned
+
+
+def _clean_index(value: Any) -> int | None:
+    """解析 1 起的指标序号（产品级裁决/信号回填用）；非法返回 None。"""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        index = int(value)
+    elif isinstance(value, str) and value.strip().isdigit():
+        index = int(value.strip())
+    else:
+        return None
+    return index if index >= 1 else None
 
 
 def _clean_outlook(value: Any) -> dict[str, Any]:
@@ -110,18 +131,36 @@ def _clean_outlook(value: Any) -> dict[str, Any]:
 
 
 def _clean_metric_findings(value: Any) -> list[dict[str, Any]]:
-    """清洗产品级逐指标结论：白名单键 + 长度裁剪，最多 12 项。"""
+    """清洗产品级逐指标终审裁决：序号 + verdict 枚举 + 长度，最多 24 项。
+
+    序号（metric_index）是回填主键——模型改写了指标名也不会丢判决；
+    序号缺失但给了指标名时保留该条（调用方按名称兜底回填）；
+    序号与名称都没有、或裁决非法的条目丢弃（该指标按"未裁决"处理，不标红）。
+    """
     if not isinstance(value, list):
         return []
     findings: list[dict[str, Any]] = []
-    for item in value[:12]:
+    for item in value[:_MAX_METRIC_FINDINGS]:
         if not isinstance(item, dict):
             continue
+        metric_index = _clean_index(item.get("metric_index"))
         label = _clip(item.get("metric_label"), 80)
-        summary = _clip(item.get("summary"), _LIMITS["summary"])
-        if not label or not summary:
+        if metric_index is None and not label:
             continue
-        findings.append({"metric_label": label, "summary": summary})
+        verdict = str(item.get("verdict") or "").strip().lower()
+        if verdict not in _VALID_VERDICTS:
+            continue
+        summary = _clip(item.get("summary"), _LIMITS["summary"])
+        if not summary:
+            continue
+        findings.append(
+            {
+                "metric_index": metric_index,
+                "metric_label": label,
+                "verdict": verdict,
+                "summary": summary,
+            }
+        )
     return findings
 
 
@@ -204,7 +243,12 @@ async def _call_trend_llm(
                 continue
             return None, model_name, last_error
         except LLMProviderError:
-            return None, model_name, "provider_error"
+            # 供应商错误（含上游响应超时）多为瞬时故障：有预算时退避重试一次
+            last_error = "provider_error"
+            if attempt < _AI_MAX_RETRIES - 1:
+                await asyncio.sleep(2**attempt)
+                continue
+            return None, model_name, last_error
         except Exception as exc:  # noqa: BLE001 —— 兜底，不泄露堆栈
             logger.warning("trend ai llm call failed: %s", type(exc).__name__)
             return None, model_name, "provider_error"

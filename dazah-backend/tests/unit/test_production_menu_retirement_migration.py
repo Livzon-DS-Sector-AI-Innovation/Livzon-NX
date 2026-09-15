@@ -10,7 +10,7 @@ MIGRATION_PATH = (
     Path(__file__).parents[2]
     / "alembic"
     / "versions"
-    / "c9d400000034_retire_legacy_production_cost_menu.py"
+    / "c9d400000036_retire_legacy_production_cost_menu.py"
 )
 
 

@@ -8,7 +8,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
 import uuid
 from typing import Any
 
@@ -38,6 +40,7 @@ from app.modules.quality.service.warehouse_result_sync import (
     maybe_sync_result_to_warehouse,
 )
 from app.platform.audit.service import record_audit_log
+from app.platform.integrations.feishu.attachment_cache import get_attachment_cache
 from app.platform.integrations.feishu.auth import FeishuAuth
 from app.platform.integrations.feishu.bitable import BitableClient, _to_ms_timestamp
 
@@ -48,14 +51,15 @@ _INSPECTION_ENTITY_CODES: set[str] = {
     "qc_items_inventory",
     "qc_items_inbound",
     "qc_items_outbound",
+    # 仪器管理（设备台账 5 表 + QC 校验计划 3 表）
     "qc_instr_equipment",
     "qc_instr_maintenance",
-    "qc_instr_calibration",
     "qc_instr_repair",
-    "qc_instr_change",
     "qc_instr_contracts",
     "qc_instr_plans",
-    "qc_instr_assets",
+    "qc_instr_calibration",
+    "qc_instr_cal_plan",
+    "qc_instr_cal_external",
 }
 for _codes in FINISHED_PRODUCT_GROUP_ENTITY_MAP.values():
     _INSPECTION_ENTITY_CODES.update(_codes)
@@ -80,9 +84,10 @@ BITABLE_CRUD_ENTITY_CODES: set[str] = (
 
 # 只读字段类型：通用表单不写入
 # （附件需上传文件、Lookup/公式由飞书派生；Button 是自动化按钮，
-#   写入/点击会触发飞书工作流，平台一律只读）
+#   写入/点击会触发飞书工作流，平台一律只读；AutoNumber 为飞书自动编号）
 _READ_ONLY_UI_TYPES = {
     "User",
+    "AutoNumber",
     "Lookup",
     "DuplexLink",
     "Attachment",
@@ -112,6 +117,17 @@ def validate_inspection_entity(entity_code: str) -> None:
 def _coerce_write_value(field_meta: dict[str, Any], value: Any) -> Any:
     """按飞书 ui_type 转换前端传入值；返回 SKIP_REMOTE_FIELD 表示跳过该字段。"""
     ui_type = str(field_meta.get("ui_type") or "").strip()
+    if ui_type == "Attachment":
+        # 附件字段：前端经 /attachments 上传获得 file_token 后按 [{file_token}] 提交；
+        # 传空列表表示清空该字段；其他形态一律跳过（避免把展示用的 url/name 误写回）
+        if isinstance(value, list) and value and all(
+            isinstance(item, dict) and str(item.get("file_token") or "").strip()
+            for item in value
+        ):
+            return [
+                {"file_token": str(item["file_token"]).strip()} for item in value
+            ]
+        return feishu_sync_service.SKIP_REMOTE_FIELD
     if ui_type == "User":
         # 人员字段：前端从人员目录选人后按 [{id}] 提交，后端统一换发 union_id
         if (
@@ -353,10 +369,21 @@ async def get_inspection_entity_fields(
             if isinstance(property_meta, dict)
             else None
         )
+        # 公式字段的「结果类型」：公式返回日期时飞书回读为 Excel 序列号，
+        # 前端需按结果类型把它换算成日期展示。
+        result_ui_type = ""
+        inner_type = (
+            property_meta.get("type") if isinstance(property_meta, dict) else None
+        )
+        if isinstance(inner_type, dict):
+            result_ui_type = str(inner_type.get("ui_type") or "")
         fields.append(
             {
                 "field_name": field_name,
                 "ui_type": ui_type,
+                "type": item.get("type"),
+                "is_primary": bool(item.get("is_primary")),
+                "result_ui_type": result_ui_type or None,
                 "editable": ui_type not in _READ_ONLY_UI_TYPES,
                 "options": [
                     {"name": str(opt.get("name") or "")}
@@ -800,6 +827,16 @@ async def _download_media_bytes(
     return content, content_type, ""
 
 
+# 飞书记录不存在的错误标识（get_record 命中已删除记录时抛 RuntimeError，
+# 须映射为 404 而非 500，使缩略图/预览/下载统一优雅降级为占位）。
+_FEISHU_RECORD_NOT_FOUND_MARKERS = ("RecordIdNotFound", "1254043")
+
+
+def _is_feishu_record_not_found(exc: Exception) -> bool:
+    text = str(exc)
+    return any(marker in text for marker in _FEISHU_RECORD_NOT_FOUND_MARKERS)
+
+
 async def get_inspection_feishu_attachment_content(
     db: AsyncSession,
     entity_code: str,
@@ -810,43 +847,66 @@ async def get_inspection_feishu_attachment_content(
 
     返回 (content, content_type, filename)。附件必须属于该记录，避免任意 URL 抓取。
     记录接口未返回临时链接时回退 drive 媒体下载接口。
+    下载成功后按 (entity_code, record_id, file_token) 写入两级缓存，
+    后续同附件请求直接命中缓存，不再回源飞书。
     """
     validate_bitable_crud_entity(entity_code)
-    runtime, entity = await _resolve_runtime_entity(db, entity_code, direction="pull")
-    client = BitableClient(
-        app_token=entity.app_token,
-        app_id=runtime.app_id,
-        app_secret=runtime.app_secret,
-    )
-    record = await client.get_record(_entity_table_id(entity), record_id)
-    if not record or not record.get("record_id"):
-        raise NotFoundException(resource="飞书记录", resource_id=str(record_id))
-    attachment = _find_attachment_in_record(record, file_token)
-    if attachment is None:
-        raise NotFoundException(resource="飞书附件", resource_id=str(file_token))
-    token = await FeishuAuth.get_tenant_access_token(
-        app_id=runtime.app_id,
-        app_secret=runtime.app_secret,
-    )
-    url = attachment.get("url") or attachment.get("tmp_url")
-    if url:
-        content, content_type, reason = await _download_attachment_bytes(url, token)
-    else:
-        content, content_type, reason = await _download_media_bytes(file_token, token)
-    if content is None:
-        if reason == "forbidden":
-            raise AppException(
-                message=(
-                    "飞书应用缺少附件下载权限：请在飞书开放平台为应用开通 drive "
-                    "下载权限，并将应用加入对应多维表格协作者并授予可管理权限后重试"
-                ),
-                status_code=502,
-            )
-        raise AppException(
-            message="飞书附件下载失败（内容无效或网络错误）", status_code=502
+
+    async def _fetch() -> tuple[bytes, str, str]:
+        runtime, entity = await _resolve_runtime_entity(
+            db, entity_code, direction="pull"
         )
-    filename = str(attachment.get("name") or "attachment")
-    return content, content_type, filename
+        client = BitableClient(
+            app_token=entity.app_token,
+            app_id=runtime.app_id,
+            app_secret=runtime.app_secret,
+        )
+        try:
+            record = await client.get_record(_entity_table_id(entity), record_id)
+        except RuntimeError as exc:
+            if _is_feishu_record_not_found(exc):
+                raise NotFoundException(
+                    resource="飞书记录", resource_id=str(record_id)
+                ) from exc
+            raise
+        if not record or not record.get("record_id"):
+            raise NotFoundException(resource="飞书记录", resource_id=str(record_id))
+        attachment = _find_attachment_in_record(record, file_token)
+        if attachment is None:
+            raise NotFoundException(resource="飞书附件", resource_id=str(file_token))
+        token = await FeishuAuth.get_tenant_access_token(
+            app_id=runtime.app_id,
+            app_secret=runtime.app_secret,
+        )
+        url = attachment.get("url") or attachment.get("tmp_url")
+        if url:
+            content, content_type, reason = await _download_attachment_bytes(
+                url, token
+            )
+        else:
+            content, content_type, reason = await _download_media_bytes(
+                file_token, token
+            )
+        if content is None:
+            if reason == "forbidden":
+                raise AppException(
+                    message=(
+                        "飞书应用缺少附件下载权限：请在飞书开放平台为应用开通 drive "
+                        "下载权限，并将应用加入对应多维表格协作者并授予可管理权限后重试"
+                    ),
+                    status_code=502,
+                )
+            raise AppException(
+                message="飞书附件下载失败（内容无效或网络错误）", status_code=502
+            )
+        filename = str(attachment.get("name") or "attachment")
+        return content, content_type, filename
+
+    result = await get_attachment_cache().get_or_fetch(
+        entity_code, record_id, file_token, _fetch
+    )
+    # _fetch 失败会抛异常直接传播，成功时 result 必不为 None
+    return result  # type: ignore[return-value]
 
 
 async def get_inspection_feishu_attachment_preview(
@@ -855,11 +915,63 @@ async def get_inspection_feishu_attachment_preview(
     record_id: str,
     file_token: str,
 ) -> tuple[bytes, str, str]:
-    """附件在线预览内容（浏览器可直接呈现）：图片/PDF 原样，office 转 PDF。
+    """附件在线预览内容（浏览器可直接呈现）：图片/PDF 原样，office 转 PDF，
+    文本解码为纯文本。
 
     附件归属校验与下载复用 get_inspection_feishu_attachment_content。
+    转换结果（office→PDF、文本解码）按 preview 后缀单独缓存，避免每次预览
+    重跑 LibreOffice；soffice/PIL 这类阻塞调用放线程池，避免卡住事件循环。
     """
-    content, content_type, filename = await get_inspection_feishu_attachment_content(
-        db, entity_code, record_id, file_token
+
+    async def _convert() -> tuple[bytes, str, str]:
+        content, content_type, filename = (
+            await get_inspection_feishu_attachment_content(
+                db, entity_code, record_id, file_token
+            )
+        )
+        return await asyncio.to_thread(
+            resolve_preview_content, content, content_type, filename
+        )
+
+    return await get_attachment_cache().get_or_fetch(
+        entity_code, record_id, file_token, _convert, key_suffix="preview:v1"
     )
-    return resolve_preview_content(content, content_type, filename)
+
+
+# bitable 附件字段单文件上限 20MB
+MAX_ATTACHMENT_UPLOAD_BYTES = 20 * 1024 * 1024
+
+
+async def upload_inspection_feishu_attachment(
+    db: AsyncSession,
+    entity_code: str,
+    file_name: str,
+    content: bytes,
+    content_type: str,
+) -> dict[str, Any]:
+    """上传文件到实体的飞书 Base 云空间，返回可直接写入附件字段的引用。
+
+    走 push 方向配置（与新增/编辑记录同权限口径）；20MB 上限按 bitable 附件
+    约束校验，文件名取上传原名的安全 basename。
+    """
+    validate_bitable_crud_entity(entity_code)
+    clean_name = os.path.basename((file_name or "").strip()) or "attachment"
+    if not content:
+        raise AppException(message="上传文件内容为空", status_code=400)
+    if len(content) > MAX_ATTACHMENT_UPLOAD_BYTES:
+        raise AppException(
+            message="附件超过 20MB 限制，请压缩后在飞书端上传", status_code=400
+        )
+    runtime, entity = await _resolve_runtime_entity(db, entity_code, direction="push")
+    client = BitableClient(
+        app_token=entity.app_token,
+        app_id=runtime.app_id,
+        app_secret=runtime.app_secret,
+    )
+    file_token = await client.upload_media(clean_name, content, content_type)
+    return {
+        "file_token": file_token,
+        "name": clean_name,
+        "size": len(content),
+        "type": content_type or "",
+    }

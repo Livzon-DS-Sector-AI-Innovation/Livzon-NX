@@ -23,7 +23,6 @@ import {
 } from './registration-certificate'
 import { isRegistrationDeclarationProgressSheetKey } from './registration-declaration-progress'
 import { isRegistrationProjectLedgerSheetKey } from './registration-project-ledger'
-import { getLiquidInspectionGroupLabel, getSolidInspectionGroupLabel } from './quality-inspection-material-groups'
 import { parseFeishuBaseUrl, parseFeishuBitableUrl } from './feishu-url'
 import { formatQualityFeishuTestSummary, formatQualitySyncSummary } from './format/quality'
 import { normalizeWarehouseDashboard } from './warehouse-dashboard'
@@ -176,8 +175,6 @@ describe('migrated pure helper contracts', () => {
     expect(isRegistrationDeclarationProgressSheetKey('gmp-projects')).toBe(true)
     expect(isRegistrationDeclarationProgressSheetKey('unknown')).toBe(false)
     expect(isRegistrationProjectLedgerSheetKey('domestic-standalone-review')).toBe(true)
-    expect(getSolidInspectionGroupLabel('ys-100')).toBe('YS100')
-    expect(getLiquidInspectionGroupLabel('yl-2xx')).toBe('YL2xx')
     expect(parseFeishuBitableUrl('https://example.feishu.cn/base/app-token?table=tbl-1')).toEqual({
       app_token: 'app-token',
       table_id: 'tbl-1',

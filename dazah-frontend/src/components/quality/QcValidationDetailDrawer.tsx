@@ -5,6 +5,7 @@ import type { QcValidationFieldMeta, QcValidationRecord } from '@/types/quality'
 import {
   renderFeishuValue,
   type FeishuAttachmentUrlBuilder,
+  type RenderFeishuValueOptions,
 } from './inspection/renderFeishuValue'
 
 /** 飞书表「ALL」视图的列顺序：方案名称 → 人员 为列表列，其余进详情 */
@@ -39,6 +40,7 @@ interface QcValidationDetailDrawerProps {
   record: QcValidationRecord | null
   fieldMetas?: QcValidationFieldMeta[]
   attachmentUrlBuilder?: FeishuAttachmentUrlBuilder
+  onAttachmentPreview?: RenderFeishuValueOptions['onAttachmentPreview']
   onClose: () => void
 }
 
@@ -58,12 +60,13 @@ function buildDetailFields(fieldMetas: QcValidationFieldMeta[]): string[] {
   return fieldMetas.length === 0 ? QC_DETAIL_FIELD_ORDER : [...known, ...extras]
 }
 
-/** QC验证记录详情抽屉：展示全部字段（附件可点击下载、人员显示头像姓名）。 */
+/** QC验证记录详情抽屉：展示全部字段（附件可预览/下载、人员显示头像姓名）。 */
 export function QcValidationDetailDrawer({
   open,
   record,
   fieldMetas = [],
   attachmentUrlBuilder,
+  onAttachmentPreview,
   onClose,
 }: QcValidationDetailDrawerProps) {
   const { message } = App.useApp()
@@ -80,6 +83,7 @@ export function QcValidationDetailDrawer({
                 {renderFeishuValue(record[field], record, undefined, message, {
                   uiType: meta?.ui_type,
                   attachmentUrlBuilder,
+                  onAttachmentPreview,
                 })}
               </Descriptions.Item>
             )

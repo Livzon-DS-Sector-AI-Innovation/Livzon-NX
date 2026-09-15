@@ -376,7 +376,7 @@ function InspectionTrendAlertCard({
               onChange={(value) => setMonthlyDay(value ?? null)}
               style={{ width: 90 }}
             />
-            <Typography.Text type="secondary">日全量分析并发送（月底不足则当月最后一天）</Typography.Text>
+            <Typography.Text type="secondary">日检查并分析（数据无更新则跳过；月底不足则当月最后一天）</Typography.Text>
             <Typography.Text type="secondary">手动重新分析发送消息</Typography.Text>
             <Switch checked={manualRerunSend} onChange={setManualRerunSend} />
           </Space>

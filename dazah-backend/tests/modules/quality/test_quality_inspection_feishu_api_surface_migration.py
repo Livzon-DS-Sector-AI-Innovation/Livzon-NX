@@ -61,22 +61,45 @@ async def test_inspection_list_pull_and_subtable_routes_use_safe_contract(
     monkeypatch.setattr(api, "try_acquire_action_lock", AsyncMock(return_value=True))
     request = _request()
 
-    list_routes = (
-        (api.api_list_equipment, "list_equipment"),
-        (api.api_list_maintenance, "list_maintenance"),
-        (api.api_list_calibrations, "list_calibrations"),
-        (api.api_list_repairs, "list_repairs"),
-        (api.api_list_instr_changes, "list_instr_changes"),
-        (api.api_list_instr_contracts, "list_instr_contracts"),
-        (api.api_list_instr_plans, "list_instr_plans"),
-        (api.api_list_instr_assets, "list_instr_assets"),
+    # 仪器管理：镜像优先列表（meta 带 source=local_mirror），列来自镜像快照
+    instrument_list_routes = (
+        (api.api_list_equipment, "qc_instr_equipment"),
+        (api.api_list_maintenance, "qc_instr_maintenance"),
+        (api.api_list_calibrations, "qc_instr_calibration"),
+        (api.api_list_repairs, "qc_instr_repair"),
+        (api.api_list_instr_contracts, "qc_instr_contracts"),
+        (api.api_list_instr_plans, "qc_instr_plans"),
+        (api.api_list_instr_cal_plans, "qc_instr_cal_plan"),
+        (api.api_list_instr_cal_external, "qc_instr_cal_external"),
     )
-    for route, service_name in list_routes:
-        monkeypatch.setattr(api, service_name, AsyncMock(return_value=_page()))
+
+    async def fake_list_instrument_mirror(
+        _db: object,
+        entity_code: str,
+        *,
+        keyword: str | None = None,
+        filters: dict[str, str] | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> dict[str, object]:
+        return {
+            "items": [{"record_id": "rec-1"}],
+            "total": 1,
+            "page": page,
+            "page_size": page_size,
+            "configured": True,
+            "fields": ["状态"],
+            "last_sync_time": "2026-09-14T00:00:00+00:00",
+        }
+
+    monkeypatch.setattr(api, "list_instrument_mirror", fake_list_instrument_mirror)
+    for route, _entity_code in instrument_list_routes:
         response = await route(
             keyword="关键字",
             page=2,
             page_size=5,
+            force=False,
+            incremental=False,
             db=db,
             request=request,
             current_user=user,
@@ -84,28 +107,66 @@ async def test_inspection_list_pull_and_subtable_routes_use_safe_contract(
         assert response.status_code == 200
         assert _body(response)["data"] == [{"record_id": "rec-1"}]
         assert _body(response)["meta"]["fields"] == ["状态"]  # type: ignore[index]
+        assert _body(response)["meta"]["source"] == "local_mirror"  # type: ignore[index]
 
-    pull_routes = (
-        (api.api_pull_equipment, "pull_equipment"),
-        (api.api_pull_maintenance, "pull_maintenance"),
-        (api.api_pull_calibrations, "pull_calibrations"),
-        (api.api_pull_repairs, "pull_repairs"),
-        (api.api_pull_instr_changes, "pull_instr_changes"),
-        (api.api_pull_instr_contracts, "pull_instr_contracts"),
-        (api.api_pull_instr_plans, "pull_instr_plans"),
-        (api.api_pull_instr_assets, "pull_instr_assets"),
+    # 未同步（configured=False）→ 降级实时读（动态列），meta 无 source
+    async def fake_list_instrument_mirror_empty(*_args: object, **_kwargs: object):
+        return {
+            "items": [],
+            "total": 0,
+            "page": 1,
+            "page_size": 20,
+            "configured": False,
+            "fields": [],
+            "last_sync_time": None,
+        }
+
+    monkeypatch.setattr(
+        api, "list_instrument_mirror", fake_list_instrument_mirror_empty
     )
-    for route, service_name in pull_routes:
+    monkeypatch.setattr(
+        api,
+        "_list_feishu_dynamic",
+        AsyncMock(return_value=_page()),
+    )
+    live = await api.api_list_equipment(
+        keyword=None,
+        page=1,
+        page_size=20,
+        force=False,
+        incremental=False,
+        db=db,
+        request=request,
+        current_user=user,
+    )
+    assert _body(live)["meta"]["fields"] == ["状态"]  # type: ignore[index]
+    assert "source" not in _body(live)["meta"]  # type: ignore[index]
 
-        async def pull(
-            _db: object, *, _service_name: str = service_name
-        ) -> dict[str, object]:
-            return {"source": _service_name, "synced": 1, "failed": 0}
+    # 同步按钮：pull 端点触发仪器镜像全量同步
+    instrument_pull_routes = (
+        (api.api_pull_equipment, "qc_instr_equipment"),
+        (api.api_pull_maintenance, "qc_instr_maintenance"),
+        (api.api_pull_calibrations, "qc_instr_calibration"),
+        (api.api_pull_repairs, "qc_instr_repair"),
+        (api.api_pull_instr_contracts, "qc_instr_contracts"),
+        (api.api_pull_instr_plans, "qc_instr_plans"),
+        (api.api_pull_instr_cal_plans, "qc_instr_cal_plan"),
+        (api.api_pull_instr_cal_external, "qc_instr_cal_external"),
+    )
+    pulled_entities: list[str] = []
 
-        monkeypatch.setattr(api, service_name, pull)
+    async def fake_sync_instrument_page(
+        _db: object, entity_code: str, *, incremental: bool = True
+    ) -> dict[str, int]:
+        pulled_entities.append(entity_code)
+        return {"synced": 1, "removed": 0, "total": 1}
+
+    monkeypatch.setattr(api, "sync_instrument_page", fake_sync_instrument_page)
+    for route, expected_entity in instrument_pull_routes:
         response = await route(db=db, current_user=user)
         assert response.status_code == 200
         assert _body(response)["data"]["synced"] == 1  # type: ignore[index]
+    assert set(pulled_entities) == {entity for _, entity in instrument_pull_routes}
 
     monkeypatch.setattr(
         api,

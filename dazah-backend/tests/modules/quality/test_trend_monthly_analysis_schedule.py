@@ -109,10 +109,10 @@ async def test_run_monthly_analysis_short_circuits_when_already_ran() -> None:
     assert result == {"status": "already"}
     db.add.assert_not_called()
 @pytest.mark.anyio
-async def test_run_monthly_analysis_executes_all_groups_and_finishes(
+async def test_run_monthly_analysis_executes_all_lines_and_finishes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """逐组执行：命中入队/未配置跳过/停用线跳过/异常跳过，最后标记 done。"""
+    """逐产品线执行：入队/未配置跳过/停用线跳过/异常跳过，最后标记 done。"""
     added: list[Any] = []
 
     db = SimpleNamespace(
@@ -130,45 +130,105 @@ async def test_run_monthly_analysis_executes_all_groups_and_finishes(
         AsyncMock(
             return_value=InspectionTrendAlertConfig(
                 is_enabled=True,
-                lines={"qc_finished_internal": {"enabled": True}},
+                lines={
+                    "qc_finished_internal": {"enabled": True},
+                    "qc_finished_off": {"enabled": False},
+                },
             )
         ),
     )
 
-    async def ok_group(db, **kwargs):
+    async def ok_line(db, **kwargs):
         return {
             "configured": True,
-            "source_entity_code": "qc_finished_internal",
-            "summary": {"trend_ai_pending_count": 2},
+            "source_entity_code": kwargs.get("source_entity_code"),
+            "summary": {"trend_ai_pending_count": 1},
             "charts": [1, 2],
         }
 
-    async def unconfigured_group(db, **kwargs):
+    async def unconfigured_line(db, **kwargs):
         return {"configured": False}
 
-    async def disabled_group(db, **kwargs):
+    async def disabled_line(db, **kwargs):
         return {
             "configured": True,
-            "source_entity_code": "other_line",
+            "source_entity_code": kwargs.get("source_entity_code"),
             "summary": {},
             "charts": [1],
         }
 
-    async def broken_group(db, **kwargs):
+    async def broken_line(db, **kwargs):
         raise RuntimeError("boom")
 
-    runners = [
-        ("internal", ok_group, {}),
-        ("none", unconfigured_group, {}),
-        ("disabled", disabled_group, {}),
-        ("broken", broken_group, {}),
-    ]
-    monkeypatch.setattr(tma, "_GROUP_RUNNERS", runners)
+    monkeypatch.setattr(
+        tma,
+        "iter_monthly_lines",
+        lambda: [
+            ("qc_finished_internal", "霉酚酸（内控）", ok_line),
+            ("qc_finished_none", "未配置线", unconfigured_line),
+            ("qc_finished_off", "停用线", disabled_line),
+            ("qc_finished_broken", "故障线", broken_line),
+        ],
+    )
+    # 逐线等待 AI 任务到终态由 _wait_line_ai_job 负责，这里桩掉避免真实轮询
+    monkeypatch.setattr(
+        tma, "_wait_line_ai_job", AsyncMock(return_value="completed")
+    )
 
     stats = await tma.run_trend_monthly_analysis(db, "2026-09")
-    # "other_line" 不在停用名单 → 默认启用并计入 lines/charts
-    assert stats == {"lines": 2, "charts": 3, "enqueued": 1, "skipped": 1}
+    # 停用线与未配置线不计入；故障线计入 skipped；只有内控线入队
+    assert stats == {"lines": 1, "charts": 2, "enqueued": 1, "skipped": 1}
     assert len(added) == 1
     assert added[0].status == "done"
     assert added[0].last_error == "1 组拉取失败"
+
+
+@pytest.mark.anyio
+async def test_wait_line_ai_job_retries_failed_then_returns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """串行等待：failed 无结论 → 自动重试一次，随后 pending → completed 返回。"""
+    rows = [
+        SimpleNamespace(notification_status="failed", ai_summary=None),
+        SimpleNamespace(notification_status="pending", ai_summary=None),
+        SimpleNamespace(notification_status="completed", ai_summary={"summary": "ok"}),
+    ]
+    calls = {"count": 0}
+
+    async def fake_get(db, **_kwargs):
+        index = min(calls["count"], len(rows) - 1)
+        calls["count"] += 1
+        return rows[index]
+
+    monkeypatch.setattr(tma.calc, "_get_existing_trend_ai", fake_get)
+    submit = AsyncMock()
+    monkeypatch.setattr(tma.calc, "_submit_trend_ai_job", submit)
+    monkeypatch.setattr(tma, "_LINE_JOB_POLL_SECONDS", 0)
+    db = SimpleNamespace(expire_all=Mock(), commit=AsyncMock())
+
+    status = await tma._wait_line_ai_job(
+        db, entity_code="qc_finished_lft_ep", period="2026-09"
+    )
+    assert status == "completed"
+    submit.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_wait_line_ai_job_returns_terminal_without_retry_on_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """已交付（sent）的行不重试，直接返回终态。"""
+    row = SimpleNamespace(notification_status="sent", ai_summary={"summary": "ok"})
+    monkeypatch.setattr(
+        tma.calc, "_get_existing_trend_ai", AsyncMock(return_value=row)
+    )
+    submit = AsyncMock()
+    monkeypatch.setattr(tma.calc, "_submit_trend_ai_job", submit)
+    db = SimpleNamespace(expire_all=Mock(), commit=AsyncMock())
+
+    status = await tma._wait_line_ai_job(
+        db, entity_code="qc_finished_lft_ep", period="2026-09"
+    )
+    assert status == "sent"
+    submit.assert_not_awaited()
 

@@ -2,10 +2,6 @@ import { ENERGY_DATA_PAGES } from "./energy-data-pages"
 import { registrationCertificateSheets } from "./registration-certificate"
 import { registrationDeclarationProgressSheets } from "./registration-declaration-progress"
 import { registrationProjectLedgerSheets } from "./registration-project-ledger"
-import {
-  liquidInspectionGroups,
-  solidInspectionGroups,
-} from "./quality-inspection-material-groups"
 import { warehouseHardwarePages } from "./warehouse-hardware-pages"
 
 export interface SubMenuItem {
@@ -402,13 +398,13 @@ export const moduleMenus: ModuleMenu[] = [
             path: "/quality/inspection/instruments",
             children: [
               { key: "inspection-instruments-equipment", label: "仪器设备", path: "/quality/inspection/instruments/equipment" },
-              { key: "inspection-instruments-assets", label: "资产台账", path: "/quality/inspection/instruments/assets" },
-              { key: "inspection-instruments-calibration", label: "校准计划", path: "/quality/inspection/instruments/calibration" },
-              { key: "inspection-instruments-maintenance", label: "维护保养", path: "/quality/inspection/instruments/maintenance" },
+              { key: "inspection-instruments-maintenance", label: "维护保养记录", path: "/quality/inspection/instruments/maintenance" },
               { key: "inspection-instruments-repair", label: "维修记录", path: "/quality/inspection/instruments/repair" },
-              { key: "inspection-instruments-change", label: "变更记录", path: "/quality/inspection/instruments/change" },
-              { key: "inspection-instruments-contracts", label: "外协合同", path: "/quality/inspection/instruments/contracts" },
-              { key: "inspection-instruments-plans", label: "年度计划", path: "/quality/inspection/instruments/plans" },
+              { key: "inspection-instruments-contracts", label: "维保合同", path: "/quality/inspection/instruments/contracts" },
+              { key: "inspection-instruments-plans", label: "维保周期表", path: "/quality/inspection/instruments/plans" },
+              { key: "inspection-instruments-calibration", label: "内校汇总", path: "/quality/inspection/instruments/calibration" },
+              { key: "inspection-instruments-cal-plan", label: "内部校验计划", path: "/quality/inspection/instruments/cal-plan" },
+              { key: "inspection-instruments-cal-external", label: "外部校准检定", path: "/quality/inspection/instruments/cal-external" },
             ],
           },
           {
@@ -432,27 +428,11 @@ export const moduleMenus: ModuleMenu[] = [
             key: "inspection-solid",
             label: "固体物料检验",
             path: "/quality/inspection/solid",
-            children: [
-              { key: "inspection-solid-raw", label: "原料检验", path: "/quality/inspection/solid/raw-inspection" },
-              ...solidInspectionGroups.map((item) => ({
-                key: `inspection-solid-${item.key}`,
-                label: item.label,
-                path: `/quality/inspection/solid/${item.key}`,
-              })),
-            ],
           },
           {
             key: "inspection-liquid",
             label: "液体物料检验",
             path: "/quality/inspection/liquid",
-            children: [
-              { key: "inspection-liquid-raw", label: "原料检验", path: "/quality/inspection/liquid/raw-inspection" },
-              ...liquidInspectionGroups.map((item) => ({
-                key: `inspection-liquid-${item.key}`,
-                label: item.label,
-                path: `/quality/inspection/liquid/${item.key}`,
-              })),
-            ],
           },
         ],
       },

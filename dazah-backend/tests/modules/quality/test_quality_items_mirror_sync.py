@@ -395,12 +395,29 @@ async def test_maybe_refresh_items_mirror_gate(
     monkeypatch.setattr(crud_api, "sync_items_page", fake_sync)
 
     # 非镜像实体：不触发
-    await crud_api._maybe_refresh_entity_mirror("qc_instr_equipment")
+    await crud_api._maybe_refresh_entity_mirror("deviation_ledger")
     assert calls == []
 
     # 物品实体：触发一次
     await crud_api._maybe_refresh_entity_mirror(PAGE_INVENTORY)
     assert calls == [PAGE_INVENTORY]
+
+    # 仪器实体：走仪器镜像增量同步（写飞书成功后列表即时反映改动）
+    instrument_calls: list[str] = []
+
+    async def fake_instrument_sync(db, entity_code, *, incremental=True):
+        instrument_calls.append(entity_code)
+        return {"synced": 1, "removed": 0, "total": 1}
+
+    from app.modules.quality.service import (
+        inspection_instrument_mirror as instrument_mirror,
+    )
+
+    monkeypatch.setattr(
+        instrument_mirror, "sync_instrument_page", fake_instrument_sync
+    )
+    await crud_api._maybe_refresh_entity_mirror("qc_instr_equipment")
+    assert instrument_calls == ["qc_instr_equipment"]
 
     # 同步失败被吞（不影响已成功的飞书写）
     async def boom(db, page_key, *, incremental=True):

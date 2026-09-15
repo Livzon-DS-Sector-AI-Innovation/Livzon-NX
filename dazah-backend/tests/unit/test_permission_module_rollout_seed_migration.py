@@ -12,7 +12,7 @@ MIGRATION_PATH = (
     Path(__file__).parents[2]
     / "alembic"
     / "versions"
-    / "c9d400000033_seed_review_pending_permission_rollouts.py"
+    / "c9d400000035_seed_review_pending_permission_rollouts.py"
 )
 
 

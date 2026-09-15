@@ -1307,7 +1307,9 @@ class WarehouseAIService:
                     current_inventory=float(inventory.available),
                     safety_inventory=safety_inventory,
                 )
-                if risk_level is None:
+                # 趋势异常只关注中/高风险：low（本周用量有波动但库存仍能覆盖）
+                # 不计入统计，也不进入明细列表（2026-09-14 拍板）
+                if risk_level is None or risk_level == "low":
                     continue
 
                 trend_items.append(

@@ -73,3 +73,28 @@ export async function runAnomalyAnalysisAction(
   revalidateAnomalyReportPaths()
   return result
 }
+
+export interface AnomalyAttachmentRef {
+  file_token: string
+  name: string
+  size: number
+  type?: string
+}
+
+/** 上传附件到成品异常多维表格（返回可写入附件字段的 file_token 引用）。 */
+export async function uploadAnomalyAttachment(
+  year: number,
+  file: File
+): Promise<AnomalyAttachmentRef> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const result = await actionFetch<AnomalyAttachmentRef>(
+    `${API_BASE_URL}/api/v1/quality/finished-product-anomaly/attachments?year=${year}`,
+    {
+      method: 'POST',
+      body: formData,
+    }
+  )
+  if (!result) throw new Error('未收到附件上传结果')
+  return result
+}

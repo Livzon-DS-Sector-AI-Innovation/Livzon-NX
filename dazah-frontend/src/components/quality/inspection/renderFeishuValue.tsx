@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { qualityTokens } from '../themeTokens'
 import { Avatar, Image, Space, Tag } from 'antd'
 import type { App } from 'antd'
@@ -36,6 +36,8 @@ export interface FeishuAttachmentPreviewContext {
 export interface RenderFeishuValueOptions {
   /** 字段 ui_type，用于按类型格式化日期/勾选等原始值 */
   uiType?: string
+  /** 公式字段的结果类型：公式返回日期时飞书回读为 Excel 序列号，需换算展示 */
+  resultUiType?: string
   /** 字段名，用于对「结果判断」等结论类字段做语义着色 */
   fieldName?: string
   /** 附件代理下载地址构造器，默认走检验模块通用接口 */
@@ -45,6 +47,15 @@ export interface RenderFeishuValueOptions {
   /** 提供时纯文本值可点击，弹窗查看完整内容（长文本截断场景） */
   onTextPreview?: (fieldName: string | undefined, value: string) => void
 }
+
+/** 字段渲染所需的类型信息（来自实体字段元数据接口） */
+export interface FeishuFieldTypeInfo {
+  uiType?: string
+  resultUiType?: string
+}
+
+/** 字段名 -> 类型信息，供表格列与详情抽屉按类型渲染 */
+export type FeishuFieldTypeMap = Record<string, FeishuFieldTypeInfo | undefined>
 
 /** 通过后端代理下载飞书附件并以新标签页打开（附件 url 需带 token）。 */
 async function openFeishuAttachment(
@@ -88,6 +99,25 @@ function formatDateTimeValue(value: unknown): string {
   return parsed.isValid() ? parsed.format('YYYY-MM-DD') : String(value)
 }
 
+/** 公式字段返回日期时的取值换算。
+ *
+ * 飞书多维表格里公式日期列（如「校验有效期」= 日期列 + 365 天）回读的是
+ * Excel 日期序列号（1899-12-30 起的天数，如 46406 = 2027-01-19），而不是
+ * 毫秒时间戳；引用日期字段的公式也可能直接给毫秒时间戳，两种都兼容。
+ */
+function formatFormulaDateValue(value: unknown): string {
+  const numeric =
+    typeof value === 'string' && /^\d+(\.\d+)?$/.test(value.trim())
+      ? Number(value.trim())
+      : (value as number)
+  if (!Number.isFinite(numeric)) return String(value)
+  if (numeric > 1e11) return formatDateTimeValue(numeric)
+  if (numeric <= 0 || numeric > 400000) return String(value)
+  return dayjs('1899-12-30').add(Math.round(numeric), 'day').format('YYYY-MM-DD')
+}
+
+const DATE_LIKE_UI_TYPES = ['DateTime', 'CreatedTime', 'ModifiedTime']
+
 function formatCheckboxValue(value: unknown): string {
   if (value === true || value === 'True' || value === 'true') return '是'
   if (value === false || value === 'False' || value === 'false') return '否'
@@ -101,7 +131,13 @@ function isImageAttachment(att: FeishuAttachment): boolean {
   return IMAGE_EXTENSIONS.includes(ext)
 }
 
-/** 图片附件内联预览：从后端代理拉取字节转 blob，点击可放大；失败回退为下载链接 */
+/** 附件代理 content URL → 缩略图 URL（content 后缀可能带 query，如 ?year=）。 */
+function toThumbnailUrl(contentUrl: string): string {
+  return contentUrl.replace(/\/content(\?|$)/, '/thumbnail$1')
+}
+
+/** 图片附件内联缩略图：进入视口后才从缩略图端点拉小图（避免原图全量字节），
+ * 点击放大时加载原图（后端缓存命中秒开）；失败回退为下载按钮。 */
 function AttachmentImage({
   entityCode,
   recordId,
@@ -117,19 +153,56 @@ function AttachmentImage({
 }) {
   const [src, setSrc] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
+  const [inView, setInView] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  // builder 引用每次 render 可能变化（闭包），用 ref 避免 effect 重复触发
+  const buildersRef = useRef({ attachmentUrlBuilder, message })
+  useEffect(() => {
+    buildersRef.current = { attachmentUrlBuilder, message }
+  })
+
+  useEffect(() => {
+    const node = containerRef.current
+    if (!node || typeof IntersectionObserver === 'undefined') {
+      setInView(true)
+      return
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setInView(true)
+          observer.disconnect()
+        }
+      },
+      { rootMargin: '120px' },
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+
+  const fileToken = attachment.file_token
+  const ext = (attachment.name || '').split('.').pop()?.toLowerCase() || ''
+  const isSvg = ext === 'svg'
 
   useEffect(() => {
     let cancelled = false
     let objectUrl: string | null = null
-    if (!attachment.file_token || !recordId) {
+    // 附件 token 变化时重置图片加载状态（effect 内重置是这里的惯用模式）
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFailed(false)
+    setSrc(null)
+    if (!inView) return
+    if (!fileToken || !recordId) {
       if (attachment.url) setSrc(attachment.url)
       return
     }
+    const { attachmentUrlBuilder: builder } = buildersRef.current
+    const contentUrl = builder(entityCode, recordId, fileToken)
     ;(async () => {
       try {
-        const res = await fetch(
-          attachmentUrlBuilder(entityCode, recordId, attachment.file_token!)
-        )
+        // SVG 后端 PIL 不处理，直接走原图代理；其余走缩略图端点
+        const targetUrl = isSvg ? contentUrl : toThumbnailUrl(contentUrl)
+        const res = await fetch(targetUrl)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const blob = await res.blob()
         if (cancelled) return
@@ -143,7 +216,7 @@ function AttachmentImage({
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [attachment, entityCode, recordId, attachmentUrlBuilder])
+  }, [inView, fileToken, attachment.url, entityCode, recordId, isSvg])
 
   if (failed) {
     return (
@@ -157,19 +230,49 @@ function AttachmentImage({
           textAlign: 'left',
           cursor: 'pointer',
         }}
-        onClick={() => void openFeishuAttachment(entityCode, recordId, attachment, message, attachmentUrlBuilder)}
+        onClick={() => void openFeishuAttachment(entityCode, recordId, attachment, buildersRef.current.message, attachmentUrlBuilder)}
       >
         {attachment.name || '附件'}
       </button>
     )
   }
+
+  if (!inView || !src) {
+    return (
+      <div
+        ref={containerRef}
+        style={{
+          width: 120,
+          height: 80,
+          background: 'rgba(0, 0, 0, 0.04)',
+          borderRadius: 4,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 12,
+          color: 'rgba(0, 0, 0, 0.35)',
+        }}
+      >
+        图片加载中…
+      </div>
+    )
+  }
+
+  const originalUrl =
+    fileToken && recordId
+      ? attachmentUrlBuilder(entityCode, recordId, fileToken)
+      : src
+
   return (
-    <Image
-      src={src || undefined}
-      alt={attachment.name || '附件'}
-      style={{ maxWidth: 200, maxHeight: 200, objectFit: 'cover', borderRadius: 4 }}
-      preview={{ mask: '点击查看' }}
-    />
+    <div ref={containerRef}>
+      <Image
+        src={src}
+        alt={attachment.name || '附件'}
+        loading="lazy"
+        style={{ maxWidth: 200, maxHeight: 200, objectFit: 'cover', borderRadius: 4 }}
+        preview={{ src: originalUrl, mask: '点击查看' }}
+      />
+    </div>
   )
 }
 
@@ -282,6 +385,13 @@ export function renderFeishuValue(
     }
   }
   if (value === null || value === undefined || value === '') return '-'
+  if (
+    options?.resultUiType &&
+    DATE_LIKE_UI_TYPES.includes(options.resultUiType) &&
+    (typeof value === 'number' || typeof value === 'string')
+  ) {
+    return formatFormulaDateValue(value)
+  }
   if (
     (uiType === 'DateTime' || uiType === 'CreatedTime' || uiType === 'ModifiedTime') &&
     (typeof value === 'number' || typeof value === 'string')

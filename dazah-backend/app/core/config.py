@@ -172,6 +172,19 @@ class Settings(BaseSettings):
     QUALITY_VALIDATION_FEISHU_APP_TOKEN: str = ""
     QUALITY_VALIDATION_FEISHU_TABLE_ID: str = ""
 
+    # Feishu 附件字节缓存（质量模块附件代理下载共用）
+    # 缓存层故障自动降级到原链路，关闭后等同原行为。
+    QUALITY_ATTACHMENT_CACHE_ENABLED: bool = True
+    QUALITY_ATTACHMENT_CACHE_DIR: str = "./data/feishu-attachment-cache"
+    QUALITY_ATTACHMENT_CACHE_MAX_MEMORY_MB: int = 500
+    QUALITY_ATTACHMENT_CACHE_MAX_DISK_MB: int = 10240
+    QUALITY_ATTACHMENT_CACHE_TTL_SECONDS: int = 7200
+
+    # Feishu 附件预热任务（每日定时拉取近期附件字节到本地缓存）
+    QUALITY_ATTACHMENT_WARMUP_ENABLED: bool = True
+    QUALITY_ATTACHMENT_WARMUP_DAYS: int = 30
+    QUALITY_ATTACHMENT_WARMUP_CRON: str = "0 2 * * *"
+
     # Training Notification Bitable
     FEISHU_BITABLE_TRAINING_NOTIFICATION_APP_TOKEN: str = ""
     FEISHU_BITABLE_TRAINING_NOTIFICATION_TABLE_ID: str = ""

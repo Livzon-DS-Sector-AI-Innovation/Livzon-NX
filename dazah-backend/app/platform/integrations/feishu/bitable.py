@@ -4,7 +4,10 @@ import logging
 from datetime import UTC, date, datetime
 from typing import Any, TypedDict
 
+import httpx
+
 from app.core.config import get_settings
+from app.platform.integrations.feishu.auth import FeishuAuth
 from app.platform.integrations.feishu.client import FeishuClient
 
 _settings = get_settings()
@@ -326,6 +329,54 @@ class BitableClient:
             "page_token": (str(raw_page_token) if raw_page_token is not None else None),
             "total": int(raw_total) if isinstance(raw_total, (int, float)) else None,
         }
+
+    async def upload_media(
+        self, file_name: str, content: bytes, content_type: str
+    ) -> str:
+        """上传文件到本 Base 的飞书云空间（drive medias/upload_all），返回 file_token。
+
+        上传后的 file_token 可写入多维表格附件字段（bitable 附件 20MB 上限由
+        调用方校验）。multipart 无法走 JSON 通道的 FeishuClient.request，
+        这里直连 httpx 并复用同一租户 token。
+        """
+        token = await FeishuAuth.get_tenant_access_token(
+            self.client.app_id, self.client.app_secret
+        )
+        async with httpx.AsyncClient(
+            base_url=self.client.base_url, timeout=120.0
+        ) as http:
+            resp = await http.post(
+                "/drive/v1/medias/upload_all",
+                headers={"Authorization": f"Bearer {token}"},
+                data={
+                    "file_name": file_name,
+                    "parent_type": "bitable_file",
+                    "parent_node": self.app_token,
+                    "size": str(len(content)),
+                },
+                files={
+                    "file": (
+                        file_name,
+                        content,
+                        content_type or "application/octet-stream",
+                    )
+                },
+            )
+        try:
+            payload = resp.json()
+        except ValueError as exc:
+            raise RuntimeError(
+                f"Feishu upload response was not JSON: status={resp.status_code}"
+            ) from exc
+        if payload.get("code") != 0:
+            raise RuntimeError(
+                f"Feishu API error: code={payload.get('code')}, "
+                f"msg={payload.get('msg')}, path=/drive/v1/medias/upload_all"
+            )
+        file_token = (payload.get("data") or {}).get("file_token")
+        if not file_token:
+            raise RuntimeError("Feishu upload returned no file_token")
+        return str(file_token)
 
 
 class FeishuBitableSync:

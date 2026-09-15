@@ -53,6 +53,8 @@ async def get_mpa_dashboard_data(
     source_entity_code: str = MPA_DASHBOARD_DEFAULT_ENTITY_CODE,
     sender_user_open_id: str | None = None,
     enable_trend_ai: bool = True,
+    suppress_send: bool = False,
+    manual_rerun: bool = False,
     frontend_group: str = "mpa",
 ) -> dict[str, Any]:
     config = MPA_DASHBOARD_ENTITY_CONFIGS.get(source_entity_code)
@@ -68,6 +70,8 @@ async def get_mpa_dashboard_data(
         oot_product_code=MPA_DASHBOARD_OOT_PRODUCT_CODES.get(source_entity_code),
         frontend_group=frontend_group,
         enable_trend_ai=enable_trend_ai,
+        suppress_send=suppress_send,
+        manual_rerun=manual_rerun,
     )
 
 
@@ -75,9 +79,16 @@ async def get_mvt_dashboard_data(
     db: AsyncSession,
     sender_user_open_id: str | None = None,
     enable_trend_ai: bool = True,
+    suppress_send: bool = False,
+    manual_rerun: bool = False,
     *,
     frontend_group: str = "mvt",
+    source_entity_code: str = MVT_DASHBOARD_ENTITY_CODE,
 ) -> dict[str, Any]:
+    if source_entity_code != MVT_DASHBOARD_ENTITY_CODE:
+        raise AppException(
+            message=f"不支持的美伐他汀仪表盘数据源: {source_entity_code}"
+        )
     return await _get_finished_dashboard_data(
         db,
         sender_user_open_id=sender_user_open_id,
@@ -87,6 +98,8 @@ async def get_mvt_dashboard_data(
         oot_product_code=MVT_DASHBOARD_OOT_PRODUCT_CODE,
         frontend_group=frontend_group,
         enable_trend_ai=enable_trend_ai,
+        suppress_send=suppress_send,
+        manual_rerun=manual_rerun,
     )
 
 
@@ -96,6 +109,8 @@ async def get_lft_dashboard_data(
     source_entity_code: str = LFT_DASHBOARD_DEFAULT_ENTITY_CODE,
     sender_user_open_id: str | None = None,
     enable_trend_ai: bool = True,
+    suppress_send: bool = False,
+    manual_rerun: bool = False,
     frontend_group: str = "lft",
 ) -> dict[str, Any]:
     config = LFT_DASHBOARD_ENTITY_CONFIGS.get(source_entity_code)
@@ -113,6 +128,8 @@ async def get_lft_dashboard_data(
         oot_product_code=LFT_DASHBOARD_OOT_PRODUCT_CODES.get(source_entity_code),
         frontend_group=frontend_group,
         enable_trend_ai=enable_trend_ai,
+        suppress_send=suppress_send,
+        manual_rerun=manual_rerun,
     )
 
 
@@ -122,6 +139,8 @@ async def get_dls_dashboard_data(
     source_entity_code: str = DLS_DASHBOARD_DEFAULT_ENTITY_CODE,
     sender_user_open_id: str | None = None,
     enable_trend_ai: bool = True,
+    suppress_send: bool = False,
+    manual_rerun: bool = False,
     frontend_group: str = "dls",
 ) -> dict[str, Any]:
     config = DLS_DASHBOARD_ENTITY_CONFIGS.get(source_entity_code)
@@ -139,6 +158,8 @@ async def get_dls_dashboard_data(
         oot_product_code=DLS_DASHBOARD_OOT_PRODUCT_CODE,
         frontend_group=frontend_group,
         enable_trend_ai=enable_trend_ai,
+        suppress_send=suppress_send,
+        manual_rerun=manual_rerun,
     )
 
 
@@ -148,6 +169,8 @@ async def get_lkms_dashboard_data(
     source_entity_code: str = LKMS_VET_DASHBOARD_ENTITY_CODE,
     sender_user_open_id: str | None = None,
     enable_trend_ai: bool = True,
+    suppress_send: bool = False,
+    manual_rerun: bool = False,
     frontend_group: str = "lkms",
 ) -> dict[str, Any]:
     if source_entity_code != LKMS_VET_DASHBOARD_ENTITY_CODE:
@@ -164,6 +187,8 @@ async def get_lkms_dashboard_data(
         oot_product_code=LKMS_VET_DASHBOARD_OOT_PRODUCT_CODE,
         frontend_group=frontend_group,
         enable_trend_ai=enable_trend_ai,
+        suppress_send=suppress_send,
+        manual_rerun=manual_rerun,
     )
 
 
@@ -173,6 +198,8 @@ async def get_bbas_dashboard_data(
     source_entity_code: str = BBAS_DASHBOARD_DEFAULT_ENTITY_CODE,
     sender_user_open_id: str | None = None,
     enable_trend_ai: bool = True,
+    suppress_send: bool = False,
+    manual_rerun: bool = False,
     frontend_group: str = "bbas",
 ) -> dict[str, Any]:
     config = BBAS_DASHBOARD_ENTITY_CONFIGS.get(source_entity_code)
@@ -189,6 +216,8 @@ async def get_bbas_dashboard_data(
         metric_configs=tuple(config["metric_configs"]),
         frontend_group=frontend_group,
         enable_trend_ai=enable_trend_ai,
+        suppress_send=suppress_send,
+        manual_rerun=manual_rerun,
     )
 
 
@@ -198,6 +227,8 @@ async def get_tryptophan_dashboard_data(
     source_entity_code: str = TRYPTOPHAN_DASHBOARD_DEFAULT_ENTITY_CODE,
     sender_user_open_id: str | None = None,
     enable_trend_ai: bool = True,
+    suppress_send: bool = False,
+    manual_rerun: bool = False,
     frontend_group: str = "tryptophan",
 ) -> dict[str, Any]:
     config = TRYPTOPHAN_DASHBOARD_ENTITY_CONFIGS.get(source_entity_code)
@@ -212,6 +243,8 @@ async def get_tryptophan_dashboard_data(
         metric_configs=tuple(config["metric_configs"]),
         frontend_group=frontend_group,
         enable_trend_ai=enable_trend_ai,
+        suppress_send=suppress_send,
+        manual_rerun=manual_rerun,
     )
 
 
@@ -221,6 +254,8 @@ async def get_formulations_dashboard_data(
     source_entity_code: str = FORMULATIONS_DASHBOARD_DEFAULT_ENTITY_CODE,
     sender_user_open_id: str | None = None,
     enable_trend_ai: bool = True,
+    suppress_send: bool = False,
+    manual_rerun: bool = False,
     frontend_group: str = "formulations",
 ) -> dict[str, Any]:
     config = FORMULATIONS_DASHBOARD_ENTITY_CONFIGS.get(source_entity_code)
@@ -235,6 +270,8 @@ async def get_formulations_dashboard_data(
         metric_configs=tuple(config["metric_configs"]),
         frontend_group=frontend_group,
         enable_trend_ai=enable_trend_ai,
+        suppress_send=suppress_send,
+        manual_rerun=manual_rerun,
     )
 
 
@@ -244,6 +281,8 @@ async def get_water_dashboard_data(
     source_entity_code: str = WATER_DASHBOARD_DEFAULT_ENTITY_CODE,
     sender_user_open_id: str | None = None,
     enable_trend_ai: bool = True,
+    suppress_send: bool = False,
+    manual_rerun: bool = False,
     frontend_group: str = "water",
 ) -> dict[str, Any]:
     config = WATER_DASHBOARD_ENTITY_CONFIGS.get(source_entity_code)
@@ -258,4 +297,6 @@ async def get_water_dashboard_data(
         metric_configs=tuple(config["metric_configs"]),
         frontend_group=frontend_group,
         enable_trend_ai=enable_trend_ai,
+        suppress_send=suppress_send,
+        manual_rerun=manual_rerun,
     )

@@ -76,6 +76,43 @@ describe('FeishuAttachmentPreviewModal', () => {
     expect(document.body.querySelector('iframe')).toBeNull()
   })
 
+  it('fetches and renders text attachments as plain text', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: () => Promise.resolve('仪器校准记录\nline2'),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderModal({
+      fileName: '校准记录.txt',
+      previewSrc: '/preview/txt',
+      downloadSrc: '/download/txt',
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(fetchMock).toHaveBeenCalledWith('/preview/txt')
+    const modalText = document.body.textContent || ''
+    expect(modalText).toContain('仪器校准记录')
+    expect(modalText).toContain('line2')
+    expect(document.body.querySelector('iframe')).toBeNull()
+    vi.unstubAllGlobals()
+  })
+
+  it('shows failure alert when the text preview request fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')))
+    renderModal({
+      fileName: '损坏记录.txt',
+      previewSrc: '/preview/txt-fail',
+      downloadSrc: '/download/txt-fail',
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(document.body.textContent).toContain('文本内容加载失败')
+    expect(document.body.textContent).toContain('请点击下方按钮下载原文件查看')
+    vi.unstubAllGlobals()
+  })
+
   it('falls back to download hint for unsupported extensions', async () => {
     const openMock = vi.fn()
     vi.stubGlobal('open', openMock)

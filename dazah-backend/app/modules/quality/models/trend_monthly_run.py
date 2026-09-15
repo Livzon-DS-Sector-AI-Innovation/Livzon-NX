@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.shared.base_model import BaseModel
@@ -15,7 +15,13 @@ class QualityTrendMonthlyRun(BaseModel):
 
     __tablename__ = "quality_trend_monthly_runs"
     __table_args__ = (
-        UniqueConstraint("period", name="uq_quality_trend_monthly_run_period"),
+        # 软删除语义：仅未删除行唯一（"重跑本月"=软删旧标记再插入新标记）
+        Index(
+            "uq_quality_trend_monthly_run_period",
+            "period",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
         {"schema": "quality"},
     )
 

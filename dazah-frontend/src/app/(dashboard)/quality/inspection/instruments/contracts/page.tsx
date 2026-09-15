@@ -12,6 +12,10 @@ export default function InstrContractsPage() {
         pullApi="/api/v1/quality/instruments/contracts/pull"
         entityCode="qc_instr_contracts"
         editable
+        editablePersonFields
+        enableTextPreview
+        enableAttachmentPreview
+        showLastSyncTime
       />
     </QualityQueryProvider>
   )
