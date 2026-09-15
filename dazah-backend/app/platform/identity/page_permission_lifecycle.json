@@ -2,7 +2,7 @@
   "version": 1,
   "pages": {
     "production:overview": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production",
       "actions": {
@@ -13,7 +13,7 @@
       }
     },
     "production:batches:workshop-101-1": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/batches/workshop/101-1",
       "actions": {
@@ -22,7 +22,7 @@
       }
     },
     "production:batches:workshop-101-2": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/batches/workshop/101-2",
       "actions": {
@@ -31,7 +31,7 @@
       }
     },
     "production:batches:workshop-102-1": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/batches/workshop/102-1",
       "actions": {
@@ -40,7 +40,7 @@
       }
     },
     "production:batches:workshop-102-2": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/batches/workshop/102-2",
       "actions": {
@@ -49,7 +49,7 @@
       }
     },
     "production:batches:workshop-103:ws103-phenylalanine": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/batches/workshop/103/phenylalanine",
       "actions": {
@@ -58,7 +58,7 @@
       }
     },
     "production:batches:workshop-103:ws103-lovastatin": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/batches/workshop/103/lovastatin",
       "actions": {
@@ -67,7 +67,7 @@
       }
     },
     "production:batches:workshop-201-1": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/batches/workshop/201-1",
       "actions": {
@@ -76,7 +76,7 @@
       }
     },
     "production:batches:workshop-201-2": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/batches/workshop/201-2",
       "actions": {
@@ -85,7 +85,7 @@
       }
     },
     "production:batches:workshop-201-3": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/batches/workshop/201-3",
       "actions": {
@@ -97,7 +97,7 @@
       }
     },
     "production:batches:workshop-202": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/batches/workshop/202",
       "actions": {
@@ -106,7 +106,7 @@
       }
     },
     "production:batches:workshop-203": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/batches/workshop/203",
       "actions": {
@@ -115,7 +115,7 @@
       }
     },
     "production:batches:workshop-203-3": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/batches/workshop/203-3",
       "actions": {
@@ -124,7 +124,7 @@
       }
     },
     "production:plan:sales-plan": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/plan",
       "actions": {
@@ -133,7 +133,7 @@
       }
     },
     "production:plan:scheduling": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/scheduling",
       "actions": {
@@ -144,7 +144,7 @@
       }
     },
     "production:process": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/process",
       "actions": {
@@ -152,7 +152,7 @@
       }
     },
     "production:records": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/records",
       "actions": {
@@ -161,7 +161,7 @@
       }
     },
     "production:balance": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/balance",
       "actions": {
@@ -169,7 +169,7 @@
       }
     },
     "production:shift-log:shift-log-deviation": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/shift-log/deviation",
       "actions": {
@@ -177,13 +177,13 @@
       }
     },
     "production:shift-log:shift-log-quality": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/shift-log/quality",
       "actions": {}
     },
     "production:shift-log:shift-log-summary": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/shift-log/summary",
       "actions": {
@@ -191,7 +191,7 @@
       }
     },
     "production:shift-log:shift-log-handover": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/shift-log/handover",
       "actions": {
@@ -200,7 +200,7 @@
       }
     },
     "production:label-verification": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/label-verification",
       "actions": {
@@ -208,7 +208,7 @@
       }
     },
     "production:pressure": {
-      "status": "retired",
+      "status": "active",
       "module_code": "production",
       "route_path": "/production/pressure",
       "actions": {
