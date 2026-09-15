@@ -69,9 +69,6 @@ from app.modules.quality.service import (
 )
 from app.modules.quality.service.inspection_dashboard_calc import reanalyze_trend_ai
 from app.modules.quality.service.inspection_helpers import _list_feishu_dynamic
-from app.modules.quality.service.maintenance_schedule import (
-    enrich_maintenance_schedule,
-)
 from app.modules.quality.service.inspection_items_mirror import (
     PAGE_INBOUND,
     PAGE_INVENTORY,
@@ -88,6 +85,9 @@ from app.modules.quality.service.instrument_profile import get_instrument_profil
 from app.modules.quality.service.items_dashboard import (
     get_items_dashboard,
     push_low_stock_alert,
+)
+from app.modules.quality.service.maintenance_schedule import (
+    enrich_maintenance_schedule,
 )
 from app.shared.schemas import ApiResponseEnvelope
 

@@ -106,12 +106,6 @@ from app.modules.quality.service.inspection_instrument_mirror import (
     list_instrument_mirror,
     sync_instrument_page,
 )
-from app.modules.quality.service.instrument_import import (
-    confirm_instrument_import,
-    preview_instrument_import,
-)
-from app.modules.quality.service.instrument_profile import get_instrument_profile
-from app.modules.quality.service.instruments_dashboard import get_instruments_dashboard
 from app.modules.quality.service.inspection_items_equipment import (
     get_inbound,
     get_item,
@@ -123,6 +117,12 @@ from app.modules.quality.service.inspection_items_equipment import (
     pull_items,
     pull_outbounds,
 )
+from app.modules.quality.service.instrument_import import (
+    confirm_instrument_import,
+    preview_instrument_import,
+)
+from app.modules.quality.service.instrument_profile import get_instrument_profile
+from app.modules.quality.service.instruments_dashboard import get_instruments_dashboard
 from app.modules.quality.service.quality_ai import (
     analyze_capa_record,
     analyze_change_record,
