@@ -160,6 +160,16 @@ describe('InstrumentImportDrawer', () => {
     expect(text).toContain('第 3 行 资产编码重复')
   })
 
+  it('closing the drawer resets state and calls onClose', async () => {
+    const props = await renderDrawerMounted()
+    selectFile(makeFile())
+    await flush()
+    clickButton('预览数据')
+    await flush()
+    clickButton('关闭')
+    expect(props.onClose).toHaveBeenCalled()
+  })
+
   it('shows import errors and keeps the drawer open', async () => {
     clientMocks.confirmInstrumentImport.mockRejectedValue(new Error('飞书写入超时'))
     const props = await renderDrawerMounted()
