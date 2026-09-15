@@ -183,7 +183,10 @@ async def test_person_mapping_crud_via_endpoint(client: AsyncClient):
     assert create_resp.status_code == 200
     mapping_id = create_resp.json()["data"]["id"]
 
-    list_resp = await client.get(url)
+    list_resp = await client.get(
+        url,
+        headers={"X-Dazah-Page-Key": "hr:hr-settings:hr-settings-dept-mapping"},
+    )
     assert list_resp.status_code == 200
     rows = [r for r in list_resp.json()["data"] if r["mapping_type"] == "person"]
     assert len(rows) == 1
