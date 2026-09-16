@@ -556,7 +556,7 @@ describe('production actions', () => {
 
     const res = await getFermentationBatchActuals()
     expect(fetchMock).toHaveBeenCalledWith(
-      `${API_BASE}/api/v1/production/fermentation-batch-actuals`,
+      `${API_BASE}/api/v1/production/fermentation-batch-actuals?product=FA`,
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
       }),
@@ -575,7 +575,7 @@ describe('production actions', () => {
       remark: null,
     })
     expect(fetchMock).toHaveBeenCalledWith(
-      `${API_BASE}/api/v1/production/fermentation-batch-actuals`,
+      `${API_BASE}/api/v1/production/fermentation-batch-actuals?product=FA`,
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({
@@ -606,7 +606,7 @@ describe('production actions', () => {
 
     await expect(setFermentationMonthCapacity(930000)).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
-      `${API_BASE}/api/v1/production/fermentation-month-capacity`,
+      `${API_BASE}/api/v1/production/fermentation-month-capacity?product=FA`,
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ planned_capacity_kg: 930000 }),

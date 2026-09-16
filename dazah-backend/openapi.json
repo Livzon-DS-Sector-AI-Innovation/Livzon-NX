@@ -141076,13 +141076,13 @@
             }
           },
           {
-            "description": "产品代码（如 FA/MC/DR）",
+            "description": "产品代码（如 FA/MC/DR/LV/MV）",
             "in": "query",
             "name": "product",
             "required": false,
             "schema": {
               "default": "FA",
-              "description": "产品代码（如 FA/MC/DR）",
+              "description": "产品代码（如 FA/MC/DR/LV/MV）",
               "title": "Product",
               "type": "string"
             }
@@ -141136,13 +141136,13 @@
         "operationId": "upsert_fermentation_batch_actual_api_v1_production_fermentation_batch_actuals_post",
         "parameters": [
           {
-            "description": "产品代码（如 FA/MC/DR）",
+            "description": "产品代码（如 FA/MC/DR/LV/MV）",
             "in": "query",
             "name": "product",
             "required": false,
             "schema": {
               "default": "FA",
-              "description": "产品代码（如 FA/MC/DR）",
+              "description": "产品代码（如 FA/MC/DR/LV/MV）",
               "title": "Product",
               "type": "string"
             }
@@ -141287,13 +141287,13 @@
             }
           },
           {
-            "description": "产品代码（如 FA/MC/DR）",
+            "description": "产品代码（如 FA/MC/DR/LV/MV）",
             "in": "query",
             "name": "product",
             "required": false,
             "schema": {
               "default": "FA",
-              "description": "产品代码（如 FA/MC/DR）",
+              "description": "产品代码（如 FA/MC/DR/LV/MV）",
               "title": "Product",
               "type": "string"
             }
@@ -141349,13 +141349,13 @@
         "operationId": "set_fermentation_month_capacity_api_v1_production_fermentation_month_capacity_post",
         "parameters": [
           {
-            "description": "产品代码（如 FA/MC/DR）",
+            "description": "产品代码（如 FA/MC/DR/LV/MV）",
             "in": "query",
             "name": "product",
             "required": false,
             "schema": {
               "default": "FA",
-              "description": "产品代码（如 FA/MC/DR）",
+              "description": "产品代码（如 FA/MC/DR/LV/MV）",
               "title": "Product",
               "type": "string"
             }

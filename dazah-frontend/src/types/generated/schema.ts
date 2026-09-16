@@ -88112,7 +88112,7 @@ export interface operations {
                 period_start?: string | null;
                 /** @description 周期结束日（含） */
                 period_end?: string | null;
-                /** @description 产品代码（如 FA/MC/DR） */
+                /** @description 产品代码（如 FA/MC/DR/LV/MV） */
                 product?: string;
             };
             header?: never;
@@ -88146,7 +88146,7 @@ export interface operations {
     upsert_fermentation_batch_actual_api_v1_production_fermentation_batch_actuals_post: {
         parameters: {
             query?: {
-                /** @description 产品代码（如 FA/MC/DR） */
+                /** @description 产品代码（如 FA/MC/DR/LV/MV） */
                 product?: string;
             };
             header?: never;
@@ -88219,7 +88219,7 @@ export interface operations {
             query?: {
                 /** @description 查看周期内任意日期（YYYY-MM-DD）；缺省为今天所在周期 */
                 date?: string | null;
-                /** @description 产品代码（如 FA/MC/DR） */
+                /** @description 产品代码（如 FA/MC/DR/LV/MV） */
                 product?: string;
             };
             header?: never;
@@ -88253,7 +88253,7 @@ export interface operations {
     set_fermentation_month_capacity_api_v1_production_fermentation_month_capacity_post: {
         parameters: {
             query?: {
-                /** @description 产品代码（如 FA/MC/DR） */
+                /** @description 产品代码（如 FA/MC/DR/LV/MV） */
                 product?: string;
             };
             header?: never;
