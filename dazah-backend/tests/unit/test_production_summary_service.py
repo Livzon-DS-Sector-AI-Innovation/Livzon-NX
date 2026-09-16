@@ -86,7 +86,11 @@ async def test_summary_fills_ferment_metrics_from_mc_archive(
     async def _covering(db: Any, ref_date: Any, code: str) -> Any:
         return archive if code == "MC" else None
 
-    monkeypatch.setattr(board, "load_archive_covering", AsyncMock(side_effect=_covering))
+    monkeypatch.setattr(
+        board,
+        "load_archive_covering",
+        AsyncMock(side_effect=_covering),
+    )
     monkeypatch.setattr(
         board,
         "get_month_setting",
@@ -98,7 +102,8 @@ async def test_summary_fills_ferment_metrics_from_mc_archive(
     mc = next(r for r in payload["rows"] if r["product_code"] == "MC")
     assert mc["ferment"]["planned_batches"] is not None
     assert mc["ferment"]["planned_capacity_kg"] == 930000.0
-    assert payload["period"] is not None and "8月27日" in payload["period"]["start"] + payload["period"]["label"]
+    assert payload["period"] is not None
+    assert "8月27日" in payload["period"]["start"] + payload["period"]["label"]
 
 
 @pytest.mark.anyio
@@ -109,7 +114,11 @@ async def test_summary_fills_metrics_for_dr_archive(monkeypatch: Any) -> None:
     async def _covering(db: Any, ref_date: Any, code: str) -> Any:
         return archive if code == "DR" else None
 
-    monkeypatch.setattr(board, "load_archive_covering", AsyncMock(side_effect=_covering))
+    monkeypatch.setattr(
+        board,
+        "load_archive_covering",
+        AsyncMock(side_effect=_covering),
+    )
     payload = await board.build_production_summary(
         _empty_db(), ref_date=date(2026, 9, 15), has_ferm=True, has_extract=True
     )
