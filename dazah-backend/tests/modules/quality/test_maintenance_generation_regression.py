@@ -84,7 +84,11 @@ async def test_screenshot_sources_generate_only_two_correct_tasks(
     install_plans(monkeypatch, [
         {"仪器编号": "QC-1-2-010", "维护内容": "清洗溶剂滤头", "周期（月）": 3},
         {"仪器编号": "QC-1-2-009", "维护内容": "清洗单向阀", "周期（月）": 0.5},
-        {"仪器编号": "QC-1-2-010、QC-1-2-009", "维护内容": "年度保养", "周期（月）": 12},
+        {
+            "仪器编号": "QC-1-2-010、QC-1-2-009",
+            "维护内容": "年度保养",
+            "周期（月）": 12,
+        },
     ])
     records = [source("QC-1-2-010", "清洗溶剂滤头"), source("QC-1-2-009", "清洗单向阀")]
     client = MemoryBitable(records)
@@ -97,7 +101,12 @@ async def test_screenshot_sources_generate_only_two_correct_tasks(
     ) == 0
     assert len(client.created) == 2
     for row, content, expected in zip(client.created, ["清洗溶剂滤头", "清洗单向阀"],
-                                      [date(2026, 12, 16), date(2026, 10, 1)], strict=True):
+                                      [
+                                          date(2026, 12, 16),
+                                          date(2026, 10, 1),
+                                      ],
+                                      strict=True,
+                                  ):
         fields = row["fields"]
         assert fields["维护内容"] == content
         assert fields["下次维保时间"] == schedule._to_ms(expected)

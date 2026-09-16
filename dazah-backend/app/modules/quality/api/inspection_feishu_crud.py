@@ -77,6 +77,10 @@ async def _maybe_refresh_entity_mirror(
     用独立会话执行：避免在请求事务里中途提交（主会话的写入已完成），
     同步失败不影响已成功的飞书写（写已提交），仅记日志。
     """
+    from app.modules.quality.service.inspection_instrument_mirror import (
+        sync_instrument_page,
+    )
+
     try:
         if record_id is not None and (
             entity_code in MATERIAL_MIRROR_ENTITIES
@@ -87,11 +91,6 @@ async def _maybe_refresh_entity_mirror(
                 entity_code, record_id, deleted=deleted
             )
             return
-        from app.modules.quality.service.inspection_instrument_mirror import (
-            INSTRUMENT_MIRROR_ENTITIES,
-            sync_instrument_page,
-        )
-
         in_scope = (
             entity_code in ITEMS_MIRROR_PAGES
             or entity_code in FINISHED_MIRROR_ENTITIES

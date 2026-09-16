@@ -20,6 +20,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import calendar
 import logging
 from datetime import date, datetime, timedelta, timezone
@@ -32,6 +33,9 @@ from app.modules.quality.service.instruments_dashboard import (
     _load_page,
     parse_feishu_date,
 )
+
+# 并发去重：镜像同步与手动完成可能同时触发下一期生成，串行化查重+创建
+_SPAWN_LOCK = asyncio.Lock()
 
 logger = logging.getLogger(__name__)
 
@@ -113,10 +117,16 @@ class _CycleIndex:
     def __init__(self) -> None:
         self.exact: dict[tuple[str, str], dict[str, Any]] = {}
         self.by_code: dict[str, list[dict[str, Any]]] = {}
+        self.conflicting: set[tuple[str, str]] = set()
 
     def add(self, codes: set[str], content: str, info: dict[str, Any]) -> None:
         for code in codes:
-            self.exact.setdefault((code, content), info)
+            key = (code, content)
+            if key in self.exact and self.exact[key] != info:
+                # 同编号+同内容存在多套不同周期：按内容精确判定会产生歧义
+                self.conflicting.add(key)
+            else:
+                self.exact.setdefault(key, info)
             bucket = self.by_code.setdefault(code, [])
             if info not in bucket:
                 bucket.append(info)
@@ -124,15 +134,18 @@ class _CycleIndex:
     def lookup(self, code: str, content: str) -> dict[str, Any] | None:
         if not code:
             return None
-        direct = self.exact.get((code, content))
-        if direct is not None:
-            return direct
         if not content:
-            # 记录未填维护内容：该编号在周期表唯一时兜底命中
+            # 记录未填维护内容：该编号在周期表有内容的计划唯一时兜底命中
+            # （空内容计划不参与匹配，避免生成无意义的空任务）
             bucket = self.by_code.get(code) or []
-            if len(bucket) == 1:
-                return bucket[0]
-        return None
+            with_content = [item for item in bucket if item.get("维护内容")]
+            if len(with_content) == 1:
+                return with_content[0]
+            return None
+        key = (code, content)
+        if key in self.conflicting:
+            return None
+        return self.exact.get(key)
 
 
 async def _load_cycle_index(db: AsyncSession) -> _CycleIndex:
@@ -147,6 +160,7 @@ async def _load_cycle_index(db: AsyncSession) -> _CycleIndex:
             "months": months,
             "category": _cell_text(row.get("仪器类别")),
             "cycle_text": _cell_text(row.get("维护周期")),
+            "维护内容": _norm_text(row.get("维护内容")),
         }
         raw_codes = _cell_text(row.get("仪器编号"))
         codes = {
@@ -260,7 +274,7 @@ async def _ensure_source_completed(
     return True
 
 
-async def spawn_next_for_fields(
+async def _spawn_next_for_fields_impl(
     db: AsyncSession,
     client: Any,
     table_id: str,
@@ -288,6 +302,11 @@ async def spawn_next_for_fields(
     info = cycle_index.lookup(code, content)
     if info is None:
         return None
+    # 记录未填维护内容时，用周期计划的内容补齐生成任务的维护内容
+    if not content and info.get("维护内容"):
+        fields = dict(fields)
+        fields["维护内容"] = info["维护内容"]
+        content = str(info["维护内容"])
     expected = next_maintenance_date(done_date, info["months"])
     expected_ms = _to_ms(expected)
 
@@ -323,6 +342,23 @@ async def spawn_next_for_fields(
     return (record_id, expected_ms) if record_id else None
 
 
+
+
+async def spawn_next_for_fields(
+    db: AsyncSession,
+    client: Any,
+    table_id: str,
+    record_id: str,
+    fields: dict[str, Any],
+    *,
+    existing: list[dict[str, Any]] | None = None,
+) -> tuple[str, int] | None:
+    """单条记录完成处理与下一期生成（并发安全入口，内部串行化）。"""
+    async with _SPAWN_LOCK:
+        return await _spawn_next_for_fields_impl(
+            db, client, table_id, record_id, fields, existing=existing
+        )
+
 async def maybe_spawn_next_maintenance(
     db: AsyncSession,
     client: Any,
@@ -333,49 +369,55 @@ async def maybe_spawn_next_maintenance(
 
     单条失败仅记日志，不影响同步与其余行。返回生成条数。
     """
-    spawned = 0
-    # 同设备编号的既有记录缓存，避免逐条查表
-    by_code: dict[str, list[dict[str, Any]]] = {}
-    for record in records:
-        fields = record.get("fields") or {}
-        if fields.get("维护日期") in (None, ""):
-            continue
-        code = _record_code(fields)
-        record_id = str(record.get("record_id") or "")
-        if not code or not record_id:
-            continue
-        try:
-            if code not in by_code:
-                by_code[code] = await client.search_records(
-                    table_id,
-                    filter_str=_build_code_filter(code),
-                    field_names=["设备编号", "维护内容", "是否完成", "下次维保时间"],
-                    user_id_type="open_id",
+    async with _SPAWN_LOCK:
+        spawned = 0
+        # 同设备编号的既有记录缓存，避免逐条查表
+        by_code: dict[str, list[dict[str, Any]]] = {}
+        for record in records:
+            fields = record.get("fields") or {}
+            if fields.get("维护日期") in (None, ""):
+                continue
+            code = _record_code(fields)
+            record_id = str(record.get("record_id") or "")
+            if not code or not record_id:
+                continue
+            try:
+                if code not in by_code:
+                    by_code[code] = await client.search_records(
+                        table_id,
+                        filter_str=_build_code_filter(code),
+                        field_names=[
+                            "设备编号",
+                            "维护内容",
+                            "是否完成",
+                            "下次维保时间",
+                        ],
+                        user_id_type="open_id",
+                    )
+                created = await _spawn_next_for_fields_impl(
+                    db, client, table_id, record_id, fields, existing=by_code[code]
                 )
-            created = await spawn_next_for_fields(
-                db, client, table_id, record_id, fields, existing=by_code[code]
-            )
-            if created:
-                spawned += 1
-                record_id, expected_ms = created
-                # 并入缓存（带真实计划时间）：同链后续记录防重复判定可见
-                by_code[code] = by_code[code] + [
-                    {
-                        "record_id": record_id,
-                        "fields": {
-                            "设备编号": code,
-                            "维护内容": fields.get("维护内容"),
-                            "是否完成": "否",
-                            "下次维保时间": expected_ms,
-                        },
-                    }
-                ]
-        except Exception as exc:  # noqa: BLE001 - 单条失败不中断同步
-            logger.warning(
-                "维保下一期任务生成失败 record=%s: %s",
-                record.get("record_id"),
-                exc,
-            )
-    if spawned:
-        logger.info("维保下一期任务本轮共生成 %d 条", spawned)
-    return spawned
+                if created:
+                    spawned += 1
+                    record_id, expected_ms = created
+                    # 并入缓存（带真实计划时间）：同链后续记录防重复判定可见
+                    by_code[code] = by_code[code] + [
+                        {
+                            "record_id": record_id,
+                            "fields": {
+                                "设备编号": code,
+                                "维护内容": fields.get("维护内容"),
+                                "是否完成": "否",
+                                "下次维保时间": expected_ms,
+                            },
+                        }
+                    ]
+            except Exception as exc:  # noqa: BLE001 - 单条失败不中断同步
+                logger.warning(
+                    "维保下一期任务生成失败 record=%s: %s",
+                    record.get("record_id"),
+                    exc,
+                )
+        if spawned:
+            logger.info("维保下一期任务本轮共生成 %d 条", spawned)
+        return spawned

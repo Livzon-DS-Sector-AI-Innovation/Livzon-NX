@@ -51,7 +51,8 @@ def upgrade() -> None:
     if existing == 0:
         bind.execute(sa.text(
             f"INSERT INTO {_SCHEMA}.{_TABLE} "
-            "(id, purpose, app_id, app_secret, is_enabled, created_at, updated_at, is_deleted) "
+            "(id, purpose, app_id, app_secret, is_enabled, created_at, "
+            "updated_at, is_deleted) "
             "VALUES (gen_random_uuid(), 'bitable', '', '', true, now(), now(), false)"
         ))
     op.create_unique_constraint(
