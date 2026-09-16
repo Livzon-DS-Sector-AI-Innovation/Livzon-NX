@@ -286,7 +286,7 @@ def _parse_workbook_definitions(
 
     workbook = load_workbook(workbook_path, data_only=True)
     try:
-        definitions: list[ProjectLedgerSheetDefinition] = []
+        definitions = []
         for worksheet in workbook.worksheets:
             raw_rows = [
                 [_normalize_text(cell) for cell in row]
@@ -306,7 +306,7 @@ def _parse_workbook_definitions(
 
             title = visible_rows[0][0] or worksheet.title
             header_row = visible_rows[1][:last_used_index]
-            used_keys: set[str] = set()
+            used_keys = set()
             columns = [
                 ProjectLedgerColumn(
                     key=_build_column_key(label, used_keys),
