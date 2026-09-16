@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   fetchAnomalyAnalysisStatus,
   fetchQualityPersonDirectory,
+  fetchQualityPersonOptions,
   fetchValidationFormLinks,
   fetchValidationPersonOptions,
   fetchAnomalyDashboard,
@@ -402,5 +403,37 @@ describe('quality client - oot limit notice export', () => {
     )
     await expect(previewInstrumentImport(file)).rejects.toThrow('文件解析失败')
     vi.unstubAllGlobals()
+  })
+})
+
+describe('quality client - person options', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('filters person options by departments and tolerates non-array input', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ code: 200, data: [{ open_id: 'ou_1', name: '张三' }] }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchQualityPersonOptions(['QC', 'AI创新部'])).resolves.toEqual([
+      { open_id: 'ou_1', name: '张三' },
+    ])
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/quality/person-options?limit=1000&departments=QC%2CAI%E5%88%9B%E6%96%B0%E9%83%A8',
+    )
+
+    // 契约测试用字符串填充参数时不应崩溃，且不带 departments 参数
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ code: 200, data: [] })),
+    )
+    await expect(
+      fetchQualityPersonOptions('demo' as unknown as string[]),
+    ).resolves.toEqual([])
+    const url = String(vi.mocked(fetch).mock.calls[0][0])
+    expect(url).toBe('/api/v1/quality/person-options?limit=1000')
   })
 })
