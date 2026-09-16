@@ -4340,6 +4340,7 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
         "GET",
         (
             "/feishu-settings/app",
+            "/feishu-settings/apps",
             "/feishu-settings/entities",
             "/feishu-settings/entities/{entity_code}/field-mapping",
             "/feishu-settings/entities/{entity_code}/tables",

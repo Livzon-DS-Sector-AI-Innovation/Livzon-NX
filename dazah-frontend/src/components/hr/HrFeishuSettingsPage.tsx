@@ -334,7 +334,6 @@ export function HrFeishuSettingsPage() {
       setContactSaving(false)
       setAppSaving(false)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contactForm, appForm, message, queryClient])
 
   const handleTestApp = useCallback(async (purpose: string = 'bitable') => {

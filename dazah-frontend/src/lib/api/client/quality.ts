@@ -1397,8 +1397,11 @@ export async function fetchQualityPersonDirectory(): Promise<QualityPersonOption
 export async function fetchQualityPersonOptions(
   departments: string[],
 ): Promise<QualityPersonOption[]> {
+  const deptList = Array.isArray(departments) ? departments : []
   const params = new URLSearchParams({ limit: '1000' })
-  params.set('departments', departments.join(','))
+  if (deptList.length > 0) {
+    params.set('departments', deptList.join(','))
+  }
   const res = await fetch(`/api/v1/quality/person-options?${params.toString()}`)
   if (!res.ok) throw await parseError(res)
   const json = await res.json()
