@@ -70,3 +70,29 @@ def test_deviation_auxiliary_routes_do_not_authorize_sibling_pages():
         )
         != DEVIATION_LEDGER_PAGE
     )
+
+
+def test_inspection_dashboards_and_equipment_import_use_live_menu_leaves():
+    inventory = "quality:inspection:inspection-items:inspection-items-inventory"
+    equipment = (
+        "quality:inspection:inspection-instruments:inspection-instruments-equipment"
+    )
+    item_dashboard = api_binding_for_route("GET", "/api/v1/quality/items/dashboard")
+    assert item_dashboard is not None
+    assert item_dashboard.page_keys == (inventory,)
+
+    instrument_dashboard = api_binding_for_route(
+        "GET", "/api/v1/quality/instruments/dashboard"
+    )
+    assert instrument_dashboard is not None
+    assert equipment in instrument_dashboard.page_keys
+
+    for method, path, action in (
+        ("GET", "/api/v1/quality/instruments/equipment/{record_id}/profile", None),
+        ("POST", "/api/v1/quality/instruments/equipment/import/preview", "bulk_import"),
+        ("POST", "/api/v1/quality/instruments/equipment/import/confirm", "bulk_import"),
+    ):
+        binding = api_binding_for_route(method, path)
+        assert binding is not None
+        assert binding.page_keys == (equipment,)
+        assert binding.sensitive_action == action

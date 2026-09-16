@@ -431,6 +431,9 @@ def _sensitive_actions(
     # action set explicit so a new API binding cannot silently widen a page.
     explicit_actions = {
         "quality:documents": ("bulk_import",),
+        "quality:inspection:inspection-instruments:inspection-instruments-equipment": (
+            "bulk_import",
+        ),
         "warehouse:warehouse-settings": ("delete",),
         "hr:departments": ("delete", "sync_config"),
         "hr:recruitment": ("delete", "sensitive_export", "sync_config"),
@@ -1111,10 +1114,9 @@ def _quality_remaining_api_bindings() -> tuple[PageApiBinding, ...]:
     )
     item_inbound = ("quality:inspection:inspection-items:inspection-items-inbound",)
     item_outbound = ("quality:inspection:inspection-items:inspection-items-outbound",)
-    item_dashboard = (
-        "quality:inspection:inspection-items:inspection-items-dashboard",
-    )
-    item_pages = item_inventory + item_inbound + item_outbound + item_dashboard
+    # The item dashboard is part of the inventory page, not a separate menu leaf.
+    item_dashboard = item_inventory
+    item_pages = item_inventory + item_inbound + item_outbound
     instrument_by_name = {
         "equipment": "inspection-instruments-equipment",
         "maintenance": "inspection-instruments-maintenance",
@@ -1245,6 +1247,8 @@ def _quality_remaining_api_bindings() -> tuple[PageApiBinding, ...]:
         if first == "inspection-resources":
             return inspection_pages
         if first == "instruments":
+            if second == "dashboard":
+                return instrument_pages
             key = instrument_by_name[second]
             return (f"quality:inspection:inspection-instruments:{key}",)
         if first == "items":
@@ -4975,7 +4979,12 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
         training_departments_pages,
         scope_adapter="hr.training_department",
     )
-    add("GET", "/training/dept-mappings", settings_mapping, scope_adapter="hr.settings")
+    add(
+        "GET",
+        "/training/dept-mappings",
+        training_departments_pages,
+        scope_adapter="hr.training_department",
+    )
     add(
         "POST",
         "/training/departments",

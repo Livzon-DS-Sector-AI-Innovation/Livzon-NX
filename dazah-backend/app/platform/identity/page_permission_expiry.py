@@ -2,22 +2,16 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
 from app.core.database import async_session_factory
 from app.platform.audit.models import AuditLog
 from app.platform.identity.models import Role, RolePageGrant, User, UserPageGrant
-from app.platform.identity.page_policy import get_page_definition
-from app.platform.integrations.feishu.notification import send_user_card
 from app.platform.scheduler import ScheduleConfig, ScheduleStrategy, TaskDefinition
-
-logger = logging.getLogger(__name__)
 
 
 async def _already_recorded(
@@ -66,7 +60,6 @@ async def _record_event(
 
 
 async def scan_sensitive_page_permission_expiry() -> None:
-    settings = get_settings()
     now = datetime.now(UTC)
     warning_at = now + timedelta(days=30)
     async with async_session_factory() as db:
@@ -108,24 +101,6 @@ async def scan_sensitive_page_permission_expiry() -> None:
                 await db.execute(select(User).where(User.id.in_(user_ids)))
             ).scalars()
         }
-        actor_ids = {
-            actor_id
-            for grant in [*role_grants, *user_grants]
-            if (actor_id := grant.updated_by or grant.created_by) is not None
-        }
-        recipient_candidates = list(
-            (
-                await db.execute(
-                    select(User).where(
-                        User.is_deleted.is_(False),
-                        User.status == "active",
-                        (User.role == "admin") | (User.id.in_(actor_ids)),
-                    )
-                )
-            ).scalars()
-        )
-        recipient_by_id = {item.id: item for item in recipient_candidates}
-        admin_ids = {item.id for item in recipient_candidates if item.role == "admin"}
         governed: list[
             tuple[str, RolePageGrant | UserPageGrant, str]
         ] = []
@@ -152,44 +127,14 @@ async def scan_sensitive_page_permission_expiry() -> None:
                 db, action=event_action, resource_id=grant.id, expiry=expiry
             ):
                 continue
-            page = get_page_definition(grant.page_key)
-            page_name = page.page_name if page else grant.page_key
-            delivered = 0
-            if settings.FEISHU_APP_ID and settings.FEISHU_APP_SECRET:
-                grant_recipient_ids = set(admin_ids)
-                actor_id = grant.updated_by or grant.created_by
-                if actor_id is not None:
-                    grant_recipient_ids.add(actor_id)
-                for recipient_id in grant_recipient_ids:
-                    recipient = recipient_by_id.get(recipient_id)
-                    if recipient is None:
-                        continue
-                    if not recipient.feishu_open_id:
-                        continue
-                    ok = await send_user_card(
-                        recipient.feishu_open_id,
-                        "高风险页面权限已到期" if expired else "高风险页面权限即将到期",
-                        (
-                            f"**授权对象：** {target_name}\n"
-                            f"**页面：** {page_name}\n"
-                            "**到期时间：** "
-                            f"{expiry.astimezone().strftime('%Y-%m-%d %H:%M')}\n"
-                            "请前往系统权限管理核对并续期或撤销。"
-                        ),
-                        app_id=settings.FEISHU_APP_ID,
-                        app_secret=settings.FEISHU_APP_SECRET,
-                    )
-                    delivered += int(ok)
-            if expired or delivered:
-                await _record_event(
-                    db,
-                    action=event_action,
-                    resource_type=resource_type,
-                    grant=grant,
-                    target_name=target_name,
-                    expiry=expiry,
-                    recipient_count=delivered,
-                )
+            await _record_event(
+                db,
+                action=event_action,
+                resource_type=resource_type,
+                grant=grant,
+                target_name=target_name,
+                expiry=expiry,
+            )
         await db.commit()
 
 

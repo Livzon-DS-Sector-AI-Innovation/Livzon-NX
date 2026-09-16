@@ -985,6 +985,10 @@
       "module_code": "quality",
       "route_path": "/quality/inspection/instruments/equipment",
       "actions": {
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        },
         "delete": {
           "status": "active",
           "category": "destructive"
