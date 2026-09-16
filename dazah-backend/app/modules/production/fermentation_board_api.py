@@ -195,6 +195,28 @@ async def get_fermentation_board(
     return success_response(data=payload)
 
 
+@router.get(
+    "/production-summary",
+    summary="生产汇总（五产线发酵/提炼关键指标）",
+)
+async def get_production_summary(
+    db: AsyncSession = Depends(get_db),
+    date: date | None = Query(
+        None, description="参考日期 YYYY-MM-DD，默认今天（按扎帐周期取数）"
+    ),
+    current_user: CurrentUser = None,
+) -> Any:
+    has_ferm, has_extract = await _stage_permissions(db, current_user)
+    now = datetime.now(BEIJING_TZ).replace(tzinfo=None)
+    payload = await board.build_production_summary(
+        db,
+        ref_date=date or now.date(),
+        has_ferm=has_ferm,
+        has_extract=has_extract,
+    )
+    return success_response(data=payload)
+
+
 @router.get("/tank-maintenance", summary="发酵罐检修标注列表（进行中）")
 async def list_tank_maintenance(
     db: AsyncSession = Depends(get_db),

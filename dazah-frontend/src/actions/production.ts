@@ -29,6 +29,7 @@ import type {
   ScheduleExcelArchive,
   FermentationBatchActual,
   FermentationBatchActualFormData,
+  ProductionSummary,
 } from '@/types/production'
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000'
@@ -134,6 +135,14 @@ export async function deleteBatchMaterial(id: string) {
 }
 
 // ============ Production Plan Actions ============
+
+// 生产汇总：五产线发酵/提炼关键指标（date 默认今天，按扎帐周期取数）
+export async function getProductionSummary(date?: string) {
+  const query = date ? `?date=${date}` : ''
+  return fetchApi<ProductionSummary>(
+    `/api/v1/production/production-summary${query}`,
+  )
+}
 
 export async function getPlans(params: PlanQueryParams = {}) {
   const searchParams = new URLSearchParams()

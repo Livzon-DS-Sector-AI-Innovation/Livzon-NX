@@ -1206,9 +1206,9 @@ describe('ProductionHomePage (fermentation board)', () => {
     // FA Tab：只显示苯丙氨酸行，霉酚酸行不出现在数值位
     expect(text).toContain('790,000')
     expect(text).not.toContain('61,000')
-    // 切到霉酚酸 Tab（导航显示名 MC）：下拉与数值切换为霉酚酸行，互不影响
+    // 切到霉酚酸 Tab（导航显示名）：下拉与数值切换为霉酚酸行，互不影响
     const mpTab = Array.from(container.querySelectorAll('.rounded-lg')).find(
-      (b) => (b.textContent || '').trim() === 'MC',
+      (b) => (b.textContent || '').trim() === '霉酚酸',
     ) as HTMLElement
     expect(mpTab).toBeTruthy()
     await act(async () => {
