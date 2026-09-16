@@ -47,7 +47,6 @@ vi.mock('@/lib/api/server/quality', async (importOriginal) => routeMocks.moduleF
 vi.mock('@/lib/api/server/registration', async (importOriginal) => routeMocks.moduleFactory(importOriginal))
 vi.mock('@/lib/api/server/regulatoryTracker', async (importOriginal) => routeMocks.moduleFactory(importOriginal))
 vi.mock('@/lib/api/server/warehouse', async (importOriginal) => routeMocks.moduleFactory(importOriginal))
-vi.mock('@/lib/api/quality-cpv', async (importOriginal) => routeMocks.moduleFactory(importOriginal))
 
 type RouteLoader = () => Promise<Record<string, unknown>>
 type GlobImportMeta = ImportMeta & {

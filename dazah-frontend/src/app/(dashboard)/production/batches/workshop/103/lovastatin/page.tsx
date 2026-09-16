@@ -23,6 +23,7 @@ import dayjs from 'dayjs'
 import * as XLSX from 'xlsx'
 import BatchProfileButton from '@/components/production/BatchProfileButton'
 import BatchEventsButton from '@/components/production/BatchEventsButton'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Text, Title } = Typography
 
@@ -63,6 +64,7 @@ const getStatusLabel = (status: string) => {
 
 export default function Workshop103LovastatinPage() {
   const { message, modal } = App.useApp()
+  const { canOperate, canDelete, canExport } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop103Lovastatin)
   const [form] = Form.useForm()
   const [editForm] = Form.useForm()
 
@@ -162,10 +164,17 @@ export default function Workshop103LovastatinPage() {
   })
   const paginated = filtered.slice((page - 1) * pageSize, page * pageSize)
 
-  const handleAdd = () => { setEditing(null); form.resetFields(); setModalVisible(true) }
-  const handleEdit = (r: FermentationRecord) => { setEditing(r); editForm.setFieldsValue({ ...r, entry_date: r.entry_date ? dayjs(r.entry_date) : null, discharge_date: r.discharge_date ? dayjs(r.discharge_date) : null }); setModalVisible(true) }
+  const handleAdd = () => {
+    if (!canOperate) return
+    setEditing(null); form.resetFields(); setModalVisible(true)
+  }
+  const handleEdit = (r: FermentationRecord) => {
+    if (!canOperate) return
+    setEditing(r); editForm.setFieldsValue({ ...r, entry_date: r.entry_date ? dayjs(r.entry_date) : null, discharge_date: r.discharge_date ? dayjs(r.discharge_date) : null }); setModalVisible(true)
+  }
 
   const handleDelete = (id: string) => {
+    if (!canDelete) return
     modal.confirm({
       title: '确认删除', content: '确定删除此发酵记录？',
       onOk: async () => {
@@ -177,6 +186,7 @@ export default function Workshop103LovastatinPage() {
   }
 
   const handleSubmit = async () => {
+    if (!canOperate) return
     try {
       const values = editing ? await editForm.validateFields() : await form.validateFields()
       const data = {
@@ -202,6 +212,7 @@ export default function Workshop103LovastatinPage() {
   }
 
   const handleStatusChange = async (id: string, status: string) => {
+    if (!canOperate) return
     const res = await updateFermentationRecord(id, { status })
     if (res.code === 200) {
       setRecords(prev => prev.map(r => r.id === id ? { ...r, status } : r))
@@ -210,6 +221,7 @@ export default function Workshop103LovastatinPage() {
   }
 
   const handlePlanSave = async () => {
+    if (!canOperate) return
     try {
       const values = await planForm.validateFields()
       setPlanTotalBatches(values.batches || 0)
@@ -222,10 +234,12 @@ export default function Workshop103LovastatinPage() {
   }
 
   const handleLineConfigOpen = () => {
+    if (!canOperate) return
     setTempActive(new Set(activeProducts))
     setLineConfigVisible(true)
   }
   const handleLineConfigSave = () => {
+    if (!canOperate) return
     setActiveProducts(tempActive)
     localStorage.setItem(LINE_STORAGE_KEY, JSON.stringify([...tempActive]))
     setLineConfigVisible(false)
@@ -254,8 +268,8 @@ export default function Workshop103LovastatinPage() {
           onBlur={() => setEditingStatusId(null)}
         />
       ) : (
-        <Tag color={getStatusColor(record.status)} style={{ cursor: 'pointer' }}
-          onClick={() => setEditingStatusId(record.id)}>
+        <Tag color={getStatusColor(record.status)} style={{ cursor: canOperate ? 'pointer' : 'default' }}
+          onClick={canOperate ? () => setEditingStatusId(record.id) : undefined}>
           {getStatusLabel(record.status)}
         </Tag>
       )
@@ -268,8 +282,8 @@ export default function Workshop103LovastatinPage() {
         <Space size="small">
           <BatchEventsButton batchId={r.id} batchLabel={`${r.fermenter}-${r.batch_no}`} status={r.status} /> 
           <BatchProfileButton batchNo={r.batch_no} />
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(r)}>编辑</Button>
-          <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(r.id)}>删除</Button>
+          {canOperate && <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(r)}>编辑</Button>}
+          {canDelete && <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(r.id)}>删除</Button>}
         </Space>
       ),
     },
@@ -292,7 +306,7 @@ export default function Workshop103LovastatinPage() {
         <Card>
           <Empty description="暂无在生产产品，请点击下方按钮配置产线" />
           <div style={{ textAlign: 'center', marginTop: 16 }}>
-            <Button type="primary" icon={<ControlOutlined />} onClick={handleLineConfigOpen}>产线配置</Button>
+            {canOperate && <Button type="primary" icon={<ControlOutlined />} onClick={handleLineConfigOpen}>产线配置</Button>}
           </div>
         </Card>
       ) : (
@@ -300,8 +314,8 @@ export default function Workshop103LovastatinPage() {
           <div className="mb-6">
             <div className="flex items-center gap-3">
               <Title level={4} style={{ margin: 0 }}><ExperimentOutlined className="mr-2" />{currentProduct.productName} - 发酵数据</Title>
-              <Button size="small" icon={<ControlOutlined />} onClick={handleLineConfigOpen}>产线配置</Button>
-              <Button size="small" icon={<SettingOutlined />} onClick={() => { planForm.setFieldsValue({ batches: planTotalBatches, yield: planYield }); setPlanModalVisible(true) }}>月度计划</Button>
+              {canOperate && <Button size="small" icon={<ControlOutlined />} onClick={handleLineConfigOpen}>产线配置</Button>}
+              {canOperate && <Button size="small" icon={<SettingOutlined />} onClick={() => { planForm.setFieldsValue({ batches: planTotalBatches, yield: planYield }); setPlanModalVisible(true) }}>月度计划</Button>}
             </div>
             <Text type="secondary">{getProductionPeriodLabel()}</Text>
           </div>
@@ -317,14 +331,14 @@ export default function Workshop103LovastatinPage() {
 
           <Card
             title="发酵记录列表"
-            extra={<Space><Button icon={<DownloadOutlined />} onClick={() => {
+        extra={<Space>{canExport && <Button icon={<DownloadOutlined />} onClick={() => {
               const headers = ['批号', '发酵罐', '进罐日期', '放罐日期', '罐产', '状态', '备注']
               const rows = filtered.map(r => [r.batch_no, r.fermenter, r.entry_date || '', r.discharge_date || '', r.tank_yield ?? '', getStatusLabel(r.status), r.remarks || ''])
               const sheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
               const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, sheet, '发酵记录')
               XLSX.writeFile(wb, `${currentProduct.productName}_发酵记录_${new Date().toISOString().slice(0, 10)}.xlsx`)
               message.success('导出成功')
-            }}>导出Excel</Button><Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新建发酵记录</Button></Space>}
+        }}>导出Excel</Button>}{canOperate && <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新建发酵记录</Button>}</Space>}
           >
             <Row gutter={16} className="mb-4">
               <Col span={6}><Input placeholder="搜索批号" prefix={<SearchOutlined />} value={searchText} onChange={e => { setSearchText(e.target.value); setPage(1) }} allowClear /></Col>
@@ -336,7 +350,7 @@ export default function Workshop103LovastatinPage() {
             />
           </Card>
 
-          <Modal title={editing ? '编辑发酵记录' : '新建发酵记录'} open={modalVisible} onOk={handleSubmit} onCancel={() => setModalVisible(false)} width={720} okText="确认" cancelText="取消">
+      <Modal title={editing ? '编辑发酵记录' : '新建发酵记录'} open={modalVisible && canOperate} onOk={canOperate ? handleSubmit : undefined} onCancel={() => setModalVisible(false)} width={720} okText="确认" cancelText="取消">
             <Form form={editing ? editForm : form} layout="vertical">
               <Row gutter={16}>
                 <Col span={8}><Form.Item name="batch_no" label="批号" rules={[{ required: true }]}><Input placeholder="批号" /></Form.Item></Col>
@@ -355,7 +369,7 @@ export default function Workshop103LovastatinPage() {
             </Form>
           </Modal>
 
-          <Modal title="月度生产计划" open={planModalVisible} onOk={handlePlanSave} onCancel={() => setPlanModalVisible(false)} width={360} okText="保存" cancelText="取消">
+      <Modal title="月度生产计划" open={planModalVisible && canOperate} onOk={canOperate ? handlePlanSave : undefined} onCancel={() => setPlanModalVisible(false)} width={360} okText="保存" cancelText="取消">
             <Form form={planForm} layout="vertical">
               <Form.Item name="batches" label={`${currentProduct.productName} — 计划总批次（批）`} rules={[{ required: true, message: '请输入计划批次' }]}>
                 <InputNumber style={{ width: '100%' }} min={0} placeholder="本月计划生产批次总数" />
@@ -371,8 +385,8 @@ export default function Workshop103LovastatinPage() {
       {/* ─── 产线配置 Modal ─── */}
       <Modal
         title="产线配置"
-        open={lineConfigVisible}
-        onOk={handleLineConfigSave}
+        open={lineConfigVisible && canOperate}
+        onOk={canOperate ? handleLineConfigSave : undefined}
         onCancel={() => setLineConfigVisible(false)}
         width={360}
         okText="保存"

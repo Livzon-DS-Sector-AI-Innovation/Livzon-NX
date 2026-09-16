@@ -120,3 +120,13 @@ docker build --file ../Dockerfile --target frontend --tag dazah-frontend:ci ..
 - 统一 `CI Gate` 要求本次范围内的 `Frontend Quality` 和 `Stable Frontend E2E` 成功；未触发的项目允许跳过，隔离测试不阻断合并。
 
 交付时记录实际运行的命令、结果及其覆盖的变更表面；未运行完整门禁不等于未验证，但必须说明为何现有证据已经充分。页面和交互只需验证本次变化可能影响的主要操作及相关加载、空数据、失败、无权限、危险确认或窄屏状态。无法取得所需证据时必须说明原因、未验证范围和风险。
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

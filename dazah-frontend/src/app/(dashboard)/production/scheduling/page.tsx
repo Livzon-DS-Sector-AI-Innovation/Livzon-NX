@@ -12,6 +12,7 @@ import {
 import type { ScheduleExcelArchive } from '@/types/production'
 import BoardNavBlocks from '@/components/production/board-nav-blocks'
 import { useProductContextStore } from '@/stores/product-context'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
 const { Dragger } = Upload
@@ -26,6 +27,7 @@ type CellValue = string
 
 export default function SchedulingPage() {
   const { message } = App.useApp()
+  const { canDelete, canBulkImport, canExport } = useProductionPermissions(PRODUCTION_PAGE_KEYS.scheduling)
   const [archives, setArchives] = useState<ScheduleExcelArchive[]>([])
   const [loadingList, setLoadingList] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -52,6 +54,7 @@ export default function SchedulingPage() {
   }, [reloadList, productCode])
 
   const handleUpload = async (file: File) => {
+    if (!canBulkImport) return false
     setUploading(true)
     try {
       const formData = new FormData()
@@ -89,6 +92,7 @@ export default function SchedulingPage() {
   }
 
   const removeArchive = async (archiveId: string) => {
+    if (!canDelete) return
     try {
       const res = await deleteScheduleExcelArchive(archiveId)
       if (res.code === 200) {
@@ -229,10 +233,10 @@ export default function SchedulingPage() {
           <Button size="small" icon={<EyeOutlined />} onClick={() => openArchive(record.id)}>
             查看
           </Button>
-          <Button size="small" icon={<DownloadOutlined />} href={fileDownloadUrl(record.id)}>
+          {canExport && <Button size="small" icon={<DownloadOutlined />} href={fileDownloadUrl(record.id)}>
             下载原件
-          </Button>
-          <Popconfirm
+          </Button>}
+          {canDelete && <Popconfirm
             title="删除该排产存档？"
             description="删除后不可恢复，原件文件一并移除。"
             okText="删除"
@@ -241,7 +245,7 @@ export default function SchedulingPage() {
             onConfirm={() => removeArchive(record.id)}
           >
             <Button size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
+          </Popconfirm>}
         </Space>
       ),
     },
@@ -279,7 +283,7 @@ export default function SchedulingPage() {
             accept=".xlsx,.xls"
             multiple={false}
             showUploadList={false}
-            disabled={uploading}
+            disabled={!canBulkImport || uploading}
             beforeUpload={handleUpload}
           >
             <p className="text-4xl mb-2"><InboxOutlined /></p>
@@ -343,9 +347,9 @@ export default function SchedulingPage() {
           }
           extra={
             <Space size={4}>
-              <Button size="small" icon={<DownloadOutlined />} href={fileDownloadUrl(active.id)}>
+              {canExport && <Button size="small" icon={<DownloadOutlined />} href={fileDownloadUrl(active.id)}>
                 下载原件
-              </Button>
+              </Button>}
               <Button size="small" onClick={() => setActive(null)}>
                 收起
               </Button>

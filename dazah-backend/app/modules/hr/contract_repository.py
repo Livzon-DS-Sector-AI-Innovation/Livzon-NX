@@ -7,6 +7,10 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.hr.models import ContractManagement
+from app.platform.identity.data_scope import (
+    current_page_actor,
+    resolve_user_department_scope,
+)
 
 
 class ContractRepository:
@@ -26,6 +30,16 @@ class ContractRepository:
         base = select(ContractManagement).where(
             ContractManagement.is_deleted.is_(False),
         )
+        actor = current_page_actor.get()
+        if actor is not None:
+            scope = await resolve_user_department_scope(self.session, actor)
+            if not scope.is_all:
+                base = base.where(
+                    or_(
+                        ContractManagement.dept_level1.in_(scope.department_names),
+                        ContractManagement.dept_level2.in_(scope.department_names),
+                    )
+                )
         if approval_statuses:
             base = base.where(ContractManagement.approval_status.in_(approval_statuses))
         if keyword:
@@ -56,12 +70,21 @@ class ContractRepository:
         return list(result.scalars().all()), total
 
     async def get_by_id(self, record_id: UUID) -> Any:
-        result = await self.session.execute(
-            select(ContractManagement).where(
-                ContractManagement.id == record_id,
-                ContractManagement.is_deleted.is_(False),
-            )
+        statement = select(ContractManagement).where(
+            ContractManagement.id == record_id,
+            ContractManagement.is_deleted.is_(False),
         )
+        actor = current_page_actor.get()
+        if actor is not None:
+            scope = await resolve_user_department_scope(self.session, actor)
+            if not scope.is_all:
+                statement = statement.where(
+                    or_(
+                        ContractManagement.dept_level1.in_(scope.department_names),
+                        ContractManagement.dept_level2.in_(scope.department_names),
+                    )
+                )
+        result = await self.session.execute(statement)
         return result.scalar_one_or_none()
 
     async def create(self, data: dict[str, Any]) -> Any:

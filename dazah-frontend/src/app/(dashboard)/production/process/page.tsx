@@ -31,6 +31,7 @@ import { useProductionStore } from '@/stores/production'
 import { getProcessSpecs, createProcessSpec, updateProcessSpec, deleteProcessSpec } from '@/actions/production'
 import type { ProcessSpec, ProcessSpecFormData, ProcessSpecStatus } from '@/types/production'
 import { PROCESS_SPEC_STATUS_OPTIONS } from '@/types/production'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const getStatusColor = (status: ProcessSpecStatus) => {
   const option = PROCESS_SPEC_STATUS_OPTIONS.find((o) => o.value === status)
@@ -44,6 +45,7 @@ const getStatusLabel = (status: ProcessSpecStatus) => {
 
 export default function ProcessPage() {
   const { message, modal } = App.useApp()
+  const { canOperate, canDelete } = useProductionPermissions(PRODUCTION_PAGE_KEYS.process)
   const [form] = Form.useForm()
   const [editForm] = Form.useForm()
   const [loading, setLoading] = useState(false)
@@ -93,18 +95,21 @@ export default function ProcessPage() {
   }
 
   const handleAdd = () => {
+    if (!canOperate) return
     setEditingSpec(null)
     form.resetFields()
     setModalVisible(true)
   }
 
   const handleEdit = (record: ProcessSpec) => {
+    if (!canOperate) return
     setEditingSpec(record)
     editForm.setFieldsValue(record)
     setModalVisible(true)
   }
 
   const handleDelete = async (id: string) => {
+    if (!canDelete) return
     modal.confirm({
       title: '确认删除',
       content: '确定要删除这个工艺规程吗？',
@@ -125,6 +130,7 @@ export default function ProcessPage() {
   }
 
   const handleSubmit = async () => {
+    if (!canOperate) return
     try {
       const values = editingSpec ? await editForm.validateFields() : await form.validateFields()
 
@@ -223,12 +229,12 @@ export default function ProcessPage() {
           <Button type="link" size="small" icon={<EyeOutlined />}>
             查看
           </Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          {canOperate && <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             编辑
-          </Button>
-          <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
+          </Button>}
+          {canDelete && <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
             删除
-          </Button>
+          </Button>}
         </Space>
       ),
     },
@@ -239,9 +245,9 @@ export default function ProcessPage() {
       <Card
         title="工艺规程"
         extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+          canOperate ? <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
             新建规程
-          </Button>
+          </Button> : null
         }
       >
         <Row gutter={16} className="mb-4">
@@ -301,8 +307,8 @@ export default function ProcessPage() {
 
       <Modal
         title={editingSpec ? '编辑工艺规程' : '新建工艺规程'}
-        open={modalVisible}
-        onOk={handleSubmit}
+        open={modalVisible && canOperate}
+        onOk={canOperate ? handleSubmit : undefined}
         onCancel={() => setModalVisible(false)}
         width={600}
         okText="确认"

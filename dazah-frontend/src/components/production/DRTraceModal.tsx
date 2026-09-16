@@ -6,6 +6,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { Modal, Typography, Spin, Empty, Button, Tooltip } from 'antd'
 import { DownloadOutlined } from '@ant-design/icons'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from './useProductionPermissions'
 
 const { Text } = Typography
 const API = (p: string) => `/api/v1/production${p}`
@@ -198,6 +199,7 @@ function buildLayout(stages: StageGroup[], targetBatch: string, targetStage: str
 
 
 export default function DRTraceModal({ stage, batchNo, onClose, stageConfig, stageOrder, apiPrefix }: Props) {
+  const { canExport } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2013)
   const cfg = stageConfig || STAGE_CFG
   const order = stageOrder || STAGE_ORDER
   const apiPath = apiPrefix || '/dr/lineage'
@@ -252,7 +254,7 @@ export default function DRTraceModal({ stage, batchNo, onClose, stageConfig, sta
   return (
     <Modal
       title={<span>批次追溯：<Text strong style={{ color: '#f5222d', margin: '0 8px' }}>{batchNo}</Text>
-        <Button icon={<DownloadOutlined />} size="small" onClick={exportPng}>导出</Button>
+        {canExport && <Button icon={<DownloadOutlined />} size="small" onClick={exportPng}>导出</Button>}
       </span>}
       open onCancel={onClose} destroyOnHidden
       width={Math.min(window.innerWidth - 100, Math.max(1100, maxX + 100))}

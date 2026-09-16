@@ -93,8 +93,9 @@ async def test_rbac_role_user_department_and_menu_workflows(
         update_role=AsyncMock(return_value=role_updated),
         soft_delete_role=AsyncMock(),
         list_role_permission_codes=AsyncMock(return_value=["quality.read"]),
-        list_user_roles=AsyncMock(return_value=[role]),
+        list_user_roles=AsyncMock(return_value=[]),
         assign_user_role=AsyncMock(),
+        replace_user_roles=AsyncMock(),
         remove_user_role=AsyncMock(return_value=True),
         list_dept_rules=AsyncMock(return_value=[dept_rule]),
         get_role_by_id=AsyncMock(return_value=role),
@@ -119,6 +120,7 @@ async def test_rbac_role_user_department_and_menu_workflows(
     monkeypatch.setattr(rbac_api, "_audit", AsyncMock())
     monkeypatch.setattr(rbac_api, "publish_permissions_changed", AsyncMock())
     monkeypatch.setattr(rbac_api, "publish_permissions_changed_all", AsyncMock())
+    monkeypatch.setattr(rbac_api, "publish_data_scope_changed", AsyncMock())
     outbox = AsyncMock()
     monkeypatch.setattr(
         rbac_api.PermissionGrantRepository, "create_outbox_event", outbox

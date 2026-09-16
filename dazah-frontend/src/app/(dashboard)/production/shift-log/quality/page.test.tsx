@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from 'antd'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { clearProductionAuthForTest, setProductionAdminForTest } from '@/test/production-auth'
 
 import QualityPage from './page'
 
@@ -19,6 +20,7 @@ describe('ShiftLogQualityPage', () => {
   let container: HTMLElement
 
   beforeEach(() => {
+    setProductionAdminForTest()
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -27,6 +29,7 @@ describe('ShiftLogQualityPage', () => {
   afterEach(() => {
     act(() => root.unmount())
     container?.remove()
+    clearProductionAuthForTest()
   })
 
   it('renders the shift quality info page', async () => {

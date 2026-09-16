@@ -15,6 +15,33 @@ from app.platform.identity.models import (
 
 
 class PermissionGrantRepository:
+    async def list_module_access_by_user(
+        self,
+        db: AsyncSession,
+        *,
+        user_ids: list[UUID],
+        module_codes: set[str],
+    ) -> dict[UUID, set[str]]:
+        if not user_ids or not module_codes:
+            return {}
+        result = await db.execute(
+            select(
+                UserModuleGrant.user_id,
+                UserModuleGrant.module_code,
+                UserModuleGrant.permissions,
+            ).where(
+                UserModuleGrant.user_id.in_(user_ids),
+                UserModuleGrant.module_code.in_(module_codes),
+                UserModuleGrant.status == "active",
+                UserModuleGrant.is_deleted.is_(False),
+            )
+        )
+        allowed: dict[UUID, set[str]] = {}
+        for user_id, module_code, permissions in result.all():
+            if "module.view" in (permissions or []):
+                allowed.setdefault(user_id, set()).add(module_code)
+        return allowed
+
     async def has_module_view(
         self,
         db: AsyncSession,

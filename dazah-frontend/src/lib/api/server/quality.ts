@@ -140,13 +140,11 @@ export async function fetchFeishuValidationDashboardStatsServer(
 // ============ Document Catalog (文件管理) ============
 
 export async function fetchDocumentDepartmentsServer(): Promise<import('@/types/quality').DocumentDepartmentItem[]> {
-  try {
-    return await serverFetch<import('@/types/quality').DocumentDepartmentItem[]>(
-      '/api/v1/quality/document-departments'
-    )
-  } catch {
-    return []
-  }
+  const result = await serverApiFetch<import('@/types/quality').DocumentDepartmentItem[]>(
+    '/api/v1/quality/document-departments',
+    { headers: { 'X-Dazah-Page-Key': 'quality:documents' } },
+  )
+  return result.data ?? []
 }
 
 // ============ Label Verification (标签复核，端点挂在 /production 前缀下) ============

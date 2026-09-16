@@ -21,7 +21,7 @@ import {
 } from '@/actions/hr'
 import PositionTransferForm from './PositionTransferForm'
 import PositionTransferDetailDrawer from './PositionTransferDetailDrawer'
-import { usePermission } from '@/hooks/usePermission'
+import { usePagePermissions } from '@/hooks/usePagePermissions'
 
 interface PositionTransferClientProps {
   initialRecords: PositionTransferRecord[]
@@ -39,9 +39,12 @@ export default function PositionTransferClient({
   initialRecords,
   initialTotal,
 }: PositionTransferClientProps) {
-  // 编辑权限：仅人力资源部（hr:write）可新增/编辑/删除/提交审批，其他部门只读
-  const { has } = usePermission()
-  const canEditHr = has('hr:write')
+  const {
+    canOperate: canEditHr,
+    canDelete,
+    canExport,
+    canSync,
+  } = usePagePermissions('hr:position-transfer')
   const { message } = App.useApp()
   const [records, setRecords] = useState<PositionTransferRecord[]>(initialRecords)
   const [total, setTotal] = useState(initialTotal)
@@ -104,6 +107,7 @@ export default function PositionTransferClient({
   }
 
   const handleDelete = async (id: string) => {
+    if (!canDelete) return
     try {
       await deletePositionTransfer(id)
       message.success('删除成功')
@@ -114,6 +118,7 @@ export default function PositionTransferClient({
   }
 
   const handleExportPdf = async (record: PositionTransferRecord) => {
+    if (!canExport) return
     try {
       const res = await fetch(`/api/v1/hr/position-transfers/${record.id}/export`)
       if (!res.ok) throw new Error('导出失败')
@@ -130,6 +135,7 @@ export default function PositionTransferClient({
   }
 
   const handleSyncFeishu = async () => {
+    if (!canSync) return
     setSyncing(true)
     try {
       const res = await syncPositionTransferFromFeishuAction()
@@ -320,6 +326,9 @@ export default function PositionTransferClient({
                   />
                 </Tooltip>
               )}
+            </>
+          ) : null}
+          {canDelete ? (
               <Popconfirm
                 title="确认删除"
                 description="确定要删除该岗位调动记录吗？"
@@ -331,9 +340,8 @@ export default function PositionTransferClient({
                   <Button type="text" size="small" danger icon={<DeleteOutlined />} />
                 </Tooltip>
               </Popconfirm>
-            </>
           ) : null}
-          <Tooltip title="导出审批">
+          {canExport && <Tooltip title="导出审批">
             <Button
               type="text"
               size="small"
@@ -341,7 +349,7 @@ export default function PositionTransferClient({
               style={{ color: '#cc0000' }}
               onClick={() => handleExportPdf(record)}
             />
-          </Tooltip>
+          </Tooltip>}
         </Space>
       ),
     },
@@ -356,7 +364,7 @@ export default function PositionTransferClient({
             新增调动记录
           </Button>
         ) : null}
-        {canEditHr ? (
+        {canSync ? (
           <Button icon={<SyncOutlined spin={syncing} />} loading={syncing} onClick={handleSyncFeishu}>
             同步飞书
           </Button>

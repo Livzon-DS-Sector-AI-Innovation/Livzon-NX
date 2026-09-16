@@ -28,6 +28,7 @@ import {
   deleteProcessParameter,
 } from '@/actions/production'
 import type { ProcessSpec, ProcessStep, ProcessParameter, ProcessParameterFormData } from '@/types/production'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
 
@@ -38,12 +39,14 @@ function ParamFormModal({
   open,
   editing,
   stepId,
+  canOperate,
   onCancel,
   onSuccess,
 }: {
   open: boolean
   editing: ProcessParameter | null
   stepId: string
+  canOperate: boolean
   onCancel: () => void
   onSuccess: () => void
 }) {
@@ -63,6 +66,7 @@ function ParamFormModal({
   }, [open, editing, form])
 
   const handleOk = async () => {
+    if (!canOperate) return
     try {
       const values = await form.validateFields()
       setLoading(true)
@@ -99,9 +103,9 @@ function ParamFormModal({
   return (
     <Modal
       title={isEdit ? '编辑工艺参数' : '新建工艺参数'}
-      open={open}
+      open={open && canOperate}
       onCancel={onCancel}
-      onOk={handleOk}
+      onOk={canOperate ? handleOk : undefined}
       confirmLoading={loading}
       destroyOnHidden
       width={520}
@@ -152,6 +156,7 @@ function ParamFormModal({
 // ═══════════════════════════════════════════
 export default function ProcessParametersPage() {
   const { message } = App.useApp()
+  const { canOperate, canDelete } = useProductionPermissions(PRODUCTION_PAGE_KEYS.process)
 
   // 规格
   const [specs, setSpecs] = useState<ProcessSpec[]>([])
@@ -208,6 +213,7 @@ export default function ProcessParametersPage() {
   }, [selectedStepId, loadParams])
 
   const handleDelete = async (id: string) => {
+    if (!canDelete) return
     const res = await deleteProcessParameter(id)
     if (res.code === 200) {
       message.success('删除成功')
@@ -233,10 +239,10 @@ export default function ProcessParametersPage() {
       title: '操作', key: 'actions', width: 120,
       render: (_: any, record: ProcessParameter) => (
         <Space size="small">
-          <Button size="small" onClick={() => { setEditing(record); setModalOpen(true) }}>编辑</Button>
-          <Popconfirm title="确定删除？" onConfirm={() => handleDelete(record.id)}>
+          {canOperate && <Button size="small" onClick={() => { setEditing(record); setModalOpen(true) }}>编辑</Button>}
+          {canDelete && <Popconfirm title="确定删除？" onConfirm={() => handleDelete(record.id)}>
             <Button size="small" danger>删除</Button>
-          </Popconfirm>
+          </Popconfirm>}
         </Space>
       ),
     },
@@ -271,7 +277,7 @@ export default function ProcessParametersPage() {
             style={{ width: 200 }}
             options={steps.map(s => ({ value: s.id, label: `步骤${s.step_no}: ${s.step_name}` }))}
           />
-          {selectedStepId && (
+          {selectedStepId && canOperate && (
             <Button type="primary" icon={<PlusOutlined />}
               onClick={() => { setEditing(null); setModalOpen(true) }}>
               新建参数
@@ -299,6 +305,7 @@ export default function ProcessParametersPage() {
           open={modalOpen}
           editing={editing}
           stepId={selectedStepId}
+          canOperate={canOperate}
           onCancel={() => { setModalOpen(false); setEditing(null) }}
           onSuccess={() => { setModalOpen(false); setEditing(null); loadParams(selectedStepId) }}
         />

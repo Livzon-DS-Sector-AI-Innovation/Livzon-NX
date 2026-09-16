@@ -5,12 +5,17 @@ import { useEffect, useState, useRef } from 'react'
 import { Modal, Typography, Tag, Spin, Empty, Button, Input, Space, Popover } from 'antd'
 import { SendOutlined, HistoryOutlined, DownloadOutlined, BulbOutlined } from '@ant-design/icons'
 import { useFAChat } from '@/hooks/useFAChat'
+import {
+  PRODUCTION_PAGE_KEYS,
+  type ProductionPageKey,
+  useProductionPermissions,
+} from './useProductionPermissions'
 
 const { Text } = Typography
 const API = (p: string) => `/api/v1/production${p}`
 
 interface StageGroup { stage: string; label: string; nodes: any[]; note?: string }
-interface Props { stage: string; batchNo: string; onClose: () => void }
+interface Props { stage: string; batchNo: string; onClose: () => void; pageKey?: ProductionPageKey }
 
 // ── FA 工段颜色 ──
 const FA_STAGE_CFG: Record<string, { color: string }> = {
@@ -107,7 +112,8 @@ function buildLayout(stages: StageGroup[], targetBatch: string, targetStage: str
 }
 
 
-export default function FATraceModal({ stage, batchNo, onClose }: Props) {
+export default function FATraceModal({ stage, batchNo, onClose, pageKey }: Props) {
+  const { canExport } = useProductionPermissions(pageKey || PRODUCTION_PAGE_KEYS.overview)
   const [loading, setLoading] = useState(true)
   const [layout, setLayout] = useState<{ nodes: any[]; lines: any[]; notes: any[] }>({ nodes: [], lines: [], notes: [] })
   const [error, setError] = useState('')
@@ -120,7 +126,8 @@ export default function FATraceModal({ stage, batchNo, onClose }: Props) {
     historyRecords, historyLoading,
     doAiAnalysis, doChatSend, loadHistory,
     setChatInput, setChatMessages, setAiResult, aiResultRef,
-  } = useFAChat({ stage, batchNo })
+    canOperate, permissionsEnabled,
+  } = useFAChat({ stage, batchNo, pageKey })
 
   // 追溯查询
   useEffect(() => {
@@ -173,7 +180,9 @@ export default function FATraceModal({ stage, batchNo, onClose }: Props) {
         <Button size="small" type="primary" icon={<BulbOutlined />} loading={aiLoading} onClick={doAiAnalysis} style={{ marginLeft: 12 }}>
           AI 分析
         </Button>
-        <Button icon={<DownloadOutlined />} size="small" style={{ marginLeft: 8 }} onClick={exportPng}>导出</Button>
+        {(!permissionsEnabled || canExport) && (
+          <Button icon={<DownloadOutlined />} size="small" style={{ marginLeft: 8 }} onClick={exportPng}>导出</Button>
+        )}
         <Popover
           trigger="click" onOpenChange={(open) => { if (open) loadHistory() }} placement="bottomLeft"
           title="分析历史"
@@ -312,9 +321,9 @@ export default function FATraceModal({ stage, batchNo, onClose }: Props) {
                     value={chatInput}
                     onChange={e => setChatInput(e.target.value)}
                     onPressEnter={doChatSend}
-                    disabled={chatSending}
+                    disabled={chatSending || (permissionsEnabled && !canOperate)}
                   />
-                  <Button size="small" type="primary" icon={<SendOutlined />} loading={chatSending} onClick={doChatSend} />
+                    {(!permissionsEnabled || canOperate) && <Button size="small" type="primary" icon={<SendOutlined />} loading={chatSending} onClick={doChatSend} />}
                 </Space.Compact>
               </div>
             </div>

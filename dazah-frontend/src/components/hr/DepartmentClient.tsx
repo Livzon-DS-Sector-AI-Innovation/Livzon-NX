@@ -10,6 +10,7 @@ import DepartmentDetailDrawer from './DepartmentDetailDrawer'
 import DepartmentForm from './DepartmentForm'
 import DepartmentToolbar from './DepartmentToolbar'
 import DepartmentTreeView from './DepartmentTreeView'
+import { usePagePermissions } from '@/hooks/usePagePermissions'
 
 interface DepartmentClientProps {
   initialDepartments: Department[]
@@ -27,6 +28,9 @@ export default function DepartmentClient({
   initialOrgTreeData = [],
 }: DepartmentClientProps) {
   const { message } = App.useApp()
+  const { canOperate: canEdit, canDelete, canSync } = usePagePermissions(
+    'hr:departments',
+  )
 
   // 视图状态
   const [activeView, setActiveView] = useState<'table' | 'tree'>('table')
@@ -50,9 +54,6 @@ export default function DepartmentClient({
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [selectedDept, setSelectedDept] = useState<Department | null>(null)
   const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null)
-
-  // 权限（Phase 1 暂用 true，后续接入 usePermission）
-  const canEdit = true
 
   // 加载表格数据
   const loadTableData = useCallback(async (page?: number, pageSize?: number) => {
@@ -157,20 +158,23 @@ export default function DepartmentClient({
 
   // 新增部门
   const handleAdd = useCallback((parentId?: string) => {
+    if (!canEdit) return
     setEditingDept(null)
     setAddParentId(parentId ?? null)
     setFormOpen(true)
-  }, [])
+  }, [canEdit])
 
   // 编辑部门
   const handleEdit = useCallback((dept: Department) => {
+    if (!canEdit) return
     setEditingDept(dept)
     setAddParentId(null)
     setFormOpen(true)
-  }, [])
+  }, [canEdit])
 
   // 删除部门
   const handleDelete = useCallback(async (id: string) => {
+    if (!canDelete) return
     try {
       await deleteDepartment(id)
       message.success('部门已删除')
@@ -183,7 +187,7 @@ export default function DepartmentClient({
     } catch (err) {
       message.error((err instanceof Error ? err.message : '') || '删除失败')
     }
-  }, [message, loadTableData, loadTreeData, drawerOpen, selectedDept])
+  }, [canDelete, message, loadTableData, loadTreeData, drawerOpen, selectedDept])
 
   // 表单成功回调
   const handleFormSuccess = useCallback(() => {
@@ -192,7 +196,7 @@ export default function DepartmentClient({
   }, [loadTableData, loadTreeData])
 
   // 飞书同步（使用共享轮询 hook）
-  const { isSyncing, startSync: handleSync } = useSyncPolling({
+  const { isSyncing, startSync } = useSyncPolling({
     syncAction: syncDepartmentsFromFeishuAction,
     pollAction: getDepartmentSyncStatus,
     maxPolls: 90,
@@ -215,12 +219,16 @@ export default function DepartmentClient({
       message.error(msg)
     },
   })
+  const handleSync = useCallback(() => {
+    if (canSync) startSync()
+  }, [canSync, startSync])
 
   // 挂载后静默自动同步飞书：确保打开页面看到最新数据（后台执行，不阻塞页面）
   useEffect(() => {
     let cancelled = false
     const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
     const autoSync = async () => {
+      if (!canSync) return
       try {
         await syncDepartmentsFromFeishuAction()
         // 最多轮询 3 分钟，超时静默放弃
@@ -246,7 +254,7 @@ export default function DepartmentClient({
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [canSync])
 
   // 表格视图：一级部门展开规则
   // 质量管理部/安全部/201车间/生产管理部 不显示本身，展开显示其二级部门
@@ -280,6 +288,7 @@ export default function DepartmentClient({
         activeView={activeView}
         onViewChange={setActiveView}
         canEdit={canEdit}
+        canSync={canSync}
         onAdd={() => handleAdd()}
         onSync={handleSync}
         syncing={isSyncing}
@@ -296,6 +305,7 @@ export default function DepartmentClient({
           onEdit={handleEdit}
           onDelete={handleDelete}
           canEdit={canEdit}
+          canDelete={canDelete}
           allDepartments={allDepartments}
         />
       ) : (
@@ -303,6 +313,7 @@ export default function DepartmentClient({
           departments={treeDepartments}
           selectedDepartmentId={selectedDeptId}
           canEdit={canEdit}
+          canDelete={canDelete}
           onSelect={setSelectedDeptId}
           onAdd={handleAdd}
           onEdit={handleEdit}
@@ -316,6 +327,7 @@ export default function DepartmentClient({
         open={drawerOpen}
         department={selectedDept}
         canEdit={canEdit}
+        canDelete={canDelete}
         onClose={() => { setDrawerOpen(false); setSelectedDept(null) }}
         onEdit={(dept) => { setDrawerOpen(false); handleEdit(dept) }}
         onDelete={(id) => handleDelete(id)}

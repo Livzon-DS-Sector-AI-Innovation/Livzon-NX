@@ -14,7 +14,7 @@ export default async function UserRolesPage() {
       <div>
         <h1 className="text-xl font-semibold text-[var(--color-charcoal)]">用户角色</h1>
         <p className="text-sm text-[var(--color-stone)] mt-1">
-          为用户手动分配角色并设置模块访问权限；模块内页面与操作权限由角色决定。
+          为用户分配页面权限角色基线，并分别管理模块入口和用户页面覆盖。
         </p>
       </div>
       <UserRoleManager initialRoles={roles} initialDepartments={departments} />

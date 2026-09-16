@@ -10,6 +10,7 @@ from app.modules.registration.models import (
     RegistrationCertificateReminderNotification,
     RegistrationCertificateReminderSetting,
 )
+from app.modules.registration.page_scope import visible_sheet_keys
 
 
 class RegistrationCertificateRepository:
@@ -29,6 +30,9 @@ class RegistrationCertificateRepository:
             select(RegistrationCertificateEntry).where(
                 RegistrationCertificateEntry.id == entry_id,
                 RegistrationCertificateEntry.is_deleted.is_(False),
+                RegistrationCertificateEntry.sheet_key.in_(
+                    await visible_sheet_keys(self.session, "certificate-management")
+                ),
             )
         )
         return result.scalar_one_or_none()
@@ -41,7 +45,10 @@ class RegistrationCertificateRepository:
         expiry_status: str | None = None,
     ) -> list[RegistrationCertificateEntry]:
         stmt = select(RegistrationCertificateEntry).where(
-            RegistrationCertificateEntry.is_deleted.is_(False)
+            RegistrationCertificateEntry.is_deleted.is_(False),
+            RegistrationCertificateEntry.sheet_key.in_(
+                await visible_sheet_keys(self.session, "certificate-management")
+            ),
         )
 
         if sheet_key:
@@ -85,6 +92,9 @@ class RegistrationCertificateRepository:
         result = await self.session.execute(
             select(func.max(RegistrationCertificateEntry.source_sequence)).where(
                 RegistrationCertificateEntry.is_deleted.is_(False),
+                RegistrationCertificateEntry.sheet_key.in_(
+                    await visible_sheet_keys(self.session, "certificate-management")
+                ),
                 RegistrationCertificateEntry.sheet_key == sheet_key,
             )
         )

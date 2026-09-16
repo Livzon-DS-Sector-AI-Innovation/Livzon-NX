@@ -51,6 +51,9 @@ class BatchBase(BaseModel):
     planned_qty: float | None = Field(None, ge=0, description="计划数量")
     process_spec_id: uuid.UUID | None = Field(None, description="工艺规程ID")
     production_line: str | None = Field(None, max_length=100, description="生产线")
+    workshop_code: str | None = Field(
+        None, max_length=32, description="所属车间编码；空值表示待确认"
+    )
     notes: str | None = Field(None, description="备注")
 
 
@@ -71,6 +74,7 @@ class BatchUpdate(BaseModel):
     planned_qty: float | None = Field(None, ge=0, description="计划数量")
     process_spec_id: uuid.UUID | None = Field(None, description="工艺规程ID")
     production_line: str | None = Field(None, max_length=100, description="生产线")
+    workshop_code: str | None = Field(None, max_length=32, description="所属车间编码")
     start_time: datetime | None = Field(None, description="开始时间")
     end_time: datetime | None = Field(None, description="结束时间")
     status: BatchStatus | None = Field(None, description="状态")

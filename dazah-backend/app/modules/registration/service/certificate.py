@@ -28,6 +28,11 @@ from app.modules.registration.models import (
     RegistrationCertificateEntry,
     RegistrationCertificateReminderNotification,
 )
+from app.modules.registration.page_scope import (
+    authorize_sheet,
+    authorized_workbook,
+    visible_sheet_keys,
+)
 from app.modules.registration.repository import RegistrationCertificateRepository
 from app.modules.registration.schemas.certificate import (
     CertificateColumn,
@@ -483,9 +488,7 @@ def _build_reminder_content(
         "reminder_days": str(reminder_days),
         "overflow_count": str(max(count - _REMINDER_PREVIEW_LIMIT, 0)),
     }
-    header = _render_template(
-        header_template, _DEFAULT_REMINDER_HEADER, template_vars
-    )
+    header = _render_template(header_template, _DEFAULT_REMINDER_HEADER, template_vars)
     lines = [header, ""]
     preview_entries = entries[:_REMINDER_PREVIEW_LIMIT]
     for index, entry in enumerate(preview_entries, start=1):
@@ -887,10 +890,15 @@ class CertificateWorkbookService:
         await self.ensure_seeded()
         workbook_path = _get_certificate_workbook_path()
         entries = await self.repository.list_entries()
+        allowed_sheets = await visible_sheet_keys(
+            self.session, "certificate-management"
+        )
 
         sheet_summaries: list[CertificateSheetSummary] = []
         for sheet_meta in CERTIFICATE_SHEET_CONFIG:
             sheet_key = str(sheet_meta["key"])
+            if sheet_key not in allowed_sheets:
+                continue
             sheet_entries = [entry for entry in entries if entry.sheet_key == sheet_key]
             sheet_summaries.append(_build_sheet_summary(sheet_key, sheet_entries))
 
@@ -919,7 +927,7 @@ class CertificateWorkbookService:
             if workbook_path.exists()
             else None,
             total_records=len(entries),
-            sheet_count=len(CERTIFICATE_SHEET_CONFIG),
+            sheet_count=len(sheet_summaries),
             issuer_count=len(
                 {
                     entry.issuing_authority
@@ -954,10 +962,15 @@ class CertificateWorkbookService:
         await self.ensure_seeded()
         workbook_path = _get_certificate_workbook_path()
         entries = await self.repository.list_entries()
+        allowed_sheets = await visible_sheet_keys(
+            self.session, "certificate-management"
+        )
 
         sheets: list[CertificateWorkbookSheet] = []
         for sheet_meta in CERTIFICATE_SHEET_CONFIG:
             sheet_key = str(sheet_meta["key"])
+            if sheet_key not in allowed_sheets:
+                continue
             sheet_name = str(sheet_meta["name"])
             sheet_entries = [entry for entry in entries if entry.sheet_key == sheet_key]
             sheets.append(
@@ -985,90 +998,100 @@ class CertificateWorkbookService:
     async def import_workbook(
         self, upload_file: UploadFile
     ) -> CertificateWorkbookImportResult:
-        filename, content = await read_upload_secure(
-            upload_file,
-            max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
-            allowed_extensions={".xlsx"},
-            what="药政证书台账",
-        )
-
-        await self.ensure_seeded()
-        old_entries = await self.repository.list_entries()
-        parsed_entries = await asyncio.to_thread(
-            _load_entries_from_workbook_bytes, content
-        )
-
-        try:
-            await self.repository.soft_delete_many(old_entries)
-            if parsed_entries:
-                await self.repository.create_entries(parsed_entries)
-            await self.session.commit()
-        except Exception:
-            await self.session.rollback()
-            raise
-
-        # 配置文件缺失时，将本次上传落盘到配置路径（create-if-missing，绝不覆盖）
-        config_path = _get_certificate_workbook_path()
-        if not config_path.exists():
-            try:
-                config_path.parent.mkdir(parents=True, exist_ok=True)
-                config_path.write_bytes(content)
-                logger.info("药政证书台账配置文件已从上传创建: %s", config_path)
-            except OSError as exc:
-                logger.warning(
-                    "药政证书台账配置文件落盘失败（%s），数据已入库但导出/种子将不可用",
-                    exc,
-                )
-
-        return CertificateWorkbookImportResult(
-            workbook_name=filename,
-            imported_sheet_count=len(CERTIFICATE_SHEET_CONFIG),
-            imported_record_count=len(parsed_entries),
-            replaced_record_count=len(old_entries),
-        )
-
-    async def export_workbook(self) -> tuple[Path, str]:
-        await self.ensure_seeded()
-        workbook_path = _get_certificate_workbook_path()
-        if not workbook_path.exists():
-            raise NotFoundException(
-                "药政证书台账文件",
-                f"{workbook_path}（请先在页面导入台账文件后再导出）",
+        async with authorized_workbook(
+            self.session, "certificate-management", "bulk_import"
+        ):
+            filename, content = await read_upload_secure(
+                upload_file,
+                max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+                allowed_extensions={".xlsx"},
+                what="药政证书台账",
             )
 
-        temp_dir = Path(tempfile.mkdtemp(prefix="certificate-workbook-export-"))
-        export_path = temp_dir / "药政证书台账-导出.xlsx"
-        await asyncio.to_thread(shutil.copyfile, workbook_path, export_path)
+            await self.ensure_seeded()
+            old_entries = await self.repository.list_entries()
+            parsed_entries = await asyncio.to_thread(
+                _load_entries_from_workbook_bytes, content
+            )
 
-        workbook = await asyncio.to_thread(load_workbook, export_path)
-        try:
-            entries = await self.repository.list_entries()
-            for sheet_meta in CERTIFICATE_SHEET_CONFIG:
-                sheet_key = str(sheet_meta["key"])
-                sheet_name = str(sheet_meta["name"])
-                headers = _get_sheet_headers(sheet_meta)
-                worksheet = workbook[sheet_name]
-                sheet_entries = [
-                    entry for entry in entries if entry.sheet_key == sheet_key
-                ]
-                row_values = [
-                    {"序号": entry.source_sequence or index, **_build_row_values(entry)}
-                    for index, entry in enumerate(sheet_entries, start=1)
-                ]
-                _fill_certificate_sheet(
-                    worksheet,
-                    row_values,
-                    headers=headers,
-                    start_row=3,
-                    template_row=3,
+            try:
+                await self.repository.soft_delete_many(old_entries)
+                if parsed_entries:
+                    await self.repository.create_entries(parsed_entries)
+                await self.session.commit()
+            except Exception:
+                await self.session.rollback()
+                raise
+
+            # 配置文件缺失时，将本次上传落盘到配置路径（create-if-missing，绝不覆盖）
+            config_path = _get_certificate_workbook_path()
+            if not config_path.exists():
+                try:
+                    config_path.parent.mkdir(parents=True, exist_ok=True)
+                    config_path.write_bytes(content)
+                    logger.info("药政证书台账配置文件已从上传创建: %s", config_path)
+                except OSError as exc:
+                    logger.warning(
+                        "药政证书台账配置文件落盘失败（%s），数据已入库但导出/种子将不可用",
+                        exc,
+                    )
+
+            return CertificateWorkbookImportResult(
+                workbook_name=filename,
+                imported_sheet_count=len(CERTIFICATE_SHEET_CONFIG),
+                imported_record_count=len(parsed_entries),
+                replaced_record_count=len(old_entries),
+            )
+
+    async def export_workbook(self) -> tuple[Path, str]:
+        async with authorized_workbook(
+            self.session, "certificate-management", "sensitive_export"
+        ):
+            await self.ensure_seeded()
+            workbook_path = _get_certificate_workbook_path()
+            if not workbook_path.exists():
+                raise NotFoundException(
+                    "药政证书台账文件",
+                    f"{workbook_path}（请先在页面导入台账文件后再导出）",
                 )
-            await asyncio.to_thread(workbook.save, export_path)
-        finally:
-            workbook.close()
 
-        return export_path, "药政证书台账-导出.xlsx"
+            temp_dir = Path(tempfile.mkdtemp(prefix="certificate-workbook-export-"))
+            export_path = temp_dir / "药政证书台账-导出.xlsx"
+            await asyncio.to_thread(shutil.copyfile, workbook_path, export_path)
+
+            workbook = await asyncio.to_thread(load_workbook, export_path)
+            try:
+                entries = await self.repository.list_entries()
+                for sheet_meta in CERTIFICATE_SHEET_CONFIG:
+                    sheet_key = str(sheet_meta["key"])
+                    sheet_name = str(sheet_meta["name"])
+                    headers = _get_sheet_headers(sheet_meta)
+                    worksheet = workbook[sheet_name]
+                    sheet_entries = [
+                        entry for entry in entries if entry.sheet_key == sheet_key
+                    ]
+                    row_values = [
+                        {
+                            "序号": entry.source_sequence or index,
+                            **_build_row_values(entry),
+                        }
+                        for index, entry in enumerate(sheet_entries, start=1)
+                    ]
+                    _fill_certificate_sheet(
+                        worksheet,
+                        row_values,
+                        headers=headers,
+                        start_row=3,
+                        template_row=3,
+                    )
+                await asyncio.to_thread(workbook.save, export_path)
+            finally:
+                workbook.close()
+
+            return export_path, "药政证书台账-导出.xlsx"
 
     async def get_sheet_detail(self, sheet_key: str) -> CertificateSheetDetail:
+        await authorize_sheet(self.session, "certificate-management", sheet_key)
         await self.ensure_seeded()
         meta = _get_sheet_meta(sheet_key)
         entries = await self.repository.list_entries(sheet_key=sheet_key)
@@ -1094,6 +1117,7 @@ class CertificateWorkbookService:
     async def create_entry(
         self, data: CertificateEntryCreate
     ) -> CertificateEntryResponse:
+        await authorize_sheet(self.session, "certificate-management", data.sheet_key)
         await self.ensure_seeded()
         meta = _get_sheet_meta(data.sheet_key)
         payload = data.model_dump()
@@ -1267,9 +1291,7 @@ class CertificateWorkbookService:
         """测试消息样例：到期日最近的 3 条台账，无数据时用合成样例。"""
         entries = await self.repository.list_entries()
         dated = [
-            entry
-            for entry in entries
-            if _extract_date(entry.expiry_date) is not None
+            entry for entry in entries if _extract_date(entry.expiry_date) is not None
         ]
 
         def _abs_days(item: RegistrationCertificateEntry) -> int:
@@ -1307,9 +1329,7 @@ class CertificateWorkbookService:
         if not normalized_open_id:
             raise AppException(message="测试发送前请先选择通知人")
 
-        recipient = await self._get_qa_reminder_recipient_by_open_id(
-            normalized_open_id
-        )
+        recipient = await self._get_qa_reminder_recipient_by_open_id(normalized_open_id)
         if recipient is None:
             # 与真实发送一致：已保存的通知人即使之后调离 QA 名单也允许测试验证
             setting = await self.repository.get_reminder_setting()

@@ -16,6 +16,10 @@ const apiClient = vi.hoisted(() => ({
   fetchQaPersonOptions: vi.fn(),
 }))
 
+vi.mock('@/hooks/usePagePermissions', () => ({
+  usePagePermissions: () => ({ canSync: true }),
+}))
+
 vi.mock('@/actions/quality', () => qualityActions)
 vi.mock('@/lib/api/client/quality', () => apiClient)
 

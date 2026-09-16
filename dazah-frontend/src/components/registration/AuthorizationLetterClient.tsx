@@ -19,6 +19,7 @@ import {
   Typography,
 } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
+import { usePagePermissions } from '@/hooks/usePagePermissions'
 import {
   createAuthorizationFdaEntry,
   createAuthorizationLedgerMain,
@@ -335,6 +336,7 @@ export default function AuthorizationLetterClient({
   initialFdaRecords,
 }: AuthorizationLetterClientProps) {
   const { message } = App.useApp()
+  const { canOperate, canDelete, canExport } = usePagePermissions('registration:authorization-letter')
   const [ledgerMainForm] = Form.useForm<AuthorizationLedgerEntryInput>()
   const [ledgerUpdateForm] = Form.useForm<LedgerUpdateFormValues>()
   const [fdaForm] = Form.useForm<AuthorizationFdaEntryInput>()
@@ -666,18 +668,21 @@ export default function AuthorizationLetterClient({
   }
 
   function openCreateLedgerMainModal() {
+    if (!canOperate) return
     setLedgerMainModalMode('create')
     setEditingLedgerMain(null)
     setLedgerMainModalOpen(true)
   }
 
   function openEditLedgerMainModal(record: AuthorizationLedgerRecord) {
+    if (!canOperate) return
     setLedgerMainModalMode('edit')
     setEditingLedgerMain(record)
     setLedgerMainModalOpen(true)
   }
 
   function openCreateLedgerUpdateModal(record: AuthorizationLedgerRecord) {
+    if (!canOperate) return
     setLedgerUpdateModalMode('create')
     setUpdateParentRecord(record)
     setEditingLedgerUpdate(null)
@@ -688,6 +693,7 @@ export default function AuthorizationLetterClient({
     record: AuthorizationLedgerRecord,
     update: AuthorizationLedgerUpdateRecord
   ) {
+    if (!canOperate) return
     setLedgerUpdateModalMode('edit')
     setUpdateParentRecord(record)
     setEditingLedgerUpdate(update)
@@ -695,11 +701,13 @@ export default function AuthorizationLetterClient({
   }
 
   function openCreateFdaModal() {
+    if (!canOperate) return
     setEditingFdaRecord(null)
     setFdaModalOpen(true)
   }
 
   function openEditFdaModal(record: AuthorizationFdaRecord) {
+    if (!canOperate) return
     setEditingFdaRecord(record)
     setFdaModalOpen(true)
   }
@@ -710,6 +718,7 @@ export default function AuthorizationLetterClient({
   }
 
   async function handleLedgerMainSubmit() {
+    if (!canOperate) return
     const values = await ledgerMainForm.validateFields()
     setLedgerMainSubmitting(true)
 
@@ -744,6 +753,7 @@ export default function AuthorizationLetterClient({
   }
 
   async function handleLedgerUpdateSubmit() {
+    if (!canOperate) return
     if (!updateParentRecord?.id) {
       message.error('未找到对应的主记录')
       return
@@ -784,6 +794,7 @@ export default function AuthorizationLetterClient({
   }
 
   async function handleFdaSubmit() {
+    if (!canOperate) return
     const values = await fdaForm.validateFields()
     setFdaSubmitting(true)
 
@@ -808,6 +819,7 @@ export default function AuthorizationLetterClient({
   }
 
   async function handleDeleteLedgerMain(record: AuthorizationLedgerRecord) {
+    if (!canDelete) return
     if (!record.id) {
       return
     }
@@ -825,6 +837,7 @@ export default function AuthorizationLetterClient({
     record: AuthorizationLedgerRecord,
     update: AuthorizationLedgerUpdateRecord
   ) {
+    if (!canDelete) return
     if (!record.id || !update.id) {
       return
     }
@@ -844,6 +857,7 @@ export default function AuthorizationLetterClient({
   }
 
   async function handleDeleteFda(record: AuthorizationFdaRecord) {
+    if (!canDelete) return
     if (!record.id) {
       return
     }
@@ -858,6 +872,7 @@ export default function AuthorizationLetterClient({
   }
 
   async function handleExportFda() {
+    if (!canExport) return
     setExportingFda(true)
 
     try {
@@ -874,6 +889,7 @@ export default function AuthorizationLetterClient({
   }
 
   async function handleExportLedger() {
+    if (!canExport) return
     setExportingLedger(true)
 
     try {
@@ -892,6 +908,7 @@ export default function AuthorizationLetterClient({
   }
 
   async function handleQuickStatusChange(record: AuthorizationLedgerRecord, status: string) {
+    if (!canOperate) return
     if (!record.id || record.status === status) {
       return
     }
@@ -1064,15 +1081,15 @@ export default function AuthorizationLetterClient({
               <Tag color="blue">{filteredFdaRecords.length} 条</Tag>
             </Space>
             <Space>
-              <Button icon={<DownloadOutlined />} loading={exportingFda} onClick={() => void handleExportFda()}>
+              <Button disabled={!canExport} title={!canExport ? '需要敏感导出权限' : undefined} icon={<DownloadOutlined />} loading={exportingFda} onClick={() => void handleExportFda()}>
                 导出FDA授权
               </Button>
-              <Button icon={<PlusOutlined />} onClick={openCreateFdaModal}>
+              <Button disabled={!canOperate} icon={<PlusOutlined />} onClick={openCreateFdaModal}>
                 新增FDA授权
               </Button>
               <Button
                 icon={<EditOutlined />}
-                disabled={!selectedFdaRecord}
+                disabled={!canOperate || !selectedFdaRecord}
                 onClick={() => {
                   if (!selectedFdaRecord) {
                     message.warning('请先选择一条FDA授权')
@@ -1085,7 +1102,7 @@ export default function AuthorizationLetterClient({
               </Button>
               <Popconfirm
                 title="确定删除选中的 FDA 授权吗？"
-                disabled={!selectedFdaRecord}
+                disabled={!canDelete || !selectedFdaRecord}
                 onConfirm={() => {
                   if (!selectedFdaRecord) {
                     message.warning('请先选择一条FDA授权')
@@ -1094,7 +1111,7 @@ export default function AuthorizationLetterClient({
                   return handleDeleteFda(selectedFdaRecord)
                 }}
               >
-                <Button danger icon={<DeleteOutlined />} disabled={!selectedFdaRecord}>
+                <Button danger icon={<DeleteOutlined />} disabled={!canDelete || !selectedFdaRecord}>
                   删除选中
                 </Button>
               </Popconfirm>
@@ -1122,10 +1139,10 @@ export default function AuthorizationLetterClient({
               <Tag color="purple">{filteredLedgerRecords.length} 条主记录</Tag>
             </Space>
             <Space wrap>
-              <Button icon={<DownloadOutlined />} loading={exportingLedger} onClick={() => void handleExportLedger()}>
+              <Button disabled={!canExport} title={!canExport ? '需要敏感导出权限' : undefined} icon={<DownloadOutlined />} loading={exportingLedger} onClick={() => void handleExportLedger()}>
                 导出市场授权
               </Button>
-              <Button type="primary" icon={<PlusOutlined />} onClick={openCreateLedgerMainModal}>
+              <Button disabled={!canOperate} type="primary" icon={<PlusOutlined />} onClick={openCreateLedgerMainModal}>
                 新增市场授权
               </Button>
               <Button
@@ -1136,13 +1153,13 @@ export default function AuthorizationLetterClient({
                   }
                   openCreateLedgerUpdateModal(selectedLedgerMain)
                 }}
-                disabled={!selectedLedgerMain}
+                disabled={!canOperate || !selectedLedgerMain}
               >
                 新增更新
               </Button>
               <Button
                 icon={<EditOutlined />}
-                disabled={!selectedLedgerMain}
+                disabled={!canOperate || !selectedLedgerMain}
                 onClick={() => {
                   if (!selectedLedgerMain) {
                     message.warning('请先选择一条主记录')
@@ -1155,7 +1172,7 @@ export default function AuthorizationLetterClient({
               </Button>
               <Button
                 icon={<EditOutlined />}
-                disabled={!selectedLedgerMain || !selectedLedgerUpdate}
+                disabled={!canOperate || !selectedLedgerMain || !selectedLedgerUpdate}
                 onClick={() => {
                   if (!selectedLedgerMain || !selectedLedgerUpdate) {
                     message.warning('请先选择一条更新子行')
@@ -1168,7 +1185,7 @@ export default function AuthorizationLetterClient({
               </Button>
               <Popconfirm
                 title="确定删除选中的主记录吗？"
-                disabled={!selectedLedgerMain}
+                disabled={!canDelete || !selectedLedgerMain}
                 onConfirm={() => {
                   if (!selectedLedgerMain) {
                     message.warning('请先选择一条主记录')
@@ -1177,13 +1194,13 @@ export default function AuthorizationLetterClient({
                   return handleDeleteLedgerMain(selectedLedgerMain)
                 }}
               >
-                <Button danger icon={<DeleteOutlined />} disabled={!selectedLedgerMain}>
+                <Button danger icon={<DeleteOutlined />} disabled={!canDelete || !selectedLedgerMain}>
                   删除主记录
                 </Button>
               </Popconfirm>
               <Popconfirm
                 title="确定删除选中的更新子行吗？"
-                disabled={!selectedLedgerMain || !selectedLedgerUpdate}
+                disabled={!canDelete || !selectedLedgerMain || !selectedLedgerUpdate}
                 onConfirm={() => {
                   if (!selectedLedgerMain || !selectedLedgerUpdate) {
                     message.warning('请先选择一条更新子行')
@@ -1192,7 +1209,7 @@ export default function AuthorizationLetterClient({
                   return handleDeleteLedgerUpdate(selectedLedgerMain, selectedLedgerUpdate)
                 }}
               >
-                <Button danger disabled={!selectedLedgerMain || !selectedLedgerUpdate}>
+                <Button danger disabled={!canDelete || !selectedLedgerMain || !selectedLedgerUpdate}>
                   删除更新
                 </Button>
               </Popconfirm>
@@ -1219,7 +1236,7 @@ export default function AuthorizationLetterClient({
                   size="small"
                   style={{ width: 128 }}
                   value={selectedLedgerMain?.status || '待确认'}
-                  disabled={!selectedLedgerMain}
+                  disabled={!canOperate || !selectedLedgerMain}
                   loading={statusUpdatingId === selectedLedgerMain?.id}
                   options={STATUS_OPTIONS.map((item) => ({ label: item, value: item }))}
                   onChange={(nextValue) => {
@@ -1350,7 +1367,7 @@ export default function AuthorizationLetterClient({
 
       <Modal
         title={editingFdaRecord ? '编辑 FDA 授权' : '新增 FDA 授权'}
-        open={fdaModalOpen}
+        open={fdaModalOpen && canOperate}
         onCancel={() => setFdaModalOpen(false)}
         onOk={() => void handleFdaSubmit()}
         confirmLoading={fdaSubmitting}
@@ -1414,7 +1431,7 @@ export default function AuthorizationLetterClient({
 
       <Modal
         title={ledgerMainModalMode === 'edit' ? '编辑市场授权主记录' : '新增市场授权主记录'}
-        open={ledgerMainModalOpen}
+        open={ledgerMainModalOpen && canOperate}
         onCancel={resetLedgerMainModal}
         onOk={() => void handleLedgerMainSubmit()}
         confirmLoading={ledgerMainSubmitting}
@@ -1526,7 +1543,7 @@ export default function AuthorizationLetterClient({
 
       <Modal
         title={ledgerUpdateModalMode === 'edit' ? '编辑更新子行' : '新增更新子行'}
-        open={ledgerUpdateModalOpen}
+        open={ledgerUpdateModalOpen && canOperate}
         onCancel={resetLedgerUpdateModal}
         onOk={() => void handleLedgerUpdateSubmit()}
         confirmLoading={ledgerUpdateSubmitting}

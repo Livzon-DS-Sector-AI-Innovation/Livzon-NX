@@ -270,8 +270,21 @@ async def _assert_hr_write(db: AsyncSession, current_user: CurrentUser) -> None:
 
     _require_user(current_user)
     assert current_user is not None
+    from app.platform.identity.data_scope import current_page_key
+    from app.platform.identity.page_permissions import PagePermissionService
     from app.platform.identity.rbac import resolve_user_permissions
 
+    page_key = current_page_key.get()
+    if page_key and page_key.startswith("hr:"):
+        if current_user.role == "admin":
+            return
+        grants = await PagePermissionService().effective_grants(db, user=current_user)
+        if any(
+            grant.page_key == page_key and "operate" in grant.permissions
+            for grant in grants
+        ):
+            return
+        raise AppException(status_code=403, message="无权操作当前人事页面")
     permissions = await resolve_user_permissions(db, current_user.id)
     if "*" in permissions or "hr:write" in permissions:
         return
@@ -296,7 +309,7 @@ def _legacy_record_payload(record: Any) -> dict[str, Any]:
 async def _resolve_visible_scope(
     db: AsyncSession, current_user: CurrentUser
 ) -> set[str] | None:
-    """解析当前用户可见部门的档案别名集合；None = 全部可见（管理员 hr:write）。"""
+    """解析当前页面可见部门；没有页面上下文时兼容历史部门别名。"""
     from app.modules.hr.training_dept_resolver import resolve_visible_dept_alias_set
 
     _require_user(current_user)
@@ -305,6 +318,12 @@ async def _resolve_visible_scope(
     if current_page_key.get() == EMPLOYEE_PAGE_KEY:
         scope = await employee_page_scope(db)
         assert scope is not None
+        return None if scope.is_all else scope.department_names
+    if (current_page_key.get() or "").startswith("hr:"):
+        from app.platform.identity.data_scope import resolve_user_department_scope
+
+        assert current_user is not None
+        scope = await resolve_user_department_scope(db, current_user)
         return None if scope.is_all else scope.department_names
     return await resolve_visible_dept_alias_set(db, current_user)
 
@@ -2453,9 +2472,7 @@ async def init_dept_approval_configs_from_departments(
 # ─── TrainingLedger Routes ───
 
 
-async def _attach_ledger_attendance(
-    db: AsyncSession, records: list[Any]
-) -> None:
+async def _attach_ledger_attendance(db: AsyncSession, records: list[Any]) -> None:
     """按培训会话参训名单统计参训人数并附加到台账记录。
 
     有 session_id 的记录以会话真实名单（employee_names）长度为统计值；
@@ -4103,9 +4120,7 @@ async def clear_training_ledgers_by_dept(
     )
 
 
-@router.post(
-    "/training-ledgers/batch-delete", summary="批量删除培训台账记录（软删除）"
-)
+@router.post("/training-ledgers/batch-delete", summary="批量删除培训台账记录（软删除）")
 async def batch_delete_training_ledgers(
     payload: BatchDeleteRequest,
     service: TrainingLedgerService = Depends(get_training_ledger_service),

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import {Card, Typography, Divider, Tag, Row, Col, Input, Button, Table, Modal,} from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { FundOutlined, ExperimentOutlined, SafetyOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title, Text, Paragraph } = Typography
 
@@ -51,15 +52,16 @@ const FieldRow = () => (
   </Row>
 )
 
-const ExtraInfo = ({ onEnter }: { onEnter: () => void }) => (
+const ExtraInfo = ({ onEnter, canOperate }: { onEnter: () => void; canOperate: boolean }) => (
   <Row gutter={12} align="middle" style={{ marginBottom: 8, fontSize: 13 }}>
     <Col><Text type="secondary" style={{ fontSize: 13 }}>罐号：</Text><Input size="small" style={{ width: 100 }} /></Col>
     <Col><Text type="secondary" style={{ fontSize: 13 }}>接种时间：</Text><Input size="small" style={{ width: 48 }} /> 年 <Input size="small" style={{ width: 48 }} /> 月 <Input size="small" style={{ width: 48 }} /> 日</Col>
-    <Col><Button size="small" icon={<PlusOutlined />} onClick={onEnter}>录入数据</Button></Col>
+    {canOperate && <Col><Button size="small" icon={<PlusOutlined />} onClick={onEnter}>录入数据</Button></Col>}
   </Row>
 )
 
 export default function QualityPage() {
+  const { canOperate } = useProductionPermissions(PRODUCTION_PAGE_KEYS.shiftLogQuality)
   const [seedData, setSeedData] = useState<IPCRecord[]>([makeRow()])
   const [fermentData, setFermentData] = useState<IPCRecord[]>([makeRow()])
   const [seedVisible, setSeedVisible] = useState(false)
@@ -125,7 +127,7 @@ export default function QualityPage() {
     { title: '稀释倍数', width: 80, render: (_, r, i) => <Input size="small" value={r.稀释倍数2} onChange={e => handleCellChange(setter, i, '稀释倍数2', e.target.value)} /> },
     { title: '吸光度值', width: 90, render: (_, r, i) => <Input size="small" value={r.吸光度值} onChange={e => handleCellChange(setter, i, '吸光度值', e.target.value)} /> },
     { title: '备注', width: 100, render: (_, r, i) => <Input size="small" value={r.备注} onChange={e => handleCellChange(setter, i, '备注', e.target.value)} /> },
-    { title: '操作', width: 60, fixed: 'right', render: (_, r) => <Button size="small" danger icon={<DeleteOutlined />} onClick={() => deleteRow(setter, r.key)} /> },
+    ...(canOperate ? [{ title: '操作', width: 60, fixed: 'right' as const, render: (_: unknown, r: IPCRecord) => <Button size="small" danger icon={<DeleteOutlined />} onClick={() => deleteRow(setter, r.key)} /> }] : []),
   ]
 
   return (
@@ -146,7 +148,7 @@ export default function QualityPage() {
         </Paragraph>
 
         <Divider plain style={{ fontSize: 14 }}>种子</Divider>
-        <ExtraInfo onEnter={() => setSeedVisible(true)} />
+        <ExtraInfo canOperate={canOperate} onEnter={() => setSeedVisible(true)} />
         <FieldRow />
         {seedData.length > 0 && seedData[0].罐号 && (
           <Table className="mt-2" columns={makeDisplayColumns()} dataSource={seedData} pagination={false} size="small" scroll={{ x: 1200 }} />
@@ -154,7 +156,7 @@ export default function QualityPage() {
         <div style={{ marginTop: 120 }} />
 
         <Divider plain style={{ fontSize: 14 }}>发酵</Divider>
-        <ExtraInfo onEnter={() => setFermentVisible(true)} />
+        <ExtraInfo canOperate={canOperate} onEnter={() => setFermentVisible(true)} />
         <FieldRow />
         {fermentData.length > 0 && fermentData[0].罐号 && (
           <Table className="mt-2" columns={makeDisplayColumns()} dataSource={fermentData} pagination={false} size="small" scroll={{ x: 1200 }} />
@@ -191,7 +193,7 @@ LV:
       </Card>
 
       {/* 种子数据录入 Modal */}
-      <Modal title="种子 · IPC 数据录入" open={seedVisible} onCancel={() => setSeedVisible(false)} width="100%" style={{ top: 20, maxWidth: 1400 }}
+      <Modal title="种子 · IPC 数据录入" open={seedVisible && canOperate} onCancel={() => setSeedVisible(false)} width="100%" style={{ top: 20, maxWidth: 1400 }}
         footer={[
           <Button key="add" icon={<PlusOutlined />} onClick={() => addRow(setSeedData)}>新增行</Button>,
           <Button key="cancel" onClick={() => setSeedVisible(false)}>取消</Button>,
@@ -201,7 +203,7 @@ LV:
       </Modal>
 
       {/* 发酵数据录入 Modal */}
-      <Modal title="发酵 · IPC 数据录入" open={fermentVisible} onCancel={() => setFermentVisible(false)} width="100%" style={{ top: 20, maxWidth: 1400 }}
+      <Modal title="发酵 · IPC 数据录入" open={fermentVisible && canOperate} onCancel={() => setFermentVisible(false)} width="100%" style={{ top: 20, maxWidth: 1400 }}
         footer={[
           <Button key="add" icon={<PlusOutlined />} onClick={() => addRow(setFermentData)}>新增行</Button>,
           <Button key="cancel" onClick={() => setFermentVisible(false)}>取消</Button>,

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.registration.models import (
     RegistrationDeclarationProgressWorkbookVersion,
 )
+from app.modules.registration.page_scope import visible_sheet_keys
 
 
 class RegistrationDeclarationProgressWorkbookRepository:
@@ -33,7 +34,10 @@ class RegistrationDeclarationProgressWorkbookRepository:
         sheet_key: str | None = None,
     ) -> list[RegistrationDeclarationProgressWorkbookVersion]:
         stmt = select(RegistrationDeclarationProgressWorkbookVersion).where(
-            RegistrationDeclarationProgressWorkbookVersion.is_deleted.is_(False)
+            RegistrationDeclarationProgressWorkbookVersion.is_deleted.is_(False),
+            RegistrationDeclarationProgressWorkbookVersion.sheet_key.in_(
+                await visible_sheet_keys(self.session, "declaration-progress")
+            ),
         )
         if sheet_key:
             stmt = stmt.where(
@@ -58,6 +62,9 @@ class RegistrationDeclarationProgressWorkbookRepository:
                 RegistrationDeclarationProgressWorkbookVersion.record_group_id
                 == record_group_id,
                 RegistrationDeclarationProgressWorkbookVersion.is_deleted.is_(False),
+                RegistrationDeclarationProgressWorkbookVersion.sheet_key.in_(
+                    await visible_sheet_keys(self.session, "declaration-progress")
+                ),
             )
             .order_by(
                 asc(RegistrationDeclarationProgressWorkbookVersion.version_number),
@@ -74,6 +81,9 @@ class RegistrationDeclarationProgressWorkbookRepository:
             select(RegistrationDeclarationProgressWorkbookVersion)
             .where(
                 RegistrationDeclarationProgressWorkbookVersion.is_deleted.is_(False),
+                RegistrationDeclarationProgressWorkbookVersion.sheet_key.in_(
+                    await visible_sheet_keys(self.session, "declaration-progress")
+                ),
                 RegistrationDeclarationProgressWorkbookVersion.sheet_key == sheet_key,
             )
             .order_by(
@@ -94,6 +104,9 @@ class RegistrationDeclarationProgressWorkbookRepository:
                 RegistrationDeclarationProgressWorkbookVersion.record_group_id
                 == record_group_id,
                 RegistrationDeclarationProgressWorkbookVersion.is_deleted.is_(False),
+                RegistrationDeclarationProgressWorkbookVersion.sheet_key.in_(
+                    await visible_sheet_keys(self.session, "declaration-progress")
+                ),
             )
             .order_by(
                 desc(RegistrationDeclarationProgressWorkbookVersion.version_number),
@@ -110,6 +123,9 @@ class RegistrationDeclarationProgressWorkbookRepository:
             ).where(
                 RegistrationDeclarationProgressWorkbookVersion.sheet_key == sheet_key,
                 RegistrationDeclarationProgressWorkbookVersion.is_deleted.is_(False),
+                RegistrationDeclarationProgressWorkbookVersion.sheet_key.in_(
+                    await visible_sheet_keys(self.session, "declaration-progress")
+                ),
             )
         )
         return int(result.scalar() or 0)
@@ -122,6 +138,9 @@ class RegistrationDeclarationProgressWorkbookRepository:
                 RegistrationDeclarationProgressWorkbookVersion.record_group_id
                 == record_group_id,
                 RegistrationDeclarationProgressWorkbookVersion.is_deleted.is_(False),
+                RegistrationDeclarationProgressWorkbookVersion.sheet_key.in_(
+                    await visible_sheet_keys(self.session, "declaration-progress")
+                ),
             )
         )
         return int(result.scalar() or 0) + 1
@@ -150,6 +169,11 @@ class RegistrationDeclarationProgressWorkbookRepository:
     ) -> None:
         await self.session.execute(
             update(RegistrationDeclarationProgressWorkbookVersion)
+            .where(
+                RegistrationDeclarationProgressWorkbookVersion.sheet_key.in_(
+                    await visible_sheet_keys(self.session, "declaration-progress")
+                )
+            )
             .values(is_deleted=True)
             .execution_options(synchronize_session=False)
         )

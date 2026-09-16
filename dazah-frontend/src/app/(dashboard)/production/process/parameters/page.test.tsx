@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { clearProductionAuthForTest, setProductionAdminForTest } from '@/test/production-auth'
 
 const actions = vi.hoisted(() => ({
   getProcessSpecs: vi.fn(),
@@ -23,6 +24,7 @@ describe('ProcessParametersPage', () => {
   let container: HTMLElement
 
   beforeEach(() => {
+    setProductionAdminForTest()
     actions.getProcessSpecs.mockResolvedValue({
       code: 200,
       message: 'success',
@@ -46,6 +48,7 @@ describe('ProcessParametersPage', () => {
   afterEach(() => {
     act(() => root.unmount())
     container?.remove()
+    clearProductionAuthForTest()
     vi.clearAllMocks()
   })
 

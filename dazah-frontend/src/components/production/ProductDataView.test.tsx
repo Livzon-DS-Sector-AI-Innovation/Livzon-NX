@@ -4,6 +4,8 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { App } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setProductionAdminForTest, clearProductionAuthForTest } from '@/test/production-auth'
+import { chooseBatchWorkshop } from '@/test/batch-workshop'
 
 const actions = vi.hoisted(() => ({
   getBatches: vi.fn(),
@@ -19,6 +21,7 @@ import ProductDataView from './ProductDataView'
 const BATCHES = [
   {
     id: 'b1',
+    workshop_code: '101-1',
     batch_no: 'BG-2026-01',
     product_name: '霉酚酸',
     product_code: 'BG',
@@ -49,6 +52,7 @@ describe('ProductDataView', () => {
   let container: HTMLElement
 
   beforeEach(() => {
+    setProductionAdminForTest()
     actions.getBatches.mockResolvedValue({ code: 200, message: 'success', data: BATCHES })
     actions.deleteBatch.mockResolvedValue({ code: 200, message: 'success', data: null })
     actions.createBatch.mockResolvedValue({ code: 200, message: 'success', data: null })
@@ -60,6 +64,7 @@ describe('ProductDataView', () => {
 
   afterEach(() => {
     act(() => root.unmount())
+    clearProductionAuthForTest()
     container?.remove()
     vi.clearAllMocks()
   })
@@ -235,11 +240,12 @@ describe('ProductDataView', () => {
         await new Promise((r) => setTimeout(r, 100))
       })
     }
+    await chooseBatchWorkshop('101-1')
     const okBtn = Array.from(document.body.querySelectorAll('button')).find((b) => (b.textContent || '').replace(/\s+/g, '') === '确认') as HTMLButtonElement | undefined
     if (okBtn) {
       await act(async () => { okBtn.click(); await new Promise((r) => setTimeout(r, 200)) })
     }
-    expect(actions.createBatch).toHaveBeenCalledWith(expect.objectContaining({ batch_no: 'BG-NEW-1' }))
+    expect(actions.createBatch).toHaveBeenCalledWith(expect.objectContaining({ batch_no: 'BG-NEW-1', workshop_code: '101-1' }))
     // 分页翻到第 2 页
     const page2 = container.querySelector('.ant-pagination-item-2') as HTMLElement | undefined
     if (page2) {

@@ -16,8 +16,25 @@ def test_requested_module_catalogs_cover_all_live_api_routes():
     page_policy.register_api_catalog_provider(
         lambda: page_policy.collect_http_route_catalog(app.routes)
     )
-    for module_code in ("warehouse", "hr", "registration", "production"):
+    for module_code in ("warehouse", "hr", "registration", "production", "quality"):
         assert page_policy.page_api_catalog_gaps(module_code) == []
+
+
+def test_position_training_import_requires_bulk_import_action():
+    binding = page_policy.api_binding_for_route(
+        "POST", "/api/v1/hr/position-training-lists/import"
+    )
+    assert binding is not None
+    assert binding.permission == "operate"
+    assert binding.sensitive_action == "bulk_import"
+
+
+def test_production_workshop_exports_are_independent_actions():
+    for page in page_policy.PAGES_BY_MODULE["production"]:
+        if page.page_key.startswith("production:batches:workshop-"):
+            assert "sensitive_export" in {
+                action.key for action in page.sensitive_actions
+            }
 
 
 def test_production_catalog_tracks_current_workshop_and_operation_pages():

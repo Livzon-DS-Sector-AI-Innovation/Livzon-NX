@@ -8,6 +8,7 @@ import { Alert, App, Button, Card, Col, Descriptions, Form, Input, Modal, Row, S
 import { BellOutlined, CalendarOutlined, ScheduleOutlined, UploadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
 
@@ -51,6 +52,7 @@ interface DumpResponse {
 
 export default function Scheduling2013Page() {
   const { message } = App.useApp()
+  const { canApprove, canReject, canBulkImport } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2013)
   const [data, setData] = useState<DumpResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -86,6 +88,7 @@ export default function Scheduling2013Page() {
 
   // 计划员上传最新排产 Excel → 后端保存到 schedule_data，上传后刷新列表
   const handleUploadExcel = async (file: File) => {
+    if (!canBulkImport) return false
     const fd = new FormData()
     fd.append('file', file)
     try {
@@ -105,6 +108,7 @@ export default function Scheduling2013Page() {
 
   // ── 接罐操作 ──
   const submitConfirm = async () => {
+    if (!canApprove) return
     if (!confirmTarget) return
     setSubmitting(true)
     try {
@@ -129,6 +133,7 @@ export default function Scheduling2013Page() {
   }
 
   const submitDelay = async () => {
+    if (!canReject) return
     if (!delayTarget) return
     if (!delayReason) {
       message.warning('请选择延期原因')
@@ -157,6 +162,7 @@ export default function Scheduling2013Page() {
   }
 
   const submitApprove = async (approve: boolean) => {
+    if (approve ? !canApprove : !canReject) return
     if (!approveTarget) return
     setSubmitting(true)
     try {
@@ -290,13 +296,15 @@ export default function Scheduling2013Page() {
           return <Tag color="orange">{r.delay_reason || '延期'}</Tag>
         }
         if (r.task_status === 'pending_approval') {
-          return <Button size="small" color="purple" variant="outlined" onClick={() => setApproveTarget(r)}>审批</Button>
+          return (canApprove || canReject)
+            ? <Button size="small" color="purple" variant="outlined" onClick={() => setApproveTarget(r)}>审批</Button>
+            : null
         }
         // pending / 未生成：可确认或延期
         return (
           <Space size={4}>
-            <Button size="small" type="primary" onClick={() => setConfirmTarget(r)}>确认接罐</Button>
-            <Button size="small" onClick={() => setDelayTarget(r)}>延期</Button>
+            {canApprove && <Button size="small" type="primary" onClick={() => setConfirmTarget(r)}>确认接罐</Button>}
+            {canReject && <Button size="small" onClick={() => setDelayTarget(r)}>延期</Button>}
           </Space>
         )
       },
@@ -314,9 +322,9 @@ export default function Scheduling2013Page() {
             102 发酵车间排产放罐计划 = 提炼车间接罐计划（数据源：排产 Excel 最新版）
           </Text>
         </div>
-        <Upload accept=".xlsx" showUploadList={false} beforeUpload={handleUploadExcel}>
+        {canBulkImport && <Upload accept=".xlsx" showUploadList={false} beforeUpload={handleUploadExcel}>
           <Button type="primary" icon={<UploadOutlined />}>更新排产</Button>
-        </Upload>
+        </Upload>}
       </div>
 
       {error && <Alert type="error" title={error} showIcon className="mb-4" />}
@@ -398,9 +406,9 @@ export default function Scheduling2013Page() {
       {/* ── 确认接罐弹窗 ── */}
       <Modal
         title="确认接罐"
-        open={Boolean(confirmTarget)}
+        open={Boolean(confirmTarget) && canApprove}
         onCancel={() => { setConfirmTarget(null); setActualTank(''); setConfirmNote('') }}
-        onOk={submitConfirm}
+        onOk={canApprove ? submitConfirm : undefined}
         confirmLoading={submitting}
         okText="确认接罐"
         width={460}
@@ -433,9 +441,9 @@ export default function Scheduling2013Page() {
       {/* ── 填报延期弹窗 ── */}
       <Modal
         title="填报延期原因"
-        open={Boolean(delayTarget)}
+        open={Boolean(delayTarget) && canReject}
         onCancel={() => { setDelayTarget(null); setDelayReason(''); setDelayNote('') }}
-        onOk={submitDelay}
+        onOk={canReject ? submitDelay : undefined}
         confirmLoading={submitting}
         okText="提交延期"
         width={460}
@@ -465,13 +473,13 @@ export default function Scheduling2013Page() {
       {/* ── 班组长审批弹窗 ── */}
       <Modal
         title="班组长审批 — 接罐确认"
-        open={Boolean(approveTarget)}
+        open={Boolean(approveTarget) && (canApprove || canReject)}
         onCancel={() => setApproveTarget(null)}
         confirmLoading={submitting}
         width={460}
         footer={[
-          <Button key="reject" danger disabled={submitting} onClick={() => submitApprove(false)}>驳回</Button>,
-          <Button key="ok" type="primary" loading={submitting} onClick={() => submitApprove(true)}>批准接罐</Button>,
+          ...(canReject ? [<Button key="reject" danger disabled={submitting} onClick={() => submitApprove(false)}>驳回</Button>] : []),
+          ...(canApprove ? [<Button key="ok" type="primary" loading={submitting} onClick={() => submitApprove(true)}>批准接罐</Button>] : []),
         ]}
       >
         {approveTarget && (

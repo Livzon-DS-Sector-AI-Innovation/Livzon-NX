@@ -1,5 +1,7 @@
 'use client'
 
+import { BatchWorkshopField } from '@/components/production/BatchWorkshopField'
+
 import { useEffect, useState } from 'react'
 import {Table,
   Button,
@@ -37,6 +39,7 @@ import type {
   BatchStatus,
 } from '@/types/production'
 import { BatchStatus as BatchStatusEnum, BATCH_STATUS_OPTIONS } from '@/types/production'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 
 // Helper to get status color
@@ -83,6 +86,7 @@ const exportBatchesToCsv = (batches: Batch[]) => {
 
 export default function BatchesPage() {
   const { message, modal } = App.useApp()
+  const { canOperate, canDelete } = useProductionPermissions(PRODUCTION_PAGE_KEYS.overview)
   const [form] = Form.useForm()
   const [editForm] = Form.useForm()
   const [loading, setLoading] = useState(false)
@@ -135,18 +139,21 @@ export default function BatchesPage() {
   }
 
   const handleAdd = () => {
+    if (!canOperate) return
     setEditingBatch(null)
     form.resetFields()
     setModalVisible(true)
   }
 
   const handleEdit = (record: Batch) => {
+    if (!canOperate) return
     setEditingBatch(record)
     editForm.setFieldsValue(record)
     setModalVisible(true)
   }
 
   const handleDelete = async (id: string) => {
+    if (!canDelete) return
     modal.confirm({
       title: '确认删除',
       content: '确定要删除这个批次吗？',
@@ -167,6 +174,7 @@ export default function BatchesPage() {
   }
 
   const handleStatusChange = async (id: string, newStatus: BatchStatus) => {
+    if (!canOperate) return
     try {
       const response = await updateBatchStatus(id, newStatus)
       if (response.code === 200) {
@@ -181,6 +189,7 @@ export default function BatchesPage() {
   }
 
   const handleSubmit = async () => {
+    if (!canOperate) return
     try {
       const values = editingBatch ? await editForm.validateFields() : await form.validateFields()
 
@@ -210,6 +219,7 @@ export default function BatchesPage() {
   }
 
   const handleExport = async () => {
+    if (!canOperate) return
     setExportLoading(true)
     try {
       // 获取所有批次数据进行导出
@@ -307,7 +317,7 @@ export default function BatchesPage() {
       fixed: 'right',
       render: (_, record) => (
         <Space size="small">
-          {record.status === BatchStatusEnum.DRAFT && (
+          {canOperate && record.status === BatchStatusEnum.DRAFT && (
             <Button
               type="link"
               size="small"
@@ -317,7 +327,7 @@ export default function BatchesPage() {
               下达
             </Button>
           )}
-          {record.status === BatchStatusEnum.RELEASED && (
+          {canOperate && record.status === BatchStatusEnum.RELEASED && (
             <Button
               type="link"
               size="small"
@@ -327,7 +337,7 @@ export default function BatchesPage() {
               开始
             </Button>
           )}
-          {record.status === BatchStatusEnum.IN_PROGRESS && (
+          {canOperate && record.status === BatchStatusEnum.IN_PROGRESS && (
             <Button
               type="link"
               size="small"
@@ -337,15 +347,15 @@ export default function BatchesPage() {
               完成
             </Button>
           )}
-          <Button
+          {canOperate && <Button
             type="link"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
             编辑
-          </Button>
-          <Button
+          </Button>}
+          {canDelete && <Button
             type="link"
             size="small"
             danger
@@ -353,7 +363,7 @@ export default function BatchesPage() {
             onClick={() => handleDelete(record.id)}
           >
             删除
-          </Button>
+          </Button>}
         </Space>
       ),
     },
@@ -365,14 +375,14 @@ export default function BatchesPage() {
         title="批次管理"
         extra={
           <Space>
-            <Tooltip title="导出当前筛选结果的批次数据">
+            {canOperate && <Tooltip title="导出当前筛选结果的批次数据">
               <Button icon={<DownloadOutlined />} onClick={handleExport} loading={exportLoading}>
                 导出
               </Button>
-            </Tooltip>
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+            </Tooltip>}
+            {canOperate && <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
               新建批次
-            </Button>
+            </Button>}
           </Space>
         }
       >
@@ -460,7 +470,7 @@ export default function BatchesPage() {
       <Modal
         title={editingBatch ? '编辑批次' : '新建批次'}
         open={modalVisible}
-        onOk={handleSubmit}
+        onOk={canOperate ? handleSubmit : undefined}
         onCancel={() => setModalVisible(false)}
         width={600}
         okText="确认"
@@ -534,6 +544,7 @@ export default function BatchesPage() {
               </Form.Item>
             </Col>
           </Row>
+          <BatchWorkshopField />
           <Form.Item name="notes" label="备注">
             <Input.TextArea rows={3} placeholder="请输入备注" />
           </Form.Item>

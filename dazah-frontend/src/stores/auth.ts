@@ -3,7 +3,7 @@
 import { create } from 'zustand'
 import type { User } from '@/types/user'
 
-interface AuthUser {
+export interface AuthUser {
   id: string
   name: string
   role?: string

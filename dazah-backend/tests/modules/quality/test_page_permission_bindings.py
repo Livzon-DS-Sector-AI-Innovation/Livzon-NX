@@ -33,7 +33,7 @@ def test_deviation_write_tools_use_reviewed_leaf_without_relaxing_confirmation()
         assert binding and binding.permission == "operate"
 
 
-def test_ledger_contract_keeps_unreviewed_workflows_closed():
+def test_ledger_contract_covers_all_reviewed_workflows():
     page = PAGES_BY_KEY[DEVIATION_LEDGER_PAGE]
     assert "self" not in page.supported_scope_types
     actions = {action.key: action.name for action in page.sensitive_actions}
@@ -51,7 +51,7 @@ def test_ledger_contract_keeps_unreviewed_workflows_closed():
         ).sensitive_action
         == "delete"
     )
-    assert page_api_catalog_gaps("quality")
+    assert page_api_catalog_gaps("quality") == []
 
 
 def test_deviation_auxiliary_routes_do_not_authorize_sibling_pages():

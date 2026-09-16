@@ -3,6 +3,7 @@ from typing import Annotated
 
 import jwt
 from fastapi import Cookie, Depends, HTTPException, Request, status
+from pydantic import TypeAdapter, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
@@ -208,6 +209,18 @@ def require_module_view(module_code: str) -> Callable[..., Awaitable[User]]:
                 f"未获授权在页面“{definition.page_name}”执行当前业务请求",
             )
         sensitive_action = binding.sensitive_action
+        if binding.action_selector is not None:
+            selector = binding.action_selector
+            try:
+                body = await request.json()
+                if not isinstance(body, dict):
+                    raise ValueError("Expected an object")
+                decision = TypeAdapter(bool).validate_python(
+                    body.get(selector.field, selector.default)
+                )
+            except (ValueError, ValidationError) as exc:
+                raise HTTPException(422, "责任动作参数无效") from exc
+            sensitive_action = selector.when_true if decision else selector.when_false
         if sensitive_action is not None:
             declared_actions = {action.key for action in definition.sensitive_actions}
             if sensitive_action not in declared_actions:

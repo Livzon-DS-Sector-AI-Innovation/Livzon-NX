@@ -9,12 +9,13 @@ from __future__ import annotations
 import re
 from collections import Counter
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from starlette.routing import BaseRoute, Mount, Route
 
 from app.platform.identity.menu_seed_data import SEED_MENUS
 from app.platform.identity.page_lifecycle import page_lifecycle_errors
+from app.platform.identity.quality_api_contract import QUALITY_REVIEWED_API_ROUTES
 
 PAGE_PERMISSION_ORDER = ("access", "query", "operate")
 PAGE_PERMISSION_SET = frozenset(PAGE_PERMISSION_ORDER)
@@ -22,6 +23,12 @@ PAGE_SCOPE_TYPES = frozenset(
     {"not_applicable", "department_tree", "departments", "all", "self"}
 )
 FIRST_BATCH_MODULES = frozenset({"hr", "warehouse", "quality", "procurement"})
+QUALITY_PRODUCT_PAGES = tuple(
+    f"quality:product-quality:product-quality-{code}"
+    for code in ("mfn", "dljs", "lftt", "mftt", "yslkms", "bbas", "sas")
+)
+QUALITY_SUPPLIER_PAGE = "quality:suppliers:supplier-qualification"
+QUALITY_SHARED_LEDGER_PAGES = frozenset((*QUALITY_PRODUCT_PAGES, QUALITY_SUPPLIER_PAGE))
 
 # Reviewed aliases used by the warehouse material-page API, not URL inference.
 WAREHOUSE_DEPARTMENT_DATA_PAGES = frozenset(
@@ -130,6 +137,16 @@ class PageDefinition:
 
 
 @dataclass(frozen=True)
+class BooleanActionSelector:
+    """A reviewed boolean request field selecting one of two decision grants."""
+
+    field: str
+    when_true: str
+    when_false: str
+    default: bool = True
+
+
+@dataclass(frozen=True)
 class PageApiBinding:
     """Reviewed exact route contract; never inferred from resource name or verb."""
 
@@ -139,6 +156,7 @@ class PageApiBinding:
     permission: str
     sensitive_action: str | None = None
     scope_adapter: str | None = None
+    action_selector: BooleanActionSelector | None = None
 
 
 # Add entries only after the endpoint's list/detail/write scope adapter has
@@ -242,7 +260,13 @@ def _api_binding_errors(binding: PageApiBinding) -> list[str]:
         errors.append("尚未完成数据范围适配")
     if not binding.page_keys or len(set(binding.page_keys)) != len(binding.page_keys):
         errors.append("关联页面为空或重复")
-    if binding.sensitive_action and binding.permission != "operate":
+    actions = {binding.sensitive_action} if binding.sensitive_action else set()
+    if binding.action_selector is not None:
+        selector = binding.action_selector
+        actions.update((selector.when_true, selector.when_false))
+        if not selector.field or binding.sensitive_action is not None:
+            errors.append("动态责任动作配置无效")
+    if actions and binding.permission != "operate":
         errors.append("高风险业务动作必须要求操作权限")
     if binding.method in {"PUT", "PATCH", "DELETE"} and binding.permission != "operate":
         errors.append("业务写入必须要求操作权限")
@@ -252,9 +276,7 @@ def _api_binding_errors(binding: PageApiBinding) -> list[str]:
         page = PAGES_BY_KEY.get(key)
         if page is None or page.module_code != module_code:
             errors.append("关联页面无效或不属于目标业务模块")
-        elif binding.sensitive_action and binding.sensitive_action not in {
-            action.key for action in page.sensitive_actions
-        }:
+        elif not actions.issubset({action.key for action in page.sensitive_actions}):
             errors.append(f"高风险业务动作未登记：{page.page_name}")
     return list(dict.fromkeys(errors))
 
@@ -362,6 +384,8 @@ def _sensitive_actions(
 ) -> tuple[SensitiveActionDefinition, ...]:
     text = f"{page_key} {route_path}".lower()
     keys: list[str] = []
+    if page_key in QUALITY_SHARED_LEDGER_PAGES:
+        keys.extend(["delete", "sync_config"])
     if page_key in WAREHOUSE_MATERIAL_PAGE_ALIASES:
         keys.extend(["delete", "sync_config"])
     if page_key == "hr:employee-management:profile":
@@ -406,6 +430,7 @@ def _sensitive_actions(
     # cannot be inferred from the short menu label alone. Keep the reviewed
     # action set explicit so a new API binding cannot silently widen a page.
     explicit_actions = {
+        "quality:documents": ("bulk_import",),
         "warehouse:warehouse-settings": ("delete",),
         "hr:departments": ("delete", "sync_config"),
         "hr:recruitment": ("delete", "sensitive_export", "sync_config"),
@@ -423,7 +448,11 @@ def _sensitive_actions(
         "hr:training:annual-plan": ("delete", "sensitive_export"),
         "hr:training:sign-in-sheet": ("delete", "sensitive_export"),
         "hr:training:trainer": ("delete", "sensitive_export", "sync_config"),
-        "hr:training:position-training": ("delete", "sensitive_export"),
+        "hr:training:position-training": (
+            "delete",
+            "bulk_import",
+            "sensitive_export",
+        ),
         "hr:training:plan-tracking": ("delete", "sensitive_export"),
         "hr:hr-settings:hr-settings-reminder": ("delete",),
         "hr:hr-settings:hr-settings-approval": ("delete",),
@@ -456,6 +485,26 @@ def _sensitive_actions(
         ),
     }
     keys.extend(explicit_actions.get(page_key, ()))
+    if page_key.startswith("quality:"):
+        # Quality ledgers are backed by reviewed shared Feishu/local resource
+        # routes. The concrete API matrix below still decides which action is
+        # usable from each page; declaring these two actions here makes those
+        # independently grantable instead of folding them into operate.
+        keys.extend(("delete", "sync_config"))
+        if page_key in {
+            "quality:deviations:deviation-history",
+            "quality:anomaly-report:anomaly-report-ledger",
+            "quality:oos-oot:oot-limits",
+        }:
+            keys.append("bulk_import")
+        if page_key in {
+            "quality:anomaly-report:anomaly-report-ledger",
+            "quality:oos-oot:oot-limits",
+            "quality:validation:validation-ai-review",
+        }:
+            keys.append("sensitive_export")
+        if page_key == "quality:capas:capa-ledger" or page_key in QUALITY_PRODUCT_PAGES:
+            keys.append("approve")
     if page_key.startswith("registration:project:declaration-progress:"):
         keys.extend(["delete", "sensitive_export", "bulk_import"])
     if page_key.startswith("registration:certificate-management:"):
@@ -464,7 +513,7 @@ def _sensitive_actions(
         # Workshop pages expose record deletion and the reviewed Feishu sync
         # settings button.  Internal stage routes resolve to the workshop
         # leaf, so both actions belong to that stable page identity.
-        keys.extend(["delete", "sync_config"])
+        keys.extend(["delete", "sensitive_export", "sync_config"])
         if page_key == "production:batches:workshop-201-3":
             keys.extend(["approve", "reject", "bulk_import"])
     action_verbs = {
@@ -492,7 +541,7 @@ def _sensitive_actions(
             key=key,
             name=employee_action_names[key]
             if page_key == "hr:employee-management:profile"
-            else deviation_action_names[key]
+            else deviation_action_names.get(key, f"{action_verbs[key]}{page_name}")
             if page_key == "quality:deviations:deviation-ledger"
             else f"{action_verbs[key]}{page_name}",
             category=_ACTION_DEFINITIONS[key].category,
@@ -520,6 +569,12 @@ def _walk_pages(
             if module_code in FIRST_BATCH_MODULES:
                 scopes = ("department_tree", "departments", "all")
             else:
+                scopes = ("not_applicable",)
+            if (
+                page_key in QUALITY_SHARED_LEDGER_PAGES
+                or page_key == "quality:quality-settings"
+            ):
+                # These ledgers are factory-wide; product identity remains enforced.
                 scopes = ("not_applicable",)
             if (
                 module_code == "procurement"
@@ -599,6 +654,7 @@ def canonical_page_key(page_key: str) -> str:
 # the normal longest-route match below.
 PAGE_ROUTE_ALIASES = {
     "/hr/employee-management": "hr:employee-management:profile",
+    "/hr/contracts": "hr:contracts:contracts-ledger",
     "/hr/training": "hr:training:annual-plan",
     "/hr/settings/feishu": "hr:hr-settings:hr-settings-feishu",
     "/hr/new/profile": "hr:employee-management:profile",
@@ -810,6 +866,44 @@ PAGE_API_BINDINGS += _procurement_resource_bindings()
 
 PAGE_API_BINDINGS += tuple(
     PageApiBinding(
+        route_path="/api/v1/quality" + suffix,
+        method=method,
+        page_keys=("quality:documents",),
+        permission=permission,
+        sensitive_action=action,
+        scope_adapter="quality.document_department",
+    )
+    for method, suffix, permission, action in (
+        ("GET", "/document-departments", "query", None),
+        ("POST", "/document-departments", "operate", None),
+        ("PUT", "/document-departments/{department_id}", "operate", None),
+        ("DELETE", "/document-departments/{department_id}", "operate", "delete"),
+        ("GET", "/document-entries/lookup-latest", "query", None),
+        ("POST", "/document-entries/resolve-content", "query", None),
+        ("GET", "/document-entries", "query", None),
+        ("POST", "/document-entries", "operate", None),
+        ("PUT", "/document-entries/{entry_id}", "operate", None),
+        ("DELETE", "/document-entries/{entry_id}", "operate", "delete"),
+        ("POST", "/document-catalog/import", "operate", "bulk_import"),
+        ("GET", "/document-catalog/export", "operate", "sensitive_export"),
+        ("POST", "/document-catalog/attachments/import", "operate", "bulk_import"),
+        ("POST", "/document-entries/attachments/auto-bind", "operate", None),
+        ("POST", "/document-entries/{entry_id}/attachments", "operate", None),
+        (
+            "DELETE", "/document-entries/{entry_id}/attachments/{storage_key:path}",
+            "operate", "delete",
+        ),
+        (
+            "GET",
+            "/document-entries/{entry_id}/attachments/{storage_key:path}/content",
+            "query", None,
+        ),
+    )
+)
+
+
+PAGE_API_BINDINGS += tuple(
+    PageApiBinding(
         route_path="/api/v1/quality/deviations" + suffix,
         method=method,
         page_keys=("quality:deviations:deviation-ledger",),
@@ -860,6 +954,368 @@ def _module_api_bindings(
             scope_adapter,
         ) in rules
     )
+
+
+def _quality_shared_ledger_bindings() -> tuple[PageApiBinding, ...]:
+    rules = [
+        (
+            method,
+            path,
+            QUALITY_PRODUCT_PAGES,
+            permission,
+            action,
+            "quality.product_code",
+        )
+        for method, path, permission, action in (
+            ("GET", "/product-quality-standards", "query", None),
+            ("GET", "/product-quality-standards/{product_code}", "query", None),
+            (
+                "GET",
+                "/product-quality-standards/{product_code}/{record_id}",
+                "query",
+                None,
+            ),
+            ("POST", "/product-quality-standards/{product_code}", "operate", None),
+            (
+                "PUT",
+                "/product-quality-standards/{product_code}/{record_id}",
+                "operate",
+                None,
+            ),
+            (
+                "DELETE",
+                "/product-quality-standards/{product_code}/{record_id}",
+                "operate",
+                "delete",
+            ),
+            (
+                "POST",
+                "/product-quality-standards/{product_code}/pull",
+                "operate",
+                "sync_config",
+            ),
+        )
+    ]
+    rules.extend(
+        (method, path, (QUALITY_SUPPLIER_PAGE,), permission, action, "not_applicable")
+        for method, path, permission, action in (
+            ("GET", "/supplier-qualification", "query", None),
+            ("POST", "/supplier-qualification", "operate", None),
+            ("PUT", "/supplier-qualification/{record_id}", "operate", None),
+            ("DELETE", "/supplier-qualification/{record_id}", "operate", "delete"),
+            ("POST", "/supplier-qualification/pull", "operate", "sync_config"),
+            ("GET", "/statistics/suppliers", "query", None),
+            ("GET", "/suppliers", "query", None),
+            ("POST", "/suppliers", "operate", None),
+            ("GET", "/suppliers/{supplier_id}", "query", None),
+            ("PUT", "/suppliers/{supplier_id}", "operate", None),
+            ("DELETE", "/suppliers/{supplier_id}", "operate", "delete"),
+            (
+                "POST",
+                "/suppliers/{supplier_id}/sync-to-feishu",
+                "operate",
+                "sync_config",
+            ),
+            ("GET", "/suppliers/{supplier_id}/qualifications", "query", None),
+            ("POST", "/suppliers/{supplier_id}/qualifications", "operate", None),
+            ("PUT", "/supplier-qualifications/{qualification_id}", "operate", None),
+            (
+                "DELETE",
+                "/supplier-qualifications/{qualification_id}",
+                "operate",
+                "delete",
+            ),
+            (
+                "POST",
+                "/supplier-qualifications/{qualification_id}/sync-to-feishu",
+                "operate",
+                "sync_config",
+            ),
+        )
+    )
+    return _module_api_bindings("quality", rules)
+
+
+PAGE_API_BINDINGS += _quality_shared_ledger_bindings()
+
+
+PAGE_API_BINDINGS += _module_api_bindings(
+    "quality",
+    [
+        (
+            method,
+            path,
+            ("quality:quality-settings",),
+            permission,
+            action,
+            "not_applicable",
+        )
+        for method, path, permission, action in (
+            ("GET", "/feishu-settings/app", "query", None),
+            ("PUT", "/feishu-settings/app", "operate", "sync_config"),
+            ("POST", "/feishu-settings/app/test", "operate", "sync_config"),
+            ("GET", "/feishu-settings/entities", "query", None),
+            (
+                "PUT",
+                "/feishu-settings/entities/{entity_code}",
+                "operate",
+                "sync_config",
+            ),
+            (
+                "POST",
+                "/feishu-settings/entities/{entity_code}/test",
+                "operate",
+                "sync_config",
+            ),
+            ("GET", "/feishu-settings/entities/{entity_code}/tables", "query", None),
+            (
+                "GET",
+                "/feishu-settings/entities/{entity_code}/field-mapping",
+                "query",
+                None,
+            ),
+            ("POST", "/items/dashboard/push-low-stock/test", "operate", "sync_config"),
+            ("GET", "/person-options/qa", "query", None),
+            ("GET", "/notification-settings", "query", None),
+            (
+                "PUT",
+                "/notification-settings/{notification_type}",
+                "operate",
+                "sync_config",
+            ),
+            ("POST", "/feishu-sync/pull", "operate", "sync_config"),
+            ("GET", "/feishu-sync/conflicts", "query", None),
+        )
+    ],
+)
+
+
+def _quality_remaining_api_bindings() -> tuple[PageApiBinding, ...]:
+    """Bind the reviewed quality routes to their owning menu leaves.
+
+    A few quality resources are intentionally shared by several leaf pages.
+    The current page header selects one of these reviewed owners; resource
+    parameters and row scope remain enforced by the quality services.
+    """
+
+    deviation_records = ("quality:deviations:deviation-records",)
+    deviation_investigations = ("quality:deviations:deviation-investigations",)
+    deviation_ledger = ("quality:deviations:deviation-ledger",)
+    deviation_history = ("quality:deviations:deviation-history",)
+    deviation_workbench = ("quality:deviations:deviation-workbench",)
+    capa_ledger = ("quality:capas:capa-ledger",)
+    capa_plans = ("quality:capas:capa-plans",)
+    complaint_ledger = ("quality:complaints:complaint-ledger",)
+    item_inventory = (
+        "quality:inspection:inspection-items:inspection-items-inventory",
+    )
+    item_inbound = ("quality:inspection:inspection-items:inspection-items-inbound",)
+    item_outbound = ("quality:inspection:inspection-items:inspection-items-outbound",)
+    item_dashboard = (
+        "quality:inspection:inspection-items:inspection-items-dashboard",
+    )
+    item_pages = item_inventory + item_inbound + item_outbound + item_dashboard
+    instrument_by_name = {
+        "equipment": "inspection-instruments-equipment",
+        "maintenance": "inspection-instruments-maintenance",
+        "repair": "inspection-instruments-repair",
+        "contracts": "inspection-instruments-contracts",
+        "plans": "inspection-instruments-plans",
+        "calibration": "inspection-instruments-calibration",
+        "cal-plan": "inspection-instruments-cal-plan",
+        "cal-external": "inspection-instruments-cal-external",
+    }
+    instrument_pages = tuple(
+        f"quality:inspection:inspection-instruments:{key}"
+        for key in instrument_by_name.values()
+    )
+    finished_pages = tuple(
+        page.page_key
+        for page in PAGES_BY_MODULE["quality"]
+        if page.page_key.startswith("quality:inspection:inspection-finished:")
+    )
+    inspection_solid = ("quality:inspection:inspection-solid",)
+    inspection_liquid = ("quality:inspection:inspection-liquid",)
+    inspection_pages = (
+        item_pages
+        + instrument_pages
+        + finished_pages
+        + inspection_solid
+        + inspection_liquid
+    )
+    oos_report = ("quality:oos-oot:oos-oot-report-records",)
+    oos_push = ("quality:oos-oot:oos-oot-investigation-push",)
+    oos_ledger = ("quality:oos-oot:oos-ledger",)
+    oot_ledger = ("quality:oos-oot:oot-ledger",)
+    oot_limits = ("quality:oos-oot:oot-limits",)
+    product_departments = ("quality:oos-oot:product-departments",)
+    anomaly = ("quality:anomaly-report:anomaly-report-ledger",)
+    return_application = ("quality:return-recalls:return-application",)
+    return_ledger = ("quality:return-recalls:return-ledger",)
+    change_ledgers = (
+        "quality:change:change-ledger",
+        "quality:change:file-change-ledger",
+    )
+    change_plans = ("quality:change:change-action-plans",)
+    validation_plans = ("quality:validation:validation-plans",)
+    validation_execution_pages = (
+        "quality:validation:equipment-qualification",
+        "quality:validation:process-validation",
+        "quality:validation:cleaning-validation",
+        "quality:validation:other-validations",
+    )
+    validation_qc = ("quality:validation:qc-validation",)
+    validation_review = ("quality:validation:validation-ai-review",)
+    settings = ("quality:quality-settings",)
+
+    def pages_for(path: str) -> tuple[str, ...]:
+        suffix = path.removeprefix("/api/v1/quality/")
+        parts = suffix.split("/")
+        first = parts[0]
+        second = parts[1] if len(parts) > 1 else ""
+        if first == "changes" and parts[-1] == "action-plans":
+            return change_plans
+        direct = {
+            "attachment-reviews": validation_review,
+            "capa-plan-tracks": capa_plans,
+            "capas": capa_ledger,
+            "change-action-plans": change_plans,
+            "changes": change_ledgers,
+            "complaint-ledger": complaint_ledger,
+            "complaints": complaint_ledger,
+            "deviation-investigation-push-records": deviation_investigations,
+            "deviation-ledger-records": deviation_ledger,
+            "deviation-report-records": deviation_records,
+            "deviation-workbench": deviation_workbench,
+            "deviations": deviation_ledger,
+            "document-entries": ("quality:documents",),
+            "finished-product-anomaly": anomaly,
+            "finished-product-inspections": finished_pages,
+            "historical-deviations": deviation_history,
+            "inspection-dashboard": finished_pages,
+            "inspection-finished": finished_pages,
+            "inspection-liquid": inspection_liquid,
+            "inspection-solid": inspection_solid,
+            "inspection-trends": finished_pages,
+            "inspections": finished_pages,
+            "lab-instruments": instrument_pages,
+            "lab-items": item_inventory,
+            "liquid-material-inspections": inspection_liquid,
+            "page-data": settings,
+            "person-options": tuple(
+                page.page_key for page in PAGES_BY_MODULE["quality"]
+            ),
+            "product-quality": QUALITY_PRODUCT_PAGES,
+            "product-quality-standard-items": QUALITY_PRODUCT_PAGES,
+            "return-application": return_application,
+            "return-ledger": return_ledger,
+            "return-recalls": return_application + return_ledger,
+            "solid-material-inspections": inspection_solid,
+            "validation-executions": validation_execution_pages,
+            "validation-qc": validation_qc,
+            "validation-reviews": validation_review,
+            "validations": validation_plans + validation_execution_pages,
+        }
+        if first == "ai":
+            return {
+                "capas": capa_ledger,
+                "changes": change_ledgers,
+                "deviations": deviation_ledger,
+                "logs": deviation_ledger + capa_ledger + change_ledgers,
+            }[second]
+        if first == "feishu-read":
+            return settings
+        if first == "feishu-sync":
+            return {
+                "capa-plan-tracks": capa_plans,
+                "capas": capa_ledger,
+                "deviation-investigation-push-records": deviation_investigations,
+                "deviations": deviation_ledger,
+                "validations": validation_plans,
+            }[second]
+        if first == "feishu":
+            return {
+                "capa-plan-tracks": capa_plans,
+                "capas": capa_ledger,
+                "statistics": validation_plans,
+                "validations": validation_plans,
+            }[second]
+        if first == "inspection":
+            return inspection_pages
+        if first == "inspection-resources":
+            return inspection_pages
+        if first == "instruments":
+            key = instrument_by_name[second]
+            return (f"quality:inspection:inspection-instruments:{key}",)
+        if first == "items":
+            return {
+                "dashboard": item_dashboard,
+                "inbound": item_inbound,
+                "inventory": item_inventory,
+                "outbound": item_outbound,
+            }[second]
+        if first == "oos-oot":
+            return {
+                "investigation-push-records": oos_push,
+                "oos-ledger": oos_ledger,
+                "oot-ledger": oot_ledger,
+                "oot-limit-items": oot_limits,
+                "oot-limit-products": oot_limits,
+                "oot-limits": oot_limits,
+                "product-departments": product_departments,
+                "records": oos_ledger,
+                "report-records": oos_report,
+            }.get(second, oos_ledger)
+        if first == "statistics":
+            return {
+                "capas": capa_ledger,
+                "changes": change_ledgers,
+                "deviations": deviation_ledger,
+                "validations": validation_plans,
+            }[second]
+        return direct[first]
+
+    def action_for(method: str, path: str) -> str | None:
+        if (
+            method == "DELETE"
+            or path.endswith("/batch-delete")
+            or "delete-execution-track" in path
+        ):
+            return "delete"
+        if "/approve" in path:
+            return "approve"
+        if "import" in path:
+            return "bulk_import"
+        if "export" in path:
+            return "sensitive_export"
+        sync_tokens = (
+            "/pull",
+            "/sync",
+            "sync-to-feishu",
+            "push-low-stock",
+            "notification-settings",
+        )
+        if any(token in path for token in sync_tokens):
+            return "sync_config"
+        return None
+
+    bindings = []
+    for method, path in QUALITY_REVIEWED_API_ROUTES:
+        action = action_for(method, path)
+        bindings.append(
+            PageApiBinding(
+                route_path=path,
+                method=method,
+                page_keys=pages_for(path),
+                permission="query" if method == "GET" and action is None else "operate",
+                sensitive_action=action,
+                scope_adapter="quality.reviewed_resource",
+            )
+        )
+    return tuple(bindings)
+
+
+PAGE_API_BINDINGS += _quality_remaining_api_bindings()
 
 
 def _production_api_bindings() -> tuple[PageApiBinding, ...]:
@@ -937,7 +1393,7 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
     add_many(
         "GET",
         ("/batches", "/batches/{batch_id}"),
-        batch_context,
+        batch_context + ("production:records", "production:balance"),
         scope_adapter="production.batch",
     )
     add("POST", "/batches", batch_context, "operate", scope_adapter="production.batch")
@@ -1969,7 +2425,17 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
     return _module_api_bindings("production", rules)
 
 
-PAGE_API_BINDINGS += _production_api_bindings()
+PAGE_API_BINDINGS += tuple(
+    replace(
+        binding,
+        sensitive_action=None,
+        action_selector=BooleanActionSelector("approve", "approve", "reject"),
+    )
+    if binding.method == "POST"
+    and binding.route_path == "/api/v1/production/dr/schedule/tasks/{batch_no}/approve"
+    else binding
+    for binding in _production_api_bindings()
+)
 
 
 def _warehouse_api_bindings() -> tuple[PageApiBinding, ...]:
@@ -4218,12 +4684,19 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
         "POST",
         (
             "/position-training-lists",
-            "/position-training-lists/import",
             "/position-training-mappings",
         ),
         position_training,
         permission="operate",
         scope_adapter="hr.training_department",
+    )
+    add(
+        "POST",
+        "/position-training-lists/import",
+        position_training,
+        "operate",
+        "bulk_import",
+        "hr.training_department",
     )
     add(
         "PUT",
@@ -4483,11 +4956,13 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
         (
             "/training/departments",
             "/training/departments/custom",
-            "/training/dept-mappings",
         ),
-        settings_mapping,
-        scope_adapter="hr.settings",
+        settings_mapping
+        + settings_scopes
+        + tuple(key for key in all_pages if key.startswith("hr:training:")),
+        scope_adapter="hr.training_department",
     )
+    add("GET", "/training/dept-mappings", settings_mapping, scope_adapter="hr.settings")
     add(
         "POST",
         "/training/departments",

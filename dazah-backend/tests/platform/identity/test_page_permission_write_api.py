@@ -98,13 +98,18 @@ async def test_versioned_role_and_user_replacement_keeps_baseline_audit_and_outb
             assert data["grants"][0]["permissions"] == []
             assert data["role_grants"][0]["permissions"] == ["access", "query"]
             assert data["custom_page_keys"] == [page_key]
-            assert (await client.put(user_url, json=deny)).status_code == 409
+            conflict = await client.put(user_url, json=deny)
+            assert conflict.status_code == 409
+            assert "你基于 v" in conflict.json()["detail"]
+            assert "授权管理员" in conflict.json()["detail"]
+            restore_key = str(uuid4())
             restored = await client.put(
                 user_url,
                 json={
                     "expected_grant_version": data["grant_version"],
                     "reason": "恢复角色基线",
                     "grants": [{"page_key": page_key, "mode": "inherit"}],
+                    "idempotency_key": restore_key,
                 },
             )
             assert restored.status_code == 200, restored.text
@@ -113,6 +118,100 @@ async def test_versioned_role_and_user_replacement_keeps_baseline_audit_and_outb
                 "query",
             ]
             assert restored.json()["data"]["custom_page_keys"] == []
+            restored_version = restored.json()["data"]["grant_version"]
+            duplicate = await client.put(
+                user_url,
+                json={
+                    "expected_grant_version": data["grant_version"],
+                    "reason": "恢复角色基线",
+                    "grants": [{"page_key": page_key, "mode": "inherit"}],
+                    "idempotency_key": restore_key,
+                },
+            )
+            assert duplicate.status_code == 200, duplicate.text
+            assert duplicate.json()["data"]["grant_version"] == restored_version
+            reused_key = await client.put(
+                user_url,
+                json={
+                    "expected_grant_version": restored_version,
+                    "reason": "另一项调整",
+                    "grants": [],
+                    "idempotency_key": restore_key,
+                },
+            )
+            assert reused_key.status_code == 409
+            assert "幂等键" in reused_key.json()["detail"]
+
+            history_response = await client.get(f"{user_url}/history")
+            assert history_response.status_code == 200, history_response.text
+            history_page = history_response.json()["data"]
+            history = history_page["items"]
+            assert history_page["total"] == 2
+            assert history_page["page"] == 1
+            assert history_page["actor_options"] == [
+                {"user_id": str(actor.id), "user_name": "授权管理员"}
+            ]
+            second_page = await client.get(
+                f"{user_url}/history", params={"page": 2, "page_size": 1}
+            )
+            assert second_page.status_code == 200
+            assert second_page.json()["data"]["total"] == 2
+            assert second_page.json()["data"]["page"] == 2
+            assert len(second_page.json()["data"]["items"]) == 1
+            deny_history = next(
+                item for item in history if item["reason"] == "明确拒绝此用户页面访问"
+            )
+            assert deny_history["actor_name"] == "授权管理员"
+            assert deny_history["source"] == "manual"
+            assert deny_history["changes"][0]["page_key"] == page_key
+            filtered = await client.get(
+                f"{user_url}/history",
+                params={
+                    "source": "manual",
+                    "page_key": page_key,
+                    "change_kind": "grant",
+                },
+            )
+            assert filtered.status_code == 200
+            assert filtered.json()["data"]["items"]
+            assert filtered.json()["data"]["total"] == 1
+
+            preview = await client.post(
+                f"{user_url}/rollback/preview",
+                json={
+                    "audit_id": deny_history["id"],
+                    "expected_grant_version": restored_version,
+                },
+            )
+            assert preview.status_code == 200, preview.text
+            preview_data = preview.json()["data"]
+            assert preview_data["affected_user_count"] == 1
+            assert preview_data["changes"][0]["page_key"] == page_key
+
+            rollback_key = str(uuid4())
+            rollback_payload = {
+                "audit_id": deny_history["id"],
+                "expected_grant_version": restored_version,
+                "reason": "恢复拒绝快照",
+                "idempotency_key": rollback_key,
+            }
+            rolled_back = await client.post(
+                f"{user_url}/rollback", json=rollback_payload
+            )
+            assert rolled_back.status_code == 200, rolled_back.text
+            rollback_version = rolled_back.json()["data"]["grant_version"]
+            duplicate_rollback = await client.post(
+                f"{user_url}/rollback", json=rollback_payload
+            )
+            assert duplicate_rollback.status_code == 200, duplicate_rollback.text
+            assert (
+                duplicate_rollback.json()["data"]["grant_version"] == rollback_version
+            )
+
+            exported = await client.get(f"{user_url}/history/export")
+            assert exported.status_code == 200
+            assert "授权管理员" in exported.text
+            assert "明确拒绝此用户页面访问" in exported.text
             logs = (
                 await db.scalars(
                     select(AuditLog).where(

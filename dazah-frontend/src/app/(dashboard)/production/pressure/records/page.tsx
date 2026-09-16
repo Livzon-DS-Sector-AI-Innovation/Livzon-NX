@@ -30,12 +30,14 @@ import {
 import { AREA_OPTIONS } from '@/types/pressure'
 import type { MergedPressureRow } from '@/types/pressure'
 import dayjs from 'dayjs'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
 const { RangePicker } = DatePicker
 
 export default function PressureRecordsPage() {
   const { message } = App.useApp()
+  const { canDelete, canExport } = useProductionPermissions(PRODUCTION_PAGE_KEYS.pressure)
   const [loading, setLoading] = useState(false)
   const [records, setRecords] = useState<MergedPressureRow[]>([])
   const [total, setTotal] = useState(0)
@@ -73,6 +75,7 @@ export default function PressureRecordsPage() {
   }, [loadData])
 
   const handleDelete = async (record: MergedPressureRow) => {
+    if (!canDelete) return
     const res = await deleteMergedRow({ point_id: record.point_id, date: record.date })
     if (res.code === 200) {
       message.success('删除成功')
@@ -83,6 +86,7 @@ export default function PressureRecordsPage() {
   }
 
   const handleBatchDelete = async () => {
+    if (!canDelete) return
     const rows = selectedRowKeys.map((key) => {
       const record = records.find((r) => `${r.point_id}-${r.date}` === key)!
       return { point_id: record.point_id, date: record.date }
@@ -96,6 +100,7 @@ export default function PressureRecordsPage() {
   }
 
   const handleExport = async () => {
+    if (!canExport) return
     const params: any = {}
     if (area) params.area = area
     if (dateRange) {
@@ -176,11 +181,11 @@ export default function PressureRecordsPage() {
       title: '操作',
       key: 'action',
       width: 80,
-      render: (_: any, record: MergedPressureRow) => (
+      render: (_: any, record: MergedPressureRow) => canDelete ? (
         <Popconfirm title="确认删除该记录？" onConfirm={() => handleDelete(record)}>
           <Button type="link" danger size="small" icon={<DeleteOutlined />} />
         </Popconfirm>
-      )
+      ) : null
     },
   ]
 
@@ -211,8 +216,8 @@ export default function PressureRecordsPage() {
             }}
           />
           <Button icon={<ReloadOutlined />} onClick={loadData}>刷新</Button>
-          <Button icon={<ExportOutlined />} onClick={handleExport}>导出</Button>
-          {selectedRowKeys.length > 0 && (
+          {canExport && <Button icon={<ExportOutlined />} onClick={handleExport}>导出</Button>}
+          {canDelete && selectedRowKeys.length > 0 && (
             <Popconfirm title={`确认删除 ${selectedRowKeys.length} 条记录？`} onConfirm={handleBatchDelete}>
               <Button danger icon={<DeleteOutlined />}>批量删除 ({selectedRowKeys.length})</Button>
             </Popconfirm>

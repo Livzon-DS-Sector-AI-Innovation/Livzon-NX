@@ -12,6 +12,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import ReactECharts from 'echarts-for-react'
 import { toPng } from 'html-to-image'
 import BATCH_TYPES from '@/components/production/batchTypes'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
 const BASE = '/api/v1/production/mc'
@@ -200,6 +201,7 @@ function TraceabilityPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { message } = App.useApp()
+  const { canOperate, canExport } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2012)
 
   // URL 参数自动追溯
   const urlStage = searchParams.get('stage') || ''
@@ -324,6 +326,7 @@ function TraceabilityPage() {
 
   // ── 追问发送（SSE）──
   const doChatSend = useCallback(async () => {
+    if (!canOperate) return
     const msg = chatInput.trim()
     if (!msg) return
     if (!aiResult?.session_id) {
@@ -379,7 +382,7 @@ function TraceabilityPage() {
     } finally {
       setChatSending(false)
     }
-  }, [chatInput, aiResult, message])
+  }, [canOperate, chatInput, aiResult, message])
 
   const exportFlow = useCallback(async () => {
     if (!flowRef.current) return
@@ -538,7 +541,7 @@ function TraceabilityPage() {
                       累计收率: {traceData.cumulative_yield}%
                     </Tag>
                   )}
-                  <Button size="small" icon={<DownloadOutlined />} style={{ marginLeft: 8 }} onClick={exportFlow}>导出图片</Button>
+                  {canExport && <Button size="small" icon={<DownloadOutlined />} style={{ marginLeft: 8 }} onClick={exportFlow}>导出图片</Button>}
                 </span>
               }
             >
@@ -758,9 +761,9 @@ function TraceabilityPage() {
                         value={chatInput}
                         onChange={e => setChatInput(e.target.value)}
                         onPressEnter={doChatSend}
-                        disabled={chatSending}
+                        disabled={chatSending || !canOperate}
                       />
-                      <Button size="small" type="primary" icon={<SendOutlined />} loading={chatSending} onClick={doChatSend} />
+                      {canOperate && <Button size="small" type="primary" icon={<SendOutlined />} loading={chatSending} onClick={doChatSend} />}
                     </Space.Compact>
                   </div>
                 </div>

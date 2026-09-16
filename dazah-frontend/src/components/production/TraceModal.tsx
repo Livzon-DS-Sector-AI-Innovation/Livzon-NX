@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import {Modal, Typography, Tag, Spin, Empty, App, Button, Input, Space, Popover,} from 'antd'
 import { SendOutlined, HistoryOutlined, DownloadOutlined } from '@ant-design/icons'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions, type ProductionPageKey } from './useProductionPermissions'
 
 const { Text } = Typography
 const API = (p: string) => `/api/v1/production${p}`
@@ -29,6 +30,7 @@ interface Props {
   stageConfig?: Record<string, { color: string }>;
   stageOrder?: string[];
   apiPrefix?: string;
+  pageKey?: ProductionPageKey;
 }
 
 export function buildLayout(stages: StageGroup[], targetBatch: string, targetStage: string, cfg: Record<string, { color: string }>, order: string[]) {
@@ -144,10 +146,12 @@ export function buildLayout(stages: StageGroup[], targetBatch: string, targetSta
 }
 
 
-export default function TraceModal({ stage, batchNo, onClose, stageConfig, stageOrder, apiPrefix }: Props) {
+export default function TraceModal({ stage, batchNo, onClose, stageConfig, stageOrder, apiPrefix, pageKey }: Props) {
   const cfg = stageConfig || STAGE_CFG
   const order = stageOrder || STAGE_ORDER
   const apiPath = apiPrefix || '/mc/lineage'
+  const permissionsEnabled = Boolean(pageKey)
+  const { canOperate, canExport } = useProductionPermissions(pageKey || PRODUCTION_PAGE_KEYS.overview)
   const [loading, setLoading] = useState(true)
   const [layout, setLayout] = useState<{ nodes: any[]; lines: any[]; notes: any[] }>({ nodes: [], lines: [], notes: [] })
   const [error, setError] = useState('')
@@ -268,6 +272,7 @@ export default function TraceModal({ stage, batchNo, onClose, stageConfig, stage
   }
 
   const doChatSend = useCallback(async () => {
+    if (permissionsEnabled && !canOperate) return
     const msg = chatInput.trim()
     if (!msg || !aiResult?.session_id) return
     setChatInput('')
@@ -324,7 +329,7 @@ export default function TraceModal({ stage, batchNo, onClose, stageConfig, stage
     } finally {
       setChatSending(false)
     }
-  }, [chatInput, aiResult, message]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [permissionsEnabled, canOperate, chatInput, aiResult, message]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const maxX = layout.nodes.reduce((m, n) => Math.max(m, n.x + n.w), 0) + 40
   const maxY = Math.max(layout.nodes.reduce((m, n) => Math.max(m, n.y + n.h), 0),
@@ -336,7 +341,9 @@ export default function TraceModal({ stage, batchNo, onClose, stageConfig, stage
         <Button size="small" type="primary" loading={aiLoading} onClick={doAiAnalysis} style={{ marginLeft: 12 }}>
           AI 分析
         </Button>
-        <Button icon={<DownloadOutlined />} size="small" style={{ marginLeft: 8 }} onClick={exportPng}>导出</Button>
+        {(!permissionsEnabled || canExport) && (
+          <Button icon={<DownloadOutlined />} size="small" style={{ marginLeft: 8 }} onClick={exportPng}>导出</Button>
+        )}
         <Popover
           trigger="click"
           onOpenChange={(open) => { if (open) loadHistory() }}
@@ -470,9 +477,9 @@ export default function TraceModal({ stage, batchNo, onClose, stageConfig, stage
                     value={chatInput}
                     onChange={e => setChatInput(e.target.value)}
                     onPressEnter={doChatSend}
-                    disabled={chatSending}
+                    disabled={chatSending || (permissionsEnabled && !canOperate)}
                   />
-                  <Button size="small" type="primary" icon={<SendOutlined />} loading={chatSending} onClick={doChatSend} />
+                  {(!permissionsEnabled || canOperate) && <Button size="small" type="primary" icon={<SendOutlined />} loading={chatSending} onClick={doChatSend} />}
                 </Space.Compact>
               </div>
             </div>

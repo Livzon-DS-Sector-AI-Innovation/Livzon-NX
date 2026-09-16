@@ -8,12 +8,14 @@ import { getNCEs, createNCE, updateNCE, deleteNCE } from '@/actions/nce'
 import type { NCERecord, NCECreate } from '@/types/nce'
 import { EVENT_TYPES, WORKSHOP_OPTIONS } from '@/types/nce'
 import dayjs from 'dayjs'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
 const { TextArea } = Input
 
 export default function DeviationPage() {
   const { message, modal } = App.useApp()
+  const { canOperate, canDelete } = useProductionPermissions(PRODUCTION_PAGE_KEYS.shiftLogDeviation)
   const [form] = Form.useForm()
   const [editForm] = Form.useForm()
   const [loading, setLoading] = useState(false)
@@ -49,6 +51,7 @@ export default function DeviationPage() {
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
 
   const openForm = (r?: NCERecord) => {
+    if (!canOperate) return
     setEditing(r || null)
     if (r) editForm.setFieldsValue({ ...r, event_time: dayjs(r.event_time), restore_time: r.restore_time ? dayjs(r.restore_time) : null })
     else form.resetFields()
@@ -56,6 +59,7 @@ export default function DeviationPage() {
   }
 
   const handleDelete = (id: string) => {
+    if (!canDelete) return
     modal.confirm({
       title: '确认删除', onOk: async () => {
         const res = await deleteNCE(id)
@@ -66,6 +70,7 @@ export default function DeviationPage() {
   }
 
   const handleSubmit = async () => {
+    if (!canOperate) return
     try {
       const vals = editing ? await editForm.validateFields() : await form.validateFields()
       const et = vals.event_time; const rt = vals.restore_time
@@ -114,8 +119,8 @@ export default function DeviationPage() {
             setDetailRecord(r); setDetailVisible(true); setAffectedBatches([])
             try { const res = await fetch(`http://localhost:8000/api/v1/production/non-conforming-events/${r.id}/affected-batches`); const j = await res.json(); if (j.code === 200) setAffectedBatches(j.data) } catch {}
           }}>详情</Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openForm(r)}>编辑</Button>
-          <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(r.id)}>删除</Button>
+          {canOperate && <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openForm(r)}>编辑</Button>}
+          {canDelete && <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(r.id)}>删除</Button>}
         </Space>
       ),
     },
@@ -126,7 +131,7 @@ export default function DeviationPage() {
       <Title level={4}><AlertOutlined className="mr-2" />非密事件与运行偏差</Title>
       <Text type="secondary">记录设备微调、公用工程波动等非密事件及处理措施</Text>
 
-      <Card className="mt-4" extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => openForm()}>新建事件</Button>}>
+      <Card className="mt-4" extra={canOperate ? <Button type="primary" icon={<PlusOutlined />} onClick={() => openForm()}>新建事件</Button> : null}>
         <Row gutter={16} className="mb-4">
           <Col span={5}><Select placeholder="车间" allowClear value={workshopFilter} onChange={v => { setWorkshopFilter(v); setPage(1) }} style={{ width: '100%' }} options={WORKSHOP_OPTIONS.map(w => ({ value: w, label: w }))} showSearch /></Col>
           <Col span={4}><Select placeholder="事件类型" allowClear value={typeFilter} onChange={v => { setTypeFilter(v); setPage(1) }} style={{ width: '100%' }} options={EVENT_TYPES.map(t => ({ value: t, label: t }))} /></Col>
@@ -137,7 +142,7 @@ export default function DeviationPage() {
           pagination={{ current: page, pageSize, total: records.length, showSizeChanger: true, showTotal: t => `共 ${t} 条`, onChange: (p, ps) => { setPage(p); setPageSize(ps) } }} />
       </Card>
 
-      <Modal title={editing ? '编辑事件' : '新建事件'} open={modalVisible} onOk={handleSubmit} onCancel={() => setModalVisible(false)} width={720} okText="确认" cancelText="取消" destroyOnHidden>
+      <Modal title={editing ? '编辑事件' : '新建事件'} open={modalVisible && canOperate} onOk={canOperate ? handleSubmit : undefined} onCancel={() => setModalVisible(false)} width={720} okText="确认" cancelText="取消" destroyOnHidden>
         <Form form={editing ? editForm : form} layout="vertical">
           <Row gutter={16}>
             <Col span={8}><Form.Item name="event_time" label="发生时间" rules={[{ required: true }]}><DatePicker showTime style={{ width: '100%' }} format="YYYY-MM-DD HH:mm" /></Form.Item></Col>

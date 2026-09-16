@@ -9,7 +9,7 @@ import { fetchOffboardingRecordsAction, deleteOffboardingRecord, syncOffboarding
 import OffboardingForm from './OffboardingForm'
 import OffboardingDetailDrawer from './OffboardingDetailDrawer'
 import HrChatbot from './HrChatbot'
-import { usePermission } from '@/hooks/usePermission'
+import { usePagePermissions } from '@/hooks/usePagePermissions'
 
 interface OffboardingClientProps {
   initialRecords: OffboardingRecord[]
@@ -20,9 +20,11 @@ export default function OffboardingClient({
   initialRecords,
   initialTotal }: OffboardingClientProps) {
   const { message } = App.useApp()
-  // 编辑权限：仅人力资源部（hr:write）可新增/编辑/删除，其他部门只读
-  const { has } = usePermission()
-  const canEditHr = has('hr:write')
+  const {
+    canOperate: canEditHr,
+    canDelete,
+    canSync,
+  } = usePagePermissions('hr:offboarding')
   const [records, setRecords] = useState<OffboardingRecord[]>(initialRecords)
   const [total, setTotal] = useState(initialTotal)
   const [page, setPage] = useState(1)
@@ -78,6 +80,7 @@ export default function OffboardingClient({
   }
 
   const handleDelete = async (id: string) => {
+    if (!canDelete) return
     try {
       await deleteOffboardingRecord(id)
       message.success('删除成功')
@@ -112,6 +115,7 @@ export default function OffboardingClient({
   }
 
   const handleSyncFeishu = async () => {
+    if (!canSync) return
     setSyncing(true)
     try {
       const res = await syncOffboardingFromFeishuAction()
@@ -381,6 +385,9 @@ export default function OffboardingClient({
                   onClick={() => handleGenerateCertificate(record)}
                 />
               </Tooltip>
+            </>
+          ) : null}
+          {canDelete ? (
               <Popconfirm
                 title="确认删除"
                 description="确定要删除该离职记录吗？"
@@ -397,7 +404,6 @@ export default function OffboardingClient({
                   />
                 </Tooltip>
               </Popconfirm>
-            </>
           ) : null}
         </Space>
       ) },
@@ -409,10 +415,10 @@ export default function OffboardingClient({
         <h1 className="text-[22px] font-semibold text-[var(--color-charcoal)]">
           离职管理
         </h1>
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+        <Button type="primary" icon={<PlusOutlined />} disabled={!canEditHr} onClick={handleAdd}>
           新增离职记录
         </Button>
-        {canEditHr ? (
+        {canSync ? (
           <Button icon={<SyncOutlined spin={syncing} />} loading={syncing} onClick={handleSyncFeishu}>
             同步飞书
           </Button>

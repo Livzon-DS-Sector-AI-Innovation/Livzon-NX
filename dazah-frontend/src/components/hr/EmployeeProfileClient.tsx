@@ -7,7 +7,7 @@ import { Employee } from '@/types/hr'
 import { fetchEmployeesAction, syncFromFeishuAction } from '@/actions/hr'
 import { fetchEmployeeDepartments } from '@/lib/api/client/hr'
 import { useHrStore } from '@/stores/hr'
-import { usePermission } from '@/hooks/usePermission'
+import { usePagePermissions } from '@/hooks/usePagePermissions'
 import EmployeeTable from './EmployeeTable'
 import EmployeeForm from './EmployeeForm'
 import EmployeeDetailDrawer from './EmployeeDetailDrawer'
@@ -34,6 +34,9 @@ export default function EmployeeProfileClient({
   initialTotal,
   fetchAction }: EmployeeProfileClientProps) {
   const { message } = App.useApp()
+  const { canOperate: canEditHr, canDelete, canSync } = usePagePermissions(
+    'hr:employee-management:profile',
+  )
   const [syncing, setSyncing] = useState(false)
   const [employees, setEmployees] = useState<Employee[]>(initialEmployees)
   const [total, setTotal] = useState(initialTotal)
@@ -97,6 +100,7 @@ export default function EmployeeProfileClient({
   }
 
   const handleSync = async (silent = false) => {
+    if (!canSync) return
     setSyncing(true)
     const hide = silent ? undefined : message.loading('正在从飞书同步数据，请稍候...', 0)
     try {
@@ -117,6 +121,7 @@ export default function EmployeeProfileClient({
   }
 
   const handleEdit = (employee: Employee) => {
+    if (!canEditHr) return
     setEditingEmployee(employee)
     setFormOpen(true)
   }
@@ -126,11 +131,8 @@ export default function EmployeeProfileClient({
     setDetailOpen(true)
   }
 
-  // 编辑权限：仅人力资源部（hr:write）可新增/同步/编辑/删除员工
-  const { has } = usePermission()
-  const canEditHr = has('hr:write')
-
   const handleAdd = () => {
+    if (!canEditHr) return
     setEditingEmployee(null)
     setFormOpen(true)
   }
@@ -157,10 +159,10 @@ export default function EmployeeProfileClient({
         <h1 className="text-[22px] font-semibold text-[var(--color-charcoal)]">
           员工档案
         </h1>
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+        <Button type="primary" icon={<PlusOutlined />} disabled={!canEditHr} onClick={handleAdd}>
           新增员工
         </Button>
-        {canEditHr ? (
+        {canSync ? (
           <Button icon={<SyncOutlined spin={syncing} />} loading={syncing} onClick={() => handleSync(false)}>
             同步飞书
           </Button>
@@ -254,6 +256,8 @@ export default function EmployeeProfileClient({
         onRefresh={handleRefresh}
         onEdit={handleEdit}
         onView={handleView}
+        canEdit={canEditHr}
+        canDelete={canDelete}
       />
 
       <EmployeeForm

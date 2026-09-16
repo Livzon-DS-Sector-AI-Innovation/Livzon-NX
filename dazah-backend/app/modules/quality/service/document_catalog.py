@@ -13,10 +13,12 @@ import openpyxl  # type: ignore[import-untyped]
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import ForbiddenException
 from app.modules.quality.models.document_catalog import (
     DocumentDepartment,
     DocumentEntry,
 )
+from app.platform.identity.data_scope import DepartmentScope
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +162,8 @@ async def import_document_catalog(
     content: bytes,
     source_file: str,
     filename: str = "",
+    *,
+    scope: DepartmentScope | None = None,
 ) -> dict[str, Any]:
     """按部门全量替换导入：支持 xlsx（sheet=部门）与 docx（单部门）两种格式。"""
     lower_name = (filename or source_file).lower()
@@ -171,6 +175,10 @@ async def import_document_catalog(
             content, fallback_name=filename
         )
         dept_entries = [(dept_name, entries)] if dept_name and entries else []
+
+    # Validate every department before replacing any records in a mixed workbook.
+    if scope is not None and any(not scope.allows(name) for name, _ in dept_entries):
+        raise ForbiddenException("导入文件包含无权操作的部门目录")
 
     # 序号自动填充：源文件序号缺失时按部门内顺序补 1..N
     for _name, entry_list in dept_entries:

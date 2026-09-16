@@ -10,6 +10,7 @@ import { calculateBlendImpurities, deleteBlendingRecord } from '@/actions/mc/sta
 import Dashboard from '@/components/production/Dashboard'
 import MCSheetsSyncButton from '@/components/production/MCSheetsSyncButton'
 import MCTraceButton from '@/components/production/MCTraceButton'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
 const BASE = '/api/v1/production/mc'
@@ -55,16 +56,18 @@ interface BlendRow extends BlendRecord {
 }
 
 function CellInput({ value, onSave, color }: { value: number | string | null | undefined; onSave: (v: number | null) => void; color?: string }) {
+  const { canOperate } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2012)
   const [editing, setEditing] = useState(false)
-  if (!editing) return <div style={{ width: '100%', height: 20, cursor: 'text', color: color || undefined, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setEditing(true)}>{value != null ? value : ''}</div>
+  if (!editing || !canOperate) return <div style={{ width: '100%', height: 20, cursor: canOperate ? 'text' : 'default', color: color || undefined, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={canOperate ? () => setEditing(true) : undefined}>{value != null ? value : ''}</div>
   return <InputNumber size="small" autoFocus style={{ width: '100%', color: color || undefined }} defaultValue={value ?? undefined}
     onBlur={e => { setEditing(false); const raw = e.currentTarget.value; if (raw === '' || raw === '-') { onSave(null); return } const n = Number(raw); if (!isNaN(n)) onSave(n) }}
     onPressEnter={(e) => { setEditing(false); const raw = e.currentTarget.value; if (raw === '' || raw === '-') { onSave(null); return } const n = Number(raw); if (!isNaN(n)) onSave(n) }} />
 }
 
 function TextCellInput({ value, onSave }: { value: string | null | undefined; onSave: (v: string | null) => void }) {
+  const { canOperate } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2012)
   const [editing, setEditing] = useState(false)
-  if (!editing) return <div style={{ width: '100%', height: 20, cursor: 'text', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setEditing(true)}>{value ?? ''}</div>
+  if (!editing || !canOperate) return <div style={{ width: '100%', height: 20, cursor: canOperate ? 'text' : 'default', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={canOperate ? () => setEditing(true) : undefined}>{value ?? ''}</div>
   return <Input size="small" autoFocus style={{ width: '100%', fontSize: 10, height: 20, padding: '0 2px' }} defaultValue={value ?? ''} onBlur={e => { setEditing(false); onSave(e.currentTarget.value || null) }} />
 }
 
@@ -80,6 +83,7 @@ const IMPURITY_FIELDS = [
 
 export default function BlendingPage() {
   const router = useRouter(); const { message, modal } = App.useApp()
+  const { canOperate, canDelete } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2012)
   const [form] = Form.useForm()
   const [records, setRecords] = useState<BlendRecord[]>([]); const [loading, setLoading] = useState(false); const [, setSaving] = useState(false)
   const [month, setMonth] = useState<number>(dayjs().month() + 1)
@@ -94,14 +98,17 @@ export default function BlendingPage() {
   useEffect(() => { load() }, [load]) // eslint-disable-line react-hooks/set-state-in-effect
 
   const saveRecord = async (id: string, field: string, value: number | string | null) => {
+    if (!canOperate) return
     setSaving(true); await api(`/blending-records/${id}`, { method: 'PUT', body: JSON.stringify({ [field]: value }) }); setSaving(false); load()
   }
 
   const saveInput = async (input: BlendInput, field: string, value: number | string | null) => {
+    if (!canOperate || !input.id) return
     setSaving(true); await api(`/blending-inputs/${input.id}`, { method: 'PUT', body: JSON.stringify({ [field]: value }) }); setSaving(false); load()
   }
 
   const handleCalculate = async (batchNo: string) => {
+    if (!canOperate) return
     setCalculating(p => ({ ...p, [batchNo]: true }))
     const res = await calculateBlendImpurities(batchNo)
     if (res.code === 200) {
@@ -114,6 +121,7 @@ export default function BlendingPage() {
   }
 
   const handleCreate = async () => {
+    if (!canOperate) return
     try { const vals = await form.validateFields(); vals.workshop = '201-2'; await api('/blending-records', { method: 'POST', body: JSON.stringify(vals) }); message.success('创建成功'); setCreateVisible(false); form.resetFields(); load() }
     catch { message.error('请检查表单') }
   }
@@ -152,8 +160,10 @@ export default function BlendingPage() {
       onCell,
     })),
     { title: <Text strong style={{ fontSize: 10, color: '#1677ff' }}>操作</Text>, key: 'calc', width: 68, fixed: 'right',
-      render: (_, r) => M(<Space orientation="vertical" size={0}><Button type="primary" size="small" icon={<CalculatorOutlined />} loading={calculating[r.batch_no ?? '']} onClick={() => handleCalculate(r.batch_no ?? '')} style={{ fontSize: 10 }}>计算</Button>
-        <Button type="link" size="small" danger onClick={() => modal.confirm({ title: `删除 ${r.batch_no}?`, onOk: async () => { await deleteBlendingRecord(r.id); load() } })} style={{ fontSize: 10 }}>删除</Button></Space>, r), onCell },
+      render: (_, r) => M(<Space orientation="vertical" size={0}>
+        {canOperate && <Button type="primary" size="small" icon={<CalculatorOutlined />} loading={calculating[r.batch_no ?? '']} onClick={() => handleCalculate(r.batch_no ?? '')} style={{ fontSize: 10 }}>计算</Button>}
+        {canDelete && <Button type="link" size="small" danger onClick={() => modal.confirm({ title: `删除 ${r.batch_no}?`, onOk: async () => { await deleteBlendingRecord(r.id); load() } })} style={{ fontSize: 10 }}>删除</Button>}
+      </Space>, r), onCell },
   ]
 
   return (
@@ -174,8 +184,8 @@ export default function BlendingPage() {
         <Space size={8}>
           <Select size="small" style={{ width: 80 }} value={month} onChange={v => setMonth(v)}
             options={[{ value: 0, label: '全部' }, ...[1,2,3,4,5,6,7,8,9,10,11,12].map(m => ({ value: m, label: `${m}月` }))]} />
-          <MCSheetsSyncButton />
-          <MCTraceButton initialModule="blending" />
+        <MCSheetsSyncButton pageKey="production:batches:workshop-201-2" />
+          <MCTraceButton initialModule="blending" pageKey="production:batches:workshop-201-2" />
         </Space>
       </div>
 
@@ -194,7 +204,7 @@ export default function BlendingPage() {
         ]}
       />
 
-      <Card extra={<Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setCreateVisible(true) }}>新建混粉批次</Button>}>
+      <Card extra={canOperate ? <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setCreateVisible(true) }}>新建混粉批次</Button> : null}>
         <Table size="small" rowKey="_key" loading={loading} className="blend-ledger-table" dataSource={flattenData()} scroll={{ x: 2200 }} columns={columns} pagination={false} />
       </Card>
 
@@ -206,7 +216,7 @@ export default function BlendingPage() {
         </Space>
       </Card>
 
-      <Modal title="新建混粉批次" open={createVisible} onOk={handleCreate} onCancel={() => setCreateVisible(false)} width={500} okText="确认" cancelText="取消" destroyOnHidden>
+      <Modal title="新建混粉批次" open={createVisible && canOperate} onOk={canOperate ? handleCreate : undefined} onCancel={() => setCreateVisible(false)} width={500} okText="确认" cancelText="取消" destroyOnHidden>
         <Form form={form} layout="vertical">
           <Row gutter={16}><Col span={12}><Form.Item name="batch_no" label="混合批号" rules={[{ required: true }]}><Input placeholder="MC-260101" /></Form.Item></Col>
             <Col span={12}><Form.Item name="pack_spec" label="包装规格"><Input placeholder="20kg/桶" /></Form.Item></Col></Row>
