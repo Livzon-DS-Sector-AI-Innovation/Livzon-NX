@@ -15,6 +15,7 @@
 """
 from __future__ import annotations
 
+import calendar
 import logging
 import re
 from datetime import date, datetime, time, timedelta
@@ -30,7 +31,7 @@ from app.modules.production.fermentation_batch_actual_models import (
 from app.modules.production.fermentation_month_setting_models import (
     FermentationMonthSetting,
 )
-from app.modules.production.schedule_excel_models import ScheduleExcelArchive
+from app.modules.production.models import ProductionPlan, ScheduleExcelArchive
 from app.modules.production.tank_maintenance_models import TankMaintenance
 
 FERMENT_TANKS = ("302A", "303A", "304A")
@@ -2465,6 +2466,22 @@ async def load_latest_archive(
     return result.scalar_one_or_none()
 
 
+def _board_functions(product_code: str):
+    """按产品分派（块定位, 看板组装）函数对。
+
+    FA/DR/MC 各自排产格式；他汀 LV/MV 复用 MC 管线。取档覆盖检查、
+    扎帐周期解析、汇总聚合共用此分派，避免多处字典漂移。
+    """
+    if product_code == "DR":
+        return find_dr_period_block, build_dr_board
+    if product_code in ("MC", "LV", "MV"):
+        return (
+            partial(find_mp_period_block, product=product_code),
+            partial(build_mp_board, product=product_code),
+        )
+    return find_period_block, build_board
+
+
 async def load_archive_covering(
     session: AsyncSession,
     ref_date: date,
@@ -2472,16 +2489,11 @@ async def load_archive_covering(
 ) -> ScheduleExcelArchive | None:
     """查找该产品 rows 覆盖指定日期所在扎帐周期的存档（含历史存档，从新到旧）。
 
-    FA/DR/MP 排产表格式不同：FA 按周期标题块、DR 按月度计划块（自然月列）、
-    MP 按月度放罐计划块（批次序号列）识别。
+    FA/DR/MC（含他汀 LV/MV）排产表格式不同：FA 按周期标题块、DR 按月度
+    计划块（自然月列）、MC 按月度放罐计划块（批次序号列）识别。
     """
     ref_dt = datetime.combine(ref_date, time(12, 0))
-    find_block = {
-        "DR": find_dr_period_block,
-        "MC": partial(find_mp_period_block, product="MC"),
-        "LV": partial(find_mp_period_block, product="LV"),
-        "MV": partial(find_mp_period_block, product="MV"),
-    }.get(product_code, find_period_block)
+    find_block, _ = _board_functions(product_code)
     result = await session.execute(
         select(ScheduleExcelArchive)
         .where(
@@ -2623,18 +2635,162 @@ def current_period(
 ) -> tuple[date, date] | None:
     """最新存档中包含 now 的扎帐周期 (start, end)。
 
-    FA/DR/MP（含他汀 LV/MV）排产格式分派。
+    FA/DR/MC（含他汀 LV/MV）排产格式分派。
     """
-    find_block = {
-        "DR": find_dr_period_block,
-        "MC": partial(find_mp_period_block, product="MC"),
-        "LV": partial(find_mp_period_block, product="LV"),
-        "MV": partial(find_mp_period_block, product="MV"),
-    }.get(product_code, find_period_block)
+    find_block, _ = _board_functions(product_code)
     block = find_block(rows, now)
     if block is None:
         return None
     return block["start"], block["end"]
+
+
+_SUMMARY_PRODUCTS: tuple[tuple[str, str], ...] = (
+    ("MC", "霉酚酸"),
+    ("DR", "多拉菌素"),
+    ("FA", "L-苯丙氨酸"),
+    ("LV", "洛伐他汀"),
+    ("MV", "美伐他汀"),
+)
+
+
+def _summary_rate(
+    numerator: float | None, denominator: float | None
+) -> float | None:
+    """比率（百分数，1 位小数）；分母缺失或非正时返回 None。"""
+    if numerator is None or denominator is None or denominator <= 0:
+        return None
+    return round(numerator / denominator * 100, 1)
+
+
+def _extract_planned_yield_kg(
+    plan_rows: list[Any], product_name: str
+) -> float | None:
+    """产销计划中该产品提炼车间行（车间名不含'发酵'）的 KG 计划合计。
+
+    发酵车间行是发酵段口径（单位'批'），不计入提炼计划；无行返回 None。
+    """
+    total = 0.0
+    found = False
+    for row in plan_rows:
+        if row.is_deleted or row.product_name != product_name:
+            continue
+        if not row.planned_yield:
+            continue
+        if "发酵" in (row.workshop or ""):
+            continue
+        found = True
+        total += float(row.planned_yield)
+    return round(total, 2) if found else None
+
+
+async def build_production_summary(
+    db: AsyncSession, *, ref_date: date, has_ferm: bool, has_extract: bool
+) -> dict[str, Any]:
+    """生产汇总：五条产线的发酵/提炼关键指标。
+
+    逐产品复用既有看板口径（月计划批次、月计划产能、已完成产能），
+    提炼段取产销计划提炼车间行与仓储成品入库；权限不足的段返回 None。
+    """
+    month_start = ref_date.replace(day=1)
+    month_end = month_start.replace(
+        day=calendar.monthrange(ref_date.year, ref_date.month)[1]
+    )
+    plan_rows = (
+        await db.execute(
+            select(ProductionPlan).where(
+                ProductionPlan.plan_date >= month_start,
+                ProductionPlan.plan_date <= month_end,
+                ProductionPlan.is_deleted.is_(False),
+            )
+        )
+    ).scalars().all()
+
+    now = datetime.combine(ref_date, time(12, 0))
+    rows: list[dict[str, Any]] = []
+    period: dict[str, str] | None = None
+    for code, name in _SUMMARY_PRODUCTS:
+        ferment = {
+            "planned_batches": None,
+            "planned_capacity_kg": None,
+            "done_yield_kg": None,
+            "capacity_rate": None,
+        }
+        extract = {
+            "planned_yield_kg": None,
+            "finished_inbound_kg": None,
+            "completion_rate": None,
+        }
+        covered = False
+        board_alerts: list[dict[str, Any]] = []
+        archive = await load_archive_covering(db, ref_date, code)
+        if archive is not None:
+            find_block, build_board_fn = _board_functions(code)
+            block = find_block(archive.rows, now)
+            if block is not None:
+                covered = True
+                if period is None:
+                    period = {
+                        "start": block["start"].isoformat(),
+                        "end": block["end"].isoformat(),
+                        "label": block["label"],
+                    }
+                if has_ferm:
+                    actuals = await list_batch_actuals(
+                        db,
+                        period_start=block["start"],
+                        period_end=block["end"],
+                        product_code=code,
+                    )
+                    payload = build_board_fn(
+                        archive.rows,
+                        [],
+                        now,
+                        actuals=[
+                            serialize_batch_actual(item) for item in actuals
+                        ],
+                        block=block,
+                    )
+                    board_alerts = payload.get("alerts") or []
+                    kpis = payload.get("kpis") or {}
+                    ferment["planned_batches"] = kpis.get("month_planned")
+                    setting = await get_month_setting(
+                        db, block["start"], code
+                    )
+                    ferment["planned_capacity_kg"] = (
+                        setting.planned_capacity_kg if setting else None
+                    )
+                    ferment["done_yield_kg"] = kpis.get("month_done_yield_kg")
+                    ferment["capacity_rate"] = _summary_rate(
+                        ferment["done_yield_kg"],
+                        ferment["planned_capacity_kg"],
+                    )
+        if has_extract:
+            extract["planned_yield_kg"] = _extract_planned_yield_kg(
+                plan_rows, name
+            )
+            extract["finished_inbound_kg"] = (
+                await get_warehouse_finished_inbound_kg(
+                    db,
+                    product_code=code,
+                    period_start=month_start,
+                    period_end=month_end,
+                )
+            )
+            extract["completion_rate"] = _summary_rate(
+                extract["finished_inbound_kg"], extract["planned_yield_kg"]
+            )
+        rows.append(
+            {
+                "product_code": code,
+                "product_name": name,
+                "covered": covered,
+                "ferment": ferment,
+                "extract": extract,
+                # 该产线的排产播报（发酵权限可见）；未覆盖产线为空
+                "alerts": board_alerts if has_ferm else [],
+            }
+        )
+    return {"period": period, "rows": rows}
 
 
 async def get_month_setting(

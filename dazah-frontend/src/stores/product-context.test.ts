@@ -38,6 +38,12 @@ describe('product context store', () => {
     expect(useProductContextStore.getState().productCode).toBe('FA')
   })
 
+  it('accepts the SUMMARY product tab persisted on mount', () => {
+    window.localStorage.setItem('dazah.production.product-context', 'SUMMARY')
+    restoreProductContext()
+    expect(useProductContextStore.getState().productCode).toBe('SUMMARY')
+  })
+
   it('keeps the default when storage is unavailable', () => {
     const getItem = vi
       .spyOn(Storage.prototype, 'getItem')
