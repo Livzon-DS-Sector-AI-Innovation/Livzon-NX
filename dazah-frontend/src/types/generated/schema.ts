@@ -12857,6 +12857,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/production/production-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 生产汇总（五产线发酵/提炼关键指标） */
+        get: operations["get_production_summary_api_v1_production_production_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/production/records": {
         parameters: {
             query?: never;
@@ -93532,6 +93549,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_production_summary_api_v1_production_production_summary_get: {
+        parameters: {
+            query?: {
+                /** @description 参考日期 YYYY-MM-DD，默认今天（按扎帐周期取数） */
+                date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

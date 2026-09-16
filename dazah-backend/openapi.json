@@ -151786,6 +151786,75 @@
         ]
       }
     },
+    "/api/v1/production/production-summary": {
+      "get": {
+        "operationId": "get_production_summary_api_v1_production_production_summary_get",
+        "parameters": [
+          {
+            "description": "参考日期 YYYY-MM-DD，默认今天（按扎帐周期取数）",
+            "in": "query",
+            "name": "date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "参考日期 YYYY-MM-DD，默认今天（按扎帐周期取数）",
+              "title": "Date"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Production Summary Api V1 Production Production Summary Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "生产汇总（五产线发酵/提炼关键指标）",
+        "tags": [
+          "生产管理",
+          "生产管理 - 发酵车间看板"
+        ]
+      }
+    },
     "/api/v1/production/records": {
       "post": {
         "description": "创建生产记录",
