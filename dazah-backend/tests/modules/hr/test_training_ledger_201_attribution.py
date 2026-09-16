@@ -8,6 +8,10 @@
 - 导入补线：授课部门为裸名 201二车间且归属为空时按参训人员飞书部门补
   半边，跨半边各建一条内容一致的副本；查不到回退所选 Tab；
 - 拦截：签到/手动新增涉及 201 家族但整份名单均无法从飞书识别线别 → 400；
+- 授课部门解析：培训师表 → 飞书联系人（表里未登记时按姓名取确认部门），
+  两者都识别不到才用传入的落款/所选部门；
+- 主记录线别：落款写成裸名「201二车间」（未指明 MC/DR）时按培训师所属
+  部门定线别，培训师识别不到线别才按参训人员飞书部门取有人的那半；
 - 拆副本收敛：某半边没有参训人员不建该半边副本（识别不到兜底全建）。
 """
 
@@ -193,7 +197,8 @@ async def test_import_falls_back_to_selected_tab_when_trainees_unknown():
     service = _service_with_execute_results(
         [
             _execute_result([]),  # 培训师表无此人
-            _execute_result([]),  # 飞书未命中
+            _execute_result([]),  # 培训师飞书联系人回退：同样未命中
+            _execute_result([]),  # 受训人员飞书未命中
         ]
     )
     _attach_create_spy(service)
@@ -213,6 +218,7 @@ async def test_import_cross_half_trainees_build_copies_for_both_lines():
     service = _service_with_execute_results(
         [
             _execute_result([]),  # 培训师表无此人
+            _execute_result([]),  # 培训师飞书联系人回退：同样未命中
             _execute_result(
                 [
                     ("测金养蓬", "201二车间（多拉）"),  # → DR
@@ -241,6 +247,7 @@ async def test_import_auto_routes_to_other_line_when_trainees_match():
     service = _service_with_execute_results(
         [
             _execute_result([]),
+            _execute_result([]),  # 培训师飞书联系人回退：同样未命中
             _execute_result(
                 [
                     ("测金养蓬", "201二车间（多拉）"),
@@ -262,7 +269,12 @@ async def test_import_auto_routes_to_other_line_when_trainees_match():
 async def test_import_skips_non_201_family_tab():
     """非 201 家族 Tab 不做受训人员自动归属（其他拆分部门不受影响）。"""
     data = _ledger_data(teaching_dept="102二车间（DR）")
-    service = _service_with_execute_results([_execute_result([])])
+    service = _service_with_execute_results(
+        [
+            _execute_result([]),  # 培训师表无此人
+            _execute_result([]),  # 培训师飞书联系人回退：同样未命中
+        ]
+    )
     _attach_create_spy(service)
 
     created_count, matched = await service.create_many([data])
@@ -286,7 +298,12 @@ async def test_import_unresolved_201_rows_fall_back_to_tab_on_unconfigured(
     invalidate_training_dept_mapping_cache()
 
     data = _ledger_data()
-    service = _service_with_execute_results([_execute_result([])])
+    service = _service_with_execute_results(
+        [
+            _execute_result([]),  # 培训师表无此人
+            _execute_result([]),  # 培训师飞书联系人回退：同样未命中
+        ]
+    )
     _attach_create_spy(service)
 
     created_count, matched = await service.create_many([data])
@@ -313,6 +330,7 @@ async def test_create_record_bare_context_dr_trainees_route_to_dr():
         side_effect=[
             _execute_result(norms_rows),  # 拦截用飞书查询
             _scalar_result(None),  # 培训师表无此人
+            _execute_result([]),  # 培训师飞书联系人回退：同样未命中
             _execute_result(norms_rows),  # 半边修正用飞书查询
             _execute_result(norms_rows),  # 拆副本人员收敛
         ]
@@ -348,6 +366,7 @@ async def test_create_record_cross_half_builds_copies_only_for_occupied_halves()
         side_effect=[
             _execute_result(norms_rows),  # 拦截用飞书查询
             _scalar_result(None),  # 培训师表无此人
+            _execute_result([]),  # 培训师飞书联系人回退：同样未命中
             _execute_result(norms_rows),  # 拆副本人员收敛
         ]
     )
@@ -379,6 +398,7 @@ async def test_create_record_single_line_skips_empty_half_copy():
         side_effect=[
             _execute_result(norms_rows),  # 拦截用飞书查询
             _scalar_result(None),  # 培训师表无此人
+            _execute_result([]),  # 培训师飞书联系人回退：同样未命中
             _execute_result(norms_rows),  # 半边修正用飞书查询
             _execute_result(norms_rows),  # 拆副本人员收敛
         ]
@@ -436,6 +456,7 @@ async def test_create_record_partial_match_routes_to_hit_line():
         side_effect=[
             _execute_result([("测金养蓬", "201二车间（多拉）")]),  # 拦截用
             _scalar_result(None),
+            _execute_result([]),  # 培训师飞书联系人回退：同样未命中
             _execute_result([("测金养蓬", "201二车间（多拉）")]),  # 半边修正
         ]
     )
@@ -464,6 +485,7 @@ async def test_create_record_non_201_dept_untouched():
     session.execute = AsyncMock(
         side_effect=[
             _scalar_result(None),  # 培训师表无此人
+            _execute_result([]),  # 培训师飞书联系人回退：同样未命中
         ]
     )
     service = TrainingLedgerService(session)
@@ -481,6 +503,149 @@ async def test_create_record_non_201_dept_untouched():
     created = service.repo.create.await_args.args[0]
     assert created.teaching_dept == "102二车间（DR）"
     assert created.ledger_department is None
+
+
+@pytest.mark.asyncio
+async def test_create_record_bare_ledger_routes_by_trainer_line():
+    """落款写成裸名「201二车间」（未指明线别）→ 主记录线别按培训师所属部门定.
+
+    参训人员全在 MC 也归 DR：培训资料→台账以培训通知落款为准，落款只写到
+    车间时线别由培训师归属决定（副本仍按参训人员收敛）。
+    """
+    trainee_rows = [("测康正宇", _BARE)]  # 受训人员在 MC 线
+    session = AsyncMock()
+    session.execute = AsyncMock(
+        side_effect=[
+            _execute_result(trainee_rows),  # 拦截用飞书查询
+            _execute_result([("测王国民", _DR)]),  # 培训师表：DR 线
+            _execute_result(trainee_rows),  # 拆副本人员收敛
+        ]
+    )
+    service = TrainingLedgerService(session)
+    created = _attach_create_spy(service)
+
+    await service.create_record(
+        _ledger_data(
+            teaching_dept=_BARE,
+            ledger_department=_BARE,
+            involved_depts=_BARE,
+            instructor="测王国民",
+            trainees="测康正宇",
+            session_id=uuid.uuid4(),
+        )
+    )
+
+    assert created[0].ledger_department == _DR  # 培训师归属决定线别
+    assert created[0].teaching_dept == _BARE
+    # MC 半边有参训人员 → 照建 MC 副本（主记录已在 DR）
+    assert {r.ledger_department for r in created} == {_DR, _MC}
+
+
+@pytest.mark.asyncio
+async def test_create_record_explicit_half_not_overridden_by_trainer():
+    """落款已指明线别（201二车间（MC））时不被培训师部门改写，仍按参训人员线别修正."""
+    trainee_rows = [("测康正宇", _BARE)]  # MC 线
+    session = AsyncMock()
+    session.execute = AsyncMock(
+        side_effect=[
+            _execute_result(trainee_rows),  # 拦截用飞书查询
+            _execute_result([("测王国民", _DR)]),  # 培训师表：DR 线
+            _execute_result(trainee_rows),  # 半边修正用飞书查询
+        ]
+    )
+    service = TrainingLedgerService(session)
+    created = _attach_create_spy(service)
+
+    await service.create_record(
+        _ledger_data(
+            teaching_dept=_BARE,
+            ledger_department=_MC,
+            involved_depts=None,
+            instructor="测王国民",
+            trainees="测康正宇",
+            session_id=None,
+        )
+    )
+
+    assert created[0].ledger_department == _MC  # 显式线别优先，不按培训师改判
+
+
+@pytest.mark.asyncio
+async def test_create_record_trainer_table_beats_feishu_contacts():
+    """培训师表已登记时用表里的部门，不再查飞书联系人（少一次查询）."""
+    session = AsyncMock()
+    session.execute = AsyncMock(
+        side_effect=[_execute_result([("测王国民", "102二车间（DR）")])]
+    )
+    service = TrainingLedgerService(session)
+    created = _attach_create_spy(service)
+
+    await service.create_record(
+        _ledger_data(
+            teaching_dept="人事行政部",
+            ledger_department=None,
+            involved_depts=None,
+            instructor="测王国民",
+            trainees="测张三",
+            session_id=None,
+        )
+    )
+
+    assert created[0].teaching_dept == "102二车间（DR）"
+
+
+@pytest.mark.asyncio
+async def test_create_record_teaching_dept_falls_back_to_feishu_contacts():
+    """培训师表没登记时授课部门取飞书联系人的确认部门，而不是落款部门."""
+    session = AsyncMock()
+    session.execute = AsyncMock(
+        side_effect=[
+            _execute_result([]),  # 培训师表无此人
+            _execute_result([("测王国民", "质量部")]),  # 飞书联系人确认部门
+        ]
+    )
+    service = TrainingLedgerService(session)
+    created = _attach_create_spy(service)
+
+    await service.create_record(
+        _ledger_data(
+            teaching_dept="人事行政部",
+            ledger_department=None,
+            involved_depts=None,
+            instructor="测王国民",
+            trainees="测张三",
+            session_id=None,
+        )
+    )
+
+    assert created[0].teaching_dept == "质量部"
+
+
+@pytest.mark.asyncio
+async def test_create_record_keeps_passed_dept_when_trainer_unknown():
+    """培训师表与飞书联系人都识别不到 → 授课部门沿用传入值（落款/所选部门）."""
+    session = AsyncMock()
+    session.execute = AsyncMock(
+        side_effect=[
+            _execute_result([]),  # 培训师表无此人
+            _execute_result([]),  # 飞书联系人也查不到
+        ]
+    )
+    service = TrainingLedgerService(session)
+    created = _attach_create_spy(service)
+
+    await service.create_record(
+        _ledger_data(
+            teaching_dept="人事行政部",
+            ledger_department=None,
+            involved_depts=None,
+            instructor="测王国民",
+            trainees="测张三",
+            session_id=None,
+        )
+    )
+
+    assert created[0].teaching_dept == "人事行政部"
 
 
 @pytest.mark.asyncio

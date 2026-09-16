@@ -93,6 +93,11 @@ async def test_inspection_list_pull_and_subtable_routes_use_safe_contract(
         }
 
     monkeypatch.setattr(api, "list_instrument_mirror", fake_list_instrument_mirror)
+    # 维护保养列表的 enrich 钩子会查周期表镜像，测试里直接透传
+    async def fake_enrich_maintenance(_db: object, items: list) -> list:
+        return items
+
+    monkeypatch.setattr(api, "enrich_maintenance_schedule", fake_enrich_maintenance)
     for route, _entity_code in instrument_list_routes:
         response = await route(
             keyword="关键字",

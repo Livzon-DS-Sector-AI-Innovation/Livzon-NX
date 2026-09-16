@@ -10777,6 +10777,34 @@
         "title": "Body_analyze_literature_api_v1_research_literature_analyze_post",
         "type": "object"
       },
+      "Body_api_confirm_instrument_import_api_v1_quality_instruments_equipment_import_confirm_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_api_confirm_instrument_import_api_v1_quality_instruments_equipment_import_confirm_post",
+        "type": "object"
+      },
+      "Body_api_preview_instrument_import_api_v1_quality_instruments_equipment_import_preview_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_api_preview_instrument_import_api_v1_quality_instruments_equipment_import_preview_post",
+        "type": "object"
+      },
       "Body_api_upload_anomaly_attachment_api_v1_quality_finished_product_anomaly_attachments_post": {
         "properties": {
           "file": {
@@ -142432,13 +142460,13 @@
             }
           },
           {
-            "description": "产品代码（如 FA/MC/DR）",
+            "description": "产品代码（如 FA/MC/DR/LV/MV）",
             "in": "query",
             "name": "product",
             "required": false,
             "schema": {
               "default": "FA",
-              "description": "产品代码（如 FA/MC/DR）",
+              "description": "产品代码（如 FA/MC/DR/LV/MV）",
               "title": "Product",
               "type": "string"
             }
@@ -142492,13 +142520,13 @@
         "operationId": "upsert_fermentation_batch_actual_api_v1_production_fermentation_batch_actuals_post",
         "parameters": [
           {
-            "description": "产品代码（如 FA/MC/DR）",
+            "description": "产品代码（如 FA/MC/DR/LV/MV）",
             "in": "query",
             "name": "product",
             "required": false,
             "schema": {
               "default": "FA",
-              "description": "产品代码（如 FA/MC/DR）",
+              "description": "产品代码（如 FA/MC/DR/LV/MV）",
               "title": "Product",
               "type": "string"
             }
@@ -142643,13 +142671,13 @@
             }
           },
           {
-            "description": "产品代码（如 FA/MC/DR）",
+            "description": "产品代码（如 FA/MC/DR/LV/MV）",
             "in": "query",
             "name": "product",
             "required": false,
             "schema": {
               "default": "FA",
-              "description": "产品代码（如 FA/MC/DR）",
+              "description": "产品代码（如 FA/MC/DR/LV/MV）",
               "title": "Product",
               "type": "string"
             }
@@ -142705,13 +142733,13 @@
         "operationId": "set_fermentation_month_capacity_api_v1_production_fermentation_month_capacity_post",
         "parameters": [
           {
-            "description": "产品代码（如 FA/MC/DR）",
+            "description": "产品代码（如 FA/MC/DR/LV/MV）",
             "in": "query",
             "name": "product",
             "required": false,
             "schema": {
               "default": "FA",
-              "description": "产品代码（如 FA/MC/DR）",
+              "description": "产品代码（如 FA/MC/DR/LV/MV）",
               "title": "Product",
               "type": "string"
             }
@@ -176310,6 +176338,57 @@
         ]
       }
     },
+    "/api/v1/quality/instruments/dashboard": {
+      "get": {
+        "description": "仪器管理仪表盘：概览/校验到期/维保/合同（读本地镜像聚合）。",
+        "operationId": "api_get_instruments_dashboard_api_v1_quality_instruments_dashboard_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_dict_str__Any__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Api Get Instruments Dashboard",
+        "tags": [
+          "质量管理",
+          "Quality-Inspection-Feishu"
+        ]
+      }
+    },
     "/api/v1/quality/instruments/equipment": {
       "get": {
         "operationId": "api_list_equipment_api_v1_quality_instruments_equipment_get",
@@ -176412,6 +176491,128 @@
         ]
       }
     },
+    "/api/v1/quality/instruments/equipment/import/confirm": {
+      "post": {
+        "description": "仪器台账批量导入确认：按设备编号新增/更新写飞书并刷镜像。",
+        "operationId": "api_confirm_instrument_import_api_v1_quality_instruments_equipment_import_confirm_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_api_confirm_instrument_import_api_v1_quality_instruments_equipment_import_confirm_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_dict_str__Any__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Api Confirm Instrument Import",
+        "tags": [
+          "质量管理",
+          "Quality-Inspection-Feishu"
+        ]
+      }
+    },
+    "/api/v1/quality/instruments/equipment/import/preview": {
+      "post": {
+        "description": "仪器台账批量导入预览：解析 xlsx、识别列头、判新增/更新（不写数据）。",
+        "operationId": "api_preview_instrument_import_api_v1_quality_instruments_equipment_import_preview_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_api_preview_instrument_import_api_v1_quality_instruments_equipment_import_preview_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_dict_str__Any__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Api Preview Instrument Import",
+        "tags": [
+          "质量管理",
+          "Quality-Inspection-Feishu"
+        ]
+      }
+    },
     "/api/v1/quality/instruments/equipment/pull": {
       "post": {
         "operationId": "api_pull_equipment_api_v1_quality_instruments_equipment_pull_post",
@@ -176456,6 +176657,66 @@
           }
         },
         "summary": "Api Pull Equipment",
+        "tags": [
+          "质量管理",
+          "Quality-Inspection-Feishu"
+        ]
+      }
+    },
+    "/api/v1/quality/instruments/equipment/{record_id}/profile": {
+      "get": {
+        "description": "仪器档案：按设备编号匹配维护/维修/校验/合同情况。",
+        "operationId": "api_get_instrument_profile_api_v1_quality_instruments_equipment__record_id__profile_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_dict_str__Any__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Api Get Instrument Profile",
         "tags": [
           "质量管理",
           "Quality-Inspection-Feishu"

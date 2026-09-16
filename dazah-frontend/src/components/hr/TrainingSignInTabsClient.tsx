@@ -33,7 +33,7 @@ import {
   updateTrainingLedger,
 } from '@/actions/hr'
 import { downloadZip } from '@/lib/download'
-import { with201SubDepts, unify201Dept, DEPT_201_MC, DEPT_201_DR, ensureDeptMappings, useDeptMappings } from './trainingDept'
+import { with201SubDepts, unify201Dept, ensureDeptMappings, useDeptMappings } from './trainingDept'
 import type { OralExamPayload } from './OralExamSheetClient'
 import type { PracticalExamPayload } from './PracticalExamSheetClient'
 
@@ -128,6 +128,24 @@ export function extractAnnexRefs(text: string): string[] {
     if (key && !refs.includes(key)) refs.push(key)
   }
   return refs
+}
+
+/**
+ * 培训台账主记录归属：培训通知的落款部门。
+ *
+ * 取值顺序：通知表单实时落款 → 会话落款 → 主办部门（总经办与空值归人事行政部）。
+ * 表单是落款唯一可编辑入口（草稿恢复后就地生效），优先读它可避免"改过落款
+ * 但会话字段没同步"时台账归属退回默认部门。
+ */
+export function resolveLedgerArchiveDept(
+  formIssuerDept: string | undefined | null,
+  sessionIssuerDept: string | undefined | null,
+  sessionDept: string | undefined | null,
+): string {
+  const issued = (formIssuerDept || sessionIssuerDept || '').trim()
+  if (issued) return issued
+  const dept = (sessionDept || '').trim()
+  return !dept || dept === '总经办' ? '人事行政部' : dept
 }
 
 export default function TrainingSignInTabsClient() {
@@ -889,16 +907,24 @@ export default function TrainingSignInTabsClient() {
         } catch { /* 检查失败不阻断 */ }
       }
       const sid = await ensureSession().catch(() => undefined)
-      // 落款部门：培训通知中修改过则用修改后的，否则公司级固定人事行政部、总经办归人事行政部
-      const archiveDept =
-        session.issuer_department ||
-        (session.department === '总经办' ? '人事行政部' : session.department || '人事行政部')
+      // 落款部门：取培训通知表单实时值（草稿恢复后就地生效，不依赖会话字段），
+      // 再回退会话落款、主办部门；总经办与空值归人事行政部
+      const notifyPayload = docBuildersRef.current['notification']?.() as
+        | { issuer_department?: string }
+        | null
+        | undefined
+      const archiveDept = resolveLedgerArchiveDept(
+        notifyPayload?.issuer_department,
+        session.issuer_department,
+        session.department,
+      )
       const trainerFull = session.instructor ? `${archiveDept}/${session.instructor}` : archiveDept
 
-      // ── 公司级培训：主台账归落款部门，涉及部门=全部受训部门，培训对象=全部人员放一起 ──
-      // ── 部门级培训：同公司级，构造单条主记录（培训对象=全部人员，内容全量一致），
-      //     涉及部门=真实参训部门（人员→部门映射，支持跨部门参训），由后端按涉及部门拆内容一致的副本；
-      //     主记录归属按参训人员判定：有 MC 人员归 MC、有 DR 人员归 DR（无对应人员不建记录） ──
+      // ── 主记录归属=培训通知的落款部门（公司级/部门级一致）──
+      // ── 公司级培训：涉及部门=全部受训部门，培训对象=全部人员放一起 ──
+      // ── 部门级培训：涉及部门=真实参训部门（人员→部门映射，支持跨部门参训）──
+      //     后端按涉及部门各建一条内容一致的副本；落款写成裸名 201二车间
+      //     （未指明线别）时，主记录线别由后端按培训师所属部门判定 ──
       const deptMap = session.employee_dept_map || {}
       const groups: { teaching_dept: string; ledger_department: string; involved: string; names: string[] }[] = []
 
@@ -914,20 +940,16 @@ export default function TrainingSignInTabsClient() {
           })
         }
       } else {
-        // 部门级培训：单条主记录，涉及部门=真实参训部门（人员映射中的部门，含跨部门参训）
+        // 部门级培训：单条主记录归落款部门，涉及部门=真实参训部门（人员映射中的部门，含跨部门参训）
         const realDepts = new Set<string>()
         ;(Object.values(deptMap || {}) as string[]).forEach((d) => d && realDepts.add(d))
         if (!realDepts.size) {
           // 无人员映射时回退受训部门（主办部门）
           ;(session.trainee_departments || []).filter(Boolean).forEach((d) => realDepts.add(d))
         }
-        // 主记录归属：有 MC 人员→201二车间（MC），有 DR 人员→201二车间（DR），否则用落款部门
-        const hasMc = sessionNames.some((n) => deptMap[n] === DEPT_201_MC)
-        const hasDr = sessionNames.some((n) => deptMap[n] === DEPT_201_DR)
-        const primaryDept = hasMc ? DEPT_201_MC : hasDr ? DEPT_201_DR : archiveDept
         groups.push({
           teaching_dept: archiveDept,
-          ledger_department: primaryDept,
+          ledger_department: archiveDept,
           involved: [...realDepts].join('、'),
           names: sessionNames, // 全部受训人员，不按部门拆分
         })

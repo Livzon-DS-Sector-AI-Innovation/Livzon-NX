@@ -36,6 +36,24 @@ def _build_workbook_bytes() -> bytes:
 
 
 @pytest.mark.anyio
+async def test_parse_workbook_prefers_visible_sheet_over_hidden() -> None:
+    """历史 Sheet 隐藏保留的多周期文件：解析首个可见工作表，而非隐藏的首表。"""
+    wb = openpyxl.Workbook()
+    hidden = wb.active
+    hidden.title = "历史排产（隐藏）"
+    hidden["A1"] = "不应被解析"
+    hidden.sheet_state = "hidden"
+    visible = wb.create_sheet("多拉排产2026.09.05")
+    visible["A1"] = "2026年9月排产计划"
+    buffer = BytesIO()
+    wb.save(buffer)
+    parsed = schedule_excel_service.parse_workbook_bytes(buffer.getvalue())
+
+    assert parsed["sheet_name"] == "多拉排产2026.09.05"
+    assert parsed["rows"][0][0] == "2026年9月排产计划"
+
+
+@pytest.mark.anyio
 async def test_parse_workbook_keeps_first_sheet_and_full_rows() -> None:
     parsed = schedule_excel_service.parse_workbook_bytes(_build_workbook_bytes())
 

@@ -22,9 +22,9 @@ const inspectionCards = [
   {
     key: 'instruments',
     title: '仪器管理',
-    description: '实验室仪器设备的台账、校准、维护管理',
+    description: '仪器台账、校准、维护与维修管理',
     icon: <ExperimentOutlined style={{ fontSize: 32, color: '#52c41a' }} />,
-    path: '/quality/inspection/instruments/equipment',
+    path: '/quality/inspection/instruments',
   },
   {
     key: 'finished',

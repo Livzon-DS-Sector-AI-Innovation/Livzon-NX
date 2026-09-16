@@ -107,7 +107,15 @@ def _is_low_stock(item: dict[str, Any], warning_source: str) -> bool:
     return any(token.lower() in alarm for token in _STOCK_ALARM_LOW_VALUES)
 
 
+_ALERT_META_KEYS = {"record_id", "created_at", "updated_at", "__link_record_ids"}
+
+
 def _build_alert_item(item: dict[str, Any]) -> ItemsStockAlertItem:
+    fields = {
+        key: value
+        for key, value in item.items()
+        if key not in _ALERT_META_KEYS and not str(key).startswith("__")
+    }
     return ItemsStockAlertItem(
         record_id=str(item.get("record_id") or ""),
         name=_cell_text(item.get("物资名称")) or _cell_text(item.get("物资名（规格）")),
@@ -116,6 +124,7 @@ def _build_alert_item(item: dict[str, Any]) -> ItemsStockAlertItem:
         current_stock=_cell_text(item.get("当前库存")) or None,
         warning_stock=_cell_text(item.get("警戒库存")) or None,
         unit=_cell_text(item.get("单位")) or None,
+        fields=fields,
     )
 
 

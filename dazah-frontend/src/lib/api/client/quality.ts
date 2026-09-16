@@ -29,6 +29,10 @@ import type {
   InspectionFeishuFieldMeta,
   InspectionFeishuFieldsResult,
   InspectionMaterialItem,
+  InstrumentDashboardData,
+  InstrumentImportPreview,
+  InstrumentImportResult,
+  InstrumentProfileData,
   ItemsDashboardData,
   ValidationReviewJobStatus,
   ValidationReviewListItem,
@@ -1690,6 +1694,62 @@ export async function fetchItemsDashboard(): Promise<ItemsDashboardData | null> 
   if (!res.ok) return null
   const json = await res.json()
   return json.data as ItemsDashboardData
+}
+
+/** 仪器管理仪表盘统计（概览/校验到期/维保/合同，读本地镜像聚合）。 */
+export async function fetchInstrumentsDashboard(): Promise<InstrumentDashboardData | null> {
+  const res = await fetch('/api/v1/quality/instruments/dashboard')
+  if (!res.ok) return null
+  const json = await res.json()
+  return json.data as InstrumentDashboardData
+}
+
+/** 仪器档案：按设备编号匹配维护/维修/校验/合同情况。 */
+export async function fetchInstrumentProfile(
+  recordId: string,
+): Promise<InstrumentProfileData> {
+  const res = await fetch(
+    `/api/v1/quality/instruments/equipment/${encodeURIComponent(recordId)}/profile`,
+  )
+  const json = await res.json()
+  if (!res.ok) {
+    throw new Error(json?.message || '仪器档案加载失败')
+  }
+  return json.data as InstrumentProfileData
+}
+
+/** 仪器台账批量导入预览：解析 xlsx、识别列头（不写数据）。 */
+export async function previewInstrumentImport(
+  file: File,
+): Promise<InstrumentImportPreview> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await fetch('/api/v1/quality/instruments/equipment/import/preview', {
+    method: 'POST',
+    body: formData,
+  })
+  const json = await res.json()
+  if (!res.ok) {
+    throw new Error(json?.message || '文件解析失败')
+  }
+  return json.data as InstrumentImportPreview
+}
+
+/** 仪器台账批量导入确认：按设备编号新增/更新写飞书并刷镜像。 */
+export async function confirmInstrumentImport(
+  file: File,
+): Promise<InstrumentImportResult> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await fetch('/api/v1/quality/instruments/equipment/import/confirm', {
+    method: 'POST',
+    body: formData,
+  })
+  const json = await res.json()
+  if (!res.ok) {
+    throw new Error(json?.message || '导入失败')
+  }
+  return json.data as InstrumentImportResult
 }
 
 // ---- 历史偏差 ----

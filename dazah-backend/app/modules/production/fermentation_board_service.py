@@ -18,6 +18,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import date, datetime, time, timedelta
+from functools import partial
 from typing import Any
 
 from sqlalchemy import select
@@ -38,7 +39,13 @@ logger = logging.getLogger(__name__)
 
 # 「提炼已出成品（仓储成品入库）」卡片：看板产品代码 → 仓储成品入库总账产品名。
 # 仅维护已接入产品；未在映射内的产品卡片维持"数据源待接入"。
-WAREHOUSE_INBOUND_PRODUCT_NAMES: dict[str, str] = {"FA": "L-苯丙氨酸"}
+WAREHOUSE_INBOUND_PRODUCT_NAMES: dict[str, str] = {
+    "FA": "L-苯丙氨酸",
+    "MC": "霉酚酸",
+    "DR": "多拉菌素",
+    "LV": "洛伐他汀",
+    "MV": "美伐他汀",
+}
 
 # 放罐窗口：计划放罐时间起 2 小时内为「放罐中」（批次仍在罐上，不算完成）；
 # 窗口结束后批次才视为「已放罐/完成」（罐状态、recent 最近完成、完成 KPI 同口径）。
@@ -229,8 +236,31 @@ def collect_dump_dates(
 
 def collect_dump_tanks(
     rows: list[list[Any]],
+    product_code: str = "FA",
 ) -> dict[str, str]:
-    """全表所有放罐批号 → 放罐罐号（跨块连续，批号唯一）。"""
+    """全表所有放罐批号 → 放罐罐号（跨块连续，批号唯一）。
+
+    FA/MP/DR 排产表布局不同，按产品分派解析；供批次产量列表回填罐号。
+    """
+    if product_code == "DR":
+        batches, _, _ = _dr_parse_batches(rows)
+        return {
+            b["batch_no"]: str(b["dump_tank"] or b["ferm_tank"] or "")
+            for b in batches
+            if b["batch_no"] and (b["dump_tank"] or b["ferm_tank"])
+        }
+    # MP 与克隆其看板管线的他汀产品（LV 洛伐他汀 / MV 美伐他汀）同分支
+    if product_code in ("MC", "LV", "MV"):
+        timeline = (
+            _statin_batch_timeline(rows)
+            if product_code in _STATIN_KEYWORD
+            else _mp_batch_timeline(rows)
+        )
+        return {
+            batch_no: str(entry["dump_tank"] or entry["ferm_tank"] or "")
+            for batch_no, entry in timeline.items()
+            if entry["dump_tank"] or entry["ferm_tank"]
+        }
     mapping: dict[str, str] = {}
     for index, row in enumerate(rows):
         if not row:
@@ -248,6 +278,1413 @@ def collect_dump_tanks(
                 tank = str(tanks[ci]).strip() if ci < len(tanks) else ""
                 mapping[batch_no] = tank
     return mapping
+
+
+# ═══════════════════ 多拉菌素（DR）排产解析 ═══════════════════
+# 102 车间排产格式：块标题「102车间2026年09月份多拉计划（09.05）」，
+# 月份为扎帐归属（9月份 = 8月27日～9月26日）；块内日期行为自然月 1..N 日；
+# 行布局（相对块首）：+1 日期 +2 菌种 +3 种子批号 +4 种子罐号
+# +5 发酵（进罐）批号 +6 发酵罐号 +7 放罐批号 +8 放罐罐号
+# +9 培养周期(h) +10 备注。无接种/放罐时刻，只有日期与培养周期。
+
+_DR_TITLE_RE = re.compile(
+    r"(\d{4})年(\d{1,2})月份多拉计划"
+)
+_DR_ROW_DATE = 1
+_DR_ROW_FERM_BATCH = 5
+_DR_ROW_FERM_TANK = 6
+_DR_ROW_DUMP_BATCH = 7
+_DR_ROW_DUMP_TANK = 8
+_DR_ROW_CYCLE = 9
+_DR_ROW_NOTE = 10
+
+
+def _dr_is_batch_no(value: Any) -> bool:
+    """DR 批号：含连字符且含数字（DR-26035 / 中试-2620 / ZS-006 / DR-26035/36）。
+
+    排除「两个发酵」「进两个种子」等纯文字说明。
+    """
+    text = str(value).strip()
+    return "-" in text and any(ch.isdigit() for ch in text)
+
+
+def _dr_split_batch(value: Any) -> list[str]:
+    """复合批号拆分：'DR-26035/36' → ['DR-26035', 'DR-26036']（短尾共享前缀）。"""
+    text = str(value).strip()
+    if "/" not in text:
+        return [text]
+    left, _, right = text.partition("/")
+    right = right.strip()
+    if right and right.isdigit():
+        # 短尾共享左批号前缀：去掉左批号尾部等长数字后拼接
+        # 'DR-26035/36' → 'DR-260' + '36' → 'DR-26036'
+        tail = re.search(r"\d+$", left)
+        if tail and len(tail.group(0)) >= len(right):
+            prefix = left[: -len(right)]
+        else:
+            prefix = re.sub(r"\d+$", "", left)
+        right = prefix + right
+    return [left, right] if right else [left]
+
+
+def _dr_split_tank(value: Any) -> list[str]:
+    """复合罐号拆分：'B401/2' → ['B401', 'B402']；非罐号返回空。"""
+    text = str(value).strip()
+    match = re.match(r"^([A-Z]\d{3})(?:/(\d{1,3}))?$", text)
+    if not match:
+        return []
+    head, tail = match.group(1), match.group(2)
+    tanks = [head]
+    if tail:
+        if len(tail) == 3:
+            tanks.append(head[0] + tail)
+        else:
+            tanks.append(head[0] + head[1:-len(tail)] + tail)
+    return tanks
+
+
+def _dr_norm_tank(value: Any) -> str | None:
+    """罐号归一：'B401/2' → 'B401'；非罐号文本返回 None。"""
+    tanks = _dr_split_tank(value)
+    return tanks[0] if tanks else None
+
+
+def find_dr_period_block(
+    rows: list[list[Any]], now: datetime
+) -> dict[str, Any] | None:
+    """定位 now 所在扎帐周期的 DR 排产块。
+
+    扎帐归属：27 日及以后属次月块，此前属当月块；块标题年月匹配即命中。
+    """
+    if now.day >= 27:
+        year, month = (now.year + 1, 1) if now.month == 12 else (
+            now.year,
+            now.month + 1,
+        )
+    else:
+        year, month = now.year, now.month
+    if month == 1:
+        start = date(year - 1, 12, 27)
+    else:
+        start = date(year, month - 1, 27)
+    end = date(year, month, 26)
+    for index, row in enumerate(rows):
+        if not row:
+            continue
+        match = _DR_TITLE_RE.search(str(row[0]))
+        if match and (int(match.group(1)), int(match.group(2))) == (
+            year,
+            month,
+        ):
+            return {
+                "start_row": index,
+                "start": start,
+                "end": end,
+                "label": f"{start.month}月{start.day}日～{end.month}月{end.day}日",
+            }
+    return None
+
+
+def _dr_column_dates(
+    rows: list[list[Any]], block: dict[str, Any]
+) -> dict[int, date]:
+    """块内列号 → 自然月日期（日期行 1..N = 标题月 1..N 日）。"""
+    match = _DR_TITLE_RE.search(str(rows[block["start_row"]][0]))
+    if match is None:
+        return {}
+    year, month = int(match.group(1)), int(match.group(2))
+    date_row = rows[block["start_row"] + _DR_ROW_DATE] or []
+    result: dict[int, date] = {}
+    for col, value in enumerate(date_row):
+        if col == 0:
+            continue
+        text = str(value).strip()
+        if not text.isdigit():
+            continue
+        try:
+            result[col] = date(year, month, int(text))
+        except ValueError:
+            continue
+    return result
+
+
+def _dr_global_ferm_events(
+    rows: list[list[Any]],
+) -> dict[str, tuple[date, str | None, float | None]]:
+    """全表各块的发酵事件：批号 →（最早进罐日, 罐号, 培养周期h）。
+
+    上月块遗留批次（本块只出现在放罐行）的移种时间/周期从这里回查补齐。
+    """
+    result: dict[str, tuple[date, str | None, float | None]] = {}
+    for index, row in enumerate(rows):
+        if not row or not _DR_TITLE_RE.search(str(row[0])):
+            continue
+        col_dates = _dr_column_dates(rows, {"start_row": index})
+        ferm_b = rows[index + _DR_ROW_FERM_BATCH] or []
+        ferm_t = rows[index + _DR_ROW_FERM_TANK] or []
+        cycle_r = rows[index + _DR_ROW_CYCLE] or []
+        for col, col_date in sorted(col_dates.items()):
+            value = ferm_b[col] if col < len(ferm_b) else None
+            if not _dr_is_batch_no(value):
+                continue
+            cycle_match = re.match(
+                r"^(\d+)h$",
+                str(cycle_r[col] if col < len(cycle_r) else "").strip(),
+            )
+            cycle_hours = (
+                float(cycle_match.group(1)) if cycle_match else None
+            )
+            batch_no = str(value).strip()
+            known = result.get(batch_no)
+            if known is None or col_date < known[0]:
+                result[batch_no] = (
+                    col_date,
+                    _dr_norm_tank(ferm_t[col] if col < len(ferm_t) else None),
+                    cycle_hours,
+                )
+    return result
+
+
+def _dr_parse_batches(
+    rows: list[list[Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """全表解析所有 DR 月度块的批次与罐事件。
+
+    扎帐周期跨自然月（上月 27 日～本月 26 日），周期头尾的批次分别落在
+    相邻两个自然月块里，因此必须全表解析后再按周期过滤，
+    否则周期头尾的批次会漏计。
+    返回（批次列表, 进罐事件流, 放罐事件流）。
+    """
+    batches: dict[str, dict[str, Any]] = {}
+    inoc_events: list[dict[str, Any]] = []
+    dump_events: list[dict[str, Any]] = []
+
+    def _ensure(batch_no: str) -> dict[str, Any]:
+        return batches.setdefault(
+            batch_no,
+            {
+                "batch_no": batch_no,
+                "inoculate": None,
+                "ferm_tank": None,
+                "dump": None,
+                "dump_tank": None,
+                "cycle_hours": None,
+            },
+        )
+
+    for index, row in enumerate(rows):
+        if not row:
+            continue
+        if not _DR_TITLE_RE.search(str(row[0])):
+            continue
+        col_dates = _dr_column_dates(rows, {"start_row": index})
+        ferm_b = rows[index + _DR_ROW_FERM_BATCH] or []
+        ferm_t = rows[index + _DR_ROW_FERM_TANK] or []
+        dump_b = rows[index + _DR_ROW_DUMP_BATCH] or []
+        dump_t = rows[index + _DR_ROW_DUMP_TANK] or []
+        cycle_r = rows[index + _DR_ROW_CYCLE] or []
+
+        for col, col_date in sorted(col_dates.items()):
+            cycle_match = re.match(
+                r"^(\d+)h$",
+                str(cycle_r[col] if col < len(cycle_r) else "").strip(),
+            )
+            col_cycle = float(cycle_match.group(1)) if cycle_match else None
+            ferm_raw = ferm_b[col] if col < len(ferm_b) else None
+            if _dr_is_batch_no(ferm_raw):
+                # 复合批号/罐号按位置拆分配对：
+                # 「DR-26035/36 + B401/2」→ DR-26035 进 B401、DR-26036 进 B402
+                batch_list = _dr_split_batch(ferm_raw)
+                tank_list = _dr_split_tank(
+                    ferm_t[col] if col < len(ferm_t) else None
+                )
+                for i, batch_no in enumerate(batch_list):
+                    tank = (
+                        tank_list[i]
+                        if i < len(tank_list)
+                        else (tank_list[-1] if tank_list else None)
+                    )
+                    batch = _ensure(batch_no)
+                    if (
+                        batch["inoculate"] is None
+                        or col_date < batch["inoculate"]
+                    ):
+                        batch["inoculate"] = col_date
+                    if tank and batch["ferm_tank"] is None:
+                        batch["ferm_tank"] = tank
+                    if (
+                        col_cycle is not None
+                        and batch["cycle_hours"] is None
+                    ):
+                        batch["cycle_hours"] = col_cycle
+                    # 罐事件流：每条（罐, 批, 移种日, 周期）独立记录
+                    if tank:
+                        inoc_events.append(
+                            {
+                                "tank": tank,
+                                "batch_no": batch_no,
+                                "date": col_date,
+                                "cycle_hours": col_cycle,
+                            }
+                        )
+            if _dr_is_batch_no(dump_b[col] if col < len(dump_b) else None):
+                batch = _ensure(str(dump_b[col]).strip())
+                # 同一批号多次出现时取最后一次放罐（表内一般唯一）
+                batch["dump"] = col_date
+                tank = _dr_norm_tank(dump_t[col] if col < len(dump_t) else None)
+                if tank:
+                    batch["dump_tank"] = tank
+                    dump_events.append(
+                        {
+                            "tank": tank,
+                            "batch_no": batch["batch_no"],
+                            "date": col_date,
+                            "cycle_hours": (
+                                float(cycle_match.group(1))
+                                if cycle_match
+                                else None
+                            ),
+                        }
+                    )
+    return list(batches.values()), inoc_events, dump_events
+
+
+def _note_row_text(row: list[Any] | None) -> str:
+    """备注行 → 备注内容：跳过首列'备注'标签，合并其余非空格。"""
+    if not row:
+        return ""
+    parts: list[str] = []
+    for index, cell in enumerate(row):
+        text = str(cell or "").strip()
+        if not text:
+            continue
+        if index == 0:
+            text = re.sub(r"^备注[:：]?", "", text).strip()
+            if not text:
+                continue
+        parts.append(text)
+    return "，".join(parts)
+
+
+def _append_schedule_alerts(
+    alerts: list[dict[str, Any]],
+    *,
+    tanks: list[dict[str, Any]],
+    now: datetime,
+    maint_tanks: set[str],
+    planned_on_tanks: list[dict[str, Any]],
+    upcoming_inocs: list[dict[str, Any]],
+    note_text: str,
+) -> None:
+    """DR/MP/他汀播报引擎（对齐 FA 播报体验）：
+
+    - 预放罐提醒：运行罐预估放罐剩 0~72h（仅日期的按当日 08:00 计）；
+    - 检修冲突：检修罐本周期仍有计划批次；
+    - 待进罐提醒：最近一个已排未进罐批次；
+    - 排产备注；全部为空时兜底固定文案。
+    """
+    for tank in tanks:
+        if tank.get("status") != "running" or not tank.get("dump_at"):
+            continue
+        raw = str(tank["dump_at"])
+        try:
+            dump_at = (
+                datetime.combine(date.fromisoformat(raw), time(8, 0))
+                if len(raw) == 10
+                else datetime.fromisoformat(raw)
+            )
+        except ValueError:
+            continue
+        remain_h = int((dump_at - now).total_seconds() // 3600)
+        if 0 <= remain_h <= 72:
+            alerts.append(
+                {
+                    "level": "warn",
+                    "text": (
+                        f"【播报】{tank['tank_no']}罐批次 {tank['batch_no']} "
+                        f"距预估放罐剩余 {remain_h}h"
+                    ),
+                }
+            )
+    for tank_no in sorted(maint_tanks):
+        conflict = [
+            item["batch_no"]
+            for item in planned_on_tanks
+            if item["tank_no"] == tank_no
+        ]
+        if conflict:
+            alerts.append(
+                {
+                    "level": "warn",
+                    "text": (
+                        f"【冲突】{tank_no}罐检修中，但本周期仍有计划批次"
+                        f"（如 {conflict[0]}），请确认"
+                    ),
+                }
+            )
+    next_inoc = min(
+        (item for item in upcoming_inocs if item["start"] > now),
+        key=lambda item: item["start"],
+        default=None,
+    )
+    if next_inoc is not None:
+        start: datetime = next_inoc["start"]
+        when = (
+            start.strftime("%m-%d")
+            if next_inoc.get("all_day")
+            else start.strftime("%m-%d %H:%M")
+        )
+        tank_label = (
+            f"进 {next_inoc['tank_no']} 罐"
+            if next_inoc.get("tank_no")
+            else "进罐"
+        )
+        alerts.append(
+            {
+                "level": "info",
+                "text": (
+                    f"待进罐批次 {next_inoc['batch_no']} "
+                    f"计划 {when} {tank_label}"
+                ),
+            }
+        )
+    if note_text:
+        alerts.append({"level": "info", "text": f"【排产备注】{note_text}"})
+    if not alerts:
+        alerts.append(
+            {"level": "info", "text": "车间运行正常，无待处理播报"}
+        )
+
+
+def build_dr_board(
+    rows: list[list[Any]],
+    maintenance: list[dict[str, Any]],
+    now: datetime,
+    actuals: list[dict[str, Any]] | None = None,
+    block: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """DR（102车间）看板组装：罐状态按进罐/放罐日期推算，KPI 按批次计。"""
+    if block is None:
+        block = find_dr_period_block(rows, now)
+    if block is None:
+        return None
+    as_of = now.date()
+    # 全表解析（扎帐周期跨自然月，周期头尾批次在相邻月块里）
+    batches, inoc_events, dump_events = _dr_parse_batches(rows)
+    actual_by_batch = {
+        a["batch_no"]: a for a in (actuals or []) if a.get("batch_no")
+    }
+    maint_by_tank = {m["tank_no"]: m for m in maintenance}
+
+    # 罐事件流：每罐的进罐/放罐时间线（复合批拆分后逐罐独立）
+    inoc_by_tank: dict[str, list[dict[str, Any]]] = {}
+    for ev in inoc_events:
+        inoc_by_tank.setdefault(ev["tank"], []).append(ev)
+    dump_by_tank: dict[str, list[dict[str, Any]]] = {}
+    for ev in dump_events:
+        dump_by_tank.setdefault(ev["tank"], []).append(ev)
+
+    # 周期窗口内（块内自然月仅覆盖 1..26 日，27 日后属下周期）
+    def _in_period(day: date | None) -> bool:
+        return day is not None and block["start"] <= day <= block["end"]
+
+    # 统计基线 = 时间线中与本扎帐周期相关的批（放罐或移种落在周期内）；
+    # 全表解析会带出历史月份老批，须按周期过滤后再算 KPI
+    batches = [
+        b
+        for b in batches
+        if _in_period(b["dump"]) or _in_period(b["inoculate"])
+    ]
+
+    done = sorted(
+        (b for b in batches if _in_period(b["dump"]) and b["dump"] <= as_of),
+        key=lambda b: (b["dump"], b["batch_no"]),  # type: ignore[arg-type, return-value]
+        reverse=True,
+    )
+    # 运行中/未开始按「本周期计划放罐」口径（放罐日期在周期内）：
+    # 跨周期放罐的在制罐不计入 KPI，保证四段进度之和 = 计划放罐数
+    #（罐状态板仍完整展示在制罐）
+    running = [
+        b
+        for b in batches
+        if b["inoculate"] is not None
+        and b["inoculate"] <= as_of
+        and (b["dump"] is None or b["dump"] > as_of)
+        and _in_period(b["dump"])
+    ]
+    pending = [
+        b
+        for b in batches
+        if b["inoculate"] is not None
+        and b["inoculate"] > as_of
+        and _in_period(b["dump"])
+    ]
+    planned_dump = [b for b in batches if _in_period(b["dump"])]
+
+    # ── 罐状态：事件流时间线推算（复合批拆分后逐罐独立）──
+    tank_nos: list[str] = []
+    for tank in [*inoc_by_tank, *dump_by_tank]:
+        if tank not in tank_nos:
+            tank_nos.append(tank)
+    batch_map = {b["batch_no"]: b for b in batches}
+    tanks: list[dict[str, Any]] = []
+    for tank_no in sorted(tank_nos):
+        maint = maint_by_tank.get(tank_no)
+        if maint:
+            tanks.append(
+                {
+                    "tank_no": tank_no,
+                    "status": "maintenance",
+                    "batch_no": None,
+                    "inoculate_at": None,
+                    "cultured_hours": None,
+                    "cycle_hours": None,
+                    "dump_at": None,
+                    "note": f"检修：{maint['reason']}",
+                }
+            )
+            continue
+        # ── 罐时间线（事件流）：进罐/放罐按罐独立排序 ──
+        inocs = sorted(
+            inoc_by_tank.get(tank_no, []), key=lambda e: (e["date"], e["batch_no"])
+        )
+        dumps = sorted(
+            dump_by_tank.get(tank_no, []), key=lambda e: (e["date"], e["batch_no"])
+        )
+        past_inocs = [e for e in inocs if e["date"] <= as_of]
+        past_dumps = [e for e in dumps if e["date"] <= as_of]
+        status = "idle"
+        note = "等待排产"
+        batch_no: str | None = None
+        inoculate: date | None = None
+        display_dump: date | None = None
+        display_cycle: float | None = None
+        cultured: float | None = None
+        if past_inocs and (
+            not past_dumps or past_inocs[-1]["date"] >= past_dumps[-1]["date"]
+        ):
+            # 最新一次进罐后尚未放罐 → 运行中
+            event = past_inocs[-1]
+            status = "running"
+            note = "运行中"
+            batch_no = event["batch_no"]
+            inoculate = event["date"]
+            display_cycle = event["cycle_hours"]
+            cultured = (as_of - event["date"]).days * 24
+        elif past_dumps:
+            event = past_dumps[-1]
+            status = "dumped"
+            note = "已放罐"
+            batch_no = event["batch_no"]
+            display_dump = event["date"]
+            display_cycle = event["cycle_hours"]
+            batch_info = batch_map.get(event["batch_no"])
+            if batch_info is not None:
+                inoculate = batch_info["inoculate"]
+        elif inocs:
+            event = inocs[0]
+            status = "idle"
+            note = "待进罐"
+            batch_no = event["batch_no"]
+            inoculate = event["date"]
+            display_cycle = event["cycle_hours"]
+        # 运行中/待进罐：预估放罐 = 该罐晚于移种的下一次放罐计划
+        # （含跨周期排罐，如本块排到月末后一两天的批次）
+        if display_dump is None and inoculate is not None:
+            upcoming = [e for e in dumps if e["date"] >= inoculate]
+            if upcoming:
+                nxt = min(upcoming, key=lambda e: e["date"])
+                display_dump = nxt["date"]
+                display_cycle = display_cycle or nxt["cycle_hours"]
+        tanks.append(
+            {
+                "tank_no": tank_no,
+                "status": status,
+                "batch_no": batch_no,
+                "inoculate_at": (
+                    inoculate.isoformat() if inoculate else None
+                ),
+                "cultured_hours": cultured,
+                "cycle_hours": display_cycle,
+                "dump_at": (
+                    display_dump.isoformat() if display_dump else None
+                ),
+                "note": note,
+            }
+        )
+
+    # ── KPI / 最近完成 / 录入下拉 ──
+    with_yield = [
+        b
+        for b in done
+        if actual_by_batch.get(b["batch_no"], {}).get("yield_kg")
+    ]
+    kpis = {
+        "month_planned": len(planned_dump),
+        "month_done_planned": len(done),
+        "done_with_yield": len(with_yield),
+        "yield_pending": len(done) - len(with_yield),
+        "month_done_yield_kg": (
+            sum(
+                actual_by_batch[b["batch_no"]]["yield_kg"]
+                for b in with_yield
+            )
+            or None
+        ),
+        "running": len(running),
+        "pending": len(pending),
+    }
+    recent = [
+        {
+            "batch_no": b["batch_no"],
+            "dump_date": b["dump"].isoformat() if b["dump"] else None,
+            "tank_no": b["dump_tank"] or b["ferm_tank"],
+            "yield_kg": actual_by_batch.get(b["batch_no"], {}).get("yield_kg"),
+            "extract_kg": actual_by_batch.get(b["batch_no"], {}).get("extract_kg"),
+            "batch_yield_rate": None,
+            "yield_rate": None,
+            "result": "计划放罐",
+            # 凑数已放罐行展示用：移种时间与计划总周期
+            "inoculate_at": (
+                b["inoculate"].isoformat() if b["inoculate"] else None
+            ),
+            "cycle_hours": b["cycle_hours"],
+        }
+        for b in done[:12]
+    ]
+    dumped_batches = [
+        {"batch_no": b["batch_no"], "dump_date": b["dump"].isoformat()}
+        for b in done
+        if b["dump"]
+    ]
+    ledger_rows = [
+        {
+            "batch_no": b["batch_no"],
+            "dump_date": b["dump"].isoformat() if b["dump"] else None,
+            "yield_kg": actual_by_batch.get(b["batch_no"], {}).get("yield_kg"),
+            "extract_kg": actual_by_batch.get(b["batch_no"], {}).get("extract_kg"),
+        }
+        for b in sorted(batches, key=lambda x: x["batch_no"])
+    ]
+    note_text = _note_row_text(rows[block["start_row"] + _DR_ROW_NOTE])
+    # 播报：预放罐/检修冲突/待进罐/排产备注（对齐 FA 播报体验）
+    alerts: list[dict[str, Any]] = []
+    _append_schedule_alerts(
+        alerts,
+        tanks=tanks,
+        now=now,
+        maint_tanks=set(maint_by_tank),
+        planned_on_tanks=[
+            {"tank_no": b["ferm_tank"], "batch_no": b["batch_no"]}
+            for b in batches
+            if b.get("ferm_tank")
+        ],
+        upcoming_inocs=[
+            {
+                "batch_no": b["batch_no"],
+                "start": datetime.combine(b["inoculate"], time(8, 0)),
+                "tank_no": b.get("ferm_tank"),
+                "all_day": True,
+            }
+            for b in batches
+            if b["inoculate"] and b["inoculate"] > as_of
+        ],
+        note_text=note_text,
+    )
+    # 罐序按移种（进罐）时间先后：已进罐的在前，待进罐/无批次罐在后
+    def _tank_order(entry: dict[str, Any]) -> tuple[bool, str, str]:
+        inoculate = entry.get("inoculate_at")
+        return (
+            inoculate is None,
+            inoculate or "",
+            str(entry.get("tank_no")),
+        )
+
+    tanks.sort(key=_tank_order)
+    # 单批产量趋势：周期内已放罐且有产量的批次，按放罐日期升序取最近 31 批
+    done_dump = {b["batch_no"]: b["dump"] for b in done}
+    measured = sorted(
+        (
+            a
+            for a in (actuals or [])
+            if a.get("yield_kg") is not None and a.get("batch_no") in done_dump
+        ),
+        key=lambda a: (done_dump[a["batch_no"]], str(a["batch_no"])),
+    )
+    recent_measured = measured[-31:]
+    trend = (
+        {
+            "batches": [a["batch_no"] for a in recent_measured],
+            "outputs": [round(float(a["yield_kg"]), 2) for a in recent_measured],
+        }
+        if recent_measured
+        else None
+    )
+    return {
+        "now": now.isoformat(),
+        "period": {
+            "start": block["start"].isoformat(),
+            "end": block["end"].isoformat(),
+            "label": block["label"],
+        },
+        "kpis": kpis,
+        "tanks": tanks,
+        "recent": recent,
+        "trend": trend,
+        "dumped_batches": dumped_batches,
+        "extraction": summarize_extraction(ledger_rows),
+        "extraction_ledger": ledger_rows,
+        "alerts": alerts,
+        "maintenance": [dict(m) for m in maintenance],
+    }
+
+
+# ═══════════════════ 霉酚酸（MP）排产解析 ═══════════════════
+# 101 车间 MC 放罐计划格式：块标题「2026年08月MC放罐计划」；
+# 块内序号行 1..N = 自然月第 1..N 天（列数随月天数变化）；
+# 批号贯穿四级流转：一级种子(16:00) → 2天后二级种子(15:00)
+# → 次日发酵(14:00) → 约7天后放罐(08:00)，同批号跨行跨块追踪时间线。
+
+# ═══════════════════ 103 他汀转产排产（洛伐 LV / 美伐 MV） ═══════════════════
+# 103车间一份文件竖排多月块、美伐/洛伐来回转产，块标题带产品关键字：
+# 「2026年6月01日～2026年6月30日103发酵洛伐计划」。标题年月 = 扎帐归属月，
+# 周期 = 上月 27 日～本月 26 日（与其他车间一致）；块内日期列仍为归属月
+# 自然日。转产月块内混有另一产品批次（放罐/倒罐行按块整体解析），且时间
+# 线全局扫描——扎帐头尾的批次写在相邻产品的月块里，不能按关键字裁剪。
+# 批号 MV-/LV- 前缀，复合尾 '/NN' 拆分。罐号语义：301B~306B 为 200kl
+# 发酵罐；倒罐 = 当日整批并入 301A（450kl），原 200kl 罐腾空，批号此后
+# 跟随 301A 至放罐——倒罐/放罐罐格里 301A 与源罐混排且顺序不统一，故
+# 倒罐批罐号直接取 301A；未倒罐直放批按罐格位置对应（第 i 批 ↔ 第 i 罐）。
+
+_STATIN_TITLE_RE = re.compile(
+    r"(\d{4})年(\d{1,2})月(\d{1,2})日～\s*(\d{4})年(\d{1,2})月(\d{1,2})日"
+    r"\s*103发酵(洛伐/美伐|美伐|洛伐)计划"
+)
+_STATIN_KEYWORD = {"LV": "洛伐", "MV": "美伐"}
+_STATIN_TURN_TANK = "301A"  # 倒罐目的罐（450kl），倒罐后批号跟随此罐
+# 批次折算基数（标准接种量）：洛伐单批 100；美伐复合批每子批 200
+#（复合接种量 400 ÷ 2）。接种量不足标准的批按比例折算小数批，
+# 如洛伐接种量 65 → 0.65 批（对齐排产表备注"9月份洛伐放罐9.65批"口径）
+_STATIN_SEED_BASE = {"LV": 100.0, "MV": 200.0}
+
+
+def _statin_blocks(rows: list[list[Any]]) -> list[dict[str, Any]]:
+    """全表扫描他汀月度块：[{start_row, year, month, start, end, keyword, note_row}]。
+
+    start/end 为标题年月的扎帐周期（上月 27 日～本月 26 日）。
+    """
+    blocks: list[dict[str, Any]] = []
+    for index, row in enumerate(rows):
+        if not row:
+            continue
+        match = _STATIN_TITLE_RE.search(str(row[0]).strip())
+        if match is None:
+            continue
+        y1, m1, d1, y2, m2, d2 = (int(match.group(i)) for i in range(1, 7))
+        start = date(y1 - 1, 12, 27) if m1 == 1 else date(y1, m1 - 1, 27)
+        try:
+            blocks.append(
+                {
+                    "start_row": index,
+                    "year": y1,
+                    "month": m1,
+                    "start": start,
+                    "end": date(y1, m1, 26),
+                    "keyword": match.group(7),
+                    "note_row": None,
+                }
+            )
+        except ValueError:
+            continue
+    # 备注行（'备注：…'）归属其上方最近的块
+    for r, row in enumerate(rows):
+        if row and str(row[0]).strip().startswith("备注"):
+            prior = [b for b in blocks if b["start_row"] < r]
+            if prior:
+                prior[-1]["note_row"] = r
+    return blocks
+
+
+def _statin_split_batch(value: Any) -> list[str]:
+    """他汀批号拆分：'MV-26009/010' → MV-26009、MV-26010；非批号文本忽略。"""
+    text = str(value or "").strip()
+    if not re.fullmatch(r"(?:MV|LV)-\d{3,6}(?:/\d{1,6})?", text):
+        return []
+    return [
+        part
+        for part in _dr_split_batch(text)
+        if re.fullmatch(r"(?:MV|LV)-\d{3,6}", part)
+    ]
+
+
+def _statin_split_tanks(value: Any) -> list[str]:
+    """罐格拆分：'304B/306B'、多行 '301A\\n303B\\n305B' → 罐号列表。"""
+    text = str(value or "").replace("\n", "/").strip()
+    return [tank.strip() for tank in text.split("/") if tank.strip()]
+
+
+def _statin_row_time(value: Any, default: str) -> time:
+    """时刻解析：Excel 小数分数（0.666…=16:00）或 'HH:MM(:SS)' 文本；异常回退默认。"""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        seconds = round(float(value) * 24 * 3600)
+        return time(seconds // 3600 % 24, (seconds // 60) % 60)
+    match = re.match(r"^(\d{1,2}):(\d{2})", str(value or "").strip())
+    if match is None:
+        return time.fromisoformat(default)
+    return time(int(match.group(1)), int(match.group(2)))
+
+
+def _statin_column_dates(
+    block: dict[str, Any], day_row: list[Any]
+) -> dict[int, date]:
+    """日期行 → {列号: 日期}（日 = 扎帐归属月内自然日）。"""
+    result: dict[int, date] = {}
+    for col in range(1, len(day_row)):
+        try:
+            day = int(float(str(day_row[col]).strip()))
+        except (TypeError, ValueError):
+            continue
+        try:
+            result[col] = date(block["year"], block["month"], day)
+        except ValueError:
+            continue
+    return result
+
+
+def _statin_batch_timeline(
+    rows: list[list[Any]],
+) -> dict[str, dict[str, Any]]:
+    """全表扫描他汀批号时间线（全部月度块，跨产品转产批不裁剪）。
+
+    返回结构与 _mp_batch_timeline 一致：{批号: {inoculate, ferm_tank,
+    dump, dump_tank}}。扎帐头尾批次写在相邻产品块里，须全局扫描；
+    倒罐批（跨块全局集合）罐号取 301A；直放批按罐格位置对应。
+    """
+    all_blocks = _statin_blocks(rows)
+    timeline: dict[str, dict[str, Any]] = {}
+
+    def _ensure(batch_no: str) -> dict[str, Any]:
+        return timeline.setdefault(
+            batch_no,
+            {
+                "batch_no": batch_no,
+                "inoculate": None,
+                "ferm_tank": None,
+                "dump": None,
+                "dump_tank": None,
+                # 批次折算数（标准接种量 = 1.0）；无种子记录的批默认整批
+                "units": 1.0,
+            },
+        )
+
+    # 倒罐批全局集合：倒罐块与放罐块可能不同（如 5/31 倒罐、6/6 放罐）
+    turned: set[str] = set()
+    for row in rows:
+        if row and str(row[0]).strip() == "倒罐":
+            for cell in row[1:]:
+                turned.update(_statin_split_batch(cell))
+
+    for block in all_blocks:
+        following = next(
+            (
+                b["start_row"]
+                for b in all_blocks
+                if b["start_row"] > block["start_row"]
+            ),
+            None,
+        )
+        block_end = following if following is not None else len(rows)
+        labeled: dict[str, tuple[int, list[Any]]] = {}
+        for r in range(block["start_row"] + 1, block_end):
+            row = rows[r] or []
+            # 标签一般在首列；日期行例外（首列空、'日期' 在第 1 列）
+            label = str(row[0]).strip() if row else ""
+            if not label and len(row) > 1:
+                label = str(row[1]).strip()
+            if label and label not in labeled:
+                labeled[label] = (r, row)
+        col_dates = _statin_column_dates(block, labeled.get("日期", (0, []))[1])
+        ferm_idx, ferm_row = labeled.get("发酵罐", (None, []))
+        shift_row = labeled.get("移种", (None, []))[1]
+        dump_idx, dump_row = labeled.get("放罐", (None, []))
+        dump_time_row = labeled.get("放罐时间", (None, []))[1]
+        ferm_tank_row = rows[ferm_idx + 1] if ferm_idx is not None else []
+        dump_tank_row = rows[dump_idx + 1] if dump_idx is not None else []
+        # 种子接种量 → 批次折算数：复合批均摊到子批，再除以标准接种量
+        seed_row = labeled.get("种子罐", (None, []))[1]
+        inoc_row = labeled.get("接种量", (None, []))[1]
+        for col, col_date in col_dates.items():
+            seed_batches = _statin_split_batch(
+                seed_row[col] if col < len(seed_row) else None
+            )
+            if not seed_batches:
+                continue
+            try:
+                total_inoc = (
+                    float(inoc_row[col]) if col < len(inoc_row) else 0.0
+                )
+            except (TypeError, ValueError):
+                total_inoc = 0.0
+            if not total_inoc:
+                continue
+            per_batch = total_inoc / len(seed_batches)
+            for seed_no in seed_batches:
+                base = _STATIN_SEED_BASE.get(seed_no.split("-")[0], 100.0)
+                entry = _ensure(seed_no)
+                entry["units"] = round(per_batch / base, 4)
+        for col, col_date in col_dates.items():
+            ferm_tanks = _statin_split_tanks(
+                ferm_tank_row[col] if col < len(ferm_tank_row) else None
+            )
+            ferm_when = datetime.combine(
+                col_date,
+                _statin_row_time(
+                    shift_row[col] if col < len(shift_row) else None,
+                    "14:00",
+                ),
+            )
+            for i, ferm_no in enumerate(
+                _statin_split_batch(
+                    ferm_row[col] if col < len(ferm_row) else None
+                )
+            ):
+                batch = _ensure(ferm_no)
+                if batch["inoculate"] is None or ferm_when < batch["inoculate"]:
+                    batch["inoculate"] = ferm_when
+                tank = (
+                    ferm_tanks[i]
+                    if i < len(ferm_tanks)
+                    else (ferm_tanks[0] if ferm_tanks else None)
+                )
+                if tank and batch["ferm_tank"] is None:
+                    batch["ferm_tank"] = tank
+            dump_cell_tanks = _statin_split_tanks(
+                dump_tank_row[col] if col < len(dump_tank_row) else None
+            )
+            dump_when = datetime.combine(
+                col_date,
+                _statin_row_time(
+                    dump_time_row[col] if col < len(dump_time_row) else None,
+                    "08:00",
+                ),
+            )
+            for i, dump_no in enumerate(
+                _statin_split_batch(
+                    dump_row[col] if col < len(dump_row) else None
+                )
+            ):
+                batch = _ensure(dump_no)
+                batch["dump"] = dump_when
+                if dump_no in turned:
+                    batch["dump_tank"] = _STATIN_TURN_TANK
+                elif batch["dump_tank"] is None:
+                    tank = (
+                        dump_cell_tanks[i]
+                        if i < len(dump_cell_tanks)
+                        else (dump_cell_tanks[0] if dump_cell_tanks else None)
+                    )
+                    if tank:
+                        batch["dump_tank"] = tank
+    return timeline
+
+
+def _find_statin_period_block(
+    rows: list[list[Any]], now: datetime, keyword: str
+) -> dict[str, Any] | None:
+    """定位 now 所在扎帐周期（上月27～本月26）的他汀月度块。"""
+    if now.day >= 27:
+        year, month = (
+            (now.year + 1, 1) if now.month == 12 else (now.year, now.month + 1)
+        )
+    else:
+        year, month = now.year, now.month
+    for block in _statin_blocks(rows):
+        if (
+            keyword in block["keyword"]
+            and (block["year"], block["month"]) == (year, month)
+        ):
+            return {
+                "start_row": block["start_row"],
+                "start": block["start"],
+                "end": block["end"],
+                "label": (
+                    f"{block['start'].month}月{block['start'].day}日～"
+                    f"{block['end'].month}月{block['end'].day}日"
+                ),
+                "note_row": block["note_row"],
+            }
+    return None
+
+
+_MP_TITLE_RE = re.compile(r"(\d{4})年(\d{1,2})月MC放罐计划")
+_MP_ROW_SEQ = 1
+_MP_ROW_FERM_BATCH = 8
+_MP_ROW_FERM_TANK = 9
+_MP_ROW_FERM_TIME = 10
+_MP_ROW_DUMP_BATCH = 11
+_MP_ROW_DUMP_TANK = 12
+_MP_ROW_DUMP_TIME = 13
+_MP_ROW_NOTE = 18
+
+
+def find_mp_period_block(
+    rows: list[list[Any]], now: datetime, product: str = "MC"
+) -> dict[str, Any] | None:
+    """定位 now 所在扎帐周期的 MC 放罐计划块（27 日及以后属次月块）。
+
+    product 为 LV/MV 时改走 103 他汀自然月块（标题含 洛伐/美伐 关键字）。
+    """
+    if product in _STATIN_KEYWORD:
+        return _find_statin_period_block(rows, now, _STATIN_KEYWORD[product])
+    if now.day >= 27:
+        year, month = (now.year + 1, 1) if now.month == 12 else (
+            now.year,
+            now.month + 1,
+        )
+    else:
+        year, month = now.year, now.month
+    if month == 1:
+        start = date(year - 1, 12, 27)
+    else:
+        start = date(year, month - 1, 27)
+    end = date(year, month, 26)
+    for index, row in enumerate(rows):
+        if not row:
+            continue
+        match = _MP_TITLE_RE.search(str(row[0]))
+        if match and (int(match.group(1)), int(match.group(2))) == (
+            year,
+            month,
+        ):
+            return {
+                "start_row": index,
+                "start": start,
+                "end": end,
+                "label": f"{start.month}月{start.day}日～{end.month}月{end.day}日",
+            }
+    return None
+
+
+def _mp_column_dates(
+    rows: list[list[Any]], start_row: int
+) -> dict[int, date]:
+    """块内列号 → 自然月日期（序号 n = 标题月第 n 日）。"""
+    match = _MP_TITLE_RE.search(str(rows[start_row][0]))
+    if match is None:
+        return {}
+    year, month = int(match.group(1)), int(match.group(2))
+    seq_row = rows[start_row + _MP_ROW_SEQ] or []
+    result: dict[int, date] = {}
+    for col in range(1, len(seq_row)):
+        text = str(seq_row[col]).strip()
+        if not text.isdigit():
+            continue
+        try:
+            result[col] = date(year, month, int(text))
+        except ValueError:
+            continue
+    return result
+
+
+def _mp_row_time(text: Any, default: str) -> time:
+    """时刻行解析（"14:00:00"）；异常回退默认时刻。"""
+    match = re.match(r"^(\d{1,2}):(\d{2})", str(text or "").strip())
+    if match is None:
+        return time.fromisoformat(default)
+    return time(int(match.group(1)), int(match.group(2)))
+
+
+def _mp_split_batch(value: Any) -> list[str]:
+    """MC 放罐计划批号拆分：支持完整前缀 'MC-26246/47' 与缺前缀 '26246/47'。
+
+    复合批短尾共享前缀（26246/47 → 26246、26247）；
+    裸数字批号统一补 MC- 前缀，与同表其他批号口径一致。
+    非批号文本返回空列表。
+    """
+    text = str(value).strip()
+    if not text:
+        return []
+    if re.fullmatch(r"\d{3,6}/\d{1,6}", text):
+        return [f"MC-{b}" for b in _dr_split_batch(text)]
+    if _dr_is_batch_no(text):
+        return [
+            b if "-" in b else f"MC-{b}" for b in _dr_split_batch(text)
+        ]
+    return []
+
+
+def _mp_batch_timeline(
+    rows: list[list[Any]],
+) -> dict[str, dict[str, Any]]:
+    """全表扫描批号时间线：发酵(进罐)与放罐事件按批号聚合。
+
+    返回 {批号: {"inoculate": datetime, "ferm_tank", "dump": datetime|None,
+    "dump_tank"}}；跨块流转的批（上月发酵、本月放罐）自然补齐。
+    复合批号（26246/47 等）拆分为独立批次后分别计数。
+    """
+    timeline: dict[str, dict[str, Any]] = {}
+
+    def _ensure(batch_no: str) -> dict[str, Any]:
+        return timeline.setdefault(
+            batch_no,
+            {
+                "batch_no": batch_no,
+                "inoculate": None,
+                "ferm_tank": None,
+                "dump": None,
+                "dump_tank": None,
+            },
+        )
+
+    for index, row in enumerate(rows):
+        if not row or not _MP_TITLE_RE.search(str(row[0])):
+            continue
+        col_dates = _mp_column_dates(rows, index)
+        ferm_b = rows[index + _MP_ROW_FERM_BATCH] or []
+        ferm_t = rows[index + _MP_ROW_FERM_TANK] or []
+        ferm_time = rows[index + _MP_ROW_FERM_TIME] or []
+        dump_b = rows[index + _MP_ROW_DUMP_BATCH] or []
+        dump_t = rows[index + _MP_ROW_DUMP_TANK] or []
+        dump_time = rows[index + _MP_ROW_DUMP_TIME] or []
+        for col, col_date in col_dates.items():
+            ferm_when = datetime.combine(
+                col_date,
+                _mp_row_time(
+                    ferm_time[col] if col < len(ferm_time) else None,
+                    "14:00",
+                ),
+            )
+            # 复合批号拆分（26246/47 → MC-26246、MC-26247）后逐批记录
+            for ferm_no in _mp_split_batch(
+                ferm_b[col] if col < len(ferm_b) else None
+            ):
+                batch = _ensure(ferm_no)
+                if batch["inoculate"] is None or ferm_when < batch["inoculate"]:
+                    batch["inoculate"] = ferm_when
+                tank = _dr_norm_tank(ferm_t[col] if col < len(ferm_t) else None)
+                if tank and batch["ferm_tank"] is None:
+                    batch["ferm_tank"] = tank
+            dump_when = datetime.combine(
+                col_date,
+                _mp_row_time(
+                    dump_time[col] if col < len(dump_time) else None,
+                    "08:00",
+                ),
+            )
+            for dump_no in _mp_split_batch(
+                dump_b[col] if col < len(dump_b) else None
+            ):
+                batch = _ensure(dump_no)
+                batch["dump"] = dump_when
+                tank = _dr_norm_tank(dump_t[col] if col < len(dump_t) else None)
+                if tank:
+                    batch["dump_tank"] = tank
+    return timeline
+
+
+def build_mp_board(
+    rows: list[list[Any]],
+    maintenance: list[dict[str, Any]],
+    now: datetime,
+    actuals: list[dict[str, Any]] | None = None,
+    block: dict[str, Any] | None = None,
+    product: str = "MC",
+) -> dict[str, Any] | None:
+    """MP（101车间）看板组装：批号时间线推算罐状态，KPI 按批次计。
+
+    product 为 LV/MV 时复用同一组装，改走 103 他汀自然月块解析
+    （块内批次整体计入，罐号按倒罐/直放规则回填）。
+    """
+    if block is None:
+        block = find_mp_period_block(rows, now, product=product)
+    if block is None:
+        return None
+    if product in _STATIN_KEYWORD:
+        timeline = _statin_batch_timeline(rows)
+    else:
+        timeline = _mp_batch_timeline(rows)
+    actual_by_batch = {
+        a["batch_no"]: a for a in (actuals or []) if a.get("batch_no")
+    }
+    maint_by_tank = {m["tank_no"]: m for m in maintenance}
+
+    def _in_period(when: datetime | None) -> bool:
+        return (
+            when is not None and block["start"] <= when.date() <= block["end"]
+        )
+
+    # 统计基线 = 时间线中与本扎帐周期相关的批：
+    # 放罐落在本周期内，或移种落在本周期内（本周期移种、下周期放罐）。
+    # 扎帐周期跨自然月（上月 27 日～本月 26 日），周期头尾的批次在
+    # 相邻月块里，因此不能只按当前块行收集，须从全表时间线过滤。
+    batches = sorted(
+        (
+            b
+            for b in timeline.values()
+            if _in_period(b["dump"]) or _in_period(b["inoculate"])
+        ),
+        key=lambda b: b["batch_no"],
+    )
+    done = sorted(
+        (b for b in batches if _in_period(b["dump"]) and b["dump"] <= now),
+        key=lambda b: (b["dump"], b["batch_no"]),  # type: ignore[arg-type, return-value]
+        reverse=True,
+    )
+    # 运行中/未开始按「本周期计划放罐」口径（放罐日期在周期内）：
+    # 跨周期放罐的在制罐不计入 KPI，保证四段进度之和 = 计划放罐数
+    running = [
+        b
+        for b in batches
+        if b["inoculate"] is not None
+        and b["inoculate"] <= now
+        and (b["dump"] is None or b["dump"] > now)
+        and _in_period(b["dump"])
+    ]
+    pending = [
+        b
+        for b in batches
+        if b["inoculate"]
+        and b["inoculate"] > now
+        and _in_period(b["dump"])
+    ]
+    planned = [b for b in batches if _in_period(b["dump"])]
+
+    # ── 罐状态：发酵罐集合，每罐取当前在罐批 ──
+    tank_nos: list[str] = []
+    for b in batches:
+        for tank in (b["ferm_tank"], b["dump_tank"]):
+            if tank and tank not in tank_nos:
+                tank_nos.append(tank)
+    tanks: list[dict[str, Any]] = []
+    for tank_no in sorted(tank_nos):
+        maint = maint_by_tank.get(tank_no)
+        if maint:
+            tanks.append(
+                {
+                    "tank_no": tank_no,
+                    "status": "maintenance",
+                    "batch_no": None,
+                    "inoculate_at": None,
+                    "cultured_hours": None,
+                    "cycle_hours": None,
+                    "dump_at": None,
+                    "note": f"检修：{maint['reason']}",
+                }
+            )
+            continue
+        own = [
+            b
+            for b in batches
+            if b["ferm_tank"] == tank_no
+            or (b["dump_tank"] == tank_no and b["ferm_tank"] is None)
+        ]
+        own.sort(
+            key=lambda b: (
+                b["inoculate"] or b["dump"] or datetime.max,  # type: ignore[arg-type]
+            )
+        )
+        active = [
+            b
+            for b in own
+            if b["inoculate"] is not None
+            and b["inoculate"] <= now
+            and (b["dump"] is None or b["dump"] > now)
+        ]
+        finished = [b for b in own if b["dump"] is not None and b["dump"] <= now]
+        batch = active[-1] if active else (finished[-1] if finished else None)
+        if batch is None:
+            tanks.append(
+                {
+                    "tank_no": tank_no,
+                    "status": "idle",
+                    "batch_no": None,
+                    "inoculate_at": None,
+                    "cultured_hours": None,
+                    "cycle_hours": None,
+                    "dump_at": None,
+                    "note": "等待排产",
+                }
+            )
+            continue
+        if batch in active:
+            status, note = "running", "运行中"
+        else:
+            status, note = "dumped", "已放罐"
+        cultured = (
+            round((now - batch["inoculate"]).total_seconds() / 3600, 1)
+            if batch["inoculate"] and batch["inoculate"] <= now
+            else None
+        )
+        cycle = (
+            round(
+                (batch["dump"] - batch["inoculate"]).total_seconds() / 3600, 1
+            )
+            if batch["dump"] and batch["inoculate"]
+            else None
+        )
+        tanks.append(
+            {
+                "tank_no": tank_no,
+                "status": status,
+                "batch_no": batch["batch_no"],
+                "inoculate_at": (
+                    batch["inoculate"].isoformat()
+                    if batch["inoculate"]
+                    else None
+                ),
+                "cultured_hours": cultured,
+                "cycle_hours": cycle,
+                "dump_at": (
+                    batch["dump"].isoformat() if batch["dump"] else None
+                ),
+                "note": note,
+            }
+        )
+    # 罐序按移种时间
+    def _tank_order(entry: dict[str, Any]) -> tuple[bool, str, str]:
+        inoculate = entry.get("inoculate_at")
+        return (inoculate is None, inoculate or "", str(entry.get("tank_no")))
+
+    tanks.sort(key=_tank_order)
+
+    with_yield = [
+        b
+        for b in done
+        if actual_by_batch.get(b["batch_no"], {}).get("yield_kg")
+    ]
+    if product in _STATIN_KEYWORD:
+        # 他汀：批次按种子接种量折算（标准 LV 100/批、MV 每子批 200/批），
+        # 支持小数批（如接种量 65 → 0.65 批，对齐排产表备注口径）
+        month_planned = round(sum(b["units"] for b in planned), 2)
+        month_done_planned = round(sum(b["units"] for b in done), 2)
+    else:
+        month_planned = len(planned)
+        month_done_planned = len(done)
+    kpis = {
+        "month_planned": month_planned,
+        "month_done_planned": month_done_planned,
+        "done_with_yield": len(with_yield),
+        "yield_pending": len(done) - len(with_yield),
+        "month_done_yield_kg": (
+            sum(
+                actual_by_batch[b["batch_no"]]["yield_kg"] for b in with_yield
+            )
+            or None
+        ),
+        "running": len(running),
+        "pending": len(pending),
+    }
+    recent = [
+        {
+            "batch_no": b["batch_no"],
+            "dump_date": b["dump"].date().isoformat() if b["dump"] else None,
+            "tank_no": b["dump_tank"] or b["ferm_tank"],
+            "yield_kg": actual_by_batch.get(b["batch_no"], {}).get("yield_kg"),
+            "extract_kg": actual_by_batch.get(b["batch_no"], {}).get(
+                "extract_kg"
+            ),
+            "batch_yield_rate": None,
+            "yield_rate": None,
+            "result": "计划放罐",
+            "inoculate_at": (
+                b["inoculate"].isoformat() if b["inoculate"] else None
+            ),
+            "cycle_hours": (
+                round((b["dump"] - b["inoculate"]).total_seconds() / 3600, 1)
+                if b["dump"] and b["inoculate"]
+                else None
+            ),
+        }
+        for b in done[:12]
+    ]
+    dumped_batches = [
+        {"batch_no": b["batch_no"], "dump_date": b["dump"].date().isoformat()}
+        for b in done
+        if b["dump"]
+    ]
+    ledger_rows = [
+        {
+            "batch_no": b["batch_no"],
+            "dump_date": b["dump"].date().isoformat() if b["dump"] else None,
+            "yield_kg": actual_by_batch.get(b["batch_no"], {}).get("yield_kg"),
+            "extract_kg": actual_by_batch.get(b["batch_no"], {}).get(
+                "extract_kg"
+            ),
+        }
+        for b in batches
+    ]
+    if product in _STATIN_KEYWORD:
+        note_row = (
+            rows[block["note_row"]] if block.get("note_row") is not None else []
+        )
+    else:
+        for block_row in range(0, len(rows)):
+            row = rows[block_row]
+            if row and _MP_TITLE_RE.search(str(row[0])):
+                note_row = rows[block_row + _MP_ROW_NOTE] or []
+                break
+        else:
+            note_row = []
+    note_text = _note_row_text(note_row)
+    # 播报：预放罐/检修冲突/待进罐/排产备注（对齐 FA 播报体验）
+    alerts: list[dict[str, Any]] = []
+    _append_schedule_alerts(
+        alerts,
+        tanks=tanks,
+        now=now,
+        maint_tanks=set(maint_by_tank),
+        planned_on_tanks=[
+            {"tank_no": b["ferm_tank"], "batch_no": b["batch_no"]}
+            for b in batches
+            if b.get("ferm_tank")
+        ],
+        upcoming_inocs=[
+            {
+                "batch_no": b["batch_no"],
+                "start": b["inoculate"],
+                "tank_no": b.get("ferm_tank"),
+            }
+            for b in batches
+            if b["inoculate"] and b["inoculate"] > now
+        ],
+        note_text=note_text,
+    )
+    # 单批产量趋势：周期内已放罐且有产量的批次，按放罐日期升序取最近 31 批
+    done_dump = {b["batch_no"]: b["dump"] for b in done}
+    measured = sorted(
+        (
+            a
+            for a in (actuals or [])
+            if a.get("yield_kg") is not None and a.get("batch_no") in done_dump
+        ),
+        key=lambda a: (done_dump[a["batch_no"]], str(a["batch_no"])),
+    )
+    recent_measured = measured[-31:]
+    trend = (
+        {
+            "batches": [a["batch_no"] for a in recent_measured],
+            "outputs": [round(float(a["yield_kg"]), 2) for a in recent_measured],
+        }
+        if recent_measured
+        else None
+    )
+    return {
+        "now": now.isoformat(),
+        "period": {
+            "start": block["start"].isoformat(),
+            "end": block["end"].isoformat(),
+            "label": block["label"],
+        },
+        "kpis": kpis,
+        "tanks": tanks,
+        "recent": recent,
+        "trend": trend,
+        "dumped_batches": dumped_batches,
+        "extraction": summarize_extraction(ledger_rows),
+        "extraction_ledger": ledger_rows,
+        "alerts": alerts,
+        "maintenance": [dict(m) for m in maintenance],
+    }
 
 
 # ═══════════════════ 重复存档合并（冻结历史日列） ═══════════════════
@@ -572,9 +2009,29 @@ def build_board(
             month_done_with_yield += 1
             month_done_yield_kg = (month_done_yield_kg or 0) + float(yield_kg)
     month_done = month_done_with_yield + month_yield_pending
+    # 运行中/未开始按「本周期计划放罐」口径统计（与 month_dump_count 分母
+    # 一致）：放罐窗口未结束的计划批，已在罐（或移种时间已到）→ 运行中，
+    # 否则未开始；跨周期放罐的在制罐不计入 KPI（罐状态板仍完整展示）
+    tank_running_batches = {
+        t["batch_no"] for t in tanks if t["status"] == "running"
+    }
+    ferm_starts = {ev["batch_no"]: ev["start"] for ev in _ferm_events(days)}
+    running_count = 0
+    pending_count = 0
+    for item in days:
+        if not item["dump_batch"]:
+            continue
+        dump_at = datetime.combine(item["date"], item["dump_time"] or time(10, 0))
+        if dump_at + DUMP_WINDOW > now:
+            start = ferm_starts.get(item["dump_batch"])
+            if (
+                item["dump_batch"] in tank_running_batches
+                or (start is not None and start <= now)
+            ):
+                running_count += 1
+            else:
+                pending_count += 1
     seed_events = _seed_events(days)
-    pending_count = sum(1 for ev in seed_events if ev["start"] > now)
-    running_count = sum(1 for t in tanks if t["status"] == "running")
 
     # ── 最近放罐（按计划，取放罐窗口已结束的批次，最多整个周期 31 批；
     #     前端表格内部滚动展示）──
@@ -587,6 +2044,7 @@ def build_board(
             batch_actual = actual_by_batch.get(item["dump_batch"]) or {}
             batch_yield = batch_actual.get("yield_kg")
             batch_extract = batch_actual.get("extract_kg")
+            inoculate = ferm_starts.get(item["dump_batch"])
             recent.append(
                 {
                     "batch_no": item["dump_batch"],
@@ -602,6 +2060,15 @@ def build_board(
                     "remark": batch_actual.get("remark"),
                     "yield_rate": None,
                     "result": "计划放罐",
+                    # 凑数已放罐行展示用：移种时间与计划总周期
+                    "inoculate_at": (
+                        inoculate.isoformat() if inoculate else None
+                    ),
+                    "cycle_hours": (
+                        round((dump_at - inoculate).total_seconds() / 3600, 1)
+                        if inoculate
+                        else None
+                    ),
                 }
             )
         if len(recent) >= 31:
@@ -1003,8 +2470,18 @@ async def load_archive_covering(
     ref_date: date,
     product_code: str = "FA",
 ) -> ScheduleExcelArchive | None:
-    """查找该产品 rows 覆盖指定日期所在扎帐周期的存档（含历史存档，从新到旧）。"""
+    """查找该产品 rows 覆盖指定日期所在扎帐周期的存档（含历史存档，从新到旧）。
+
+    FA/DR/MP 排产表格式不同：FA 按周期标题块、DR 按月度计划块（自然月列）、
+    MP 按月度放罐计划块（批次序号列）识别。
+    """
     ref_dt = datetime.combine(ref_date, time(12, 0))
+    find_block = {
+        "DR": find_dr_period_block,
+        "MC": partial(find_mp_period_block, product="MC"),
+        "LV": partial(find_mp_period_block, product="LV"),
+        "MV": partial(find_mp_period_block, product="MV"),
+    }.get(product_code, find_period_block)
     result = await session.execute(
         select(ScheduleExcelArchive)
         .where(
@@ -1015,7 +2492,7 @@ async def load_archive_covering(
         .limit(24)
     )
     for archive in result.scalars().all():
-        if find_period_block(archive.rows, ref_dt) is not None:
+        if find_block(archive.rows, ref_dt) is not None:
             return archive
     return None
 
@@ -1142,10 +2619,19 @@ async def delete_batch_actual(
 
 
 def current_period(
-    rows: list[list[Any]], now: datetime
+    rows: list[list[Any]], now: datetime, product_code: str = "FA"
 ) -> tuple[date, date] | None:
-    """最新存档中包含 now 的扎帐周期 (start, end)。"""
-    block = find_period_block(rows, now)
+    """最新存档中包含 now 的扎帐周期 (start, end)。
+
+    FA/DR/MP（含他汀 LV/MV）排产格式分派。
+    """
+    find_block = {
+        "DR": find_dr_period_block,
+        "MC": partial(find_mp_period_block, product="MC"),
+        "LV": partial(find_mp_period_block, product="LV"),
+        "MV": partial(find_mp_period_block, product="MV"),
+    }.get(product_code, find_period_block)
+    block = find_block(rows, now)
     if block is None:
         return None
     return block["start"], block["end"]

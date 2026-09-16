@@ -966,7 +966,7 @@
       }
     },
     "quality:inspection:inspection-items:inspection-items-dashboard": {
-      "status": "active",
+      "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/items/dashboard",
       "actions": {

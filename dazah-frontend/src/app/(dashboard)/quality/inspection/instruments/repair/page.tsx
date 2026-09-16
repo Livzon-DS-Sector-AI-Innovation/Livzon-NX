@@ -13,7 +13,6 @@ export default function InstrRepairPage() {
         entityCode="qc_instr_repair"
         editable
         editablePersonFields
-        enableTextPreview
         enableAttachmentPreview
         showLastSyncTime
         filters={[{ key: '维修状态', label: '维修状态' }]}

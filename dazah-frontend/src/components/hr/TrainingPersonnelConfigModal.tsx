@@ -424,7 +424,6 @@ export default function TrainingPersonnelConfigModal({ open, level, scopeDept, o
             showSearch
             filterOption={(input, option) => matchPinyin(String(option?.value ?? ''), input)}
             notFoundContent={hasMembers ? '无匹配人员，可手动输入' : '该部门无在职联系人，请手动输入姓名'}
-            maxTagCount="responsive"
           />
         )
       },

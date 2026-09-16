@@ -510,6 +510,10 @@ export interface BoardRecentBatch {
   remark: string | null
   yield_rate: number | null
   result: string
+  /** 移种时间（凑数已放罐行展示用） */
+  inoculate_at?: string | null
+  /** 计划总周期(h)（凑数已放罐行展示用） */
+  cycle_hours?: number | null
 }
 
 export interface BoardAlert {

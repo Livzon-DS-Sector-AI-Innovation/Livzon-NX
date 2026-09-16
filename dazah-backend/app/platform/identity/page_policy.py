@@ -444,7 +444,7 @@ def _sensitive_actions(
             "sync_config",
         ),
         "hr:contracts:contracts-ledger": ("sync_config",),
-        "hr:training:training-ledger": ("sync_config",),
+        "hr:training:training-ledger": ("delete", "sync_config"),
         "hr:training:annual-plan": ("delete", "sensitive_export"),
         "hr:training:sign-in-sheet": ("delete", "sensitive_export"),
         "hr:training:trainer": ("delete", "sensitive_export", "sync_config"),
@@ -3778,6 +3778,21 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
     settings_approval = ("hr:hr-settings:hr-settings-approval",)
     settings_mapping = ("hr:hr-settings:hr-settings-dept-mapping",)
     settings_scopes = ("hr:hr-settings:hr-settings-dept-scopes",)
+    # 培训各页共用的部门目录只读接口（列表/自定义/映射）允许的页面集合；
+    # 浏览器经代理会带上来源页路径，缺登记会导致培训页 403。
+    training_departments_pages = (
+        annual_plan
+        + sign_in
+        + new_employee_training
+        + training_ledger
+        + employee_training
+        + trainer
+        + position_training
+        + plan_tracking
+        + settings_mapping
+        + settings_scopes
+        + settings_reminder
+    )
     rules: list[tuple[str, str, tuple[str, ...], str, str | None, str]] = []
 
     def add(
@@ -4957,16 +4972,14 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
             "/training/departments",
             "/training/departments/custom",
         ),
-        settings_mapping
-        + settings_scopes
-        + tuple(key for key in all_pages if key.startswith("hr:training:")),
+        training_departments_pages,
         scope_adapter="hr.training_department",
     )
     add("GET", "/training/dept-mappings", settings_mapping, scope_adapter="hr.settings")
     add(
         "POST",
         "/training/departments",
-        settings_mapping,
+        settings_mapping + training_ledger,
         "operate",
         "sync_config",
         "hr.settings",
@@ -4982,7 +4995,7 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
     add(
         "DELETE",
         "/training/departments/{name}",
-        settings_mapping,
+        settings_mapping + training_ledger,
         "operate",
         "delete",
         "hr.settings",

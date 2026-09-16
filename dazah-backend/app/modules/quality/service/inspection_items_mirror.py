@@ -107,14 +107,46 @@ def _extract_select_options(field: dict[str, Any]) -> list[dict[str, str]]:
     return result
 
 
+# 物品页不展示的飞书列（内部关联/无业务含义）
+HIDDEN_COLUMNS: frozenset[str] = frozenset({"父记录"})
+
+# 日期型 ui_type（值可能回读为毫秒时间戳，需格式化为日期）
+_DATE_UI_TYPES = {"DateTime", "Date", "CreatedTime", "ModifiedTime"}
+
+
+def _format_date_cell(
+    value: Any, ui_type: str, column_key: str
+) -> str | None:
+    """把毫秒时间戳格式化为 YYYY-MM-DD（日期/时间类列）。
+
+    飞书日期列经 GET /records 回读可能是 int 或纯数字字符串（epoch ms），
+    直接展示就是时间戳数字；此处统一转成人可读日期。
+    """
+    is_date_column = ui_type in _DATE_UI_TYPES or "日期" in column_key
+    if not is_date_column:
+        return None
+    raw = value
+    if isinstance(raw, str) and raw.strip().isdigit():
+        raw = float(raw.strip())
+    if not isinstance(raw, (int, float)) or isinstance(raw, bool):
+        return None
+    try:
+        return datetime.fromtimestamp(float(raw) / 1000, tz=UTC).strftime("%Y-%m-%d")
+    except (ValueError, OSError):
+        return None
+
+
 def _build_columns(field_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """飞书 list_fields -> 列结构（含全列 + 选项映射，供前端动态展示全部列）。"""
     columns: list[dict[str, Any]] = []
     for field in field_items:
         field_name = str(field.get("field_name") or "").strip()
-        if not field_name:
+        if not field_name or field_name in HIDDEN_COLUMNS:
             continue
         ui_type = str(field.get("ui_type") or field.get("type") or "")
+        # 飞书「按钮」列（如「打开详情」）无回读值、非业务数据，不入镜像列
+        if ui_type == "Button":
+            continue
         options = _extract_select_options(field)
         column: dict[str, Any] = {
             "key": field_name,
@@ -152,12 +184,24 @@ def _normalize_record_cells(
     """把飞书记录整行归一化成 cells（中文列名 -> 前端可渲染结构）。"""
     fields = record.get("fields") or {}
     cells: dict[str, Any] = {}
+    # 列 ui_type 映射（内部键）：供详情抽屉按日期/勾选等类型正确渲染
+    column_types: dict[str, str] = {}
     for column in columns:
         key = column["key"]
         raw = fields.get(key)
         options = column.get("options")
         resolved = _resolve_option_value(raw, options) if options else raw
-        cells[key] = _smart_normalize_value(resolved)
+        ui_type = str(column.get("ui_type") or "")
+        formatted_date = _format_date_cell(resolved, ui_type, key)
+        cells[key] = (
+            formatted_date
+            if formatted_date is not None
+            else _smart_normalize_value(resolved)
+        )
+        if ui_type:
+            column_types[key] = ui_type
+    if column_types:
+        cells[f"{_INTERNAL_PREFIX}column_types"] = column_types
     # 双向链接原始 record_ids（前端不可见，供物资名回填索引使用）
     link_ids = fields.get("物资名")
     if isinstance(link_ids, dict):
@@ -578,6 +622,12 @@ async def list_items_mirror(
             if fv:
                 items = [it for it in items if str(it.get(fk) or "") == fv]
 
+    # 入库/出库按业务日期倒序（日期已格式化为 YYYY-MM-DD，字符串倒序即时间倒序；
+    # 无日期的行排在最后），保证最新记录在前
+    date_field = ITEMS_DATE_SORT_FIELDS.get(page_key)
+    if date_field:
+        items.sort(key=lambda it: str(it.get(date_field) or ""), reverse=True)
+
     total = len(items)
     start = (page - 1) * page_size
     page_items = items[start : start + page_size]
@@ -598,6 +648,11 @@ async def list_items_mirror(
         "page_size": page_size,
         "configured": True,
         "fields": display_fields,
+        "fieldMeta": {
+            str(col.get("key")): str(col.get("ui_type") or "")
+            for col in (snapshot.columns or [])
+            if col.get("key")
+        },
         "last_sync_time": snapshot.last_synced_at.isoformat()
         if snapshot.last_synced_at
         else None,

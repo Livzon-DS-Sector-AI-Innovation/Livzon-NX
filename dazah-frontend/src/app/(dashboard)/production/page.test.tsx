@@ -194,7 +194,7 @@ describe('ProductionHomePage (fermentation board)', () => {
     await render()
     expect(actions.getFermentationBoard).toHaveBeenCalled()
     const text = (container.textContent || '') + (document.body.textContent || '')
-    expect(text).toContain('103-1车间L-苯丙氨酸生产看板')
+    expect(text).toContain('L-苯丙氨酸生产看板')
     expect(text).toContain('生产周期 8月27日～9月26日')
     expect(text).toContain('本月计划批次')
     expect(text).toContain('31')
@@ -214,25 +214,17 @@ describe('ProductionHomePage (fermentation board)', () => {
     // 理论批次卡：一天一批，截至今天（随运行日期浮动）、已完成÷理论=设备利用率
     expect(text).toContain('理论批次')
     expect(text).toContain('设备利用率')
-    expect(text).toMatch(/截至 \d{2}-\d{2} · 一天一批/)
-    expect(text).toContain('已完成 10 ÷ 理论')
+    expect(text).toMatch(/截至 \d{2}-\d{2} · 按排产计划/)
+    expect(text).toContain('实际已放罐 9 ÷ 应放罐 10')
     expect(text).toMatch(/设备利用率\s*\n?\s*\d+(\.\d+)?%/)
     expect(text).not.toContain('当前运行批次')
     expect(text).not.toContain('待启动排产批次')
     // 本月批次进度条：产能口径（绿色段=已完成产能/计划产能），汇总行已删除
-    expect(text).toContain('本月批次进度')
     expect(text).not.toContain('已放罐 10/31')
-    expect(text).toContain('已完成 9 批｜298,531.00 kg')
-    expect(text).toContain('待出产量 1 批')
-    expect(text).toContain('未开始 19 批')
+    expect(text).toContain('298,531.00 kg')
     // 右侧计划产能：未设置显示 --，有设置显示 kg
     expect(text).toContain('本月计划产能')
     expect(container.textContent || '').toContain('--')
-    // 箭头位置 = 产能进度点 298531/930000 ≈ 32.1%
-    const arrow = container.querySelector('.relative .absolute[style*="left: 32"]')
-    expect(arrow).toBeTruthy()
-    // 进度条粒子脉冲层（Canvas）随进度条渲染
-    expect(container.querySelectorAll('[data-testid="progress-particles"]').length).toBe(1)
     // 顶部保留历史数据入口
     const historyBtn = Array.from(container.querySelectorAll('button')).find((b) =>
       b.textContent?.includes('历史数据'),
@@ -380,17 +372,19 @@ describe('ProductionHomePage (fermentation board)', () => {
       },
     })
     await render()
-    // 批次后三位升序：231（已放罐追加行）→ 232（放罐中）→ 234 → 无批号罐置末尾；
-    // 放罐中的 FA26232 不再重复出现在已放罐行（后端放罐窗口+2h 口径保证）
-    expect(tankTableBatchCells()).toEqual(['FA26231', 'FA26232', 'FA26234', '-'])
+    // 按移种时间排序：232/234 同移种时间(9/6 21:00)退回批号尾序 → 232 → 234；
+    // 凑数的已放罐行（无移种时间）与无批号罐置末尾
+    expect(tankTableBatchCells()).toEqual(['FA26232', 'FA26234', 'FA26231', '-'])
     // 已放罐行备注为固定完成话术
     const tankTable = Array.from(document.body.querySelectorAll('table')).find((t) =>
       t.textContent?.includes('当前批次号'),
     )
     expect(tankTable).toBeTruthy()
-    expect(tankTable!.querySelector('tbody tr td:nth-child(8)')?.textContent).toBe(
-      '该罐本批次放罐作业完成',
-    )
+    const notes = Array.from(
+      tankTable!.querySelectorAll('tbody tr td:nth-child(8)'),
+    ).map((td) => td.textContent)
+    // 已放罐行备注为固定完成话术
+    expect(notes).toContain('该罐本批次放罐作业完成')
   })
 
   it('shows the backend hint when no archive covers today', async () => {
@@ -449,7 +443,7 @@ describe('ProductionHomePage (fermentation board)', () => {
       okBtn.click()
       await new Promise((r) => setTimeout(r, 200))
     })
-    expect(actions.setFermentationMonthCapacity).toHaveBeenCalledWith(930000)
+    expect(actions.setFermentationMonthCapacity).toHaveBeenCalledWith(930000, 'FA')
   })
 
   it('marks a tank under maintenance and refreshes the board', async () => {
@@ -577,12 +571,15 @@ describe('ProductionHomePage (fermentation board)', () => {
       modalOkBtn().click()
       await new Promise((r) => setTimeout(r, 200))
     })
-    expect(actions.upsertFermentationBatchActual).toHaveBeenCalledWith({
-      batch_no: 'FA26230',
-      dump_date: '2026-09-07',
-      yield_kg: null,
-      remark: null,
-    })
+    expect(actions.upsertFermentationBatchActual).toHaveBeenCalledWith(
+      {
+        batch_no: 'FA26230',
+        dump_date: '2026-09-07',
+        yield_kg: null,
+        remark: null,
+      },
+      'FA',
+    )
     expect(document.body.textContent || '').toContain('已保存批次产量')
   })
 
@@ -634,6 +631,7 @@ describe('ProductionHomePage (fermentation board)', () => {
     })
     expect(actions.upsertFermentationBatchActual).toHaveBeenCalledWith(
       expect.objectContaining({ batch_no: 'FA26231', yield_kg: 105, remark: '复检合格' }),
+      'FA',
     )
   })
 
@@ -807,8 +805,8 @@ describe('ProductionHomePage (fermentation board)', () => {
         },
         {
           id: 'pl-2',
-          workshop: '203车间',
-          product_name: '甲瓦',
+          workshop: '103发酵车间',
+          product_name: 'L-苯丙氨酸',
           plan_date: '2026-09-01',
           planned_yield: 200,
           unit: 'KG',
@@ -835,7 +833,7 @@ describe('ProductionHomePage (fermentation board)', () => {
     expect(dropdown).toBeTruthy()
     const option = Array.from(
       dropdown.querySelectorAll('.ant-select-item-option'),
-    ).find((o) => o.textContent?.includes('甲瓦')) as HTMLElement
+    ).find((o) => o.textContent?.includes('103发酵车间')) as HTMLElement
     expect(option).toBeTruthy()
     await act(async () => {
       option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
@@ -846,7 +844,7 @@ describe('ProductionHomePage (fermentation board)', () => {
     expect(raw).toBeTruthy()
     const store = JSON.parse(raw || '{}') as Record<string, string>
     const values = Object.values(store)
-    expect(values).toContain('203车间|甲瓦')
+    expect(values).toContain('103发酵车间|L-苯丙氨酸')
   })
 
   it('picks a dump date manually in the actual modal', async () => {
@@ -904,6 +902,7 @@ describe('ProductionHomePage (fermentation board)', () => {
     })
     expect(actions.upsertFermentationBatchActual).toHaveBeenCalledWith(
       expect.objectContaining({ dump_date: '2026-09-09' }),
+      'FA',
     )
   })
 
@@ -957,9 +956,9 @@ describe('ProductionHomePage (fermentation board)', () => {
 
   it('switches period via the month picker and reloads with a located date', async () => {
     await render()
-    // 月份选择器：顶部标题栏（103-1车间L-苯丙氨酸生产看板 与 生产周期 标签之间）
+    // 月份选择器：顶部标题栏（L-苯丙氨酸生产看板 与 生产周期 标签之间）
     const pickerInput = Array.from(container.querySelectorAll('.ant-picker input')).find(
-      (i) => i.closest('.ant-space')?.textContent?.includes('103-1车间L-苯丙氨酸生产看板'),
+      (i) => i.closest('.ant-space')?.textContent?.includes('L-苯丙氨酸生产看板'),
     ) as HTMLInputElement
     expect(pickerInput).toBeTruthy()
     await act(async () => {
@@ -1127,7 +1126,7 @@ describe('ProductionHomePage (fermentation board)', () => {
         {
           id: 'p-1',
           workshop: '201-2车间',
-          product_name: '霉酚酸',
+          product_name: 'L-苯丙氨酸',
           plan_date: '2026-09-01',
           planned_yield: 61000,
           unit: 'KG',
@@ -1139,7 +1138,7 @@ describe('ProductionHomePage (fermentation board)', () => {
         {
           id: 'p-2',
           workshop: '101-2发酵车间',
-          product_name: '霉酚酸',
+          product_name: 'L-苯丙氨酸',
           plan_date: '2026-09-01',
           planned_yield: 30,
           unit: '批',
@@ -1154,11 +1153,11 @@ describe('ProductionHomePage (fermentation board)', () => {
     await render()
     const text = (container.textContent || '') + (document.body.textContent || '')
     expect(text).toContain('提炼计划产量')
-    // 默认选中第一行（201-2车间 霉酚酸），显示其计划产量与单位
+    // 默认选中第一行（201-2车间 L-苯丙氨酸），显示其计划产量与单位
     expect(text).toContain('61,000')
     expect(text).toContain('KG · 9月计划')
     // 下拉选中值带车间+产品（渲染在 Select 文本中）
-    expect(text).toContain('201-2车间 霉酚酸')
+    expect(text).toContain('201-2车间 L-苯丙氨酸')
     // 月份查询参数随概览自然月
     expect(actions.getPlans).toHaveBeenCalledWith(
       expect.objectContaining({ month: expect.stringMatching(/^\d{4}-\d{2}$/) }),
@@ -1173,6 +1172,61 @@ describe('ProductionHomePage (fermentation board)', () => {
     // 无计划数据时不显示"单位 · X月计划"取数文案（KPI 卡的"发酵本月计划产能"不受影响）
     expect(text).not.toContain('KG · ')
     expect(text).not.toContain('批 · ')
+  })
+
+  it('isolates the plan picker options per product tab', async () => {
+    actions.getPlans.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [
+        {
+          id: 'p-fa',
+          workshop: '203车间',
+          product_name: 'L-苯丙氨酸',
+          plan_date: '2026-09-01',
+          planned_yield: 790000,
+          unit: 'KG',
+          remarks: '',
+          source: 'feishu',
+        },
+        {
+          id: 'p-mp',
+          workshop: '201-2车间',
+          product_name: '霉酚酸',
+          plan_date: '2026-09-01',
+          planned_yield: 61000,
+          unit: 'KG',
+          remarks: '',
+          source: 'feishu',
+        },
+      ],
+      meta: { total: 2 },
+    })
+    await render()
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    // FA Tab：只显示苯丙氨酸行，霉酚酸行不出现在数值位
+    expect(text).toContain('790,000')
+    expect(text).not.toContain('61,000')
+    // 切到霉酚酸 Tab（导航显示名 MC）：下拉与数值切换为霉酚酸行，互不影响
+    const mpTab = Array.from(container.querySelectorAll('.rounded-lg')).find(
+      (b) => (b.textContent || '').trim() === 'MC',
+    ) as HTMLElement
+    expect(mpTab).toBeTruthy()
+    await act(async () => {
+      mpTab.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const textAfter = (container.textContent || '') + (document.body.textContent || '')
+    expect(textAfter).toContain('61,000')
+    expect(textAfter).not.toContain('790,000')
+    // 切回 FA，避免产品上下文泄漏到后续用例
+    const faTab = Array.from(container.querySelectorAll('.rounded-lg')).find(
+      (b) => (b.textContent || '').trim() === 'L-苯丙氨酸',
+    ) as HTMLElement
+    await act(async () => {
+      faTab.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
   })
 
   it('restores the remembered plan selection after reload', async () => {

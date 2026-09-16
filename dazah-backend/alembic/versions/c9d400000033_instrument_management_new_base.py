@@ -129,6 +129,10 @@ _RETIRED_MENUS: tuple[tuple[str, str], ...] = (
 # 菜单改名（key -> 新名称）
 _RENAMED_MENUS: tuple[tuple[str, str], ...] = (
     (
+        "quality:inspection:inspection-instruments:inspection-instruments-equipment",
+        "仪器台账",
+    ),
+    (
         "quality:inspection:inspection-instruments:inspection-instruments-maintenance",
         "维护保养记录",
     ),
@@ -153,6 +157,16 @@ _UPDATE_BINDING_SQL = (
     "enable_push_to_feishu = true, enable_pull_from_feishu = true, "
     "is_deleted = false, updated_at = now() "
     "WHERE entity_code = :entity_code"
+)
+
+# 维保合同「新增」走飞书共享表单（可在质量设置-飞书设置中更换）
+_CONTRACT_FORM_URL = (
+    "https://j0eukrlohu.feishu.cn/share/base/form/shrcnrm7ld6TLNwaoPuAWP36Z42"
+)
+_UPDATE_CONTRACT_FORM_URL_SQL = (
+    "UPDATE quality.quality_feishu_entity_settings "
+    "SET feishu_form_url = :form_url, updated_at = now() "
+    "WHERE entity_code = 'qc_instr_contracts'"
 )
 
 _INSERT_SETTING_SQL = (
@@ -216,6 +230,12 @@ def upgrade() -> None:
             ).bindparams(entity_code=entity_code)
         )
 
+    bind.execute(
+        sa.text(_UPDATE_CONTRACT_FORM_URL_SQL).bindparams(
+            form_url=_CONTRACT_FORM_URL
+        )
+    )
+
     for menu_key, route_path in _RETIRED_MENUS:
         bind.execute(
             _MENU_TABLE.update()
@@ -244,6 +264,7 @@ def downgrade() -> None:
 
     退役实体与菜单保持退役状态：无法区分"迁移退役"与"管理员主动停用"，
     与原退役迁移一致，需要恢复时由管理员在菜单/设置页显式启用。
+    合同表单链接保留：清空会丢失管理员后续在设置页的自定义值。
     """
     bind = op.get_bind()
 
@@ -275,6 +296,7 @@ def downgrade() -> None:
 
     for menu_key, _new_name in _RENAMED_MENUS:
         old_name = {
+            "inspection-instruments-equipment": "仪器设备",
             "inspection-instruments-maintenance": "维护保养",
             "inspection-instruments-calibration": "校准计划",
             "inspection-instruments-contracts": "外协合同",

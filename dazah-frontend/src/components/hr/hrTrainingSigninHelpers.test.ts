@@ -6,6 +6,7 @@ import {
   formatTopicForSignin,
   matchDrugCategory,
   matchTrainingType,
+  resolveLedgerArchiveDept,
 } from './TrainingSignInTabsClient'
 
 describe('TrainingSignInTabsClient helpers', () => {
@@ -76,6 +77,21 @@ describe('TrainingSignInTabsClient helpers', () => {
     })
     it('returns empty array when no references', () => {
       expect(extractAnnexRefs('无附件引用')).toEqual([])
+    })
+  })
+
+  describe('resolveLedgerArchiveDept', () => {
+    it('prefers the live training-notice form value over the session', () => {
+      expect(resolveLedgerArchiveDept('质量部', '人事行政部', '人事行政部')).toBe('质量部')
+    })
+    it('falls back to session issuer then organizer department', () => {
+      expect(resolveLedgerArchiveDept('', '生产部', '人事行政部')).toBe('生产部')
+      expect(resolveLedgerArchiveDept(undefined, undefined, '201二车间（DR）')).toBe('201二车间（DR）')
+    })
+    it('maps 总经办 and empty department to 人事行政部', () => {
+      expect(resolveLedgerArchiveDept(null, null, '总经办')).toBe('人事行政部')
+      expect(resolveLedgerArchiveDept('', '', '')).toBe('人事行政部')
+      expect(resolveLedgerArchiveDept(undefined, undefined, undefined)).toBe('人事行政部')
     })
   })
 })
