@@ -13,6 +13,7 @@ from io import BytesIO
 from typing import Any
 
 import openpyxl  # type: ignore[import-untyped]
+import xlrd  # type: ignore[import-untyped]
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -48,10 +49,23 @@ def _serialize_cell(value: Any) -> Any:
 
 
 def parse_workbook_bytes(data: bytes) -> dict[str, Any]:
-    """解析 Excel 第一个工作表，返回与前端渲染协议一致的结构。"""
+    """解析 Excel 首个可见工作表，返回与前端渲染协议一致的结构。
+
+    按文件魔数分派：.xlsx/.xlsm（ZIP）走 openpyxl；.xls（OLE 复合文档）
+    走 xlrd（openpyxl 不支持 BIFF 格式）。两者产出的 rows/merges 协议一致。
+    多周期排产文件常把历史 Sheet 隐藏保留；首表可能命中隐藏表，
+    因此优先取第一个可见工作表，全部隐藏时回退首表。
+    """
+    if data[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1":
+        return _parse_xls_bytes(data)
+    return _parse_xlsx_bytes(data)
+
+
+def _parse_xlsx_bytes(data: bytes) -> dict[str, Any]:
     workbook = openpyxl.load_workbook(BytesIO(data), data_only=True)
     try:
-        worksheet = workbook.worksheets[0]
+        visible = [ws for ws in workbook.worksheets if ws.sheet_state == "visible"]
+        worksheet = visible[0] if visible else workbook.worksheets[0]
     finally:
         workbook.close()
 
@@ -82,6 +96,95 @@ def parse_workbook_bytes(data: bytes) -> dict[str, Any]:
         "col_widths": col_widths,
         "row_count": len(rows),
         "col_count": worksheet.max_column,
+    }
+
+
+def _xls_text_units(text: str) -> int:
+    """显示宽度单位：中文等全宽字符记 2，其余记 1。"""
+    return sum(2 if ord(ch) > 0x2E7F else 1 for ch in text)
+
+
+def _parse_xls_bytes(data: bytes) -> dict[str, Any]:
+    """xlrd 解析 .xls：单元格序列化与 _serialize_cell 口径一致。"""
+    book = xlrd.open_workbook(file_contents=data, formatting_info=True)
+    visible = [sheet for sheet in book.sheets() if sheet.visibility == 0]
+    worksheet = visible[0] if visible else book.sheet_by_index(0)
+
+    def _cell_value(r: int, c: int) -> Any:
+        cell = worksheet.cell(r, c)
+        if cell.ctype == xlrd.XL_CELL_DATE:
+            value = xlrd.xldate_as_datetime(cell.value, book.datemode)
+            if (value.year, value.month, value.day) == (1899, 12, 31):
+                return value.strftime("%H:%M:%S")  # 纯时刻（小数时间）
+            if (
+                value.hour == 0
+                and value.minute == 0
+                and value.second == 0
+                and value.microsecond == 0
+            ):
+                return value.strftime("%Y-%m-%d")
+            return value.strftime("%Y-%m-%d %H:%M:%S")
+        if cell.ctype == xlrd.XL_CELL_NUMBER:
+            return cell.value
+        if cell.ctype == xlrd.XL_CELL_BOOLEAN:
+            return bool(cell.value)
+        if cell.ctype == xlrd.XL_CELL_TEXT:
+            return str(cell.value)
+        return ""  # 空/错误/空白
+
+    rows = [
+        [_cell_value(r, c) for c in range(worksheet.ncols)]
+        for r in range(worksheet.nrows)
+    ]
+
+    # xlrd 合并区间为半开 (rlo, rhi, clo, chi)，转 0-based 闭区间端点
+    merges = [
+        {
+            "s": {"r": rlo, "c": clo},
+            "e": {"r": rhi - 1, "c": chi - 1},
+        }
+        for rlo, rhi, clo, chi in worksheet.merged_cells
+    ]
+
+    # 列宽按内容自适应：非合并格按所在列计；跨列合并格（标题/备注横跨
+    # 多列）渲染时占整行宽，其显示宽度均摊到覆盖列——单列无需独立放下。
+    # 宽度按序列化后的显示值计（换行符当空格、中文按 2 倍字符计）。
+    span_starts: dict[tuple[int, int], int] = {}
+    covered: set[tuple[int, int]] = set()
+    for rlo, rhi, clo, chi in worksheet.merged_cells:
+        if chi - clo <= 1:
+            continue
+        span_starts[(rlo, clo)] = chi - clo
+        for r in range(rlo, rhi):
+            for c in range(clo, chi):
+                if (r, c) != (rlo, clo):
+                    covered.add((r, c))
+
+    col_units = [0.0] * worksheet.ncols
+    for r in range(len(rows)):
+        for c in range(worksheet.ncols):
+            if (r, c) in covered:
+                continue
+            value = rows[r][c] if c < len(rows[r]) else ""
+            if value in (None, ""):
+                continue
+            flat = str(value).replace("\n", " ").strip()
+            if not flat:
+                continue
+            share = _xls_text_units(flat) / span_starts.get((r, c), 1)
+            for cc in range(c, min(c + span_starts.get((r, c), 1), worksheet.ncols)):
+                col_units[cc] = max(col_units[cc], share)
+    col_widths = [
+        min(300, max(28, round(units * 8 + 12))) for units in col_units
+    ]
+
+    return {
+        "sheet_name": worksheet.name,
+        "rows": rows,
+        "merges": merges,
+        "col_widths": col_widths,
+        "row_count": len(rows),
+        "col_count": worksheet.ncols,
     }
 
 

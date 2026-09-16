@@ -769,7 +769,8 @@ async def test_board_warehouse_inbound_none_for_unwired_product(
         board, "build_board", MagicMock(return_value=_full_board_payload())
     )
 
-    res = await auth_client.get(f"{API}/fermentation-board?product=MC")
+    # MC 已接入（霉酚酸口径统一为 MC），改用未知代码验证跳过
+    res = await auth_client.get(f"{API}/fermentation-board?product=XX")
     assert res.status_code == 200
     assert res.json()["data"]["extract_finished_inbound_kg"] is None
 

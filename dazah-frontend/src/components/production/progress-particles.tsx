@@ -3,7 +3,9 @@
 /**
  * 本月批次进度条粒子脉冲层（对齐 Codex 推理强度滑块的粒子动效）：
  * - 静态：深蓝「已完成」段内散落半透明白色思考粒子，缓慢闪烁；
- * - 进度变化：粒子从进度点生成、只向左流动漂移并淡出，涨幅越大越密越快，
+ * - 进度变化：粒子从箭头底边位置生成（已完成矩形右缘 −17px = 进度点
+ *   左侧 34px）、只向左流动漂移并淡出（箭头盖在粒子上层，露出底缘
+ *   左侧即「从三角中喷出」），涨幅越大越密越快，
  *   粒子被进度点阻挡、不会进入右侧未完成区域；
  * - 进度落定：进度点触发一圈冲击波，粒子短暂爆发后回落稳定；
  * - 产能达成率 ≥ 100%：粒子密度翻倍 + 持续微光扫光 + 蓝色叠加提饱和。
@@ -40,6 +42,9 @@ interface Wave {
 }
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min)
+
+/** 粒子发射区间（px）：进度点左侧 34px，与 batch-progress-bar 箭头横向跨度一致 */
+const EMIT_SPAN_PX = 34
 
 export default function ProgressParticles({
   progressPct,
@@ -125,10 +130,13 @@ export default function ProgressParticles({
 
     const spawnFlow = (count: number) => {
       const tip = tipX()
+      if (tip <= 4) return
       for (let i = 0; i < count; i++) {
         d.particles.push({
           kind: 'flow',
-          x: Math.max(1, tip - rand(0, Math.min(70, tip))),
+          // 从箭头底边位置发出（进度点左侧 34px = 已完成矩形右缘 −17px），
+          // 向左漂移；箭头盖在粒子上层，一露出底缘左侧即「从三角喷出」
+          x: Math.max(1, tip - EMIT_SPAN_PX),
           y: rand(3, d.height - 3),
           r: rand(0.7, 1.7),
           alpha: 0,
