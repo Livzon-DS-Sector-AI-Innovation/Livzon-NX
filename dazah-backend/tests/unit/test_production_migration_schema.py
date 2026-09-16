@@ -507,3 +507,60 @@ def test_extraction_merge_migration_joins_quality_branch() -> None:
     assert set(merge.down_revision) == {"a9e3c1f8b2d4", "c9d400000032"}
     assert merge.upgrade() is None
     assert merge.downgrade() is None
+
+
+def test_rename_mp_to_mc_migration_updates_three_tables_both_ways(
+    monkeypatch: Any,
+) -> None:
+    migration = _load_migration(
+        PRODUCT_CODE_MIGRATION_PATH.parent
+        / "c9d400000037_rename_mp_product_code_to_mc.py",
+        "rename_mp_product_code_migration",
+    )
+    executed: list[str] = []
+    monkeypatch.setattr(migration.op, "execute", lambda sql: executed.append(str(sql)))
+
+    migration.upgrade()
+    assert executed == [
+        (
+            "UPDATE production.schedule_excel_archives "
+            "SET product_code = 'MC' WHERE product_code = 'MP'"
+        ),
+        (
+            "UPDATE production.fermentation_month_settings "
+            "SET product_code = 'MC' WHERE product_code = 'MP'"
+        ),
+        (
+            "UPDATE production.fermentation_batch_actuals "
+            "SET product_code = 'MC' WHERE product_code = 'MP'"
+        ),
+    ]
+
+    executed.clear()
+    migration.downgrade()
+    assert executed == [
+        (
+            "UPDATE production.schedule_excel_archives "
+            "SET product_code = 'MP' WHERE product_code = 'MC'"
+        ),
+        (
+            "UPDATE production.fermentation_month_settings "
+            "SET product_code = 'MP' WHERE product_code = 'MC'"
+        ),
+        (
+            "UPDATE production.fermentation_batch_actuals "
+            "SET product_code = 'MP' WHERE product_code = 'MC'"
+        ),
+    ]
+
+
+def test_rename_and_rollout_merge_migration_chain() -> None:
+    merge = _load_migration(
+        PRODUCT_CODE_MIGRATION_PATH.parent
+        / "c9d400000038_merge_rename_and_rollout_heads.py",
+        "rename_rollout_merge_migration",
+    )
+    assert merge.revision == "c9d400000038"
+    assert set(merge.down_revision) == {"c9d400000036", "c9d400000037"}
+    assert merge.upgrade() is None
+    assert merge.downgrade() is None
