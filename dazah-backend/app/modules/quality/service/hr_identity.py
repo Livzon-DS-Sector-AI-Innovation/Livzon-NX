@@ -26,11 +26,17 @@ _UNION_ID_CACHE_TTL = 30 * 24 * 3600
 async def translate_hr_open_ids_to_union_ids(
     db: AsyncSession,
     open_ids: list[str],
+    *,
+    fallback_credentials: tuple[str, str] | None = None,
 ) -> dict[str, str]:
     """批量把人事应用 open_id 翻译为 union_id。
 
     结果按 open_id 缓存 30 天；查不到（人员已离职/未同步/缓存过期且
     飞书侧已删除）的 id 不出现在返回结果中，由调用方决定如何报错。
+
+    fallback_credentials：实体所属应用凭据。记录里已保存的人员 id 属于
+    该应用命名空间，人事应用查不到；union_id 全租户一致，用签发方应用
+    再查一次即可拿到同一 union_id，避免混合命名空间写入 1254066。
     """
     unique_ids = list(
         dict.fromkeys(oid.strip() for oid in open_ids if oid and oid.strip())
@@ -53,15 +59,20 @@ async def translate_hr_open_ids_to_union_ids(
     )
 
     try:
-        credentials = await get_hr_feishu_app_credentials(db)
+        credentials = await get_hr_feishu_app_credentials(db, purpose="contact")
     except HrFeishuNotConfigured as exc:
-        raise AppException(
-            message=(
-                "人事模块飞书应用未配置，无法解析所选人员的飞书身份；"
-                "请先在人事管理-设置中完成飞书应用配置"
-            )
-        ) from exc
+        if fallback_credentials is None:
+            raise AppException(
+                message=(
+                    "人事模块飞书应用未配置，无法解析所选人员的飞书身份；"
+                    "请先在人事管理-设置中完成飞书应用配置"
+                )
+            ) from exc
+        credentials = fallback_credentials
     contact = FeishuContact(*credentials)
+
+    def _missing_after_contact() -> list[str]:
+        return [oid for oid in missing if oid not in result]
 
     for open_id in missing:
         try:
@@ -78,4 +89,24 @@ async def translate_hr_open_ids_to_union_ids(
                 union_id,
                 ex=_UNION_ID_CACHE_TTL,
             )
+
+    # 人事应用不认识的 id（如记录里保存的实体应用命名空间 open_id）：
+    # 用签发方应用兜底再查一次，union_id 跨应用一致
+    if fallback_credentials is not None and _missing_after_contact():
+        entity_contact = FeishuContact(*fallback_credentials)
+        for open_id in _missing_after_contact():
+            try:
+                union_id = await entity_contact.get_user_union_id(open_id)
+            except Exception:
+                logger.warning(
+                    "实体应用兜底换 union_id 失败: %s", open_id, exc_info=True
+                )
+                union_id = None
+            if union_id:
+                result[open_id] = union_id
+                await cache_set(
+                    f"{_UNION_ID_CACHE_PREFIX}{open_id}",
+                    union_id,
+                    ex=_UNION_ID_CACHE_TTL,
+                )
     return result

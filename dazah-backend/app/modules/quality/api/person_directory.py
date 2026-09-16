@@ -30,12 +30,20 @@ router = APIRouter()
 )
 async def list_person_options(
     keyword: str | None = Query(None, description="姓名关键词（可选）"),
+    departments: str | None = Query(
+        None, description="部门过滤，逗号分隔（如 QC,AI创新部）；缺省返回全部在职"
+    ),
     limit: int = Query(500, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     _require_user(current_user)
-    items = await get_person_options(db, keyword=keyword, limit=limit)
+    department_list = [
+        item.strip() for item in (departments or "").split(",") if item.strip()
+    ]
+    items = await get_person_options(
+        db, keyword=keyword, limit=limit, departments=department_list or None
+    )
     return success_response(data=items)
 
 

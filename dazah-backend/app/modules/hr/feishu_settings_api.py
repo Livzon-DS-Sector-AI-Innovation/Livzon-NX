@@ -37,37 +37,76 @@ async def _restart_hr_ws_safely() -> None:
         logger.exception("人事飞书长连接热重启失败")
 
 
-@router.get("/app", summary="获取人事模块飞书应用配置")
-async def get_hr_feishu_app_settings(
+_VALID_PURPOSES = ("contact", "bitable")
+
+
+def _validate_purpose(purpose: str | None) -> str:
+    if purpose not in _VALID_PURPOSES:
+        raise AppException(
+            status_code=400,
+            message=(
+                f"未知用途 {purpose}，"
+                "应为 contact（通讯录/部门管理）或 bitable（多维表格）"
+            ),
+        )
+    return purpose
+
+
+@router.get("/apps", summary="获取人事模块两组飞书应用配置（通讯录/多维表格）")
+async def list_hr_feishu_apps(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    result = await service.get_hr_feishu_app_settings(db)
+    items = await service.list_hr_feishu_app_settings(db)
+    return success_response(
+        data=[item.model_dump(mode="json") for item in items]
+    )
+
+
+@router.get("/app", summary="获取人事模块飞书应用配置（按用途）")
+async def get_hr_feishu_app_settings(
+    purpose: str = Query(
+        "bitable", description="contact=通讯录/部门管理；bitable=多维表格"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    _require_user(current_user)
+    purpose = _validate_purpose(purpose)
+    result = await service.get_hr_feishu_app_settings(db, purpose)
     return success_response(data=result.model_dump(mode="json"))
 
 
-@router.put("/app", summary="保存人事模块飞书应用配置")
+@router.put("/app", summary="保存人事模块飞书应用配置（按用途）")
 async def save_hr_feishu_app_settings(
     data: UpdateHrFeishuAppSettingsRequest,
+    purpose: str = Query(
+        "bitable", description="contact=通讯录/部门管理；bitable=多维表格"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    result = await service.update_hr_feishu_app_settings(db, data)
+    purpose = _validate_purpose(purpose)
+    result = await service.update_hr_feishu_app_settings(db, data, purpose)
     asyncio.create_task(_restart_hr_ws_safely())
     return success_response(
         data=result.model_dump(mode="json"), message="飞书应用配置已保存"
     )
 
 
-@router.post("/app/test", summary="测试人事模块飞书应用连接")
+@router.post("/app/test", summary="测试人事模块飞书应用连接（按用途）")
 async def test_hr_feishu_app_settings(
+    purpose: str = Query(
+        "bitable", description="contact=通讯录/部门管理；bitable=多维表格"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    result = await service.test_hr_feishu_app_settings(db)
+    purpose = _validate_purpose(purpose)
+    result = await service.test_hr_feishu_app_settings(db, purpose)
     return success_response(data=result.model_dump(mode="json"))
 
 

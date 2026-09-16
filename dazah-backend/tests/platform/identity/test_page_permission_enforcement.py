@@ -351,3 +351,14 @@ def test_plans_get_route_covers_overview_and_sales_plan_pages():
     assert binding is not None
     assert "production:overview" in binding.page_keys
     assert "production:plan:sales-plan" in binding.page_keys
+
+
+def test_hr_feishu_apps_route_bound_to_settings_page():
+    """/feishu-settings/apps 读取双应用配置，绑定到 HR 设置-飞书页并带数据范围。"""
+    binding = page_policy.api_binding_for_route(
+        "GET", "/api/v1/hr/feishu-settings/apps"
+    )
+    assert binding is not None
+    assert "hr:hr-settings:hr-settings-feishu" in binding.page_keys
+    assert binding.permission == "query"
+    assert binding.scope_adapter == "hr.settings"

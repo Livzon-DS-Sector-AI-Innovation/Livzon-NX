@@ -1324,7 +1324,11 @@ class DepartmentService:
         if not roots:
             return []
 
-        contact = FeishuContact(*await get_hr_feishu_app_credentials(self.session))
+        contact = FeishuContact(
+            *await get_hr_feishu_app_credentials(
+                self.session, purpose="contact"
+            )
+        )
 
         # 并发获取所有叶子部门的用户列表，单次超时 5 秒
         leaf_depts = [
@@ -1609,7 +1613,11 @@ class DepartmentService:
         if leader_ids:
             from app.modules.hr.feishu.contact import FeishuContact
 
-            contact = FeishuContact(*await get_hr_feishu_app_credentials(self.session))
+            contact = FeishuContact(
+                *await get_hr_feishu_app_credentials(
+                    self.session, purpose="contact"
+                )
+            )
             sem = asyncio.Semaphore(10)
 
             async def _fetch_leader_name(uid: str) -> tuple[str, str | None]:
@@ -5055,15 +5063,19 @@ class TrainingLedgerService:
 
     async def delete_custom_training_department(self, name: str) -> bool:
         """删除自定义部门（软删除）"""
-        # 不能删除数据驱动部门（UNION 查询产生的部门，不含自定义部门）
-        # 先获取所有部门，再减去自定义部门，得到数据驱动部门
-        all_depts = await self.repo.list_all_training_departments()
-        custom_depts = await self.repo.list_custom_training_departments()
-        data_driven = set(all_depts) - set(custom_depts)
-
+        # 不能删除数据驱动部门：台账/ESG/年度计划/岗位清单/培训师/会话，以及
+        # 人员配置里的部门。判据必须是"去掉自定义行之后该名字是否仍然出现"——
+        # 用集合相减会把同名数据来源一起减掉，导致删除成功但部门仍在列表里。
+        data_driven = set(
+            await self.repo.list_all_training_departments(include_custom=False)
+        )
         if name in data_driven:
             raise AppException(
-                status_code=400, message=f"部门「{name}」有培训数据，不可删除"
+                status_code=400,
+                message=(
+                    f"部门「{name}」来自培训数据或人员配置，不能删除；"
+                    "如需在部门列表中隐藏，请在培训部门映射设置中配置排除"
+                ),
             )
         return await self.repo.delete_custom_training_department(name)
 

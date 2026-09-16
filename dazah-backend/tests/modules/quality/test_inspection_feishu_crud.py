@@ -155,7 +155,7 @@ async def test_resolve_user_field_open_ids_union_mode_translates_hr_ids(
 ) -> None:
     """union 模式（QC验证）：人事 open_id 换发 union_id；回显 id 保持原样。"""
 
-    async def _fake_translate(db, open_ids):
+    async def _fake_translate(db, open_ids, **kwargs):
         table = {"ou_li": "on_li"}
         return {oid: union for oid, union in table.items() if oid in open_ids}
 
@@ -180,7 +180,7 @@ async def test_resolve_user_field_open_ids_union_mode_translates_hr_ids(
 async def test_resolve_user_field_open_ids_union_mode_raises_when_unknown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_translate(db, open_ids):
+    async def _fake_translate(db, open_ids, **kwargs):
         return {}
 
     monkeypatch.setattr(
@@ -201,7 +201,7 @@ async def test_resolve_user_field_open_ids_legacy_mode_keeps_unknown_ids(
 ) -> None:
     """非 union 模式（检验历史表单）：人员换发失败时保留原 id，不阻断。"""
 
-    async def _fake_translate(_db, ids):
+    async def _fake_translate(_db, ids, **kwargs):
         return {}
 
     monkeypatch.setattr(
@@ -436,3 +436,100 @@ async def test_inspection_feishu_attachment_content_api(
     assert resp.status_code == 200
     assert resp.content == b"PDFBYTES"
     assert "attachment" in resp.headers["content-disposition"]
+
+
+@pytest.mark.anyio
+async def test_update_feishu_write_error_surfaces_as_app_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """飞书写入拒绝（如 1254066）转 502 业务错误，不再以 500 吞掉。"""
+
+    class _FailingClient:
+        async def update_record(self, *_args, **_kwargs):
+            raise RuntimeError(
+                "Feishu API error: code=1254066, msg=UserFieldConvFail, path=x"
+            )
+
+    class _FakeRuntime:
+        app_id = "app"
+        app_secret = "secret"
+
+    class _FakeEntity:
+        table_id = "tbl"
+
+    async def _fake_write_client(_db, _code):
+        return _FailingClient(), _FakeEntity(), _FakeRuntime()
+
+    async def _fake_field_map(_client, _table_id):
+        return {}
+
+    monkeypatch.setattr(service, "_resolve_write_client", _fake_write_client)
+    monkeypatch.setattr(service, "_list_remote_field_map", _fake_field_map)
+
+    with pytest.raises(AppException, match="飞书写入失败") as exc_info:
+        await service.update_inspection_feishu_record(
+            object(), "qc_instr_maintenance", "rec1", {}
+        )
+    assert exc_info.value.status_code == 502
+
+
+@pytest.mark.anyio
+async def test_resolve_user_field_open_ids_translates_resolved_prefill_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """非 union 模式：记录回显的 resolved ou_ 也必须换发，否则与目录新选
+    人员的 on_ 混写会被飞书 1254066 整单拒绝（换个人就保存失败的根因）。"""
+
+    async def _fake_translate(_db, ids, **kwargs):
+        table = {
+            "ou_prefill": "on_prefill",  # 记录回显（写入应用命名空间）
+            "ou_picked": "on_picked",  # 人事目录新选
+        }
+        return {oid: union for oid, union in table.items() if oid in ids}
+
+    monkeypatch.setattr(
+        "app.modules.quality.service.hr_identity."
+        "translate_hr_open_ids_to_union_ids",
+        _fake_translate,
+    )
+    fields = {
+        "通知人": [{"id": "ou_prefill", "name": "张起智", "resolved": True}],
+        "维护人": [{"id": "ou_picked", "name": "李文昊"}],
+    }
+    user_map = {
+        "通知人": {"field_name": "通知人", "ui_type": "User"},
+        "维护人": {"field_name": "维护人", "ui_type": "User"},
+    }
+    await service._resolve_user_field_open_ids(
+        object(), user_map, fields, union_mode=False
+    )
+    assert fields["通知人"][0]["id"] == "on_prefill"
+    assert fields["维护人"][0]["id"] == "on_picked"
+
+
+@pytest.mark.anyio
+async def test_resolve_user_field_open_ids_mixed_unresolved_raises_clearly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """换发失败且与 on_ 混写时：报出人名的明确错误，而非飞书 1254066。"""
+
+    async def _fake_translate(_db, ids, **kwargs):
+        return {"ou_picked": "on_picked"}
+
+    monkeypatch.setattr(
+        "app.modules.quality.service.hr_identity."
+        "translate_hr_open_ids_to_union_ids",
+        _fake_translate,
+    )
+    fields = {
+        "通知人": [{"id": "ou_prefill", "name": "张起智", "resolved": True}],
+        "维护人": [{"id": "ou_picked", "name": "李文昊"}],
+    }
+    user_map = {
+        "通知人": {"field_name": "通知人", "ui_type": "User"},
+        "维护人": {"field_name": "维护人", "ui_type": "User"},
+    }
+    with pytest.raises(AppException, match="张起智"):
+        await service._resolve_user_field_open_ids(
+            object(), user_map, fields, union_mode=False
+        )

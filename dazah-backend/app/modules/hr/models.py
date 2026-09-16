@@ -1020,8 +1020,18 @@ class AnnualTrainingPlanItem(BaseModel):
 
 class HrFeishuAppSettings(BaseModel):
     __tablename__ = "hr_feishu_app_settings"
-    __table_args__ = {"schema": "hr"}
+    __table_args__ = (
+        UniqueConstraint("purpose", name="uq_hr_feishu_app_settings_purpose"),
+        {"schema": "hr"},
+    )
 
+    purpose: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="bitable",
+        server_default="bitable",
+        comment="应用用途：contact=通讯录/部门管理/飞书联系人；bitable=多维表格",
+    )
     app_id: Mapped[str] = mapped_column(String(100), nullable=False)
     app_secret: Mapped[str] = mapped_column(Text, nullable=False)
     is_enabled: Mapped[bool] = mapped_column(
@@ -2053,7 +2063,13 @@ class HrCustomTrainingDepartment(BaseModel):
 
     __tablename__ = "hr_custom_training_departments"
     __table_args__ = (
-        Index("ix_hr_custom_training_depts_name", "name", unique=True),
+        # 仅未删除记录唯一：软删除后同名部门要能重新添加
+        Index(
+            "ix_hr_custom_training_depts_name",
+            "name",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
         {"schema": "hr"},
     )
 

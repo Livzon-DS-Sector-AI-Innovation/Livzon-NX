@@ -7,7 +7,7 @@ in quality inspection management.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +21,31 @@ from app.modules.quality.service.quality_feishu_pages import (
 )
 
 logger = logging.getLogger(__name__)
+
+_TZ_SH = timezone(timedelta(hours=8))
+
+
+def resolve_month_range_ms(month: str) -> tuple[int, int]:
+    """YYYY-MM -> 东八区当月 [起始毫秒, 次月起始毫秒) 半开区间。
+
+    维保记录列表按「生成日期」月份过滤用（镜像 SQL 与实时兜底共用同一口径）；
+    格式非法抛 AppException(400)。
+    """
+    try:
+        year_str, month_str = str(month).strip().split("-")
+        year, month_num = int(year_str), int(month_str)
+    except (ValueError, AttributeError) as exc:
+        raise AppException(
+            message="月份格式不正确，应为 YYYY-MM（如 2026-09）", status_code=400
+        ) from exc
+    if not (1900 < year < 3000) or not (1 <= month_num <= 12):
+        raise AppException(
+            message="月份格式不正确，应为 YYYY-MM（如 2026-09）", status_code=400
+        )
+    start = datetime(year, month_num, 1, tzinfo=_TZ_SH)
+    end_year = year + (1 if month_num == 12 else 0)
+    end = datetime(end_year, month_num % 12 + 1, 1, tzinfo=_TZ_SH)
+    return int(start.timestamp() * 1000), int(end.timestamp() * 1000)
 
 
 # ── Helpers ──
@@ -435,11 +460,14 @@ async def _list_feishu_dynamic(
     filters: dict[str, str] | None = None,
     page: int = 1,
     page_size: int = 20,
+    month: str | None = None,
+    month_field: str = "生成日期",
 ) -> dict[str, Any]:
     """镜像未就绪时的实时兜底读取：列完全跟随飞书表真实字段。
 
     附件列返回 [{name,url,file_token,type,size}]、人员列返回 [{name,avatar_url,id}]、
     超链接返回 {link,text}，与镜像 cells 结构一致，前端渲染逻辑共用一套。
+    month 传入时按 month_field 的毫秒时间戳落在当月过滤（与镜像路径同口径）。
     """
     try:
         _, entity = await _resolve_runtime_entity(db, entity_code, direction="pull")
@@ -472,6 +500,17 @@ async def _list_feishu_dynamic(
                 items = [
                     it for it in items if str(it.get(field_key) or "") == field_value
                 ]
+
+    if month:
+        low_ms, high_ms = resolve_month_range_ms(month)
+
+        def _in_month(value: Any) -> bool:
+            try:
+                return value is not None and low_ms <= float(value) < high_ms
+            except (TypeError, ValueError):
+                return False
+
+        items = [it for it in items if _in_month(it.get(month_field))]
 
     items.sort(key=lambda x: str(x.get("updated_at") or ""), reverse=True)
     start = (page - 1) * page_size

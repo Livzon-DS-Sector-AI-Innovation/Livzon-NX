@@ -559,8 +559,16 @@ async def test_training_import_and_custom_department_repository_operations() -> 
     training = repository.TrainingLedgerRepository(session)
     session.execute.return_value = SimpleNamespace(all=lambda: [("质量部",)])
     assert await training.list_custom_training_departments() == ["质量部"]
+    # 无同名历史行 → 新建
+    session.execute.return_value = _Result(None)
     created = await training.add_custom_training_department("研发部")
     assert created.name == "研发部"
+    # 同名软删除行 → 恢复该行（避免与新建行并存）
+    soft_deleted = SimpleNamespace(name="研发部", is_deleted=True)
+    session.execute.return_value = _Result(soft_deleted)
+    revived = await training.add_custom_training_department("研发部")
+    assert revived is soft_deleted
+    assert soft_deleted.is_deleted is False
     session.execute.return_value = _Result(obj)
     assert await training.delete_custom_training_department("研发部") is True
     assert obj.is_deleted is True

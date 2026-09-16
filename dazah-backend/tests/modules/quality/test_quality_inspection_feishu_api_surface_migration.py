@@ -99,7 +99,7 @@ async def test_inspection_list_pull_and_subtable_routes_use_safe_contract(
 
     monkeypatch.setattr(api, "enrich_maintenance_schedule", fake_enrich_maintenance)
     for route, _entity_code in instrument_list_routes:
-        response = await route(
+        kwargs: dict[str, object] = dict(
             keyword="关键字",
             page=2,
             page_size=5,
@@ -109,10 +109,58 @@ async def test_inspection_list_pull_and_subtable_routes_use_safe_contract(
             request=request,
             current_user=user,
         )
+        if route is api.api_list_maintenance:
+            # month=None = 不过滤（全部）；镜像函数收到的 month 关键字透传见下
+            kwargs["month"] = None
+        response = await route(**kwargs)
         assert response.status_code == 200
         assert _body(response)["data"] == [{"record_id": "rec-1"}]
         assert _body(response)["meta"]["fields"] == ["状态"]  # type: ignore[index]
         assert _body(response)["meta"]["source"] == "local_mirror"  # type: ignore[index]
+
+    # 维保列表 month 参数透传到镜像读取（YYYY-MM 按生成日期落月过滤）
+    captured: dict[str, object] = {}
+
+    async def fake_list_instrument_mirror_month(
+        _db: object,
+        entity_code: str,
+        *,
+        keyword: str | None = None,
+        filters: dict[str, str] | None = None,
+        page: int = 1,
+        page_size: int = 20,
+        month: str | None = None,
+        month_field: str = "生成日期",
+    ) -> dict[str, object]:
+        captured["month"] = month
+        captured["month_field"] = month_field
+        return {
+            "items": [{"record_id": "rec-1"}],
+            "total": 1,
+            "page": page,
+            "page_size": page_size,
+            "configured": True,
+            "fields": ["状态"],
+            "last_sync_time": None,
+        }
+
+    monkeypatch.setattr(
+        api, "list_instrument_mirror", fake_list_instrument_mirror_month
+    )
+    month_response = await api.api_list_maintenance(
+        keyword=None,
+        month="2026-09",
+        page=1,
+        page_size=20,
+        force=False,
+        incremental=False,
+        db=db,
+        request=request,
+        current_user=user,
+    )
+    assert month_response.status_code == 200
+    assert captured == {"month": "2026-09", "month_field": "生成日期"}
+    monkeypatch.setattr(api, "list_instrument_mirror", fake_list_instrument_mirror)
 
     # 未同步（configured=False）→ 降级实时读（动态列），meta 无 source
     async def fake_list_instrument_mirror_empty(*_args: object, **_kwargs: object):

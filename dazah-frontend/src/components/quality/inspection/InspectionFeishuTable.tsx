@@ -5,7 +5,7 @@ import { TableEmptyState } from '../TableEmptyState'
 import { qualityTokens } from '../themeTokens'
 
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { Table, Card, Button, Input, Space, Typography, Alert, Select, App, Popconfirm } from 'antd'
+import { Table, Card, Button, Input, Space, Typography, Alert, Select, App, Popconfirm, Tag } from 'antd'
 import { SyncOutlined, SearchOutlined, FilterOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import type { TablePaginationConfig } from 'antd'
 import type { ColumnsType, ColumnType } from 'antd/es/table'
@@ -70,6 +70,17 @@ interface Props {
   columnWidths?: Record<string, number | string>
   /** 表头文字居中 */
   centerHeaders?: boolean
+  /** 列显示名覆盖（字段名 -> 表头文字，如 长公式列改短名） */
+  columnLabels?: Record<string, string>
+  /** 单元格值标记：字段名 -> 值 -> Tag 颜色（如 是否完成 是/否 亮色突出） */
+  valueTags?: Record<string, Record<string, { color: string; text?: string }>>
+  /** 月份过滤（YYYY-MM，后端按「生成日期」落月）；空串/不传 = 不过滤看全部 */
+  monthFilter?: string
+  /** 按行动态高亮：字段名 -> (整行) => Tag 配置；返回 null/undefined 正常渲染 */
+  cellHighlights?: Record<
+    string,
+    (record: Record<string, unknown>) => { color: string; text?: string } | null | undefined
+  >
 }
 
 interface FetchResult {
@@ -107,6 +118,10 @@ export function InspectionFeishuTable({
   wrapColumns = false,
   columnWidths,
   centerHeaders = false,
+  columnLabels,
+  valueTags,
+  cellHighlights,
+  monthFilter = '',
 }: Props) {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
@@ -172,11 +187,12 @@ export function InspectionFeishuTable({
   }, [fieldsData])
 
   const { data: queryData, isFetching: loading, error } = useQuery<FetchResult>({
-    queryKey: ['quality-inspection', 'list', listApi, { page: pagination.page, pageSize: pagination.pageSize, keyword, filterValues, entityCode }],
+    queryKey: ['quality-inspection', 'list', listApi, { page: pagination.page, pageSize: pagination.pageSize, keyword, filterValues, entityCode, monthFilter }],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(pagination.page), page_size: String(pagination.pageSize) })
       if (keyword) params.set('keyword', keyword)
       if (entityCode) params.set('entity_code', entityCode)
+      if (monthFilter) params.set('month', monthFilter)
       for (const [k, v] of Object.entries(filterValues)) {
         if (v) params.append('filter_' + k, v)
       }
@@ -217,6 +233,13 @@ export function InspectionFeishuTable({
     setShowFilters(false)
     setPagination({ page: 1, pageSize: 20 })
   }, [entityCode, listApi])
+
+  // 切换月份（含清空=全部）回到第一页：渲染期同步调整状态，避免副作用级联
+  const [lastMonthFilter, setLastMonthFilter] = useState(monthFilter)
+  if (lastMonthFilter !== monthFilter) {
+    setLastMonthFilter(monthFilter)
+    setPagination(prev => (prev.page === 1 ? prev : { ...prev, page: 1 }))
+  }
 
   const handlePull = async () => {
     if (!entityCode) return
@@ -374,7 +397,7 @@ export function InspectionFeishuTable({
             textAlign: centerHeaders || isFinishedPreset ? 'center' : 'left',
           }}
         >
-          {field}
+          {columnLabels?.[field] ?? field}
         </div>
       ),
       dataIndex: field,
@@ -382,6 +405,40 @@ export function InspectionFeishuTable({
       width,
       align: isFinishedPreset ? 'center' : undefined,
       render: (value: unknown, record: Record<string, unknown>) => {
+        const valueKey = typeof value === 'string' ? value.trim() : ''
+        // 按行动态高亮（如 剩余天数 ≤3 红 / ≤7 橙，且仅在未完成时）
+        const dynamicTag = cellHighlights?.[field]?.(record)
+        if (dynamicTag) {
+          return (
+            <div
+              style={{
+                lineHeight: 1.35,
+                textAlign: isFinishedPreset ? 'center' : 'left',
+                width: '100%',
+              }}
+            >
+              <Tag color={dynamicTag.color}>
+                {dynamicTag.text ?? (valueKey || String(value ?? ''))}
+              </Tag>
+            </div>
+          )
+        }
+        // 值标记（如 是否完成 是=绿 / 否=红）：命中映射时用 Tag 突出
+        const tagMap = valueTags?.[field]
+        const tag = tagMap?.[valueKey]
+        if (tag) {
+          return (
+            <div
+              style={{
+                lineHeight: 1.35,
+                textAlign: isFinishedPreset ? 'center' : 'left',
+                width: '100%',
+              }}
+            >
+              <Tag color={tag.color}>{tag.text ?? valueKey}</Tag>
+            </div>
+          )
+        }
         return (
           <div
             style={
@@ -584,7 +641,7 @@ export function InspectionFeishuTable({
           locale={{
             emptyText: (
               <TableEmptyState
-                hasFilters={Boolean(keyword || Object.keys(filterValues).length)}
+                hasFilters={Boolean(keyword || monthFilter || Object.keys(filterValues).length)}
                 hasError={!configured}
                 errorMessage="飞书数据源未配置，请在「质量管理 -> 飞书设置」完成配置后查看数据"
               />

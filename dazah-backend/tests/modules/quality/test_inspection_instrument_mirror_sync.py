@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pytest
@@ -18,6 +19,8 @@ from app.modules.quality.service import inspection_instrument_mirror as mirror
 pytestmark = pytest.mark.anyio
 
 ENTITY = "qc_instr_calibration"
+
+_TZ_SH = timezone(timedelta(hours=8))
 
 _SNAPSHOT_DDL = """
     CREATE TABLE IF NOT EXISTS quality.quality_items_page_snapshots (
@@ -357,6 +360,81 @@ async def test_sync_unknown_entity_rejected(db_session: AsyncSession) -> None:
         await mirror.sync_instrument_page(db_session, "qc_instr_not_exist")
 
 
+def _month_ms(*args: int) -> int:
+    return int(datetime(*args, tzinfo=_TZ_SH).timestamp() * 1000)
+
+
+def _month_fields() -> list[dict[str, Any]]:
+    return [
+        {"field_name": "设备名称", "ui_type": "Text", "type": 1},
+        {"field_name": "生成日期", "ui_type": "DateTime", "type": 5},
+    ]
+
+
+def _month_records() -> list[dict[str, Any]]:
+    """2026-09 两条（int/文本数字各一）、2026-08 两条（含 8 月 1 日 00:00 边界）、
+    9 月 1 日 00:00 边界一条（不得漏进 8 月）、无生成日期一条、
+    非数字文本一条（范围过滤不得因脏文本报错或误命中）。"""
+    return [
+        {
+            "record_id": "rec_sep1",
+            "fields": {"设备名称": "A", "生成日期": _month_ms(2026, 9, 1)},
+            "last_modified_time": 1_700_000_000_000,
+        },
+        {
+            "record_id": "rec_sep2",
+            "fields": {"设备名称": "B", "生成日期": str(_month_ms(2026, 9, 28))},
+            "last_modified_time": 1_700_000_000_100,
+        },
+        {
+            "record_id": "rec_augstart",
+            "fields": {"设备名称": "C", "生成日期": _month_ms(2026, 8, 1)},
+            "last_modified_time": 1_700_000_000_200,
+        },
+        {
+            "record_id": "rec_aug",
+            "fields": {"设备名称": "D", "生成日期": _month_ms(2026, 8, 15)},
+            "last_modified_time": 1_700_000_000_300,
+        },
+        {
+            "record_id": "rec_nodate",
+            "fields": {"设备名称": "E"},
+            "last_modified_time": 1_700_000_000_400,
+        },
+        {
+            "record_id": "rec_text",
+            "fields": {"设备名称": "F", "生成日期": "2026-09-01"},
+            "last_modified_time": 1_700_000_000_500,
+        },
+    ]
+
+
+async def test_list_month_filter_by_generation_date(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """month 过滤：按生成日期毫秒值落月（左闭右开）；不传=全部。"""
+    _install_feishu_mocks(monkeypatch, _month_records(), fields=_month_fields())
+    await mirror.sync_instrument_page(db_session, ENTITY, incremental=False)
+
+    whole = await mirror.list_instrument_mirror(db_session, ENTITY)
+    assert whole["total"] == 6
+
+    sep = await mirror.list_instrument_mirror(db_session, ENTITY, month="2026-09")
+    assert sep["total"] == 2
+    assert {it["record_id"] for it in sep["items"]} == {"rec_sep1", "rec_sep2"}
+
+    # 9 月 1 日 00:00 是 8 月区间的开上界：不得漏进 8 月
+    aug = await mirror.list_instrument_mirror(db_session, ENTITY, month="2026-08")
+    assert {it["record_id"] for it in aug["items"]} == {"rec_augstart", "rec_aug"}
+
+    # 十二月滚动到次年一月，边界不漏
+    dec = await mirror.list_instrument_mirror(db_session, ENTITY, month="2026-12")
+    assert dec["total"] == 0
+
+    with pytest.raises(AppException):
+        await mirror.list_instrument_mirror(db_session, ENTITY, month="2026/09")
+
+
 async def test_get_fields_empty_before_sync(db_session: AsyncSession) -> None:
     fields = await mirror.get_instrument_mirror_fields(db_session, ENTITY)
     assert fields == []
@@ -373,3 +451,65 @@ async def test_all_entities_have_titles_and_date_routes() -> None:
     # 有日期列的页必须配置日期排序字段；无日期列的页（维保周期表）不配
     assert "qc_instr_plans" not in mirror.INSTRUMENT_DATE_SORT_FIELDS
     assert mirror.INSTRUMENT_DATE_SORT_FIELDS["qc_instr_cal_external"] == "检定日期"
+    # 维保表「完成日期」已改名「维护日期」：排序字段必须跟随，否则
+    # 增量同步每次排序被拒退化全量
+    assert mirror.INSTRUMENT_DATE_SORT_FIELDS["qc_instr_maintenance"] == "维护日期"
+
+
+async def test_delete_instrument_mirror_record_soft_deletes_immediately(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """页面删除写穿：软删对应镜像行并回填总数，无需等全量对账。"""
+    _install_feishu_mocks(monkeypatch, _records())
+    await mirror.sync_instrument_page(db_session, ENTITY, incremental=False)
+
+    deleted = await mirror.delete_instrument_mirror_record(
+        db_session, ENTITY, "rec1"
+    )
+    assert deleted is True
+    read = await mirror.list_instrument_mirror(db_session, ENTITY)
+    assert read["total"] == 1
+    assert [item["record_id"] for item in read["items"]] == ["rec2"]
+    snapshot = await repo.get_snapshot(db_session, ENTITY)
+    assert snapshot.total_rows == 1
+
+    # 不存在的 record_id：返回 False（幂等）
+    assert (
+        await mirror.delete_instrument_mirror_record(db_session, ENTITY, "rec-x")
+        is False
+    )
+
+
+async def test_upsert_instrument_record_by_id_writes_through(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """单条写穿：get_record 后直接 upsert 镜像行（新增/编辑即时生效）。"""
+    _install_feishu_mocks(monkeypatch, _records())
+    await mirror.sync_instrument_page(db_session, ENTITY, incremental=False)
+
+    class _UpsertClient:
+        def __init__(self, *, app_token, app_id, app_secret):
+            pass
+
+        async def get_record(self, table_id, record_id):
+            return {
+                "record_id": record_id,
+                "fields": {
+                    "序号": 9,
+                    "仪器、设备名称": "新进色谱仪",
+                    "校验有效期": "46410",
+                    "设备类型": "optMain",
+                },
+                "last_modified_time": 1_700_000_200_000,
+            }
+
+    monkeypatch.setattr(mirror, "BitableClient", _UpsertClient)
+
+    ok = await mirror.upsert_instrument_record_by_id(db_session, ENTITY, "rec-new")
+    assert ok is True
+    read = await mirror.list_instrument_mirror(db_session, ENTITY)
+    by_id = {item["record_id"]: item for item in read["items"]}
+    assert by_id["rec-new"]["仪器、设备名称"] == "新进色谱仪"
+    assert by_id["rec-new"]["设备类型"] == "主要设备"  # 选项 id 已映射文字
+    snapshot = await repo.get_snapshot(db_session, ENTITY)
+    assert snapshot.total_rows == 3

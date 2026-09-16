@@ -349,7 +349,7 @@ async def _sync_feishu_members(db: AsyncSession) -> None:
     """
     from app.modules.hr.feishu_settings_service import get_hr_feishu_app_credentials
 
-    app_id, app_secret = await get_hr_feishu_app_credentials(db)
+    app_id, app_secret = await get_hr_feishu_app_credentials(db, purpose="contact")
     contact = FeishuContact(app_id=app_id, app_secret=app_secret)
     root_id = await _resolve_ningxia_root_dept_id(db)
     extra_roots = await _resolve_extra_root_dept_ids(db, contact, root_id)

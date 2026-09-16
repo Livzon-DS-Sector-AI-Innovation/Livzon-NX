@@ -16,6 +16,8 @@ import {
   fetchEmployees,
   fetchEmployeesAction,
   updateCandidateAction,
+  updateHrFeishuAppSettings,
+  testHrFeishuAppSettings,
 } from './hr'
 
 const API_BASE = process.env.API_BASE_URL || 'http://dazah-backend-app-1:8000'
@@ -85,6 +87,29 @@ describe('hr actions', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/hr/candidates/c-1`,
       expect.objectContaining({ method: 'PUT', body: JSON.stringify({ note: 'x' }) }),
+    )
+  })
+
+  it('saves HR feishu app settings with a purpose', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const data = { app_id: 'cli_test', app_secret: 's', is_enabled: true }
+    await updateHrFeishuAppSettings(data, 'contact')
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/hr/feishu-settings/app?purpose=contact`,
+      expect.objectContaining({ method: 'PUT', body: JSON.stringify(data) }),
+    )
+  })
+
+  it('tests HR feishu app connection with a purpose', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { success: true } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await testHrFeishuAppSettings('bitable')
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/hr/feishu-settings/app/test?purpose=bitable`,
+      expect.objectContaining({ method: 'POST' }),
     )
   })
 })

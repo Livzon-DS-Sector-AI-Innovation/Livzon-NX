@@ -42,7 +42,11 @@ from app.modules.quality.service.warehouse_result_sync import (
 from app.platform.audit.service import record_audit_log
 from app.platform.integrations.feishu.attachment_cache import get_attachment_cache
 from app.platform.integrations.feishu.auth import FeishuAuth
-from app.platform.integrations.feishu.bitable import BitableClient, _to_ms_timestamp
+from app.platform.integrations.feishu.bitable import (
+    BitableClient,
+    _to_ms_timestamp,
+    fields_need_union_user_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -196,6 +200,18 @@ def _coerce_write_fields(
     return coerced
 
 
+def _write_user_id_type(coerced: dict[str, Any], union_mode: bool) -> str:
+    """按本次写入的人员 id 前缀选命名空间。
+
+    人事目录新选人员换发后是 union_id（on_ 前缀），必须以 union_id 写入；
+    本 Base 回读/复制的 id 是 open_id（ou_ 前缀），以 open_id 写入。
+    命名空间与 id 不匹配会报 1254066 UserFieldConvFail。
+    """
+    if union_mode or fields_need_union_user_id(coerced):
+        return "union_id"
+    return "open_id"
+
+
 def _entity_uses_union_user_ids(entity_code: str) -> bool:
     """QC验证实体的人员字段统一走 union_id 命名空间（与人事目录选人配套）。"""
     return entity_code.startswith("validation_qc_")
@@ -207,6 +223,7 @@ async def _resolve_user_field_open_ids(
     fields: dict[str, Any],
     *,
     union_mode: bool = False,
+    fallback_credentials: tuple[str, str] | None = None,
 ) -> None:
     """把 User 字段里新选人员的 id 原地整理为当前 Base 可写的形态。
 
@@ -216,8 +233,10 @@ async def _resolve_user_field_open_ids(
     user_id_type=union_id；resolved=True 的记录回读 id 保持原样；换发失败
     明确报错，避免静默写入失败。
 
-    非 union 模式（检验等历史表单）：同样经人事应用换发 union_id；换发
-    失败（历史记录中的旧成员 id 等）保持原 id，不阻断写入。
+    非 union 模式（检验等历史表单）：所有 ou_ 一律换发 union_id（记录回显
+    的 resolved 项属于写入应用命名空间，经 fallback_credentials 换发必然
+    成功），保证同一次写入只含一种命名空间；换发失败且与 on_ 混写时明确
+    报错（纯 ou_ 时保持原 id 走 open_id 写入，兼容历史数据）。
     """
     user_fields = [
         name
@@ -271,13 +290,15 @@ async def _resolve_user_field_open_ids(
             )
         return
 
-    # 非 union 模式：同样经人事应用换发 union_id，失败保持原 id，不阻断
+    # 非 union 模式：所有 ou_ id（含记录回显的 resolved 项——它们属于写入
+    # 应用命名空间，经 fallback_credentials 必然可换发）统一换发为 union_id，
+    # 保证同一次写入只有一种命名空间：on_ 与 ou_ 混写会被飞书 1254066 整单
+    # 拒绝（2026-09-16 "换一个人员就保存失败"的根因：回显 resolved 项被跳过
+    # 保持 ou_，新选人员换成 on_，混写触发）。
     wanted: list[str] = []
     for name in user_fields:
         for item in fields[name]:
             if not isinstance(item, dict):
-                continue
-            if item.get("resolved"):
                 continue
             member_id = str(item.get("id") or "").strip()
             if member_id.startswith("ou_"):
@@ -289,10 +310,12 @@ async def _resolve_user_field_open_ids(
         translate_hr_open_ids_to_union_ids,
     )
 
-    try:
-        translated = await translate_hr_open_ids_to_union_ids(db, wanted)
-    except Exception:
-        return
+    # 人事应用未配置/解密失败时由兜底凭据接管；个别人员查不到（离职/
+    # 未同步）保持原 id，若因此与 on_ 混写则下方显式报错
+    translated = await translate_hr_open_ids_to_union_ids(
+        db, wanted, fallback_credentials=fallback_credentials
+    )
+    unresolved: list[str] = []
     for name in user_fields:
         fields[name] = [
             {
@@ -301,10 +324,31 @@ async def _resolve_user_field_open_ids(
                     str(item.get("id") or "").strip(), item.get("id")
                 ),
             }
-            if isinstance(item, dict) and not item.get("resolved")
+            if isinstance(item, dict)
             else item
             for item in fields[name]
         ]
+        for item in fields[name]:
+            if (
+                isinstance(item, dict)
+                and str(item.get("id") or "").startswith("ou_")
+            ):
+                unresolved.append(
+                    str(item.get("name") or "").strip() or str(item.get("id"))
+                )
+    has_union = any(
+        isinstance(item, dict) and str(item.get("id") or "").startswith("on_")
+        for name in user_fields
+        for item in fields[name]
+    )
+    if unresolved and has_union:
+        raise AppException(
+            message=(
+                f"人员 {'、'.join(sorted(set(unresolved)))} 的飞书身份无法解析，"
+                "无法与其他人员一同保存；请删除该人员后从下拉中重新选择"
+            ),
+            status_code=400,
+        )
 
 
 def _union_entry(item: dict[str, Any], translated: dict[str, str]) -> dict[str, Any]:
@@ -325,14 +369,14 @@ def _entity_table_id(entity: Any) -> str:
 async def _resolve_write_client(
     db: AsyncSession,
     entity_code: str,
-) -> tuple[Any, Any]:
+) -> tuple[Any, Any, Any]:
     runtime, entity = await _resolve_runtime_entity(db, entity_code, direction="push")
     client = BitableClient(
         app_token=entity.app_token,
         app_id=runtime.app_id,
         app_secret=runtime.app_secret,
     )
-    return client, entity
+    return client, entity, runtime
 
 
 async def _list_remote_field_map(
@@ -424,18 +468,27 @@ async def create_inspection_feishu_record(
     actor_user_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     validate_bitable_crud_entity(entity_code)
-    client, entity = await _resolve_write_client(db, entity_code)
+    client, entity, runtime = await _resolve_write_client(db, entity_code)
     remote_field_map = await _list_remote_field_map(client, entity.table_id)
     union_mode = _entity_uses_union_user_ids(entity_code)
     await _resolve_user_field_open_ids(
-        db, remote_field_map, fields, union_mode=union_mode
+        db,
+        remote_field_map,
+        fields,
+        union_mode=union_mode,
+        fallback_credentials=(runtime.app_id, runtime.app_secret),
     )
     coerced = _coerce_write_fields(remote_field_map, fields)
-    record = await client.create_record(
-        _entity_table_id(entity),
-        coerced,
-        user_id_type="union_id" if union_mode else "open_id",
-    )
+    try:
+        record = await client.create_record(
+            _entity_table_id(entity),
+            coerced,
+            user_id_type=_write_user_id_type(coerced, union_mode),
+        )
+    except RuntimeError as exc:
+        # 飞书写入拒绝（如 1254066 人员命名空间不符）：转业务错误透出原因，
+        # 不作为 500 吞掉
+        raise AppException(message=f"飞书写入失败：{exc}", status_code=502) from exc
     record_id = str(record.get("record_id") or "")
     await record_audit_log(
         db,
@@ -464,19 +517,28 @@ async def update_inspection_feishu_record(
     actor_user_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     validate_bitable_crud_entity(entity_code)
-    client, entity = await _resolve_write_client(db, entity_code)
+    client, entity, runtime = await _resolve_write_client(db, entity_code)
     remote_field_map = await _list_remote_field_map(client, entity.table_id)
     union_mode = _entity_uses_union_user_ids(entity_code)
     await _resolve_user_field_open_ids(
-        db, remote_field_map, fields, union_mode=union_mode
+        db,
+        remote_field_map,
+        fields,
+        union_mode=union_mode,
+        fallback_credentials=(runtime.app_id, runtime.app_secret),
     )
     coerced = _coerce_write_fields(remote_field_map, fields)
-    record = await client.update_record(
-        _entity_table_id(entity),
-        record_id,
-        coerced,
-        user_id_type="union_id" if union_mode else "open_id",
-    )
+    try:
+        record = await client.update_record(
+            _entity_table_id(entity),
+            record_id,
+            coerced,
+            user_id_type=_write_user_id_type(coerced, union_mode),
+        )
+    except RuntimeError as exc:
+        # 飞书写入拒绝（如 1254066 人员命名空间不符）：转业务错误透出原因，
+        # 不作为 500 吞掉
+        raise AppException(message=f"飞书写入失败：{exc}", status_code=502) from exc
     next_record_id = str(record.get("record_id") or record_id)
     await record_audit_log(
         db,
