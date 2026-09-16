@@ -125,8 +125,8 @@ describe('HrFeishuSettingsPage 双应用配置', () => {
     })
     await flush()
     expect(hrApi.fetchAllHrFeishuAppSettings).toHaveBeenCalled()
-    expect(container.textContent).toContain('通讯录应用')
-    expect(container.textContent).toContain('多维表格应用')
+    expect(container.textContent).toContain('通讯录与部门管理')
+    expect(container.textContent).toContain('多维表格同步')
   })
 
   it('展示人事飞书实体配置列表', async () => {
