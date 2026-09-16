@@ -2016,6 +2016,8 @@ class AttachmentPreviewEnvelope(BaseModel):
 
 
 class HrFeishuAppSettingsDetail(BaseModel):
+    purpose: str = "bitable"
+    purpose_label: str = "多维表格同步"
     app_id: str = ""
     app_secret_masked: str | None = None
     is_enabled: bool = False

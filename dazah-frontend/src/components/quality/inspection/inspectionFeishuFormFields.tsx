@@ -6,6 +6,9 @@ import dayjs, { type Dayjs } from 'dayjs'
 import { FeishuPersonSelect, type FeishuPersonValue } from '@/components/shared/FeishuPersonSelect'
 import type { InspectionFeishuFieldMeta } from '@/types/quality'
 
+/** 质量检验人员字段候选部门（2026-09-16 与用户确认：QC + AI创新部）。 */
+export const QUALITY_INSPECTION_PERSON_DEPARTMENTS = ['QC', 'AI创新部']
+
 /** 只读字段值渲染（附件/人员/链接等），供新增/编辑弹窗与详情共用。 */
 export function renderReadOnlyValue(
   value: unknown,
@@ -185,10 +188,11 @@ export function FieldControl({
         name={field.field_name}
         label={label}
         rules={rules}
-        extra="来自人事管理-飞书联系人，支持中文/全拼/首字母搜索"
+        extra="仅 QC / AI创新部 在职人员，支持中文/全拼/首字母搜索"
       >
         <FeishuPersonSelect
           multiple
+          departments={QUALITY_INSPECTION_PERSON_DEPARTMENTS}
           extraOptions={toPersonExtraOptions(initialValue)}
         />
       </Form.Item>

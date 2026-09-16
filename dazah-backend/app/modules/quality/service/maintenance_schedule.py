@@ -1,12 +1,21 @@
-"""维护保养记录「下次维保时间」自动计算与回写。
+"""维护保养记录「完成即生成下一期任务」。
 
-飞书侧该列已由死公式改为可填写的日期列。以本地镜像的
-QC检测仪器维护保养周期表为准：按「仪器编号」（一格多编号顿号分隔）找到
-对应维护周期（月），以完成日期（未完成用生成日期）为基准加 N 个月得到
-下次维保时间：
-- 页面/档案展示：只填充空值，不覆盖飞书侧已填写的日期；
-- 同步回写（backfill）：镜像同步时把算出的日期写回飞书空值行，
-  手动填过的不动；回写失败仅记日志，不影响同步。
+业务口径（2026-09 与用户确认）：记录填写「维护日期」即视为本期完成——
+- 自动把原记录「是否完成」置为「是」（已是「是」则不动）；
+- 自动新建一条下一期任务记录：复制 设备名称/设备编号/维护内容/通知人/
+  维保类型；是否完成=「否」、维护日期留空（尚未维护）、生成日期=当天、
+  下次维保时间 = 原记录维护日期 + 周期表「周期（月）」；
+  维护人/复核人留空，待下一期实际维护时再填写；
+- 链的粒度是「设备编号 + 维护内容」：同一编号可并存多条不同维护内容、
+  不同周期的任务链，互不影响；
+- 防重复：同编号同维护内容下，已存在「下次维保时间 == 预期日期」的记录，
+  或已存在未完成且计划不早于预期日期的任务时，跳过该链的生成。
+
+周期匹配：以 QC检测仪器维护保养周期表镜像为准，按「仪器编号 + 维护内容」
+（编号与内容均归一化空白）建索引；记录无维护内容且该编号在周期表只有一行
+时按编号兜底命中。无维护内容的记录匹配不到周期，不会生成下一期。
+展示用 enrich（不回写飞书）：「下次维保时间」为空的行按维护日期+周期补算，
+仅在列表/档案展示，飞书侧仍以真实值为准。
 """
 
 from __future__ import annotations
@@ -24,9 +33,21 @@ from app.modules.quality.service.instruments_dashboard import (
     parse_feishu_date,
 )
 
+logger = logging.getLogger(__name__)
+
 _TZ_SH = timezone(timedelta(hours=8))
 
-logger = logging.getLogger(__name__)
+ENTITY = "qc_instr_maintenance"
+# 生成下一期任务时从原记录复制的字段。维护人/复核人不复制：下一期尚未
+# 维护，留待实际执行时填写；通知人保留（下一期仍通知同一人）。
+# User 字段按原始 id 数组原样回写
+_SPAWN_COPY_FIELDS = (
+    "设备名称",
+    "设备编号",
+    "维护内容",
+    "通知人",
+    "维保类型",
+)
 
 
 def _to_int(value: Any) -> float | None:
@@ -43,6 +64,11 @@ def _to_int(value: Any) -> float | None:
         return None
 
 
+def _norm_text(value: Any) -> str:
+    """归一化文本用于匹配：去首尾与内部全部空白。"""
+    return "".join(_cell_text(value).split())
+
+
 def add_months(base: date, months: int) -> date:
     """基准日期加 N 个月（日值超过目标月天数时取月末）。"""
     month_index = base.year * 12 + (base.month - 1) + months
@@ -52,8 +78,25 @@ def add_months(base: date, months: int) -> date:
     return date(year, month, day)
 
 
+def next_maintenance_date(base: date, months: float) -> date:
+    """维护日期 + 周期。
+
+    整数月走月历加法（月末日钳制）；不足 1 个月的小数周期（如周期表里的
+    0.5 = 每半月）按 30 天/月 折算成天数，避免 int 截断成 0 退化成同一天。
+    """
+    if months < 1:
+        return base + timedelta(days=max(1, round(30 * months)))
+    return add_months(base, int(months))
+
+
 def _today() -> date:
     return datetime.now(tz=_TZ_SH).date()
+
+
+def _to_ms(target: date) -> int:
+    """日期 -> 飞书 DateTime 字段的毫秒时间戳（东八区当天零点）。"""
+    stamp = datetime(target.year, target.month, target.day, tzinfo=_TZ_SH)
+    return int(stamp.timestamp() * 1000)
 
 
 def _parse_row_date(row: dict[str, Any], *keys: str) -> date | None:
@@ -64,126 +107,275 @@ def _parse_row_date(row: dict[str, Any], *keys: str) -> date | None:
     return None
 
 
-async def _load_cycle_index(db: AsyncSession) -> dict[str, dict[str, Any]]:
-    """周期表按编号分词建索引：编号 -> {months, category, cycle_text}。"""
+class _CycleIndex:
+    """周期表索引：精确 (编号, 维护内容) 命中 + 编号单行兜底。"""
+
+    def __init__(self) -> None:
+        self.exact: dict[tuple[str, str], dict[str, Any]] = {}
+        self.by_code: dict[str, list[dict[str, Any]]] = {}
+
+    def add(self, codes: set[str], content: str, info: dict[str, Any]) -> None:
+        for code in codes:
+            self.exact.setdefault((code, content), info)
+            bucket = self.by_code.setdefault(code, [])
+            if info not in bucket:
+                bucket.append(info)
+
+    def lookup(self, code: str, content: str) -> dict[str, Any] | None:
+        if not code:
+            return None
+        direct = self.exact.get((code, content))
+        if direct is not None:
+            return direct
+        if not content:
+            # 记录未填维护内容：该编号在周期表唯一时兜底命中
+            bucket = self.by_code.get(code) or []
+            if len(bucket) == 1:
+                return bucket[0]
+        return None
+
+
+async def _load_cycle_index(db: AsyncSession) -> _CycleIndex:
+    """周期表按（仪器编号、维护内容）建索引；一格多编号顿号分词。"""
     page = await _load_page(db, "qc_instr_plans")
-    index: dict[str, dict[str, Any]] = {}
+    index = _CycleIndex()
     for row in page.get("items") or []:
         months = _to_int(row.get("周期（月）"))
         if months is None or months <= 0:
             continue
         info = {
-            "months": int(months),
+            "months": months,
             "category": _cell_text(row.get("仪器类别")),
             "cycle_text": _cell_text(row.get("维护周期")),
         }
         raw_codes = _cell_text(row.get("仪器编号"))
-        tokens = {
+        codes = {
             token.strip()
             for token in raw_codes.replace("、", ",").split(",")
             if token.strip()
         }
-        for token in tokens:
-            index.setdefault(token, info)
+        index.add(codes, _norm_text(row.get("维护内容")), info)
     return index
+
+
+def _record_code(fields: dict[str, Any]) -> str:
+    return _cell_text(fields.get("设备编号")).strip()
+
+
+def _record_content(fields: dict[str, Any]) -> str:
+    return _norm_text(fields.get("维护内容"))
+
+
+def _copy_value(value: Any) -> Any:
+    """把回读形态的字段值转成可写入形态。
+
+    文本列回读是富文本段 [{text,type}]，写入需纯字符串；人员列回读带
+    name/avatar 等多余键，写入只需 [{id}]；其余（单选字符串/数字）原样。
+    """
+    if not isinstance(value, list) or not value:
+        return value
+    if not all(isinstance(item, dict) for item in value):
+        return value
+    if all(item.get("id") for item in value):
+        return [{"id": str(item["id"])} for item in value]
+    return "".join(str(item.get("text") or "") for item in value)
 
 
 async def enrich_maintenance_schedule(
     db: AsyncSession, items: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    """就地填充维护保养记录行的「下次维保时间」（已有值不覆盖）。"""
+    """展示用：就地填充「下次维保时间」为空的行（按维护日期+周期），不回写飞书。
+
+    剩余天数公式列现已恢复有效，展示直接用公式值，不再补算。
+    """
     cycle_index = await _load_cycle_index(db)
-    if not cycle_index:
+    if not cycle_index.exact and not cycle_index.by_code:
         return items
-    today = _today()
     for item in items:
         if _cell_text(item.get("下次维保时间")):
             continue
-        code = _cell_text(item.get("仪器编号")).strip()
-        info = cycle_index.get(code)
-        if info is None:
-            # 一格多编号的维护保养记录：任一编号命中周期表即可
-            info = next(
-                (
-                    entry
-                    for token in code.replace("、", ",").split(",")
-                    if (entry := cycle_index.get(token.strip()))
-                ),
-                None,
-            )
+        info = cycle_index.lookup(
+            _record_code(item), _record_content(item)
+        )
         if info is None:
             continue
-        base = _parse_row_date(item, "完成日期", "生成日期")
+        base = _parse_row_date(item, "维护日期", "生成日期")
         if base is None:
             continue
-        next_due = add_months(base, info["months"])
-        item["下次维保时间"] = next_due.isoformat()
-        # 剩余天数（提前1周通知）在飞书侧同为死公式，一并补齐
-        if not _cell_text(item.get("剩余天数（提前1周通知）")):
-            item["剩余天数（提前1周通知）"] = str((next_due - today).days)
+        item["下次维保时间"] = next_maintenance_date(
+            base, info["months"]
+        ).isoformat()
     return items
 
 
-def _next_due_ms(next_due: date) -> int:
-    """日期 -> 飞书 DateTime 字段的毫秒时间戳（东八区当天零点）。"""
-    stamp = datetime(next_due.year, next_due.month, next_due.day, tzinfo=_TZ_SH)
-    return int(stamp.timestamp() * 1000)
+def _has_open_successor(
+    existing: list[dict[str, Any]],
+    code: str,
+    content: str,
+    expected_ms: int,
+) -> bool:
+    """同编号同维护内容的链是否已有下一期任务（防重复）。"""
+    for record in existing:
+        fields = record.get("fields") or {}
+        if _record_code(fields) != code:
+            continue
+        if _record_content(fields) != content:
+            continue
+        next_raw = fields.get("下次维保时间")
+        if next_raw == expected_ms:
+            return True
+        if (
+            _cell_text(fields.get("是否完成")) == "否"
+            and isinstance(next_raw, (int, float))
+            and next_raw >= expected_ms
+        ):
+            return True
+    return False
 
 
-async def backfill_next_maintenance_dates(
+def _build_code_filter(code: str) -> str:
+    return f'CurrentValue.[设备编号] = "{code}"'
+
+
+async def _ensure_source_completed(
+    client: Any,
+    table_id: str,
+    record_id: str,
+    fields: dict[str, Any],
+) -> bool:
+    """填了维护日期即视为完成：原记录「是否完成」自动置「是」（幂等）。
+
+    就地同步 fields，保证同一次处理内的防重复判定看到完成态。
+    """
+    if fields.get("是否完成") == "是":
+        return False
+    await client.update_record(
+        table_id,
+        record_id,
+        {"是否完成": "是"},
+        user_id_type="open_id",
+    )
+    fields["是否完成"] = "是"
+    logger.info("维保记录已自动置为完成 record=%s", record_id)
+    return True
+
+
+async def spawn_next_for_fields(
+    db: AsyncSession,
+    client: Any,
+    table_id: str,
+    record_id: str,
+    fields: dict[str, Any],
+    *,
+    existing: list[dict[str, Any]] | None = None,
+) -> tuple[str, int] | None:
+    """单条记录的完成处理与下一期生成；返回 (新建 record_id, 预期下次时间ms)。
+
+    处理顺序：先把填了维护日期的原记录自动置完成，再按周期匹配生成下一期
+    （匹配不到周期时仅置完成、不生成）。fields 为飞书原始字段值（records
+    API 回读形态）。existing 传入时用于防重复判定（同设备编号的既有记录），
+    否则按设备编号查表。
+    """
+    done_date = _parse_row_date(fields, "维护日期")
+    if done_date is None:
+        return None
+    await _ensure_source_completed(client, table_id, record_id, fields)
+    code = _record_code(fields)
+    if not code:
+        return None
+    content = _record_content(fields)
+    cycle_index = await _load_cycle_index(db)
+    info = cycle_index.lookup(code, content)
+    if info is None:
+        return None
+    expected = next_maintenance_date(done_date, info["months"])
+    expected_ms = _to_ms(expected)
+
+    if existing is None:
+        existing = await client.search_records(
+            table_id,
+            filter_str=_build_code_filter(code),
+            field_names=["设备编号", "维护内容", "是否完成", "下次维保时间"],
+            user_id_type="open_id",
+        )
+    if _has_open_successor(existing, code, content, expected_ms):
+        return None
+
+    new_fields: dict[str, Any] = {
+        "生成日期": _to_ms(_today()),
+        "是否完成": "否",
+        "下次维保时间": expected_ms,
+    }
+    for key in _SPAWN_COPY_FIELDS:
+        value = fields.get(key)
+        if value in (None, "", []):
+            continue
+        new_fields[key] = _copy_value(value)
+    record = await client.create_record(table_id, new_fields, user_id_type="open_id")
+    record_id = str(record.get("record_id") or "")
+    logger.info(
+        "已生成下一期维保任务：%s[%s] -> record=%s 下次维保时间=%s",
+        code,
+        content[:12],
+        record_id,
+        expected.isoformat(),
+    )
+    return (record_id, expected_ms) if record_id else None
+
+
+async def maybe_spawn_next_maintenance(
     db: AsyncSession,
     client: Any,
     table_id: str,
     records: list[dict[str, Any]],
 ) -> int:
-    """把算出的「下次维保时间」回写飞书（仅空值），返回回写条数。
+    """镜像同步后批量检测：填了维护日期的行自动置完成并补建下一期任务。
 
-    在维护保养镜像同步时调用：records 为本次拉取的飞书记录（原始 dict，
-    fields 为飞书原始值）。回写成功后同步更新本地 fields，使镜像与飞书一致；
-    单条失败仅记日志，不中断其余回写。
+    单条失败仅记日志，不影响同步与其余行。返回生成条数。
     """
-    cycle_index = await _load_cycle_index(db)
-    if not cycle_index:
-        return 0
-    updated = 0
+    spawned = 0
+    # 同设备编号的既有记录缓存，避免逐条查表
+    by_code: dict[str, list[dict[str, Any]]] = {}
     for record in records:
         fields = record.get("fields") or {}
-        if fields.get("下次维保时间") not in (None, ""):
+        if fields.get("维护日期") in (None, ""):
             continue
-        code = _cell_text(fields.get("仪器编号")).strip()
-        info = cycle_index.get(code)
-        if info is None:
-            info = next(
-                (
-                    entry
-                    for token in code.replace("、", ",").split(",")
-                    if (entry := cycle_index.get(token.strip()))
-                ),
-                None,
-            )
-        if info is None:
-            continue
-        base = _parse_row_date(fields, "完成日期", "生成日期")
-        if base is None:
-            continue
-        next_due = add_months(base, info["months"])
+        code = _record_code(fields)
         record_id = str(record.get("record_id") or "")
-        try:
-            await client.update_record(
-                table_id,
-                record_id,
-                {"下次维保时间": _next_due_ms(next_due)},
-                user_id_type="open_id",
-            )
-        except Exception as exc:  # noqa: BLE001 - 单条回写失败不中断
-            logger.warning(
-                "下次维保时间回写失败 record=%s: %s", record_id, exc
-            )
+        if not code or not record_id:
             continue
-        fields["下次维保时间"] = _next_due_ms(next_due)
-        updated += 1
-    if updated:
-        logger.info(
-            "下次维保时间回写完成：共 %d 条（table=%s）", updated, table_id
-        )
-    return updated
+        try:
+            if code not in by_code:
+                by_code[code] = await client.search_records(
+                    table_id,
+                    filter_str=_build_code_filter(code),
+                    field_names=["设备编号", "维护内容", "是否完成", "下次维保时间"],
+                    user_id_type="open_id",
+                )
+            created = await spawn_next_for_fields(
+                db, client, table_id, record_id, fields, existing=by_code[code]
+            )
+            if created:
+                spawned += 1
+                record_id, expected_ms = created
+                # 并入缓存（带真实计划时间）：同链后续记录防重复判定可见
+                by_code[code] = by_code[code] + [
+                    {
+                        "record_id": record_id,
+                        "fields": {
+                            "设备编号": code,
+                            "维护内容": fields.get("维护内容"),
+                            "是否完成": "否",
+                            "下次维保时间": expected_ms,
+                        },
+                    }
+                ]
+        except Exception as exc:  # noqa: BLE001 - 单条失败不中断同步
+            logger.warning(
+                "维保下一期任务生成失败 record=%s: %s",
+                record.get("record_id"),
+                exc,
+            )
+    if spawned:
+        logger.info("维保下一期任务本轮共生成 %d 条", spawned)
+    return spawned

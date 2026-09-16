@@ -1393,6 +1393,18 @@ export async function fetchQualityPersonDirectory(): Promise<QualityPersonOption
   return json.data ?? []
 }
 
+/** 按部门收敛的人员候选（质量检验表单选人用，如 QC/AI创新部） */
+export async function fetchQualityPersonOptions(
+  departments: string[],
+): Promise<QualityPersonOption[]> {
+  const params = new URLSearchParams({ limit: '1000' })
+  params.set('departments', departments.join(','))
+  const res = await fetch(`/api/v1/quality/person-options?${params.toString()}`)
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return json.data ?? []
+}
+
 // ---- OOS/OOT APIs ----
 
 const OOS_OOT_API_BASE = '/api/v1/quality/oos-oot'

@@ -191,3 +191,29 @@ async def test_get_qa_reminder_recipients_filters_by_keyword(db_session) -> None
     ]
     by_id = {item["open_id"]: item for item in recipients}
     assert by_id[f"ou_{run_id}_qa1"]["enterprise_email"] == "wu1@example.com"
+
+
+@pytest.mark.anyio
+async def test_get_person_options_departments_filter(db_session) -> None:
+    """departments 收敛候选：只返回指定部门的在职人员（质量检验选人口径）。"""
+    db_session.add_all(
+        [
+            _member("dep1", "检验员甲", "QC"),
+            _member("dep2", "创新员乙", "AI创新部"),
+            _member("dep3", "车间丙", "201一车间"),
+            _member("dep4", "离职丁", "QC", status="2"),
+        ]
+    )
+    await db_session.commit()
+
+    options = _run_options(
+        await person_directory.get_person_options(
+            db_session, departments=["QC", "AI创新部"]
+        )
+    )
+    names = {item["name"] for item in options}
+    assert names == {f"检验员甲{suffix}", f"创新员乙{suffix}"}
+
+    # 全部匹配（含大小写一致的精确部门名）：不传 departments 仍返回全部
+    all_options = _run_options(await person_directory.get_person_options(db_session))
+    assert f"车间丙{suffix}" in {item["name"] for item in all_options}

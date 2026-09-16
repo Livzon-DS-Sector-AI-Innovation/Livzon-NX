@@ -104,8 +104,18 @@ async function unwrapHrResponse<T>(responseOrPromise: Response | Promise<Respons
   return (json.data ?? json) as T
 }
 
-export async function fetchHrFeishuAppSettings(): Promise<HrFeishuAppSettingsDetail> {
-  return unwrapHrResponse(fetch('/api/v1/hr/feishu-settings/app', { cache: 'no-store' }))
+export async function fetchHrFeishuAppSettings(
+  purpose: string = 'bitable',
+): Promise<HrFeishuAppSettingsDetail> {
+  return unwrapHrResponse(
+    fetch(`/api/v1/hr/feishu-settings/app?purpose=${purpose}`, { cache: 'no-store' }),
+  )
+}
+
+export async function fetchAllHrFeishuAppSettings(): Promise<HrFeishuAppSettingsDetail[]> {
+  return unwrapHrResponse(
+    fetch('/api/v1/hr/feishu-settings/apps', { cache: 'no-store' }),
+  )
 }
 
 export async function fetchHrFeishuEntitySettings(): Promise<HrFeishuEntitySettingItem[]> {

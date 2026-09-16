@@ -27,17 +27,22 @@ async def get_person_options(
     db: AsyncSession,
     keyword: str | None = None,
     limit: int = 500,
+    departments: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """人员选择器候选：人事管理-飞书联系人目录（hr_feishu_members）。
 
     仅返回在职人员（status=1），同一 open_id 的多部门记录去重；前端拉全量后
-    做中文/拼音本地过滤。
+    做中文/拼音本地过滤。departments 给定时只返回这些部门（精确匹配）的
+    在职人员——质量检验表单的人员字段按部门收敛候选（QC/AI创新部）。
     """
     from sqlalchemy import func, select
 
     from app.modules.hr.models import HrFeishuMember
 
     normalized = (keyword or "").strip()
+    normalized_departments = [
+        str(item).strip() for item in (departments or []) if str(item).strip()
+    ]
     query = (
         select(
             HrFeishuMember.open_id,
@@ -61,6 +66,8 @@ async def get_person_options(
     )
     if normalized:
         query = query.where(HrFeishuMember.name.ilike(f"%{normalized}%"))
+    if normalized_departments:
+        query = query.where(HrFeishuMember.department.in_(normalized_departments))
     rows = (await db.execute(query)).all()
     if not rows:
         total = (

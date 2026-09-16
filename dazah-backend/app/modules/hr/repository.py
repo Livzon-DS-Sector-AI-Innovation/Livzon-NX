@@ -1568,9 +1568,15 @@ class TrainingLedgerRepository:
         )
         return result.scalar_one_or_none()
 
-    async def list_all_training_departments(self) -> list[str]:
-        "培训模块所有有数据的部门：台账/ESG/年度计划/岗位清单/"
-        "培训师/培训会话 并集（单条 UNION 查询）."
+    async def list_all_training_departments(
+        self, *, include_custom: bool = True
+    ) -> list[str]:
+        """培训模块所有有数据的部门：台账/ESG/年度计划/岗位清单/培训师/培训会话
+        并集，叠加人员配置部门与自定义部门，再按映射配置归一/排除/强制补入.
+
+        include_custom=False 时不叠加自定义部门：删除守卫据此判断某部门是否
+        "另有数据来源"（只看自定义行之外是否仍会出现该名字）。
+        """
 
         from app.modules.hr.models import (
             EsgTrainingRecord,
@@ -1627,17 +1633,18 @@ class TrainingLedgerRepository:
                         depts.append(item["department"])
 
         # 叠加手动添加的自定义部门（补充数据驱动部门）
-        from app.modules.hr.models import HrCustomTrainingDepartment
+        if include_custom:
+            from app.modules.hr.models import HrCustomTrainingDepartment
 
-        custom_rows = (
-            await self.session.execute(
-                select(HrCustomTrainingDepartment.name).where(
-                    HrCustomTrainingDepartment.is_deleted.is_(False)
+            custom_rows = (
+                await self.session.execute(
+                    select(HrCustomTrainingDepartment.name).where(
+                        HrCustomTrainingDepartment.is_deleted.is_(False)
+                    )
                 )
-            )
-        ).all()
-        for row in custom_rows:
-            depts.append(row[0])
+            ).all()
+            for row in custom_rows:
+                depts.append(row[0])
 
         # 后处理：按配置表归一/排除/强制补入（替代原硬编码 201 变体字典）
         # 一次查询，本地分拆为 norm_map / exclude / force_show
@@ -1673,9 +1680,28 @@ class TrainingLedgerRepository:
     async def add_custom_training_department(
         self, name: str
     ) -> "HrCustomTrainingDepartment":
-        """新增自定义部门"""
+        """新增自定义部门；同名软删除行存在时恢复该行.
+
+        唯一索引只对未删除记录生效（部分唯一索引），恢复软删除行可避免
+        同名记录新旧并存。
+        """
         from app.modules.hr.models import HrCustomTrainingDepartment
 
+        existing = (
+            (
+                await self.session.execute(
+                    select(HrCustomTrainingDepartment)
+                    .where(HrCustomTrainingDepartment.name == name)
+                    .limit(1)
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if existing is not None:
+            existing.is_deleted = False
+            await self.session.flush()
+            return existing
         dept = HrCustomTrainingDepartment(name=name)
         self.session.add(dept)
         await self.session.flush()

@@ -162,7 +162,12 @@ async def test_training_department_and_mapping_operations(
         updated_by=None,
     )
     repo: Any = SimpleNamespace(
-        list_all_training_departments=AsyncMock(return_value=["质量部", "生产部"]),
+        list_all_training_departments=AsyncMock(
+            # include_custom=False 用于删除守卫：只看自定义行之外的来源
+            side_effect=lambda *, include_custom=True: (
+                ["质量部", "生产部"] if include_custom else ["质量部"]
+            )
+        ),
         list_custom_training_departments=AsyncMock(return_value=["生产部"]),
         add_custom_training_department=AsyncMock(
             return_value=SimpleNamespace(name="研发部", id=uuid4())

@@ -112391,6 +112391,18 @@
         "operationId": "get_hr_feishu_app_settings_api_v1_hr_feishu_settings_app_get",
         "parameters": [
           {
+            "description": "contact=通讯录/部门管理；bitable=多维表格",
+            "in": "query",
+            "name": "purpose",
+            "required": false,
+            "schema": {
+              "default": "bitable",
+              "description": "contact=通讯录/部门管理；bitable=多维表格",
+              "title": "Purpose",
+              "type": "string"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,
@@ -112429,7 +112441,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "获取人事模块飞书应用配置",
+        "summary": "获取人事模块飞书应用配置（按用途）",
         "tags": [
           "人事管理",
           "人事-飞书设置"
@@ -112438,6 +112450,18 @@
       "put": {
         "operationId": "save_hr_feishu_app_settings_api_v1_hr_feishu_settings_app_put",
         "parameters": [
+          {
+            "description": "contact=通讯录/部门管理；bitable=多维表格",
+            "in": "query",
+            "name": "purpose",
+            "required": false,
+            "schema": {
+              "default": "bitable",
+              "description": "contact=通讯录/部门管理；bitable=多维表格",
+              "title": "Purpose",
+              "type": "string"
+            }
+          },
           {
             "in": "cookie",
             "name": "auth_token",
@@ -112487,7 +112511,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "保存人事模块飞书应用配置",
+        "summary": "保存人事模块飞书应用配置（按用途）",
         "tags": [
           "人事管理",
           "人事-飞书设置"
@@ -112498,6 +112522,18 @@
       "post": {
         "operationId": "test_hr_feishu_app_settings_api_v1_hr_feishu_settings_app_test_post",
         "parameters": [
+          {
+            "description": "contact=通讯录/部门管理；bitable=多维表格",
+            "in": "query",
+            "name": "purpose",
+            "required": false,
+            "schema": {
+              "default": "bitable",
+              "description": "contact=通讯录/部门管理；bitable=多维表格",
+              "title": "Purpose",
+              "type": "string"
+            }
+          },
           {
             "in": "cookie",
             "name": "auth_token",
@@ -112537,7 +112573,57 @@
             "description": "Validation Error"
           }
         },
-        "summary": "测试人事模块飞书应用连接",
+        "summary": "测试人事模块飞书应用连接（按用途）",
+        "tags": [
+          "人事管理",
+          "人事-飞书设置"
+        ]
+      }
+    },
+    "/api/v1/hr/feishu-settings/apps": {
+      "get": {
+        "operationId": "list_hr_feishu_apps_api_v1_hr_feishu_settings_apps_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response List Hr Feishu Apps Api V1 Hr Feishu Settings Apps Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取人事模块两组飞书应用配置（通讯录/多维表格）",
         "tags": [
           "人事管理",
           "人事-飞书设置"
@@ -176980,6 +177066,17 @@
             }
           },
           {
+            "description": "按生成日期过滤月份 YYYY-MM；不传=全部",
+            "in": "query",
+            "name": "month",
+            "required": false,
+            "schema": {
+              "description": "按生成日期过滤月份 YYYY-MM；不传=全部",
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
             "in": "query",
             "name": "page",
             "required": false,
@@ -177062,6 +177159,68 @@
           }
         },
         "summary": "Api List Maintenance",
+        "tags": [
+          "质量管理",
+          "Quality-Inspection-Feishu"
+        ]
+      }
+    },
+    "/api/v1/quality/instruments/maintenance/export": {
+      "get": {
+        "description": "设备年度预防性维护保养汇总表（复刻用户模板格式，维护日期为 YYYY.MM.DD 文本）。",
+        "operationId": "api_export_maintenance_summary_api_v1_quality_instruments_maintenance_export_get",
+        "parameters": [
+          {
+            "description": "月份 YYYY-MM，如 2026-07",
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "description": "月份 YYYY-MM，如 2026-07",
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Export Maintenance Summary Api V1 Quality Instruments Maintenance Export Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "按月导出维保汇总表 xlsx",
         "tags": [
           "质量管理",
           "Quality-Inspection-Feishu"
@@ -183757,6 +183916,24 @@
               ],
               "description": "姓名关键词（可选）",
               "title": "Keyword"
+            }
+          },
+          {
+            "description": "部门过滤，逗号分隔（如 QC,AI创新部）；缺省返回全部在职",
+            "in": "query",
+            "name": "departments",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "部门过滤，逗号分隔（如 QC,AI创新部）；缺省返回全部在职",
+              "title": "Departments"
             }
           },
           {

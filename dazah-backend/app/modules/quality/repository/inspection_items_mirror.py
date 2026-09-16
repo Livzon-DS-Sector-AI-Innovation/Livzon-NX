@@ -11,7 +11,15 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import TIMESTAMP, asc, func, or_, select, update
+from sqlalchemy import (
+    TIMESTAMP,
+    Numeric,
+    asc,
+    func,
+    or_,
+    select,
+    update,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.quality.models.inspection_items_mirror import (
@@ -214,6 +222,7 @@ async def list_rows_filtered(
     columns: list[str],
     keyword: str | None = None,
     filters: dict[str, str] | None = None,
+    numeric_ranges: dict[str, tuple[float, float]] | None = None,
     updated_sort_field: str = "__last_modified",
     text_sort_field: str | None = None,
     offset: int = 0,
@@ -224,6 +233,8 @@ async def list_rows_filtered(
     cells 以飞书中文列名为键，动态列通过 JSONB ->> 过滤：
     - 占位行：所有业务列均为空的行跳过（等价内存版 _has_visible_cell）；
     - filters：列值精确匹配（NULL 视为不匹配）；
+    - numeric_ranges：列值数值范围匹配（如维保列表按生成日期毫秒时间戳
+      落月）；先用正则确认文本是数字再 cast，脏文本/空值不落入任何区间；
     - 排序：text_sort_field 给定时按该文本列倒序（对齐飞书批号文本降序），
       缺失排最后、次键回落更新时间；未指定时默认按镜像更新时间字段
       （__last_modified）倒序。
@@ -260,6 +271,19 @@ async def list_rows_filtered(
             if not field_value:
                 continue
             condition = QualityItemsPageRow.cells[field_key].astext == field_value
+            count_stmt = count_stmt.where(condition)
+            stmt = stmt.where(condition)
+    if numeric_ranges:
+        for field_key, (low, high) in numeric_ranges.items():
+            cell_text = func.nullif(QualityItemsPageRow.cells[field_key].astext, "")
+            numeric_cell = cell_text.cast(Numeric)
+            # 左闭右开 [low, high)：月末 1 日 00:00 恰为上月 high 时归当月；
+            # 先用正则确认是数字再 cast，脏文本/空值不落入任何区间
+            condition = (
+                cell_text.op("~")(r"^-?\d+(\.\d+)?$")
+                & (numeric_cell >= low)
+                & (numeric_cell < high)
+            )
             count_stmt = count_stmt.where(condition)
             stmt = stmt.where(condition)
 

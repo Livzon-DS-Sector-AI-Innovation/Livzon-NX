@@ -22,7 +22,7 @@ _PAGE_SIZE = 500
 
 # 子表 -> 编号列
 _PROFILE_MATCH_COLUMNS: dict[str, str] = {
-    "qc_instr_maintenance": "仪器编号",
+    "qc_instr_maintenance": "设备编号",
     "qc_instr_repair": "设备编号",
     "qc_instr_calibration": "仪器、设备编号",
     "qc_instr_cal_plan": "仪器、设备编号",

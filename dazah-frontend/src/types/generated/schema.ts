@@ -4881,9 +4881,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 获取人事模块飞书应用配置 */
+        /** 获取人事模块飞书应用配置（按用途） */
         get: operations["get_hr_feishu_app_settings_api_v1_hr_feishu_settings_app_get"];
-        /** 保存人事模块飞书应用配置 */
+        /** 保存人事模块飞书应用配置（按用途） */
         put: operations["save_hr_feishu_app_settings_api_v1_hr_feishu_settings_app_put"];
         post?: never;
         delete?: never;
@@ -4901,8 +4901,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 测试人事模块飞书应用连接 */
+        /** 测试人事模块飞书应用连接（按用途） */
         post: operations["test_hr_feishu_app_settings_api_v1_hr_feishu_settings_app_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/hr/feishu-settings/apps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取人事模块两组飞书应用配置（通讯录/多维表格） */
+        get: operations["list_hr_feishu_apps_api_v1_hr_feishu_settings_apps_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -17328,6 +17345,26 @@ export interface paths {
         };
         /** Api List Maintenance */
         get: operations["api_list_maintenance_api_v1_quality_instruments_maintenance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/instruments/maintenance/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 按月导出维保汇总表 xlsx
+         * @description 设备年度预防性维护保养汇总表（复刻用户模板格式，维护日期为 YYYY.MM.DD 文本）。
+         */
+        get: operations["api_export_maintenance_summary_api_v1_quality_instruments_maintenance_export_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -73546,7 +73583,10 @@ export interface operations {
     };
     get_hr_feishu_app_settings_api_v1_hr_feishu_settings_app_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description contact=通讯录/部门管理；bitable=多维表格 */
+                purpose?: string;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -73577,7 +73617,10 @@ export interface operations {
     };
     save_hr_feishu_app_settings_api_v1_hr_feishu_settings_app_put: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description contact=通讯录/部门管理；bitable=多维表格 */
+                purpose?: string;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -73611,6 +73654,40 @@ export interface operations {
         };
     };
     test_hr_feishu_app_settings_api_v1_hr_feishu_settings_app_test_post: {
+        parameters: {
+            query?: {
+                /** @description contact=通讯录/部门管理；bitable=多维表格 */
+                purpose?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_hr_feishu_apps_api_v1_hr_feishu_settings_apps_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -105430,6 +105507,8 @@ export interface operations {
         parameters: {
             query?: {
                 keyword?: string;
+                /** @description 按生成日期过滤月份 YYYY-MM；不传=全部 */
+                month?: string;
                 page?: number;
                 page_size?: number;
                 force?: boolean;
@@ -105450,6 +105529,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponseEnvelope_list_dict_str__Any___"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_export_maintenance_summary_api_v1_quality_instruments_maintenance_export_get: {
+        parameters: {
+            query: {
+                /** @description 月份 YYYY-MM，如 2026-07 */
+                month: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -108880,6 +108993,8 @@ export interface operations {
             query?: {
                 /** @description 姓名关键词（可选） */
                 keyword?: string | null;
+                /** @description 部门过滤，逗号分隔（如 QC,AI创新部）；缺省返回全部在职 */
+                departments?: string | null;
                 limit?: number;
             };
             header?: never;
