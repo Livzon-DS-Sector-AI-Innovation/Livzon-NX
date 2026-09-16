@@ -4,7 +4,7 @@
 // 数据源：最新排产 Excel 存档（当前扎帐周期块）+ 人工检修标注。
 // 实际完成/收率/合格率等指标待实际数据接入后启用（当前显示 --）。
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Card,
@@ -40,7 +40,8 @@ import {
 import dayjs from 'dayjs'
 import ReactECharts from 'echarts-for-react'
 import BoardNavBlocks from '@/components/production/board-nav-blocks'
-import ProgressParticles from '@/components/production/progress-particles'
+import BatchProgressBar from '@/components/production/batch-progress-bar'
+import ProductionSummary from '@/components/production/production-summary'
 import { useProductContextStore } from '@/stores/product-context'
 import { usePermission } from '@/hooks/usePermission'
 import {
@@ -126,8 +127,25 @@ const REFRESH_INTERVAL_MS = 5 * 60 * 1000
 // 提炼计划产量卡的下拉选择记忆（按月份存 {月份: "车间|产品"}），刷新后恢复
 const PLAN_SELECTION_STORAGE_KEY = 'dazah.production.plan-card.selection'
 
-// 当前产品（第 5 个导航位）：看板标题与产品入口共用
-const PRODUCT_NAME = 'L-苯丙氨酸'
+// 产品 Tab 代码 → 展示名（导航块/看板标题）；系统代码 MC 的展示名
+// 统一为霉酚酸（计划产量行按源数据名过滤，见 PLAN_PRODUCT_NAMES）
+const PRODUCT_NAMES: Record<string, string> = {
+  SUMMARY: '汇总',
+  FA: 'L-苯丙氨酸',
+  MC: '霉酚酸',
+  DR: '多拉菌素',
+  LV: '洛伐他汀',
+  MV: '美伐他汀',
+}
+// 计划产量行的源数据产品名（production_plans.product_name）：
+// 霉酚酸的源数据名不是 MC，计划卡过滤须用源名，与展示名分离
+const PLAN_PRODUCT_NAMES: Record<string, string> = {
+  FA: 'L-苯丙氨酸',
+  MC: '霉酚酸',
+  DR: '多拉菌素',
+  LV: '洛伐他汀',
+  MV: '美伐他汀',
+}
 
 function fmtDateTime(value?: string | null): string {
   if (!value) return '--'
@@ -175,8 +193,10 @@ export default function ProductionDashboard() {
   const [loading, setLoading] = useState(true)
   // 周期回看：空串 = 今天所在周期；否则为所选周期内任意日期
   const [viewDate, setViewDate] = useState<string>('')
-  // 当前产品上下文（导航块第 5 位切换），看板按此产品取数
+  // 当前产品上下文（导航块切换），看板按此产品取数；
+  // SUMMARY 为汇总视图（五产线聚合），非单一产品
   const productCode = useProductContextStore((s) => s.productCode)
+  const isSummaryView = productCode === 'SUMMARY'
   // 首帧不渲染时间（服务端与客户端时区不一致会导致 hydration 不匹配），挂载后再计时
   const [clock, setClock] = useState('')
   const [maintModalOpen, setMaintModalOpen] = useState(false)
@@ -222,13 +242,24 @@ export default function ProductionDashboard() {
   }, [viewDate, productCode])
 
   useEffect(() => {
+    if (isSummaryView) return // 汇总视图无单产品看板可拉
     void loadBoard() // eslint-disable-line react-hooks/set-state-in-effect -- 看板初始加载，与 201-2 页面既有模式一致
     const timer = setInterval(() => void loadBoard(), REFRESH_INTERVAL_MS)
     return () => clearInterval(timer)
-  }, [loadBoard])
+  }, [loadBoard, isSummaryView])
 
   // 提炼计划产量：跟随概览自然月拉生产计划；选择按月记入本地存储，
   // 页面刷新后恢复所选行，仅当该行不在当月数据时才回退第一行
+  // 计划行按当前产品 Tab 过滤：每个产品的下拉只列自己的车间行，选择互不影响
+  const currentProductName =
+    PLAN_PRODUCT_NAMES[productCode] ?? PLAN_PRODUCT_NAMES.FA
+  const productPlanRows = useMemo(
+    () => planRows.filter((r) => r.product_name === currentProductName),
+    [planRows, currentProductName],
+  )
+  // 记忆键按 产品|月份 隔离
+  const planMemoryKey = `${productCode}|${planMonth}`
+
   useEffect(() => {
     let cancelled = false
     void (async () => {
@@ -237,15 +268,19 @@ export default function ProductionDashboard() {
         const store = JSON.parse(
           window.localStorage.getItem(PLAN_SELECTION_STORAGE_KEY) || '{}',
         )
-        remembered = typeof store[planMonth] === 'string' ? store[planMonth] : ''
+        remembered =
+          typeof store[planMemoryKey] === 'string' ? store[planMemoryKey] : ''
       } catch {
         // 存储不可用则当作无记录
       }
       try {
         const res = await getPlans({ month: planMonth, page_size: 200 })
         if (res.code === 200 && !cancelled) {
-          const rows = res.data || []
-          setPlanRows(rows)
+          const allRows = res.data || []
+          setPlanRows(allRows)
+          const rows = allRows.filter(
+            (r) => r.product_name === currentProductName,
+          )
           setSelectedPlanKey((prev) => {
             if (rows.length === 0) return ''
             for (const key of [prev, remembered]) {
@@ -261,16 +296,16 @@ export default function ProductionDashboard() {
     return () => {
       cancelled = true
     }
-  }, [planMonth])
+  }, [planMonth, productCode, currentProductName, planMemoryKey])
 
-  // 显式选择时写入本地存储（按月份分开记忆）
+  // 显式选择时写入本地存储（按产品+月份分开记忆）
   const handlePlanSelect = useCallback(
     (key: string) => {
       setSelectedPlanKey(key)
       try {
         const raw = window.localStorage.getItem(PLAN_SELECTION_STORAGE_KEY)
         const store = raw ? JSON.parse(raw) : {}
-        store[planMonth] = key
+        store[planMemoryKey] = key
         window.localStorage.setItem(
           PLAN_SELECTION_STORAGE_KEY,
           JSON.stringify(store),
@@ -279,7 +314,7 @@ export default function ProductionDashboard() {
         // 存储不可用时仅当次会话生效
       }
     },
-    [planMonth],
+    [planMemoryKey],
   )
 
   useEffect(() => {
@@ -328,6 +363,7 @@ export default function ProductionDashboard() {
       const res = await getFermentationBatchActuals(
         board?.period.start,
         board?.period.end,
+        productCode,
       )
       if (res.code === 200) {
         setActuals(res.data || [])
@@ -366,7 +402,7 @@ export default function ProductionDashboard() {
       payload.yield_kg = actualYieldKg
       payload.remark = actualRemark.trim() || null
     }
-    const res = await upsertFermentationBatchActual(payload)
+    const res = await upsertFermentationBatchActual(payload, productCode)
     if (res.code === 200) {
       message.success('已保存批次产量')
       setActualModalOpen(false)
@@ -394,7 +430,7 @@ export default function ProductionDashboard() {
   }
 
   const submitCapacity = async () => {
-    const res = await setFermentationMonthCapacity(capacityKg)
+    const res = await setFermentationMonthCapacity(capacityKg, productCode)
     if (res.code === 200) {
       message.success('已保存本月计划产能')
       setCapacityModalOpen(false)
@@ -410,9 +446,9 @@ export default function ProductionDashboard() {
   const dash = '--'
   // 「提炼已出成品（仓储成品入库）」：当期仓储入库合计；仅接入产品有值
   const extractInboundKg = board?.extract_finished_inbound_kg ?? null
-  // 「提炼计划产量」当前选中行（车间+产品）
+  // 「提炼计划产量」当前选中行（车间+产品，仅当前产品的行）
   const selectedPlan =
-    planRows.find((r) => planKey(r) === selectedPlanKey) ?? null
+    productPlanRows.find((r) => planKey(r) === selectedPlanKey) ?? null
   // 完成率 = 已出成品 ÷ 当前选中行的计划产量，百分比保留两位小数
   const extractPlanRate =
     extractInboundKg != null && selectedPlan?.planned_yield
@@ -420,7 +456,7 @@ export default function ProductionDashboard() {
       : dash
 
   // 发酵罐实时状态：三台发酵罐 + 最近已放罐的一批（凑齐 4 批）
-  // 行序按批次顺序（批次号后三位从小到大）；无批号的罐（空闲/检修）保持罐号顺序排在最后
+  // 行序按移种（进罐）时间先后；无移种时间的罐（凑数已放罐/空闲/检修）按罐号排最后
   const renderTanks = useMemo(() => {
     const rows: BoardTank[] = [...(board?.tanks || [])]
     const last = board?.recent?.[0]
@@ -429,18 +465,27 @@ export default function ProductionDashboard() {
         tank_no: last.tank_no || '已放罐批次',
         status: 'dumped',
         batch_no: last.batch_no,
-        inoculate_at: null,
-        cultured_hours: null,
-        cycle_hours: null,
+        inoculate_at: last.inoculate_at ?? null,
+        // 已完成批次：培养时长即计划总周期
+        cultured_hours: last.cycle_hours ?? null,
+        cycle_hours: last.cycle_hours ?? null,
         dump_at: last.dump_date,
         note: '该罐本批次放罐作业完成',
       })
     }
-    rows.sort(
-      (a, b) =>
+    rows.sort((a, b) => {
+      const aTime = a.inoculate_at || ''
+      const bTime = b.inoculate_at || ''
+      if (aTime && bTime && aTime !== bTime) return aTime < bTime ? -1 : 1
+      if (aTime && !bTime) return -1
+      if (!aTime && bTime) return 1
+      // 同移种时间或都无：退回批次顺序号，再退罐号
+      const seqDiff =
         (batchSeqNo(a.batch_no) ?? Number.POSITIVE_INFINITY) -
-        (batchSeqNo(b.batch_no) ?? Number.POSITIVE_INFINITY),
-    )
+        (batchSeqNo(b.batch_no) ?? Number.POSITIVE_INFINITY)
+      if (seqDiff !== 0) return seqDiff
+      return (a.tank_no || '').localeCompare(b.tank_no || '')
+    })
     return rows
   }, [board])
 
@@ -468,63 +513,27 @@ export default function ProductionDashboard() {
   const fmtNum2 = (v: number | null | undefined) =>
     v == null ? '-' : v.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-  // 本月批次进度条：已完成（产量已录）→ 待出产量（已放罐未录产量）→ 运行中 → 未开始
-  // 产能口径：已完成段宽度 = 已完成产能/计划产能，箭头随之；
-  // 剩余宽度按待出产量/运行中/未开始的批次数比例分配（段内仍显示批数）
-  const planned = kpi?.month_planned ?? 0
+  // 批次进度数据：已完成（产量已录）→ 待出产量（已放罐未录产量）→ 运行中 → 未开始
+  // 四段统一「本周期计划放罐」口径（后端已收口）：未开始 = kpis.pending
+  // （已排产、放罐在本周期内、尚未进罐），四段之和恒等于计划放罐数；
+  // 跨周期放罐的在制罐不计入（罐状态板仍展示）。不可用「计划 − 其余」倒减：
+  // 在制批次数超过计划放罐数时负数钳零会吞掉批次
   const doneWithYield = kpi?.done_with_yield ?? 0
   const yieldPending = kpi?.yield_pending ?? 0
   const runningCount = kpi?.running ?? 0
-  const notStarted = Math.max(0, planned - doneWithYield - yieldPending - runningCount)
-  const segPct = (count: number) => (planned > 0 ? (count / planned) * 100 : 0)
+  const notStarted = kpi?.pending ?? 0
   const capacityMode = plannedCapacityKg != null && plannedCapacityKg > 0
-  // 产能达成率 ≥ 100% 时进度条粒子进入最高密度模式（Ultra）
-  const capacityUltra =
-    capacityMode && doneYieldKg != null && plannedCapacityKg != null
-      ? doneYieldKg >= plannedCapacityKg
-      : false
-  const greenPct =
-    capacityMode && doneYieldKg != null
-      ? Math.min(100, (doneYieldKg / plannedCapacityKg) * 100)
-      : segPct(doneWithYield)
-  const arrowPct = greenPct
-  const restBatches = yieldPending + runningCount + notStarted
-  const restPct = 100 - greenPct
-  const restSegPct = (count: number) =>
-    restBatches > 0 ? (count / restBatches) * restPct : 0
-  const greenLabel =
-    capacityMode && doneYieldKg != null
-      ? `已完成 ${doneWithYield} 批｜${fmtKg(doneYieldKg, 2)}`
-      : `${doneWithYield}`
 
-  const progressSegments = [
-    { key: 'done', label: '已完成', count: doneWithYield, color: '#33526e' },
-    { key: 'pending', label: '待出产量', count: yieldPending, color: '#94a3b8' },
-    { key: 'running', label: '运行中', count: runningCount, color: '#7ea6c9' },
-    { key: 'idle', label: '未开始', count: notStarted, color: '#e8eef4' },
-  ]
-  // 箭头两个斜角用右侧第一个有数据的段颜色填充
-  const nextSegment = progressSegments.find(
-    (seg) => seg.key !== 'done' && seg.count > 0,
-  )
-  const arrowNotchColor = nextSegment?.color ?? '#f0f0f0'
-
-  // 理论批次：一天一批，当前周期截至今天、历史周期截至周期末
-  const asOfDay = isCurrent ? dayjs() : dayjs(board?.period.end ?? undefined)
-  const asOfLabel = asOfDay.isValid() ? asOfDay.format('MM-DD') : '--'
-  const theoryBatches =
-    board?.period.start && board?.period.end
-      ? Math.max(
-          0,
-          Math.min(
-            asOfDay.diff(dayjs(board.period.start), 'day') + 1,
-            dayjs(board.period.end).diff(dayjs(board.period.start), 'day') + 1,
-          ),
-        )
-      : null
+  // 理论批次：按排产计划，截至今天应放罐的批次数（放罐日期已到期的计划批次）。
+  // 后端 month_done_planned 即该口径；设备利用率 = 实际已放罐（已录产量）
+  // ÷ 理论应放罐，封顶 100%
+  const asOfLabel = isCurrent
+    ? dayjs().format('MM-DD')
+    : (board?.period.end ?? '').slice(5).replace('-', '-')
+  const theoryBatches = kpi?.month_done_planned ?? null
   const utilizationRate =
-    theoryBatches && kpi?.month_done_planned != null
-      ? Math.round((kpi.month_done_planned / theoryBatches) * 100)
+    theoryBatches && kpi?.done_with_yield != null
+      ? Math.min(100, Math.round((kpi.done_with_yield / theoryBatches) * 100))
       : null
 
   const kpiCards: {
@@ -560,12 +569,12 @@ export default function ProductionDashboard() {
     {
       title: '发酵理论批次',
       value: theoryBatches != null ? theoryBatches : dash,
-      sub: `截至 ${asOfLabel} · 一天一批`,
+      sub: `截至 ${asOfLabel} · 按排产计划`,
       span: 8,
       extra: {
         label: '发酵设备利用率',
         value: utilizationRate != null ? `${utilizationRate}%` : dash,
-        sub: `已完成 ${kpi?.month_done_planned ?? dash} ÷ 理论 ${theoryBatches ?? dash}`,
+        sub: `实际已放罐 ${kpi?.done_with_yield ?? dash} ÷ 应放罐 ${theoryBatches ?? dash}`,
       },
     },
   ]
@@ -806,10 +815,11 @@ export default function ProductionDashboard() {
 
   return (
     <div className="p-4 flex flex-col gap-3">
-      {/* 顶部导航块：第 5 位为当前产品 L-苯丙氨酸，其余为占位 */}
+      {/* 顶部导航块：第 4 位为当前产品 L-苯丙氨酸，第 5/6 位洛伐他汀/美伐他汀
+          （复用 MP 管线），首位为汇总 Tab（原地切换五产线聚合视图） */}
       <BoardNavBlocks />
 
-      {/* 顶部通栏 */}
+      {/* 顶部标题卡：汇总态标题切换、单产品操作按钮隐藏 */}
       <Card
         variant="borderless"
         className="shadow-sm"
@@ -819,7 +829,9 @@ export default function ProductionDashboard() {
           <Space size={12}>
             <ScheduleOutlined style={{ fontSize: 22, color: '#1677ff' }} />
             <Title level={4} style={{ margin: 0 }}>
-              {`103-1车间${PRODUCT_NAME}生产看板`}
+              {isSummaryView
+                ? '生产汇总'
+                : `${PRODUCT_NAMES[productCode] ?? PRODUCT_NAMES.FA}生产看板`}
             </Title>
             <DatePicker
               size="small"
@@ -829,17 +841,21 @@ export default function ProductionDashboard() {
               value={
                 viewDate
                   ? dayjs(viewDate)
-                  : board?.period.end
-                    ? dayjs(board.period.end)
-                    : null
+                  : isSummaryView
+                    ? dayjs()
+                    : board?.period.end
+                      ? dayjs(board.period.end)
+                      : null
               }
               onChange={(d) => {
                 // 选自然月 → 定位到主要落在该月的扎帐周期（该月 15 日必在其中）
                 if (d) setViewDate(d.date(15).format('YYYY-MM-DD'))
               }}
             />
-            {board?.period && <Tag color="blue">生产周期 {board.period.label}</Tag>}
-            {!isCurrent && (
+            {board?.period && !isSummaryView && (
+              <Tag color="blue">生产周期 {board.period.label}</Tag>
+            )}
+            {!isCurrent && !isSummaryView && (
               <Button size="small" onClick={() => setViewDate('')}>
                 回到本月
               </Button>
@@ -847,25 +863,36 @@ export default function ProductionDashboard() {
           </Space>
           <Space size={16}>
             <Text type="secondary">系统时间：{clock}</Text>
-            <Text type="secondary">数据刷新：5 分钟</Text>
-            <Button
-              size="small"
-              icon={<DatabaseOutlined />}
-              onClick={() => void openActuals()}
-            >
-              历史数据
-            </Button>
-            <Button
-              size="small"
-              icon={<SyncOutlined spin={loading} />}
-              onClick={() => void loadBoard()}
-            >
-              立即刷新
-            </Button>
+            {!isSummaryView && (
+              <Text type="secondary">数据刷新：5 分钟</Text>
+            )}
+            {!isSummaryView && (
+              <>
+                <Button
+                  size="small"
+                  icon={<DatabaseOutlined />}
+                  onClick={() => void openActuals()}
+                >
+                  历史数据
+                </Button>
+                <Button
+                  size="small"
+                  icon={<SyncOutlined spin={loading} />}
+                  onClick={() => void loadBoard()}
+                >
+                  立即刷新
+                </Button>
+              </>
+            )}
           </Space>
         </div>
       </Card>
 
+      {/* 汇总视图：五产线聚合表 + 播报汇总 */}
+      {isSummaryView && <ProductionSummary month={planMonth} />}
+
+      {!isSummaryView && (
+      <>
       {/* 告警跑马灯 */}
       <Card
         variant="borderless"
@@ -1064,11 +1091,11 @@ export default function ProductionDashboard() {
                         onChange={handlePlanSelect}
                         placeholder="车间 · 产品"
                         style={{ width: 168, fontSize: 12 }}
-                        options={planRows.map((r) => ({
+                        options={productPlanRows.map((r) => ({
                           value: planKey(r),
                           label: `${r.workshop ?? ''} ${r.product_name}`,
                         }))}
-                        disabled={planRows.length === 0}
+                        disabled={productPlanRows.length === 0}
                       />
                     </div>
                     <Statistic
@@ -1080,7 +1107,7 @@ export default function ProductionDashboard() {
                       styles={{ content: { fontSize: 26, fontWeight: 600 } }}
                     />
                     <Text type="secondary" style={{ fontSize: 11 }}>
-                      {planRows.length === 0
+                      {productPlanRows.length === 0
                         ? `${Number(planMonth.slice(5))}月生产计划待更新`
                         : selectedPlan?.planned_yield != null
                           ? `${selectedPlan.unit ?? ''} · ${Number(planMonth.slice(5))}月计划`
@@ -1111,7 +1138,7 @@ export default function ProductionDashboard() {
                         />
                         <Text type="secondary" style={{ fontSize: 11 }}>
                           {extractInboundKg != null
-                            ? 'L-苯丙氨酸 · 本月合计(kg)'
+                            ? `${PRODUCT_NAMES[productCode] ?? PRODUCT_NAMES.FA} · 本月合计(kg)`
                             : '数据源待接入'}
                         </Text>
                       </div>
@@ -1187,100 +1214,15 @@ export default function ProductionDashboard() {
                 </Text>
               )}
             </div>
-            {/* 箭头骑在轨道上，指向已放罐进度点 */}
-            <div className="relative" style={{ marginTop: 8, marginBottom: 4 }}>
-              <div
-                className="flex h-6 rounded overflow-hidden"
-                style={{ position: 'relative', zIndex: 1 }}
-              >
-                {progressSegments.map((seg) => (
-                  <div
-                    key={seg.key}
-                    title={
-                      seg.key === 'done'
-                        ? `${greenLabel}${
-                            capacityMode && plannedCapacityKg
-                              ? `（产能达成率 ${((greenPct)).toFixed(1)}%）`
-                              : ''
-                          }`
-                        : `${seg.label} ${seg.count} 批`
-                    }
-                    className="h-full flex items-center justify-center overflow-hidden"
-                    style={{
-                      // 待出产量段向左多垫 34px：垫满箭头基部下方，与右侧连成一体无接缝
-                      width:
-                        seg.key === 'pending' && yieldPending > 0
-                          ? `calc(${restSegPct(seg.count)}% + 34px)`
-                          : `${seg.key === 'done' ? greenPct : restSegPct(seg.count)}%`,
-                      backgroundColor: seg.color,
-                      ...(seg.key === 'done'
-                        ? { backgroundImage: 'linear-gradient(90deg, #33526e, #4a6d8c)' }
-                        : {}),
-                    }}
-                  >
-                    {seg.key === 'done' ? (
-                      greenPct >= 14 && doneWithYield > 0 ? (
-                        <span style={{ fontSize: 11, color: '#fff' }}>{greenLabel}</span>
-                      ) : null
-                    ) : (
-                      seg.count > 0 &&
-                      restSegPct(seg.count) >= 6 && (
-                        <span
-                          style={{
-                            fontSize: 11,
-                            color:
-                              seg.key === 'idle' || seg.key === 'pending'
-                                ? '#595959'
-                                : '#fff',
-                          }}
-                        >
-                          {seg.count}
-                        </span>
-                      )
-                    )}
-                  </div>
-                ))}
-              </div>
-              {/* 粒子脉冲层：深蓝已完成段内的思考粒子（Codex 滑块同款动效） */}
-              <ProgressParticles progressPct={arrowPct} ultra={capacityUltra} />
-              {/* 箭头：轨道本身是横杠，大三角头（轨道2倍高）跨骑轨道、方向向右，
-                  尖落在分界点；上下两个斜角填右侧段颜色 */}
-              <div
-                className="absolute"
-                style={{
-                  left: `${arrowPct}%`,
-                  top: -12,
-                  height: 48,
-                  transform: 'translateX(-100%)',
-                  zIndex: 3,
-                }}
-              >
-                <svg width={34} height={48} viewBox="0 0 34 48" style={{ display: 'block' }}>
-                  {/* 右侧色角块仅占据轨道高度带（沿对角线裁剪到 y=12~36） */}
-                  <polygon points="17,12 34,12 34,24" fill={arrowNotchColor} />
-                  <polygon points="17,36 34,36 34,24" fill={arrowNotchColor} />
-                  {/* 箭身取轨道渐变末端色 #4a6d8c，与轨道右端无缝衔接 */}
-                  <polygon points="0,0 34,24 0,48" fill="#4a6d8c" />
-                </svg>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 flex-wrap">
-              {progressSegments.map((seg) => (
-                <span key={seg.key} className="flex items-center gap-1">
-                  <span
-                    className="inline-block w-2.5 h-2.5 rounded-sm"
-                    style={{ backgroundColor: seg.color }}
-                  />
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {seg.key === 'done'
-                      ? `已完成 ${doneWithYield} 批${
-                          capacityMode && doneYieldKg != null ? `｜${fmtKg(doneYieldKg, 2)}` : ''
-                        }`
-                      : `${seg.label} ${seg.count} 批`}
-                  </Text>
-                </span>
-              ))}
-            </div>
+            <BatchProgressBar
+              doneCount={doneWithYield}
+              pendingCount={yieldPending}
+              runningCount={runningCount}
+              idleCount={notStarted}
+              doneYieldKg={doneYieldKg}
+              plannedCapacityKg={plannedCapacityKg}
+              historical={!isCurrent}
+            />
           </Card>
 
           {/* 三台罐状态 */}
@@ -1348,6 +1290,8 @@ export default function ProductionDashboard() {
           )}
         </>
       )}
+      </>)
+      }
 
       {/* 检修标注弹窗 */}
       <Modal

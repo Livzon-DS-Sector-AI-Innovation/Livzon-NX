@@ -769,7 +769,8 @@ async def test_board_warehouse_inbound_none_for_unwired_product(
         board, "build_board", MagicMock(return_value=_full_board_payload())
     )
 
-    res = await auth_client.get(f"{API}/fermentation-board?product=MC")
+    # MC 已接入（霉酚酸口径统一为 MC），改用未知代码验证跳过
+    res = await auth_client.get(f"{API}/fermentation-board?product=XX")
     assert res.status_code == 200
     assert res.json()["data"]["extract_finished_inbound_kg"] is None
 
@@ -935,3 +936,22 @@ async def test_partial_upsert_preserves_other_stage_data() -> None:
             await board.delete_batch_actual(session, item)
     finally:
         await engine.dispose()
+
+
+@pytest.mark.anyio
+async def test_production_summary_endpoint_returns_payload(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+) -> None:
+    payload = {"period": None, "rows": [{"product_code": "MC"}]}
+    monkeypatch.setattr(
+        board, "build_production_summary", AsyncMock(return_value=payload)
+    )
+    res = await auth_client.get(f"{API}/production-summary?date=2026-09-15")
+    assert res.status_code == 200
+    assert res.json()["data"] == payload
+    kwargs = board.build_production_summary.call_args.kwargs
+    assert kwargs["has_ferm"] is True
+    assert kwargs["has_extract"] is True
+    assert str(kwargs["ref_date"]) == "2026-09-15"

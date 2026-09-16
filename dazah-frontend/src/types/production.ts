@@ -475,6 +475,38 @@ export interface BoardTank {
   note: string | null
 }
 
+/** 生产汇总：单产线发酵指标 */
+export interface ProductionSummaryFerment {
+  planned_batches: number | null
+  planned_capacity_kg: number | null
+  done_yield_kg: number | null
+  capacity_rate: number | null
+}
+
+/** 生产汇总：单产线提炼指标 */
+export interface ProductionSummaryExtract {
+  planned_yield_kg: number | null
+  finished_inbound_kg: number | null
+  completion_rate: number | null
+}
+
+/** 生产汇总：单产线行 */
+export interface ProductionSummaryRow {
+  product_code: string
+  product_name: string
+  covered: boolean
+  ferment: ProductionSummaryFerment
+  extract: ProductionSummaryExtract
+  /** 该产线排产播报（发酵权限） */
+  alerts: { level: string; text: string }[]
+}
+
+/** 生产汇总响应 */
+export interface ProductionSummary {
+  period: { start: string; end: string; label: string } | null
+  rows: ProductionSummaryRow[]
+}
+
 export interface BoardKpis {
   month_planned: number | null
   month_done_planned: number | null
@@ -507,6 +539,10 @@ export interface BoardRecentBatch {
   remark: string | null
   yield_rate: number | null
   result: string
+  /** 移种时间（凑数已放罐行展示用） */
+  inoculate_at?: string | null
+  /** 计划总周期(h)（凑数已放罐行展示用） */
+  cycle_hours?: number | null
 }
 
 export interface BoardAlert {

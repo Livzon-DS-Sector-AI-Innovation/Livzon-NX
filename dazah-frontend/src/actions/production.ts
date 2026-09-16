@@ -29,6 +29,7 @@ import type {
   ScheduleExcelArchive,
   FermentationBatchActual,
   FermentationBatchActualFormData,
+  ProductionSummary,
 } from '@/types/production'
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000'
@@ -134,6 +135,14 @@ export async function deleteBatchMaterial(id: string) {
 }
 
 // ============ Production Plan Actions ============
+
+// 生产汇总：五产线发酵/提炼关键指标（date 默认今天，按扎帐周期取数）
+export async function getProductionSummary(date?: string) {
+  const query = date ? `?date=${date}` : ''
+  return fetchApi<ProductionSummary>(
+    `/api/v1/production/production-summary${query}`,
+  )
+}
 
 export async function getPlans(params: PlanQueryParams = {}) {
   const searchParams = new URLSearchParams()
@@ -471,10 +480,12 @@ export async function removeTankMaintenance(itemId: string) {
 export async function getFermentationBatchActuals(
   periodStart?: string,
   periodEnd?: string,
+  product = 'FA',
 ): Promise<ApiResponse<FermentationBatchActual[]>> {
   const params = new URLSearchParams()
   if (periodStart) params.set('period_start', periodStart)
   if (periodEnd) params.set('period_end', periodEnd)
+  params.set('product', product)
   const qs = params.toString()
   const response = await fetch(
     `${API_BASE}/api/v1/production/fermentation-batch-actuals${qs ? `?${qs}` : ''}`,
@@ -485,9 +496,10 @@ export async function getFermentationBatchActuals(
 
 export async function upsertFermentationBatchActual(
   data: FermentationBatchActualFormData,
+  product = 'FA',
 ): Promise<ApiResponse<FermentationBatchActual>> {
   const response = await fetch(
-    `${API_BASE}/api/v1/production/fermentation-batch-actuals`,
+    `${API_BASE}/api/v1/production/fermentation-batch-actuals?product=${encodeURIComponent(product)}`,
     {
       method: 'POST',
       headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
@@ -516,9 +528,12 @@ export async function deleteFermentationBatchActual(itemId: string) {
   return response.json()
 }
 
-export async function setFermentationMonthCapacity(plannedCapacityKg: number | null) {
+export async function setFermentationMonthCapacity(
+  plannedCapacityKg: number | null,
+  product = 'FA',
+) {
   const response = await fetch(
-    `${API_BASE}/api/v1/production/fermentation-month-capacity`,
+    `${API_BASE}/api/v1/production/fermentation-month-capacity?product=${encodeURIComponent(product)}`,
     {
       method: 'POST',
       headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
