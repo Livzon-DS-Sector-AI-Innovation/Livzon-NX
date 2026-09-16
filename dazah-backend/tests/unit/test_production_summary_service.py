@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.modules.production import fermentation_board_service as board
+from tests.unit.test_fermentation_board_service import _dr_rows, _mp_rows
 
 EXPECTED_PRODUCTS = ["MC", "DR", "FA", "LV", "MV"]
 
@@ -73,3 +74,45 @@ async def test_summary_none_fields_when_no_archive_covers_period(
     assert row["ferment"]["planned_capacity_kg"] is None
     assert row["extract"]["finished_inbound_kg"] is None
     assert SimpleNamespace(**row["ferment"]) is not None
+
+
+@pytest.mark.anyio
+async def test_summary_fills_ferment_metrics_from_mc_archive(
+    monkeypatch: Any,
+) -> None:
+    _patch_board_io(monkeypatch)
+    archive = SimpleNamespace(rows=_mp_rows(), product_code="MC")
+
+    async def _covering(db: Any, ref_date: Any, code: str) -> Any:
+        return archive if code == "MC" else None
+
+    monkeypatch.setattr(board, "load_archive_covering", AsyncMock(side_effect=_covering))
+    monkeypatch.setattr(
+        board,
+        "get_month_setting",
+        AsyncMock(return_value=SimpleNamespace(planned_capacity_kg=930000.0)),
+    )
+    payload = await board.build_production_summary(
+        _empty_db(), ref_date=date(2026, 9, 15), has_ferm=True, has_extract=True
+    )
+    mc = next(r for r in payload["rows"] if r["product_code"] == "MC")
+    assert mc["ferment"]["planned_batches"] is not None
+    assert mc["ferment"]["planned_capacity_kg"] == 930000.0
+    assert payload["period"] is not None and "8月27日" in payload["period"]["start"] + payload["period"]["label"]
+
+
+@pytest.mark.anyio
+async def test_summary_fills_metrics_for_dr_archive(monkeypatch: Any) -> None:
+    _patch_board_io(monkeypatch)
+    archive = SimpleNamespace(rows=_dr_rows(), product_code="DR")
+
+    async def _covering(db: Any, ref_date: Any, code: str) -> Any:
+        return archive if code == "DR" else None
+
+    monkeypatch.setattr(board, "load_archive_covering", AsyncMock(side_effect=_covering))
+    payload = await board.build_production_summary(
+        _empty_db(), ref_date=date(2026, 9, 15), has_ferm=True, has_extract=True
+    )
+    dr = next(r for r in payload["rows"] if r["product_code"] == "DR")
+    assert dr["ferment"]["planned_batches"] is not None
+    assert dr["ferment"]["planned_capacity_kg"] is None
