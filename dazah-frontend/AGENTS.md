@@ -49,7 +49,7 @@ Server Action 示例见 `examples/server-actions.md`。
 
 - API 请求、响应和参数类型必须从 `@/types/generated/schema` 或其公开导出导入，禁止重新手写同名契约。
 - `src/lib/api/` 只做请求、认证、错误标准化和类型封装。
-- 后端 API 变化时，从项目根目录执行 `scripts/generate-api.ps1`，禁止手动编辑 OpenAPI 快照或生成类型。
+- 后端端点、参数或请求/响应契约变化时，从项目根目录执行 `scripts/generate-api.ps1`，禁止手动编辑 OpenAPI 快照或生成类型。
 - 如果生成结果出现大量与需求无关的变化，停止并检查后端 OpenAPI 来源。
 
 ## 管理后台交互要求
@@ -100,6 +100,7 @@ pnpm typecheck
 pnpm test:coverage
 pnpm build
 pnpm test:e2e:critical
+# 仅 CI 或明确授权的隔离交付验证使用此交付镜像命令
 docker build --file ../Dockerfile --target frontend --tag dazah-frontend:ci ..
 ```
 
@@ -114,7 +115,7 @@ docker build --file ../Dockerfile --target frontend --tag dazah-frontend:ci ..
 - `pnpm test:e2e:critical` 对应 `Stable Frontend E2E`，覆盖不依赖真实外部系统的关键
   用户流程。
 - `pnpm build` 对应 `Frontend Quality` 中的构建步骤，用于验证 Next.js 生产构建、Server/Client 边界和静态生成。
-- Docker 命令对应 `Frontend Quality` 中的镜像构建步骤，涉及依赖、构建配置、运行时配置、standalone 输出或 Dockerfile 时必须本地执行。
+- Docker 命令对应 `Frontend Quality` 中的交付镜像构建步骤。变化影响镜像构建或容器运行时，执行相应开发镜像构建或容器验证，本地使用 `docker build --file ../Dockerfile.dev --target frontend --tag dazah-frontend:dev ..`；standalone 等交付镜像特有变化由 CI 或明确授权的隔离交付验证覆盖。
 - `Stable Frontend E2E` 和隔离测试复用同次 CI 的 standalone 构建产物；生产 Docker 镜像独立构建并缓存构建层。
 - 统一 `CI Gate` 要求本次范围内的 `Frontend Quality` 和 `Stable Frontend E2E` 成功；未触发的项目允许跳过，隔离测试不阻断合并。
 

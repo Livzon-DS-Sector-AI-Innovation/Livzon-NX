@@ -29,7 +29,8 @@ export function ItemsInventoryTable() {
       entityCode="qc_items_inventory"
       filters={filters}
       editable
-      enableTextPreview
+      disableCreate
+      hiddenFields={['父记录']}
       enableAttachmentPreview
     />
   )

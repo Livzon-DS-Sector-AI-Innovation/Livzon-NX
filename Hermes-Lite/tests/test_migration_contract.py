@@ -16,3 +16,10 @@ def test_hermes_schema_requires_backend_discovery_before_execution() -> None:
     assert "then action=describe" in description
     assert "then action=execute" in description
     assert "permissions and confirmations are enforced by the backend" in description
+
+
+def test_hermes_does_not_duplicate_backend_page_permission_catalog() -> None:
+    properties = dazah_platform.DAZAH_TOOL_SCHEMA["parameters"]["properties"]
+
+    assert "operation" in properties
+    assert "page_key" not in properties

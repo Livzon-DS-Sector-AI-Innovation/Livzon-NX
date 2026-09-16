@@ -452,7 +452,10 @@ async def test_training_departments_filtered(
     )
     await _seed_scope(db_session, DEV_USER_ID, [DEPT_A])
 
-    resp = await client.get("/api/v1/hr/training/departments")
+    resp = await client.get(
+        "/api/v1/hr/training/departments",
+        headers={"X-Dazah-Page-Key": "hr:training:training-ledger"},
+    )
     assert resp.status_code == 200
     depts = resp.json()["data"]
     assert DEPT_A in depts
@@ -470,7 +473,9 @@ async def test_training_ledger_403_on_out_of_scope_dept(
     await _seed_scope(db_session, DEV_USER_ID, [DEPT_A])
 
     resp = await client.get(
-        "/api/v1/hr/training-ledgers", params={"department": DEPT_B}
+        "/api/v1/hr/training-ledgers",
+        params={"department": DEPT_B},
+        headers={"X-Dazah-Page-Key": "hr:training:training-ledger"},
     )
     assert resp.status_code == 403
 

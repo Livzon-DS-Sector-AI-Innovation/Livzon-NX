@@ -31,6 +31,7 @@ async def test_overview_endpoint_contract(client: AsyncClient) -> None:
     response = await client.get(
         "/api/v1/warehouse/inspection-progress/overview",
         params={"scope": "raw", "days": 7},
+        headers={"X-Dazah-Page-Key": "warehouse:materials:raw-summary"},
     )
     assert response.status_code == 200
     body = response.json()
@@ -51,6 +52,7 @@ async def test_overview_endpoint_rejects_invalid_scope(
     response = await client.get(
         "/api/v1/warehouse/inspection-progress/overview",
         params={"scope": "hardware"},
+        headers={"X-Dazah-Page-Key": "warehouse:materials:raw-summary"},
     )
     assert response.status_code == 422
 
@@ -74,6 +76,9 @@ async def test_ai_analysis_endpoint_contract(
     response = await client.get(
         "/api/v1/warehouse/inspection-progress/ai-analysis",
         params={"scope": "product", "days": 7, "force": True},
+        headers={
+            "X-Dazah-Page-Key": "warehouse:product-inventory:product-summary"
+        },
     )
     assert response.status_code == 200
     data = response.json()["data"]

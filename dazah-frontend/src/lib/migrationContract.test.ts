@@ -99,11 +99,21 @@ describe('five-module migration contract', () => {
     expect(uniquePaths.length).toBeGreaterThan(100)
   })
 
-  it('keeps the three quality inspection landing pages usable', () => {
-    for (const section of ['items', 'instruments', 'finished']) {
-      const page = resolve(dashboardRoot, 'quality/inspection', section, 'page.tsx')
-      expect(readFileSync(page, 'utf8')).toContain('InspectionSectionLanding')
-    }
+  it('keeps the quality inspection landing pages usable', () => {
+    // 物品管理首页 = 物品仪表盘；仪器管理首页 = 仪器管理仪表盘；
+    // 成品检验首页 = 各成品台账入口页
+    const itemsPage = resolve(dashboardRoot, 'quality/inspection/items/page.tsx')
+    expect(readFileSync(itemsPage, 'utf8')).toContain('ItemsDashboard')
+    const instrumentsPage = resolve(
+      dashboardRoot,
+      'quality/inspection/instruments/page.tsx',
+    )
+    expect(readFileSync(instrumentsPage, 'utf8')).toContain('InstrumentsDashboard')
+    const finishedPage = resolve(
+      dashboardRoot,
+      'quality/inspection/finished/page.tsx',
+    )
+    expect(readFileSync(finishedPage, 'utf8')).toContain('FinishedProductsLanding')
   })
 
   it('keeps repaired compatibility operations in generated OpenAPI', () => {

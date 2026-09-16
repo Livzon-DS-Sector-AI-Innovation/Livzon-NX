@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
 class ItemsStockAlertItem(BaseModel):
-    """库存不足物料条目。"""
+    """库存不足物料条目（含全部列，供前端详情弹窗展示）。"""
 
     record_id: str = ""
     name: str | None = None
@@ -15,6 +17,7 @@ class ItemsStockAlertItem(BaseModel):
     current_stock: str | None = None
     warning_stock: str | None = None
     unit: str | None = None
+    fields: dict[str, Any] = Field(default_factory=dict)
 
 
 class ItemsMonthlyPoint(BaseModel):

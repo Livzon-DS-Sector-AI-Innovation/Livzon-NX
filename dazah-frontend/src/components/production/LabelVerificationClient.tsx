@@ -87,7 +87,7 @@ export default function LabelVerificationClient({
     try {
       const formData = new FormData()
       formData.append('file', file)
-      const res = await fetch(`/api/v1/quality/label-verifications/upload-video`, {
+      const res = await fetch(`/api/v1/production/label-verifications/upload-video`, {
         method: 'POST',
         body: formData,
       })

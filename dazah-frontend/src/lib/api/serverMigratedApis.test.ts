@@ -106,7 +106,7 @@ describe('migrated server API contracts', () => {
       return headers?.Authorization === 'Bearer migration-server-token'
     })).toBe(true)
     expect(calls.some(([url]) => String(url).includes('/hr/new/onboarding-records'))).toBe(true)
-    expect(calls.some(([url]) => String(url).includes('/quality/label-verifications'))).toBe(true)
+    expect(calls.some(([url]) => String(url).includes('/production/label-verifications'))).toBe(true)
     expect(calls.some(([url]) => String(url).includes('/warehouse/material-pages/raw-summary'))).toBe(true)
   })
 

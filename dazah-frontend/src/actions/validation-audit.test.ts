@@ -2,9 +2,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getServerApiBaseUrl: vi.fn(() => 'http://backend.test'),
+  getAuthHeaders: vi.fn().mockResolvedValue({
+    'Content-Type': 'application/json',
+    Authorization: 'Bearer server-token',
+    'X-Dazah-Page-Path': '/registration/validation-audit',
+  }),
   revalidatePath: vi.fn(),
 }))
 
+vi.mock('@/lib/auth', () => ({ getAuthHeaders: mocks.getAuthHeaders }))
 vi.mock('@/lib/server-api', () => ({ getServerApiBaseUrl: mocks.getServerApiBaseUrl }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 
@@ -53,12 +59,24 @@ describe('validation audit server actions', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       'http://backend.test/api/v1/registration/validation-audit/tasks',
-      expect.objectContaining({ method: 'POST' }),
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer server-token',
+          'X-Dazah-Page-Path': '/registration/validation-audit',
+        }),
+      }),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       'http://backend.test/api/v1/registration/validation-audit/tasks/task-1',
-      expect.objectContaining({ method: 'DELETE' }),
+      expect.objectContaining({
+        method: 'DELETE',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer server-token',
+          'X-Dazah-Page-Path': '/registration/validation-audit',
+        }),
+      }),
     )
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/registration/validation-audit')
   })

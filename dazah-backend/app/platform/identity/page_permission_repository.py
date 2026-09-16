@@ -32,9 +32,7 @@ class PagePermissionRepository:
         result = await db.execute(select(Menu))
         return active_menu_page_keys(list(result.scalars().all()))
 
-    async def active_menu_page_catalog(
-        self, db: AsyncSession
-    ) -> list[ActiveMenuPage]:
+    async def active_menu_page_catalog(self, db: AsyncSession) -> list[ActiveMenuPage]:
         result = await db.execute(select(Menu))
         return active_menu_page_catalog(list(result.scalars().all()))
 
@@ -189,11 +187,7 @@ def active_menu_page_catalog(menus: list[Menu]) -> list[ActiveMenuPage]:
     }
     active: list[ActiveMenuPage] = []
     for menu in menus:
-        if (
-            menu.type != "menu"
-            or menu.id in parent_ids
-            or not menu.route_path
-        ):
+        if menu.type != "menu" or menu.id in parent_ids or not menu.route_path:
             continue
         current: Menu | None = menu
         visited: set[UUID] = set()
@@ -223,11 +217,14 @@ def active_menu_page_catalog(menus: list[Menu]) -> list[ActiveMenuPage]:
 
 def active_menu_page_keys(menus: list[Menu]) -> set[str]:
     """Return pages whose live menu route matches the permission definition."""
-    from app.platform.identity.page_policy import get_page_definition
+    from app.platform.identity.page_policy import (
+        canonical_page_key,
+        get_page_definition,
+    )
 
     active: set[str] = set()
     for item in active_menu_page_catalog(menus):
-        definition = get_page_definition(item.key or "")
+        definition = get_page_definition(canonical_page_key(item.key or ""))
         if definition is not None and item.route_path == definition.route_path:
             active.add(definition.page_key)
     return active

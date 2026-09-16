@@ -389,7 +389,6 @@ export const moduleMenus: ModuleMenu[] = [
               { key: "inspection-items-inventory", label: "库存台账", path: "/quality/inspection/items/inventory" },
               { key: "inspection-items-inbound", label: "入库记录", path: "/quality/inspection/items/inbound" },
               { key: "inspection-items-outbound", label: "出库记录", path: "/quality/inspection/items/outbound" },
-              { key: "inspection-items-dashboard", label: "物品仪表盘", path: "/quality/inspection/items/dashboard" },
             ],
           },
           {
@@ -397,7 +396,7 @@ export const moduleMenus: ModuleMenu[] = [
             label: "仪器管理",
             path: "/quality/inspection/instruments",
             children: [
-              { key: "inspection-instruments-equipment", label: "仪器设备", path: "/quality/inspection/instruments/equipment" },
+              { key: "inspection-instruments-equipment", label: "仪器台账", path: "/quality/inspection/instruments/equipment" },
               { key: "inspection-instruments-maintenance", label: "维护保养记录", path: "/quality/inspection/instruments/maintenance" },
               { key: "inspection-instruments-repair", label: "维修记录", path: "/quality/inspection/instruments/repair" },
               { key: "inspection-instruments-contracts", label: "维保合同", path: "/quality/inspection/instruments/contracts" },
@@ -933,12 +932,48 @@ function collectPageRoutes(
   })
 }
 
+// Keep landing and migrated routes aligned with the backend's reviewed page
+// aliases. Directory nodes are not permission pages, so their entry route
+// must explicitly inherit a stable leaf page identity.
+const pageRouteAliases: Record<string, string> = {
+  "/hr/employee-management": "hr:employee-management:profile",
+  "/hr/training": "hr:training:annual-plan",
+  "/hr/settings/feishu": "hr:hr-settings:hr-settings-feishu",
+  "/hr/new/profile": "hr:employee-management:profile",
+  "/hr/new/onboarding": "hr:onboarding",
+  "/hr/new/offboarding": "hr:offboarding",
+  "/hr/new/departure": "hr:offboarding",
+  "/hr/new/departments": "hr:departments",
+  "/warehouse/materials/dashboard": "warehouse:materials:raw-summary",
+  "/warehouse/hardware/dashboard": "warehouse:hardware:hardware-hardware-summary",
+  "/warehouse/product/dashboard": "warehouse:product-inventory:product-summary",
+  "/registration/project": "registration:project:project-ledger:international-associated-review",
+  "/registration/project-ledger": "registration:project:project-ledger:international-associated-review",
+  "/registration/declaration-progress": "registration:project:declaration-progress:international-planned-in-progress",
+  "/registration/certificate-management": "registration:certificate-management:international-registration",
+  "/registration/fees": "registration:fees:fee-ledger",
+}
+
+const pageRoutePrefixAliases: Record<string, string> = {
+  "/registration/reference-standard": "registration:project:declaration-progress:international-planned-in-progress",
+  "/registration/supplementary-reply": "registration:project:declaration-progress:international-planned-in-progress",
+  "/registration/validation-audit": "registration:project:declaration-progress:international-planned-in-progress",
+  "/registration/review": "registration:project:declaration-progress:international-planned-in-progress",
+  "/registration/dossier-writer": "registration:project:declaration-progress:international-planned-in-progress",
+}
+
 export function getPageKeyByPath(pathname: string): string | undefined {
   const normalized = pathname.replace(/\/$/, "") || "/"
   // Only reviewed auxiliary forms inherit the ledger page; sibling pages do not.
   if (/^\/quality\/deviations\/(?:new|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.test(normalized)) {
     return 'quality:deviations:deviation-ledger'
   }
+  const alias = pageRouteAliases[normalized]
+  if (alias) return alias
+  const prefixAlias = Object.entries(pageRoutePrefixAliases).find(([prefix]) =>
+    normalized === prefix || normalized.startsWith(`${prefix}/`),
+  )
+  if (prefixAlias) return prefixAlias[1]
   const candidates = moduleMenus.flatMap((module) =>
     collectPageRoutes(module.children, module.key),
   ).filter(({ path }) => {

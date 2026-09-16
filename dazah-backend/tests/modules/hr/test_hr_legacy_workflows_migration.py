@@ -707,7 +707,11 @@ async def test_training_ledger_create_update_delete_conflict_and_notification(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     session_id = uuid4()
-    session_result = SimpleNamespace(scalar_one_or_none=lambda: "质量部")
+    session_result = SimpleNamespace(
+        scalar_one_or_none=lambda: "质量部",
+        # 培训师授课部门解析按 (姓名, 部门) 行读取（批量 IN 查询形状）
+        all=lambda: [("王老师", "质量部")],
+    )
     repo = SimpleNamespace(
         create=AsyncMock(side_effect=lambda value: value),
         get_by_id=AsyncMock(),

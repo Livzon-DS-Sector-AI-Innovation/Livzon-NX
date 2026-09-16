@@ -1,5 +1,6 @@
 'use server'
 
+import { getAuthHeaders } from '@/lib/auth'
 import { getServerApiBaseUrl } from '@/lib/server-api'
 import { revalidatePath } from 'next/cache'
 import type {
@@ -25,6 +26,7 @@ async function actionFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...options,
     headers: {
+      ...(await getAuthHeaders()),
       ...options?.headers,
     },
   })
@@ -115,7 +117,7 @@ export async function createValidationAuditTask(
   try {
     const response = await fetch(`${BASE}/tasks`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(),
       body: JSON.stringify(data),
     })
     const json = await response.json()
@@ -138,6 +140,7 @@ export async function deleteValidationAuditTask(
   try {
     const response = await fetch(`${BASE}/tasks/${taskId}`, {
       method: 'DELETE',
+      headers: await getAuthHeaders(),
     })
     const json = await response.json()
     if (!response.ok) {
@@ -158,8 +161,11 @@ export async function uploadValidationAuditFiles(
   formData: FormData
 ): Promise<{ success: boolean; message: string; data?: unknown }> {
   try {
+    const authHeaders = await getAuthHeaders()
+    delete authHeaders['Content-Type']
     const response = await fetch(`${BASE}/tasks/${taskId}/files`, {
       method: 'POST',
+      headers: authHeaders,
       body: formData,
     })
     const json = await response.json()
@@ -182,6 +188,7 @@ export async function parseValidationAuditFiles(
   try {
     const response = await fetch(`${BASE}/tasks/${taskId}/parse`, {
       method: 'POST',
+      headers: await getAuthHeaders(),
     })
     const json = await response.json()
     if (!response.ok) {
@@ -203,6 +210,7 @@ export async function runValidationAudit(
   try {
     const response = await fetch(`${BASE}/tasks/${taskId}/audit`, {
       method: 'POST',
+      headers: await getAuthHeaders(),
     })
     if (!response.ok) {
       const json = await response.json().catch(() => ({}))

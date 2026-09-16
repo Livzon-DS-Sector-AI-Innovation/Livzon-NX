@@ -18,13 +18,14 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import CurrentUser
 from app.core.exceptions import AppException
 from app.core.response import success_response
+from app.core.upload_security import read_upload_secure
 from app.modules.quality.api.deps import (
     QUALITY_QA_SCOPE_PERMISSIONS,
     try_acquire_action_lock,
@@ -46,6 +47,7 @@ from app.modules.quality.service import (
     get_dls_dashboard_data,
     get_finished_display_fields,
     get_formulations_dashboard_data,
+    get_instruments_dashboard,
     get_lft_dashboard_data,
     get_lkms_dashboard_data,
     get_mpa_dashboard_data,
@@ -75,9 +77,17 @@ from app.modules.quality.service.inspection_items_mirror import (
     list_items_mirror,
     sync_items_page,
 )
+from app.modules.quality.service.instrument_import import (
+    confirm_instrument_import,
+    preview_instrument_import,
+)
+from app.modules.quality.service.instrument_profile import get_instrument_profile
 from app.modules.quality.service.items_dashboard import (
     get_items_dashboard,
     push_low_stock_alert,
+)
+from app.modules.quality.service.maintenance_schedule import (
+    enrich_maintenance_schedule,
 )
 from app.shared.schemas import ApiResponseEnvelope
 
@@ -175,6 +185,7 @@ def _mirror_response(result: dict[str, Any]) -> Any:
         "page": result["page"],
         "page_size": result["page_size"],
         "fields": result.get("fields", []),
+        "fieldMeta": result.get("fieldMeta", {}),
         "configured": result.get("configured", True),
         "last_sync_time": result.get("last_sync_time"),
         "source": "local_mirror",
@@ -223,6 +234,7 @@ async def _mirror_page_list(
     page_size: int,
     force: bool,
     incremental: bool,
+    enrich: Any = None,
 ) -> Any:
     """镜像页通用列表：镜像优先，可选触发同步；空镜像/未镜像降级实时读。
 
@@ -245,6 +257,8 @@ async def _mirror_page_list(
         page=page,
         page_size=page_size,
     )
+    if enrich is not None and mirror.get("configured"):
+        mirror["items"] = await enrich(db, mirror["items"])
     # 未同步且未强制刷新 → 降级实时读，保证首次进入不空屏
     if not force and not mirror["configured"]:
         return await _safe_list(
@@ -486,6 +500,7 @@ async def _instrument_page_list(
     page_size: int,
     force: bool,
     incremental: bool,
+    enrich: Any = None,
 ) -> Any:
     """仪器子表列表：本地镜像优先，未同步时降级实时读（列跟随飞书真实字段）。"""
     return await _mirror_page_list(
@@ -500,6 +515,7 @@ async def _instrument_page_list(
         page_size=page_size,
         force=force,
         incremental=incremental,
+        enrich=enrich,
     )
 
 
@@ -585,6 +601,7 @@ async def api_list_maintenance(
         page_size=page_size,
         force=force,
         incremental=incremental,
+        enrich=enrich_maintenance_schedule,
     )
 
 
@@ -820,6 +837,99 @@ async def api_pull_instr_cal_external(
 ) -> Any:
     _require_user(current_user)
     return await _safe_pull_mirror(sync_instrument_page, "qc_instr_cal_external", db)
+
+
+# ── 仪器管理仪表盘 / 仪器档案 / 仪器台账批量导入 ──
+
+
+@router.get(
+    "/instruments/dashboard", response_model=ApiResponseEnvelope[dict[str, Any]]
+)
+async def api_get_instruments_dashboard(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    """仪器管理仪表盘：概览/校验到期/维保/合同（读本地镜像聚合）。"""
+    _require_user(current_user)
+    result = await get_instruments_dashboard(db)
+    return success_response(data=result)
+
+
+@router.get(
+    "/instruments/equipment/{record_id}/profile",
+    response_model=ApiResponseEnvelope[dict[str, Any]],
+)
+async def api_get_instrument_profile(
+    record_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    """仪器档案：按设备编号匹配维护/维修/校验/合同情况。"""
+    _require_user(current_user)
+    result = await get_instrument_profile(db, record_id)
+    return success_response(data=result)
+
+
+_IMPORT_MAX_BYTES = 10 * 1024 * 1024
+
+
+@router.post(
+    "/instruments/equipment/import/preview",
+    response_model=ApiResponseEnvelope[dict[str, Any]],
+)
+async def api_preview_instrument_import(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    """仪器台账批量导入预览：解析 xlsx、识别列头、判新增/更新（不写数据）。"""
+    user_id = _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["qc"],
+    )
+    _filename, content = await read_upload_secure(
+        file,
+        max_bytes=_IMPORT_MAX_BYTES,
+        allowed_extensions={".xlsx"},
+        what="仪器台账导入文件",
+    )
+    logger.info("instrument import preview by user=%s", str(user_id))
+    return success_response(data=await preview_instrument_import(db, content))
+
+
+@router.post(
+    "/instruments/equipment/import/confirm",
+    response_model=ApiResponseEnvelope[dict[str, Any]],
+)
+async def api_confirm_instrument_import(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    """仪器台账批量导入确认：按设备编号新增/更新写飞书并刷镜像。"""
+    user_id = _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["qc"],
+    )
+    _filename, content = await read_upload_secure(
+        file,
+        max_bytes=_IMPORT_MAX_BYTES,
+        allowed_extensions={".xlsx"},
+        what="仪器台账导入文件",
+    )
+    result = await confirm_instrument_import(db, content, operator_user_id=user_id)
+    logger.info(
+        "instrument import confirmed by user=%s created=%s updated=%s failed=%s",
+        str(user_id),
+        result.get("created"),
+        result.get("updated"),
+        result.get("failed"),
+    )
+    return success_response(data=result, message="导入完成")
 
 
 # ═══════════════════════════════════════

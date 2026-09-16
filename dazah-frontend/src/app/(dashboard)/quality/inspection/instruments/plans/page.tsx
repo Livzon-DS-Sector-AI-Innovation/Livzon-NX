@@ -12,8 +12,16 @@ export default function InstrPlansPage() {
         pullApi="/api/v1/quality/instruments/plans/pull"
         entityCode="qc_instr_plans"
         editable
-        enableTextPreview
         showLastSyncTime
+        wrapColumns
+        centerHeaders
+        columnWidths={{
+          仪器类别: '12%',
+          维护周期: '6%',
+          '周期（月）': '6%',
+          仪器编号: '32%',
+          维护内容: '32%',
+        }}
       />
     </QualityQueryProvider>
   )

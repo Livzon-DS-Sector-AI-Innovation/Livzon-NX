@@ -54,7 +54,10 @@ async def test_route_returns_avatar_map(client: AsyncClient) -> None:
         "app.modules.hr.public_api.get_active_avatar_map_by_name",
         new=AsyncMock(return_value={"杨舒惠": "https://s1-imfile.feishucdn.example/a.webp"}),
     ):
-        response = await client.get("/api/v1/warehouse/person-avatar-map")
+        response = await client.get(
+            "/api/v1/warehouse/person-avatar-map",
+            headers={"X-Dazah-Page-Key": "warehouse:materials:raw-summary"},
+        )
 
     assert response.status_code == 200
     body = response.json()
