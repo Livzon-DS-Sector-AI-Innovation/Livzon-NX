@@ -15,8 +15,8 @@
 """
 from __future__ import annotations
 
-import logging
 import calendar
+import logging
 import re
 from datetime import date, datetime, time, timedelta
 from functools import partial
