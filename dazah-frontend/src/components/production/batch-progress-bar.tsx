@@ -174,8 +174,9 @@ export default function BatchProgressBar({
         )}
       </div>
 
-      {/* 轨道 + 箭头（叠加层） */}
-      <div className="relative" style={{ marginTop: 10, marginBottom: 4 }}>
+      {/* 轨道 + 箭头（叠加层）。箭头 34×48 上下各探出轨道 12px：
+          margin 上下各留 12px 以上容纳探出，避免箭尖戳出卡片边框 */}
+      <div className="relative" style={{ marginTop: 12, marginBottom: 16 }}>
         <div
           className="flex h-6 rounded overflow-hidden"
           data-testid="batch-progress-track"

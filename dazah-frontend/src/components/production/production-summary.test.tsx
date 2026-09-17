@@ -86,7 +86,7 @@ describe('ProductionSummary', () => {
     await render({ month: '2026-09' })
     const text = (container.textContent || '') + (document.body.textContent || '')
     expect(text).toContain('霉酚酸')
-    expect(text).toContain('44,769')
+    expect(text).toContain('44,769.11')
     expect(text).toContain('62,500')
     expect(text).toContain('64.2%')
     // 播报汇总：前缀来源产品

@@ -225,6 +225,12 @@ def build_permission_catalog() -> list[dict[str, Any]]:
                 "action": "extraction-yield",
                 "name": "提炼成品产量可见",
             },
+            {
+                "code": "production:schedule-archive",
+                "module": "production",
+                "action": "schedule-archive",
+                "name": "排产历史修正",
+            },
         ]
     )
     return catalog

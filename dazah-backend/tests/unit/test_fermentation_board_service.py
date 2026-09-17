@@ -1049,3 +1049,211 @@ def test_build_mp_board_tank_states_and_kpis() -> None:
     assert any("【排产备注】黄色正常罐批。" in t for t in texts)
     # recent 取最近已放罐（9/6 的跨块批）
     assert payload["recent"][0]["batch_no"] == "MC-26244"
+
+
+# ═══════════════════ 漏录/进度/排产告警 ═══════════════════
+
+
+def _alert(payload: dict, prefix: str) -> list[dict]:
+    return [a for a in payload["alerts"] if a["text"].startswith(prefix)]
+
+
+def test_fmt_batches() -> None:
+    """批次数文案：整数批不带小数；他汀折算小数批保留有效小数。"""
+    assert board._fmt_batches(7) == "7"
+    assert board._fmt_batches(9) == "9"
+    assert board._fmt_batches(9.65) == "9.65"
+    assert board._fmt_batches(9.0) == "9"
+    assert board._fmt_batches(0.65) == "0.65"
+
+
+@pytest.mark.anyio
+async def test_kpi_alert_yield_entry_tiers_fa() -> None:
+    """FA 漏录提醒三档：窗口后 24h 内不播；24~72h info；超 72h 升级 warn。"""
+    rows = _mini_rows()
+    # FA-PREV 8/27 10:00 放罐（窗口 12:00 结束）：8/28 11:00 = 23h，宽限期内
+    payload = board.build_board(rows, [], datetime(2026, 8, 28, 11, 0))
+    assert payload is not None
+    assert _alert(payload, "【待录】") == []
+
+    # 8/28 13:00 = 25h → info 单条
+    payload = board.build_board(rows, [], datetime(2026, 8, 28, 13, 0))
+    assert payload is not None
+    assert _alert(payload, "【待录】") == [
+        {
+            "level": "info",
+            "text": "【待录】1 批已放罐超 1 天未录产量（FA-PREV），请录入",
+        }
+    ]
+
+    # 8/30 13:00 = 73h → warn；FA-M0 窗口 8/30 12:00 刚结束（1h）不计入
+    payload = board.build_board(rows, [], datetime(2026, 8, 30, 13, 0))
+    assert payload is not None
+    pending = _alert(payload, "【待录】")
+    assert len(pending) == 1
+    assert pending[0]["level"] == "warn"
+    assert "FA-PREV" in pending[0]["text"]
+    assert "超 3 天" in pending[0]["text"]
+
+
+@pytest.mark.anyio
+async def test_kpi_alert_yield_entry_dr() -> None:
+    """DR 漏录提醒：排产无放罐时刻，宽限按放罐日零点折算。"""
+    rows = _dr_rows()
+    # DR-2617 9/3 放罐：9/4 00:01 起 24h 宽限过 → info
+    payload = board.build_dr_board(rows, [], datetime(2026, 9, 4, 0, 1))
+    assert payload is not None
+    pending = _alert(payload, "【待录】")
+    assert len(pending) == 1
+    assert pending[0]["level"] == "info"
+    assert "DR-2617" in pending[0]["text"]
+
+
+@pytest.mark.anyio
+async def test_kpi_alert_yield_entry_mp_warn_takes_precedence() -> None:
+    """MP：warn 档存在时不重复播 info 档（录入抽屉已列全部未录批次）。"""
+    rows = _mp_rows()
+    # 9/7 11:00：MC-26238（9/2 放罐，超 72h）→ warn；
+    # MC-26244（9/6 放罐，25h）落在 info 档但被 warn 抑制
+    payload = board.build_mp_board(rows, [], datetime(2026, 9, 7, 11, 0))
+    assert payload is not None
+    pending = _alert(payload, "【待录】")
+    assert len(pending) == 1
+    assert pending[0]["level"] == "warn"
+    assert "MC-26238" in pending[0]["text"]
+
+
+@pytest.mark.anyio
+async def test_kpi_alert_progress_lag_fa() -> None:
+    """周期末进度预警：剩余 ≤7 天且录产量进度落后时间进度 ≥10 个百分点。"""
+    rows = _mini_rows()
+    # 9/26 为周期最后一天：2 计划批均未录产量 → 落后 100 个百分点
+    payload = board.build_board(rows, [], datetime(2026, 9, 26, 12, 0))
+    assert payload is not None
+    progress = _alert(payload, "【进度】")
+    assert len(progress) == 1
+    assert progress[0]["level"] == "warn"
+    assert "剩 0 天" in progress[0]["text"]
+    assert "0/2 批（0%）" in progress[0]["text"]
+
+    # 录满产量 → 进度跟上不再播；【待录】同时消失
+    actuals = [
+        {"batch_no": "FA-PREV", "dump_date": "2026-08-27", "yield_kg": 100.0},
+        {"batch_no": "FA-M0", "dump_date": "2026-08-30", "yield_kg": 120.0},
+    ]
+    payload = board.build_board(
+        rows, [], datetime(2026, 9, 26, 12, 0), actuals=actuals
+    )
+    assert payload is not None
+    assert _alert(payload, "【进度】") == []
+    assert _alert(payload, "【待录】") == []
+
+
+@pytest.mark.anyio
+async def test_kpi_alert_progress_statin_decimal_batches() -> None:
+    """他汀小数批文案：9.65 批保留两位小数展示。"""
+    alerts: list[dict] = []
+    board._append_kpi_alerts(
+        alerts,
+        block={"start": date(2026, 9, 20), "end": date(2026, 10, 26)},
+        now=datetime(2026, 10, 24, 12, 0),
+        kpis={"month_planned": 9.65, "done_with_yield": 3},
+        missing_dumps=[],
+        today=date(2026, 10, 24),
+    )
+    progress = [a for a in alerts if a["text"].startswith("【进度】")]
+    assert len(progress) == 1
+    assert "3/9.65 批" in progress[0]["text"]
+
+
+@pytest.mark.anyio
+async def test_kpi_alerts_muted_outside_current_period() -> None:
+    """真实今天不在块内（历史回看/未来周期）→ 漏录与进度告警静音。"""
+    rows = _mini_rows()
+    hist_block = {
+        "start": date(2026, 8, 27),
+        "end": date(2026, 9, 26),
+        "label": "8月27日～9月26日",
+        "start_row": 0,
+    }
+    # now 已到 10 月：真实今天在块后 → 历史回看不播旧账
+    payload = board.build_board(
+        rows, [], datetime(2026, 10, 20, 12, 0), block=hist_block
+    )
+    assert payload is not None
+    assert _alert(payload, "【待录】") == []
+    assert _alert(payload, "【进度】") == []
+
+    # 未来周期（真实今天早于块首）→ 静音
+    alerts: list[dict] = []
+    board._append_kpi_alerts(
+        alerts,
+        block={"start": date(2026, 10, 27), "end": date(2026, 11, 26)},
+        now=datetime(2026, 11, 20, 12, 0),
+        kpis={"month_planned": 2, "done_with_yield": 0},
+        missing_dumps=[("FA-X", datetime(2026, 11, 1, 12, 0))],
+        today=date(2026, 10, 20),
+    )
+    assert alerts == []
+
+
+@pytest.mark.anyio
+async def test_next_period_coverage_alert_windows(monkeypatch) -> None:
+    """排产上传提醒：剩 ≤3 天才查存档；无覆盖播 warn；有覆盖/历史/远期不播。"""
+    block = {"start": date(2026, 9, 27), "end": date(2026, 10, 26)}
+    calls: list[tuple[date, str]] = []
+
+    async def fake_load(session, ref_date, product_code="FA"):
+        calls.append((ref_date, product_code))
+        return None
+
+    monkeypatch.setattr(board, "load_archive_covering", fake_load)
+
+    # 剩余 9 天：未到临期窗口，不查存档
+    assert (
+        await board.next_period_coverage_alert(
+            None, product_code="FA", block=block, today=date(2026, 10, 17)
+        )
+        is None
+    )
+    assert calls == []
+
+    # 剩余 3 天且无覆盖存档 → warn；查询按「周期结束次日」定位
+    alert = await board.next_period_coverage_alert(
+        None, product_code="FA", block=block, today=date(2026, 10, 23)
+    )
+    assert alert is not None
+    assert alert["level"] == "warn"
+    assert "【排产】" in alert["text"]
+    assert "2026-09-27～2026-10-26" in alert["text"]
+    assert calls == [(date(2026, 10, 27), "FA")]
+
+    # 剩余 4 天（窗口外）→ 不播
+    assert (
+        await board.next_period_coverage_alert(
+            None, product_code="FA", block=block, today=date(2026, 10, 22)
+        )
+        is None
+    )
+
+    # 已有存档覆盖下一周期 → 不播
+    async def fake_hit(session, ref_date, product_code="FA"):
+        return object()
+
+    monkeypatch.setattr(board, "load_archive_covering", fake_hit)
+    assert (
+        await board.next_period_coverage_alert(
+            None, product_code="FA", block=block, today=date(2026, 10, 23)
+        )
+        is None
+    )
+
+    # 历史周期（块已结束）→ 不播，且不再触发查询
+    monkeypatch.setattr(board, "load_archive_covering", fake_load)
+    assert (
+        await board.next_period_coverage_alert(
+            None, product_code="FA", block=block, today=date(2026, 11, 1)
+        )
+        is None
+    )
+    assert calls == [(date(2026, 10, 27), "FA")]

@@ -12020,10 +12020,23 @@
       },
       "Body_upload_schedule_excel_api_v1_production_schedule_excel_post": {
         "properties": {
+          "allow_history_fix": {
+            "default": false,
+            "description": "以新文件修正「今天之前」的历史列（需专属权限）",
+            "title": "Allow History Fix",
+            "type": "boolean"
+          },
           "file": {
             "contentMediaType": "application/octet-stream",
             "description": "排产计划 .xlsx / .xls 文件",
             "title": "File",
+            "type": "string"
+          },
+          "history_fix_reason": {
+            "default": "",
+            "description": "历史修正原因（修正时必填）",
+            "maxLength": 255,
+            "title": "History Fix Reason",
             "type": "string"
           }
         },

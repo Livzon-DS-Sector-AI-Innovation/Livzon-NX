@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from datetime import date, datetime, time
 from io import BytesIO
+from types import SimpleNamespace
+from typing import Any
+from unittest.mock import AsyncMock, Mock
 
 import openpyxl  # type: ignore[import-untyped]
 import pytest
@@ -188,3 +191,317 @@ def test_merge_keeps_new_file_without_matching_old_block() -> None:
     merged = merge_schedule_rows_preserve_past(new_rows, old_rows, today)
 
     assert merged == new_rows
+
+
+# ═══════ 按产品适配合并：DR/MC/他汀块识别与历史修正 ═══════
+
+
+def _dr_schedule_rows(ferm_tank_row: list) -> list[list]:
+    """单块 DR 排产表（2026-04 自然月 4 列），发酵罐号行可定制。
+
+    行偏移对齐 DR 解析：+1 日期 +5 进罐批号 +6 发酵罐号 +7 放罐批号
+    +8 放罐罐号 +9 培养周期 +10 备注。DR-26013 场景：进罐写在 B403、
+    放罐写在 B404（历史真实事故：罐号不一致卡死罐状态板）。
+    """
+    return [
+        ["102车间2026年04月份多拉计划（04.05）"],
+        ["日期", 5, 6, 18, 19],
+        [],
+        [],
+        [],
+        ["", "DR-26013", "", "", ""],
+        ferm_tank_row,
+        ["", "", "", "DR-26013", ""],
+        ["", "", "", "B404", ""],
+        ["", "", "", "300h", ""],
+        ["备注", ""],
+    ]
+
+
+def test_merge_dr_freezes_history_tank_change() -> None:
+    """DR-26013 场景：重传表把 4/5 进罐罐号 B403 改成 B404，冻结后保留 B403。"""
+    from app.modules.production.fermentation_board_service import (
+        merge_schedule_rows_for_product,
+    )
+
+    old_rows = _dr_schedule_rows(["", "B403", "", "", ""])
+    new_rows = _dr_schedule_rows(["", "B404", "", "", ""])
+
+    merged, report = merge_schedule_rows_for_product(
+        new_rows, old_rows, date(2026, 9, 17), "DR"
+    )
+
+    assert report["recognized"] is True
+    assert report["matched_blocks"] == 1
+    assert report["frozen_columns"] == 4
+    assert report["corrected"] is False
+    # 历史列冻结：进罐罐号沿用旧存档
+    assert merged[6][1] == "B403"
+    assert {
+        "block": "2026-04",
+        "row": "发酵罐号",
+        "date": "2026-04-05",
+        "column": 1,
+        "old": "B403",
+        "new": "B404",
+    } in report["discarded_changes"]
+    # 入参不被修改
+    assert new_rows[6][1] == "B404"
+
+
+def test_merge_dr_history_fix_takes_new_values() -> None:
+    """显式历史修正（freeze_past=False）：以新文件为准，差异照常记录。"""
+    from app.modules.production.fermentation_board_service import (
+        merge_schedule_rows_for_product,
+    )
+
+    old_rows = _dr_schedule_rows(["", "B403", "", "", ""])
+    new_rows = _dr_schedule_rows(["", "B404", "", "", ""])
+
+    merged, report = merge_schedule_rows_for_product(
+        new_rows, old_rows, date(2026, 9, 17), "DR", freeze_past=False
+    )
+
+    assert report["corrected"] is True
+    assert merged[6][1] == "B404"
+    change = next(
+        c for c in report["discarded_changes"] if c["date"] == "2026-04-05"
+    )
+    assert (change["old"], change["new"]) == ("B403", "B404")
+
+
+def test_merge_history_fix_without_changes_not_corrected() -> None:
+    """修正模式但新文件与原存档无历史差异：corrected=False，不产生空修正。"""
+    from app.modules.production.fermentation_board_service import (
+        merge_schedule_rows_for_product,
+    )
+
+    rows = _dr_schedule_rows(["", "B403", "", "", ""])
+
+    merged, report = merge_schedule_rows_for_product(
+        rows, rows, date(2026, 9, 17), "DR", freeze_past=False
+    )
+
+    assert report["recognized"] is True
+    assert report["discarded_changes"] == []
+    assert report["corrected"] is False
+
+
+def test_merge_reports_unrecognized_sheet() -> None:
+    """新文件一个周期块都识别不出时 recognized=False，行原样返回。"""
+    from app.modules.production.fermentation_board_service import (
+        merge_schedule_rows_for_product,
+    )
+
+    old_rows = _dr_schedule_rows(["", "B403", "", "", ""])
+
+    merged, report = merge_schedule_rows_for_product(
+        [["随便一张没有周期块的表"]], old_rows, date(2026, 9, 17), "DR"
+    )
+
+    assert report["recognized"] is False
+    assert report["matched_blocks"] == 0
+    assert merged == [["随便一张没有周期块的表"]]
+
+
+def _mp_schedule_rows(ferm_tank_row: list) -> list[list]:
+    """单块 MC 排产表（2026-08 两列）：+1 序号 +8 进罐批号 +9 发酵罐号。"""
+    rows: list[list] = [[] for _ in range(19)]
+    rows[0] = ["2026年08月MC放罐计划"]
+    rows[1] = ["序号", 1, 2]
+    rows[8] = ["", "MC-26246", "MC-26247"]
+    rows[9] = ferm_tank_row
+    rows[18] = ["备注"]
+    return rows
+
+
+def test_merge_mc_freezes_past_columns() -> None:
+    """MC 表历史列改动同样被冻结（原实现只认 FA 格式，此处为回归）。"""
+    from app.modules.production.fermentation_board_service import (
+        merge_schedule_rows_for_product,
+    )
+
+    old_rows = _mp_schedule_rows(["", "301A", "302B"])
+    new_rows = _mp_schedule_rows(["", "301A", "303B"])
+
+    merged, report = merge_schedule_rows_for_product(
+        new_rows, old_rows, date(2026, 9, 17), "MC"
+    )
+
+    assert report["recognized"] is True
+    assert report["frozen_columns"] == 2
+    assert merged[9][2] == "302B"
+    assert {
+        "block": "2026-08",
+        "row": "发酵罐号",
+        "date": "2026-08-02",
+        "column": 2,
+        "old": "302B",
+        "new": "303B",
+    } in report["discarded_changes"]
+
+
+def _statin_schedule_rows(ferm_tank_row: list) -> list[list]:
+    """单块他汀排产表（label 驱动布局，日期行标签在第 1 列）。"""
+    return [
+        ["2026年08月27日～2026年09月26日 103发酵洛伐计划"],
+        ["", "日期", 5, 6],
+        ["种子罐", "", "LV-26001", "LV-26002"],
+        ["接种量", "", 100, 100],
+        ["发酵罐", "", "LV-26001", "LV-26002"],
+        ferm_tank_row,
+        ["移种", "", "14:00", "14:00"],
+        ["放罐", "", "LV-26001", "LV-26002"],
+        ["放罐时间", "", "08:00", "08:00"],
+    ]
+
+
+def test_merge_statin_freezes_past_columns() -> None:
+    """他汀（LV）表：label 驱动块同样按日期冻结历史列。"""
+    from app.modules.production.fermentation_board_service import (
+        merge_schedule_rows_for_product,
+    )
+
+    old_rows = _statin_schedule_rows(["罐号", "", "301B", "302B"])
+    new_rows = _statin_schedule_rows(["罐号", "", "301B", "303B"])
+
+    merged, report = merge_schedule_rows_for_product(
+        new_rows, old_rows, date(2026, 9, 17), "LV"
+    )
+
+    assert report["recognized"] is True
+    assert report["frozen_columns"] == 2
+    assert merged[5][3] == "302B"
+    change = next(c for c in report["discarded_changes"] if c["old"])
+    assert (change["old"], change["new"]) == ("302B", "303B")
+    assert change["row"] == "罐号"
+
+
+# ═══════════ create_archive：合并编排 / 拒绝 / 修正原因校验 ═══════════
+
+
+def _patch_latest_archive(
+    monkeypatch: Any, rows: list[list]
+) -> AsyncMock:
+    from app.modules.production import fermentation_board_service
+
+    latest_loader = AsyncMock(return_value=SimpleNamespace(rows=rows))
+    monkeypatch.setattr(
+        fermentation_board_service, "load_latest_archive", latest_loader
+    )
+    return latest_loader
+
+
+def _make_session() -> AsyncMock:
+    session = AsyncMock()
+    session.add = Mock()
+    return session
+
+
+@pytest.mark.anyio
+async def test_create_archive_merges_with_latest_and_reports(
+    monkeypatch: Any,
+) -> None:
+    """create_archive 用最新存档冻结历史并返回合并报告。"""
+    _patch_latest_archive(
+        monkeypatch, _dr_schedule_rows(["", "B403", "", "", ""])
+    )
+    new_rows = _dr_schedule_rows(["", "B404", "", "", ""])
+
+    archive, report = await schedule_excel_service.create_archive(
+        _make_session(),
+        product_code="DR",
+        file_name="多拉.xlsx",
+        sheet_name="多拉排产",
+        original_path="schedule_excel/dr.xlsx",
+        rows=new_rows,
+        merges=[],
+        col_widths=[],
+        row_count=len(new_rows),
+        col_count=5,
+    )
+
+    assert report["recognized"] is True
+    assert report["corrected"] is False
+    assert report["discarded_changes"][0]["old"] == "B403"
+    # 落库存档行是冻结后的合并结果
+    assert archive.rows[6][1] == "B403"
+    assert archive.product_code == "DR"
+
+
+@pytest.mark.anyio
+async def test_create_archive_rejects_unrecognized_sheet(
+    monkeypatch: Any,
+) -> None:
+    """新文件识别不出周期块：拒绝存档并提示标准标题格式。"""
+    _patch_latest_archive(
+        monkeypatch, _dr_schedule_rows(["", "B403", "", "", ""])
+    )
+
+    with pytest.raises(ValueError, match="未能在新文件中识别任何排产周期块"):
+        await schedule_excel_service.create_archive(
+            _make_session(),
+            product_code="DR",
+            file_name="错表.xlsx",
+            sheet_name="错表",
+            original_path="schedule_excel/bad.xlsx",
+            rows=[["与排产无关的表"]],
+            merges=[],
+            col_widths=[],
+            row_count=1,
+            col_count=1,
+        )
+
+
+@pytest.mark.anyio
+async def test_create_archive_history_fix_requires_reason(
+    monkeypatch: Any,
+) -> None:
+    """应用历史修正时原因必填。"""
+    _patch_latest_archive(
+        monkeypatch, _dr_schedule_rows(["", "B403", "", "", ""])
+    )
+
+    with pytest.raises(ValueError, match="修正原因"):
+        await schedule_excel_service.create_archive(
+            _make_session(),
+            product_code="DR",
+            file_name="多拉.xlsx",
+            sheet_name="多拉排产",
+            original_path="schedule_excel/dr.xlsx",
+            rows=_dr_schedule_rows(["", "B404", "", "", ""]),
+            merges=[],
+            col_widths=[],
+            row_count=11,
+            col_count=5,
+            history_fix=True,
+            history_fix_reason="  ",
+        )
+
+
+@pytest.mark.anyio
+async def test_create_archive_history_fix_applies_new_values(
+    monkeypatch: Any,
+) -> None:
+    """history_fix + 原因：以新文件修正历史，报告标记 corrected。"""
+    _patch_latest_archive(
+        monkeypatch, _dr_schedule_rows(["", "B403", "", "", ""])
+    )
+
+    archive, report = await schedule_excel_service.create_archive(
+        _make_session(),
+        product_code="DR",
+        file_name="多拉.xlsx",
+        sheet_name="多拉排产",
+        original_path="schedule_excel/dr.xlsx",
+        rows=_dr_schedule_rows(["", "B404", "", "", ""]),
+        merges=[],
+        col_widths=[],
+        row_count=11,
+        col_count=5,
+        history_fix=True,
+        history_fix_reason="排产表笔误，实际进 B404",
+    )
+
+    assert report["corrected"] is True
+    assert archive.rows[6][1] == "B404"
