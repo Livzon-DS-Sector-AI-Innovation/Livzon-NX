@@ -25,7 +25,7 @@ export const SYSTEM_PERMISSION_PAGES = [
   {
     href: '/system/user-roles',
     title: '用户角色',
-    description: '为用户分配角色，并设置可进入的一级业务模块。',
+    description: '为用户分配页面权限角色基线，并管理模块入口和用户页面覆盖。',
   },
   {
     href: '/system/dept-roles',
@@ -40,7 +40,7 @@ export const SYSTEM_PERMISSION_PAGES = [
   {
     href: '/system/permission-verification',
     title: '权限接入检查',
-    description: '查看各模块的权限接入详情与门禁结果。',
+    description: '自动检查模块权限接入完整性，并诊断用户授权与健康问题。',
   },
 ] as const
 
@@ -71,7 +71,6 @@ export default function SystemPermissionsPanel({
   departments,
   deptRules,
   menus,
-  users,
 }: SystemPermissionsData) {
   return (
     <section aria-labelledby="system-permissions-title" data-testid="system-permissions-panel">

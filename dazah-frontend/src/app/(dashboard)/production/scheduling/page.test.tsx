@@ -57,6 +57,7 @@ vi.mock('antd', async () => {
   return { ...actual, Upload }
 })
 
+import { setProductionAdminForTest } from '@/test/production-auth'
 import SchedulingPage from './page'
 
 const ARCHIVE_SUMMARY = [
@@ -92,6 +93,7 @@ describe('SchedulingPage archive flow', () => {
   let container: HTMLElement
 
   beforeEach(() => {
+    setProductionAdminForTest()
     permissionState.codes = []
     actions.getScheduleExcelArchives.mockResolvedValue({
       code: 200,

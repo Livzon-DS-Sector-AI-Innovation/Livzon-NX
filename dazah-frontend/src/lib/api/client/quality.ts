@@ -1577,7 +1577,9 @@ export { formatQualitySyncSummary, formatQualityFeishuTestSummary } from '@/lib/
  */
 
 export async function fetchDocumentDepartments(): Promise<DocumentDepartmentItem[]> {
-  const res = await fetch('/api/v1/quality/document-departments')
+  const res = await fetch('/api/v1/quality/document-departments', {
+    headers: { 'X-Dazah-Page-Key': 'quality:documents' },
+  })
   if (!res.ok) throw new Error(`获取文件目录部门失败: ${res.statusText}`)
   const json = await res.json()
   return json.data ?? []
@@ -1597,7 +1599,9 @@ export async function fetchDocumentEntries(params?: {
     if (params.page_size) queryParts.push(`page_size=${params.page_size}`)
   }
   const query = queryParts.length ? `?${queryParts.join('&')}` : ''
-  const res = await fetch(`/api/v1/quality/document-entries${query}`)
+  const res = await fetch(`/api/v1/quality/document-entries${query}`, {
+    headers: { 'X-Dazah-Page-Key': 'quality:documents' },
+  })
   if (!res.ok) throw new Error(`获取文件目录条目失败: ${res.statusText}`)
   const json = await res.json()
   return { items: json.data ?? [], total: json.meta?.total ?? 0 }
@@ -1609,7 +1613,7 @@ export async function lookupLatestDocument(
 ): Promise<{ name: string; code: string | null; effective_date: string | null } | null> {
   const res = await fetch(
     `/api/v1/quality/document-entries/lookup-latest?name=${encodeURIComponent(name)}`,
-    { cache: 'no-store' }
+    { cache: 'no-store', headers: { 'X-Dazah-Page-Key': 'quality:documents' } }
   )
   if (!res.ok) return null
   const json = await res.json()
@@ -1642,7 +1646,8 @@ export async function fetchDocumentEntryAttachmentContent(
 ): Promise<{ text: string; blobUrl: string; contentType: string }> {
   const encodedKey = storageKey.split('/').map(encodeURIComponent).join('/')
   const res = await fetch(
-    `/api/v1/quality/document-entries/${entryId}/attachments/${encodedKey}/content`
+    `/api/v1/quality/document-entries/${entryId}/attachments/${encodedKey}/content`,
+    { headers: { 'X-Dazah-Page-Key': 'quality:documents' } },
   )
   if (!res.ok) throw new Error(`获取附件内容失败: ${res.statusText}`)
   const contentType = res.headers.get('content-type') || ''

@@ -18,9 +18,10 @@ import ModulePermissionsDrawer from './ModulePermissionsDrawer'
 
 const user = (id: string): UserManagementItem => ({
   id, name: `用户${id}`, role: 'user', status: 'active', auth_source: 'local', grant_version: 3,
+  module_codes: ['hr'],
 })
 const result = (id: string): UserPagePermissionsOut => ({
-  user_id: id, grant_version: 3, grants: [], custom_page_keys: [], module_rollouts: { hr: 'draft' },
+  user_id: id, grant_version: 3, grants: [], custom_page_keys: [], module_checks: { hr: 'incomplete' },
   definitions: [{ page_key: 'hr:employee-management:profile', module_code: 'hr',
     page_name: `员工档案${id}`, route_path: '/hr/employee-management',
     supported_scope_types: ['department_tree', 'departments', 'all'] }],
@@ -31,24 +32,80 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-it('auto-expands high risk pages without granting actions and preserves hidden scope', async () => {
+it('auto-expands high risk pages without granting actions and displays editable scope', async () => {
   const data = result('A')
   data.definitions![0].sensitive_actions = [{ key: 'delete', name: '删除员工档案', category: 'destructive', description: '删除员工记录' }]
   data.custom_page_keys = ['hr:employee-management:profile']
   data.grants = [{ page_key: 'hr:employee-management:profile', module_code: 'hr', source: 'user',
     permissions: ['access'], sensitive_actions: [], data_scope: { scope_type: 'departments', department_ids: ['stable-dept'] } }]
   mocks.get.mockResolvedValue(data)
+  mocks.departments.mockResolvedValue([{ feishu_department_id: 'stable-dept', name: '质量部' }])
   mocks.replace.mockResolvedValue({ ok: true, data })
   await show('A')
   expect(document.body.textContent).toContain('删除员工档案')
-  expect(document.body.textContent).not.toContain('数据范围')
-  expect(mocks.departments).not.toHaveBeenCalled()
+  expect(document.body.textContent).toContain('数据范围')
+  expect(document.body.textContent).toContain('指定部门及下级')
+  expect(document.body.textContent).toContain('质量部')
+  expect(mocks.departments).toHaveBeenCalledTimes(1)
   expect(document.querySelector<HTMLInputElement>('input[value="delete"]')!.checked).toBe(false)
   const confirmation = await preview()
   await act(async () => { await confirmation.onOk() })
   expect(mocks.replace).toHaveBeenCalledWith('A', expect.objectContaining({ grants: [expect.objectContaining({
     data_scope: { scope_type: 'departments', department_ids: ['stable-dept'] }, sensitive_actions: [],
   })] }))
+})
+
+it('limits batch changes to the current search result', async () => {
+  const data = result('A')
+  data.definitions!.push({ ...data.definitions![0], page_key: 'hr:other', page_name: '其他页面' })
+  mocks.get.mockResolvedValue(data)
+  await show('A')
+  const search = document.querySelector<HTMLInputElement>('input[placeholder="搜索页面名称或权限键"]')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(search, '其他页面')
+    search.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => button('可查看').click())
+  const confirmation = mocks.confirm.mock.lastCall![0] as { content: string; onOk: () => Promise<void> | void }
+  expect(confirmation.content).toContain('1 个页面')
+  await act(async () => { await confirmation.onOk() })
+  expect(document.body.textContent).toContain('未保存调整 1 个页面')
+})
+
+it('shows the role source and whether a user override expands or restricts it', async () => {
+  const data = result('A')
+  data.custom_page_keys = ['hr:employee-management:profile']
+  data.grants = [{ page_key: 'hr:employee-management:profile', module_code: 'hr', source: 'user',
+    permissions: ['access'], sensitive_actions: [], data_scope: { scope_type: 'department_tree', department_ids: [] } }]
+  data.role_grants = [{ page_key: 'hr:employee-management:profile', module_code: 'hr', source: 'role',
+    source_role_names: ['人事只读', '人事经办'], permissions: ['access', 'query'], sensitive_actions: [],
+    role_sources: [
+      { role_id: 'role-read', role_name: '人事只读', permissions: ['access', 'query'], sensitive_actions: [],
+        data_scope: { scope_type: 'department_tree', department_ids: [] } },
+      { role_id: 'role-operate', role_name: '人事经办', permissions: ['access'], sensitive_actions: [],
+        data_scope: { scope_type: 'all', department_ids: [] } },
+    ],
+    data_scope: { scope_type: 'department_tree', department_ids: [] } }]
+  mocks.get.mockResolvedValue(data)
+  await show('A')
+  expect(document.body.textContent).toContain('用户覆盖')
+  expect(document.body.textContent).toContain('覆盖收紧')
+  expect(document.body.textContent).toContain('角色基线：可查看（人事只读、人事经办）')
+  expect(document.body.textContent).toContain('用户覆盖完整替换该页角色基线')
+})
+
+it('filters pages that declare independent high risk actions', async () => {
+  const data = result('A')
+  data.definitions![0].sensitive_actions = [{ key: 'delete', name: '删除员工档案', category: 'destructive', description: '删除员工记录' }]
+  data.definitions!.push({ ...data.definitions![0], page_key: 'hr:other', page_name: '普通页面', sensitive_actions: [] })
+  mocks.get.mockResolvedValue(data)
+  await show('A')
+  const filter = [...document.querySelectorAll<HTMLElement>('.ant-segmented-item')]
+    .find((item) => item.textContent?.replace(/\s/g, '') === '只看含高风险操作')!
+  expect(filter).toBeTruthy()
+  await act(async () => filter.click())
+  expect(document.body.textContent).toContain('员工档案A')
+  expect(document.body.textContent).not.toContain('普通页面')
 })
 let root: Root
 let host: HTMLDivElement
@@ -77,7 +134,9 @@ function button(label: string) {
   return found!
 }
 async function preview() {
-  await act(async () => button('只读').click())
+  await act(async () => button('可查看').click())
+  const batchConfirmation = mocks.confirm.mock.lastCall![0] as { onOk: () => Promise<void> | void }
+  await act(async () => { await batchConfirmation.onOk() })
   const input = document.querySelector<HTMLInputElement>('input[placeholder="填写授权调整原因"]')!
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '职责调整')
@@ -106,7 +165,7 @@ it.each([true, false])('ignores a previous user save result (success=%s)', async
   const confirmation = await preview()
   let save: Promise<void> | void
   await act(async () => { save = confirmation.onOk() })
-  expect(button('只读').disabled).toBe(true)
+  expect(button('可查看').disabled).toBe(true)
   expect(document.querySelector<HTMLInputElement>('input[placeholder="填写授权调整原因"]')!.disabled).toBe(true)
   await act(async () => { void confirmation.onOk() })
   expect(mocks.replace).toHaveBeenCalledTimes(1)

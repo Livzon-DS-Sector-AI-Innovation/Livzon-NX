@@ -47,9 +47,6 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
             _n("batches", "批次管理", "/production/batches"),
             _n("plan", "生产计划", "/production/plan"),
             _n("cost", "生产成本", "/production/cost"),
-            _n("process", "工艺规程（开发中）", "/production/process", disabled=True),
-            _n("records", "生产记录（开发中）", "/production/records", disabled=True),
-            _n("balance", "物料平衡（开发中）", "/production/balance", disabled=True),
         ],
     ),
     # ── 设备管理 ────────────────────────────────────────────────

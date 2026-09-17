@@ -96,9 +96,6 @@ export const moduleMenus: ModuleMenu[] = [
           { key: "scheduling", label: "排产计划", path: "/production/scheduling" },
         ],
       },
-      { key: "process", label: "工艺规程（开发中）", path: "/production/process" },
-      { key: "records", label: "生产记录（开发中）", path: "/production/records" },
-      { key: "balance", label: "物料平衡（开发中）", path: "/production/balance" },
       {
         key: "shift-log",
         label: "生产日志",
@@ -908,15 +905,28 @@ interface ModuleLandingAccess {
   page_permission_rollouts?: Record<string, string>
 }
 
-/** 登录后进入顶部菜单栏中从左到右的第一个可见模块。 */
+export const NO_AUTHORIZED_PAGE_PATH = "/no-access"
+
+/** 登录后按导航顺序进入首个已授权、可路由的页面。 */
 export function getFirstAuthorizedModulePath(user: ModuleLandingAccess): string {
-  const visibleModules = user.role === "admin"
-    ? moduleMenus
-    : getAuthorizedPageMenus(
-        user.module_codes,
-        user.page_permissions,
-      )
-  return visibleModules[0]?.path || "/production"
+  if (user.role === "admin") return moduleMenus[0].path
+  const allowedKeys = new Set((user.page_permissions || [])
+    .filter((grant) => grant.permissions?.includes("access"))
+    .map((grant) => grant.page_key))
+  function firstAuthorizedPage(items: SubMenuItem[]): string | undefined {
+    for (const item of items) {
+      if (item.disabled || item.adminOnly) continue
+      const key = item.path && getPageKeyByPath(item.path.split('?')[0])
+      if (key && allowedKeys.has(key)) return item.path
+      const nested = item.children && firstAuthorizedPage(item.children)
+      if (nested) return nested
+    }
+  }
+  for (const moduleMenu of getAuthorizedModuleMenus(user.module_codes)) {
+    const path = firstAuthorizedPage(moduleMenu.children)
+    if (path) return path
+  }
+  return NO_AUTHORIZED_PAGE_PATH
 }
 
 function collectPageRoutes(
@@ -937,6 +947,7 @@ function collectPageRoutes(
 // must explicitly inherit a stable leaf page identity.
 const pageRouteAliases: Record<string, string> = {
   "/hr/employee-management": "hr:employee-management:profile",
+  "/hr/contracts": "hr:contracts:contracts-ledger",
   "/hr/training": "hr:training:annual-plan",
   "/hr/settings/feishu": "hr:hr-settings:hr-settings-feishu",
   "/hr/new/profile": "hr:employee-management:profile",
@@ -964,6 +975,9 @@ const pageRoutePrefixAliases: Record<string, string> = {
 
 export function getPageKeyByPath(pathname: string): string | undefined {
   const normalized = pathname.replace(/\/$/, "") || "/"
+  if (['/production/process', '/production/records', '/production/balance'].some(
+    (path) => normalized === path || normalized.startsWith(`${path}/`),
+  )) return undefined
   // Only reviewed auxiliary forms inherit the ledger page; sibling pages do not.
   if (/^\/quality\/deviations\/(?:new|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.test(normalized)) {
     return 'quality:deviations:deviation-ledger'

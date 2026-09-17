@@ -12,6 +12,7 @@ interface DepartmentToolbarProps {
   activeView: 'table' | 'tree'
   onViewChange: (view: 'table' | 'tree') => void
   canEdit: boolean
+  canSync: boolean
   onAdd: () => void
   onSync: () => void
   syncing: boolean
@@ -21,6 +22,7 @@ export default function DepartmentToolbar({
   activeView,
   onViewChange,
   canEdit,
+  canSync,
   onAdd,
   onSync,
   syncing,
@@ -36,22 +38,22 @@ export default function DepartmentToolbar({
         ]}
       />
 
-      {canEdit && (
+      {(canEdit || canSync) && (
         <Space>
-          <Button
+          {canEdit && <Button
             type="primary"
             icon={<PlusOutlined />}
             onClick={onAdd}
           >
             新增部门
-          </Button>
-          <Button
+          </Button>}
+          {canSync && <Button
             icon={<SyncOutlined spin={syncing} />}
             onClick={onSync}
             loading={syncing}
           >
             从飞书同步
-          </Button>
+          </Button>}
         </Space>
       )}
     </div>

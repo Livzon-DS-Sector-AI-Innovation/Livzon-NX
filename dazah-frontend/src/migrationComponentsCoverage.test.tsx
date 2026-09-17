@@ -125,6 +125,12 @@ vi.mock('next/link', () => ({ default: ({ children, ...props }: { children?: Rea
 vi.mock('next/image', () => ({ default: (props: Record<string, unknown>) => createElement('img', props) }))
 vi.mock('styled-jsx/style', () => ({ default: () => null }))
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ has: () => mocks.permissionAllowed, hasAny: () => mocks.permissionAllowed }) }))
+// This harness exercises business flows; dedicated page-permission tests cover denials.
+vi.mock('@/hooks/usePagePermissions', () => ({ usePagePermissions: () => ({
+  canQuery: mocks.permissionAllowed, canOperate: mocks.permissionAllowed,
+  canDelete: mocks.permissionAllowed, canImport: mocks.permissionAllowed,
+  canExport: mocks.permissionAllowed, canSync: mocks.permissionAllowed,
+}) }))
 
 vi.mock('@/actions/hr', () => mocks.moduleFactory('actions/hr'))
 vi.mock('@/actions/admin', () => mocks.moduleFactory('actions/admin'))
@@ -292,10 +298,10 @@ vi.mock('antd', async () => {
   }
   ;(Modal as typeof Modal & { confirm: (config: { onOk?: () => unknown }) => void; destroyAll: () => void }).confirm = (config) => void config.onOk?.()
   ;(Modal as typeof Modal & { confirm: (config: { onOk?: () => unknown }) => void; destroyAll: () => void }).destroyAll = () => undefined
-  const Drawer = ({ open, children, title, onClose, extra, afterOpenChange }: { open?: boolean; children?: ReactNode; title?: ReactNode; onClose?: () => void; extra?: ReactNode; afterOpenChange?: (open: boolean) => void }) => {
+  const Drawer = ({ open, children, title, onClose, extra, footer, afterOpenChange }: { open?: boolean; children?: ReactNode; title?: ReactNode; onClose?: () => void; extra?: ReactNode; footer?: ReactNode; afterOpenChange?: (open: boolean) => void }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 同 Modal：引用变化不应重放
     React.useEffect(() => { afterOpenChange?.(Boolean(open)) }, [open])
-    return open ? createElement('aside', null, createElement('h2', null, title), createElement('button', { onClick: onClose }, '关闭'), extra, children) : null
+    return open ? createElement('aside', null, createElement('h2', null, title), createElement('button', { onClick: onClose }, '关闭'), extra, children, footer) : null
   }
   const Alert = ({ title, description, children }: { title?: ReactNode; description?: ReactNode; children?: ReactNode }) => createElement('div', null, title, description, children)
   const Divider = ({ children }: { children?: ReactNode }) => createElement('div', null, children)
@@ -397,7 +403,7 @@ vi.mock('antd', async () => {
   const TimePicker = Object.assign(Wrapper, { RangePicker })
   const Result = Wrapper
   const Avatar = Wrapper
-  const exports = { App, Alert, AutoComplete, Avatar, Badge, Breadcrumb: Wrapper, Button, Card, Checkbox, Collapse, Col: Wrapper, DatePicker: Object.assign(DatePicker, { RangePicker }), Descriptions: Object.assign(Wrapper, { Item: Wrapper }), Divider, Drawer, Dropdown, Empty, Flex: Wrapper, Form, Input, InputNumber, List, Menu, Modal, Pagination, Popconfirm, Progress: Wrapper, Radio, Result, Row: Wrapper, Select, Segmented, Space, Spin, Statistic, Switch, Table, Tabs, Tag, TimePicker, Timeline: Wrapper, Tooltip: Wrapper, Tree, Typography, Upload }
+  const exports = { App, Alert, AutoComplete, Avatar, Badge, Breadcrumb: Wrapper, Button, Card, Checkbox, Collapse, Col: Wrapper, ConfigProvider: Wrapper, DatePicker: Object.assign(DatePicker, { RangePicker }), Descriptions: Object.assign(Wrapper, { Item: Wrapper }), Divider, Drawer, Dropdown, Empty, Flex: Wrapper, Form, Input, InputNumber, List, Menu, Modal, Pagination, Popconfirm, Progress: Wrapper, Radio, Result, Row: Wrapper, Select, Segmented, Space, Spin, Statistic, Switch, Table, Tabs, Tag, TimePicker, Timeline: Wrapper, Tooltip: Wrapper, Tree, Typography, Upload }
   return new Proxy(exports, { get: (target, name: string | symbol) => name === 'then' ? undefined : target[name as keyof typeof target] ?? Wrapper })
 })
 

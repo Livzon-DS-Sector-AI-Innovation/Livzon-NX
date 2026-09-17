@@ -44,7 +44,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("rebuild_document_catalog")
 
-DEFAULT_ENV_FILE = r"E:\工厂平台\dazah-backend\.env"
+DEFAULT_ENV_FILE = str(Path(__file__).resolve().parents[2] / ".env.local")
 DEFAULT_STORAGE_ROOT = r"E:\工厂平台\dazah-backend\uploads\quality\document_catalog"
 DEFAULT_SOURCE_DIR = r"C:\Users\Administrator\Desktop\莫小张"
 BACKUP_DIR = Path(__file__).resolve().parent.parent / "data"

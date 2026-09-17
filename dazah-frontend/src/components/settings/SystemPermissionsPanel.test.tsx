@@ -19,6 +19,6 @@ describe('system permissions settings entry', () => {
     expect(SYSTEM_PERMISSION_PAGES.find((page) => page.href === '/system/roles')?.description)
       .toContain('菜单页面')
     expect(SYSTEM_PERMISSION_PAGES.find((page) => page.href === '/system/user-roles')?.description)
-      .toContain('一级业务模块')
+      .toContain('模块入口和用户页面覆盖')
   })
 })

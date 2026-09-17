@@ -9,6 +9,7 @@ import dayjs from 'dayjs'
 import Dashboard from '@/components/production/Dashboard'
 import MCSheetsSyncButton from '@/components/production/MCSheetsSyncButton'
 import MCTraceButton from '@/components/production/MCTraceButton'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
 const BASE = '/api/v1/production/mc'
@@ -55,29 +56,33 @@ interface QcRow extends QcRecord {
 }
 
 function CellInput({ value, onSave }: { value: number | null | undefined; onSave: (v: number | null) => void }) {
+  const { canOperate } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2012)
   const [editing, setEditing] = useState(false)
-  if (!editing) return <div style={{ width: '100%', height: 20, cursor: 'text', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setEditing(true)}>{value != null ? value : ''}</div>
+  if (!editing || !canOperate) return <div style={{ width: '100%', height: 20, cursor: canOperate ? 'text' : 'default', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={canOperate ? () => setEditing(true) : undefined}>{value != null ? value : ''}</div>
   return <InputNumber size="small" autoFocus style={{ width: '100%' }} defaultValue={value ?? undefined}
     onBlur={e => { setEditing(false); const raw = e.currentTarget.value; if (raw === '' || raw === '-') { onSave(null); return } const n = Number(raw); if (!isNaN(n)) onSave(n) }}
     onPressEnter={(e) => { setEditing(false); const raw = e.currentTarget.value; if (raw === '' || raw === '-') { onSave(null); return } const n = Number(raw); if (!isNaN(n)) onSave(n) }} />
 }
 
 function DateCellInput({ value, onSave }: { value: string | null | undefined; onSave: (v: string | null) => void }) {
+  const { canOperate } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2012)
   const [editing, setEditing] = useState(false)
-  if (!editing) return <div style={{ width: '100%', height: 20, cursor: 'text', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setEditing(true)}>{value ?? ''}</div>
+  if (!editing || !canOperate) return <div style={{ width: '100%', height: 20, cursor: canOperate ? 'text' : 'default', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={canOperate ? () => setEditing(true) : undefined}>{value ?? ''}</div>
   return <DatePicker size="small" autoFocus open style={{ width: '100%', fontSize: 10 }} defaultValue={value ? dayjs(value) : undefined} format="YYYY.MM.DD"
     onChange={d => { setEditing(false); onSave(d ? d.format('YYYY-MM-DD') : null) }}
     onOpenChange={open => { if (!open) setEditing(false) }} />
 }
 
 function TextCellInput({ value, onSave }: { value: string | null | undefined; onSave: (v: string | null) => void }) {
+  const { canOperate } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2012)
   const [editing, setEditing] = useState(false)
-  if (!editing) return <div style={{ width: '100%', height: 20, cursor: 'text', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setEditing(true)}>{value ?? ''}</div>
+  if (!editing || !canOperate) return <div style={{ width: '100%', height: 20, cursor: canOperate ? 'text' : 'default', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={canOperate ? () => setEditing(true) : undefined}>{value ?? ''}</div>
   return <Input size="small" autoFocus style={{ width: '100%', fontSize: 10, height: 20, padding: '0 2px' }} defaultValue={value ?? ''} onBlur={e => { setEditing(false); onSave(e.currentTarget.value || null) }} />
 }
 
 export default function QcInspectionPage() {
   const router = useRouter(); const { message, modal } = App.useApp()
+  const { canOperate, canDelete } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2012)
   const [form] = Form.useForm()
   const [records, setRecords] = useState<QcRecord[]>([]); const [loading, setLoading] = useState(false); const [saving, setSaving] = useState(false)
   const [month, setMonth] = useState<number>(dayjs().month() + 1)
@@ -91,18 +96,22 @@ export default function QcInspectionPage() {
   useEffect(() => { load() }, [load]) // eslint-disable-line react-hooks/set-state-in-effect
 
   const saveRecord = async (id: string, field: string, value: number | string | null) => {
+    if (!canOperate) return
     setSaving(true); await api(`/qc-inspections/${id}`, { method: 'PUT', body: JSON.stringify({ [field]: value }) }); setSaving(false); load()
   }
 
   const saveInput = async (input: QcInput, field: string, value: number | string | null) => {
+    if (!canOperate || !input.id) return
     setSaving(true); await api(`/qc-inputs/${input.id}`, { method: 'PUT', body: JSON.stringify({ [field]: value }) }); setSaving(false); load()
   }
 
   const addInputRow = async (qcBatch: string | undefined) => {
+    if (!canOperate || !qcBatch) return
     setSaving(true); await api('/qc-inputs', { method: 'POST', body: JSON.stringify({ qc_batch: qcBatch, input_batch: '', dry_weight: 0 }) }); setSaving(false); load()
   }
 
   const handleCreate = async () => {
+    if (!canOperate) return
     try { const vals = await form.validateFields(); if (vals.input_date) vals.input_date = dayjs(vals.input_date).format('YYYY-MM-DD'); const r = await api('/qc-inspections', { method: 'POST', body: JSON.stringify(vals) }); if (r.code === 200) { message.success('创建成功'); setCreateVisible(false); form.resetFields(); load() } else message.error(r.message || '创建失败') }
     catch { message.error('请检查表单') }
   }
@@ -127,7 +136,7 @@ export default function QcInspectionPage() {
     { title: '请检标准', dataIndex: 'inspection_std', width: 130, render: (_, r) => M(<TextCellInput value={r.inspection_std} onSave={v => saveRecord(r.id, 'inspection_std', v)} />, r), onCell },
     { title: '前台批号', dataIndex: 'front_batch_no', width: 110, render: (_, r) => M(<TextCellInput value={r.front_batch_no} onSave={v => saveRecord(r.id, 'front_batch_no', v)} />, r), onCell },
     { title: '累计\n重量(kg)', dataIndex: 'cumulative_weight', width: 75, render: (_, r) => M(<CellInput value={r.cumulative_weight} onSave={v => saveRecord(r.id, 'cumulative_weight', v)} />, r), onCell },
-    { title: '操作', key: 'act', width: 50, fixed: 'right', render: (_, r) => M(<Button type="link" size="small" danger onClick={() => modal.confirm({ title: `删除 ${r.batch_no}?`, onOk: async () => { await api(`/qc-inspections/${r.id}`, { method: 'DELETE' }); load() } })} style={{ fontSize: 10 }}>删除</Button>, r), onCell },
+    { title: '操作', key: 'act', width: 50, fixed: 'right', render: (_, r) => M(canDelete ? <Button type="link" size="small" danger onClick={() => modal.confirm({ title: `删除 ${r.batch_no}?`, onOk: async () => { await api(`/qc-inspections/${r.id}`, { method: 'DELETE' }); load() } })} style={{ fontSize: 10 }}>删除</Button> : null, r), onCell },
   ]
 
   const batchInputCounts = []
@@ -151,8 +160,8 @@ export default function QcInspectionPage() {
         <Space size={8}>
           <Select size="small" style={{ width: 80 }} value={month} onChange={v => setMonth(v)}
             options={[{ value: 0, label: '全部' }, ...[1,2,3,4,5,6,7,8,9,10,11,12].map(m => ({ value: m, label: `${m}月` }))]} />
-          <MCSheetsSyncButton />
-          <MCTraceButton initialModule="qc" />
+          <MCSheetsSyncButton pageKey="production:batches:workshop-201-2" />
+          <MCTraceButton initialModule="qc" pageKey="production:batches:workshop-201-2" />
         </Space>
       </div>
 
@@ -168,15 +177,15 @@ export default function QcInspectionPage() {
         ]}
       />
 
-      <Card extra={<Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setCreateVisible(true) }}>新建入库单</Button>}>
+      <Card extra={canOperate ? <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setCreateVisible(true) }}>新建入库单</Button> : null}>
         <Table size="small" rowKey="_key" loading={loading} className="qc-ledger-table" dataSource={flattenData()} scroll={{ x: 1200 }} columns={columns} pagination={false} />
         <div style={{ padding: '8px 0', display: 'flex', flexWrap: 'wrap', gap: 8, borderTop: '1px solid #f0f0f0', marginTop: 8 }}>
-          {batchInputCounts.map(bic => <Button key={bic.recordId} size="small" type="dashed" loading={saving} onClick={() => addInputRow(bic.batchNo)}>+ 投入 ({bic.batchNo})</Button>)}
+          {canOperate && batchInputCounts.map(bic => <Button key={bic.recordId} size="small" type="dashed" loading={saving} onClick={() => addInputRow(bic.batchNo)}>+ 投入 ({bic.batchNo})</Button>)}
           {batchInputCounts.length === 0 && <Text type="secondary">暂无入库记录</Text>}
         </div>
       </Card>
 
-      <Modal title="新建入库单" open={createVisible} onOk={handleCreate} onCancel={() => setCreateVisible(false)} width={600} okText="确认" cancelText="取消" destroyOnHidden>
+      <Modal title="新建入库单" open={createVisible && canOperate} onOk={canOperate ? handleCreate : undefined} onCancel={() => setCreateVisible(false)} width={600} okText="确认" cancelText="取消" destroyOnHidden>
         <Form form={form} layout="vertical">
           <Row gutter={16}><Col span={8}><Form.Item name="batch_no" label="成品后台批号" rules={[{ required: true }]}><Input placeholder="MC-260101" /></Form.Item></Col>
             <Col span={8}><Form.Item name="input_date" label="入库日期"><DatePicker style={{ width: '100%' }} /></Form.Item></Col></Row>

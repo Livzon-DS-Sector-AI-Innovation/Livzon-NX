@@ -27,6 +27,7 @@ interface DepartmentTreeViewProps {
   departments: Department[]
   selectedDepartmentId: string | null
   canEdit: boolean
+  canDelete: boolean
   onSelect: (id: string | null) => void
   onAdd: (parentId?: string) => void
   onEdit: (dept: Department) => void
@@ -136,6 +137,7 @@ export default function DepartmentTreeView({
   departments,
   selectedDepartmentId,
   canEdit,
+  canDelete,
   onSelect,
   onAdd,
   onEdit,
@@ -200,27 +202,26 @@ export default function DepartmentTreeView({
 
   // 递归渲染树节点，用 Dropdown 包裹实现右键菜单
   const getContextMenuItems = (dept: Department): MenuProps['items'] =>
-    canEdit
+    canEdit || canDelete
       ? [
-          {
+          ...(canEdit ? [{
             key: 'add-child',
             label: '新增子部门',
             icon: <PlusOutlined />,
             onClick: () => onAdd(dept.id),
-          },
-          {
+          }, {
             key: 'edit',
             label: '编辑',
             icon: <EditOutlined />,
             onClick: () => onEdit(dept),
-          },
-          {
+          }] : []),
+          ...(canDelete ? [{
             key: 'delete',
             label: '删除',
             icon: <DeleteOutlined />,
             danger: true,
             onClick: () => onDelete(dept.id),
-          },
+          }] : []),
         ]
       : []
 

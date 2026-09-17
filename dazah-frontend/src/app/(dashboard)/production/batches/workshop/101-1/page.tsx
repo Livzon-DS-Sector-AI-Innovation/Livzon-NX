@@ -17,6 +17,7 @@ import {
 } from '@/actions/seed-culture'
 import type { SeedCultureRecord, SeedCultureCreate } from '@/types/seed-culture'
 import SyncSettingsButton from '@/components/production/SyncSettingsButton'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 import dayjs from 'dayjs'
 
 const { Text, Title } = Typography
@@ -34,6 +35,7 @@ const LINE_STORAGE_KEY = 'workshop_1011_active_products'
 
 export default function SeedCulturePage() {
   const { message, modal } = App.useApp()
+  const { canOperate, canDelete } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop1011)
   const [form] = Form.useForm()
   const [editForm] = Form.useForm()
   const [loading, setLoading] = useState(false)
@@ -105,6 +107,7 @@ export default function SeedCulturePage() {
   const paginated = records.slice((page - 1) * pageSize, page * pageSize)
 
   const openForm = (r?: SeedCultureRecord) => {
+    if (!canOperate) return
     if (r) {
       setEditing(r)
       editForm.setFieldsValue({
@@ -120,6 +123,7 @@ export default function SeedCulturePage() {
   }
 
   const handleDelete = (id: string) => {
+    if (!canDelete) return
     modal.confirm({
       title: '确认删除', onOk: async () => {
         const res = await deleteSeedCulture(id)
@@ -130,6 +134,7 @@ export default function SeedCulturePage() {
   }
 
   const handleSubmit = async () => {
+    if (!canOperate) return
     try {
       const values = editing ? await editForm.validateFields() : await form.validateFields()
       const data: Record<string, unknown> = {}
@@ -151,8 +156,12 @@ export default function SeedCulturePage() {
     } catch { message.error('请检查表单填写') }
   }
 
-  const handleLineConfigOpen = () => { setTempActive(new Set(activeProducts)); setLineConfigVisible(true) }
+  const handleLineConfigOpen = () => {
+    if (!canOperate) return
+    setTempActive(new Set(activeProducts)); setLineConfigVisible(true)
+  }
   const handleLineConfigSave = () => {
+    if (!canOperate) return
     setActiveProducts(tempActive)
     localStorage.setItem(LINE_STORAGE_KEY, JSON.stringify([...tempActive]))
     setLineConfigVisible(false)
@@ -204,8 +213,8 @@ export default function SeedCulturePage() {
       render: (_, r) => (
         <Space size="small">
           <Button type="link" size="small" onClick={() => { setDetailRecord(r); setDetailVisible(true) }}>详情</Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openForm(r)}>编辑</Button>
-          <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(r.id)}>删除</Button>
+          {canOperate && <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openForm(r)}>编辑</Button>}
+          {canDelete && <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(r.id)}>删除</Button>}
         </Space>
       ),
     },
@@ -287,7 +296,7 @@ export default function SeedCulturePage() {
       {visibleProducts.length === 0 ? (
         <Card><Empty description="暂无在生产产品，请配置产线" />
           <div style={{ textAlign: 'center', marginTop: 16 }}>
-            <Button type="primary" icon={<ControlOutlined />} onClick={handleLineConfigOpen}>产线配置</Button></div>
+            {canOperate && <Button type="primary" icon={<ControlOutlined />} onClick={handleLineConfigOpen}>产线配置</Button>}</div>
         </Card>
       ) : (
         <>
@@ -295,11 +304,11 @@ export default function SeedCulturePage() {
             <Title level={4}><ExperimentOutlined className="mr-2" />{currentProduct.productName} — 摇瓶种子制备记录</Title>
             <Text type="secondary">菌种制备全流程跟踪</Text>
             <div style={{ marginTop: 8 }}>
-              <SyncSettingsButton productName={currentProduct.productName} />
-              <Button size="small" icon={<ControlOutlined />} onClick={handleLineConfigOpen}>产线配置</Button>
+              <SyncSettingsButton productName={currentProduct.productName} pageKey={PRODUCTION_PAGE_KEYS.workshop1011} />
+              {canOperate && <Button size="small" icon={<ControlOutlined />} onClick={handleLineConfigOpen}>产线配置</Button>}
             </div>
           </div>
-          <Card extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => openForm()}>新建记录</Button>}>
+          <Card extra={canOperate ? <Button type="primary" icon={<PlusOutlined />} onClick={() => openForm()}>新建记录</Button> : null}>
             <Row gutter={16} className="mb-4">
               <Col span={6}><Input placeholder="搜索摇瓶批号" prefix={<SearchOutlined />} value={searchText}
                 onChange={e => setSearchText(e.target.value)} allowClear /></Col>
@@ -312,7 +321,7 @@ export default function SeedCulturePage() {
         </>
       )}
 
-      <Modal title={editing ? '编辑记录' : '新建记录'} open={modalVisible} onOk={handleSubmit}
+      <Modal title={editing ? '编辑记录' : '新建记录'} open={modalVisible && canOperate} onOk={canOperate ? handleSubmit : undefined}
         onCancel={() => setModalVisible(false)} width={960} okText="确认" cancelText="取消" destroyOnHidden style={{ top: 20 }}>
         <Form form={editing ? editForm : form} layout="vertical"
           initialValues={{ product_name: currentProduct.productName }}
@@ -369,7 +378,7 @@ export default function SeedCulturePage() {
         )}
       </Modal>
 
-      <Modal title="产线配置" open={lineConfigVisible} onOk={handleLineConfigSave}
+      <Modal title="产线配置" open={lineConfigVisible && canOperate} onOk={canOperate ? handleLineConfigSave : undefined}
         onCancel={() => setLineConfigVisible(false)} width={360} okText="保存" cancelText="取消">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {PRODUCTS.map(p => (

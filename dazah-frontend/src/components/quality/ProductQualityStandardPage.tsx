@@ -1,5 +1,7 @@
 'use client'
 
+import { usePagePermissions } from '@/hooks/usePagePermissions'
+
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   App,
@@ -87,6 +89,7 @@ export default function ProductQualityStandardPage({
   productCode,
   productLabel,
 }: ProductQualityStandardPageProps) {
+  const { canOperate, canDelete, canSync } = usePagePermissions(`quality:product-quality:product-quality-${productCode}`)
   const { message } = App.useApp()
   const columnStorageKey = `${COLUMN_WIDTH_STORAGE_KEY_PREFIX}-${productCode}`
 
@@ -178,6 +181,7 @@ export default function ProductQualityStandardPage({
   }, [columnStorageKey, message])
 
   const handlePull = async () => {
+    if (!canSync) return
     setPulling(true)
     try {
       const result = await pullProductQualityStandardsAction(productCode)
@@ -193,12 +197,14 @@ export default function ProductQualityStandardPage({
   }
 
   const openCreate = () => {
+    if (!canOperate) return
     setEditingRecord(null)
     form.resetFields()
     setModalVisible(true)
   }
 
   const openEdit = (record: ProductQualityStandardItem) => {
+    if (!canOperate) return
     setEditingRecord(record)
     form.setFieldsValue({
       customer_name: record.customer_name,
@@ -216,6 +222,7 @@ export default function ProductQualityStandardPage({
   }
 
   const handleSubmit = async () => {
+    if (!canOperate) return
     try {
       const values = await form.validateFields()
       setSaving(true)
@@ -250,6 +257,7 @@ export default function ProductQualityStandardPage({
   }
 
   const handleDelete = async (recordId: string) => {
+    if (!canDelete) return
     try {
       await deleteProductQualityStandardAction(productCode, recordId)
       message.success('删除成功')
@@ -371,9 +379,9 @@ export default function ProductQualityStandardPage({
       title: '操作', key: 'actions', width: 120, fixed: 'right',
       render: (_, record) => (
         <Space size="small">
-          <Button type="link" size="small" style={{ paddingInline: 0 }} onClick={() => openEdit(record)}>修改</Button>
-          <Popconfirm title="确认删除?" onConfirm={() => handleDelete(record.record_id)}>
-            <Button type="link" size="small" danger style={{ paddingInline: 0 }}>删除</Button>
+          <Button type="link" size="small" style={{ paddingInline: 0 }} disabled={!canOperate} onClick={() => openEdit(record)}>修改</Button>
+          <Popconfirm disabled={!canDelete} title="确认删除?" onConfirm={() => handleDelete(record.record_id)}>
+            <Button type="link" size="small" danger disabled={!canDelete} style={{ paddingInline: 0 }}>删除</Button>
           </Popconfirm>
         </Space>
       ),
@@ -408,8 +416,8 @@ export default function ProductQualityStandardPage({
             style={{ width: 320 }}
           />
           <Space>
-            <Button icon={<PlusOutlined />} type="primary" onClick={openCreate}>新增</Button>
-            <Button icon={<CloudDownloadOutlined />} loading={pulling} onClick={handlePull}>从飞书拉取</Button>
+            <Button icon={<PlusOutlined />} type="primary" disabled={!canOperate} onClick={openCreate}>新增</Button>
+            <Button icon={<CloudDownloadOutlined />} loading={pulling} disabled={!canSync} onClick={handlePull}>从飞书拉取</Button>
             <Button icon={<ReloadOutlined />} onClick={() => void refetch()} loading={loading}>刷新</Button>
             <Button onClick={resetColumnWidths}>恢复列宽</Button>
           </Space>
@@ -461,7 +469,7 @@ export default function ProductQualityStandardPage({
 
       <Modal
         title={editingRecord ? '修改产品质量标准' : '新增产品质量标准'}
-        open={modalVisible}
+        open={modalVisible && canOperate}
         onCancel={() => setModalVisible(false)}
         onOk={handleSubmit}
         confirmLoading={saving}

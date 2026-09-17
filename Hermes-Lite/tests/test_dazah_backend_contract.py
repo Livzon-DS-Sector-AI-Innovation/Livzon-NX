@@ -125,6 +125,55 @@ def test_describe_uses_operation_and_trusted_subject(monkeypatch) -> None:
     }
 
 
+def test_quality_operation_is_forwarded_to_backend_catalog(monkeypatch) -> None:
+    recorded: dict[str, object] = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self) -> dict[str, object]:
+            return {
+                "data": {
+                    "ok": True,
+                    "operation": "quality.list_cpv_products",
+                }
+            }
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args) -> None:
+            pass
+
+        async def post(self, url, json, headers):
+            recorded.update(url=url, json=json, headers=headers)
+            return FakeResponse()
+
+    monkeypatch.setenv("DAZAH_AGENT_TOOL_TOKEN", "contract-token")
+    monkeypatch.setattr(dazah_platform.httpx, "AsyncClient", FakeAsyncClient)
+    token = _bind_context()
+    try:
+        payload = asyncio.run(
+            dazah_platform.dazah_tool(
+                "execute",
+                operation="quality.list_cpv_products",
+                params={"page": 1},
+            )
+        )
+    finally:
+        dazah_platform.dazah_request_context.reset(token)
+
+    assert json.loads(payload)["data"]["operation"] == "quality.list_cpv_products"
+    assert str(recorded["url"]).endswith("/agent/tools/execute")
+    request_json = recorded["json"]
+    assert request_json["operation"] == "quality.list_cpv_products"
+    assert request_json["params"] == {"page": 1}
+
+
 def test_timeout_and_unavailable_backend_are_typed_errors(monkeypatch) -> None:
     class FailingAsyncClient:
         failure: type[httpx.HTTPError] = httpx.ReadTimeout

@@ -19,6 +19,8 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.exceptions import AppException
 from app.modules.quality.models import DocumentDepartment, DocumentEntry
+from app.modules.quality.service.document_catalog_scope import document_entry_scope
+from app.platform.identity.data_scope import DepartmentScope
 
 
 def _escape_like(value: str) -> str:
@@ -152,12 +154,14 @@ def _latest_entry_sort_key(entry: DocumentEntry) -> Any:
 
 
 async def find_latest_entry_by_name(
-    db: AsyncSession, core: str
+    db: AsyncSession, core: str, *, scope: DepartmentScope | None = None
 ) -> DocumentEntry | None:
     """按文件名称查找最新版条目（精确→模糊→反向包含）。"""
     from sqlalchemy import literal
 
-    base = select(DocumentEntry).where(DocumentEntry.is_deleted.is_(False))
+    base = select(DocumentEntry).where(
+        DocumentEntry.is_deleted.is_(False), document_entry_scope(scope)
+    )
     rows = (await db.execute(base.where(DocumentEntry.name == core))).scalars().all()
     if not rows:
         rows = (

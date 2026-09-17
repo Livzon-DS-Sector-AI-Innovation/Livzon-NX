@@ -19,7 +19,7 @@ function permissionResult(
     ],
     grants: [],
     custom_page_keys: [],
-    module_rollouts: { hr: 'draft' },
+    module_checks: { hr: 'incomplete' },
     ...overrides,
   }
 }
@@ -43,6 +43,7 @@ describe('page permission editor state', () => {
       mode: 'inherit',
       permissions: [],
       sensitiveActions: [],
+      sensitiveActionsExpiresAt: null,
       scopeType: 'department_tree',
       departmentIds: [],
     })

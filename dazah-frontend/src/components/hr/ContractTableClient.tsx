@@ -7,7 +7,7 @@ import { ReloadOutlined, SearchOutlined, SyncOutlined, DeleteOutlined, EditOutli
 import dayjs from 'dayjs'
 import type { ContractVM } from '@/lib/api/client/hr'
 import { deleteContractAction, updateContractAction, renewContractAction, syncContractsFromFeishu, updateContractSignStatusAction } from '@/actions/hr'
-import { usePermission } from '@/hooks/usePermission'
+import { usePagePermissions } from '@/hooks/usePagePermissions'
 
 const CONTRACT_SEQUENCES = ['首次', '第二次', '第三次', '第四次', '第五次', '第六次']
 
@@ -18,9 +18,7 @@ interface ContractTableClientProps {
 
 export default function ContractTableClient({ initialData, initialTotal }: ContractTableClientProps) {
   const { message } = App.useApp()
-  // 编辑权限：仅人力资源部（hr:write）可编辑/删除/续签，其他部门只读
-  const { has } = usePermission()
-  const canEditHr = has('hr:write')
+  const { canOperate: canEditHr, canDelete, canSync } = usePagePermissions('hr:contracts:contracts-ledger')
   const [data, setData] = useState<ContractVM[]>(initialData)
   const [total, setTotal] = useState(initialTotal)
   const [loading, setLoading] = useState(false)
@@ -50,12 +48,13 @@ export default function ContractTableClient({ initialData, initialTotal }: Contr
   }
 
   const handleSyncFromFeishu = async () => {
+    if (!canSync) return
     setSyncing(true)
     try {
       const json = await syncContractsFromFeishu()
       message.success(json.message || `同步完成: 新增 ${json.data?.created || 0} 条, 更新 ${json.data?.updated || 0} 条`)
       await load()
-    } catch (e) {
+    } catch {
       message.error('同步失败')
     } finally { setSyncing(false) }
   }
@@ -63,6 +62,7 @@ export default function ContractTableClient({ initialData, initialTotal }: Contr
   // 手动同步，不在页面加载时自动触发写入
 
   const handleDelete = async (record: ContractVM) => {
+    if (!canDelete) return
     try {
       const json = await deleteContractAction(record.id)
       if (json.code === 200) {
@@ -71,12 +71,13 @@ export default function ContractTableClient({ initialData, initialTotal }: Contr
       } else {
         message.error(json.message || '删除失败')
       }
-    } catch (e) {
+    } catch {
       message.error('删除失败')
     }
   }
 
   const handleEdit = (record: ContractVM) => {
+    if (!canEditHr) return
     setSelected(record)
     editForm.setFieldsValue({
       contract_sequence: record.contract_sequence,
@@ -100,11 +101,12 @@ export default function ContractTableClient({ initialData, initialTotal }: Contr
   }
 
   const handleEditSave = async () => {
+    if (!canEditHr) return
     try {
       const values = await editForm.validateFields()
       setSaving(true)
       // 转换日期字段
-      const payload: Record<string, any> = {
+      const payload: Record<string, string | null> = {
         contract_sequence: values.contract_sequence,
         dept_leader_name: values.dept_leader_name,
         contract_opinion: values.contract_opinion,
@@ -141,6 +143,7 @@ export default function ContractTableClient({ initialData, initialTotal }: Contr
   }
 
   const handleSignStatus = async (record: ContractVM, signedStatus: '已签署' | '拒签') => {
+    if (!canEditHr) return
     try {
       const json = await updateContractSignStatusAction(record.id, signedStatus)
       if (json.code === 200) {
@@ -155,12 +158,14 @@ export default function ContractTableClient({ initialData, initialTotal }: Contr
   }
 
   const handleRenew = (record: ContractVM) => {
+    if (!canEditHr) return
     setSelected(record)
     renewForm.resetFields()
     setRenewOpen(true)
   }
 
   const handleRenewSave = async () => {
+    if (!canEditHr) return
     try {
       const values = await renewForm.validateFields()
       setRenewing(true)
@@ -201,7 +206,7 @@ export default function ContractTableClient({ initialData, initialTotal }: Contr
         return '-'
       }},
     { title: '操作', width: 260,
-      render: (_: any, record: ContractVM) => {
+      render: (_: unknown, record: ContractVM) => {
         if (!canEditHr) {
           return (
             <Button size="small" onClick={() => { setSelected(record); setDetailOpen(true) }}>详情</Button>
@@ -224,8 +229,8 @@ export default function ContractTableClient({ initialData, initialTotal }: Contr
               </Popconfirm>
             </>
           )}
-          <Popconfirm title="确定删除该合同记录？将同步删除飞书多维表格数据" onConfirm={() => handleDelete(record)}>
-            <Button size="small" danger icon={<DeleteOutlined />}>删除</Button>
+          <Popconfirm disabled={!canDelete} title="确定删除该合同记录？将同步删除飞书多维表格数据" onConfirm={() => handleDelete(record)}>
+            <Button size="small" danger disabled={!canDelete} title={!canDelete ? '需要删除权限' : undefined} icon={<DeleteOutlined />}>删除</Button>
           </Popconfirm>
         </Space>
         )
@@ -241,7 +246,7 @@ export default function ContractTableClient({ initialData, initialTotal }: Contr
             options={CONTRACT_SEQUENCES.map(s => ({ value: s, label: s }))} />
           <Button icon={<SearchOutlined />} onClick={load}>搜索</Button>
           <Button icon={<ReloadOutlined />} loading={loading} onClick={load}>刷新</Button>
-          <Button icon={<SyncOutlined />} loading={syncing} onClick={handleSyncFromFeishu}>
+          <Button disabled={!canSync} title={!canSync ? '需要同步配置权限' : undefined} icon={<SyncOutlined />} loading={syncing} onClick={handleSyncFromFeishu}>
             同步飞书
           </Button>
         </Space>
@@ -289,7 +294,7 @@ export default function ContractTableClient({ initialData, initialTotal }: Contr
       {/* 编辑合同 Modal */}
       <Modal
         title={`编辑合同 - ${selected?.name || ''}（${selected?.employee_number || ''}）`}
-        open={editOpen}
+        open={editOpen && canEditHr}
         onCancel={() => setEditOpen(false)}
         width={800}
         footer={[
@@ -388,7 +393,7 @@ export default function ContractTableClient({ initialData, initialTotal }: Contr
       {/* 续签快捷弹窗 */}
       <Modal
         title={`填写续签日期 - ${selected?.name || ''}（${selected?.contract_sequence || ''}）`}
-        open={renewOpen}
+        open={renewOpen && canEditHr}
         onCancel={() => setRenewOpen(false)}
         width={480}
         footer={[

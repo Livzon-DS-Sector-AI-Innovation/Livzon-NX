@@ -9,6 +9,7 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.main import app  # noqa: A001
 from app.platform.identity.models import User  # noqa: F401
+from app.platform.identity.page_policy import api_binding_for_route
 from tests.db_safety import get_pytest_database_url
 
 settings = get_settings()
@@ -80,7 +81,32 @@ async def client() -> AsyncIterator[AsyncClient]:
 
         app.dependency_overrides[get_db] = _override_get_db
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+
+        async def _attach_registered_page_context(request) -> None:  # noqa: ANN001
+            if (
+                "X-Dazah-Page-Key" in request.headers
+                or "X-Dazah-Page-Path" in request.headers
+            ):
+                return
+            for route in app.routes:
+                methods = getattr(route, "methods", None)
+                path_regex = getattr(route, "path_regex", None)
+                if (
+                    methods
+                    and request.method in methods
+                    and path_regex is not None
+                    and path_regex.fullmatch(request.url.path)
+                ):
+                    binding = api_binding_for_route(request.method, route.path)
+                    if binding is not None and binding.page_keys:
+                        request.headers["X-Dazah-Page-Key"] = binding.page_keys[0]
+                    return
+
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+            event_hooks={"request": [_attach_registered_page_context]},
+        ) as ac:
             yield ac
         app.dependency_overrides.clear()
         await session.rollback()

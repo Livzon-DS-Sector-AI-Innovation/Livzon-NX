@@ -9,6 +9,7 @@ import dayjs from 'dayjs'
 import Dashboard from '@/components/production/Dashboard'
 import MCSheetsSyncButton from '@/components/production/MCSheetsSyncButton'
 import MCTraceButton from '@/components/production/MCTraceButton'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
 const BASE = '/api/v1/production/mc'
@@ -64,29 +65,33 @@ interface RefinementRow extends RefinementRecord {
 }
 
 function CellInput({ value, onSave, color }: { value: number | null | undefined; onSave: (v: number | null) => void; color?: string }) {
+  const { canOperate } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2012)
   const [editing, setEditing] = useState(false)
-  if (!editing) return <div style={{ width: '100%', height: 20, cursor: 'text', color: color || undefined, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setEditing(true)}>{value != null ? value : ''}</div>
+  if (!editing || !canOperate) return <div style={{ width: '100%', height: 20, cursor: canOperate ? 'text' : 'default', color: color || undefined, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={canOperate ? () => setEditing(true) : undefined}>{value != null ? value : ''}</div>
   return <InputNumber size="small" autoFocus style={{ width: '100%', color: color || undefined }} defaultValue={value ?? undefined}
     onBlur={e => { setEditing(false); const raw = e.currentTarget.value; if (raw === '' || raw === '-') { onSave(null); return } const n = Number(raw); if (!isNaN(n)) onSave(n) }}
     onPressEnter={(e) => { setEditing(false); const raw = e.currentTarget.value; if (raw === '' || raw === '-') { onSave(null); return } const n = Number(raw); if (!isNaN(n)) onSave(n) }} />
 }
 
 function DateCellInput({ value, onSave }: { value: string | null | undefined; onSave: (v: string | null) => void }) {
+  const { canOperate } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2012)
   const [editing, setEditing] = useState(false)
-  if (!editing) return <div style={{ width: '100%', height: 20, cursor: 'text', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setEditing(true)}>{value ?? ''}</div>
+  if (!editing || !canOperate) return <div style={{ width: '100%', height: 20, cursor: canOperate ? 'text' : 'default', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={canOperate ? () => setEditing(true) : undefined}>{value ?? ''}</div>
   return <DatePicker size="small" autoFocus open style={{ width: '100%', fontSize: 10 }} defaultValue={value ? dayjs(value) : undefined} format="YYYY.MM.DD"
     onChange={d => { setEditing(false); onSave(d ? d.format('YYYY-MM-DD') : null) }}
     onOpenChange={open => { if (!open) setEditing(false) }} />
 }
 
 function TextCellInput({ value, onSave }: { value: string | null | undefined; onSave: (v: string | null) => void }) {
+  const { canOperate } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2012)
   const [editing, setEditing] = useState(false)
-  if (!editing) return <div style={{ width: '100%', height: 20, cursor: 'text', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setEditing(true)}>{value ?? ''}</div>
+  if (!editing || !canOperate) return <div style={{ width: '100%', height: 20, cursor: canOperate ? 'text' : 'default', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={canOperate ? () => setEditing(true) : undefined}>{value ?? ''}</div>
   return <Input size="small" autoFocus style={{ width: '100%', fontSize: 10, height: 20, padding: '0 2px' }} defaultValue={value ?? ''} onBlur={e => { setEditing(false); onSave(e.currentTarget.value || null) }} />
 }
 
 export default function McRefinementPage() {
   const router = useRouter(); const { message, modal } = App.useApp()
+  const { canOperate, canDelete } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2012)
   const [form] = Form.useForm()
   const [records, setRecords] = useState<RefinementRecord[]>([]); const [loading, setLoading] = useState(false); const [saving, setSaving] = useState(false)
   const [month, setMonth] = useState<number>(dayjs().month() + 1)
@@ -100,12 +105,14 @@ export default function McRefinementPage() {
   useEffect(() => { load() }, [load]) // eslint-disable-line react-hooks/set-state-in-effect
 
   const saveRecord = async (id: string, field: string, value: number | string | null, record: RefinementRecord) => {
+    if (!canOperate) return
     setSaving(true); const d: Record<string, unknown> = { [field]: value }
     if (field === 'dry_weight') d.single_step_yield = value != null && record.total_pure_qty != null && record.total_pure_qty > 0 ? Math.round(Number(value) / record.total_pure_qty * 10000) / 100 : null
     await api(`/refinement-records/${id}`, { method: 'PUT', body: JSON.stringify(d) }); setSaving(false); load()
   }
 
   const saveInput = async (input: RefinementInput, field: string, value: number | string | null, _refinementBatch: string | undefined) => { // eslint-disable-line @typescript-eslint/no-unused-vars
+    if (!canOperate || !input.id) return
     setSaving(true); const d: Record<string, unknown> = { [field]: value }
     if (field === 'input_weight' || field === 'moisture' || field === 'content') {
       const w = (field === 'input_weight' ? value : input.input_weight) || 0; const m = (field === 'moisture' ? value : input.moisture) || 0; const c = (field === 'content' ? value : input.content) || 0
@@ -115,11 +122,13 @@ export default function McRefinementPage() {
   }
 
   const addInputRow = async (refinementBatch: string | undefined) => {
+    if (!canOperate || !refinementBatch) return
     setSaving(true); await api('/refinement-inputs', { method: 'POST', body: JSON.stringify({ refinement_batch: refinementBatch, wet_batch_no: '', input_weight: 0, moisture: 0, content: 0 }) })
     setSaving(false); load()
   }
 
   const handleCreate = async () => {
+    if (!canOperate) return
     try {
       const vals = await form.validateFields(); vals.workshop = '201-2'
       if (vals.input_date) vals.input_date = dayjs(vals.input_date).format('YYYY-MM-DD')
@@ -157,7 +166,7 @@ export default function McRefinementPage() {
     { title: '累计干\n粉重量', dataIndex: 'cumulative_dry_weight', width: 65, render: (_, r) => M(<CellInput value={r.cumulative_dry_weight} onSave={v => saveRecord(r.id, 'cumulative_dry_weight', v, r)} />, r), onCell },
     { title: '单步\n收率', dataIndex: 'single_step_yield', width: 52, render: (_, r) => M(<CellInput value={r.single_step_yield} color={r.single_step_yield != null ? (r.single_step_yield >= 85 ? '#52c41a' : '#f5222d') : undefined} onSave={v => saveRecord(r.id, 'single_step_yield', v, r)} />, r), onCell },
     { title: '二次结晶\n累计收率', dataIndex: 'cumulative_yield', width: 68, render: (_, r) => M(<CellInput value={r.cumulative_yield} onSave={v => saveRecord(r.id, 'cumulative_yield', v, r)} />, r), onCell },
-    { title: '操作', key: 'act', width: 50, fixed: 'right', render: (_, r) => M(<Button type="link" size="small" danger onClick={() => modal.confirm({ title: `删除 ${r.batch_no}?`, onOk: async () => { await api(`/refinement-records/${r.id}`, { method: 'DELETE' }); load() } })} style={{ fontSize: 10 }}>删除</Button>, r), onCell },
+    { title: '操作', key: 'act', width: 50, fixed: 'right', render: (_, r) => M(canDelete ? <Button type="link" size="small" danger onClick={() => modal.confirm({ title: `删除 ${r.batch_no}?`, onOk: async () => { await api(`/refinement-records/${r.id}`, { method: 'DELETE' }); load() } })} style={{ fontSize: 10 }}>删除</Button> : null, r), onCell },
   ]
 
   const batchInputCounts = []
@@ -181,8 +190,8 @@ export default function McRefinementPage() {
         <Space size={8}>
           <Select size="small" style={{ width: 80 }} value={month} onChange={v => setMonth(v)}
             options={[{ value: 0, label: '全部' }, ...[1,2,3,4,5,6,7,8,9,10,11,12].map(m => ({ value: m, label: `${m}月` }))]} />
-          <MCSheetsSyncButton />
-          <MCTraceButton initialModule="refinement" />
+          <MCSheetsSyncButton pageKey="production:batches:workshop-201-2" />
+          <MCTraceButton initialModule="refinement" pageKey="production:batches:workshop-201-2" />
         </Space>
       </div>
 
@@ -201,15 +210,15 @@ export default function McRefinementPage() {
         ]}
       />
 
-      <Card extra={<Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setCreateVisible(true) }}>新建精制记录</Button>}>
+      <Card extra={canOperate ? <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setCreateVisible(true) }}>新建精制记录</Button> : null}>
         <Table size="small" rowKey="_key" loading={loading} className="refine-ledger-table" dataSource={flattenData()} scroll={{ x: 1900 }} columns={columns} pagination={false} />
         <div style={{ padding: '8px 0', display: 'flex', flexWrap: 'wrap', gap: 8, borderTop: '1px solid #f0f0f0', marginTop: 8 }}>
-          {batchInputCounts.map(bic => <Button key={bic.recordId} size="small" type="dashed" loading={saving} onClick={() => addInputRow(bic.batchNo)}>+ 投入 ({bic.batchNo})</Button>)}
+          {canOperate && batchInputCounts.map(bic => <Button key={bic.recordId} size="small" type="dashed" loading={saving} onClick={() => addInputRow(bic.batchNo)}>+ 投入 ({bic.batchNo})</Button>)}
           {batchInputCounts.length === 0 && <Text type="secondary">暂无精制记录</Text>}
         </div>
       </Card>
 
-      <Modal title="新建MC精制记录" open={createVisible} onOk={handleCreate} onCancel={() => setCreateVisible(false)} width={800} okText="确认" cancelText="取消" destroyOnHidden>
+      <Modal title="新建MC精制记录" open={createVisible && canOperate} onOk={canOperate ? handleCreate : undefined} onCancel={() => setCreateVisible(false)} width={800} okText="确认" cancelText="取消" destroyOnHidden>
         <Form form={form} layout="vertical" style={{ maxHeight: '70vh', overflow: 'auto' }}>
           <Row gutter={16}><Col span={8}><Form.Item name="batch_no" label="批号（MC-F2-XXXXXX）" rules={[{ required: true }]}><Input /></Form.Item></Col>
             <Col span={8}><Form.Item name="input_date" label="投料日期"><DatePicker style={{ width: '100%' }} /></Form.Item></Col></Row>

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import {Button, Modal, Checkbox, Typography, App, Tag} from 'antd'
 import { SyncOutlined } from '@ant-design/icons'
+import { useProductionPermissions, type ProductionPageKey } from './useProductionPermissions'
 
 const { Text, Paragraph } = Typography
 const API = (p: string) => `/api/v1/production${p}`
@@ -18,14 +19,17 @@ const MODULES = [
   { key: 'intermediate', value: 'intermediate', label: '母液中间体' },
 ]
 
-export default function FASheetsSyncButton() {
+export default function FASheetsSyncButton({ pageKey }: { pageKey?: ProductionPageKey }) {
   const { message } = App.useApp()
+  const permissions = useProductionPermissions(pageKey || 'production:overview')
+  const canSync = !pageKey || permissions.canSync
   const [visible, setVisible] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [selected, setSelected] = useState<string[]>(MODULES.map(m => m.key))
   const [results, setResults] = useState<Record<string, unknown> | null>(null)
 
   const handleSync = async () => {
+    if (!canSync) return
     if (selected.length === 0) { message.warning('请至少选择一个模块'); return }
     setSyncing(true)
     setResults(null)
@@ -64,13 +68,13 @@ export default function FASheetsSyncButton() {
 
   return (
     <>
-      <Button icon={<SyncOutlined />} onClick={() => { setVisible(true); setResults(null) }}>
+      {canSync && <Button icon={<SyncOutlined />} onClick={() => { setVisible(true); setResults(null) }}>
         从飞书同步
-      </Button>
+      </Button>}
 
       <Modal
         title="从飞书同步 FA 台账数据"
-        open={visible}
+        open={visible && canSync}
         onCancel={() => setVisible(false)}
         width={500}
         footer={[

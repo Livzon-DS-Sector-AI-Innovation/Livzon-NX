@@ -38,6 +38,16 @@ export type UserPagePermissionsOut =
   components['schemas']['UserPagePermissionsOut']
 export type UserPagePermissionsUpdate =
   components['schemas']['UserPagePermissionsUpdate']
+export type PagePermissionHistoryItemOut =
+  components['schemas']['PagePermissionHistoryItemOut']
+export type PagePermissionHistoryPageOut =
+  components['schemas']['PagePermissionHistoryPageOut']
+export type PagePermissionRollbackRequest =
+  components['schemas']['PagePermissionRollbackRequest']
+export type PagePermissionRollbackPreviewRequest =
+  components['schemas']['PagePermissionRollbackPreviewRequest']
+export type PagePermissionRollbackPreviewOut =
+  components['schemas']['PagePermissionRollbackPreviewOut']
 export type DepartmentResponse = {
   id: string
   feishu_department_id: string
@@ -174,6 +184,76 @@ export async function replaceUserPagePermissions(
         'Content-Type': 'application/json',
         'If-Match': String(data.expected_grant_version),
       },
+      body: JSON.stringify(data),
+    }
+  ))
+  if (result.ok) revalidatePath('/settings')
+  return result
+}
+
+export type PagePermissionHistoryQuery = {
+  actor_user_id?: string
+  source?: 'manual' | 'rollback' | 'health_remediation'
+  page_key?: string
+  change_kind?: 'grant' | 'expand' | 'restrict' | 'revoke' | 'mixed'
+  date_from?: string
+  date_to?: string
+  page?: number
+  page_size?: number
+}
+
+function pagePermissionHistoryQuery(query: PagePermissionHistoryQuery = {}) {
+  const params = new URLSearchParams()
+  Object.entries(query).forEach(([key, value]) => {
+    if (value) params.set(key, String(value))
+  })
+  const text = params.toString()
+  return text ? `?${text}` : ''
+}
+
+export async function getUserPagePermissionHistory(
+  id: string,
+  query: PagePermissionHistoryQuery = {}
+) {
+  return fetchIdentity<PagePermissionHistoryPageOut>(
+    `/admin/users/${id}/page-permissions/history${pagePermissionHistoryQuery(query)}`
+  )
+}
+
+export async function previewUserPagePermissionRollback(
+  id: string,
+  data: PagePermissionRollbackPreviewRequest
+) {
+  return fetchIdentity<PagePermissionRollbackPreviewOut>(
+    `/admin/users/${id}/page-permissions/rollback/preview`,
+    { method: 'POST', body: JSON.stringify(data) }
+  )
+}
+
+export async function exportUserPagePermissionHistory(id: string) {
+  const res = await fetch(
+    `${API_BASE}/api/v1/identity/admin/users/${id}/page-permissions/history/export`,
+    { headers: await getAuthHeaders(), cache: 'no-store' }
+  )
+  if (!res.ok) {
+    const json = (await res.json().catch(() => null)) as ApiEnvelope<unknown> | null
+    throw new Error(json?.message || json?.detail || `请求失败 (${res.status})`)
+  }
+  return {
+    filename: /filename="?([^";]+)"?/.exec(res.headers.get('Content-Disposition') ?? '')?.[1]
+      ?? 'page-permission-history.csv',
+    content: await res.text(),
+  }
+}
+
+export async function rollbackUserPagePermissions(
+  id: string,
+  data: PagePermissionRollbackRequest
+) {
+  const result = await permissionActionResult<UserPagePermissionsOut>(async () => fetch(
+    `${API_BASE}/api/v1/identity/admin/users/${id}/page-permissions/rollback`, {
+      method: 'POST',
+      headers: { ...await getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     }
   ))

@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { clearProductionAuthForTest, setProductionAdminForTest } from '@/test/production-auth'
 
 const store: Record<string, string> = {}
 vi.stubGlobal('localStorage', {
@@ -54,6 +55,7 @@ describe('ShiftHandoverPage', () => {
   let container: HTMLElement
 
   beforeEach(() => {
+    setProductionAdminForTest()
     actions.getShiftHandovers.mockResolvedValue({ code: 200, message: 'success', data: RECORDS })
     actions.getDistinctPositions.mockResolvedValue({ code: 200, message: 'success', data: ['发酵主操'] })
     actions.confirmShiftHandover.mockResolvedValue({ code: 200, message: 'success', data: null })
@@ -69,6 +71,7 @@ describe('ShiftHandoverPage', () => {
   afterEach(() => {
     act(() => root.unmount())
     container?.remove()
+    clearProductionAuthForTest()
     vi.clearAllMocks()
   })
 

@@ -1257,7 +1257,11 @@ export async function resolveDocumentEntryContent(
   )
   const result = await actionFetch<components['schemas']['DocumentEntryResolveResult']>(
     `${API_BASE_URL}/api/v1/quality/document-entries/resolve-content`,
-    { method: 'POST', body: JSON.stringify({ entries } satisfies DocumentEntryResolveRequest) }
+    {
+      method: 'POST',
+      headers: { 'X-Dazah-Page-Key': 'quality:documents' },
+      body: JSON.stringify({ entries } satisfies DocumentEntryResolveRequest),
+    }
   )
   return result?.results ?? []
 }

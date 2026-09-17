@@ -54,6 +54,11 @@ async def test_export_uses_business_names_and_neutralizes_spreadsheet_formulas(
             ]
         ),
     )
+    monkeypatch.setattr(
+        rbac_api.PagePermissionService,
+        "integration_gaps",
+        AsyncMock(return_value=[]),
+    )
     app = FastAPI()
     app.include_router(rbac_api.rbac_router, prefix="/api/v1/identity")
     app.dependency_overrides[rbac_api.require_identity_admin] = lambda: user
@@ -71,7 +76,7 @@ async def test_export_uses_business_names_and_neutralizes_spreadsheet_formulas(
         "不适用",
         "角色基线",
         "采购经办",
-        "待核验（不影响权限生效）",
+        "自动检查通过",
     ]
     assert "bulk_import" not in response.text
     assert "purchasing:supplier" not in response.text

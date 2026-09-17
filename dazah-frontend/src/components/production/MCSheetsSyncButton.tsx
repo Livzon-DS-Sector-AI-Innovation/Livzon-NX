@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import {Button, Modal, Checkbox, Typography, App, Alert, Tag} from 'antd'
 import { SyncOutlined } from '@ant-design/icons'
+import { useProductionPermissions, type ProductionPageKey } from './useProductionPermissions'
 
 const { Text, Paragraph } = Typography
 const API = (p: string) => `/api/v1/production${p}`
@@ -32,14 +33,17 @@ const MODULES = [
   { key: 'ba', value: 'ba', label: '丁酯盘点' },
 ]
 
-export default function MCSheetsSyncButton() {
+export default function MCSheetsSyncButton({ pageKey }: { pageKey?: ProductionPageKey }) {
   const { message } = App.useApp()
+  const permissions = useProductionPermissions(pageKey || 'production:overview')
+  const canSync = !pageKey || permissions.canSync
   const [visible, setVisible] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [selected, setSelected] = useState<string[]>(['crude', 'extraction', 'refinement', 'blending', 'qc'])
   const [results, setResults] = useState<Record<string, SyncResult> | null>(null)
 
   const handleSync = async () => {
+    if (!canSync) return
     if (selected.length === 0) {
       message.warning('请至少选择一个模块')
       return
@@ -91,18 +95,18 @@ export default function MCSheetsSyncButton() {
 
   return (
     <>
-      <Button
+      {canSync && <Button
         size="small"
         icon={<SyncOutlined spin={syncing} />}
         onClick={() => { setVisible(true); setResults(null) }}
         title="从飞书同步数据"
       >
         从飞书同步
-      </Button>
+      </Button>}
 
       <Modal
         title="从飞书同步 MC 台账数据"
-        open={visible}
+        open={visible && canSync}
         onCancel={() => setVisible(false)}
         width={500}
         footer={[

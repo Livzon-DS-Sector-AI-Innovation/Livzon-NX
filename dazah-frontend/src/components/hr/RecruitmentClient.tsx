@@ -22,7 +22,7 @@ import {
 import CandidateListView from './CandidateListView'
 import CandidateCardView from './CandidateCardView'
 import { Candidate } from '@/types/hr'
-import { usePermission } from '@/hooks/usePermission'
+import { usePagePermissions } from '@/hooks/usePagePermissions'
 
 interface RecruitmentClientProps {
   initialJobs: JobPostingVM[]
@@ -34,9 +34,11 @@ interface CandidateQueryData {
 }
 
 export default function RecruitmentClient({ initialJobs }: RecruitmentClientProps) {
-  // 编辑权限：仅人力资源部（hr:write）可发布/同步/AI筛选，其他部门只读
-  const { has } = usePermission()
-  const canEditHr = has('hr:write')
+  const {
+    canOperate: canEditHr,
+    canDelete,
+    canSync,
+  } = usePagePermissions('hr:recruitment')
   const { message } = App.useApp()
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list')
   const [page, setPage] = useState(1)
@@ -112,6 +114,7 @@ export default function RecruitmentClient({ initialJobs }: RecruitmentClientProp
   }
 
   const handleSync = async () => {
+    if (!canSync) return
     setSyncing(true)
     try {
       const res = await fetchCandidatesFromFeishu()
@@ -123,6 +126,7 @@ export default function RecruitmentClient({ initialJobs }: RecruitmentClientProp
   }
 
   const handleDelete = async (id: string) => {
+    if (!canDelete) return
     try {
       await deleteCandidateAction(id)
       message.success('删除成功')
@@ -198,7 +202,7 @@ export default function RecruitmentClient({ initialJobs }: RecruitmentClientProp
         {canEditHr ? (
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setJobModalOpen(true)}>发布招聘信息</Button>
         ) : null}
-        {canEditHr ? (
+        {canSync ? (
           <Button icon={<ImportOutlined />} onClick={handleSync} loading={syncing}>从飞书同步</Button>
         ) : null}
         {canEditHr ? (
@@ -287,6 +291,8 @@ export default function RecruitmentClient({ initialJobs }: RecruitmentClientProp
                 loading={loading}
                 onPageChange={handlePageChange}
                 onDelete={handleDelete}
+                canOperate={canEditHr}
+                canDelete={canDelete}
                 onTransfer={handleTransfer}
                 transferring={transferring}
                 onRefresh={refetch}
@@ -302,6 +308,7 @@ export default function RecruitmentClient({ initialJobs }: RecruitmentClientProp
                   loading={loading}
                   onPageChange={handlePageChange}
                   onDelete={handleDelete}
+                  canDelete={canDelete}
                 />
               </div>
             )}

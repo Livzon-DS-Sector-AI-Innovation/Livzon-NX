@@ -99,6 +99,9 @@ class Batch(BaseModel):
     production_line: Mapped[str | None] = mapped_column(
         String(100), nullable=True, comment="生产线"
     )
+    workshop_code: Mapped[str | None] = mapped_column(
+        String(32), nullable=True, index=True, comment="所属车间编码；空值表示待确认"
+    )
     start_time: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, comment="开始时间"
     )

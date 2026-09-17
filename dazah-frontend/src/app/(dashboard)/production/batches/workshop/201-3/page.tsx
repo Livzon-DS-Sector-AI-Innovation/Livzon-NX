@@ -10,6 +10,7 @@ import {ExperimentOutlined, FilterOutlined, BulbOutlined,
 import ReactECharts from 'echarts-for-react'
 import dayjs, { type Dayjs } from 'dayjs'
 import SyncSettingsButton from '@/components/production/SyncSettingsButton'
+import { PRODUCTION_PAGE_KEYS } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
 
@@ -96,7 +97,7 @@ export default function Workshop2013Page() {
           />
         </Space>
         <Space size={8}>
-          <SyncSettingsButton productName="多拉菌素" syncTarget="dr_ledger" />
+          <SyncSettingsButton productName="多拉菌素" syncTarget="dr_ledger" pageKey={PRODUCTION_PAGE_KEYS.workshop2013} />
           <Button type="primary" size="large" icon={<ScheduleOutlined />} onClick={() => router.push('/production/batches/workshop/201-3/scheduling')}>
             排产
           </Button>

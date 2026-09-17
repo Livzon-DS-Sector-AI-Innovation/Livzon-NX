@@ -1,5 +1,7 @@
 'use client'
 
+import { BatchWorkshopField } from './BatchWorkshopField'
+
 import { useEffect, useState } from 'react'
 import {
   Table,
@@ -35,6 +37,11 @@ import {
 import { getBatches, createBatch, updateBatch, deleteBatch } from '@/actions/production'
 import type { Batch, BatchFormData, BatchStatus } from '@/types/production'
 import { BatchStatus as BatchStatusEnum, BATCH_STATUS_OPTIONS } from '@/types/production'
+import {
+  PRODUCTION_PAGE_KEYS,
+  useProductionPermissions,
+  type ProductionPageKey,
+} from './useProductionPermissions'
 
 const { Text, Title } = Typography
 
@@ -91,10 +98,15 @@ const exportBatchesToCsv = (batches: Batch[], workshopName: string) => {
 
 interface WorkshopDataViewProps {
   workshopName: string
+  pageKey?: ProductionPageKey
 }
 
-export default function WorkshopDataView({ workshopName }: WorkshopDataViewProps) {
+export default function WorkshopDataView({ workshopName, pageKey }: WorkshopDataViewProps) {
   const { message, modal } = App.useApp()
+  const permissions = useProductionPermissions(pageKey || PRODUCTION_PAGE_KEYS.overview)
+  const canOperate = permissions.canOperate
+  const canDelete = permissions.canDelete
+  const canExport = permissions.canExport
   const [form] = Form.useForm()
   const [editForm] = Form.useForm()
   const [loading, setLoading] = useState(false)
@@ -145,18 +157,21 @@ export default function WorkshopDataView({ workshopName }: WorkshopDataViewProps
   const paginated = filtered.slice((page - 1) * pageSize, page * pageSize)
 
   const handleAdd = () => {
+    if (!canOperate) return
     setEditingBatch(null)
     form.resetFields()
     setModalVisible(true)
   }
 
   const handleEdit = (record: Batch) => {
+    if (!canOperate) return
     setEditingBatch(record)
     editForm.setFieldsValue(record)
     setModalVisible(true)
   }
 
   const handleDelete = async (id: string) => {
+    if (!canDelete) return
     modal.confirm({
       title: '确认删除',
       content: '确定要删除这个批次吗？',
@@ -177,6 +192,7 @@ export default function WorkshopDataView({ workshopName }: WorkshopDataViewProps
   }
 
   const handleSubmit = async () => {
+    if (!canOperate) return
     try {
       const values = editingBatch
         ? await editForm.validateFields()
@@ -208,6 +224,7 @@ export default function WorkshopDataView({ workshopName }: WorkshopDataViewProps
   }
 
   const handleExport = async () => {
+    if (!canExport) return
     setExportLoading(true)
     try {
       if (filtered.length > 0) {
@@ -235,6 +252,7 @@ export default function WorkshopDataView({ workshopName }: WorkshopDataViewProps
       title: '状态', dataIndex: 'status', key: 'status', width: 100,
       render: (s: BatchStatus) => <Tag color={getStatusColor(s)}>{getStatusLabel(s)}</Tag>,
     },
+    { title: '所属车间', dataIndex: 'workshop_code', key: 'workshop_code', width: 110, render: (code?: string | null) => code ? `${code}车间` : '待确认' },
     { title: '生产线', dataIndex: 'production_line', key: 'production_line', width: 100 },
     {
       title: '开始时间', dataIndex: 'start_time', key: 'start_time', width: 160,
@@ -248,8 +266,8 @@ export default function WorkshopDataView({ workshopName }: WorkshopDataViewProps
       title: '操作', key: 'action', width: 180, fixed: 'right',
       render: (_, record) => (
         <Space size="small">
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
-          <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>删除</Button>
+          {canOperate && <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>}
+          {canDelete && <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>删除</Button>}
         </Space>
       ),
     },
@@ -290,8 +308,8 @@ export default function WorkshopDataView({ workshopName }: WorkshopDataViewProps
         title={`${workshopName} - 批次列表`}
         extra={
           <Space>
-            <Tooltip title="导出当前筛选结果"><Button icon={<DownloadOutlined />} onClick={handleExport} loading={exportLoading}>导出</Button></Tooltip>
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新建批次</Button>
+            {canExport && <Tooltip title="导出当前筛选结果"><Button icon={<DownloadOutlined />} onClick={handleExport} loading={exportLoading}>导出</Button></Tooltip>}
+            {canOperate && <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新建批次</Button>}
           </Space>
         }
       >
@@ -318,7 +336,7 @@ export default function WorkshopDataView({ workshopName }: WorkshopDataViewProps
         />
       </Card>
 
-      <Modal title={editingBatch ? `编辑批次 - ${workshopName}` : `新建批次 - ${workshopName}`} open={modalVisible} onOk={handleSubmit} onCancel={() => setModalVisible(false)} width={600} okText="确认" cancelText="取消">
+      <Modal title={editingBatch ? `编辑批次 - ${workshopName}` : `新建批次 - ${workshopName}`} open={modalVisible} onOk={canOperate ? handleSubmit : undefined} onCancel={() => setModalVisible(false)} width={600} okText="确认" cancelText="取消">
         <Form form={editingBatch ? editForm : form} layout="vertical" initialValues={editingBatch || {}}>
           <Form.Item name="batch_no" label="批次号" rules={[{ required: true, message: '请输入批次号' }]}>
             <Input placeholder="请输入批次号" disabled={!!editingBatch} />
@@ -339,6 +357,7 @@ export default function WorkshopDataView({ workshopName }: WorkshopDataViewProps
           <Row gutter={16}>
             <Col span={12}><Form.Item name="production_line" label="生产线"><Select placeholder="请选择生产线" allowClear><Select.Option value="A线">A线</Select.Option><Select.Option value="B线">B线</Select.Option><Select.Option value="C线">C线</Select.Option></Select></Form.Item></Col>
           </Row>
+          <BatchWorkshopField pageKey={pageKey} />
           <Form.Item name="notes" label="备注"><Input.TextArea rows={3} placeholder="请输入备注" /></Form.Item>
         </Form>
       </Modal>

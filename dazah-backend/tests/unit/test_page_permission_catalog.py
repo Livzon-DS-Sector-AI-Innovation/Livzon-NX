@@ -4,6 +4,7 @@ import pytest
 from fastapi import FastAPI
 
 from app.platform.identity import page_policy
+from app.platform.identity.menu_seed_data import SEED_MENUS
 
 
 def test_procurement_catalog_covers_actual_endpoints_and_valid_menu_pages():
@@ -16,8 +17,25 @@ def test_requested_module_catalogs_cover_all_live_api_routes():
     page_policy.register_api_catalog_provider(
         lambda: page_policy.collect_http_route_catalog(app.routes)
     )
-    for module_code in ("warehouse", "hr", "registration", "production"):
+    for module_code in ("warehouse", "hr", "registration", "production", "quality"):
         assert page_policy.page_api_catalog_gaps(module_code) == []
+
+
+def test_position_training_import_requires_bulk_import_action():
+    binding = page_policy.api_binding_for_route(
+        "POST", "/api/v1/hr/position-training-lists/import"
+    )
+    assert binding is not None
+    assert binding.permission == "operate"
+    assert binding.sensitive_action == "bulk_import"
+
+
+def test_production_workshop_exports_are_independent_actions():
+    for page in page_policy.PAGES_BY_MODULE["production"]:
+        if page.page_key.startswith("production:batches:workshop-"):
+            assert "sensitive_export" in {
+                action.key for action in page.sensitive_actions
+            }
 
 
 def test_production_catalog_tracks_current_workshop_and_operation_pages():
@@ -37,9 +55,6 @@ def test_production_catalog_tracks_current_workshop_and_operation_pages():
         "production:batches:workshop-203-3",
         "production:plan:sales-plan",
         "production:plan:scheduling",
-        "production:process",
-        "production:records",
-        "production:balance",
         "production:shift-log:shift-log-deviation",
         "production:shift-log:shift-log-quality",
         "production:shift-log:shift-log-summary",
@@ -50,6 +65,25 @@ def test_production_catalog_tracks_current_workshop_and_operation_pages():
     assert {
         page.page_key for page in page_policy.PAGES_BY_MODULE["production"]
     } == expected
+
+
+@pytest.mark.parametrize(
+    "route",
+    (
+        "/production/process",
+        "/production/process/parameters",
+        "/production/records",
+        "/production/balance",
+    ),
+)
+def test_removed_production_routes_have_no_page_identity(route: str) -> None:
+    assert page_policy.page_key_for_route(route) is None
+
+
+def test_removed_production_menus_are_not_seeded() -> None:
+    production = next(menu for menu in SEED_MENUS if menu["key"] == "production")
+    child_keys = {child["key"] for child in production["children"] or []}
+    assert child_keys.isdisjoint({"process", "records", "balance"})
 
 
 def test_new_endpoint_without_a_page_contract_blocks_publication(monkeypatch):

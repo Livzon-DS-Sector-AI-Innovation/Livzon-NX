@@ -4,6 +4,8 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { App } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setProductionAdminForTest, clearProductionAuthForTest } from '@/test/production-auth'
+import { chooseBatchWorkshop } from '@/test/batch-workshop'
 
 const prodActions = vi.hoisted(() => ({
   getBatches: vi.fn(),
@@ -19,6 +21,7 @@ import WorkshopDataView from './WorkshopDataView'
 const BATCHES = [
   {
     id: 'b1',
+    workshop_code: '101-1',
     batch_no: 'B-001',
     product_code: 'PC-1',
     product_name: '霉酚酸',
@@ -50,6 +53,7 @@ describe('WorkshopDataView', () => {
   let container: HTMLElement
 
   beforeEach(() => {
+    setProductionAdminForTest()
     prodActions.getBatches.mockResolvedValue({ code: 200, message: 'success', data: BATCHES })
     prodActions.deleteBatch.mockResolvedValue({ code: 200, message: 'success', data: null })
     prodActions.createBatch.mockResolvedValue({ code: 200, message: 'success', data: null })
@@ -58,6 +62,7 @@ describe('WorkshopDataView', () => {
 
   afterEach(() => {
     act(() => root.unmount())
+    clearProductionAuthForTest()
     container?.remove()
     vi.clearAllMocks()
   })
@@ -384,11 +389,12 @@ describe('WorkshopDataView', () => {
         await new Promise((r) => setTimeout(r, 100))
       })
     }
+    await chooseBatchWorkshop('101-1')
     const okBtn = Array.from(document.body.querySelectorAll('button')).find((b) => (b.textContent || '').replace(/\s+/g, '') === '确认') as HTMLButtonElement | undefined
     if (okBtn) {
       await act(async () => { okBtn.click(); await new Promise((r) => setTimeout(r, 200)) })
     }
-    expect(prodActions.createBatch).toHaveBeenCalledWith(expect.objectContaining({ batch_no: 'B-NEW-99' }))
+    expect(prodActions.createBatch).toHaveBeenCalledWith(expect.objectContaining({ batch_no: 'B-NEW-99', workshop_code: '101-1' }))
     // 编辑并更新
     const editBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('编辑')) as HTMLElement | undefined
     if (editBtn) {

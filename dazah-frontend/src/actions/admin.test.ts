@@ -14,12 +14,26 @@ import * as adminActions from './admin'
 import { createRole } from './admin'
 
 describe('system permission server actions', () => {
-  it('appends deduplicated roles and refreshes both permission entry points', async () => {
+  it('replaces manual roles with an authorization version and audit reason', async () => {
+    const request = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { message: '角色分配已更新' } })))
+    vi.stubGlobal('fetch', request)
+    await adminActions.assignUserRoles('user-1', ['role-1', 'role-2'], {
+      expectedGrantVersion: 7,
+      reason: '岗位职责调整',
+    })
+    expect(request).toHaveBeenCalledWith(expect.stringContaining('/users/user-1/roles'), expect.objectContaining({
+      method: 'POST', body: JSON.stringify({
+        role_ids: ['role-1', 'role-2'], mode: 'replace', expected_grant_version: 7, reason: '岗位职责调整',
+      }),
+    }))
+  })
+
+  it('appends deduplicated department roles without replacing current manual roles', async () => {
     const request = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { message: '角色已分配' } })))
     vi.stubGlobal('fetch', request)
     expect((await adminActions.applyDeptRolesToUser('user-1', ['role-1', 'role-1'])).ok).toBe(true)
     expect(request).toHaveBeenCalledWith(expect.stringContaining('/users/user-1/roles'), expect.objectContaining({
-      method: 'POST', body: JSON.stringify({ role_ids: ['role-1'] }),
+      method: 'POST', body: JSON.stringify({ role_ids: ['role-1'], mode: 'add' }),
     }))
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/system/user-roles')
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/settings')
@@ -41,28 +55,94 @@ describe('system permission server actions', () => {
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
 
-  it('publishes a page rollout with preview version and confirmation reason', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      data: { module_code: 'hr', status: 'enforced' },
-    }), { status: 200, headers: { 'content-type': 'application/json' } }))
+  it('previews role page permission impact without writing grants', async () => {
+    const payload = { expected_grant_version: 3, grants: [], reason: '影响预演' }
+    const preview = { role_id: 'role-1', member_count: 4, affected_user_count: 2 }
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: preview }), {
+      status: 200, headers: { 'content-type': 'application/json' },
+    }))
     vi.stubGlobal('fetch', fetchMock)
+    await expect(adminActions.previewRolePagePermissions('role-1', payload)).resolves.toEqual(preview)
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining(
+      '/roles/role-1/page-permissions/preview',
+    ), expect.objectContaining({ method: 'POST', body: JSON.stringify(payload) }))
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
 
-    await expect(adminActions.publishPagePermissionRollout({
-      module_code: 'hr', current_version: 4, preview_hash: 'preview-hash',
-    } as never, '发布员工页面权限')).resolves.toEqual({
-      ok: true, data: { module_code: 'hr', status: 'enforced' },
+  it('loads role authorization history, health results and performs a versioned rollback', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: {
+        items: [{ id: 'audit-1', grants: [] }], total: 1, page: 1, page_size: 20,
+      } })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: { issue_count: 1, issues: [] } })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: { grant_version: 5 } })))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(adminActions.getRolePagePermissionHistory('role-1')).resolves.toEqual({
+      items: [{ id: 'audit-1', grants: [] }], total: 1, page: 1, page_size: 20,
+    })
+    await expect(adminActions.getPagePermissionHealth()).resolves.toEqual({ issue_count: 1, issues: [] })
+    const payload = { audit_id: 'audit-1', expected_grant_version: 4, reason: '回滚误配权限' }
+    await expect(adminActions.rollbackRolePagePermissions('role-1', payload)).resolves.toEqual({ ok: true, data: { grant_version: 5 } })
+    expect(fetchMock.mock.calls[2][0]).toEqual(expect.stringContaining('/roles/role-1/page-permissions/rollback'))
+    expect(fetchMock.mock.calls[2][1]).toEqual(expect.objectContaining({ method: 'POST', body: JSON.stringify(payload) }))
+  })
+
+  it('filters, previews and exports role authorization history', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [] })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: {
+        target_type: 'role', target_id: 'role-1', changes: [], affected_user_count: 0,
+      } })))
+      .mockResolvedValueOnce(new Response('时间,操作人\n2026-09-16,管理员', {
+        headers: { 'Content-Disposition': 'attachment; filename="role-history.csv"' },
+      }))
+    vi.stubGlobal('fetch', fetchMock)
+    await adminActions.getRolePagePermissionHistory('role-1', {
+      source: 'rollback', page_key: 'hr:recruitment', actor_user_id: 'actor-1',
+      page: 2, page_size: 50,
+    })
+    expect(fetchMock.mock.calls[0][0]).toEqual(expect.stringContaining(
+      'source=rollback&page_key=hr%3Arecruitment&actor_user_id=actor-1&page=2&page_size=50',
+    ))
+    const previewRequest = { audit_id: 'audit-1', expected_grant_version: 4 }
+    await adminActions.previewRolePagePermissionRollback('role-1', previewRequest)
+    expect(fetchMock.mock.calls[1][0]).toEqual(expect.stringContaining('/rollback/preview'))
+    expect(fetchMock.mock.calls[1][1]).toEqual(expect.objectContaining({
+      method: 'POST', body: JSON.stringify(previewRequest),
+    }))
+    await expect(adminActions.exportRolePagePermissionHistory('role-1')).resolves.toEqual({
+      filename: 'role-history.csv', content: '时间,操作人\n2026-09-16,管理员',
+    })
+  })
+
+  it('sends a versioned permission health remediation request', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: { fixed: true, grant_version: 6, message: '已恢复角色基线' },
+    })))
+    vi.stubGlobal('fetch', fetchMock)
+    const payload = {
+      code: 'redundant_user_override' as const, target_type: 'user' as const,
+      target_id: 'user-1', page_key: 'hr:employee-management:profile',
+      expected_grant_version: 5, reason: '健康检查自动修复',
+    }
+    await expect(adminActions.remediatePagePermissionHealth(payload)).resolves.toEqual({
+      ok: true, data: { fixed: true, grant_version: 6, message: '已恢复角色基线' },
     })
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining(
-      '/identity/admin/page-permissions/modules/hr/publish',
-    ), expect.objectContaining({
-      method: 'POST',
-      body: JSON.stringify({
-        expected_version: 4,
-        preview_hash: 'preview-hash',
-        reason: '发布员工页面权限',
-        confirmed: true,
-      }),
+      '/page-permissions/health/remediate',
+    ), expect.objectContaining({ method: 'POST', body: JSON.stringify(payload) }))
+  })
+
+  it('reads live module integration results', async () => {
+    const data = [{ module_code: 'hr', passed: false, catalog_gaps: ['接口绑定缺失'] }]
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data }), {
+      status: 200, headers: { 'content-type': 'application/json' },
     }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(adminActions.listPagePermissionRollouts()).resolves.toEqual(data)
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining(
+      '/identity/admin/page-permissions/modules',
+    ), expect.anything())
   })
 
   afterEach(() => {

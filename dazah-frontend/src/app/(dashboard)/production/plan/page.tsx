@@ -18,6 +18,7 @@ import type { ColumnsType } from 'antd/es/table'
 import { getPlans } from '@/actions/production'
 import type { ProductionPlan } from '@/types/production'
 import SyncSettingsButton from '@/components/production/SyncSettingsButton'
+import { PRODUCTION_PAGE_KEYS } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
 
@@ -170,7 +171,7 @@ export default function PlanPage() {
                       value={dayjs(`${month}-01`)}
                       onChange={changeMonth}
                     />
-                    <SyncSettingsButton productName="生产计划" syncTarget="production_plan" />
+                    <SyncSettingsButton productName="生产计划" syncTarget="production_plan" pageKey={PRODUCTION_PAGE_KEYS.salesPlan} />
                   </div>
                   <Table
                     columns={columns}

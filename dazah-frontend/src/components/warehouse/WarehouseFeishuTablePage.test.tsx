@@ -293,8 +293,9 @@ describe('WarehouseFeishuTablePage', () => {
     expect(Boolean(button('编辑'))).toBe(level === 'operate')
     expect(button('删除记录')).toBeUndefined()
     expect(button('同步最新数据')).toBeUndefined()
+    const callsBeforeRefresh = mocks.fetchWarehouseMaterialPage.mock.calls.length
     await act(async () => button('刷新')?.click())
-    expect(mocks.fetchWarehouseMaterialPage).toHaveBeenLastCalledWith('raw-summary', expect.objectContaining({ incremental: true, force: undefined }), 60000)
+    expect(mocks.fetchWarehouseMaterialPage).toHaveBeenCalledTimes(callsBeforeRefresh)
   })
 
   it('shows read-only inspection cycle block in record detail when available', async () => {

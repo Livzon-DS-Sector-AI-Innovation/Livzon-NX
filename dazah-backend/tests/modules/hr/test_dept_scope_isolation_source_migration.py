@@ -192,13 +192,13 @@ def _use_non_admin_test_user(monkeypatch) -> None:
 
 
 async def _seed_employee_page_grant(
-    session: AsyncSession, department_ids: list[str]
+    session: AsyncSession,
+    department_ids: list[str],
+    page_key: str = "hr:employee-management:profile",
 ) -> None:
     for department_id in department_ids:
         existing_department = await session.scalar(
-            select(Department).where(
-                Department.feishu_department_id == department_id
-            )
+            select(Department).where(Department.feishu_department_id == department_id)
         )
         if existing_department is None:
             session.add(
@@ -210,14 +210,14 @@ async def _seed_employee_page_grant(
     existing = await session.scalar(
         select(UserPageGrant).where(
             UserPageGrant.user_id == UUID(DEV_USER_ID),
-            UserPageGrant.page_key == "hr:employee-management:profile",
+            UserPageGrant.page_key == page_key,
         )
     )
     if existing is None:
         session.add(
             UserPageGrant(
                 user_id=UUID(DEV_USER_ID),
-                page_key="hr:employee-management:profile",
+                page_key=page_key,
                 permissions=["access", "query"],
                 sensitive_actions=[],
                 scope_type="departments",
@@ -430,6 +430,8 @@ async def test_training_departments_filtered(
 ):
     """培训部门列表（部门 Tab 数据源）按可见范围过滤"""
     _patch_rbac(monkeypatch, ["hr:read"])
+    _use_non_admin_test_user(monkeypatch)
+    await _seed_employee_page_grant(db_session, [DEPT_A], "hr:training:training-ledger")
     db_session.add_all(
         [
             TrainingLedger(
@@ -470,6 +472,8 @@ async def test_training_ledger_403_on_out_of_scope_dept(
 ):
     """非管理员按越权部门查台账 → 403"""
     _patch_rbac(monkeypatch, ["hr:read"])
+    _use_non_admin_test_user(monkeypatch)
+    await _seed_employee_page_grant(db_session, [DEPT_A], "hr:training:training-ledger")
     await _seed_scope(db_session, DEV_USER_ID, [DEPT_A])
 
     resp = await client.get(

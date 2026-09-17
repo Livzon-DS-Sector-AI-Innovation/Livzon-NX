@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { App } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { clearProductionAuthForTest, setProductionAdminForTest } from '@/test/production-auth'
 
 const { routerPushMock } = vi.hoisted(() => ({ routerPushMock: vi.fn() }))
 
@@ -148,6 +149,7 @@ describe('TraceabilityPage (201-2)', () => {
   let container: HTMLElement
 
   beforeEach(() => {
+    setProductionAdminForTest()
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -156,6 +158,7 @@ describe('TraceabilityPage (201-2)', () => {
   afterEach(() => {
     act(() => root.unmount())
     container?.remove()
+    clearProductionAuthForTest()
     vi.clearAllMocks()
   })
 

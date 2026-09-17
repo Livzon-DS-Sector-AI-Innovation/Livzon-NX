@@ -29,6 +29,11 @@ export interface AdminUserItem {
   email?: string | null
   department?: string | null
   position?: string | null
+  role?: "admin" | "user"
+  status?: "active" | "disabled"
+  auth_source?: "local" | "feishu"
+  grant_version?: number
+  module_codes?: string[]
   roles: RoleItem[]
 }
 

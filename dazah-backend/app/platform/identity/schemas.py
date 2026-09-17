@@ -33,14 +33,28 @@ class PageDataScopeInput(BaseModel):
         return self
 
 
+class PagePermissionRoleSourceOut(BaseModel):
+    role_id: UUID
+    role_name: str
+    permissions: list[PagePermissionLevel] = Field(default_factory=list)
+    sensitive_actions: list[str] = Field(default_factory=list)
+    sensitive_actions_expires_at: datetime | None = None
+    data_scope: PageDataScopeInput
+
+
 class EffectivePageGrantOut(BaseModel):
     page_key: str
     module_code: str
     permissions: list[PagePermissionLevel] = Field(default_factory=list)
     sensitive_actions: list[str] = Field(default_factory=list)
+    sensitive_action_expirations: dict[str, datetime | None] = Field(
+        default_factory=dict
+    )
     data_scope: PageDataScopeInput
     source: Literal["super_admin", "user", "role", "none"]
     source_role_names: list[str] = Field(default_factory=list)
+    role_sources: list[PagePermissionRoleSourceOut] = Field(default_factory=list)
+    resolution: list[str] = Field(default_factory=list)
 
 
 class ExternalIdentityBindingCreate(BaseModel):
@@ -277,21 +291,38 @@ class LivzonAccessScopeOut(BaseModel):
 class PageGrantInput(BaseModel):
     page_key: str = Field(min_length=1, max_length=255)
     mode: PageGrantMode = "custom"
-    permissions: list[PagePermissionLevel] = Field(default_factory=list, max_length=3)
-    sensitive_actions: list[str] = Field(default_factory=list, max_length=100)
+    permissions: list[PagePermissionLevel] = Field(
+        default_factory=list,
+        max_length=3,
+        description="基础权限档位；operate 表示普通操作，不包含高风险操作",
+    )
+    sensitive_actions: list[str] = Field(
+        default_factory=list,
+        max_length=100,
+        description="附加高风险操作；非空时服务端同时授予 operate 基础权限",
+    )
+    sensitive_actions_expires_at: datetime | None = None
     data_scope: PageDataScopeInput = Field(default_factory=PageDataScopeInput)
+
+    @model_validator(mode="after")
+    def validate_sensitive_action_expiry(self) -> "PageGrantInput":
+        if self.sensitive_actions_expires_at and not self.sensitive_actions:
+            raise ValueError("未授权高风险动作时不能设置到期时间")
+        return self
 
 
 class UserPagePermissionsUpdate(BaseModel):
     expected_grant_version: int | None = Field(default=None, ge=0)
     grants: list[PageGrantInput] = Field(default_factory=list, max_length=1000)
     reason: str = Field(min_length=1, max_length=500)
+    idempotency_key: UUID | None = None
 
 
 class RolePagePermissionsUpdate(BaseModel):
     expected_grant_version: int = Field(ge=0)
     grants: list[PageGrantInput] = Field(default_factory=list, max_length=1000)
     reason: str = Field(min_length=1, max_length=500)
+    idempotency_key: UUID | None = None
 
 
 class SensitiveActionDefinitionOut(BaseModel):
@@ -323,8 +354,11 @@ class UserPagePermissionsOut(BaseModel):
     definitions: list[PagePermissionDefinitionOut] = Field(default_factory=list)
     grants: list[EffectivePageGrantOut] = Field(default_factory=list)
     role_grants: list[EffectivePageGrantOut] = Field(default_factory=list)
+    custom_grants: list[EffectivePageGrantOut] = Field(default_factory=list)
     custom_page_keys: list[str] = Field(default_factory=list)
-    module_rollouts: dict[str, str] = Field(default_factory=dict)
+    module_checks: dict[str, Literal["passed", "incomplete"]] = Field(
+        default_factory=dict
+    )
 
 
 class RolePagePermissionsOut(BaseModel):
@@ -332,6 +366,26 @@ class RolePagePermissionsOut(BaseModel):
     grant_version: int
     definitions: list[PagePermissionDefinitionOut] = Field(default_factory=list)
     grants: list[EffectivePageGrantOut] = Field(default_factory=list)
+
+
+class RolePagePermissionAffectedUserOut(BaseModel):
+    user_id: UUID
+    user_name: str
+    impact: Literal["expanded", "restricted", "mixed"]
+
+
+class RolePagePermissionsPreviewOut(BaseModel):
+    role_id: UUID
+    grant_version: int
+    member_count: int = Field(ge=0)
+    affected_user_count: int = Field(ge=0)
+    expanded_user_count: int = Field(ge=0)
+    restricted_user_count: int = Field(ge=0)
+    mixed_user_count: int = Field(ge=0)
+    users_with_overrides: int = Field(ge=0)
+    affected_user_samples: list[RolePagePermissionAffectedUserOut] = Field(
+        default_factory=list, max_length=20
+    )
 
 
 class PagePermissionSimulationRequest(BaseModel):
@@ -347,6 +401,117 @@ class PagePermissionSimulationOut(BaseModel):
     effective: EffectivePageGrantOut | None = None
 
 
+class PagePermissionHistoryChangeOut(BaseModel):
+    page_key: str
+    page_name: str
+    kind: Literal["grant", "expand", "restrict", "revoke", "mixed"]
+    summary: str
+    before: dict[str, Any] | None = None
+    after: dict[str, Any] | None = None
+
+
+class PagePermissionHistoryItemOut(BaseModel):
+    id: UUID
+    actor_user_id: UUID | None = None
+    actor_name: str | None = None
+    action: str
+    source: Literal["manual", "rollback", "health_remediation"]
+    reason: str | None = None
+    grant_version: int | None = Field(default=None, ge=0)
+    old_grants: list[dict[str, Any]] = Field(default_factory=list)
+    grants: list[dict[str, Any]] = Field(default_factory=list)
+    changes: list[PagePermissionHistoryChangeOut] = Field(default_factory=list)
+    rollback_of: UUID | None = None
+    created_at: datetime
+
+
+class PagePermissionHistoryActorOut(BaseModel):
+    user_id: UUID
+    user_name: str
+
+
+class PagePermissionHistoryPageOut(BaseModel):
+    items: list[PagePermissionHistoryItemOut] = Field(default_factory=list)
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=100)
+    actor_options: list[PagePermissionHistoryActorOut] = Field(default_factory=list)
+    is_truncated: bool = False
+
+
+class PagePermissionRollbackRequest(BaseModel):
+    audit_id: UUID
+    expected_grant_version: int = Field(ge=0)
+    reason: str = Field(min_length=1, max_length=500)
+    idempotency_key: UUID | None = None
+
+
+class PagePermissionRollbackPreviewRequest(BaseModel):
+    audit_id: UUID
+    expected_grant_version: int = Field(ge=0)
+
+
+class PagePermissionRollbackPreviewOut(BaseModel):
+    target_type: Literal["role", "user"]
+    target_id: UUID
+    current_grant_version: int = Field(ge=0)
+    history_grant_version: int | None = Field(default=None, ge=0)
+    changes: list[PagePermissionHistoryChangeOut] = Field(default_factory=list)
+    affected_user_count: int = Field(ge=0)
+    expanded_user_count: int = Field(ge=0)
+    restricted_user_count: int = Field(ge=0)
+    mixed_user_count: int = Field(ge=0)
+    users_with_overrides: int = Field(ge=0)
+    affected_user_samples: list[RolePagePermissionAffectedUserOut] = Field(
+        default_factory=list, max_length=20
+    )
+
+
+class PagePermissionHealthIssueOut(BaseModel):
+    code: Literal[
+        "retired_page",
+        "invalid_department",
+        "missing_module_access",
+        "redundant_user_override",
+        "sensitive_without_expiry",
+        "sensitive_expired",
+        "sensitive_expiring",
+    ]
+    severity: Literal["warning", "error"]
+    target_type: Literal["role", "user"]
+    target_id: UUID
+    target_name: str
+    page_key: str
+    page_name: str
+    module_code: str | None = None
+    detail: str
+    grant_version: int = Field(ge=0)
+    remediation: Literal["remove_grant", "prune_departments", "edit"]
+
+
+class PagePermissionHealthRemediationRequest(BaseModel):
+    code: Literal["retired_page", "invalid_department", "redundant_user_override"]
+    target_type: Literal["role", "user"]
+    target_id: UUID
+    page_key: str = Field(min_length=1, max_length=255)
+    expected_grant_version: int = Field(ge=0)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class PagePermissionHealthRemediationOut(BaseModel):
+    fixed: bool = True
+    grant_version: int = Field(ge=0)
+    message: str
+
+
+class PagePermissionHealthOut(BaseModel):
+    checked_at: datetime
+    issue_count: int = Field(ge=0)
+    error_count: int = Field(ge=0)
+    warning_count: int = Field(ge=0)
+    issues: list[PagePermissionHealthIssueOut] = Field(default_factory=list)
+
+
 class PermissionModuleRolloutOut(BaseModel):
     module_code: str
     status: Literal["legacy", "draft", "enforced"]
@@ -354,6 +519,12 @@ class PermissionModuleRolloutOut(BaseModel):
     published_at: datetime | None = None
     published_by: UUID | None = None
     last_reason: str | None = None
+
+
+class PermissionModuleIntegrationOut(BaseModel):
+    module_code: str
+    passed: bool
+    catalog_gaps: list[str] = Field(default_factory=list)
 
 
 class PermissionModuleRolloutPreviewOut(BaseModel):
@@ -648,6 +819,9 @@ class UserRolesResponse(BaseModel):
 
 class AssignUserRoleRequest(BaseModel):
     role_ids: list[UUID] = Field(default_factory=list, max_length=200)
+    mode: Literal["replace", "add"] = "add"
+    expected_grant_version: int | None = Field(default=None, ge=0)
+    reason: str | None = Field(default=None, max_length=500)
 
 
 class DeptRuleCreateRequest(BaseModel):

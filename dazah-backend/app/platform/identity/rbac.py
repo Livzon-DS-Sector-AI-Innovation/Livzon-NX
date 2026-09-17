@@ -272,81 +272,90 @@ def is_identity_read_only(path: str) -> bool:
 # ─── 权限解析 ─────────────────────────────────────────────────────────
 
 
-async def resolve_user_roles(db: AsyncSession, user_id: Any) -> list[Role]:
-    """解析用户全部角色（部门映射 + 手动并集，DISTINCT 去重）。
+async def resolve_users_roles(
+    db: AsyncSession, users: list[Any]
+) -> dict[Any, list[Role]]:
+    """批量解析用户全部角色（部门映射 + 手动并集，按角色 ID 去重）。
 
     部门映射规则按“飞书部门 ID 精确匹配”或“部门名精确匹配”任一命中即授予
     （双条件独立，不再要求用户无部门 ID，避免登录补全部门后部门名匹配失效）。
     """
-    from app.platform.identity.models import User
-
-    # 手动分配角色
-    manual_stmt = (
-        select(Role)
+    if not users:
+        return {}
+    user_ids = [user.id for user in users]
+    manual_result = await db.execute(
+        select(UserRole.user_id, Role)
         .join(UserRole, UserRole.role_id == Role.id)
         .where(
-            UserRole.user_id == user_id,
+            UserRole.user_id.in_(user_ids),
             UserRole.source == "manual",
             UserRole.is_deleted == False,  # noqa: E712
             Role.is_deleted == False,  # noqa: E712
         )
     )
-    manual_result = await db.execute(manual_stmt)
-    manual_roles = list(manual_result.scalars().all())
+    resolved: dict[Any, list[Role]] = {user.id: [] for user in users}
+    for user_id, role in manual_result.all():
+        resolved[user_id].append(role)
 
-    # 部门映射角色
-    user_result = await db.execute(
-        select(User).where(User.id == user_id, User.is_deleted == False)  # noqa: E712
+    rule_result = await db.execute(
+        select(DepartmentRoleRule).where(
+            DepartmentRoleRule.is_deleted == False  # noqa: E712
+        )
     )
-    user = user_result.scalar_one_or_none()
-    dept_role_ids: list[Any] = []
-    if user is not None:
+    rules = list(rule_result.scalars().all())
+    role_ids_by_user: dict[Any, set[Any]] = {user.id: set() for user in users}
+    for user in users:
         dept_ids: list[str] = []
         if user.feishu_department_ids:
             try:
                 dept_ids = json.loads(user.feishu_department_ids)
             except (json.JSONDecodeError, TypeError):
                 dept_ids = []
-
-        rule_stmt = select(DepartmentRoleRule).where(
-            DepartmentRoleRule.is_deleted == False  # noqa: E712
-        )
-        rule_result = await db.execute(rule_stmt)
-        rules = list(rule_result.scalars().all())
-
         for rule in rules:
-            # 双条件独立匹配（任一命中即授予）：
-            # 1) 飞书部门 ID 精确匹配（规则配置了 od-xxx 且用户部门数组包含）
-            # 2) 部门名精确匹配（规则仅配置部门名时也生效）
-            #    —— 不再要求"用户无部门 ID"：登录时 _complete_department_info 会
-            #    补全 feishu_department_ids，若部门名匹配依赖其为空，该方式将永久失效。
             if rule.feishu_department_id and rule.feishu_department_id in dept_ids:
-                dept_role_ids.append(rule.role_id)
+                role_ids_by_user[user.id].add(rule.role_id)
             elif (
                 rule.department_name
                 and user.department
                 and user.department == rule.department_name
             ):
-                dept_role_ids.append(rule.role_id)
+                role_ids_by_user[user.id].add(rule.role_id)
 
-    dept_roles: list[Role] = []
-    if dept_role_ids:
-        dept_stmt = select(Role).where(
-            Role.id.in_(dept_role_ids),
-            Role.code != SUPER_ADMIN_ROLE_CODE,
-            Role.is_deleted == False,  # noqa: E712
+    all_department_role_ids = set().union(*role_ids_by_user.values())
+    department_roles: dict[Any, Role] = {}
+    if all_department_role_ids:
+        dept_result = await db.execute(
+            select(Role).where(
+                Role.id.in_(all_department_role_ids),
+                Role.code != SUPER_ADMIN_ROLE_CODE,
+                Role.is_deleted == False,  # noqa: E712
+            )
         )
-        dept_result = await db.execute(dept_stmt)
-        dept_roles = list(dept_result.scalars().all())
+        department_roles = {role.id: role for role in dept_result.scalars().all()}
 
-    # 并集去重（按 id）
-    seen: set[Any] = set()
-    merged: list[Role] = []
-    for role in [*manual_roles, *dept_roles]:
-        if role.id not in seen:
-            seen.add(role.id)
-            merged.append(role)
-    return merged
+    for user in users:
+        resolved[user.id].extend(
+            department_roles[role_id]
+            for role_id in role_ids_by_user[user.id]
+            if role_id in department_roles
+        )
+        resolved[user.id] = list(
+            {role.id: role for role in resolved[user.id]}.values()
+        )
+    return resolved
+
+
+async def resolve_user_roles(db: AsyncSession, user_id: Any) -> list[Role]:
+    """解析单个用户角色；批量场景应调用 resolve_users_roles。"""
+    from app.platform.identity.models import User
+
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.is_deleted == False)  # noqa: E712
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        return []
+    return (await resolve_users_roles(db, [user])).get(user.id, [])
 
 
 async def resolve_user_permissions(db: AsyncSession, user_id: Any) -> list[str]:

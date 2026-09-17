@@ -25,9 +25,6 @@ from app.core.upload_security import (
     validate_upload_metadata,
 )
 from app.modules.quality.api.deps import (
-    assert_quality_edit_scope as _assert_quality_edit_scope,
-)
-from app.modules.quality.api.deps import (
     require_user as _require_user,
 )
 from app.modules.quality.api.deps import (
@@ -67,6 +64,7 @@ from app.modules.quality.service.document_catalog_attachment import (
 from app.modules.quality.service.document_catalog_export import (
     export_document_catalog_docx,
 )
+from app.modules.quality.service.document_catalog_scope import document_entry_scope
 from app.shared.schemas import ApiResponseEnvelope
 
 logger = logging.getLogger(__name__)
@@ -107,6 +105,48 @@ def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+async def _visible_entry(
+    db: AsyncSession, user: CurrentUser, entry_id: uuid.UUID
+) -> DocumentEntry:
+    scope = await _resolve_quality_list_scope(db, user)
+    result = await db.execute(
+        select(DocumentEntry).where(
+            DocumentEntry.id == entry_id,
+            DocumentEntry.is_deleted.is_(False),
+            document_entry_scope(scope),
+        )
+    )
+    entry = result.scalar_one_or_none()
+    if entry is None:
+        raise AppException(message="条目不存在", status_code=404)
+    return entry
+
+
+async def _assert_department(
+    db: AsyncSession, user: CurrentUser, department_id: uuid.UUID | None
+) -> None:
+    scope = await _resolve_quality_list_scope(db, user)
+    if scope.is_all:
+        return
+    result = await db.execute(
+        select(DocumentDepartment.id).where(
+            DocumentDepartment.id == department_id,
+            DocumentDepartment.is_deleted.is_(False),
+            DocumentDepartment.name.in_(scope.department_names),
+        )
+    )
+    if result.scalar_one_or_none() is None:
+        raise AppException(message="无权访问该部门文件目录", status_code=403)
+
+
+async def _assert_department_name(
+    db: AsyncSession, user: CurrentUser, name: str | None
+) -> None:
+    scope = await _resolve_quality_list_scope(db, user)
+    if not scope.allows(name):
+        raise AppException(message="无权访问该部门文件目录", status_code=403)
+
+
 @router.get(
     "/document-departments",
     summary="获取文件目录部门列表",
@@ -118,8 +158,11 @@ async def list_document_departments(
 ) -> Any:
     _require_user(current_user)
     departments, counts = await crud.list_document_departments(db)
+    scope = await _resolve_quality_list_scope(db, current_user)
     data = []
     for department in departments:
+        if not scope.allows(department.name):
+            continue
         item = DocumentDepartmentOut.model_validate(department).model_dump(
             mode="json"
         )
@@ -139,6 +182,7 @@ async def create_document_department(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
+    await _assert_department_name(db, current_user, data.name.strip())
     department = await crud.create_document_department(db, data.name, data.sort_order)
     return success_response(
         data=DocumentDepartmentOut.model_validate(department).model_dump(
@@ -161,7 +205,11 @@ async def update_document_department(
 ) -> Any:
     _require_user(current_user)
     department = await crud.get_document_department(db, department_id)
-    await _assert_quality_edit_scope(db, current_user, record=department)
+    await _assert_department_name(db, current_user, department.name)
+    if "name" in data.model_fields_set:
+        await _assert_department_name(
+            db, current_user, data.name.strip() if data.name else None
+        )
     updated = await crud.update_document_department(
         db, department, data.model_dump(exclude_unset=True)
     )
@@ -183,7 +231,7 @@ async def delete_document_department(
 ) -> Any:
     _require_user(current_user)
     department = await crud.get_document_department(db, department_id)
-    await _assert_quality_edit_scope(db, current_user, record=department)
+    await _assert_department_name(db, current_user, department.name)
     await crud.delete_document_department(db, department)
     return success_response(message="已删除")
 
@@ -206,7 +254,8 @@ async def lookup_latest_document_entry(
     core = (name or "").strip()
     if not core:
         return success_response(data=None)
-    entry = await crud.find_latest_entry_by_name(db, core)
+    scope = await _resolve_quality_list_scope(db, current_user)
+    entry = await crud.find_latest_entry_by_name(db, core, scope=scope)
     if entry is None:
         return success_response(data=None)
     return success_response(
@@ -233,6 +282,7 @@ async def resolve_document_entry_content(
     名称匹配最新版。
     """
     _require_user(current_user)
+    scope = await _resolve_quality_list_scope(db, current_user)
     items: list[DocumentEntryResolveItem] = []
     queries = list(body.entries) or [
         DocumentEntryResolveQuery(name=name) for name in body.names
@@ -246,11 +296,12 @@ async def resolve_document_entry_content(
                 select(DocumentEntry).where(
                     DocumentEntry.id == query.entry_id,
                     DocumentEntry.is_deleted.is_(False),
+                    document_entry_scope(scope),
                 )
             )
             entry = result.scalar_one_or_none()
         elif core:
-            entry = await crud.find_latest_entry_by_name(db, core)
+            entry = await crud.find_latest_entry_by_name(db, core, scope=scope)
         if entry is not None:
             item.code = entry.code
             item.entry_id = entry.id
@@ -281,7 +332,7 @@ async def list_document_entries(
 
     # 部门数据隔离：QA 角色全部可见，否则按部门名范围 → 文档部门目录 id 集合过滤
     scope = await _resolve_quality_list_scope(db, current_user)
-    scope_dept_ids: list[str] | None = None
+    scope_dept_ids: list[str] | None = None if scope.is_all else []
     if not scope.is_all and scope.department_names:
         dept_result = await db.execute(
             select(DocumentDepartment.id).where(
@@ -290,9 +341,6 @@ async def list_document_entries(
             )
         )
         scope_dept_ids = [str(did) for did in dept_result.scalars().all()]
-        if not scope_dept_ids:
-            # 无可见部门目录：置不可能匹配的 id 保证空结果
-            scope_dept_ids = ["00000000-0000-0000-0000-000000000000"]
     items, total = await crud.list_document_entries(
         db,
         department_id=department_id,
@@ -323,6 +371,7 @@ async def create_document_entry(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
+    await _assert_department(db, current_user, data.department_id)
     entry = await crud.create_document_entry(db, data.model_dump())
     return success_response(
         data=DocumentEntryOut.model_validate(entry).model_dump(mode="json"),
@@ -342,8 +391,9 @@ async def update_document_entry(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    entry = await crud.get_document_entry(db, entry_id)
-    await _assert_quality_edit_scope(db, current_user, record=entry)
+    entry = await _visible_entry(db, current_user, entry_id)
+    if "department_id" in data.model_fields_set:
+        await _assert_department(db, current_user, data.department_id)
     updated = await crud.update_document_entry(
         db, entry, data.model_dump(exclude_unset=True)
     )
@@ -364,8 +414,7 @@ async def delete_document_entry(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    entry = await crud.get_document_entry(db, entry_id)
-    await _assert_quality_edit_scope(db, current_user, record=entry)
+    entry = await _visible_entry(db, current_user, entry_id)
     await crud.delete_document_entry(db, entry)
     return success_response(message="已删除")
 
@@ -399,8 +448,13 @@ async def import_document_catalog_excel(
             message="仅支持 .xlsx / .xls / .docx / .doc 文件", status_code=400
         )
     try:
-        result = await import_document_catalog(db, content, filename, filename=filename)
+        scope = await _resolve_quality_list_scope(db, current_user)
+        result = await import_document_catalog(
+            db, content, filename, filename=filename, scope=scope
+        )
         return success_response(data=result, message="导入成功")
+    except AppException:
+        raise
     except Exception:
         logger.exception("Failed to import document catalog")
         return error_response(message="导入失败，请稍后重试", status_code=400)
@@ -416,8 +470,13 @@ async def export_document_catalog(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
+    scope = await _resolve_quality_list_scope(db, current_user)
+    if department_id is not None:
+        await _assert_department(db, current_user, department_id)
     try:
-        base_query = select(DocumentEntry).where(DocumentEntry.is_deleted.is_(False))
+        base_query = select(DocumentEntry).where(
+            DocumentEntry.is_deleted.is_(False), document_entry_scope(scope)
+        )
         if department_id is not None:
             base_query = base_query.where(DocumentEntry.department_id == department_id)
         result = await db.execute(
@@ -474,6 +533,7 @@ async def batch_import_document_attachments(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
+    scope = await _resolve_quality_list_scope(db, current_user)
     from app.modules.quality.service.document_catalog_attachment import (
         WORD_EXT,
         extract_content_identity,
@@ -525,7 +585,7 @@ async def batch_import_document_attachments(
                 )
 
             entry, match_type = await match_entry_for_attachment(
-                db, file_name, content_identity
+                db, file_name, content_identity, scope=scope
             )
             if entry is None:
                 failed += 1
@@ -592,13 +652,14 @@ async def auto_bind_document_entry_attachment(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
+    scope = await _resolve_quality_list_scope(db, current_user)
     try:
         file_name = validate_upload_metadata(
             file,
             allowed_extensions=DOCUMENT_CATALOG_EXTENSIONS,
             allowed_mimes=DOCUMENT_CATALOG_MIMES,
         )
-        entry = await find_entry_by_file_name(db, file_name)
+        entry = await find_entry_by_file_name(db, file_name, scope=scope)
         if entry is None:
             return error_response(
                 message=f"未找到与「{file_name}」编码匹配的唯一文件条目，请选择具体条目后上传",
@@ -651,17 +712,8 @@ async def upload_document_entry_attachment(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
+    entry = await _visible_entry(db, current_user, entry_id)
     try:
-        result = await db.execute(
-            select(DocumentEntry).where(
-                DocumentEntry.id == entry_id,
-                DocumentEntry.is_deleted.is_(False),
-            )
-        )
-        entry = result.scalar_one_or_none()
-        if entry is None:
-            return error_response(message="条目不存在", status_code=404)
-
         file_name = validate_upload_metadata(
             file,
             allowed_extensions=DOCUMENT_CATALOG_EXTENSIONS,
@@ -714,17 +766,8 @@ async def delete_document_entry_attachment(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
+    entry = await _visible_entry(db, current_user, entry_id)
     try:
-        result = await db.execute(
-            select(DocumentEntry).where(
-                DocumentEntry.id == entry_id,
-                DocumentEntry.is_deleted.is_(False),
-            )
-        )
-        entry = result.scalar_one_or_none()
-        if entry is None:
-            return error_response(message="条目不存在", status_code=404)
-
         removed = await delete_attachment_from_entry(db, entry, storage_key)
         if not removed:
             return error_response(message="附件不存在", status_code=404)
@@ -745,17 +788,8 @@ async def get_document_entry_attachment_content(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
+    entry = await _visible_entry(db, current_user, entry_id)
     try:
-        result = await db.execute(
-            select(DocumentEntry).where(
-                DocumentEntry.id == entry_id,
-                DocumentEntry.is_deleted.is_(False),
-            )
-        )
-        entry = result.scalar_one_or_none()
-        if entry is None:
-            return error_response(message="条目不存在", status_code=404)
-
         data, content_type = read_attachment_preview(entry, storage_key)
         if not data:
             return error_response(message="附件内容不存在", status_code=404)
