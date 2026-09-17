@@ -50,6 +50,10 @@ export function renderReadOnlyValue(
         .filter((n): n is string => Boolean(n))
       return names.length ? names.join('、') : '-'
     }
+    // 证书识别预填的附件只有 file_token（记录创建后才能预览）
+    if (value.some((v) => (v as { file_token?: string })?.file_token)) {
+      return '证书文件将随记录一并上传'
+    }
     return (value as unknown[]).join('、')
   }
   if (typeof value === 'object' && value !== null) {

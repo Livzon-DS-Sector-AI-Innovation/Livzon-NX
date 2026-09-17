@@ -15,6 +15,8 @@ export default function InstrContractsPage() {
         editablePersonFields
         enableAttachmentPreview
         showLastSyncTime
+        /* 新增只走飞书共享表单（质量设置-飞书设置可配链接），不走本地弹窗 */
+        createFormOnly
       />
     </QualityQueryProvider>
   )

@@ -714,7 +714,10 @@ PAGE_API_BINDINGS += tuple(
     PageApiBinding(
         route_path="/api/v1/hr/employees" + suffix,
         method=method,
-        page_keys=("hr:employee-management:profile",),
+        # 员工列表被培训签到等页跨页调用（referer 派生 sign-in key）
+        page_keys=("hr:employee-management:profile", "hr:training:sign-in-sheet")
+        if method == "GET"
+        else ("hr:employee-management:profile",),
         permission=permission,
         sensitive_action=action,
         scope_adapter="hr.employee_department",
@@ -2275,6 +2278,11 @@ def _registration_api_bindings() -> tuple[PageApiBinding, ...]:
         for page in PAGES_BY_MODULE["registration"]
         if ":project:declaration-progress:" in page.page_key
     )
+    project_ledger_pages = tuple(
+        page.page_key
+        for page in PAGES_BY_MODULE["registration"]
+        if ":project:project-ledger:" in page.page_key
+    )
     authorization_page = ("registration:authorization-letter",)
     certificate_pages = tuple(
         page.page_key
@@ -2386,7 +2394,7 @@ def _registration_api_bindings() -> tuple[PageApiBinding, ...]:
         (
             "GET",
             "/declaration-progress/overview",
-            declaration_pages,
+            declaration_pages + project_ledger_pages,
             "query",
             None,
             "registration.declaration",
@@ -3374,7 +3382,7 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
             "/teams",
             "/teams/{team_id}",
         ),
-        departments,
+        departments + onboarding + contract_approval,
         scope_adapter="hr.department_tree",
     )
     add_many(
@@ -3452,7 +3460,7 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
     add_many(
         "GET",
         ("/candidates", "/candidates/{record_id}", "/jobs", "/jobs/{record_id}"),
-        recruitment,
+        recruitment + onboarding,
         scope_adapter="hr.recruitment_record",
     )
     add(
@@ -3474,7 +3482,7 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
     add_many(
         "GET",
         ("/email/config", "/email/offer-template"),
-        recruitment,
+        recruitment + settings_feishu,
         scope_adapter="hr.recruitment_record",
     )
     add_many(
@@ -4155,7 +4163,7 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
     add_many(
         "GET",
         ("/trainers", "/trainers/{trainer_id}"),
-        trainer,
+        trainer + sign_in,
         scope_adapter="hr.training_department",
     )
     add(
@@ -4349,7 +4357,11 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
             "/hr-settings/hr-members",
             "/hr-settings/hr-members/sync-status",
         ),
-        settings_feishu,
+        settings_feishu
+        + (
+            "hr:employee-management:feishu-contacts",
+            "hr:hr-settings:hr-settings-dept-mapping",
+        ),
         scope_adapter="hr.settings",
     )
     add_many(

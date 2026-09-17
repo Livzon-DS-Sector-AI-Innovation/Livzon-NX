@@ -4967,6 +4967,40 @@
         "title": "ApiResponseEnvelope[InspectionRecordOut]",
         "type": "object"
       },
+      "ApiResponseEnvelope_InstrumentCertificateAnalyzeResult_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/InstrumentCertificateAnalyzeResult"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[InstrumentCertificateAnalyzeResult]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_KnowledgeArticleDetail_": {
         "properties": {
           "code": {
@@ -10718,6 +10752,20 @@
         "title": "Body_analyze_literature_api_v1_research_literature_analyze_post",
         "type": "object"
       },
+      "Body_api_analyze_instrument_certificate_api_v1_quality_instruments_cal_external_certificate_analyze_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_api_analyze_instrument_certificate_api_v1_quality_instruments_cal_external_certificate_analyze_post",
+        "type": "object"
+      },
       "Body_api_confirm_instrument_import_api_v1_quality_instruments_equipment_import_confirm_post": {
         "properties": {
           "file": {
@@ -15691,6 +15739,109 @@
         "title": "CertificateEntryUpdate",
         "type": "object"
       },
+      "CertificateExtractedFields": {
+        "description": "AI 从证书中提取的原始字段（值可能为空，供人工核对）。",
+        "properties": {
+          "calibration_agency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "检定/校准机构",
+            "title": "Calibration Agency"
+          },
+          "calibration_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "检定/校准日期 YYYY-MM-DD",
+            "title": "Calibration Date"
+          },
+          "certificate_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "证书编号",
+            "title": "Certificate No"
+          },
+          "conclusion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "检定/校准结论",
+            "title": "Conclusion"
+          },
+          "instrument_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "仪器/器具名称",
+            "title": "Instrument Name"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "型号/规格",
+            "title": "Model"
+          },
+          "next_calibration_date_stated": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "证书载明的下次检定日期/有效期至（可能缺失）",
+            "title": "Next Calibration Date Stated"
+          },
+          "serial_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "出厂编号/器具编号",
+            "title": "Serial No"
+          }
+        },
+        "title": "CertificateExtractedFields",
+        "type": "object"
+      },
       "CertificateRecordSummary": {
         "description": "Compact certificate record for dashboard lists.",
         "properties": {
@@ -15800,6 +15951,125 @@
           "expiry_status"
         ],
         "title": "CertificateRecordSummary",
+        "type": "object"
+      },
+      "CertificateRematchRequest": {
+        "description": "人工修正后的证书字段 → 重新反查设备目录并重建预填字段。",
+        "properties": {
+          "attachment_file_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "首次识别上传的证书附件 token（复用，不重复上传）",
+            "title": "Attachment File Token"
+          },
+          "attachment_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachment Name"
+          },
+          "calibration_agency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calibration Agency"
+          },
+          "calibration_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calibration Date"
+          },
+          "certificate_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate No"
+          },
+          "conclusion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conclusion"
+          },
+          "instrument_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instrument Name"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "next_calibration_date_stated": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Calibration Date Stated"
+          },
+          "serial_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "修正后的出厂编号",
+            "title": "Serial No"
+          }
+        },
+        "title": "CertificateRematchRequest",
         "type": "object"
       },
       "CertificateReminderRecipientOption": {
@@ -29687,6 +29957,93 @@
           "report_system_prompt"
         ],
         "title": "DeviationWorkbenchSettingsOut",
+        "type": "object"
+      },
+      "DeviceDirectoryMatch": {
+        "description": "QC 设备目录实时反查结果。",
+        "properties": {
+          "instrument_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "目录中的器具名称",
+            "title": "Instrument Name"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "使用地点",
+            "title": "Location"
+          },
+          "match_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "命中的目录列名（如 器具编号）",
+            "title": "Match By"
+          },
+          "matched": {
+            "description": "是否在设备目录中命中",
+            "title": "Matched",
+            "type": "boolean"
+          },
+          "period_months": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "检定周期（月）",
+            "title": "Period Months"
+          },
+          "period_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "目录中的周期原文",
+            "title": "Period Text"
+          },
+          "record_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "目录记录 ID",
+            "title": "Record Id"
+          }
+        },
+        "required": [
+          "matched"
+        ],
+        "title": "DeviceDirectoryMatch",
         "type": "object"
       },
       "DocumentDepartmentOut": {
@@ -45189,6 +45546,61 @@
           }
         },
         "title": "InstructorConflictItem",
+        "type": "object"
+      },
+      "InstrumentCertificateAnalyzeResult": {
+        "description": "证书识别端点响应：提取结果 + 目录反查 + 预填字段（人工确认后提交）。",
+        "properties": {
+          "attachment_file_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "已上传证书的附件 token（重新匹配时透传复用，不重复上传）",
+            "title": "Attachment File Token"
+          },
+          "computed_next_calibration_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "按目录周期推算的下次检定日期 YYYY-MM-DD（检定日期+周期-1天）",
+            "title": "Computed Next Calibration Date"
+          },
+          "directory": {
+            "$ref": "#/components/schemas/DeviceDirectoryMatch"
+          },
+          "extracted": {
+            "$ref": "#/components/schemas/CertificateExtractedFields"
+          },
+          "mapped_fields": {
+            "additionalProperties": true,
+            "description": "可写入外部校准表的字段（键=飞书字段名）",
+            "title": "Mapped Fields",
+            "type": "object"
+          },
+          "warnings": {
+            "description": "识别/反查/映射过程中的提示",
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "extracted",
+          "directory"
+        ],
+        "title": "InstrumentCertificateAnalyzeResult",
         "type": "object"
       },
       "InteractionFormField": {
@@ -176224,6 +176636,128 @@
           }
         },
         "summary": "Api List Instr Cal External",
+        "tags": [
+          "质量管理",
+          "Quality-Inspection-Feishu"
+        ]
+      }
+    },
+    "/api/v1/quality/instruments/cal-external/certificate-analyze": {
+      "post": {
+        "description": "上传校准证书 → AI 识别 → 实时反查 QC 设备目录，返回外部校准表预填字段。\n\n只做识别与预填，不写飞书记录；记录由前端人工确认后走通用新增接口提交。",
+        "operationId": "api_analyze_instrument_certificate_api_v1_quality_instruments_cal_external_certificate_analyze_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_api_analyze_instrument_certificate_api_v1_quality_instruments_cal_external_certificate_analyze_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_InstrumentCertificateAnalyzeResult_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Api Analyze Instrument Certificate",
+        "tags": [
+          "质量管理",
+          "Quality-Inspection-Feishu"
+        ]
+      }
+    },
+    "/api/v1/quality/instruments/cal-external/certificate-rematch": {
+      "post": {
+        "description": "人工修正识别字段后重新反查 QC 设备目录（填入表单前的修正闭环）。\n\n按修正后的出厂编号重新匹配目录、重算下次检定日期、刷新序号；\n证书附件复用首次识别上传的 token，不重复上传。",
+        "operationId": "api_rematch_instrument_certificate_api_v1_quality_instruments_cal_external_certificate_rematch_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CertificateRematchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_InstrumentCertificateAnalyzeResult_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Api Rematch Instrument Certificate",
         "tags": [
           "质量管理",
           "Quality-Inspection-Feishu"
