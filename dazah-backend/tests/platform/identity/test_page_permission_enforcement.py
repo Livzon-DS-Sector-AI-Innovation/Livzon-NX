@@ -387,3 +387,13 @@ def test_certificate_analyze_routes_bound_to_cal_external_page():
         ) in binding.page_keys
         assert binding.permission == "operate"
         assert binding.scope_adapter == "quality.reviewed_resource"
+
+
+def test_browse_folder_route_removed_from_bindings():
+    """遗留服务端弹窗接口 /email/browse-folder 已下线，不再有页面登记。"""
+    assert (
+        page_policy.api_binding_for_route(
+            "POST", "/api/v1/hr/email/browse-folder"
+        )
+        is None
+    )
