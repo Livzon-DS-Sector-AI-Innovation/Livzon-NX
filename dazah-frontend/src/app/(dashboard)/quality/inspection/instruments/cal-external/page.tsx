@@ -13,6 +13,7 @@ export default function InstrCalExternalPage() {
         entityCode="qc_instr_cal_external"
         editable
         enableAttachmentPreview
+        enableCertificateCreate
         showLastSyncTime
       />
     </QualityQueryProvider>

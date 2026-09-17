@@ -1211,6 +1211,14 @@ export type InspectionFeishuFieldsResult = {
 
 export type InspectionFeishuFields = Record<string, unknown>
 
+/** 校准证书 AI 识别结果（提取字段 + QC 设备目录反查 + 外部校准表预填字段）。 */
+export type InstrumentCertificateAnalyzeResult =
+  components['schemas']['InstrumentCertificateAnalyzeResult']
+
+/** 人工修正识别字段后重新匹配的请求体。 */
+export type InstrumentCertificateRematchRequest =
+  components['schemas']['CertificateRematchRequest']
+
 /** 固体/液体原辅料（代码+名称 label、模块与分组），供新增检验选料。 */
 export type InspectionMaterialItem = {
   entity_code: string
@@ -1249,14 +1257,26 @@ export interface ItemsDashboardData {
   last_sync_time?: string | null
 }
 
-/** 仪器管理仪表盘：概览/校验到期/维保/合同（读本地镜像聚合） */
+/** 仪器管理仪表盘：概览/校验到期/维保/合同（读本地镜像聚合；合同只统计总数） */
 export interface InstrumentDashboardData {
   configured: boolean
   equipment: { total: number; ok: number; repairing: number; key_count: number }
+  /** 设备状态构成（环图数据） */
+  equipment_status: { name: string; value: number }[]
   calibration_due: InstrumentCalibrationDueRow[]
   calibration_expired: InstrumentCalibrationDueRow[]
-  maintenance: { total: number; unfinished: number; cycle_count: number }
-  contracts: { total: number; expiring: InstrumentContractDueRow[] }
+  /** 未来 6 个月校验数量分布（含当月） */
+  calibration_upcoming: { month: string; count: number }[]
+  maintenance: {
+    total: number
+    unfinished: number
+    /** 未完成且下次维保时间在 7 天内的临期数（已完成不计） */
+    due_soon_7d: number
+    cycle_count: number
+  }
+  /** 未完成维保任务到期分布（已完成不计） */
+  maintenance_due_buckets: { name: string; value: number }[]
+  contracts: { total: number }
   last_sync_time?: string | null
 }
 
@@ -1264,13 +1284,6 @@ export interface InstrumentCalibrationDueRow {
   source: string
   name: string
   code: string
-  due_date: string | null
-  days: number
-  record_id: string
-}
-
-export interface InstrumentContractDueRow {
-  name: string
   due_date: string | null
   days: number
   record_id: string

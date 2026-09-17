@@ -68,7 +68,11 @@ def service(monkeypatch: pytest.MonkeyPatch) -> RecruitmentService:
     async def fake_get_client(self):
         return client
 
+    async def fake_table_id(self, entity_code: str, fallback: str) -> str:
+        return fallback
+
     monkeypatch.setattr(RecruitmentBitableRepo, "_get_client", fake_get_client)
+    monkeypatch.setattr(RecruitmentBitableRepo, "_table_id", fake_table_id)
     return RecruitmentService()
 
 

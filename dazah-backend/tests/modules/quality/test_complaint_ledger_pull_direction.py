@@ -24,7 +24,15 @@ def test_complaint_ledger_default_directions_allow_pull():
 
 def test_push_only_members_still_default_pull_off():
     # 其余 push-only 成员保持原默认（本地为主，仅推送）。
-    for code in ("oos_ledger", "oot_ledger", "return_recall_ledger"):
+    for code in ("return_recall_ledger", "product_quality_ledger"):
         push, pull = _get_default_sync_directions(code)
         assert push is True
         assert pull is False
+
+
+def test_oos_oot_ledgers_allow_pull():
+    """OOS/OOT 台账页面直连飞书实时读取，不得归入 push-only。"""
+    for code in ("oos_ledger", "oot_ledger"):
+        assert code not in PUSH_ONLY_QUALITY_FEISHU_ENTITIES
+        push, pull = _get_default_sync_directions(code)
+        assert pull is True

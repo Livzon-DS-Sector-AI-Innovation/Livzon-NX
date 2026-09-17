@@ -371,3 +371,19 @@ def test_hr_feishu_apps_route_bound_to_settings_page():
     assert "hr:hr-settings:hr-settings-feishu" in binding.page_keys
     assert binding.permission == "query"
     assert binding.scope_adapter == "hr.settings"
+
+
+def test_certificate_analyze_routes_bound_to_cal_external_page():
+    """校准证书 AI 识别/重新匹配接口绑定到外部校准检定页（operate 权限）。"""
+    for suffix in ("certificate-analyze", "certificate-rematch"):
+        binding = page_policy.api_binding_for_route(
+            "POST",
+            f"/api/v1/quality/instruments/cal-external/{suffix}",
+        )
+        assert binding is not None, suffix
+        assert (
+            "quality:inspection:inspection-instruments:"
+            "inspection-instruments-cal-external"
+        ) in binding.page_keys
+        assert binding.permission == "operate"
+        assert binding.scope_adapter == "quality.reviewed_resource"

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 from urllib.parse import quote
@@ -61,6 +62,45 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# 飞书公式列（如外部校准「下次检定日期」=EDATE(检定日期,12)-1）在记录创建/
+# 编辑的瞬间可能尚未算完，单条写穿会把空值存进镜像；而仪器镜像增量按日期/水位
+# 过滤未必再覆盖该行。延迟数秒重拉该单条，把公式的迟到值补进镜像（best-effort，
+# 失败仅记日志，每日全量兜底）。
+_FORMULA_LAG_REFRESH_DELAYS: tuple[float, ...] = (5.0, 30.0)
+_MIRROR_REFRESH_TASKS: set[asyncio.Task[None]] = set()
+
+
+async def _refresh_record_mirror_later(
+    entity_code: str,
+    record_id: str,
+    delays: tuple[float, ...] = _FORMULA_LAG_REFRESH_DELAYS,
+) -> None:
+    for delay in delays:
+        await asyncio.sleep(delay)
+        try:
+            await _sync_single_record_to_mirror(entity_code, record_id)
+        except AppException as exc:
+            logger.info("delayed mirror refresh skipped (%s): %s", entity_code, exc)
+        except Exception as exc:  # noqa: BLE001 - 补刷失败不影响主流程
+            logger.warning(
+                "delayed mirror refresh failed (%s/%s): %s",
+                entity_code,
+                record_id,
+                exc,
+            )
+
+
+def _schedule_record_mirror_refresh(entity_code: str, record_id: str) -> None:
+    """仪器实体写入飞书后调度后台延迟补刷（持强引用防止任务被 GC）。"""
+    task = asyncio.create_task(
+        _refresh_record_mirror_later(
+            entity_code, record_id, _FORMULA_LAG_REFRESH_DELAYS
+        )
+    )
+    _MIRROR_REFRESH_TASKS.add(task)
+    task.add_done_callback(_MIRROR_REFRESH_TASKS.discard)
+
+
 async def _maybe_refresh_entity_mirror(
     entity_code: str,
     record_id: str | None = None,
@@ -87,9 +127,9 @@ async def _maybe_refresh_entity_mirror(
             or entity_code in FINISHED_MIRROR_ENTITIES
             or entity_code in INSTRUMENT_MIRROR_ENTITIES
         ):
-            await _sync_single_record_to_mirror(
-                entity_code, record_id, deleted=deleted
-            )
+            await _sync_single_record_to_mirror(entity_code, record_id, deleted=deleted)
+            if not deleted and entity_code in INSTRUMENT_MIRROR_ENTITIES:
+                _schedule_record_mirror_refresh(entity_code, record_id)
             return
         in_scope = (
             entity_code in ITEMS_MIRROR_PAGES

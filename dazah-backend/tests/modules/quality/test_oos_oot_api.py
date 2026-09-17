@@ -143,7 +143,15 @@ async def test_oos_oot_feishu_entities_are_push_only_and_single_record_can_be_pu
     }
     assert set(oos_oot_defaults) == expected_entity_codes
     assert all(item.enable_push_to_feishu for item in oos_oot_defaults.values())
-    assert all(not item.enable_pull_from_feishu for item in oos_oot_defaults.values())
+    # OOS/OOT 台账页面直连飞书实时读取，默认允许回拉；
+    # 限度产品/明细保持 push-only
+    assert oos_oot_defaults["oos_ledger"].enable_pull_from_feishu
+    assert oos_oot_defaults["oot_ledger"].enable_pull_from_feishu
+    assert all(
+        not item.enable_pull_from_feishu
+        for code, item in oos_oot_defaults.items()
+        if code not in ("oos_ledger", "oot_ledger")
+    )
 
     created = await client.post(
         "/api/v1/quality/oos-oot/records",
