@@ -34,17 +34,13 @@ from app.platform.identity.data_scope import (
 from app.platform.identity.deps import CurrentUser, require_current_user
 from app.platform.identity.models import (
     Permission,
-    PermissionModuleRollout,
     Role,
     RolePageGrant,
     User,
     UserPageGrant,
 )
 from app.platform.identity.page_permission_repository import PagePermissionRepository
-from app.platform.identity.page_permissions import (
-    REVIEW_PENDING_ROLLOUT_MODULES,
-    PagePermissionService,
-)
+from app.platform.identity.page_permissions import PagePermissionService
 from app.platform.identity.page_policy import (
     PAGES_BY_MODULE,
     canonical_page_key,
@@ -89,9 +85,7 @@ from app.platform.identity.schemas import (
     PagePermissionRollbackRequest,
     PagePermissionSimulationOut,
     PagePermissionSimulationRequest,
-    PermissionModulePublishRequest,
-    PermissionModuleRollbackRequest,
-    PermissionModuleRolloutOut,
+    PermissionModuleIntegrationOut,
     PermissionModuleRolloutPreviewOut,
     PermissionResponse,
     PermissionSimulateRequest,
@@ -2001,10 +1995,15 @@ async def simulate_page_permission(
             and effective is not None
             and body.sensitive_action in effective.sensitive_actions
         )
-    if not module_allowed:
+    if definition is None:
+        reason = "所选页面未登记或已失效"
+    elif not module_allowed:
         reason = "当前账号未获得所属模块访问权限"
     elif allowed:
-        reason = "当前账号具备所属模块访问及所选页面业务权限"
+        reason = (
+            "当前账号满足模块入口及所选页面授权条件；"
+            "实际接口还需核对页面绑定、数据范围和业务规则"
+        )
     else:
         reason = "当前账号已获模块访问，但未获得所选页面业务权限"
     result = PagePermissionSimulationOut(
@@ -2015,8 +2014,8 @@ async def simulate_page_permission(
 
 @rbac_router.get(
     "/page-permissions/modules",
-    summary="页面权限模块发布状态",
-    response_model=list[PermissionModuleRolloutOut],
+    summary="自动检查模块页面权限接入完整性",
+    response_model=list[PermissionModuleIntegrationOut],
 )
 async def list_page_permission_rollouts(
     current_user: IdentityAdminUser,
@@ -2024,7 +2023,12 @@ async def list_page_permission_rollouts(
 ) -> JSONResponse:
     service = PagePermissionService()
     modules = sorted(set(MODULES_BY_CODE) | set(PAGES_BY_MODULE))
-    items = [await service.rollout_out(db, module_code=code) for code in modules]
+    items = []
+    for code in modules:
+        gaps = await service.integration_gaps(db, module_code=code)
+        items.append(PermissionModuleIntegrationOut(
+            module_code=code, passed=not gaps, catalog_gaps=gaps
+        ))
     return success_response(data=[item.model_dump(mode="json") for item in items])
 
 
@@ -2041,98 +2045,6 @@ async def preview_page_permission_rollout(
     if module_code not in MODULES_BY_CODE and module_code not in PAGES_BY_MODULE:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "模块不存在")
     result = await PagePermissionService().rollout_preview(db, module_code=module_code)
-    return success_response(data=result.model_dump(mode="json"))
-
-
-@rbac_router.post(
-    "/page-permissions/modules/{module_code}/publish",
-    summary="发布模块页面权限",
-    response_model=PermissionModuleRolloutOut,
-)
-async def publish_page_permission_rollout(
-    module_code: str,
-    body: PermissionModulePublishRequest,
-    current_user: IdentityAdminUser,
-    db: AsyncSession = Depends(get_db),
-) -> JSONResponse:
-    service = PagePermissionService()
-    preview = await service.rollout_preview(db, module_code=module_code)
-    if preview.catalog_gaps:
-        raise HTTPException(status.HTTP_409_CONFLICT, "页面权限目录仍有缺口，不能发布")
-    if preview.current_version != body.expected_version:
-        raise HTTPException(status.HTTP_409_CONFLICT, "发布版本已变化，请重新预览")
-    if preview.preview_hash != body.preview_hash:
-        raise HTTPException(status.HTTP_409_CONFLICT, "发布预览已过期，请重新预览")
-    page_repo = PagePermissionRepository()
-    rollout = await page_repo.get_rollout(db, module_code=module_code, for_update=True)
-    if rollout is not None and rollout.version != body.expected_version:
-        raise HTTPException(status.HTTP_409_CONFLICT, "发布版本已变化，请重新预览")
-    if rollout is None:
-        rollout = PermissionModuleRollout(module_code=module_code)
-        rollout.created_by = current_user.id
-        db.add(rollout)
-        await db.flush()
-    service.mark_rollout(
-        rollout, enforced=True, actor_id=current_user.id, reason=body.reason
-    )
-    await _bump_all_user_grant_versions(db, actor_id=current_user.id)
-    await _audit(
-        db,
-        current_user,
-        action="publish_page_permission_module",
-        resource_type="identity.permission_module_rollout",
-        resource_id=rollout.id,
-        new_value={
-            "module_code": module_code,
-            "status": "enforced",
-            "version": rollout.version,
-            "reason": body.reason,
-            "preview_hash": preview.preview_hash,
-        },
-    )
-    await db.commit()
-    await publish_permissions_changed_all()
-    result = await service.rollout_out(db, module_code=module_code)
-    return success_response(data=result.model_dump(mode="json"))
-
-
-@rbac_router.post(
-    "/page-permissions/modules/{module_code}/rollback",
-    summary="紧急回退模块页面权限",
-    response_model=PermissionModuleRolloutOut,
-)
-async def rollback_page_permission_rollout(
-    module_code: str,
-    body: PermissionModuleRollbackRequest,
-    current_user: IdentityAdminUser,
-    db: AsyncSession = Depends(get_db),
-) -> JSONResponse:
-    service = PagePermissionService()
-    if not await service.is_super_admin(db, user_id=current_user.id):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "仅系统管理员可以紧急回退")
-    page_repo = PagePermissionRepository()
-    rollout = await page_repo.get_rollout(db, module_code=module_code, for_update=True)
-    if rollout is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "模块发布记录不存在")
-    if rollout.version != body.expected_version:
-        raise HTTPException(status.HTTP_409_CONFLICT, "发布版本已变化，请刷新后重试")
-    old_status = rollout.status
-    service.mark_rollout(
-        rollout, enforced=False, actor_id=current_user.id, reason=body.reason
-    )
-    await _bump_all_user_grant_versions(db, actor_id=current_user.id)
-    await _audit(
-        db,
-        current_user,
-        action="rollback_page_permission_module",
-        resource_type="identity.permission_module_rollout",
-        resource_id=rollout.id,
-        old_value={"status": old_status},
-        new_value={"status": "legacy", "reason": body.reason},
-    )
-    await db.commit()
-    await publish_permissions_changed_all()
-    result = await service.rollout_out(db, module_code=module_code)
     return success_response(data=result.model_dump(mode="json"))
 
 
@@ -2160,15 +2072,16 @@ async def export_permissions(
             "数据范围",
             "授权来源",
             "角色来源",
-            "接入门禁记录",
+            "当前接入检查",
         ]
     )
     service = PagePermissionService()
     repo = PagePermissionRepository()
     department_labels = await repo.department_labels(db)
-    rollouts = {item.module_code: item.status for item in await repo.list_rollouts(db)}
-    for module_code in REVIEW_PENDING_ROLLOUT_MODULES:
-        rollouts.setdefault(module_code, "draft")
+    integration_checks = {
+        code: not await service.integration_gaps(db, module_code=code)
+        for code in sorted(set(MODULES_BY_CODE) | set(PAGES_BY_MODULE))
+    }
     scope_names = {
         "all": "全部部门",
         "department_tree": "本部门及下级",
@@ -2181,11 +2094,6 @@ async def export_permissions(
         "user": "用户覆盖",
         "none": "未授权",
         "super_admin": "系统管理员",
-    }
-    status_names = {
-        "legacy": "未记录通过（不影响权限生效）",
-        "draft": "待核验（不影响权限生效）",
-        "enforced": "已记录通过（不影响权限生效）",
     }
     for user in users:
         grants = await service.effective_grants(db, user=user)
@@ -2219,7 +2127,11 @@ async def export_permissions(
                     scope_text,
                     source_names[grant.source],
                     "；".join(grant.source_role_names),
-                    status_names[rollouts.get(grant.module_code, "legacy")],
+                    (
+                        "自动检查通过"
+                        if integration_checks.get(grant.module_code)
+                        else "接入有缺口"
+                    ),
                 ]
             )
         if not rows:

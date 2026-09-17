@@ -34,7 +34,7 @@ export type PagePermissionRollbackPreviewOut = components["schemas"]["PagePermis
 export type PagePermissionHealthOut = components["schemas"]["PagePermissionHealthOut"]
 export type PagePermissionHealthRemediationRequest = components["schemas"]["PagePermissionHealthRemediationRequest"]
 export type PagePermissionHealthRemediationOut = components["schemas"]["PagePermissionHealthRemediationOut"]
-export type PermissionModuleRolloutOut = components["schemas"]["PermissionModuleRolloutOut"]
+export type PermissionModuleIntegrationOut = components["schemas"]["PermissionModuleIntegrationOut"]
 export type PermissionModuleRolloutPreviewOut = components["schemas"]["PermissionModuleRolloutPreviewOut"]
 
 /**
@@ -517,7 +517,7 @@ export async function simulatePagePermission(data: PagePermissionSimulationReque
 
 export async function listPagePermissionRollouts() {
   const res = await authedFetch("/identity/admin/page-permissions/modules")
-  return handleResponse(res) as Promise<PermissionModuleRolloutOut[]>
+  return handleResponse(res) as Promise<PermissionModuleIntegrationOut[]>
 }
 
 export async function previewPagePermissionRollout(moduleCode: string) {
@@ -525,36 +525,4 @@ export async function previewPagePermissionRollout(moduleCode: string) {
     `/identity/admin/page-permissions/modules/${moduleCode}/preview`
   )
   return handleResponse(res) as Promise<PermissionModuleRolloutPreviewOut>
-}
-
-export async function publishPagePermissionRollout(
-  preview: PermissionModuleRolloutPreviewOut,
-  reason: string
-) {
-  return permissionActionResult<PermissionModuleRolloutOut>(() => authedFetch(
-    `/identity/admin/page-permissions/modules/${preview.module_code}/publish`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        expected_version: preview.current_version,
-        preview_hash: preview.preview_hash,
-        reason,
-        confirmed: true,
-      }),
-    }
-  ))
-}
-
-export async function rollbackPagePermissionRollout(
-  moduleCode: string,
-  expectedVersion: number,
-  reason: string
-) {
-  return permissionActionResult<PermissionModuleRolloutOut>(() => authedFetch(
-    `/identity/admin/page-permissions/modules/${moduleCode}/rollback`,
-    {
-      method: "POST",
-      body: JSON.stringify({ expected_version: expectedVersion, reason, confirmed: true }),
-    }
-  ))
 }

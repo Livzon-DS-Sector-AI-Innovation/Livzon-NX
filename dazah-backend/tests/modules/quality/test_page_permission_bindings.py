@@ -33,6 +33,25 @@ def test_deviation_write_tools_use_reviewed_leaf_without_relaxing_confirmation()
         assert binding and binding.permission == "operate"
 
 
+def test_all_quality_agent_tools_have_reviewed_page_contracts():
+    ensure_agent_tools_registered()
+    tools = [spec for spec in tool_registry.list() if spec.module == "quality"]
+
+    assert tools
+    assert not [spec.name for spec in tools if not spec.page_keys]
+    for spec in tools:
+        binding = api_binding_for_route(spec.method, "/api/v1" + spec.path)
+        if binding is not None:
+            assert spec.page_keys == binding.page_keys
+            assert spec.sensitive_action == binding.sensitive_action
+        for page_key in spec.page_keys:
+            page = PAGES_BY_KEY[page_key]
+            if spec.sensitive_action:
+                assert spec.sensitive_action in {
+                    action.key for action in page.sensitive_actions
+                }
+
+
 def test_ledger_contract_covers_all_reviewed_workflows():
     page = PAGES_BY_KEY[DEVIATION_LEDGER_PAGE]
     assert "self" not in page.supported_scope_types

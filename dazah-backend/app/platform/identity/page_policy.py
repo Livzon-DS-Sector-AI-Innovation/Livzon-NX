@@ -479,9 +479,6 @@ def _sensitive_actions(
             "sensitive_export",
             "sync_config",
         ),
-        "production:process": ("delete",),
-        "production:records": ("delete", "sensitive_export"),
-        "production:balance": ("delete",),
         "production:shift-log:shift-log-deviation": ("delete",),
         "production:shift-log:shift-log-summary": ("delete",),
         "production:shift-log:shift-log-handover": ("approve", "delete"),
@@ -1298,6 +1295,8 @@ def _quality_remaining_api_bindings() -> tuple[PageApiBinding, ...]:
             return "bulk_import"
         if "export" in path:
             return "sensitive_export"
+        if method in {"POST", "PUT", "PATCH", "DELETE"} and "/feishu-sync/" in path:
+            return "sync_config"
         sync_tokens = (
             "/pull",
             "/sync",
@@ -1345,9 +1344,9 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
         if page.page_key.startswith("production:batches:workshop-")
     )
     batch_context = workshop_pages + overview
-    records_context = ("production:records",) + batch_context
-    balance_context = ("production:balance",) + batch_context
-    process_context = ("production:process",) + overview
+    records_context = batch_context
+    balance_context = batch_context
+    process_context = overview
     sales_plan_page = ("production:plan:sales-plan",)
     scheduling_page = ("production:plan:scheduling",)
     deviation_page = ("production:shift-log:shift-log-deviation",)
@@ -1403,7 +1402,7 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
     add_many(
         "GET",
         ("/batches", "/batches/{batch_id}"),
-        batch_context + ("production:records", "production:balance"),
+        batch_context,
         scope_adapter="production.batch",
     )
     add("POST", "/batches", batch_context, "operate", scope_adapter="production.batch")
@@ -5061,6 +5060,15 @@ def module_for_page(page_key: str) -> str | None:
 
 def page_key_for_route(route_path: str) -> str | None:
     normalized = route_path.rstrip("/") or "/"
+    if any(
+        normalized == path or normalized.startswith(path + "/")
+        for path in (
+            "/production/process",
+            "/production/records",
+            "/production/balance",
+        )
+    ):
+        return None
     # Auxiliary forms belong to the ledger, never to its directory or siblings.
     if re.fullmatch(
         r"/quality/deviations/(?:new|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})",

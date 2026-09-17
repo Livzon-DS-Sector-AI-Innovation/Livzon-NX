@@ -33,7 +33,7 @@ async def allowed_batch_workshops(
         return frozenset({code}) if code in WORKSHOP_CODES else frozenset()
     if page == "production:overview" and not write:
         return None
-    if page not in {"production:overview", "production:records", "production:balance"}:
+    if page != "production:overview":
         return frozenset()
     required = "operate" if write else "query"
     grants = await PagePermissionService().effective_grants(session, user=actor)
