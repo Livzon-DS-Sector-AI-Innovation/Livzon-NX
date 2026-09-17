@@ -177,7 +177,7 @@ def _patch_happy_path(
     )
     monkeypatch.setattr(service, "BitableClient", lambda **_kw: fake)
     vision = AsyncMock(return_value=dict(_FULL_EXTRACTION))
-    monkeypatch.setattr(service.llm_client, "chat_vision_json", vision)
+    monkeypatch.setattr(type(service.llm_client), "chat_vision_json", vision)
     upload_ref = {
         "file_token": "ft_cert",
         "name": "证书.pdf",
@@ -247,7 +247,7 @@ async def test_analyze_pdf_with_text_layer_uses_text_llm(
     _patch_happy_path(monkeypatch)
     monkeypatch.setattr(service, "_extract_pdf_text", lambda _content: "证书" * 200)
     text_llm = AsyncMock(return_value=dict(_FULL_EXTRACTION))
-    monkeypatch.setattr(service.llm_client, "chat_json", text_llm)
+    monkeypatch.setattr(type(service.llm_client), "chat_json", text_llm)
     render_calls: list[bytes] = []
 
     def _fake_render_unused(content: bytes) -> list[str]:
@@ -282,7 +282,7 @@ async def test_analyze_scanned_pdf_renders_pages_for_vision(
 
     monkeypatch.setattr(service, "_render_pdf_pages", _fake_render)
     text_llm = AsyncMock()
-    monkeypatch.setattr(service.llm_client, "chat_json", text_llm)
+    monkeypatch.setattr(type(service.llm_client), "chat_json", text_llm)
 
     result = await service.analyze_calibration_certificate(
         None,  # type: ignore[arg-type]
@@ -302,7 +302,7 @@ async def test_analyze_without_serial_skips_directory_lookup(
 ) -> None:
     fake, _vision = _patch_happy_path(monkeypatch)
     monkeypatch.setattr(
-        service.llm_client,
+        type(service.llm_client),
         "chat_vision_json",
         AsyncMock(return_value={**_FULL_EXTRACTION, "serial_no": None}),
     )
@@ -334,7 +334,7 @@ async def test_analyze_directory_miss_falls_back_to_stated_next_date(
     )
     monkeypatch.setattr(service, "BitableClient", lambda **_kw: fake)
     monkeypatch.setattr(
-        service.llm_client,
+        type(service.llm_client),
         "chat_vision_json",
         AsyncMock(
             return_value={
@@ -395,7 +395,7 @@ async def test_analyze_directory_permission_error_adds_collaborator_hint(
 
     monkeypatch.setattr(service, "BitableClient", lambda **_kw: _DeniedClient())
     monkeypatch.setattr(
-        service.llm_client,
+        type(service.llm_client),
         "chat_vision_json",
         AsyncMock(return_value=dict(_FULL_EXTRACTION)),
     )
@@ -461,7 +461,7 @@ async def test_analyze_directory_hits_location_containing_serial(
 
     monkeypatch.setattr(service, "BitableClient", lambda **_kw: _Client())
     monkeypatch.setattr(
-        service.llm_client,
+        type(service.llm_client),
         "chat_vision_json",
         AsyncMock(
             return_value={
@@ -515,7 +515,7 @@ async def test_analyze_stated_date_conflict_with_period_prefers_period(
 ) -> None:
     _patch_happy_path(monkeypatch)
     monkeypatch.setattr(
-        service.llm_client,
+        type(service.llm_client),
         "chat_vision_json",
         AsyncMock(
             return_value={
@@ -543,7 +543,7 @@ async def test_analyze_stated_date_matching_period_does_not_warn(
     """证书载明日期与推算一致时不得误报不一致。"""
     _patch_happy_path(monkeypatch)
     monkeypatch.setattr(
-        service.llm_client,
+        type(service.llm_client),
         "chat_vision_json",
         AsyncMock(
             return_value={
@@ -584,7 +584,7 @@ async def test_analyze_skips_missing_columns_and_unwritable_next_date(
     )
     monkeypatch.setattr(service, "BitableClient", lambda **_kw: fake)
     monkeypatch.setattr(
-        service.llm_client,
+        type(service.llm_client),
         "chat_vision_json",
         AsyncMock(return_value=dict(_FULL_EXTRACTION)),
     )
@@ -621,7 +621,7 @@ async def test_analyze_llm_errors_map_to_business_errors(
 ) -> None:
     _patch_happy_path(monkeypatch)
     vision = AsyncMock(side_effect=error)
-    monkeypatch.setattr(service.llm_client, "chat_vision_json", vision)
+    monkeypatch.setattr(type(service.llm_client), "chat_vision_json", vision)
 
     with pytest.raises(AppException) as exc_info:
         await service.analyze_calibration_certificate(
@@ -639,7 +639,7 @@ async def test_analyze_cleans_garbage_llm_output(
 ) -> None:
     _patch_happy_path(monkeypatch)
     monkeypatch.setattr(
-        service.llm_client,
+        type(service.llm_client),
         "chat_vision_json",
         AsyncMock(
             return_value={
@@ -781,7 +781,7 @@ async def test_analyze_directory_hits_gauge_column_via_candidate(
 
     monkeypatch.setattr(service, "BitableClient", lambda **_kw: _FilterAwareClient())
     monkeypatch.setattr(
-        service.llm_client,
+        type(service.llm_client),
         "chat_vision_json",
         AsyncMock(
             return_value={
