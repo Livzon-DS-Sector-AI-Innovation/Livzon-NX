@@ -1,5 +1,7 @@
 'use client'
 
+import { usePagePermissions } from '@/hooks/usePagePermissions'
+
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
@@ -157,6 +159,7 @@ function matchTableForEntity(
 }
 
 export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boolean }) {
+  const { canSync } = usePagePermissions('quality:quality-settings')
   const { message, modal } = App.useApp()
   const queryClient = useQueryClient()
   const [resultNotice, setResultNotice] = useState<ResultNotice>(null)
@@ -296,6 +299,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
   }, [entityItems])
 
   const handleSaveApp = useCallback(async () => {
+    if (!canSync) return
     try {
       setAppSaving(true)
       await updateQualityFeishuAppSettings({
@@ -320,9 +324,10 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
     } finally {
       setAppSaving(false)
     }
-  }, [appForm, message, queryClient])
+  }, [canSync, appForm, message, queryClient])
 
   const handleTestApp = useCallback(async () => {
+    if (!canSync) return
     try {
       setAppTesting(true)
       const result = await testQualityFeishuAppSettings()
@@ -353,9 +358,10 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
     } finally {
       setAppTesting(false)
     }
-  }, [message, queryClient])
+  }, [canSync, message, queryClient])
 
   const handlePull = useCallback(async () => {
+    if (!canSync) return
     try {
       setPulling(true)
       const result = await pullQualityRecordsFromFeishu()
@@ -380,10 +386,11 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
     } finally {
       setPulling(false)
     }
-  }, [message, queryClient])
+  }, [canSync, message, queryClient])
 
   const handleSaveEntity = useCallback(
     async (entityCode: string) => {
+      if (!canSync) return
       try {
         setRowSaving((current) => ({ ...current, [entityCode]: true }))
         const draft = entityDrafts[entityCode]
@@ -412,11 +419,12 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
         setRowSaving((current) => ({ ...current, [entityCode]: false }))
       }
     },
-    [entityDrafts, message, queryClient]
+    [canSync, entityDrafts, message, queryClient]
   )
 
   const handleTestEntity = useCallback(
     async (entityCode: string, entityName: string) => {
+      if (!canSync) return
       try {
         setRowTesting((current) => ({ ...current, [entityCode]: true }))
         const result = await testQualityFeishuEntitySetting(entityCode)
@@ -451,7 +459,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
         setRowTesting((current) => ({ ...current, [entityCode]: false }))
       }
     },
-    [message, queryClient]
+    [canSync, message, queryClient]
   )
 
   const openFieldMapping = useCallback(
@@ -500,6 +508,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
   // 分组批量更新：粘贴 URL 后，将该分组下所有实体的 App Token / Table ID 统一更新
   const handleBatchUpdate = useCallback(
     async (groupName: string) => {
+      if (!canSync) return
       const url = groupUrlInputs[groupName]?.trim()
       if (!url) {
         message.warning('请先粘贴多维表格网址')
@@ -567,12 +576,13 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
         },
       })
     },
-    [groupUrlInputs, groupedEntities, entityDrafts, message, modal, queryClient],
+    [canSync, groupUrlInputs, groupedEntities, entityDrafts, message, modal, queryClient],
   )
 
   // 按名称自动匹配：粘贴 Base 地址 → 读取该 Base 所有子表 → 按实体名称匹配并批量更新
   const handleAutoMatchTables = useCallback(
     async (groupName: string) => {
+      if (!canSync) return
       const url = groupUrlInputs[groupName]?.trim()
       if (!url) {
         message.warning('请先粘贴多维表格网址')
@@ -674,7 +684,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
         },
       })
     },
-    [groupUrlInputs, groupedEntities, entityDrafts, message, modal, queryClient],
+    [canSync, groupUrlInputs, groupedEntities, entityDrafts, message, modal, queryClient],
   )
 
   // 渲染分组标题栏（含 URL 批量更新输入框 + 按钮）
@@ -705,7 +715,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
           type="primary"
           onClick={() => void handleBatchUpdate(group)}
           loading={batchLoading}
-          disabled={!urlValue.trim()}
+          disabled={!canSync || !urlValue.trim()}
         >
           批量更新
         </Button>
@@ -713,7 +723,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
           size="small"
           onClick={() => void handleAutoMatchTables(group)}
           loading={batchLoading}
-          disabled={!urlValue.trim()}
+          disabled={!canSync || !urlValue.trim()}
         >
           按名称匹配
         </Button>
@@ -722,6 +732,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
   }
 
   const saveFieldMapping = useCallback(async () => {
+    if (!canSync) return
     if (!mappingBundle) return
     try {
       setMappingSaving(true)
@@ -755,7 +766,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
     } finally {
       setMappingSaving(false)
     }
-  }, [entityDrafts, mappingBundle, mappingDrafts, message, queryClient])
+  }, [canSync, entityDrafts, mappingBundle, mappingDrafts, message, queryClient])
 
   const manualMappingFields = useMemo(
     () => getManualMappingFields(mappingBundle),
@@ -971,7 +982,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
               type="primary"
               icon={<SaveOutlined />}
               loading={rowSaving[record.entity_code]}
-              onClick={() => void handleSaveEntity(record.entity_code)}
+              disabled={!canSync} onClick={() => void handleSaveEntity(record.entity_code)}
             >
               保存
             </Button>
@@ -979,7 +990,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
               size="small"
               icon={<SecurityScanOutlined />}
               loading={rowTesting[record.entity_code]}
-              onClick={() => void handleTestEntity(record.entity_code, record.entity_name)}
+              disabled={!canSync} onClick={() => void handleTestEntity(record.entity_code, record.entity_name)}
             >
               测试
             </Button>
@@ -988,6 +999,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
       },
     ],
     [
+      canSync,
       entityDrafts,
       handleLoadTables,
       handleSaveEntity,
@@ -1042,7 +1054,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
             </Button>
             <Button
               icon={<SecurityScanOutlined />}
-              onClick={() => void handleTestApp()}
+              disabled={!canSync} onClick={() => void handleTestApp()}
               loading={appTesting}
             >
               测试连接
@@ -1050,7 +1062,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
             <Button
               type="primary"
               icon={<SaveOutlined />}
-              onClick={() => void handleSaveApp()}
+              disabled={!canSync} onClick={() => void handleSaveApp()}
               loading={appSaving}
             >
               保存配置
@@ -1108,7 +1120,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
           <Button
             type="primary"
             icon={<CloudDownloadOutlined />}
-            onClick={() => void handlePull()}
+            disabled={!canSync} onClick={() => void handlePull()}
             loading={pulling}
           >
             手动回拉已启用数据
@@ -1153,7 +1165,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
                         size="small"
                         type="primary"
                         loading={appSaving}
-                        onClick={() => void handleSaveApp()}
+                        disabled={!canSync} onClick={() => void handleSaveApp()}
                       >
                         保存表单链接
                       </Button>
@@ -1202,7 +1214,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
         extra={
           <Space>
             <Button onClick={() => setMappingOpen(false)}>关闭</Button>
-            <Button type="primary" loading={mappingSaving} onClick={() => void saveFieldMapping()}>
+            <Button type="primary" loading={mappingSaving} disabled={!canSync} onClick={() => void saveFieldMapping()}>
               保存字段对齐
             </Button>
           </Space>

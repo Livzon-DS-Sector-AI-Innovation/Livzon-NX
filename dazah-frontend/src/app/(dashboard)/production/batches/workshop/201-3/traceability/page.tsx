@@ -14,6 +14,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import ReactECharts from 'echarts-for-react'
 import { toPng } from 'html-to-image'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
 const BASE = '/api/v1/production/dr'
@@ -521,6 +522,7 @@ export default function TraceabilityPageWrapper() {
 }
 
 function TraceabilityPage() {
+  const { canExport } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2013)
   const router = useRouter()
   const searchParams = useSearchParams()
   const { message } = App.useApp()
@@ -742,7 +744,7 @@ function TraceabilityPage() {
                       累计收率: {traceData.cumulative_yield}%
                     </Tag>
                   )}
-                  <Button size="small" icon={<DownloadOutlined />} style={{ marginLeft: 8 }} onClick={exportFlow}>导出图片</Button>
+                  {canExport && <Button size="small" icon={<DownloadOutlined />} style={{ marginLeft: 8 }} onClick={exportFlow}>导出图片</Button>}
                 </span>
               }
             >

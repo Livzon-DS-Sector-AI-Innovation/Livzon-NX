@@ -177,10 +177,19 @@ async def test_preview_expires_after_permission_change_with_same_user_counts(
         async def list_active_users(self, *args, **kwargs):
             return [user]
 
+        async def list_role_grants(self, *args, **kwargs):
+            return []
+
+        async def list_user_grants_for_users(self, *args, **kwargs):
+            return []
+
     async def grants(*args, **kwargs):
         return []
 
     monkeypatch.setattr(PagePermissionService, "effective_grants", grants)
+    monkeypatch.setattr(
+        rbac, "resolve_users_roles", AsyncMock(return_value={user.id: []})
+    )
     service = PagePermissionService(repo=Repo())
     before = await service.rollout_preview(None, module_code="hr")
     user.grant_version += 1

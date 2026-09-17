@@ -10,6 +10,7 @@ interface DepartmentDetailDrawerProps {
   open: boolean
   department: Department | null
   canEdit: boolean
+  canDelete: boolean
   onClose: () => void
   onEdit: (dept: Department) => void
   onDelete: (id: string) => void
@@ -21,6 +22,7 @@ export default function DepartmentDetailDrawer({
   open,
   department,
   canEdit,
+  canDelete,
   onClose,
   onEdit,
   onDelete,
@@ -42,20 +44,24 @@ export default function DepartmentDetailDrawer({
     ? allDepartments.find(d => d.id === department.parent_id)?.name || '-'
     : '-'
 
-  const footer = canEdit ? (
+  const footer = canEdit || canDelete ? (
     <Space>
-      <Button type="primary" icon={<EditOutlined />} onClick={() => onEdit(department)}>
-        编辑部门
-      </Button>
-      <Popconfirm
-        title="确定要删除该部门吗？"
-        description="删除后不可恢复，请谨慎操作。"
-        onConfirm={() => onDelete(department.id)}
-        okText="确定"
-        cancelText="取消"
-      >
-        <Button danger icon={<DeleteOutlined />}>删除部门</Button>
-      </Popconfirm>
+      {canEdit ? (
+        <Button type="primary" icon={<EditOutlined />} onClick={() => onEdit(department)}>
+          编辑部门
+        </Button>
+      ) : null}
+      {canDelete ? (
+        <Popconfirm
+          title="确定要删除该部门吗？"
+          description="删除后不可恢复，请谨慎操作。"
+          onConfirm={() => onDelete(department.id)}
+          okText="确定"
+          cancelText="取消"
+        >
+          <Button danger icon={<DeleteOutlined />}>删除部门</Button>
+        </Popconfirm>
+      ) : null}
     </Space>
   ) : null
 

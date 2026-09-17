@@ -16,6 +16,8 @@ interface EmployeeTableProps {
   onRefresh: () => void
   onEdit: (employee: Employee) => void
   onView: (employee: Employee) => void
+  canEdit: boolean
+  canDelete: boolean
 }
 
 export default function EmployeeTable({
@@ -26,11 +28,15 @@ export default function EmployeeTable({
   onPageChange,
   onRefresh,
   onEdit,
-  onView }: EmployeeTableProps) {
+  onView,
+  canEdit,
+  canDelete,
+}: EmployeeTableProps) {
   const { message } = App.useApp()
   const [loading, setLoading] = useState(false)
 
   const handleDelete = async (id: string) => {
+    if (!canDelete) return
     setLoading(true)
     try {
       const result = await deleteEmployee(id)
@@ -130,10 +136,12 @@ export default function EmployeeTable({
               type="text"
               size="small"
               icon={<EditOutlined />}
+              disabled={!canEdit}
               onClick={() => onEdit(record)}
             />
           </Tooltip>
           <Popconfirm
+            disabled={!canDelete}
             title="确认删除"
             description={`确定要删除员工 ${record.name} 吗？`}
             onConfirm={() => handleDelete(record.id)}
@@ -145,6 +153,7 @@ export default function EmployeeTable({
                 type="text"
                 size="small"
                 danger
+                disabled={!canDelete}
                 icon={<DeleteOutlined />}
               />
             </Tooltip>

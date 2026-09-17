@@ -17,6 +17,8 @@ interface CandidateListViewProps {
   loading: boolean
   onPageChange: (page: number, pageSize: number) => void
   onDelete: (id: string) => void
+  canOperate: boolean
+  canDelete: boolean
   onTransfer?: (id: string) => void
   transferring?: boolean
   onRefresh?: () => void
@@ -31,6 +33,8 @@ export default function CandidateListView({
   loading,
   onPageChange,
   onDelete,
+  canOperate,
+  canDelete,
   onTransfer,
   transferring,
   onRefresh,
@@ -224,6 +228,7 @@ export default function CandidateListView({
           onChange={(v) => handleStatusChange(record.id, v)}
           options={INTERVIEW_STATUS_OPTIONS}
           allowClear
+          disabled={!canOperate}
         />
       ),
     },
@@ -237,7 +242,7 @@ export default function CandidateListView({
           <a onClick={() => handleRowClick(record)}>
             <EyeOutlined /> 查看
           </a>
-          {record.interview_status === '通过' && (
+          {canOperate && record.interview_status === '通过' && (
             <>
               <a onClick={() => handleOpenEmailModal(record)} className="text-blue-500">
                 <MailOutlined /> 发Offer
@@ -256,12 +261,12 @@ export default function CandidateListView({
               </Popconfirm>
             </>
           )}
-          {record.interview_status === '未通过' && (
+          {canOperate && record.interview_status === '未通过' && (
             <a onClick={() => handleOpenRejectEmailModal(record)} className="text-orange-500">
               <MailOutlined /> 发邮件通知
             </a>
           )}
-          <Popconfirm
+          {canDelete ? <Popconfirm
             title="确认删除"
             description={`确定要删除候选人「${record.name}」的简历吗？`}
             onConfirm={() => onDelete(record.id)}
@@ -272,7 +277,7 @@ export default function CandidateListView({
             <a className="text-red-500" onClick={(e) => e.stopPropagation()}>
               <DeleteOutlined /> 删除
             </a>
-          </Popconfirm>
+          </Popconfirm> : null}
         </Space>
       ),
     },

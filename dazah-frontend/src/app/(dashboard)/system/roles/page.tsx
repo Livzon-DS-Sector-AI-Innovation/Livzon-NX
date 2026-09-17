@@ -14,7 +14,7 @@ export default async function RolesPage() {
       <div>
         <h1 className="text-xl font-semibold text-[var(--color-charcoal)]">角色管理</h1>
         <p className="text-sm text-[var(--color-stone)] mt-1">
-          创建、编辑角色，并按菜单页面配置访问、查询、操作、高风险业务动作与数据范围。
+          创建、编辑角色，并按菜单页面配置访问、查询、普通操作、附加高风险操作与数据范围。
         </p>
       </div>
       <RoleManager

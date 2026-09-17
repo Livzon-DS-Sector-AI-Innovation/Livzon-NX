@@ -7410,6 +7410,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identity/admin/page-permissions/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 检查页面权限健康状态 */
+        get: operations["get_page_permission_health_api_v1_identity_admin_page_permissions_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity/admin/page-permissions/health/remediate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 修复页面权限健康问题 */
+        post: operations["remediate_page_permission_health_issue_api_v1_identity_admin_page_permissions_health_remediate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identity/admin/page-permissions/modules": {
         parameters: {
             query?: never;
@@ -7618,6 +7652,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identity/admin/roles/{role_id}/page-permissions/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查看角色页面权限历史 */
+        get: operations["get_role_page_permission_history_api_v1_identity_admin_roles__role_id__page_permissions_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity/admin/roles/{role_id}/page-permissions/history/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 导出角色页面权限历史 */
+        get: operations["export_role_page_permission_history_api_v1_identity_admin_roles__role_id__page_permissions_history_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity/admin/roles/{role_id}/page-permissions/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 预演角色页面权限用户影响 */
+        post: operations["preview_role_page_permissions_api_v1_identity_admin_roles__role_id__page_permissions_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity/admin/roles/{role_id}/page-permissions/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 回滚角色页面权限 */
+        post: operations["rollback_role_page_permissions_api_v1_identity_admin_roles__role_id__page_permissions_rollback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity/admin/roles/{role_id}/page-permissions/rollback/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 预演角色页面权限回滚 */
+        post: operations["preview_role_page_permission_rollback_api_v1_identity_admin_roles__role_id__page_permissions_rollback_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identity/admin/roles/{role_id}/permissions": {
         parameters: {
             query?: never;
@@ -7664,6 +7783,74 @@ export interface paths {
         /** 替换用户页面权限覆盖 */
         put: operations["replace_user_page_permissions_api_v1_identity_admin_users__user_id__page_permissions_put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity/admin/users/{user_id}/page-permissions/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查看用户页面权限历史 */
+        get: operations["get_user_page_permission_history_api_v1_identity_admin_users__user_id__page_permissions_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity/admin/users/{user_id}/page-permissions/history/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 导出用户页面权限历史 */
+        get: operations["export_user_page_permission_history_api_v1_identity_admin_users__user_id__page_permissions_history_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity/admin/users/{user_id}/page-permissions/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 回滚用户页面权限 */
+        post: operations["rollback_user_page_permissions_api_v1_identity_admin_users__user_id__page_permissions_rollback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity/admin/users/{user_id}/page-permissions/rollback/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 预演用户页面权限回滚 */
+        post: operations["preview_user_page_permission_rollback_api_v1_identity_admin_users__user_id__page_permissions_rollback_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -14420,286 +14607,6 @@ export interface paths {
         put?: never;
         /** 推送投诉至飞书 */
         post: operations["sync_complaint_to_feishu_api_v1_quality_complaints__complaint_id__sync_to_feishu_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/cpv/import/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 确认导入
-         * @description 确认导入Excel数据
-         */
-        post: operations["confirm_import_api_v1_quality_cpv_import_confirm_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/cpv/import/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 上传Excel预览
-         * @description 上传Excel文件并预览导入数据
-         */
-        post: operations["preview_import_api_v1_quality_cpv_import_preview_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/cpv/import/tasks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 获取导入任务列表
-         * @description 获取导入任务列表
-         */
-        get: operations["get_import_tasks_api_v1_quality_cpv_import_tasks_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/cpv/import/tasks/{task_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 获取导入任务详情
-         * @description 获取导入任务详情
-         */
-        get: operations["get_import_task_api_v1_quality_cpv_import_tasks__task_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/cpv/parameters/{parameter_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * 更新参数
-         * @description 更新参数
-         */
-        put: operations["update_parameter_api_v1_quality_cpv_parameters__parameter_id__put"];
-        post?: never;
-        /**
-         * 删除参数
-         * @description 删除参数
-         */
-        delete: operations["delete_parameter_api_v1_quality_cpv_parameters__parameter_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/cpv/products": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 获取产品列表
-         * @description 获取CPV产品列表（带统计摘要）
-         */
-        get: operations["get_products_api_v1_quality_cpv_products_get"];
-        put?: never;
-        /**
-         * 创建产品
-         * @description 创建CPV产品
-         */
-        post: operations["create_product_api_v1_quality_cpv_products_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/cpv/products/{product_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 获取产品详情
-         * @description 获取CPV产品详情
-         */
-        get: operations["get_product_api_v1_quality_cpv_products__product_id__get"];
-        /**
-         * 更新产品
-         * @description 更新CPV产品
-         */
-        put: operations["update_product_api_v1_quality_cpv_products__product_id__put"];
-        post?: never;
-        /**
-         * 删除产品
-         * @description 删除CPV产品（软删除）
-         */
-        delete: operations["delete_product_api_v1_quality_cpv_products__product_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/cpv/products/{product_id}/batches": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 获取批次列表
-         * @description 获取批次列表
-         */
-        get: operations["get_batches_api_v1_quality_cpv_products__product_id__batches_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/cpv/products/{product_id}/cpp": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 获取CPP批次数据（宽表）
-         * @description 获取CPP批次数据（宽表格式）
-         */
-        get: operations["get_cpp_batches_api_v1_quality_cpv_products__product_id__cpp_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/cpv/products/{product_id}/cqa": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 获取CQA批次数据（宽表）
-         * @description 获取CQA批次数据（宽表格式）
-         */
-        get: operations["get_cqa_batches_api_v1_quality_cpv_products__product_id__cqa_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/cpv/products/{product_id}/parameters": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 获取参数列表
-         * @description 获取产品参数列表
-         */
-        get: operations["get_parameters_api_v1_quality_cpv_products__product_id__parameters_get"];
-        put?: never;
-        /**
-         * 新增参数
-         * @description 新增产品参数
-         */
-        post: operations["create_parameter_api_v1_quality_cpv_products__product_id__parameters_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/cpv/products/{product_id}/statistics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 获取统计数据
-         * @description 获取统计数据（批次总数、均值、标准差、CPK、异常数）
-         */
-        get: operations["get_statistics_api_v1_quality_cpv_products__product_id__statistics_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/cpv/products/{product_id}/trend": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 获取趋势图数据
-         * @description 获取趋势图数据
-         */
-        get: operations["get_trend_api_v1_quality_cpv_products__product_id__trend_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -29676,6 +29583,16 @@ export interface components {
         };
         /** AssignUserRoleRequest */
         AssignUserRoleRequest: {
+            /** Expected Grant Version */
+            expected_grant_version?: number | null;
+            /**
+             * Mode
+             * @default add
+             * @enum {string}
+             */
+            mode: "replace" | "add";
+            /** Reason */
+            reason?: string | null;
             /** Role Ids */
             role_ids?: string[];
         };
@@ -30585,6 +30502,11 @@ export interface components {
              * @description 单位
              */
             unit?: string | null;
+            /**
+             * Workshop Code
+             * @description 所属车间编码；空值表示待确认
+             */
+            workshop_code?: string | null;
         };
         /** BatchCreateDataMasterRequest */
         BatchCreateDataMasterRequest: {
@@ -30897,6 +30819,11 @@ export interface components {
              * @description 单位
              */
             unit?: string | null;
+            /**
+             * Workshop Code
+             * @description 所属车间编码
+             */
+            workshop_code?: string | null;
         };
         /** BatchUpdateStatusRequest */
         BatchUpdateStatusRequest: {
@@ -31018,39 +30945,6 @@ export interface components {
         Body_confirm_deviation_import_api_v1_quality_deviations_import_confirm_post: {
             /** File */
             file: string;
-        };
-        /** Body_confirm_import_api_v1_quality_cpv_import_confirm_post */
-        Body_confirm_import_api_v1_quality_cpv_import_confirm_post: {
-            /**
-             * Data Type
-             * @description 数据类型: CPP/CQA
-             */
-            data_type: string;
-            /** File */
-            file: string;
-            /**
-             * File Name
-             * @description 文件名
-             */
-            file_name: string;
-            /**
-             * Import Mode
-             * @description 导入模式: create/update/overwrite
-             * @default create
-             */
-            import_mode: string;
-            /**
-             * Product Id
-             * Format: uuid
-             * @description 产品ID
-             */
-            product_id: string;
-            /**
-             * Skip Errors
-             * @description 跳过错误行
-             * @default false
-             */
-            skip_errors: boolean;
         };
         /** Body_confirm_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_confirm_post */
         Body_confirm_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_confirm_post: {
@@ -31362,11 +31256,6 @@ export interface components {
         };
         /** Body_preview_deviation_import_api_v1_quality_deviations_import_preview_post */
         Body_preview_deviation_import_api_v1_quality_deviations_import_preview_post: {
-            /** File */
-            file: string;
-        };
-        /** Body_preview_import_api_v1_quality_cpv_import_preview_post */
-        Body_preview_import_api_v1_quality_cpv_import_preview_post: {
             /** File */
             file: string;
         };
@@ -34846,190 +34735,6 @@ export interface components {
              */
             worker_count?: number | null;
         };
-        /**
-         * CpvParameterCreate
-         * @description 创建参数请求
-         */
-        CpvParameterCreate: {
-            /**
-             * Code
-             * @description 参数代码
-             */
-            code?: string | null;
-            /**
-             * Control Lower
-             * @description 控制下限
-             */
-            control_lower?: number | null;
-            /**
-             * Control Upper
-             * @description 控制上限
-             */
-            control_upper?: number | null;
-            /**
-             * Is Enabled
-             * @description 是否启用
-             * @default true
-             */
-            is_enabled: boolean;
-            /**
-             * Lower Limit
-             * @description 标准下限
-             */
-            lower_limit?: number | null;
-            /**
-             * Name
-             * @description 参数名称
-             */
-            name: string;
-            /**
-             * Parameter Type
-             * @description 参数类型
-             * @enum {string}
-             */
-            parameter_type: "CPP" | "CQA";
-            /**
-             * Sort Order
-             * @description 排序
-             * @default 0
-             */
-            sort_order: number;
-            /**
-             * Target Value
-             * @description 目标值
-             */
-            target_value?: number | null;
-            /**
-             * Unit
-             * @description 单位
-             */
-            unit?: string | null;
-            /**
-             * Upper Limit
-             * @description 标准上限
-             */
-            upper_limit?: number | null;
-        };
-        /**
-         * CpvParameterUpdate
-         * @description 更新参数请求
-         */
-        CpvParameterUpdate: {
-            /**
-             * Code
-             * @description 参数代码
-             */
-            code?: string | null;
-            /**
-             * Control Lower
-             * @description 控制下限
-             */
-            control_lower?: number | null;
-            /**
-             * Control Upper
-             * @description 控制上限
-             */
-            control_upper?: number | null;
-            /**
-             * Is Enabled
-             * @description 是否启用
-             */
-            is_enabled?: boolean | null;
-            /**
-             * Lower Limit
-             * @description 标准下限
-             */
-            lower_limit?: number | null;
-            /**
-             * Name
-             * @description 参数名称
-             */
-            name?: string | null;
-            /**
-             * Sort Order
-             * @description 排序
-             */
-            sort_order?: number | null;
-            /**
-             * Target Value
-             * @description 目标值
-             */
-            target_value?: number | null;
-            /**
-             * Unit
-             * @description 单位
-             */
-            unit?: string | null;
-            /**
-             * Upper Limit
-             * @description 标准上限
-             */
-            upper_limit?: number | null;
-        };
-        /**
-         * CpvProductCreate
-         * @description 创建产品请求
-         */
-        CpvProductCreate: {
-            /**
-             * Description
-             * @description 备注描述
-             */
-            description?: string | null;
-            /**
-             * Name
-             * @description 产品名称
-             */
-            name: string;
-            /**
-             * Process Version
-             * @description 工艺版本
-             */
-            process_version?: string | null;
-            /**
-             * Specification
-             * @description 规格
-             */
-            specification?: string | null;
-            /**
-             * Status
-             * @description 状态
-             * @default active
-             * @enum {string}
-             */
-            status: "active" | "inactive";
-        };
-        /**
-         * CpvProductUpdate
-         * @description 更新产品请求
-         */
-        CpvProductUpdate: {
-            /**
-             * Description
-             * @description 备注描述
-             */
-            description?: string | null;
-            /**
-             * Name
-             * @description 产品名称
-             */
-            name?: string | null;
-            /**
-             * Process Version
-             * @description 工艺版本
-             */
-            process_version?: string | null;
-            /**
-             * Specification
-             * @description 规格
-             */
-            specification?: string | null;
-            /**
-             * Status
-             * @description 状态
-             */
-            status?: ("active" | "inactive") | null;
-        };
         /** CreateAttachmentReviewRequest */
         CreateAttachmentReviewRequest: {
             /** Attachment Url */
@@ -38412,6 +38117,14 @@ export interface components {
             page_key: string;
             /** Permissions */
             permissions?: ("access" | "query" | "operate")[];
+            /** Resolution */
+            resolution?: string[];
+            /** Role Sources */
+            role_sources?: components["schemas"]["PagePermissionRoleSourceOut"][];
+            /** Sensitive Action Expirations */
+            sensitive_action_expirations?: {
+                [key: string]: string | null;
+            };
             /** Sensitive Actions */
             sensitive_actions?: string[];
             /**
@@ -48579,10 +48292,18 @@ export interface components {
             mode: "inherit" | "custom";
             /** Page Key */
             page_key: string;
-            /** Permissions */
+            /**
+             * Permissions
+             * @description 基础权限档位；operate 表示普通操作，不包含高风险操作
+             */
             permissions?: ("access" | "query" | "operate")[];
-            /** Sensitive Actions */
+            /**
+             * Sensitive Actions
+             * @description 附加高风险操作；非空时服务端同时授予 operate 基础权限
+             */
             sensitive_actions?: string[];
+            /** Sensitive Actions Expires At */
+            sensitive_actions_expires_at?: string | null;
         };
         /** PagePermissionDefinitionOut */
         PagePermissionDefinitionOut: {
@@ -48598,6 +48319,260 @@ export interface components {
             sensitive_actions?: components["schemas"]["SensitiveActionDefinitionOut"][];
             /** Supported Scope Types */
             supported_scope_types?: ("not_applicable" | "department_tree" | "departments" | "all" | "self")[];
+        };
+        /** PagePermissionHealthIssueOut */
+        PagePermissionHealthIssueOut: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "retired_page" | "invalid_department" | "missing_module_access" | "redundant_user_override" | "sensitive_without_expiry" | "sensitive_expired" | "sensitive_expiring";
+            /** Detail */
+            detail: string;
+            /** Grant Version */
+            grant_version: number;
+            /** Module Code */
+            module_code?: string | null;
+            /** Page Key */
+            page_key: string;
+            /** Page Name */
+            page_name: string;
+            /**
+             * Remediation
+             * @enum {string}
+             */
+            remediation: "remove_grant" | "prune_departments" | "edit";
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "warning" | "error";
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+            /** Target Name */
+            target_name: string;
+            /**
+             * Target Type
+             * @enum {string}
+             */
+            target_type: "role" | "user";
+        };
+        /** PagePermissionHealthOut */
+        PagePermissionHealthOut: {
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /** Error Count */
+            error_count: number;
+            /** Issue Count */
+            issue_count: number;
+            /** Issues */
+            issues?: components["schemas"]["PagePermissionHealthIssueOut"][];
+            /** Warning Count */
+            warning_count: number;
+        };
+        /** PagePermissionHealthRemediationOut */
+        PagePermissionHealthRemediationOut: {
+            /**
+             * Fixed
+             * @default true
+             */
+            fixed: boolean;
+            /** Grant Version */
+            grant_version: number;
+            /** Message */
+            message: string;
+        };
+        /** PagePermissionHealthRemediationRequest */
+        PagePermissionHealthRemediationRequest: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "retired_page" | "invalid_department" | "redundant_user_override";
+            /** Expected Grant Version */
+            expected_grant_version: number;
+            /** Page Key */
+            page_key: string;
+            /** Reason */
+            reason: string;
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+            /**
+             * Target Type
+             * @enum {string}
+             */
+            target_type: "role" | "user";
+        };
+        /** PagePermissionHistoryActorOut */
+        PagePermissionHistoryActorOut: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** User Name */
+            user_name: string;
+        };
+        /** PagePermissionHistoryChangeOut */
+        PagePermissionHistoryChangeOut: {
+            /** After */
+            after?: {
+                [key: string]: unknown;
+            } | null;
+            /** Before */
+            before?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "grant" | "expand" | "restrict" | "revoke" | "mixed";
+            /** Page Key */
+            page_key: string;
+            /** Page Name */
+            page_name: string;
+            /** Summary */
+            summary: string;
+        };
+        /** PagePermissionHistoryItemOut */
+        PagePermissionHistoryItemOut: {
+            /** Action */
+            action: string;
+            /** Actor Name */
+            actor_name?: string | null;
+            /** Actor User Id */
+            actor_user_id?: string | null;
+            /** Changes */
+            changes?: components["schemas"]["PagePermissionHistoryChangeOut"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Grant Version */
+            grant_version?: number | null;
+            /** Grants */
+            grants?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Old Grants */
+            old_grants?: {
+                [key: string]: unknown;
+            }[];
+            /** Reason */
+            reason?: string | null;
+            /** Rollback Of */
+            rollback_of?: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "manual" | "rollback" | "health_remediation";
+        };
+        /** PagePermissionHistoryPageOut */
+        PagePermissionHistoryPageOut: {
+            /** Actor Options */
+            actor_options?: components["schemas"]["PagePermissionHistoryActorOut"][];
+            /**
+             * Is Truncated
+             * @default false
+             */
+            is_truncated: boolean;
+            /** Items */
+            items?: components["schemas"]["PagePermissionHistoryItemOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /** PagePermissionRoleSourceOut */
+        PagePermissionRoleSourceOut: {
+            data_scope: components["schemas"]["PageDataScopeInput"];
+            /** Permissions */
+            permissions?: ("access" | "query" | "operate")[];
+            /**
+             * Role Id
+             * Format: uuid
+             */
+            role_id: string;
+            /** Role Name */
+            role_name: string;
+            /** Sensitive Actions */
+            sensitive_actions?: string[];
+            /** Sensitive Actions Expires At */
+            sensitive_actions_expires_at?: string | null;
+        };
+        /** PagePermissionRollbackPreviewOut */
+        PagePermissionRollbackPreviewOut: {
+            /** Affected User Count */
+            affected_user_count: number;
+            /** Affected User Samples */
+            affected_user_samples?: components["schemas"]["RolePagePermissionAffectedUserOut"][];
+            /** Changes */
+            changes?: components["schemas"]["PagePermissionHistoryChangeOut"][];
+            /** Current Grant Version */
+            current_grant_version: number;
+            /** Expanded User Count */
+            expanded_user_count: number;
+            /** History Grant Version */
+            history_grant_version?: number | null;
+            /** Mixed User Count */
+            mixed_user_count: number;
+            /** Restricted User Count */
+            restricted_user_count: number;
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+            /**
+             * Target Type
+             * @enum {string}
+             */
+            target_type: "role" | "user";
+            /** Users With Overrides */
+            users_with_overrides: number;
+        };
+        /** PagePermissionRollbackPreviewRequest */
+        PagePermissionRollbackPreviewRequest: {
+            /**
+             * Audit Id
+             * Format: uuid
+             */
+            audit_id: string;
+            /** Expected Grant Version */
+            expected_grant_version: number;
+        };
+        /** PagePermissionRollbackRequest */
+        PagePermissionRollbackRequest: {
+            /**
+             * Audit Id
+             * Format: uuid
+             */
+            audit_id: string;
+            /** Expected Grant Version */
+            expected_grant_version: number;
+            /** Idempotency Key */
+            idempotency_key?: string | null;
+            /** Reason */
+            reason: string;
         };
         /** PagePermissionSimulationOut */
         PagePermissionSimulationOut: {
@@ -53006,6 +52981,21 @@ export interface components {
             /** Menu Ids */
             menu_ids?: string[];
         };
+        /** RolePagePermissionAffectedUserOut */
+        RolePagePermissionAffectedUserOut: {
+            /**
+             * Impact
+             * @enum {string}
+             */
+            impact: "expanded" | "restricted" | "mixed";
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** User Name */
+            user_name: string;
+        };
         /** RolePagePermissionsOut */
         RolePagePermissionsOut: {
             /** Definitions */
@@ -53020,12 +53010,38 @@ export interface components {
              */
             role_id: string;
         };
+        /** RolePagePermissionsPreviewOut */
+        RolePagePermissionsPreviewOut: {
+            /** Affected User Count */
+            affected_user_count: number;
+            /** Affected User Samples */
+            affected_user_samples?: components["schemas"]["RolePagePermissionAffectedUserOut"][];
+            /** Expanded User Count */
+            expanded_user_count: number;
+            /** Grant Version */
+            grant_version: number;
+            /** Member Count */
+            member_count: number;
+            /** Mixed User Count */
+            mixed_user_count: number;
+            /** Restricted User Count */
+            restricted_user_count: number;
+            /**
+             * Role Id
+             * Format: uuid
+             */
+            role_id: string;
+            /** Users With Overrides */
+            users_with_overrides: number;
+        };
         /** RolePagePermissionsUpdate */
         RolePagePermissionsUpdate: {
             /** Expected Grant Version */
             expected_grant_version: number;
             /** Grants */
             grants?: components["schemas"]["PageGrantInput"][];
+            /** Idempotency Key */
+            idempotency_key?: string | null;
             /** Reason */
             reason: string;
         };
@@ -58483,6 +58499,8 @@ export interface components {
         };
         /** UserPagePermissionsOut */
         UserPagePermissionsOut: {
+            /** Custom Grants */
+            custom_grants?: components["schemas"]["EffectivePageGrantOut"][];
             /** Custom Page Keys */
             custom_page_keys?: string[];
             /** Definitions */
@@ -58509,6 +58527,8 @@ export interface components {
             expected_grant_version?: number | null;
             /** Grants */
             grants?: components["schemas"]["PageGrantInput"][];
+            /** Idempotency Key */
+            idempotency_key?: string | null;
             /** Reason */
             reason: string;
         };
@@ -80148,6 +80168,72 @@ export interface operations {
             };
         };
     };
+    get_page_permission_health_api_v1_identity_admin_page_permissions_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PagePermissionHealthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remediate_page_permission_health_issue_api_v1_identity_admin_page_permissions_health_remediate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PagePermissionHealthRemediationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PagePermissionHealthRemediationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_page_permission_rollouts_api_v1_identity_admin_page_permissions_modules_get: {
         parameters: {
             query?: never;
@@ -80694,6 +80780,192 @@ export interface operations {
             };
         };
     };
+    get_role_page_permission_history_api_v1_identity_admin_roles__role_id__page_permissions_history_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                actor_user_id?: string | null;
+                source?: ("manual" | "rollback" | "health_remediation") | null;
+                page_key?: string | null;
+                change_kind?: ("grant" | "expand" | "restrict" | "revoke" | "mixed") | null;
+                date_from?: string | null;
+                date_to?: string | null;
+            };
+            header?: never;
+            path: {
+                role_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PagePermissionHistoryPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_role_page_permission_history_api_v1_identity_admin_roles__role_id__page_permissions_history_export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                role_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_role_page_permissions_api_v1_identity_admin_roles__role_id__page_permissions_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                role_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RolePagePermissionsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RolePagePermissionsPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rollback_role_page_permissions_api_v1_identity_admin_roles__role_id__page_permissions_rollback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                role_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PagePermissionRollbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RolePagePermissionsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_role_page_permission_rollback_api_v1_identity_admin_roles__role_id__page_permissions_rollback_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                role_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PagePermissionRollbackPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PagePermissionRollbackPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     set_role_permissions_api_v1_identity_admin_roles__role_id__permissions_post: {
         parameters: {
             query?: never;
@@ -80826,6 +81098,155 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserPagePermissionsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_user_page_permission_history_api_v1_identity_admin_users__user_id__page_permissions_history_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                actor_user_id?: string | null;
+                source?: ("manual" | "rollback" | "health_remediation") | null;
+                page_key?: string | null;
+                change_kind?: ("grant" | "expand" | "restrict" | "revoke" | "mixed") | null;
+                date_from?: string | null;
+                date_to?: string | null;
+            };
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PagePermissionHistoryPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_user_page_permission_history_api_v1_identity_admin_users__user_id__page_permissions_history_export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rollback_user_page_permissions_api_v1_identity_admin_users__user_id__page_permissions_rollback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PagePermissionRollbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPagePermissionsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_user_page_permission_rollback_api_v1_identity_admin_users__user_id__page_permissions_rollback_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PagePermissionRollbackPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PagePermissionRollbackPreviewOut"];
                 };
             };
             /** @description Validation Error */
@@ -98189,693 +98610,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExternalQualityFeishuSyncResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    confirm_import_api_v1_quality_cpv_import_confirm_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_confirm_import_api_v1_quality_cpv_import_confirm_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    preview_import_api_v1_quality_cpv_import_preview_post: {
-        parameters: {
-            query: {
-                /** @description 产品ID */
-                product_id: string;
-                /** @description 数据类型: CPP/CQA */
-                data_type: string;
-                /** @description 导入模式: create/update/overwrite */
-                import_mode?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_preview_import_api_v1_quality_cpv_import_preview_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_import_tasks_api_v1_quality_cpv_import_tasks_get: {
-        parameters: {
-            query?: {
-                /** @description 产品ID */
-                product_id?: string | null;
-                /** @description 页码 */
-                page?: number;
-                /** @description 每页数量 */
-                page_size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_import_task_api_v1_quality_cpv_import_tasks__task_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_parameter_api_v1_quality_cpv_parameters__parameter_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                parameter_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CpvParameterUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_parameter_api_v1_quality_cpv_parameters__parameter_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                parameter_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_products_api_v1_quality_cpv_products_get: {
-        parameters: {
-            query?: {
-                /** @description 关键词搜索 */
-                keyword?: string | null;
-                /** @description 状态筛选 */
-                status?: string | null;
-                /** @description 页码 */
-                page?: number;
-                /** @description 每页数量 */
-                page_size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_product_api_v1_quality_cpv_products_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CpvProductCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_product_api_v1_quality_cpv_products__product_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                product_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_product_api_v1_quality_cpv_products__product_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                product_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CpvProductUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_product_api_v1_quality_cpv_products__product_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                product_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_batches_api_v1_quality_cpv_products__product_id__batches_get: {
-        parameters: {
-            query?: {
-                /** @description 数据类型: CPP/CQA */
-                data_type?: string | null;
-                /** @description 批号 */
-                batch_no?: string | null;
-                /** @description 开始日期 */
-                start_date?: string | null;
-                /** @description 结束日期 */
-                end_date?: string | null;
-                /** @description 页码 */
-                page?: number;
-                /** @description 每页数量 */
-                page_size?: number;
-            };
-            header?: never;
-            path: {
-                product_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_cpp_batches_api_v1_quality_cpv_products__product_id__cpp_get: {
-        parameters: {
-            query?: {
-                /** @description 批号 */
-                batch_no?: string | null;
-                /** @description 开始日期 */
-                start_date?: string | null;
-                /** @description 结束日期 */
-                end_date?: string | null;
-                /** @description 页码 */
-                page?: number;
-                /** @description 每页数量 */
-                page_size?: number;
-            };
-            header?: never;
-            path: {
-                product_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_cqa_batches_api_v1_quality_cpv_products__product_id__cqa_get: {
-        parameters: {
-            query?: {
-                /** @description 批号 */
-                batch_no?: string | null;
-                /** @description 开始日期 */
-                start_date?: string | null;
-                /** @description 结束日期 */
-                end_date?: string | null;
-                /** @description 页码 */
-                page?: number;
-                /** @description 每页数量 */
-                page_size?: number;
-            };
-            header?: never;
-            path: {
-                product_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_parameters_api_v1_quality_cpv_products__product_id__parameters_get: {
-        parameters: {
-            query?: {
-                /** @description 参数类型: CPP/CQA */
-                type?: string | null;
-            };
-            header?: never;
-            path: {
-                product_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_parameter_api_v1_quality_cpv_products__product_id__parameters_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                product_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CpvParameterCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_statistics_api_v1_quality_cpv_products__product_id__statistics_get: {
-        parameters: {
-            query: {
-                /** @description 参数ID */
-                parameter_id: string;
-                /** @description 批号 */
-                batch_no?: string | null;
-                /** @description 开始日期 */
-                start_date?: string | null;
-                /** @description 结束日期 */
-                end_date?: string | null;
-            };
-            header?: never;
-            path: {
-                product_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_trend_api_v1_quality_cpv_products__product_id__trend_get: {
-        parameters: {
-            query: {
-                /** @description 参数ID */
-                parameter_id: string;
-                /** @description 批号 */
-                batch_no?: string | null;
-                /** @description 开始日期 */
-                start_date?: string | null;
-                /** @description 结束日期 */
-                end_date?: string | null;
-            };
-            header?: never;
-            path: {
-                product_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

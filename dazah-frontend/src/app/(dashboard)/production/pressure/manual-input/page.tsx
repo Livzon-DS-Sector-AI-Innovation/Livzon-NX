@@ -27,11 +27,13 @@ import {
 import { AREA_OPTIONS } from '@/types/pressure'
 import type { PointMapping } from '@/types/pressure'
 import dayjs from 'dayjs'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
 
 export default function ManualInputPage() {
   const { message } = App.useApp()
+  const { canOperate, canBulkImport } = useProductionPermissions(PRODUCTION_PAGE_KEYS.pressure)
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [area, setArea] = useState<string>('无菌区')
@@ -70,6 +72,7 @@ export default function ManualInputPage() {
   }
 
   const handleAddPoint = async () => {
+    if (!canOperate) return
     try {
       const values = await addForm.validateFields()
       const check = await checkPointIdUnique(values.point_id)
@@ -95,6 +98,7 @@ export default function ManualInputPage() {
   }
 
   const handleSubmit = async () => {
+    if (!canBulkImport) return
     const filledValues: Record<string, number | null> = {}
     let hasValue = false
     for (const [key, val] of Object.entries(values)) {
@@ -158,8 +162,9 @@ export default function ManualInputPage() {
           <InputNumber
             size="small"
             value={values[key] ?? undefined}
-            onChange={(v) => setValues({ ...values, [key]: v })}
+            onChange={(v) => canBulkImport && setValues({ ...values, [key]: v })}
             placeholder="-"
+            disabled={!canBulkImport}
             style={{ width: 80 }}
           />
         )
@@ -184,12 +189,12 @@ export default function ManualInputPage() {
             onChange={(d) => d && setSelectedDate(d)}
           />
           <Button icon={<ReloadOutlined />} onClick={loadPoints}>刷新位点</Button>
-          <Button icon={<PlusOutlined />} onClick={() => setAddModalOpen(true)}>
+          {canOperate && <Button icon={<PlusOutlined />} onClick={() => setAddModalOpen(true)}>
             新增位点
-          </Button>
-          <Button type="primary" icon={<SendOutlined />} loading={submitting} onClick={handleSubmit}>
+          </Button>}
+          {canBulkImport && <Button type="primary" icon={<SendOutlined />} loading={submitting} onClick={handleSubmit}>
             提交
-          </Button>
+          </Button>}
         </Space>
 
         <div className="mb-2">
@@ -201,10 +206,12 @@ export default function ManualInputPage() {
                 size="small"
                 value={slot}
                 onChange={(e) => {
+                  if (!canBulkImport) return
                   const newSlots = [...timeSlots]
                   newSlots[idx] = e.target.value
                   setTimeSlots(newSlots)
                 }}
+                disabled={!canBulkImport}
                 style={{ width: 80 }}
               />
             ))}
@@ -234,8 +241,8 @@ export default function ManualInputPage() {
 
       <Modal
         title="新增位点"
-        open={addModalOpen}
-        onOk={handleAddPoint}
+        open={addModalOpen && canOperate}
+        onOk={canOperate ? handleAddPoint : undefined}
         onCancel={() => { setAddModalOpen(false); addForm.resetFields() }}
       >
         <Form form={addForm} layout="vertical">

@@ -12,6 +12,7 @@ import {
   clearPositionTrainingListsByDept,
 } from '@/actions/hr'
 import type { PositionTrainingList, PositionTrainingListItem } from '@/types/hr'
+import { usePagePermissions } from '@/hooks/usePagePermissions'
 
 interface ItemDisplay {
   key: string
@@ -28,6 +29,9 @@ interface ItemDisplay {
 }
 
 export default function PositionTrainingListClient() {
+  const { canOperate, canDelete, canImport, canExport } = usePagePermissions(
+    'hr:training:position-training',
+  )
   const { message } = App.useApp()
   const [items, setItems] = useState<ItemDisplay[]>([])
   const [loading, setLoading] = useState(false)
@@ -124,6 +128,7 @@ export default function PositionTrainingListClient() {
   // ─── CRUD ───
 
   const handleAdd = () => {
+    if (!canOperate) return
     setEditingItem(null)
     form.resetFields()
     form.setFieldsValue({ level: '岗位级' })
@@ -131,6 +136,7 @@ export default function PositionTrainingListClient() {
   }
 
   const handleEdit = (item: ItemDisplay) => {
+    if (!canOperate) return
     setEditingItem(item)
     form.setFieldsValue({
       level: item.level,
@@ -143,7 +149,7 @@ export default function PositionTrainingListClient() {
   }
 
   const handleDelete = async (item: ItemDisplay) => {
-    if (!item.listId) return
+    if (!canDelete || !item.listId) return
     try {
       const all = await fetchPositionTrainingLists({
         department: department || undefined,
@@ -172,6 +178,7 @@ export default function PositionTrainingListClient() {
   }
 
   const handleSubmit = async () => {
+    if (!canOperate) return
     try {
       const values = await form.validateFields()
       const newItem = {
@@ -239,6 +246,7 @@ export default function PositionTrainingListClient() {
   // ─── 导入 ───
 
   const handleImport = async (file: File) => {
+    if (!canImport) return false
     setImportLoading(true)
     try {
       const result = await importPositionTrainingLists(file)
@@ -264,6 +272,7 @@ export default function PositionTrainingListClient() {
   // ─── 导出 ───
 
   const handleExport = async () => {
+    if (!canExport) return
     if (!currentListId) {
       message.warning('暂无数据可导出')
       return
@@ -320,9 +329,9 @@ export default function PositionTrainingListClient() {
       width: 140,
       render: (_, record) => (
         <Space>
-          <Button type="link" size="small" onClick={() => handleEdit(record)}>编辑</Button>
-          <Popconfirm title="确定删除吗？" onConfirm={() => handleDelete(record)}>
-            <Button type="link" size="small" danger>删除</Button>
+          <Button type="link" size="small" disabled={!canOperate} onClick={() => handleEdit(record)}>编辑</Button>
+          <Popconfirm disabled={!canDelete} title="确定删除吗？" onConfirm={() => handleDelete(record)}>
+            <Button type="link" size="small" danger disabled={!canDelete}>删除</Button>
           </Popconfirm>
         </Space>
       ),
@@ -369,18 +378,20 @@ export default function PositionTrainingListClient() {
             multiple
             showUploadList={false}
             beforeUpload={(file) => { handleImport(file); return false }}
-            disabled={importLoading}
+            disabled={importLoading || !canImport}
           >
-            <Button icon={<UploadOutlined />} loading={importLoading}>
+            <Button icon={<UploadOutlined />} loading={importLoading} disabled={!canImport}>
               {importLoading ? '导入中...' : '导入'}
             </Button>
           </Upload>
-          <Button icon={<DownloadOutlined />} onClick={handleExport}>导出</Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增明细</Button>
+          <Button icon={<DownloadOutlined />} disabled={!canExport} onClick={handleExport}>导出</Button>
+          <Button type="primary" icon={<PlusOutlined />} disabled={!canOperate} onClick={handleAdd}>新增明细</Button>
           <Popconfirm
             title={`确定清除 "${department}" 的所有岗位培训清单吗？`}
             description="此操作不可恢复，部门下全部清单和明细将被删除"
+            disabled={!canDelete}
             onConfirm={async () => {
+              if (!canDelete) return
               setClearLoading(true)
               try {
                 const result = await clearPositionTrainingListsByDept(department)
@@ -394,7 +405,7 @@ export default function PositionTrainingListClient() {
             cancelText="取消"
             okButtonProps={{ danger: true }}
           >
-            <Button danger icon={<DeleteOutlined />} loading={clearLoading} disabled={!department}>
+            <Button danger icon={<DeleteOutlined />} loading={clearLoading} disabled={!department || !canDelete}>
               一键清除
             </Button>
           </Popconfirm>
@@ -421,8 +432,8 @@ export default function PositionTrainingListClient() {
       {/* Add / Edit Modal */}
       <Modal
         title={editingItem ? '编辑培训明细' : '新增培训明细'}
-        open={modalOpen}
-        onOk={handleSubmit}
+        open={modalOpen && canOperate}
+        onOk={canOperate ? handleSubmit : undefined}
         onCancel={() => setModalOpen(false)}
         width={560}
         destroyOnHidden

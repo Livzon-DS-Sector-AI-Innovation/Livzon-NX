@@ -25,11 +25,13 @@ import {
 } from '@/actions/pressure'
 import { AREA_OPTIONS } from '@/types/pressure'
 import type { PointMapping } from '@/types/pressure'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title } = Typography
 
 export default function PointManagementPage() {
   const { message } = App.useApp()
+  const { canOperate, canDelete } = useProductionPermissions(PRODUCTION_PAGE_KEYS.pressure)
   const [loading, setLoading] = useState(false)
   const [mappings, setMappings] = useState<PointMapping[]>([])
   const [total, setTotal] = useState(0)
@@ -61,6 +63,7 @@ export default function PointManagementPage() {
   }, [loadData])
 
   const handleSubmit = async () => {
+    if (!canOperate) return
     try {
       const values = await form.validateFields()
       if (editingId) {
@@ -96,6 +99,7 @@ export default function PointManagementPage() {
   }
 
   const handleEdit = (record: PointMapping) => {
+    if (!canOperate) return
     setEditingId(record.id)
     form.setFieldsValue({
       point_id: record.point_id,
@@ -106,6 +110,7 @@ export default function PointManagementPage() {
   }
 
   const handleDelete = async (id: string) => {
+    if (!canDelete) return
     const res = await deletePointMapping(id)
     if (res.code === 200) {
       message.success('删除成功')
@@ -123,10 +128,10 @@ export default function PointManagementPage() {
       width: 120,
       render: (_: any, record: PointMapping) => (
         <Space>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
-          <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)}>
+          {canOperate && <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />}
+          {canDelete && <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)}>
             <Button type="link" danger size="small" icon={<DeleteOutlined />} />
-          </Popconfirm>
+          </Popconfirm>}
         </Space>
       )
     },
@@ -136,13 +141,13 @@ export default function PointManagementPage() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <Title level={4}>位点管理</Title>
-        <Button
+        {canOperate && <Button
           type="primary"
           icon={<PlusOutlined />}
           onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true) }}
         >
           新增位点
-        </Button>
+        </Button>}
       </div>
 
       <Card variant="borderless" className="shadow-sm">
@@ -182,8 +187,8 @@ export default function PointManagementPage() {
 
       <Modal
         title={editingId ? '编辑位点' : '新增位点'}
-        open={modalOpen}
-        onOk={handleSubmit}
+        open={modalOpen && canOperate}
+        onOk={canOperate ? handleSubmit : undefined}
         onCancel={() => { setModalOpen(false); setEditingId(null); form.resetFields() }}
         destroyOnHidden
       >

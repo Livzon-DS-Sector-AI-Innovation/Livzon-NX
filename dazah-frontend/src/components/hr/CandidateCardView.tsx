@@ -14,6 +14,7 @@ interface CandidateCardViewProps {
   loading: boolean
   onPageChange: (page: number, pageSize: number) => void
   onDelete: (id: string) => void
+  canDelete: boolean
 }
 
 export default function CandidateCardView({
@@ -24,6 +25,7 @@ export default function CandidateCardView({
   loading,
   onPageChange,
   onDelete,
+  canDelete,
 }: CandidateCardViewProps) {
   const router = useRouter()
 
@@ -118,7 +120,7 @@ export default function CandidateCardView({
                   </Tag>
                 )}
               </div>
-              <Popconfirm
+              {canDelete ? <Popconfirm
                 title="确认删除"
                 description={`确定要删除候选人「${candidate.name}」的简历吗？`}
                 onConfirm={() => onDelete(candidate.id)}
@@ -134,7 +136,7 @@ export default function CandidateCardView({
                 >
                   删除
                 </Button>
-              </Popconfirm>
+              </Popconfirm> : null}
             </div>
           </Card>
         ))}

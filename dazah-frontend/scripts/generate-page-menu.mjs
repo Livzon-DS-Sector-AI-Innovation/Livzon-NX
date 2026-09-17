@@ -1,4 +1,4 @@
-// Generate the first-batch backend menu seed from the existing static navigation.
+// Generate the reviewed backend page-menu catalog from the existing static navigation.
 import fs from 'node:fs'
 import path from 'node:path'
 import vm from 'node:vm'
@@ -27,8 +27,8 @@ function node(item) {
     disabled: Boolean(item.disabled), children: item.children?.map(node) || null }
 }
 const { moduleMenus } = load(path.join(root, 'src/lib/menu-config.ts'))
-const firstBatch = new Set(['hr', 'warehouse', 'quality', 'procurement'])
-const output = moduleMenus.filter((menuModule) => firstBatch.has(menuModule.moduleCode)).map(node)
+const reviewedModules = new Set(['production', 'hr', 'warehouse', 'quality', 'procurement'])
+const output = moduleMenus.filter((menuModule) => reviewedModules.has(menuModule.moduleCode)).map(node)
 const target = path.resolve(root, '../dazah-backend/app/platform/identity/page_menu_catalog.json')
 const content = `${JSON.stringify(output, null, 2)}\n`
 if (process.argv.includes('--check')) {

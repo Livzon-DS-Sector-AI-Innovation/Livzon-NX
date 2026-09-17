@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
 import SyncSettingsButton from '@/components/production/SyncSettingsButton'
+import { PRODUCTION_PAGE_KEYS } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
 
@@ -124,7 +125,7 @@ function Workshop203Content() {
           />
         </Space>
         <Space size={8}>
-          <SyncSettingsButton productName="L-苯丙氨酸" syncTarget="production_plan" />
+          <SyncSettingsButton productName="L-苯丙氨酸" syncTarget="production_plan" pageKey={PRODUCTION_PAGE_KEYS.workshop203} />
           <Button size="large" icon={<NodeIndexOutlined />} onClick={() => router.push('/production/batches/workshop/203/traceability')}>
             批次追踪
           </Button>

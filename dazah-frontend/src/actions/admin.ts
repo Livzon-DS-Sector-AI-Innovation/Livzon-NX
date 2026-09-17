@@ -22,9 +22,18 @@ type RoleMenusRequest = components["schemas"]["RoleMenusRequest"]
 type DataScopeRuleCreateRequest = components["schemas"]["DataScopeRuleCreateRequest"]
 type PermissionSimulateRequest = components["schemas"]["PermissionSimulateRequest"]
 export type RolePagePermissionsOut = components["schemas"]["RolePagePermissionsOut"]
+export type RolePagePermissionsPreviewOut = components["schemas"]["RolePagePermissionsPreviewOut"]
 export type RolePagePermissionsUpdate = components["schemas"]["RolePagePermissionsUpdate"]
 export type PagePermissionSimulationRequest = components["schemas"]["PagePermissionSimulationRequest"]
 export type PagePermissionSimulationOut = components["schemas"]["PagePermissionSimulationOut"]
+export type PagePermissionHistoryItemOut = components["schemas"]["PagePermissionHistoryItemOut"]
+export type PagePermissionHistoryPageOut = components["schemas"]["PagePermissionHistoryPageOut"]
+export type PagePermissionRollbackRequest = components["schemas"]["PagePermissionRollbackRequest"]
+export type PagePermissionRollbackPreviewRequest = components["schemas"]["PagePermissionRollbackPreviewRequest"]
+export type PagePermissionRollbackPreviewOut = components["schemas"]["PagePermissionRollbackPreviewOut"]
+export type PagePermissionHealthOut = components["schemas"]["PagePermissionHealthOut"]
+export type PagePermissionHealthRemediationRequest = components["schemas"]["PagePermissionHealthRemediationRequest"]
+export type PagePermissionHealthRemediationOut = components["schemas"]["PagePermissionHealthRemediationOut"]
 export type PermissionModuleRolloutOut = components["schemas"]["PermissionModuleRolloutOut"]
 export type PermissionModuleRolloutPreviewOut = components["schemas"]["PermissionModuleRolloutPreviewOut"]
 
@@ -116,8 +125,17 @@ export async function setRolePermissions(roleId: string, permissionIds: string[]
 
 // ── 用户角色 ────────────────────────────────────────────────────────
 
-export async function assignUserRoles(userId: string, roleIds: string[]) {
-  const body: AssignUserRoleRequest = { role_ids: roleIds }
+export async function assignUserRoles(userId: string, roleIds: string[], options?: {
+  expectedGrantVersion?: number
+  reason?: string
+  mode?: "replace" | "add"
+}) {
+  const body: AssignUserRoleRequest = {
+    role_ids: roleIds,
+    mode: options?.mode ?? "replace",
+    ...(options?.expectedGrantVersion == null ? {} : { expected_grant_version: options.expectedGrantVersion }),
+    ...(options?.reason ? { reason: options.reason } : {}),
+  }
   const res = await authedFetch(`/identity/admin/users/${userId}/roles`, {
     method: "POST",
     body: JSON.stringify(body),
@@ -140,7 +158,7 @@ export async function removeUserRole(userId: string, roleId: string) {
 
 /** 批量界面逐人调用，保留生产环境下的鉴权错误与部分成功结果。 */
 export async function applyDeptRolesToUser(userId: string, roleIds: string[]) {
-  const body: AssignUserRoleRequest = { role_ids: [...new Set(roleIds)] }
+  const body: AssignUserRoleRequest = { role_ids: [...new Set(roleIds)], mode: "add" }
   const result = await permissionActionResult<unknown>(() => authedFetch(
     `/identity/admin/users/${encodeURIComponent(userId)}/roles`,
     { method: "POST", body: JSON.stringify(body) },
@@ -389,6 +407,103 @@ export async function replaceRolePagePermissions(
     { method: "PUT", body: JSON.stringify(data) }
   ))
   if (result.ok) revalidatePath("/system/roles")
+  return result
+}
+
+export async function previewRolePagePermissions(
+  roleId: string,
+  data: RolePagePermissionsUpdate
+) {
+  const res = await authedFetch(
+    `/identity/admin/roles/${roleId}/page-permissions/preview`,
+    { method: "POST", body: JSON.stringify(data) }
+  )
+  return handleResponse(res) as Promise<RolePagePermissionsPreviewOut>
+}
+
+export type PagePermissionHistoryQuery = {
+  actor_user_id?: string
+  source?: "manual" | "rollback" | "health_remediation"
+  page_key?: string
+  change_kind?: "grant" | "expand" | "restrict" | "revoke" | "mixed"
+  date_from?: string
+  date_to?: string
+  page?: number
+  page_size?: number
+}
+
+function pagePermissionHistoryQuery(query: PagePermissionHistoryQuery = {}) {
+  const params = new URLSearchParams()
+  Object.entries(query).forEach(([key, value]) => {
+    if (value) params.set(key, String(value))
+  })
+  const text = params.toString()
+  return text ? `?${text}` : ""
+}
+
+export async function getRolePagePermissionHistory(
+  roleId: string,
+  query: PagePermissionHistoryQuery = {}
+) {
+  const res = await authedFetch(
+    `/identity/admin/roles/${roleId}/page-permissions/history${pagePermissionHistoryQuery(query)}`
+  )
+  return handleResponse(res) as Promise<PagePermissionHistoryPageOut>
+}
+
+export async function previewRolePagePermissionRollback(
+  roleId: string,
+  data: PagePermissionRollbackPreviewRequest
+) {
+  const res = await authedFetch(
+    `/identity/admin/roles/${roleId}/page-permissions/rollback/preview`,
+    { method: "POST", body: JSON.stringify(data) }
+  )
+  return handleResponse(res) as Promise<PagePermissionRollbackPreviewOut>
+}
+
+export async function exportRolePagePermissionHistory(roleId: string) {
+  const res = await authedFetch(
+    `/identity/admin/roles/${roleId}/page-permissions/history/export`
+  )
+  if (!res.ok) await handleResponse(res)
+  return {
+    filename: /filename="?([^";]+)"?/.exec(res.headers.get("Content-Disposition") ?? "")?.[1]
+      ?? "page-permission-history.csv",
+    content: await res.text(),
+  }
+}
+
+export async function rollbackRolePagePermissions(
+  roleId: string,
+  data: PagePermissionRollbackRequest
+) {
+  const result = await permissionActionResult<RolePagePermissionsOut>(() => authedFetch(
+    `/identity/admin/roles/${roleId}/page-permissions/rollback`,
+    { method: "POST", body: JSON.stringify(data) }
+  ))
+  if (result.ok) revalidatePath("/system/roles")
+  return result
+}
+
+export async function getPagePermissionHealth() {
+  const res = await authedFetch("/identity/admin/page-permissions/health")
+  return handleResponse(res) as Promise<PagePermissionHealthOut>
+}
+
+export async function remediatePagePermissionHealth(
+  data: PagePermissionHealthRemediationRequest
+) {
+  const result = await permissionActionResult<PagePermissionHealthRemediationOut>(
+    () => authedFetch("/identity/admin/page-permissions/health/remediate", {
+      method: "POST",
+      body: JSON.stringify(data),
+    })
+  )
+  if (result.ok) {
+    revalidatePath("/system/roles")
+    revalidatePath("/settings")
+  }
   return result
 }
 

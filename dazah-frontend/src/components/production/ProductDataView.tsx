@@ -1,5 +1,7 @@
 'use client'
 
+import { BatchWorkshopField } from './BatchWorkshopField'
+
 import { useEffect, useState } from 'react'
 import {
   Table,
@@ -33,6 +35,11 @@ import {PlusOutlined,
 import { getBatches, createBatch, updateBatch, deleteBatch } from '@/actions/production'
 import type { Batch, BatchFormData, BatchStatus } from '@/types/production'
 import { BatchStatus as BatchStatusEnum, BATCH_STATUS_OPTIONS } from '@/types/production'
+import {
+  PRODUCTION_PAGE_KEYS,
+  useProductionPermissions,
+  type ProductionPageKey,
+} from './useProductionPermissions'
 
 const { Text, Title } = Typography
 
@@ -98,10 +105,16 @@ const exportBatchesToCsv = (batches: Batch[], productName: string) => {
 
 interface ProductDataViewProps {
   productName: string
+  /** Legacy product routes inherit the overview page identity. */
+  pageKey?: ProductionPageKey
 }
 
-export default function ProductDataView({ productName }: ProductDataViewProps) {
+export default function ProductDataView({ productName, pageKey }: ProductDataViewProps) {
   const { message, modal } = App.useApp()
+  const permissions = useProductionPermissions(pageKey || PRODUCTION_PAGE_KEYS.overview)
+  const canOperate = permissions.canOperate
+  const canDelete = permissions.canDelete
+  const canExport = permissions.canExport
   const [form] = Form.useForm()
   const [editForm] = Form.useForm()
   const [loading, setLoading] = useState(false)
@@ -165,6 +178,7 @@ export default function ProductDataView({ productName }: ProductDataViewProps) {
   const paginatedBatches = batches.slice((page - 1) * pageSize, page * pageSize)
 
   const handleAdd = () => {
+    if (!canOperate) return
     setEditingBatch(null)
     form.resetFields()
     form.setFieldsValue({ product_name: productName })
@@ -172,12 +186,14 @@ export default function ProductDataView({ productName }: ProductDataViewProps) {
   }
 
   const handleEdit = (record: Batch) => {
+    if (!canOperate) return
     setEditingBatch(record)
     editForm.setFieldsValue(record)
     setModalVisible(true)
   }
 
   const handleDelete = async (id: string) => {
+    if (!canDelete) return
     modal.confirm({
       title: '确认删除',
       content: '确定要删除这个批次吗？',
@@ -198,6 +214,7 @@ export default function ProductDataView({ productName }: ProductDataViewProps) {
   }
 
   const handleSubmit = async () => {
+    if (!canOperate) return
     try {
       const values = editingBatch
         ? await editForm.validateFields()
@@ -235,6 +252,7 @@ export default function ProductDataView({ productName }: ProductDataViewProps) {
   }
 
   const handleExport = async () => {
+    if (!canExport) return
     setExportLoading(true)
     try {
       if (batches.length > 0) {
@@ -324,15 +342,15 @@ export default function ProductDataView({ productName }: ProductDataViewProps) {
       fixed: 'right',
       render: (_, record) => (
         <Space size="small">
-          <Button
+          {canOperate && <Button
             type="link"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
             编辑
-          </Button>
-          <Button
+          </Button>}
+          {canDelete && <Button
             type="link"
             size="small"
             danger
@@ -340,7 +358,7 @@ export default function ProductDataView({ productName }: ProductDataViewProps) {
             onClick={() => handleDelete(record.id)}
           >
             删除
-          </Button>
+          </Button>}
         </Space>
       ),
     },
@@ -429,14 +447,14 @@ export default function ProductDataView({ productName }: ProductDataViewProps) {
         title={`${productName} - 批次列表`}
         extra={
           <Space>
-            <Tooltip title="导出当前筛选结果的批次数据">
+            {canExport && <Tooltip title="导出当前筛选结果的批次数据">
               <Button icon={<DownloadOutlined />} onClick={handleExport} loading={exportLoading}>
                 导出
               </Button>
-            </Tooltip>
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+            </Tooltip>}
+            {canOperate && <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
               新建批次
-            </Button>
+            </Button>}
           </Space>
         }
       >
@@ -496,7 +514,7 @@ export default function ProductDataView({ productName }: ProductDataViewProps) {
       <Modal
         title={editingBatch ? `编辑批次 - ${productName}` : `新建批次 - ${productName}`}
         open={modalVisible}
-        onOk={handleSubmit}
+        onOk={canOperate ? handleSubmit : undefined}
         onCancel={() => setModalVisible(false)}
         width={600}
         okText="确认"
@@ -570,6 +588,7 @@ export default function ProductDataView({ productName }: ProductDataViewProps) {
               </Form.Item>
             </Col>
           </Row>
+          <BatchWorkshopField pageKey={pageKey} />
           <Form.Item name="notes" label="备注">
             <Input.TextArea rows={3} placeholder="请输入备注" />
           </Form.Item>

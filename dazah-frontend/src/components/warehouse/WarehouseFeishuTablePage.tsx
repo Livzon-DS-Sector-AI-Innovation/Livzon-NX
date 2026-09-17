@@ -1554,11 +1554,11 @@ export function WarehouseFeishuTablePage({
   )
 
   const refreshIncremental = useCallback(() => {
-    if (!canQueryThisPage) return
+    if (!canQueryThisPage || !canSyncThisPage) return
     setRefreshing(true)
     refreshMutation.mutate({ incremental: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshMutation.mutate, canQueryThisPage])
+  }, [refreshMutation.mutate, canQueryThisPage, canSyncThisPage])
 
   const handleRefresh = () => {
     refreshIncremental()

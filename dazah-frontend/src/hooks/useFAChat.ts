@@ -4,6 +4,11 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { App } from 'antd'
+import {
+  PRODUCTION_PAGE_KEYS,
+  useProductionPermissions,
+  type ProductionPageKey,
+} from '@/components/production/useProductionPermissions'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
 const BASE = '/api/v1/production/fa'
@@ -11,10 +16,13 @@ const BASE = '/api/v1/production/fa'
 export interface UseFAChatOptions {
   stage: string
   batchNo: string
+  pageKey?: ProductionPageKey
 }
 
-export function useFAChat({ stage, batchNo }: UseFAChatOptions) {
+export function useFAChat({ stage, batchNo, pageKey }: UseFAChatOptions) {
   const { message } = App.useApp()
+  const permissionsEnabled = Boolean(pageKey)
+  const { canOperate } = useProductionPermissions(pageKey || PRODUCTION_PAGE_KEYS.overview)
 
   // ── AI 分析状态 ──
   const [aiLoading, setAiLoading] = useState(false)
@@ -98,6 +106,7 @@ export function useFAChat({ stage, batchNo }: UseFAChatOptions) {
 
   // ═══════════════ 对话发送 ═══════════════
   const doChatSend = useCallback(async () => {
+    if (permissionsEnabled && !canOperate) return
     const msg = chatInput.trim()
     if (!msg) return
     const currentResult = aiResultRef.current
@@ -154,7 +163,7 @@ export function useFAChat({ stage, batchNo }: UseFAChatOptions) {
     } finally {
       setChatSending(false)
     }
-  }, [chatInput, message])
+  }, [permissionsEnabled, canOperate, chatInput, message])
 
   // ═══════════════ 历史记录 ═══════════════
   const loadHistory = useCallback(async () => {
@@ -176,5 +185,7 @@ export function useFAChat({ stage, batchNo }: UseFAChatOptions) {
     doAiAnalysis, doChatSend, loadHistory,
     setChatInput, setChatMessages, setAiResult, setHistoryRecords,
     aiResultRef,
+    canOperate,
+    permissionsEnabled,
   }
 }

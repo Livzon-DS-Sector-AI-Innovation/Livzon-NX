@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { clearProductionAuthForTest, setProductionAdminForTest } from '@/test/production-auth'
 
 const actions = vi.hoisted(() => ({
   getNCEs: vi.fn(),
@@ -42,6 +43,7 @@ describe('ShiftLogDeviationPage', () => {
   let container: HTMLElement
 
   beforeEach(() => {
+    setProductionAdminForTest()
     actions.getNCEs.mockResolvedValue({ code: 200, message: 'success', data: RECORDS, meta: { total: 1 } })
     container = document.createElement('div')
     document.body.append(container)
@@ -51,6 +53,7 @@ describe('ShiftLogDeviationPage', () => {
   afterEach(() => {
     act(() => root.unmount())
     container?.remove()
+    clearProductionAuthForTest()
     vi.clearAllMocks()
   })
 

@@ -504,11 +504,6 @@ async def api_push_low_stock_test(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    await _assert_quality_edit_scope(
-        db,
-        current_user,
-        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["qc"],
-    )
     result = await push_low_stock_alert(db, test=True)
     return success_response(data=result.model_dump(mode="json"))
 

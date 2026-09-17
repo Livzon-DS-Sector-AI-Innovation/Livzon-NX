@@ -10,6 +10,7 @@ export default async function LabelVerificationPage() {
     <LabelVerificationClient
       initialVerifications={res?.data || []}
       initialTotal={res?.meta?.total || 0}
+      pageKey="production:label-verification"
     />
   )
 }

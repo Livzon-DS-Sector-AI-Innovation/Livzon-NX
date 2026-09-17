@@ -7949,6 +7949,39 @@
       },
       "AssignUserRoleRequest": {
         "properties": {
+          "expected_grant_version": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Grant Version"
+          },
+          "mode": {
+            "default": "add",
+            "enum": [
+              "replace",
+              "add"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
           "role_ids": {
             "items": {
               "format": "uuid",
@@ -9925,6 +9958,19 @@
             ],
             "description": "单位",
             "title": "Unit"
+          },
+          "workshop_code": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "所属车间编码；空值表示待确认",
+            "title": "Workshop Code"
           }
         },
         "required": [
@@ -10597,6 +10643,19 @@
             ],
             "description": "单位",
             "title": "Unit"
+          },
+          "workshop_code": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "所属车间编码",
+            "title": "Workshop Code"
           }
         },
         "title": "BatchUpdate",
@@ -10898,51 +10957,6 @@
           "file"
         ],
         "title": "Body_confirm_deviation_import_api_v1_quality_deviations_import_confirm_post",
-        "type": "object"
-      },
-      "Body_confirm_import_api_v1_quality_cpv_import_confirm_post": {
-        "properties": {
-          "data_type": {
-            "description": "数据类型: CPP/CQA",
-            "title": "Data Type",
-            "type": "string"
-          },
-          "file": {
-            "contentMediaType": "application/octet-stream",
-            "title": "File",
-            "type": "string"
-          },
-          "file_name": {
-            "description": "文件名",
-            "title": "File Name",
-            "type": "string"
-          },
-          "import_mode": {
-            "default": "create",
-            "description": "导入模式: create/update/overwrite",
-            "title": "Import Mode",
-            "type": "string"
-          },
-          "product_id": {
-            "description": "产品ID",
-            "format": "uuid",
-            "title": "Product Id",
-            "type": "string"
-          },
-          "skip_errors": {
-            "default": false,
-            "description": "跳过错误行",
-            "title": "Skip Errors",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "file",
-          "product_id",
-          "data_type",
-          "file_name"
-        ],
-        "title": "Body_confirm_import_api_v1_quality_cpv_import_confirm_post",
         "type": "object"
       },
       "Body_confirm_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_confirm_post": {
@@ -11641,20 +11655,6 @@
           "file"
         ],
         "title": "Body_preview_deviation_import_api_v1_quality_deviations_import_preview_post",
-        "type": "object"
-      },
-      "Body_preview_import_api_v1_quality_cpv_import_preview_post": {
-        "properties": {
-          "file": {
-            "contentMediaType": "application/octet-stream",
-            "title": "File",
-            "type": "string"
-          }
-        },
-        "required": [
-          "file"
-        ],
-        "title": "Body_preview_import_api_v1_quality_cpv_import_preview_post",
         "type": "object"
       },
       "Body_preview_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_preview_post": {
@@ -20651,402 +20651,6 @@
           }
         },
         "title": "ContractorWorkRecordUpdate",
-        "type": "object"
-      },
-      "CpvParameterCreate": {
-        "description": "创建参数请求",
-        "properties": {
-          "code": {
-            "anyOf": [
-              {
-                "maxLength": 100,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "参数代码",
-            "title": "Code"
-          },
-          "control_lower": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "控制下限",
-            "title": "Control Lower"
-          },
-          "control_upper": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "控制上限",
-            "title": "Control Upper"
-          },
-          "is_enabled": {
-            "default": true,
-            "description": "是否启用",
-            "title": "Is Enabled",
-            "type": "boolean"
-          },
-          "lower_limit": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "标准下限",
-            "title": "Lower Limit"
-          },
-          "name": {
-            "description": "参数名称",
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
-          },
-          "parameter_type": {
-            "description": "参数类型",
-            "enum": [
-              "CPP",
-              "CQA"
-            ],
-            "title": "Parameter Type",
-            "type": "string"
-          },
-          "sort_order": {
-            "default": 0,
-            "description": "排序",
-            "title": "Sort Order",
-            "type": "integer"
-          },
-          "target_value": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "目标值",
-            "title": "Target Value"
-          },
-          "unit": {
-            "anyOf": [
-              {
-                "maxLength": 50,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "单位",
-            "title": "Unit"
-          },
-          "upper_limit": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "标准上限",
-            "title": "Upper Limit"
-          }
-        },
-        "required": [
-          "parameter_type",
-          "name"
-        ],
-        "title": "CpvParameterCreate",
-        "type": "object"
-      },
-      "CpvParameterUpdate": {
-        "description": "更新参数请求",
-        "properties": {
-          "code": {
-            "anyOf": [
-              {
-                "maxLength": 100,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "参数代码",
-            "title": "Code"
-          },
-          "control_lower": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "控制下限",
-            "title": "Control Lower"
-          },
-          "control_upper": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "控制上限",
-            "title": "Control Upper"
-          },
-          "is_enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "是否启用",
-            "title": "Is Enabled"
-          },
-          "lower_limit": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "标准下限",
-            "title": "Lower Limit"
-          },
-          "name": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "参数名称",
-            "title": "Name"
-          },
-          "sort_order": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "排序",
-            "title": "Sort Order"
-          },
-          "target_value": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "目标值",
-            "title": "Target Value"
-          },
-          "unit": {
-            "anyOf": [
-              {
-                "maxLength": 50,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "单位",
-            "title": "Unit"
-          },
-          "upper_limit": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "标准上限",
-            "title": "Upper Limit"
-          }
-        },
-        "title": "CpvParameterUpdate",
-        "type": "object"
-      },
-      "CpvProductCreate": {
-        "description": "创建产品请求",
-        "properties": {
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "备注描述",
-            "title": "Description"
-          },
-          "name": {
-            "description": "产品名称",
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
-          },
-          "process_version": {
-            "anyOf": [
-              {
-                "maxLength": 50,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "工艺版本",
-            "title": "Process Version"
-          },
-          "specification": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "规格",
-            "title": "Specification"
-          },
-          "status": {
-            "default": "active",
-            "description": "状态",
-            "enum": [
-              "active",
-              "inactive"
-            ],
-            "title": "Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "CpvProductCreate",
-        "type": "object"
-      },
-      "CpvProductUpdate": {
-        "description": "更新产品请求",
-        "properties": {
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "备注描述",
-            "title": "Description"
-          },
-          "name": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "产品名称",
-            "title": "Name"
-          },
-          "process_version": {
-            "anyOf": [
-              {
-                "maxLength": 50,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "工艺版本",
-            "title": "Process Version"
-          },
-          "specification": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "规格",
-            "title": "Specification"
-          },
-          "status": {
-            "anyOf": [
-              {
-                "enum": [
-                  "active",
-                  "inactive"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "状态",
-            "title": "Status"
-          }
-        },
-        "title": "CpvProductUpdate",
         "type": "object"
       },
       "CreateAttachmentReviewRequest": {
@@ -30562,6 +30166,35 @@
             },
             "title": "Permissions",
             "type": "array"
+          },
+          "resolution": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Resolution",
+            "type": "array"
+          },
+          "role_sources": {
+            "items": {
+              "$ref": "#/components/schemas/PagePermissionRoleSourceOut"
+            },
+            "title": "Role Sources",
+            "type": "array"
+          },
+          "sensitive_action_expirations": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Sensitive Action Expirations",
+            "type": "object"
           },
           "sensitive_actions": {
             "items": {
@@ -55762,6 +55395,7 @@
             "type": "string"
           },
           "permissions": {
+            "description": "基础权限档位；operate 表示普通操作，不包含高风险操作",
             "items": {
               "enum": [
                 "access",
@@ -55775,12 +55409,25 @@
             "type": "array"
           },
           "sensitive_actions": {
+            "description": "附加高风险操作；非空时服务端同时授予 operate 基础权限",
             "items": {
               "type": "string"
             },
             "maxItems": 100,
             "title": "Sensitive Actions",
             "type": "array"
+          },
+          "sensitive_actions_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sensitive Actions Expires At"
           }
         },
         "required": [
@@ -55836,6 +55483,654 @@
           "route_path"
         ],
         "title": "PagePermissionDefinitionOut",
+        "type": "object"
+      },
+      "PagePermissionHealthIssueOut": {
+        "properties": {
+          "code": {
+            "enum": [
+              "retired_page",
+              "invalid_department",
+              "missing_module_access",
+              "redundant_user_override",
+              "sensitive_without_expiry",
+              "sensitive_expired",
+              "sensitive_expiring"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "grant_version": {
+            "minimum": 0.0,
+            "title": "Grant Version",
+            "type": "integer"
+          },
+          "module_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Module Code"
+          },
+          "page_key": {
+            "title": "Page Key",
+            "type": "string"
+          },
+          "page_name": {
+            "title": "Page Name",
+            "type": "string"
+          },
+          "remediation": {
+            "enum": [
+              "remove_grant",
+              "prune_departments",
+              "edit"
+            ],
+            "title": "Remediation",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "warning",
+              "error"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "target_id": {
+            "format": "uuid",
+            "title": "Target Id",
+            "type": "string"
+          },
+          "target_name": {
+            "title": "Target Name",
+            "type": "string"
+          },
+          "target_type": {
+            "enum": [
+              "role",
+              "user"
+            ],
+            "title": "Target Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "target_type",
+          "target_id",
+          "target_name",
+          "page_key",
+          "page_name",
+          "detail",
+          "grant_version",
+          "remediation"
+        ],
+        "title": "PagePermissionHealthIssueOut",
+        "type": "object"
+      },
+      "PagePermissionHealthOut": {
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "error_count": {
+            "minimum": 0.0,
+            "title": "Error Count",
+            "type": "integer"
+          },
+          "issue_count": {
+            "minimum": 0.0,
+            "title": "Issue Count",
+            "type": "integer"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/PagePermissionHealthIssueOut"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "warning_count": {
+            "minimum": 0.0,
+            "title": "Warning Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "checked_at",
+          "issue_count",
+          "error_count",
+          "warning_count"
+        ],
+        "title": "PagePermissionHealthOut",
+        "type": "object"
+      },
+      "PagePermissionHealthRemediationOut": {
+        "properties": {
+          "fixed": {
+            "default": true,
+            "title": "Fixed",
+            "type": "boolean"
+          },
+          "grant_version": {
+            "minimum": 0.0,
+            "title": "Grant Version",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "grant_version",
+          "message"
+        ],
+        "title": "PagePermissionHealthRemediationOut",
+        "type": "object"
+      },
+      "PagePermissionHealthRemediationRequest": {
+        "properties": {
+          "code": {
+            "enum": [
+              "retired_page",
+              "invalid_department",
+              "redundant_user_override"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "expected_grant_version": {
+            "minimum": 0.0,
+            "title": "Expected Grant Version",
+            "type": "integer"
+          },
+          "page_key": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Page Key",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "target_id": {
+            "format": "uuid",
+            "title": "Target Id",
+            "type": "string"
+          },
+          "target_type": {
+            "enum": [
+              "role",
+              "user"
+            ],
+            "title": "Target Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "target_type",
+          "target_id",
+          "page_key",
+          "expected_grant_version",
+          "reason"
+        ],
+        "title": "PagePermissionHealthRemediationRequest",
+        "type": "object"
+      },
+      "PagePermissionHistoryActorOut": {
+        "properties": {
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          },
+          "user_name": {
+            "title": "User Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "user_name"
+        ],
+        "title": "PagePermissionHistoryActorOut",
+        "type": "object"
+      },
+      "PagePermissionHistoryChangeOut": {
+        "properties": {
+          "after": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "kind": {
+            "enum": [
+              "grant",
+              "expand",
+              "restrict",
+              "revoke",
+              "mixed"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "page_key": {
+            "title": "Page Key",
+            "type": "string"
+          },
+          "page_name": {
+            "title": "Page Name",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "page_key",
+          "page_name",
+          "kind",
+          "summary"
+        ],
+        "title": "PagePermissionHistoryChangeOut",
+        "type": "object"
+      },
+      "PagePermissionHistoryItemOut": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "actor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Name"
+          },
+          "actor_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor User Id"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/PagePermissionHistoryChangeOut"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "grant_version": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant Version"
+          },
+          "grants": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Grants",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "old_grants": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Old Grants",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "rollback_of": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rollback Of"
+          },
+          "source": {
+            "enum": [
+              "manual",
+              "rollback",
+              "health_remediation"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "source",
+          "created_at"
+        ],
+        "title": "PagePermissionHistoryItemOut",
+        "type": "object"
+      },
+      "PagePermissionHistoryPageOut": {
+        "properties": {
+          "actor_options": {
+            "items": {
+              "$ref": "#/components/schemas/PagePermissionHistoryActorOut"
+            },
+            "title": "Actor Options",
+            "type": "array"
+          },
+          "is_truncated": {
+            "default": false,
+            "title": "Is Truncated",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PagePermissionHistoryItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "PagePermissionHistoryPageOut",
+        "type": "object"
+      },
+      "PagePermissionRoleSourceOut": {
+        "properties": {
+          "data_scope": {
+            "$ref": "#/components/schemas/PageDataScopeInput"
+          },
+          "permissions": {
+            "items": {
+              "enum": [
+                "access",
+                "query",
+                "operate"
+              ],
+              "type": "string"
+            },
+            "title": "Permissions",
+            "type": "array"
+          },
+          "role_id": {
+            "format": "uuid",
+            "title": "Role Id",
+            "type": "string"
+          },
+          "role_name": {
+            "title": "Role Name",
+            "type": "string"
+          },
+          "sensitive_actions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sensitive Actions",
+            "type": "array"
+          },
+          "sensitive_actions_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sensitive Actions Expires At"
+          }
+        },
+        "required": [
+          "role_id",
+          "role_name",
+          "data_scope"
+        ],
+        "title": "PagePermissionRoleSourceOut",
+        "type": "object"
+      },
+      "PagePermissionRollbackPreviewOut": {
+        "properties": {
+          "affected_user_count": {
+            "minimum": 0.0,
+            "title": "Affected User Count",
+            "type": "integer"
+          },
+          "affected_user_samples": {
+            "items": {
+              "$ref": "#/components/schemas/RolePagePermissionAffectedUserOut"
+            },
+            "maxItems": 20,
+            "title": "Affected User Samples",
+            "type": "array"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/PagePermissionHistoryChangeOut"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "current_grant_version": {
+            "minimum": 0.0,
+            "title": "Current Grant Version",
+            "type": "integer"
+          },
+          "expanded_user_count": {
+            "minimum": 0.0,
+            "title": "Expanded User Count",
+            "type": "integer"
+          },
+          "history_grant_version": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "History Grant Version"
+          },
+          "mixed_user_count": {
+            "minimum": 0.0,
+            "title": "Mixed User Count",
+            "type": "integer"
+          },
+          "restricted_user_count": {
+            "minimum": 0.0,
+            "title": "Restricted User Count",
+            "type": "integer"
+          },
+          "target_id": {
+            "format": "uuid",
+            "title": "Target Id",
+            "type": "string"
+          },
+          "target_type": {
+            "enum": [
+              "role",
+              "user"
+            ],
+            "title": "Target Type",
+            "type": "string"
+          },
+          "users_with_overrides": {
+            "minimum": 0.0,
+            "title": "Users With Overrides",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "target_type",
+          "target_id",
+          "current_grant_version",
+          "affected_user_count",
+          "expanded_user_count",
+          "restricted_user_count",
+          "mixed_user_count",
+          "users_with_overrides"
+        ],
+        "title": "PagePermissionRollbackPreviewOut",
+        "type": "object"
+      },
+      "PagePermissionRollbackPreviewRequest": {
+        "properties": {
+          "audit_id": {
+            "format": "uuid",
+            "title": "Audit Id",
+            "type": "string"
+          },
+          "expected_grant_version": {
+            "minimum": 0.0,
+            "title": "Expected Grant Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "audit_id",
+          "expected_grant_version"
+        ],
+        "title": "PagePermissionRollbackPreviewRequest",
+        "type": "object"
+      },
+      "PagePermissionRollbackRequest": {
+        "properties": {
+          "audit_id": {
+            "format": "uuid",
+            "title": "Audit Id",
+            "type": "string"
+          },
+          "expected_grant_version": {
+            "minimum": 0.0,
+            "title": "Expected Grant Version",
+            "type": "integer"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "audit_id",
+          "expected_grant_version",
+          "reason"
+        ],
+        "title": "PagePermissionRollbackRequest",
         "type": "object"
       },
       "PagePermissionSimulationOut": {
@@ -65694,6 +65989,35 @@
         "title": "RoleMenusRequest",
         "type": "object"
       },
+      "RolePagePermissionAffectedUserOut": {
+        "properties": {
+          "impact": {
+            "enum": [
+              "expanded",
+              "restricted",
+              "mixed"
+            ],
+            "title": "Impact",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          },
+          "user_name": {
+            "title": "User Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "user_name",
+          "impact"
+        ],
+        "title": "RolePagePermissionAffectedUserOut",
+        "type": "object"
+      },
       "RolePagePermissionsOut": {
         "properties": {
           "definitions": {
@@ -65727,6 +66051,69 @@
         "title": "RolePagePermissionsOut",
         "type": "object"
       },
+      "RolePagePermissionsPreviewOut": {
+        "properties": {
+          "affected_user_count": {
+            "minimum": 0.0,
+            "title": "Affected User Count",
+            "type": "integer"
+          },
+          "affected_user_samples": {
+            "items": {
+              "$ref": "#/components/schemas/RolePagePermissionAffectedUserOut"
+            },
+            "maxItems": 20,
+            "title": "Affected User Samples",
+            "type": "array"
+          },
+          "expanded_user_count": {
+            "minimum": 0.0,
+            "title": "Expanded User Count",
+            "type": "integer"
+          },
+          "grant_version": {
+            "title": "Grant Version",
+            "type": "integer"
+          },
+          "member_count": {
+            "minimum": 0.0,
+            "title": "Member Count",
+            "type": "integer"
+          },
+          "mixed_user_count": {
+            "minimum": 0.0,
+            "title": "Mixed User Count",
+            "type": "integer"
+          },
+          "restricted_user_count": {
+            "minimum": 0.0,
+            "title": "Restricted User Count",
+            "type": "integer"
+          },
+          "role_id": {
+            "format": "uuid",
+            "title": "Role Id",
+            "type": "string"
+          },
+          "users_with_overrides": {
+            "minimum": 0.0,
+            "title": "Users With Overrides",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "role_id",
+          "grant_version",
+          "member_count",
+          "affected_user_count",
+          "expanded_user_count",
+          "restricted_user_count",
+          "mixed_user_count",
+          "users_with_overrides"
+        ],
+        "title": "RolePagePermissionsPreviewOut",
+        "type": "object"
+      },
       "RolePagePermissionsUpdate": {
         "properties": {
           "expected_grant_version": {
@@ -65741,6 +66128,18 @@
             "maxItems": 1000,
             "title": "Grants",
             "type": "array"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key"
           },
           "reason": {
             "maxLength": 500,
@@ -81016,6 +81415,13 @@
       },
       "UserPagePermissionsOut": {
         "properties": {
+          "custom_grants": {
+            "items": {
+              "$ref": "#/components/schemas/EffectivePageGrantOut"
+            },
+            "title": "Custom Grants",
+            "type": "array"
+          },
           "custom_page_keys": {
             "items": {
               "type": "string"
@@ -81089,6 +81495,18 @@
             "maxItems": 1000,
             "title": "Grants",
             "type": "array"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key"
           },
           "reason": {
             "maxLength": 500,
@@ -125129,6 +125547,116 @@
         ]
       }
     },
+    "/api/v1/identity/admin/page-permissions/health": {
+      "get": {
+        "operationId": "get_page_permission_health_api_v1_identity_admin_page_permissions_health_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagePermissionHealthOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "检查页面权限健康状态",
+        "tags": [
+          "权限管理",
+          "权限管理"
+        ]
+      }
+    },
+    "/api/v1/identity/admin/page-permissions/health/remediate": {
+      "post": {
+        "operationId": "remediate_page_permission_health_issue_api_v1_identity_admin_page_permissions_health_remediate_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PagePermissionHealthRemediationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagePermissionHealthRemediationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "修复页面权限健康问题",
+        "tags": [
+          "权限管理",
+          "权限管理"
+        ]
+      }
+    },
     "/api/v1/identity/admin/page-permissions/modules": {
       "get": {
         "operationId": "list_page_permission_rollouts_api_v1_identity_admin_page_permissions_modules_get",
@@ -126074,6 +126602,469 @@
         ]
       }
     },
+    "/api/v1/identity/admin/roles/{role_id}/page-permissions/history": {
+      "get": {
+        "operationId": "get_role_page_permission_history_api_v1_identity_admin_roles__role_id__page_permissions_history_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "role_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Role Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actor_user_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor User Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "manual",
+                    "rollback",
+                    "health_remediation"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page Key"
+            }
+          },
+          {
+            "in": "query",
+            "name": "change_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "grant",
+                    "expand",
+                    "restrict",
+                    "revoke",
+                    "mixed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Change Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagePermissionHistoryPageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "查看角色页面权限历史",
+        "tags": [
+          "权限管理",
+          "权限管理"
+        ]
+      }
+    },
+    "/api/v1/identity/admin/roles/{role_id}/page-permissions/history/export": {
+      "get": {
+        "operationId": "export_role_page_permission_history_api_v1_identity_admin_roles__role_id__page_permissions_history_export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "role_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Role Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "导出角色页面权限历史",
+        "tags": [
+          "权限管理",
+          "权限管理"
+        ]
+      }
+    },
+    "/api/v1/identity/admin/roles/{role_id}/page-permissions/preview": {
+      "post": {
+        "operationId": "preview_role_page_permissions_api_v1_identity_admin_roles__role_id__page_permissions_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "role_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Role Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RolePagePermissionsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RolePagePermissionsPreviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "预演角色页面权限用户影响",
+        "tags": [
+          "权限管理",
+          "权限管理"
+        ]
+      }
+    },
+    "/api/v1/identity/admin/roles/{role_id}/page-permissions/rollback": {
+      "post": {
+        "operationId": "rollback_role_page_permissions_api_v1_identity_admin_roles__role_id__page_permissions_rollback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "role_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Role Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PagePermissionRollbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RolePagePermissionsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "回滚角色页面权限",
+        "tags": [
+          "权限管理",
+          "权限管理"
+        ]
+      }
+    },
+    "/api/v1/identity/admin/roles/{role_id}/page-permissions/rollback/preview": {
+      "post": {
+        "operationId": "preview_role_page_permission_rollback_api_v1_identity_admin_roles__role_id__page_permissions_rollback_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "role_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Role Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PagePermissionRollbackPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagePermissionRollbackPreviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "预演角色页面权限回滚",
+        "tags": [
+          "权限管理",
+          "权限管理"
+        ]
+      }
+    },
     "/api/v1/identity/admin/roles/{role_id}/permissions": {
       "post": {
         "operationId": "set_role_permissions_api_v1_identity_admin_roles__role_id__permissions_post",
@@ -126406,6 +127397,399 @@
           }
         },
         "summary": "替换用户页面权限覆盖",
+        "tags": [
+          "权限管理",
+          "权限管理"
+        ]
+      }
+    },
+    "/api/v1/identity/admin/users/{user_id}/page-permissions/history": {
+      "get": {
+        "operationId": "get_user_page_permission_history_api_v1_identity_admin_users__user_id__page_permissions_history_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actor_user_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor User Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "manual",
+                    "rollback",
+                    "health_remediation"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page Key"
+            }
+          },
+          {
+            "in": "query",
+            "name": "change_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "grant",
+                    "expand",
+                    "restrict",
+                    "revoke",
+                    "mixed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Change Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagePermissionHistoryPageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "查看用户页面权限历史",
+        "tags": [
+          "权限管理",
+          "权限管理"
+        ]
+      }
+    },
+    "/api/v1/identity/admin/users/{user_id}/page-permissions/history/export": {
+      "get": {
+        "operationId": "export_user_page_permission_history_api_v1_identity_admin_users__user_id__page_permissions_history_export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "导出用户页面权限历史",
+        "tags": [
+          "权限管理",
+          "权限管理"
+        ]
+      }
+    },
+    "/api/v1/identity/admin/users/{user_id}/page-permissions/rollback": {
+      "post": {
+        "operationId": "rollback_user_page_permissions_api_v1_identity_admin_users__user_id__page_permissions_rollback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PagePermissionRollbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPagePermissionsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "回滚用户页面权限",
+        "tags": [
+          "权限管理",
+          "权限管理"
+        ]
+      }
+    },
+    "/api/v1/identity/admin/users/{user_id}/page-permissions/rollback/preview": {
+      "post": {
+        "operationId": "preview_user_page_permission_rollback_api_v1_identity_admin_users__user_id__page_permissions_rollback_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PagePermissionRollbackPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagePermissionRollbackPreviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "预演用户页面权限回滚",
         "tags": [
           "权限管理",
           "权限管理"
@@ -161567,1633 +162951,6 @@
         "tags": [
           "质量管理",
           "Quality-External"
-        ]
-      }
-    },
-    "/api/v1/quality/cpv/import/confirm": {
-      "post": {
-        "description": "确认导入Excel数据",
-        "operationId": "confirm_import_api_v1_quality_cpv_import_confirm_post",
-        "parameters": [
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_confirm_import_api_v1_quality_cpv_import_confirm_post"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "确认导入",
-        "tags": [
-          "质量管理",
-          "CPV-导入"
-        ]
-      }
-    },
-    "/api/v1/quality/cpv/import/preview": {
-      "post": {
-        "description": "上传Excel文件并预览导入数据",
-        "operationId": "preview_import_api_v1_quality_cpv_import_preview_post",
-        "parameters": [
-          {
-            "description": "产品ID",
-            "in": "query",
-            "name": "product_id",
-            "required": true,
-            "schema": {
-              "description": "产品ID",
-              "format": "uuid",
-              "title": "Product Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "数据类型: CPP/CQA",
-            "in": "query",
-            "name": "data_type",
-            "required": true,
-            "schema": {
-              "description": "数据类型: CPP/CQA",
-              "title": "Data Type",
-              "type": "string"
-            }
-          },
-          {
-            "description": "导入模式: create/update/overwrite",
-            "in": "query",
-            "name": "import_mode",
-            "required": false,
-            "schema": {
-              "default": "create",
-              "description": "导入模式: create/update/overwrite",
-              "title": "Import Mode",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_preview_import_api_v1_quality_cpv_import_preview_post"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "上传Excel预览",
-        "tags": [
-          "质量管理",
-          "CPV-导入"
-        ]
-      }
-    },
-    "/api/v1/quality/cpv/import/tasks": {
-      "get": {
-        "description": "获取导入任务列表",
-        "operationId": "get_import_tasks_api_v1_quality_cpv_import_tasks_get",
-        "parameters": [
-          {
-            "description": "产品ID",
-            "in": "query",
-            "name": "product_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "产品ID",
-              "title": "Product Id"
-            }
-          },
-          {
-            "description": "页码",
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "description": "页码",
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "每页数量",
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "description": "每页数量",
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "获取导入任务列表",
-        "tags": [
-          "质量管理",
-          "CPV-导入"
-        ]
-      }
-    },
-    "/api/v1/quality/cpv/import/tasks/{task_id}": {
-      "get": {
-        "description": "获取导入任务详情",
-        "operationId": "get_import_task_api_v1_quality_cpv_import_tasks__task_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "task_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Task Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "获取导入任务详情",
-        "tags": [
-          "质量管理",
-          "CPV-导入"
-        ]
-      }
-    },
-    "/api/v1/quality/cpv/parameters/{parameter_id}": {
-      "delete": {
-        "description": "删除参数",
-        "operationId": "delete_parameter_api_v1_quality_cpv_parameters__parameter_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "parameter_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Parameter Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "删除参数",
-        "tags": [
-          "质量管理",
-          "CPV-产品"
-        ]
-      },
-      "put": {
-        "description": "更新参数",
-        "operationId": "update_parameter_api_v1_quality_cpv_parameters__parameter_id__put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "parameter_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Parameter Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CpvParameterUpdate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "更新参数",
-        "tags": [
-          "质量管理",
-          "CPV-产品"
-        ]
-      }
-    },
-    "/api/v1/quality/cpv/products": {
-      "get": {
-        "description": "获取CPV产品列表（带统计摘要）",
-        "operationId": "get_products_api_v1_quality_cpv_products_get",
-        "parameters": [
-          {
-            "description": "关键词搜索",
-            "in": "query",
-            "name": "keyword",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "关键词搜索",
-              "title": "Keyword"
-            }
-          },
-          {
-            "description": "状态筛选",
-            "in": "query",
-            "name": "status",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "状态筛选",
-              "title": "Status"
-            }
-          },
-          {
-            "description": "页码",
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "description": "页码",
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "每页数量",
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "description": "每页数量",
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "获取产品列表",
-        "tags": [
-          "质量管理",
-          "CPV-产品"
-        ]
-      },
-      "post": {
-        "description": "创建CPV产品",
-        "operationId": "create_product_api_v1_quality_cpv_products_post",
-        "parameters": [
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CpvProductCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "创建产品",
-        "tags": [
-          "质量管理",
-          "CPV-产品"
-        ]
-      }
-    },
-    "/api/v1/quality/cpv/products/{product_id}": {
-      "delete": {
-        "description": "删除CPV产品（软删除）",
-        "operationId": "delete_product_api_v1_quality_cpv_products__product_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "product_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Product Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "删除产品",
-        "tags": [
-          "质量管理",
-          "CPV-产品"
-        ]
-      },
-      "get": {
-        "description": "获取CPV产品详情",
-        "operationId": "get_product_api_v1_quality_cpv_products__product_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "product_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Product Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "获取产品详情",
-        "tags": [
-          "质量管理",
-          "CPV-产品"
-        ]
-      },
-      "put": {
-        "description": "更新CPV产品",
-        "operationId": "update_product_api_v1_quality_cpv_products__product_id__put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "product_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Product Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CpvProductUpdate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "更新产品",
-        "tags": [
-          "质量管理",
-          "CPV-产品"
-        ]
-      }
-    },
-    "/api/v1/quality/cpv/products/{product_id}/batches": {
-      "get": {
-        "description": "获取批次列表",
-        "operationId": "get_batches_api_v1_quality_cpv_products__product_id__batches_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "product_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Product Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "数据类型: CPP/CQA",
-            "in": "query",
-            "name": "data_type",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "数据类型: CPP/CQA",
-              "title": "Data Type"
-            }
-          },
-          {
-            "description": "批号",
-            "in": "query",
-            "name": "batch_no",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "批号",
-              "title": "Batch No"
-            }
-          },
-          {
-            "description": "开始日期",
-            "in": "query",
-            "name": "start_date",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "开始日期",
-              "title": "Start Date"
-            }
-          },
-          {
-            "description": "结束日期",
-            "in": "query",
-            "name": "end_date",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "结束日期",
-              "title": "End Date"
-            }
-          },
-          {
-            "description": "页码",
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "description": "页码",
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "每页数量",
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "description": "每页数量",
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "获取批次列表",
-        "tags": [
-          "质量管理",
-          "CPV-产品"
-        ]
-      }
-    },
-    "/api/v1/quality/cpv/products/{product_id}/cpp": {
-      "get": {
-        "description": "获取CPP批次数据（宽表格式）",
-        "operationId": "get_cpp_batches_api_v1_quality_cpv_products__product_id__cpp_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "product_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Product Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "批号",
-            "in": "query",
-            "name": "batch_no",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "批号",
-              "title": "Batch No"
-            }
-          },
-          {
-            "description": "开始日期",
-            "in": "query",
-            "name": "start_date",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "开始日期",
-              "title": "Start Date"
-            }
-          },
-          {
-            "description": "结束日期",
-            "in": "query",
-            "name": "end_date",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "结束日期",
-              "title": "End Date"
-            }
-          },
-          {
-            "description": "页码",
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "description": "页码",
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "每页数量",
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "description": "每页数量",
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "获取CPP批次数据（宽表）",
-        "tags": [
-          "质量管理",
-          "CPV-产品"
-        ]
-      }
-    },
-    "/api/v1/quality/cpv/products/{product_id}/cqa": {
-      "get": {
-        "description": "获取CQA批次数据（宽表格式）",
-        "operationId": "get_cqa_batches_api_v1_quality_cpv_products__product_id__cqa_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "product_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Product Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "批号",
-            "in": "query",
-            "name": "batch_no",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "批号",
-              "title": "Batch No"
-            }
-          },
-          {
-            "description": "开始日期",
-            "in": "query",
-            "name": "start_date",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "开始日期",
-              "title": "Start Date"
-            }
-          },
-          {
-            "description": "结束日期",
-            "in": "query",
-            "name": "end_date",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "结束日期",
-              "title": "End Date"
-            }
-          },
-          {
-            "description": "页码",
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "description": "页码",
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "每页数量",
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "description": "每页数量",
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "获取CQA批次数据（宽表）",
-        "tags": [
-          "质量管理",
-          "CPV-产品"
-        ]
-      }
-    },
-    "/api/v1/quality/cpv/products/{product_id}/parameters": {
-      "get": {
-        "description": "获取产品参数列表",
-        "operationId": "get_parameters_api_v1_quality_cpv_products__product_id__parameters_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "product_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Product Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "参数类型: CPP/CQA",
-            "in": "query",
-            "name": "type",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "参数类型: CPP/CQA",
-              "title": "Type"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "获取参数列表",
-        "tags": [
-          "质量管理",
-          "CPV-产品"
-        ]
-      },
-      "post": {
-        "description": "新增产品参数",
-        "operationId": "create_parameter_api_v1_quality_cpv_products__product_id__parameters_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "product_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Product Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CpvParameterCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "新增参数",
-        "tags": [
-          "质量管理",
-          "CPV-产品"
-        ]
-      }
-    },
-    "/api/v1/quality/cpv/products/{product_id}/statistics": {
-      "get": {
-        "description": "获取统计数据（批次总数、均值、标准差、CPK、异常数）",
-        "operationId": "get_statistics_api_v1_quality_cpv_products__product_id__statistics_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "product_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Product Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "参数ID",
-            "in": "query",
-            "name": "parameter_id",
-            "required": true,
-            "schema": {
-              "description": "参数ID",
-              "format": "uuid",
-              "title": "Parameter Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "批号",
-            "in": "query",
-            "name": "batch_no",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "批号",
-              "title": "Batch No"
-            }
-          },
-          {
-            "description": "开始日期",
-            "in": "query",
-            "name": "start_date",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "开始日期",
-              "title": "Start Date"
-            }
-          },
-          {
-            "description": "结束日期",
-            "in": "query",
-            "name": "end_date",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "结束日期",
-              "title": "End Date"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "获取统计数据",
-        "tags": [
-          "质量管理",
-          "CPV-产品"
-        ]
-      }
-    },
-    "/api/v1/quality/cpv/products/{product_id}/trend": {
-      "get": {
-        "description": "获取趋势图数据",
-        "operationId": "get_trend_api_v1_quality_cpv_products__product_id__trend_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "product_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Product Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "参数ID",
-            "in": "query",
-            "name": "parameter_id",
-            "required": true,
-            "schema": {
-              "description": "参数ID",
-              "format": "uuid",
-              "title": "Parameter Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "批号",
-            "in": "query",
-            "name": "batch_no",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "批号",
-              "title": "Batch No"
-            }
-          },
-          {
-            "description": "开始日期",
-            "in": "query",
-            "name": "start_date",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "开始日期",
-              "title": "Start Date"
-            }
-          },
-          {
-            "description": "结束日期",
-            "in": "query",
-            "name": "end_date",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "结束日期",
-              "title": "End Date"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "获取趋势图数据",
-        "tags": [
-          "质量管理",
-          "CPV-产品"
         ]
       }
     },

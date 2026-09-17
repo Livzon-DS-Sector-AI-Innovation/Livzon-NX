@@ -399,6 +399,9 @@ class RolePageGrant(BaseModel):
     sensitive_actions: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, default=list, server_default="[]"
     )
+    sensitive_actions_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     scope_type: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
@@ -430,6 +433,9 @@ class UserPageGrant(BaseModel):
     )
     sensitive_actions: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, default=list, server_default="[]"
+    )
+    sensitive_actions_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
     scope_type: Mapped[str] = mapped_column(
         String(32),

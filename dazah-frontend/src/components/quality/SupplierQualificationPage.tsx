@@ -1,5 +1,7 @@
 'use client'
 
+import { usePagePermissions } from '@/hooks/usePagePermissions'
+
 import { qualityTokens } from './themeTokens'
 import { useCallback, useEffect, useState } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
@@ -90,6 +92,7 @@ interface SupplierQualificationPageProps {
 }
 
 export default function SupplierQualificationPage({ initialItems = [] }: SupplierQualificationPageProps) {
+  const { canOperate, canDelete, canSync } = usePagePermissions('quality:suppliers:supplier-qualification')
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const [saving, setSaving] = useState(false)
@@ -146,6 +149,7 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
   const items = data?.items ?? []
 
   const handlePullFromFeishu = useCallback(async () => {
+    if (!canSync) return
     try {
       setPulling(true)
       const result = await pullSupplierQualifications()
@@ -156,17 +160,19 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
     } finally {
       setPulling(false)
     }
-  }, [queryClient, message])
+  }, [queryClient, message, canSync])
 
   const openCreate = useCallback(() => {
+    if (!canOperate) return
     setEditingRecord(null)
     form.resetFields()
     form.setFieldsValue({ is_completed: false })
     setResponsiblePersons([])
     setModalVisible(true)
-  }, [form])
+  }, [form, canOperate])
 
   const openEdit = useCallback((record: SupplierQualificationItem) => {
+    if (!canOperate) return
     setEditingRecord(record)
     form.setFieldsValue({
       supplier_name: record.supplier_name ?? '',
@@ -191,7 +197,7 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
         })),
     )
     setModalVisible(true)
-  }, [form])
+  }, [form, canOperate])
 
   const closeModal = useCallback(() => {
     setModalVisible(false)
@@ -201,6 +207,7 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
   }, [form])
 
   const handleSubmit = useCallback(async () => {
+    if (!canOperate) return
     const values = await form.validateFields()
     try {
       setSaving(true)
@@ -234,9 +241,10 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
     } finally {
       setSaving(false)
     }
-  }, [closeModal, editingRecord, form, queryClient, message, responsiblePersons])
+  }, [closeModal, editingRecord, form, queryClient, message, responsiblePersons, canOperate])
 
   const handleDelete = useCallback(async (recordId: string) => {
+    if (!canDelete) return
     try {
       await deleteSupplierQualification(recordId)
       message.success('供应商资质记录已删除')
@@ -244,7 +252,7 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
     } catch (error: unknown) {
       message.error(getErrorMessage(error, '删除供应商资质记录失败'))
     }
-  }, [queryClient, message])
+  }, [queryClient, message, canDelete])
 
   const columns: ColumnsType<SupplierQualificationItem> = [
     {
@@ -391,14 +399,15 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
       fixed: 'right',
       render: (_, record) => (
         <Space size="small">
-          <Button type="link" onClick={() => openEdit(record)}>修改</Button>
+          <Button type="link" disabled={!canOperate} onClick={() => openEdit(record)}>修改</Button>
           <Popconfirm
+            disabled={!canDelete}
             title="确认删除这条供应商资质记录？"
             okText="删除"
             cancelText="取消"
             onConfirm={() => void handleDelete(record.record_id)}
           >
-            <Button type="link" danger>删除</Button>
+            <Button type="link" danger disabled={!canDelete}>删除</Button>
           </Popconfirm>
         </Space>
       ),
@@ -481,8 +490,8 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
             />
           </Space>
           <Space>
-            <Button type="primary" onClick={openCreate}>新增</Button>
-            <Button loading={pulling} onClick={() => void handlePullFromFeishu()}>从飞书拉取</Button>
+            <Button type="primary" disabled={!canOperate} onClick={openCreate}>新增</Button>
+            <Button loading={pulling} disabled={!canSync} onClick={() => void handlePullFromFeishu()}>从飞书拉取</Button>
           </Space>
         </div>
 
@@ -509,7 +518,7 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
 
       <Modal
         title={editingRecord ? '修改供应商资质记录' : '新增供应商资质记录'}
-        open={modalVisible}
+        open={modalVisible && canOperate}
         onOk={() => void handleSubmit()}
         onCancel={closeModal}
         confirmLoading={saving}

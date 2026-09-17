@@ -21,6 +21,7 @@ import {
   DEFAULT_POSITIONS, WORKSHOP_OPTIONS, SCHEDULE_MODES, getShiftOptions, SHIFT_LABELS,
 } from '@/types/shift-handover'
 import dayjs from 'dayjs'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Text, Title, Paragraph } = Typography
 const { TextArea } = Input
@@ -85,6 +86,7 @@ const HANDOVER_NOTICE = (
 
 export default function HandoverPage() {
   const { message, modal } = App.useApp()
+  const { canOperate, canDelete, canApprove } = useProductionPermissions(PRODUCTION_PAGE_KEYS.shiftLogHandover)
   const [form] = Form.useForm()
   const [editForm] = Form.useForm()
   const [loading, setLoading] = useState(false)
@@ -166,6 +168,7 @@ export default function HandoverPage() {
   }
 
   const handleAdd = () => {
+    if (!canOperate) return
     setEditing(null); form.resetFields()
     setFormWorkshop(''); setFormScheduleMode('4-3')
     // 先展示须知，确认后再弹出表单
@@ -174,6 +177,7 @@ export default function HandoverPage() {
   }
 
   const handleEdit = (r: ShiftHandoverRecord) => {
+    if (!canOperate) return
     setEditing(r)
     editForm.setFieldsValue({ ...r, handover_time: r.handover_time ? dayjs(r.handover_time) : null })
     setFormWorkshop(r.workshop)
@@ -183,6 +187,7 @@ export default function HandoverPage() {
   }
 
   const handleDelete = (id: string) => {
+    if (!canDelete) return
     modal.confirm({
       title: '确认删除', content: '确定删除此交接记录？',
       onOk: async () => {
@@ -195,6 +200,7 @@ export default function HandoverPage() {
 
   // 表单提交 → 直接保存
   const handleFormSubmit = async () => {
+    if (!canOperate) return
     try {
       const values = editing ? await editForm.validateFields() : await form.validateFields()
       localStorage.setItem(getScheduleLSKey(values.workshop as string), formScheduleMode)
@@ -231,9 +237,12 @@ export default function HandoverPage() {
   // 须知确认 — 新建时弹出表单，确认时执行 API
   const handleNoticeConfirm = async () => {
     setNoticeVisible(false)
-    if (noticeMode === 'submit') { setModalVisible(true); return }
+    if (noticeMode === 'submit') {
+      if (canOperate) setModalVisible(true)
+      return
+    }
     // 确认接班
-    if (!confirmRecordId) return
+    if (!confirmRecordId || !canApprove) return
     const res = await confirmShiftHandover(confirmRecordId)
     if (res.code === 200) { message.success('已确认接班'); load() }
     else message.error(res.message || '确认失败')
@@ -242,6 +251,7 @@ export default function HandoverPage() {
 
   // 确认接班按钮
   const handleOpenConfirm = (id: string) => {
+    if (!canApprove) return
     setConfirmRecordId(id)
     setNoticeMode('confirm')
     setCountdown(3)
@@ -290,9 +300,9 @@ export default function HandoverPage() {
       render: (_, r) => (
         <Space size="small">
           <Button type="link" size="small" onClick={() => { setDetailRecord(r); setDetailVisible(true) }}>详情</Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(r)}>编辑</Button>
-          <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(r.id)}>删除</Button>
-          {r.status === 'pending' && (
+          {canOperate && <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(r)}>编辑</Button>}
+          {canDelete && <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(r.id)}>删除</Button>}
+          {canApprove && r.status === 'pending' && (
             <Button type="link" size="small" icon={<CheckOutlined />} style={{ color: '#52c41a' }}
               onClick={() => handleOpenConfirm(r.id)}>确认接班</Button>
           )}
@@ -309,7 +319,7 @@ export default function HandoverPage() {
       </div>
 
       <Card
-        extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新建交接记录</Button>}
+        extra={canOperate ? <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新建交接记录</Button> : null}
       >
         <Row gutter={16} className="mb-4">
           <Col span={6}>
@@ -333,7 +343,7 @@ export default function HandoverPage() {
       </Card>
 
       {/* ─── 新建/编辑 ─── */}
-      <Modal title={editing ? '编辑交接记录' : '新建交接记录'} open={modalVisible} onOk={handleFormSubmit}
+      <Modal title={editing ? '编辑交接记录' : '新建交接记录'} open={modalVisible && canOperate} onOk={canOperate ? handleFormSubmit : undefined}
         onCancel={() => setModalVisible(false)} width={780} okText="提交" cancelText="取消" destroyOnHidden>
         <Form form={editing ? editForm : form} layout="vertical">
           <Row gutter={16}>

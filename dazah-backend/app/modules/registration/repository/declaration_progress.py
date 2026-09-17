@@ -9,6 +9,7 @@ from sqlalchemy import asc, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.registration.models import RegistrationDeclarationProgressVersion
+from app.modules.registration.page_scope import visible_sheet_keys
 
 
 class RegistrationDeclarationProgressRepository:
@@ -29,7 +30,10 @@ class RegistrationDeclarationProgressRepository:
         sheet_key: str | None = None,
     ) -> list[RegistrationDeclarationProgressVersion]:
         stmt = select(RegistrationDeclarationProgressVersion).where(
-            RegistrationDeclarationProgressVersion.is_deleted.is_(False)
+            RegistrationDeclarationProgressVersion.is_deleted.is_(False),
+            RegistrationDeclarationProgressVersion.sheet_key.in_(
+                await visible_sheet_keys(self.session, "project-ledger")
+            ),
         )
         if sheet_key:
             stmt = stmt.where(
@@ -54,6 +58,9 @@ class RegistrationDeclarationProgressRepository:
                 RegistrationDeclarationProgressVersion.record_group_id
                 == record_group_id,
                 RegistrationDeclarationProgressVersion.is_deleted.is_(False),
+                RegistrationDeclarationProgressVersion.sheet_key.in_(
+                    await visible_sheet_keys(self.session, "project-ledger")
+                ),
             )
             .order_by(
                 asc(RegistrationDeclarationProgressVersion.version_number),
@@ -72,6 +79,9 @@ class RegistrationDeclarationProgressRepository:
                 RegistrationDeclarationProgressVersion.record_group_id
                 == record_group_id,
                 RegistrationDeclarationProgressVersion.is_deleted.is_(False),
+                RegistrationDeclarationProgressVersion.sheet_key.in_(
+                    await visible_sheet_keys(self.session, "project-ledger")
+                ),
             )
             .order_by(
                 desc(RegistrationDeclarationProgressVersion.version_number),
@@ -88,6 +98,9 @@ class RegistrationDeclarationProgressRepository:
             ).where(
                 RegistrationDeclarationProgressVersion.sheet_key == sheet_key,
                 RegistrationDeclarationProgressVersion.is_deleted.is_(False),
+                RegistrationDeclarationProgressVersion.sheet_key.in_(
+                    await visible_sheet_keys(self.session, "project-ledger")
+                ),
             )
         )
         return int(result.scalar() or 0)
@@ -100,6 +113,9 @@ class RegistrationDeclarationProgressRepository:
                 RegistrationDeclarationProgressVersion.record_group_id
                 == record_group_id,
                 RegistrationDeclarationProgressVersion.is_deleted.is_(False),
+                RegistrationDeclarationProgressVersion.sheet_key.in_(
+                    await visible_sheet_keys(self.session, "project-ledger")
+                ),
             )
         )
         return int(result.scalar() or 0) + 1

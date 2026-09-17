@@ -43,6 +43,7 @@ describe('page permission editor state', () => {
       mode: 'inherit',
       permissions: [],
       sensitiveActions: [],
+      sensitiveActionsExpiresAt: null,
       scopeType: 'department_tree',
       departmentIds: [],
     })

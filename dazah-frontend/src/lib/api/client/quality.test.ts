@@ -108,6 +108,25 @@ describe('quality client - qc validation', () => {
   })
 })
 
+describe('document catalog page context', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('passes the documents page key when loading departments and entries', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => jsonResponse({ data: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { fetchDocumentDepartments, fetchDocumentEntries } = await import('./quality')
+
+    await expect(fetchDocumentDepartments()).resolves.toEqual([])
+    await expect(fetchDocumentEntries({ page: 2 })).resolves.toEqual({ items: [], total: 0 })
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/quality/document-departments', {
+      headers: { 'X-Dazah-Page-Key': 'quality:documents' },
+    })
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/quality/document-entries?page=2', {
+      headers: { 'X-Dazah-Page-Key': 'quality:documents' },
+    })
+  })
+})
+
 describe('quality client - finished product anomaly', () => {
   afterEach(() => {
     vi.unstubAllGlobals()

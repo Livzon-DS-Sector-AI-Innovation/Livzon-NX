@@ -11,6 +11,7 @@ import dayjs from 'dayjs'
 import Dashboard from '@/components/production/Dashboard'
 import MCSheetsSyncButton from '@/components/production/MCSheetsSyncButton'
 import MCTraceButton from '@/components/production/MCTraceButton'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
 const BASE = '/api/v1/production/mc'
@@ -101,16 +102,18 @@ interface CrudeRow {
 }
 
 function CellInput({ value, onSave, color }: { value: number | null | undefined; onSave: (v: number | null) => void; color?: string }) {
+  const { canOperate } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2012)
   const [editing, setEditing] = useState(false)
-  if (!editing) return <div style={{ width: '100%', height: 20, cursor: 'text', color: color || undefined, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setEditing(true)}>{value != null ? value : ''}</div>
+  if (!editing || !canOperate) return <div style={{ width: '100%', height: 20, cursor: canOperate ? 'text' : 'default', color: color || undefined, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={canOperate ? () => setEditing(true) : undefined}>{value != null ? value : ''}</div>
   return <InputNumber size="small" autoFocus style={{ width: '100%', color: color || undefined }} defaultValue={value ?? undefined}
     onBlur={e => { setEditing(false); const raw = e.target.value; if (raw === '' || raw === '-') { onSave(null); return } const n = Number(raw); if (!isNaN(n)) onSave(n) }}
     onPressEnter={(e) => { setEditing(false); const raw = e.currentTarget.value; if (raw === '' || raw === '-') { onSave(null); return } const n = Number(raw); if (!isNaN(n)) onSave(n) }} />
 }
 
 function DateCellInput({ value, onSave }: { value: string | null | undefined; onSave: (v: string | null) => void }) {
+  const { canOperate } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2012)
   const [editing, setEditing] = useState(false)
-  if (!editing) return <div style={{ width: '100%', height: 20, cursor: 'text', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setEditing(true)}>{value ?? ''}</div>
+  if (!editing || !canOperate) return <div style={{ width: '100%', height: 20, cursor: canOperate ? 'text' : 'default', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={canOperate ? () => setEditing(true) : undefined}>{value ?? ''}</div>
   return <DatePicker size="small" autoFocus open style={{ width: '100%', fontSize: 10 }} defaultValue={value ? dayjs(value) : undefined} format="YYYY.MM.DD"
     onChange={d => { setEditing(false); onSave(d ? d.format('YYYY-MM-DD') : null) }}
     onOpenChange={open => { if (!open) setEditing(false) }} />
@@ -118,6 +121,7 @@ function DateCellInput({ value, onSave }: { value: string | null | undefined; on
 
 export default function CrudeExtractionPage() {
   const router = useRouter(); const { message } = App.useApp()
+  const { canOperate } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2012)
   const [data, setData] = useState<CrudeItem[]>([]); const [loading, setLoading] = useState(false); const [saving, setSaving] = useState(false)
   const [month, setMonth] = useState<number>(dayjs().month() + 1) // 默认当前月份
   const [createVisible, setCreateVisible] = useState(false); const [createForm] = Form.useForm()
@@ -140,6 +144,7 @@ export default function CrudeExtractionPage() {
   const calcCrPq = (w: number | string | null | undefined, ct: number | string | null | undefined, ms: number | string | null | undefined) => w != null && ct != null && ms != null ? Math.round(Number(w) * Number(ct) * (100 - Number(ms))) / 10000 : null
 
   const saveST = async (id: string | undefined, field: string, value: number | string | null, st: SubTank | undefined) => {
+    if (!canOperate || !id) return
     setSaving(true)
     const d: Record<string, unknown> = { [field]: value }
     if (field === 'crude_weight' || field === 'crude_content' || field === 'crude_moisture')
@@ -154,6 +159,7 @@ export default function CrudeExtractionPage() {
   }
 
   const saveNa = async (na: SodiumStep, field: string, value: number | null, stId: string | undefined, seq: number) => {
+    if (!canOperate) return
     setSaving(true); const d: Record<string, unknown> = { [field]: value }
     if (field === 'na_after_volume' || field === 'na_potency') {
       const av = field === 'na_after_volume' ? value : na.na_after_volume
@@ -174,6 +180,7 @@ export default function CrudeExtractionPage() {
   }
 
   const saveAc = async (ac: AcidStep, field: string, value: number | null, stId: string | undefined, seq: number) => {
+    if (!canOperate) return
     setSaving(true); const d: Record<string, unknown> = { [field]: value }
     if (field === 'acid_filter_volume' || field === 'acid_potency') {
       const av = field === 'acid_filter_volume' ? value : ac.acid_filter_volume
@@ -193,6 +200,7 @@ export default function CrudeExtractionPage() {
   }
 
   const addStepRow = async (stId: string | undefined, count: number) => {
+    if (!canOperate || !stId) return
     setSaving(true); const seq = count + 1
     await api('/crude-extract/sodium-steps', { method: 'POST', body: JSON.stringify({ sub_tank_id: stId, seq_no: seq }) })
     await api('/crude-extract/acid-steps', { method: 'POST', body: JSON.stringify({ sub_tank_id: stId, seq_no: seq }) })
@@ -200,6 +208,7 @@ export default function CrudeExtractionPage() {
   }
 
   const handleCreate = async () => {
+    if (!canOperate) return
     try {
       const vals = await createForm.validateFields(); vals.workshop = '201-2'
       if (vals.produce_date) vals.produce_date = dayjs(vals.produce_date).format('YYYY-MM-DD')
@@ -210,6 +219,7 @@ export default function CrudeExtractionPage() {
   }
 
   const handleCreateFL = async () => {
+    if (!canOperate) return
     try {
       const vals = await flForm.validateFields()
       if (vals.create_date) vals.create_date = dayjs(vals.create_date).format('YYYY-MM-DD')
@@ -325,8 +335,8 @@ export default function CrudeExtractionPage() {
         <Space size={8}>
           <Select size="small" style={{ width: 80 }} value={month} onChange={v => setMonth(v)}
             options={[{ value: 0, label: '全部' }, ...[1,2,3,4,5,6,7,8,9,10,11,12].map(m => ({ value: m, label: `${m}月` }))]} />
-          <MCSheetsSyncButton />
-          <MCTraceButton initialModule="refining" />
+          <MCSheetsSyncButton pageKey="production:batches:workshop-201-2" />
+          <MCTraceButton initialModule="refining" pageKey="production:batches:workshop-201-2" />
         </Space>
       </div>
 
@@ -348,17 +358,17 @@ export default function CrudeExtractionPage() {
       />
 
       <Card title="霉酚酸粗提台账" extra={<Space>
-        <Button size="small" onClick={() => { flForm.resetFields(); setFlVisible(true) }}>新建发酵液</Button>
-        <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => { createForm.resetFields(); setCreateVisible(true) }}>新建提炼批次</Button>
+        {canOperate && <Button size="small" onClick={() => { flForm.resetFields(); setFlVisible(true) }}>新建发酵液</Button>}
+        {canOperate && <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => { createForm.resetFields(); setCreateVisible(true) }}>新建提炼批次</Button>}
       </Space>}>
         <Table size="small" rowKey="_key" loading={loading} className="crude-ledger-table" dataSource={flatRows} scroll={{ x: 2400 }} columns={columns} pagination={false} />
         <div style={{ padding: '8px 0', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {subTankInfos.map(st => <Button key={st.stId} size="small" type="dashed" loading={saving} onClick={() => addStepRow(st.batchNo, st.rowCount)}>+ 步骤 ({st.batchNo})</Button>)}
+          {canOperate && subTankInfos.map(st => <Button key={st.stId} size="small" type="dashed" loading={saving} onClick={() => addStepRow(st.batchNo, st.rowCount)}>+ 步骤 ({st.batchNo})</Button>)}
           {subTankInfos.length === 0 && <Text type="secondary">暂无分罐数据</Text>}
         </div>
       </Card>
 
-      <Modal title="新建提炼批次（自动创建分罐-1/-2）" open={createVisible} onOk={handleCreate} onCancel={() => setCreateVisible(false)} width={700} okText="确认" cancelText="取消" destroyOnHidden>
+      <Modal title="新建提炼批次（自动创建分罐-1/-2）" open={createVisible && canOperate} onOk={canOperate ? handleCreate : undefined} onCancel={() => setCreateVisible(false)} width={700} okText="确认" cancelText="取消" destroyOnHidden>
         <Form form={createForm} layout="vertical">
           <Row gutter={16}>
             <Col span={8}><Form.Item name="batch_no" label="提炼生产批号" rules={[{ required: true }]}><Input placeholder="MC-251224" /></Form.Item></Col>
@@ -374,7 +384,7 @@ export default function CrudeExtractionPage() {
         </Form>
       </Modal>
 
-      <Modal title="新建发酵液" open={flVisible} onOk={handleCreateFL} onCancel={() => setFlVisible(false)} width={700} okText="确认" cancelText="取消" destroyOnHidden>
+      <Modal title="新建发酵液" open={flVisible && canOperate} onOk={canOperate ? handleCreateFL : undefined} onCancel={() => setFlVisible(false)} width={700} okText="确认" cancelText="取消" destroyOnHidden>
         <Form form={flForm} layout="vertical">
           <Row gutter={16}>
             <Col span={12}><Form.Item name="batch_no" label="发酵液批号" rules={[{ required: true }]}><Input placeholder="MC-101-25202" /></Form.Item></Col>

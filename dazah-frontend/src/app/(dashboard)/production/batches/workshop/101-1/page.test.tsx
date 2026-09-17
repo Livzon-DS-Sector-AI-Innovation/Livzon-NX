@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { App } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { clearProductionAuthForTest, setProductionAdminForTest } from '@/test/production-auth'
 
 const actions = vi.hoisted(() => ({
   getSeedCultures: vi.fn(),
@@ -35,6 +36,7 @@ describe('SeedCulturePage (101-1)', () => {
   let container: HTMLElement
 
   beforeEach(() => {
+    setProductionAdminForTest()
     actions.getSeedCultures.mockResolvedValue({ code: 200, message: 'success', data: RECORDS })
     container = document.createElement('div')
     document.body.append(container)
@@ -44,6 +46,7 @@ describe('SeedCulturePage (101-1)', () => {
   afterEach(() => {
     act(() => root.unmount())
     container?.remove()
+    clearProductionAuthForTest()
     vi.clearAllMocks()
   })
 

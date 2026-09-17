@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy import asc, select, update
 
 from app.modules.registration.models import RegistrationProjectLedgerVersion
+from app.modules.registration.page_scope import visible_sheet_keys
 from app.modules.registration.repository.declaration_progress import (
     RegistrationDeclarationProgressRepository,
 )
@@ -19,6 +20,11 @@ class RegistrationProjectLedgerRepository(RegistrationDeclarationProgressReposit
     ) -> None:
         await self.session.execute(
             update(RegistrationProjectLedgerVersion)
+            .where(
+                RegistrationProjectLedgerVersion.sheet_key.in_(
+                    await visible_sheet_keys(self.session, "project-ledger")
+                )
+            )
             .values(is_deleted=True)
             .execution_options(synchronize_session=False)
         )
@@ -34,6 +40,9 @@ class RegistrationProjectLedgerRepository(RegistrationDeclarationProgressReposit
             select(RegistrationProjectLedgerVersion)
             .where(
                 RegistrationProjectLedgerVersion.is_deleted.is_(False),
+                RegistrationProjectLedgerVersion.sheet_key.in_(
+                    await visible_sheet_keys(self.session, "project-ledger")
+                ),
                 RegistrationProjectLedgerVersion.sheet_key == sheet_key,
             )
             .order_by(

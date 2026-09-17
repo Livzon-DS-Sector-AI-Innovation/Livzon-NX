@@ -24,6 +24,10 @@
         "sync_config": {
           "status": "active",
           "category": "integration_admin"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
         }
       }
     },
@@ -39,6 +43,10 @@
         "sync_config": {
           "status": "active",
           "category": "integration_admin"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
         }
       }
     },
@@ -54,6 +62,10 @@
         "sync_config": {
           "status": "active",
           "category": "integration_admin"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
         }
       }
     },
@@ -69,6 +81,10 @@
         "sync_config": {
           "status": "active",
           "category": "integration_admin"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
         }
       }
     },
@@ -84,6 +100,10 @@
         "sync_config": {
           "status": "active",
           "category": "integration_admin"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
         }
       }
     },
@@ -99,6 +119,10 @@
         "sync_config": {
           "status": "active",
           "category": "integration_admin"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
         }
       }
     },
@@ -114,6 +138,10 @@
         "sync_config": {
           "status": "active",
           "category": "integration_admin"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
         }
       }
     },
@@ -129,6 +157,10 @@
         "sync_config": {
           "status": "active",
           "category": "integration_admin"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
         }
       }
     },
@@ -156,6 +188,10 @@
         "bulk_import": {
           "status": "active",
           "category": "bulk_change"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
         }
       }
     },
@@ -171,6 +207,10 @@
         "sync_config": {
           "status": "active",
           "category": "integration_admin"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
         }
       }
     },
@@ -186,6 +226,10 @@
         "sync_config": {
           "status": "active",
           "category": "integration_admin"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
         }
       }
     },
@@ -201,6 +245,10 @@
         "sync_config": {
           "status": "active",
           "category": "integration_admin"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
         }
       }
     },
@@ -1021,6 +1069,14 @@
         "sensitive_export": {
           "status": "active",
           "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
         }
       }
     },
@@ -1036,6 +1092,10 @@
         "sensitive_export": {
           "status": "active",
           "category": "sensitive_export"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
         }
       }
     },
@@ -1043,7 +1103,16 @@
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/deviations/investigations",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:deviations:deviation-ledger": {
       "status": "active",
@@ -1061,6 +1130,10 @@
         "bulk_import": {
           "status": "active",
           "category": "bulk_change"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
         }
       }
     },
@@ -1080,6 +1153,14 @@
         "bulk_import": {
           "status": "active",
           "category": "bulk_change"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        },
+        "approve": {
+          "status": "active",
+          "category": "decision"
         }
       }
     },
@@ -1087,7 +1168,16 @@
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/capas/plans",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:complaints:complaint-ledger": {
       "status": "active",
@@ -1105,6 +1195,10 @@
         "bulk_import": {
           "status": "active",
           "category": "bulk_change"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
         }
       }
     },
@@ -1118,31 +1212,80 @@
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/items/inventory",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-items:inspection-items-inbound": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/items/inbound",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-items:inspection-items-outbound": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/items/outbound",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-items:inspection-items-dashboard": {
       "status": "retired",
       "module_code": "quality",
       "route_path": "/quality/inspection/items/dashboard",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-instruments:inspection-instruments-equipment": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/instruments/equipment",
-      "actions": {}
+      "actions": {
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        },
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-instruments:inspection-instruments-assets": {
       "status": "retired",
@@ -1154,31 +1297,80 @@
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/instruments/calibration",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-instruments:inspection-instruments-cal-plan": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/instruments/cal-plan",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-instruments:inspection-instruments-cal-external": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/instruments/cal-external",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-instruments:inspection-instruments-maintenance": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/instruments/maintenance",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-instruments:inspection-instruments-repair": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/instruments/repair",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-instruments:inspection-instruments-change": {
       "status": "retired",
@@ -1198,6 +1390,10 @@
         "sensitive_export": {
           "status": "active",
           "category": "sensitive_export"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
         }
       }
     },
@@ -1205,67 +1401,166 @@
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/instruments/plans",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-finished:inspection-finished-mpa": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/finished/mpa",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-finished:inspection-finished-mvt": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/finished/mvt",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-finished:inspection-finished-lft": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/finished/lft",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-finished:inspection-finished-dls": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/finished/dls",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-finished:inspection-finished-lkms": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/finished/lkms",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-finished:inspection-finished-pf": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/finished/pf",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-finished:inspection-finished-bbas": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/finished/bbas",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-finished:inspection-finished-formulations": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/finished/formulations",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-finished:inspection-finished-tryptophan": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/finished/tryptophan",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-finished:inspection-finished-water": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/finished/water",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-solid:inspection-solid-raw": {
       "status": "retired",
@@ -1405,6 +1700,10 @@
         "sensitive_export": {
           "status": "active",
           "category": "sensitive_export"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
         }
       }
     },
@@ -1412,7 +1711,16 @@
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/oos-oot/investigation-push",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:oos-oot:oos-ledger": {
       "status": "active",
@@ -1430,6 +1738,10 @@
         "bulk_import": {
           "status": "active",
           "category": "bulk_change"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
         }
       }
     },
@@ -1449,6 +1761,10 @@
         "bulk_import": {
           "status": "active",
           "category": "bulk_change"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
         }
       }
     },
@@ -1456,13 +1772,39 @@
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/oos-oot/oot-limits",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
     },
     "quality:oos-oot:product-departments": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/oos-oot/product-departments",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:product-quality": {
       "status": "retired",
@@ -1474,7 +1816,16 @@
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/return-recalls/return-application",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:return-recalls:return-ledger": {
       "status": "active",
@@ -1492,6 +1843,10 @@
         "bulk_import": {
           "status": "active",
           "category": "bulk_change"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
         }
       }
     },
@@ -1499,7 +1854,16 @@
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/suppliers/qualification",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:change:change-ledger": {
       "status": "active",
@@ -1517,6 +1881,10 @@
         "bulk_import": {
           "status": "active",
           "category": "bulk_change"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
         }
       }
     },
@@ -1536,6 +1904,10 @@
         "bulk_import": {
           "status": "active",
           "category": "bulk_change"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
         }
       }
     },
@@ -1543,43 +1915,106 @@
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/change/action-plans",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:validation:validation-plans": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/validation/plans",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:validation:equipment-qualification": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/validation/equipment-qualification",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:validation:process-validation": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/validation/process-validation",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:validation:cleaning-validation": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/validation/cleaning-validation",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:validation:other-validations": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/validation/other-validations",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:validation:qc-validation": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/validation/qc-validation",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "hr:departments": {
       "status": "active",
@@ -3352,55 +3787,168 @@
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/deviations/history",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
     },
     "quality:deviations:deviation-workbench": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/deviations/workbench",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:product-quality:product-quality-mfn": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/product-quality/mfn",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        },
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
     },
     "quality:product-quality:product-quality-dljs": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/product-quality/dljs",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        },
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
     },
     "quality:product-quality:product-quality-lftt": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/product-quality/lftt",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        },
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
     },
     "quality:product-quality:product-quality-mftt": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/product-quality/mftt",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        },
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
     },
     "quality:product-quality:product-quality-yslkms": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/product-quality/yslkms",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        },
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
     },
     "quality:product-quality:product-quality-bbas": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/product-quality/bbas",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        },
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
     },
     "quality:product-quality:product-quality-sas": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/product-quality/sas",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        },
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
     },
     "quality:anomaly-report": {
       "status": "retired",
@@ -3448,6 +3996,10 @@
         "bulk_import": {
           "status": "active",
           "category": "bulk_change"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
         }
       }
     },
@@ -3459,6 +4011,10 @@
         "sync_config": {
           "status": "active",
           "category": "integration_admin"
+        },
+        "delete": {
+          "status": "active",
+          "category": "destructive"
         }
       }
     },
@@ -3466,7 +4022,20 @@
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/validation/ai-review",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
     },
     "hr:employee-management:profile": {
       "status": "active",
@@ -3968,13 +4537,31 @@
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/solid",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "quality:inspection:inspection-liquid": {
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/inspection/liquid",
-      "actions": {}
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "production:summary": {
       "status": "retired",

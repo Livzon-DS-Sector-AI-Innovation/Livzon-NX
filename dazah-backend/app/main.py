@@ -71,13 +71,18 @@ mcp_asgi = get_mcp_app(path="/", middleware=mcp_middleware)
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Starting %s (%s)", settings.APP_NAME, settings.APP_ENV)
 
+    from app.core.database import async_session_factory
+    from app.core.schema_guard import assert_database_schema_current
+
+    async with async_session_factory() as schema_db:
+        await assert_database_schema_current(schema_db)
+
     from app.platform.identity.service import bootstrap_local_users
 
     await bootstrap_local_users()
 
     # RBAC/menu seeds are additive and idempotent. Existing module grants,
     # users and custom menus are never deleted or overwritten.
-    from app.core.database import async_session_factory
     from app.platform.identity.rbac import seed_menus, seed_permissions
 
     try:
@@ -185,6 +190,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     scheduler_registry = SchedulerRegistry()
     scheduler_engine = SchedulerEngine(scheduler_registry)
+
+    from app.platform.identity.page_permission_expiry import (
+        sensitive_page_permission_expiry_task,
+    )
+
+    scheduler_registry.register_task(sensitive_page_permission_expiry_task)
 
     from app.modules.equipment.scheduled import (
         InspectionScheduleGenerator,

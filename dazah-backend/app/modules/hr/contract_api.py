@@ -20,6 +20,7 @@ from app.core.database import get_db
 from app.core.deps import CurrentUser
 from app.core.exceptions import AppException, NotFoundException
 from app.core.response import paginated_response, success_response
+from app.modules.hr.contract_repository import ContractRepository
 from app.modules.hr.contract_schemas import (
     ContractApprovalResultItem,
     ContractManagementCreate,
@@ -1172,16 +1173,9 @@ async def renew_contract(
 
     from sqlalchemy import select
 
-    from app.modules.hr.models import ContractManagement as ContractRecord
     from app.modules.hr.models import Employee
 
-    result = await db.execute(
-        select(ContractRecord).where(
-            ContractRecord.id == record_id,
-            ContractRecord.is_deleted.is_(False),
-        )
-    )
-    record = result.scalars().first()
+    record = await ContractRepository(db).get_by_id(record_id)
     if not record:
         raise NotFoundException("合同记录不存在")
 
@@ -1604,15 +1598,8 @@ async def update_contract_sign_status(
     _require_user(current_user)
     if data.signed_status not in ("已签署", "拒签"):
         raise AppException(status_code=400, message="签署状态必须为 已签署 或 拒签")
-    from app.modules.hr.models import ContractManagement as ContractRecord
 
-    result = await db.execute(
-        select(ContractRecord).where(
-            ContractRecord.id == record_id,
-            ContractRecord.is_deleted.is_(False),
-        )
-    )
-    record = result.scalar_one_or_none()
+    record = await ContractRepository(db).get_by_id(record_id)
     if not record:
         raise NotFoundException("合同记录不存在")
 
@@ -1665,6 +1652,11 @@ async def sync_contracts_from_feishu(
 ) -> Any:
     """方向 B：从飞书多维表格全量拉取合同数据"""
     _require_user(current_user)
+    from app.platform.identity.data_scope import resolve_user_department_scope
+
+    assert current_user is not None
+    if not (await resolve_user_department_scope(db, current_user)).is_all:
+        raise AppException(status_code=403, message="全量同步需要全部部门数据范围")
     service = ContractService(db)
     try:
         result = await service.sync_from_feishu()

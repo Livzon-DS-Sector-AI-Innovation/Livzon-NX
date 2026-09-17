@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { App } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAuthStore } from '@/stores/auth'
 
 const apiClient = vi.hoisted(() => ({
   fetchSupplierQualifications: vi.fn(),
@@ -39,6 +40,7 @@ describe('SupplierQualificationPage 到期状态筛选', () => {
 
   afterEach(() => {
     act(() => root.unmount())
+    useAuthStore.getState().clearUser()
     container.remove()
     document.body
       .querySelectorAll('.ant-modal-root, .ant-select-dropdown, .ant-message')
@@ -147,6 +149,14 @@ describe('SupplierQualificationPage 到期状态筛选', () => {
   })
 
   it('editing a record keeps responsible_users pre-filled and saves them back', async () => {
+    useAuthStore.getState().setUser({
+      id: 'supplier-editor', name: '资质编辑员', role: 'user',
+      page_permissions: [{
+        page_key: 'quality:suppliers:supplier-qualification', module_code: 'quality',
+        permissions: ['access', 'query', 'operate'], sensitive_actions: [],
+        data_scope: { scope_type: 'not_applicable', department_ids: [] }, source: 'user',
+      }],
+    })
     apiClient.fetchSupplierQualifications.mockResolvedValue({
       items: [
         {

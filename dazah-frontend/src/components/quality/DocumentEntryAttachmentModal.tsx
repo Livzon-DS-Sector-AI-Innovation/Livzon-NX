@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import { usePagePermissions } from '@/hooks/usePagePermissions'
 import {
   App,
   Button,
@@ -144,12 +145,13 @@ export default function DocumentEntryAttachmentModal({
   onChanged,
   onPreview,
 }: Props) {
+  const { canDelete } = usePagePermissions('quality:documents')
   const { message, modal } = App.useApp()
 
   const attachments: DocumentEntryAttachment[] = entry?.attachments ?? []
 
   const handleDelete = (attachment: DocumentEntryAttachment) => {
-    if (!entry) return
+    if (!entry || !canDelete) return
     modal.confirm({
       title: '删除附件',
       content: `确定删除「${attachment.file_name}」吗？`,
@@ -218,6 +220,7 @@ export default function DocumentEntryAttachmentModal({
             size="small"
             danger
             icon={<DeleteOutlined />}
+            disabled={!canDelete}
             onClick={() => handleDelete(record)}
           >
             删除

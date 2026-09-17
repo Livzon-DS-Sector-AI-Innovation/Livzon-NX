@@ -50,6 +50,8 @@ from app.modules.quality.service.document_catalog_md import (
     ExtractedImage,
     convert_word_attachment,
 )
+from app.modules.quality.service.document_catalog_scope import document_entry_scope
+from app.platform.identity.data_scope import DepartmentScope
 
 logger = logging.getLogger(__name__)
 
@@ -353,7 +355,7 @@ def extract_cjk_core(file_name: str) -> str:
 
 
 async def find_entry_by_file_name(
-    db: AsyncSession, file_name: str
+    db: AsyncSession, file_name: str, *, scope: DepartmentScope | None = None
 ) -> DocumentEntry | None:
     """按文件名中的文件编码自动匹配唯一条目（修订号优先），无法唯一匹配返回 None。"""
     parsed = extract_code_and_rev(file_name)
@@ -376,6 +378,7 @@ async def find_entry_by_file_name(
             select(DocumentEntry).where(
                 DocumentEntry.is_deleted.is_(False),
                 DocumentEntry.code.in_(rev_codes),
+                document_entry_scope(scope),
             )
         )
         exact_matches = exact_result.scalars().all()
@@ -393,6 +396,7 @@ async def find_entry_by_file_name(
         select(DocumentEntry).where(
             DocumentEntry.is_deleted.is_(False),
             or_(*conditions),
+            document_entry_scope(scope),
         )
     )
     matches = result.scalars().all()
@@ -452,7 +456,8 @@ def extract_content_identity(md_text: str) -> tuple[str | None, str | None]:
 
 
 async def match_entry_by_content(
-    db: AsyncSession, content_code: str | None, content_title: str | None
+    db: AsyncSession, content_code: str | None, content_title: str | None,
+    *, scope: DepartmentScope | None = None,
 ) -> DocumentEntry | None:
     """正文匹配：优先正文文件编号（主干一致，全串一致优先），其次正文标题
     与条目名称归一化后完全一致。"""
@@ -464,6 +469,7 @@ async def match_entry_by_content(
             select(DocumentEntry).where(
                 DocumentEntry.is_deleted.is_(False),
                 DocumentEntry.code.ilike(f"{head}%"),
+                document_entry_scope(scope),
             )
         )
         normed = [
@@ -484,6 +490,7 @@ async def match_entry_by_content(
             select(DocumentEntry).where(
                 DocumentEntry.is_deleted.is_(False),
                 DocumentEntry.name.ilike(f"%{_escape_like(content_title)}%"),
+                document_entry_scope(scope),
             )
         )
         exact = [
@@ -496,7 +503,9 @@ async def match_entry_by_content(
     return None
 
 
-async def match_entry_by_name(db: AsyncSession, file_name: str) -> DocumentEntry | None:
+async def match_entry_by_name(
+    db: AsyncSession, file_name: str, *, scope: DepartmentScope | None = None
+) -> DocumentEntry | None:
     """名称匹配：文件名中文核心词与条目名称归一化后完全一致，唯一则命中；
     多条同名时绑定附件最少的一条。"""
     core = extract_cjk_core(file_name)
@@ -506,6 +515,7 @@ async def match_entry_by_name(db: AsyncSession, file_name: str) -> DocumentEntry
         select(DocumentEntry).where(
             DocumentEntry.is_deleted.is_(False),
             DocumentEntry.name.ilike(f"%{_escape_like(core)}%"),
+            document_entry_scope(scope),
         )
     )
     matches = [
@@ -524,7 +534,9 @@ def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-async def _llm_candidates(db: AsyncSession, file_name: str) -> list[DocumentEntry]:
+async def _llm_candidates(
+    db: AsyncSession, file_name: str, *, scope: DepartmentScope | None = None
+) -> list[DocumentEntry]:
     """构造 LLM 候选集：编码前缀同部门条目，否则名称相近条目（限量）。"""
     parsed = extract_code_and_rev(file_name)
     if parsed:
@@ -534,6 +546,7 @@ async def _llm_candidates(db: AsyncSession, file_name: str) -> list[DocumentEntr
             select(DocumentEntry).where(
                 DocumentEntry.is_deleted.is_(False),
                 DocumentEntry.code.ilike(f"{dept_prefix}%"),
+                document_entry_scope(scope),
             )
         )
         candidates = list(result.scalars().all())
@@ -545,15 +558,18 @@ async def _llm_candidates(db: AsyncSession, file_name: str) -> list[DocumentEntr
             select(DocumentEntry).where(
                 DocumentEntry.is_deleted.is_(False),
                 DocumentEntry.name.ilike(f"%{_escape_like(core[:6])}%"),
+                document_entry_scope(scope),
             )
         )
         return list(result.scalars().all())[:60]
     return []
 
 
-async def llm_match_entry(db: AsyncSession, file_name: str) -> DocumentEntry | None:
+async def llm_match_entry(
+    db: AsyncSession, file_name: str, *, scope: DepartmentScope | None = None
+) -> DocumentEntry | None:
     """LLM 识别匹配：在候选条目中选出与附件文件名最匹配的文件条目。"""
-    candidates = await _llm_candidates(db, file_name)
+    candidates = await _llm_candidates(db, file_name, scope=scope)
     if not candidates:
         return None
     candidate_text = "\n".join(
@@ -601,23 +617,25 @@ async def match_entry_for_attachment(
     db: AsyncSession,
     file_name: str,
     content_identity: tuple[str | None, str | None] | None = None,
+    *,
+    scope: DepartmentScope | None = None,
 ) -> tuple[DocumentEntry | None, str]:
     """四段式匹配：文件名称 → 文件编号 → 正文内容 → LLM 兜底。
 
     content_identity 为转换后 md 提取的 (正文文件编号, 正文标题)，
     仅在名称与编号均未命中时参与正文匹配。
     """
-    entry = await match_entry_by_name(db, file_name)
+    entry = await match_entry_by_name(db, file_name, scope=scope)
     if entry is not None:
         return entry, "name"
-    entry = await find_entry_by_file_name(db, file_name)
+    entry = await find_entry_by_file_name(db, file_name, scope=scope)
     if entry is not None:
         return entry, "code"
     if content_identity is not None:
-        entry = await match_entry_by_content(db, *content_identity)
+        entry = await match_entry_by_content(db, *content_identity, scope=scope)
         if entry is not None:
             return entry, "content"
-    entry = await llm_match_entry(db, file_name)
+    entry = await llm_match_entry(db, file_name, scope=scope)
     if entry is not None:
         return entry, "llm"
     return None, "none"

@@ -39,6 +39,7 @@ const authStore = vi.hoisted(() => {
     user: {
       id: 'u-test',
       name: '测试用户',
+      role: 'admin' as const,
       permissions: ['*'] as string[],
     },
   }

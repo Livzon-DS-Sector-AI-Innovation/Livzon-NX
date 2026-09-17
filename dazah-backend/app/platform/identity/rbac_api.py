@@ -8,8 +8,10 @@ never turns an old ``module.view`` grant into a write or Agent permission.
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
+from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -34,7 +36,9 @@ from app.platform.identity.models import (
     Permission,
     PermissionModuleRollout,
     Role,
+    RolePageGrant,
     User,
+    UserPageGrant,
 )
 from app.platform.identity.page_permission_repository import PagePermissionRepository
 from app.platform.identity.page_permissions import (
@@ -73,6 +77,16 @@ from app.platform.identity.schemas import (
     MenuCreateRequest,
     MenuResponse,
     MenuUpdateRequest,
+    PageDataScopeInput,
+    PageGrantInput,
+    PagePermissionHealthOut,
+    PagePermissionHealthRemediationOut,
+    PagePermissionHealthRemediationRequest,
+    PagePermissionHistoryItemOut,
+    PagePermissionHistoryPageOut,
+    PagePermissionRollbackPreviewOut,
+    PagePermissionRollbackPreviewRequest,
+    PagePermissionRollbackRequest,
     PagePermissionSimulationOut,
     PagePermissionSimulationRequest,
     PermissionModulePublishRequest,
@@ -83,7 +97,9 @@ from app.platform.identity.schemas import (
     PermissionSimulateRequest,
     RoleCreateRequest,
     RoleMenusRequest,
+    RolePagePermissionAffectedUserOut,
     RolePagePermissionsOut,
+    RolePagePermissionsPreviewOut,
     RolePagePermissionsUpdate,
     RolePermissionsRequest,
     RoleResponse,
@@ -211,11 +227,118 @@ def _grant_payload(grants: list[Any]) -> list[dict[str, Any]]:
             "page_key": grant.page_key,
             "permissions": list(grant.permissions or []),
             "sensitive_actions": list(grant.sensitive_actions or []),
+            "sensitive_actions_expires_at": (
+                grant.sensitive_actions_expires_at.isoformat()
+                if getattr(grant, "sensitive_actions_expires_at", None)
+                else None
+            ),
             "scope_type": grant.scope_type,
             "department_ids": list(grant.department_ids or []),
         }
         for grant in grants
     ]
+
+
+def _snapshot_inputs(grants: list[dict[str, Any]]) -> list[PageGrantInput]:
+    return [
+        PageGrantInput(
+            page_key=str(grant["page_key"]),
+            permissions=list(grant.get("permissions") or []),
+            sensitive_actions=list(grant.get("sensitive_actions") or []),
+            sensitive_actions_expires_at=grant.get("sensitive_actions_expires_at"),
+            data_scope=PageDataScopeInput(
+                scope_type=grant.get("scope_type", "department_tree"),
+                department_ids=list(grant.get("department_ids") or []),
+            ),
+        )
+        for grant in grants
+    ]
+
+
+def _page_permission_request_fingerprint(
+    *,
+    reason: str,
+    grants: list[PageGrantInput] | None = None,
+    audit_id: UUID | None = None,
+) -> str:
+    payload = {
+        "reason": reason,
+        "grants": [grant.model_dump(mode="json") for grant in grants or []],
+        "audit_id": str(audit_id) if audit_id else None,
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _assert_matching_idempotency(existing: Any, request_fingerprint: str) -> None:
+    if (existing.new_value or {}).get("request_fingerprint") != request_fingerprint:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "该幂等键已用于另一项授权请求，请重新发起操作",
+        )
+
+
+async def _raise_page_grant_conflict(
+    db: AsyncSession,
+    *,
+    resource_type: str,
+    resource_id: UUID,
+    submitted_version: int,
+    current_version: int,
+) -> None:
+    latest = await PagePermissionService().permission_history(
+        db,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        limit=1,
+    )
+    detail = (
+        f"授权版本冲突：你基于 v{submitted_version} 编辑，当前已是 v{current_version}"
+    )
+    if latest:
+        item = latest[0]
+        actor = item.actor_name or "其他管理员"
+        changed_at = item.created_at.astimezone().strftime("%Y-%m-%d %H:%M")
+        reason = f"，原因：{item.reason}" if item.reason else ""
+        detail += f"；最近由 {actor} 于 {changed_at} 变更{reason}"
+    raise HTTPException(status.HTTP_409_CONFLICT, detail)
+
+
+def _page_permission_history_csv(
+    items: list[PagePermissionHistoryItemOut], *, target_name: str
+) -> Response:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(
+        ["时间", "对象", "版本", "来源", "操作人", "原因", "页面", "变化", "变化说明"]
+    )
+    source_labels = {
+        "manual": "手工调整",
+        "rollback": "历史回滚",
+        "health_remediation": "健康修复",
+    }
+    for item in items:
+        changes: list[Any] = list(item.changes) or [None]
+        for change in changes:
+            writer.writerow(
+                [
+                    item.created_at.isoformat(),
+                    target_name,
+                    item.grant_version or "",
+                    source_labels[item.source],
+                    item.actor_name or "系统",
+                    item.reason or "",
+                    change.page_name if change else "",
+                    change.kind if change else "",
+                    change.summary if change else "",
+                ]
+            )
+    filename = f"page-permission-history-{datetime.now().strftime('%Y%m%d-%H%M%S')}.csv"
+    return Response(
+        content="\ufeff" + buffer.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @rbac_router.get("/permissions", summary="权限目录列表")
@@ -432,7 +555,20 @@ async def assign_user_roles(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "管理员不能修改自己的角色")
     await lock_admin_changes(db)
     user = await _get_target_user_or_404(db, user_id)
+    if (
+        body.expected_grant_version is not None
+        and user.grant_version != body.expected_grant_version
+    ):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "授权版本冲突："
+            f"你基于 v{body.expected_grant_version} 编辑，"
+            f"当前已是 v{user.grant_version}",
+        )
     repo = RbacRepository()
+    current_roles = await repo.list_user_roles(db, user.id)
+    current_by_id = {role.id: role for role in current_roles}
+    selected_roles: list[Role] = []
     for role_id in dict.fromkeys(body.role_ids):
         role = await _get_role_or_404(db, role_id)
         if (
@@ -444,9 +580,40 @@ async def assign_user_roles(
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN, "仅系统管理员可以分配系统管理员角色"
             )
-        await repo.assign_user_role(db, user.id, role_id)
-        if role.code == "super_admin":
-            user.role = "admin"
+        selected_roles.append(role)
+    requested_by_id = {role.id: role for role in selected_roles}
+    selected_by_id = (
+        {**current_by_id, **requested_by_id} if body.mode == "add" else requested_by_id
+    )
+    removed_super_admin = any(
+        role.code == "super_admin" and role_id not in selected_by_id
+        for role_id, role in current_by_id.items()
+    )
+    if removed_super_admin:
+        if not await PagePermissionService().is_super_admin(
+            db, user_id=current_user.id
+        ):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN, "仅系统管理员可以移除系统管理员角色"
+            )
+        if user.status == "active" and await _active_super_admin_count(db) <= 1:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT, "不能移除最后一个可用的系统管理员"
+            )
+    current_ids = set(current_by_id)
+    selected_ids = set(selected_by_id)
+    added_ids = selected_ids - current_ids
+    removed_ids = current_ids - selected_ids
+    if not added_ids and not removed_ids:
+        return success_response(
+            data={"message": "角色未变化", "grant_version": user.grant_version}
+        )
+    await repo.replace_user_roles(db, user.id, list(selected_ids))
+    user.role = (
+        "admin"
+        if any(role.code == "super_admin" for role in selected_by_id.values())
+        else "user"
+    )
     user.grant_version += 1
     user.updated_by = current_user.id
     await PermissionGrantRepository().create_outbox_event(
@@ -462,12 +629,25 @@ async def assign_user_roles(
         action="rbac_user_roles_updated",
         resource_type="identity.user_roles",
         resource_id=user.id,
-        new_value={"role_ids": [str(item) for item in body.role_ids]},
+        old_value={"role_ids": [str(item) for item in sorted(current_ids, key=str)]},
+        new_value={
+            "role_ids": [str(item) for item in sorted(selected_ids, key=str)],
+            "added_role_ids": [str(item) for item in sorted(added_ids, key=str)],
+            "removed_role_ids": [str(item) for item in sorted(removed_ids, key=str)],
+            "reason": (body.reason or "").strip() or None,
+        },
     )
     await db.commit()
     await publish_permissions_changed(user.id)
     await publish_data_scope_changed("user", user.id)
-    return success_response(data={"message": "角色已分配"})
+    return success_response(
+        data={
+            "message": "角色分配已更新",
+            "grant_version": user.grant_version,
+            "added_count": len(added_ids),
+            "removed_count": len(removed_ids),
+        }
+    )
 
 
 @rbac_router.delete("/users/{user_id}/roles/{role_id}", summary="移除手动角色")
@@ -1012,15 +1192,32 @@ async def replace_user_page_permissions(
         raise HTTPException(400, "系统管理员拥有全部权限，无需配置页面覆盖")
     if body.expected_grant_version is None:
         raise HTTPException(status.HTTP_428_PRECONDITION_REQUIRED, "必须提交授权版本")
-    if user.grant_version != body.expected_grant_version:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            f"授权版本冲突，当前版本为 {user.grant_version}",
-        )
+    page_repo = PagePermissionRepository()
     service = PagePermissionService()
+    request_fingerprint = _page_permission_request_fingerprint(
+        reason=body.reason, grants=body.grants
+    )
+    if body.idempotency_key:
+        existing = await page_repo.find_page_permission_idempotency(
+            db,
+            resource_type="identity.user_page_permissions",
+            resource_id=user.id,
+            idempotency_key=body.idempotency_key,
+        )
+        if existing:
+            _assert_matching_idempotency(existing, request_fingerprint)
+            result = await service.user_permissions_out(db, user=user)
+            return success_response(data=result.model_dump(mode="json"))
+    if user.grant_version != body.expected_grant_version:
+        await _raise_page_grant_conflict(
+            db,
+            resource_type="identity.user_page_permissions",
+            resource_id=user.id,
+            submitted_version=body.expected_grant_version,
+            current_version=user.grant_version,
+        )
     normalized = service.normalize_inputs(body.grants, allow_inherit=True)
     await service.validate_department_ids(db, grants=normalized)
-    page_repo = PagePermissionRepository()
     old = await page_repo.list_user_grants(db, user_id=user.id)
     created = await page_repo.replace_user_grants(
         db,
@@ -1044,7 +1241,15 @@ async def replace_user_page_permissions(
         resource_type="identity.user_page_permissions",
         resource_id=user.id,
         old_value={"grants": _grant_payload(old)},
-        new_value={"grants": _grant_payload(created), "reason": body.reason},
+        new_value={
+            "grants": _grant_payload(created),
+            "reason": body.reason,
+            "grant_version": user.grant_version,
+            "idempotency_key": str(body.idempotency_key)
+            if body.idempotency_key
+            else None,
+            "request_fingerprint": request_fingerprint,
+        },
     )
     await db.commit()
     await publish_permissions_changed(user.id)
@@ -1093,12 +1298,29 @@ async def replace_role_page_permissions(
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, "不能通过修改本人所属角色调整自身页面授权"
         )
-    if role.grant_version != body.expected_grant_version:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            f"授权版本冲突，当前版本为 {role.grant_version}",
-        )
     service = PagePermissionService()
+    request_fingerprint = _page_permission_request_fingerprint(
+        reason=body.reason, grants=body.grants
+    )
+    if body.idempotency_key:
+        existing = await page_repo.find_page_permission_idempotency(
+            db,
+            resource_type="identity.role_page_permissions",
+            resource_id=role.id,
+            idempotency_key=body.idempotency_key,
+        )
+        if existing:
+            _assert_matching_idempotency(existing, request_fingerprint)
+            result = await service.role_permissions_out(db, role=role)
+            return success_response(data=result.model_dump(mode="json"))
+    if role.grant_version != body.expected_grant_version:
+        await _raise_page_grant_conflict(
+            db,
+            resource_type="identity.role_page_permissions",
+            resource_id=role.id,
+            submitted_version=body.expected_grant_version,
+            current_version=role.grant_version,
+        )
     normalized = service.normalize_inputs(body.grants, allow_inherit=False)
     await service.validate_department_ids(db, grants=normalized)
     old = await page_repo.list_role_grants(db, role_ids=[role.id])
@@ -1118,11 +1340,624 @@ async def replace_role_page_permissions(
         resource_type="identity.role_page_permissions",
         resource_id=role.id,
         old_value={"grants": _grant_payload(old)},
-        new_value={"grants": _grant_payload(created), "reason": body.reason},
+        new_value={
+            "grants": _grant_payload(created),
+            "reason": body.reason,
+            "grant_version": role.grant_version,
+            "idempotency_key": str(body.idempotency_key)
+            if body.idempotency_key
+            else None,
+            "request_fingerprint": request_fingerprint,
+        },
     )
     await db.commit()
     await publish_permissions_changed_all()
     result = await service.role_permissions_out(db, role=role)
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@rbac_router.post(
+    "/roles/{role_id}/page-permissions/preview",
+    summary="预演角色页面权限用户影响",
+    response_model=RolePagePermissionsPreviewOut,
+)
+async def preview_role_page_permissions(
+    role_id: UUID,
+    body: RolePagePermissionsUpdate,
+    current_user: IdentityAdminUser,
+    db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
+    role = await _get_role_or_404(db, role_id)
+    if role.code == "super_admin":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "系统管理员页面权限不可修改")
+    service = PagePermissionService()
+    if role.grant_version != body.expected_grant_version:
+        await _raise_page_grant_conflict(
+            db,
+            resource_type="identity.role_page_permissions",
+            resource_id=role.id,
+            submitted_version=body.expected_grant_version,
+            current_version=role.grant_version,
+        )
+    normalized = service.normalize_inputs(body.grants, allow_inherit=False)
+    await service.validate_department_ids(db, grants=normalized)
+    result = await service.role_permissions_preview(
+        db,
+        role=role,
+        proposed_grants=normalized,
+        module_access_mode=settings.effective_module_access_mode,
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@rbac_router.get(
+    "/users/{user_id}/page-permissions/history",
+    summary="查看用户页面权限历史",
+    response_model=PagePermissionHistoryPageOut,
+)
+async def get_user_page_permission_history(
+    user_id: UUID,
+    current_user: IdentityAdminUser,
+    db: AsyncSession = Depends(get_db),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    actor_user_id: UUID | None = Query(default=None),
+    source: Literal["manual", "rollback", "health_remediation"] | None = Query(
+        default=None
+    ),
+    page_key: str | None = Query(default=None, max_length=255),
+    change_kind: Literal["grant", "expand", "restrict", "revoke", "mixed"]
+    | None = Query(default=None),
+    date_from: datetime | None = Query(default=None),
+    date_to: datetime | None = Query(default=None),
+) -> JSONResponse:
+    await _get_target_user_or_404(db, user_id)
+    result = await PagePermissionService().permission_history_page(
+        db,
+        resource_type="identity.user_page_permissions",
+        resource_id=user_id,
+        page=page,
+        page_size=page_size,
+        actor_user_id=actor_user_id,
+        source=source,
+        page_key=page_key,
+        change_kind=change_kind,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@rbac_router.get(
+    "/roles/{role_id}/page-permissions/history",
+    summary="查看角色页面权限历史",
+    response_model=PagePermissionHistoryPageOut,
+)
+async def get_role_page_permission_history(
+    role_id: UUID,
+    current_user: IdentityAdminUser,
+    db: AsyncSession = Depends(get_db),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    actor_user_id: UUID | None = Query(default=None),
+    source: Literal["manual", "rollback", "health_remediation"] | None = Query(
+        default=None
+    ),
+    page_key: str | None = Query(default=None, max_length=255),
+    change_kind: Literal["grant", "expand", "restrict", "revoke", "mixed"]
+    | None = Query(default=None),
+    date_from: datetime | None = Query(default=None),
+    date_to: datetime | None = Query(default=None),
+) -> JSONResponse:
+    await _get_role_or_404(db, role_id)
+    result = await PagePermissionService().permission_history_page(
+        db,
+        resource_type="identity.role_page_permissions",
+        resource_id=role_id,
+        page=page,
+        page_size=page_size,
+        actor_user_id=actor_user_id,
+        source=source,
+        page_key=page_key,
+        change_kind=change_kind,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@rbac_router.get(
+    "/users/{user_id}/page-permissions/history/export",
+    summary="导出用户页面权限历史",
+)
+async def export_user_page_permission_history(
+    user_id: UUID,
+    current_user: IdentityAdminUser,
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    user = await _get_target_user_or_404(db, user_id)
+    items = await PagePermissionService().permission_history(
+        db,
+        resource_type="identity.user_page_permissions",
+        resource_id=user_id,
+        limit=5000,
+    )
+    return _page_permission_history_csv(items, target_name=user.name)
+
+
+@rbac_router.get(
+    "/roles/{role_id}/page-permissions/history/export",
+    summary="导出角色页面权限历史",
+)
+async def export_role_page_permission_history(
+    role_id: UUID,
+    current_user: IdentityAdminUser,
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    role = await _get_role_or_404(db, role_id)
+    items = await PagePermissionService().permission_history(
+        db,
+        resource_type="identity.role_page_permissions",
+        resource_id=role_id,
+        limit=5000,
+    )
+    return _page_permission_history_csv(items, target_name=role.name)
+
+
+@rbac_router.post(
+    "/users/{user_id}/page-permissions/rollback/preview",
+    summary="预演用户页面权限回滚",
+    response_model=PagePermissionRollbackPreviewOut,
+)
+async def preview_user_page_permission_rollback(
+    user_id: UUID,
+    body: PagePermissionRollbackPreviewRequest,
+    current_user: IdentityAdminUser,
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    user = await _get_target_user_or_404(db, user_id)
+    if user.grant_version != body.expected_grant_version:
+        await _raise_page_grant_conflict(
+            db,
+            resource_type="identity.user_page_permissions",
+            resource_id=user.id,
+            submitted_version=body.expected_grant_version,
+            current_version=user.grant_version,
+        )
+    repo = PagePermissionRepository()
+    history = await repo.get_page_permission_history(
+        db,
+        audit_id=body.audit_id,
+        resource_type="identity.user_page_permissions",
+        resource_id=user.id,
+    )
+    if history is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "授权历史不存在")
+    service = PagePermissionService()
+    current = _grant_payload(await repo.list_user_grants(db, user_id=user.id))
+    target = service.normalize_inputs(
+        _snapshot_inputs(list((history.new_value or {}).get("grants") or [])),
+        allow_inherit=True,
+    )
+    await service.validate_department_ids(db, grants=target)
+    changes = service.history_changes(current, target)
+    kinds = {item.kind for item in changes}
+    impact = (
+        "expanded"
+        if kinds and kinds <= {"grant", "expand"}
+        else "restricted"
+        if kinds and kinds <= {"revoke", "restrict"}
+        else "mixed"
+    )
+    result = PagePermissionRollbackPreviewOut(
+        target_type="user",
+        target_id=user.id,
+        current_grant_version=user.grant_version,
+        history_grant_version=(history.new_value or {}).get("grant_version"),
+        changes=changes,
+        affected_user_count=1 if changes else 0,
+        expanded_user_count=1 if changes and impact == "expanded" else 0,
+        restricted_user_count=1 if changes and impact == "restricted" else 0,
+        mixed_user_count=1 if changes and impact == "mixed" else 0,
+        users_with_overrides=1 if target else 0,
+        affected_user_samples=(
+            [
+                RolePagePermissionAffectedUserOut(
+                    user_id=user.id, user_name=user.name, impact=impact
+                )
+            ]
+            if changes
+            else []
+        ),
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@rbac_router.post(
+    "/roles/{role_id}/page-permissions/rollback/preview",
+    summary="预演角色页面权限回滚",
+    response_model=PagePermissionRollbackPreviewOut,
+)
+async def preview_role_page_permission_rollback(
+    role_id: UUID,
+    body: PagePermissionRollbackPreviewRequest,
+    current_user: IdentityAdminUser,
+    db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
+    role = await _get_role_or_404(db, role_id)
+    if role.grant_version != body.expected_grant_version:
+        await _raise_page_grant_conflict(
+            db,
+            resource_type="identity.role_page_permissions",
+            resource_id=role.id,
+            submitted_version=body.expected_grant_version,
+            current_version=role.grant_version,
+        )
+    repo = PagePermissionRepository()
+    history = await repo.get_page_permission_history(
+        db,
+        audit_id=body.audit_id,
+        resource_type="identity.role_page_permissions",
+        resource_id=role.id,
+    )
+    if history is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "授权历史不存在")
+    service = PagePermissionService()
+    current = _grant_payload(await repo.list_role_grants(db, role_ids=[role.id]))
+    target = service.normalize_inputs(
+        _snapshot_inputs(list((history.new_value or {}).get("grants") or [])),
+        allow_inherit=False,
+    )
+    await service.validate_department_ids(db, grants=target)
+    impact = await service.role_permissions_preview(
+        db,
+        role=role,
+        proposed_grants=target,
+        module_access_mode=settings.effective_module_access_mode,
+    )
+    result = PagePermissionRollbackPreviewOut(
+        target_type="role",
+        target_id=role.id,
+        current_grant_version=role.grant_version,
+        history_grant_version=(history.new_value or {}).get("grant_version"),
+        changes=service.history_changes(current, target),
+        affected_user_count=impact.affected_user_count,
+        expanded_user_count=impact.expanded_user_count,
+        restricted_user_count=impact.restricted_user_count,
+        mixed_user_count=impact.mixed_user_count,
+        users_with_overrides=impact.users_with_overrides,
+        affected_user_samples=impact.affected_user_samples,
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@rbac_router.post(
+    "/users/{user_id}/page-permissions/rollback",
+    summary="回滚用户页面权限",
+    response_model=UserPagePermissionsOut,
+)
+async def rollback_user_page_permissions(
+    user_id: UUID,
+    body: PagePermissionRollbackRequest,
+    current_user: IdentityAdminUser,
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    if user_id == current_user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "管理员不能回滚自己的页面权限")
+    permission_repo = PermissionGrantRepository()
+    user = await permission_repo.get_user_for_update(db, user_id)
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "用户不存在")
+    if user.role == "admin":
+        raise HTTPException(400, "系统管理员拥有全部权限，无需回滚页面覆盖")
+    page_repo = PagePermissionRepository()
+    service = PagePermissionService()
+    request_fingerprint = _page_permission_request_fingerprint(
+        reason=body.reason, audit_id=body.audit_id
+    )
+    if body.idempotency_key:
+        existing = await page_repo.find_page_permission_idempotency(
+            db,
+            resource_type="identity.user_page_permissions",
+            resource_id=user.id,
+            idempotency_key=body.idempotency_key,
+        )
+        if existing:
+            _assert_matching_idempotency(existing, request_fingerprint)
+            result = await service.user_permissions_out(db, user=user)
+            return success_response(data=result.model_dump(mode="json"))
+    if user.grant_version != body.expected_grant_version:
+        await _raise_page_grant_conflict(
+            db,
+            resource_type="identity.user_page_permissions",
+            resource_id=user.id,
+            submitted_version=body.expected_grant_version,
+            current_version=user.grant_version,
+        )
+    history = await page_repo.get_page_permission_history(
+        db,
+        audit_id=body.audit_id,
+        resource_type="identity.user_page_permissions",
+        resource_id=user.id,
+    )
+    if history is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "授权历史不存在")
+    normalized = service.normalize_inputs(
+        _snapshot_inputs(list((history.new_value or {}).get("grants") or [])),
+        allow_inherit=True,
+    )
+    await service.validate_department_ids(db, grants=normalized)
+    old = await page_repo.list_user_grants(db, user_id=user.id)
+    created = await page_repo.replace_user_grants(
+        db, user_id=user.id, grants=normalized, actor_id=current_user.id
+    )
+    user.grant_version += 1
+    user.updated_by = current_user.id
+    await permission_repo.create_outbox_event(
+        db,
+        user_id=user.id,
+        grant_version=user.grant_version,
+        actor_id=current_user.id,
+        event_type="identity.user_page_grants.changed.v1",
+    )
+    await _audit(
+        db,
+        current_user,
+        action="rollback_user_page_permissions",
+        resource_type="identity.user_page_permissions",
+        resource_id=user.id,
+        old_value={"grants": _grant_payload(old)},
+        new_value={
+            "grants": _grant_payload(created),
+            "reason": body.reason,
+            "grant_version": user.grant_version,
+            "rollback_of": str(history.id),
+            "idempotency_key": str(body.idempotency_key)
+            if body.idempotency_key
+            else None,
+            "request_fingerprint": request_fingerprint,
+        },
+    )
+    await db.commit()
+    await publish_permissions_changed(user.id)
+    result = await service.user_permissions_out(db, user=user)
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@rbac_router.post(
+    "/roles/{role_id}/page-permissions/rollback",
+    summary="回滚角色页面权限",
+    response_model=RolePagePermissionsOut,
+)
+async def rollback_role_page_permissions(
+    role_id: UUID,
+    body: PagePermissionRollbackRequest,
+    current_user: IdentityAdminUser,
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    page_repo = PagePermissionRepository()
+    role = await page_repo.get_role_for_update(db, role_id=role_id)
+    if role is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "角色不存在")
+    if role.code == "super_admin":
+        raise HTTPException(400, "系统管理员页面权限不可回滚")
+    actor_roles = await resolve_user_roles(db, current_user.id)
+    if (
+        current_user.role != "admin"
+        and not any(item.code == "super_admin" for item in actor_roles)
+        and any(item.id == role.id for item in actor_roles)
+    ):
+        raise HTTPException(403, "不能通过回滚本人所属角色调整自身页面授权")
+    service = PagePermissionService()
+    request_fingerprint = _page_permission_request_fingerprint(
+        reason=body.reason, audit_id=body.audit_id
+    )
+    if body.idempotency_key:
+        existing = await page_repo.find_page_permission_idempotency(
+            db,
+            resource_type="identity.role_page_permissions",
+            resource_id=role.id,
+            idempotency_key=body.idempotency_key,
+        )
+        if existing:
+            _assert_matching_idempotency(existing, request_fingerprint)
+            result = await service.role_permissions_out(db, role=role)
+            return success_response(data=result.model_dump(mode="json"))
+    if role.grant_version != body.expected_grant_version:
+        await _raise_page_grant_conflict(
+            db,
+            resource_type="identity.role_page_permissions",
+            resource_id=role.id,
+            submitted_version=body.expected_grant_version,
+            current_version=role.grant_version,
+        )
+    history = await page_repo.get_page_permission_history(
+        db,
+        audit_id=body.audit_id,
+        resource_type="identity.role_page_permissions",
+        resource_id=role.id,
+    )
+    if history is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "授权历史不存在")
+    normalized = service.normalize_inputs(
+        _snapshot_inputs(list((history.new_value or {}).get("grants") or [])),
+        allow_inherit=False,
+    )
+    await service.validate_department_ids(db, grants=normalized)
+    old = await page_repo.list_role_grants(db, role_ids=[role.id])
+    created = await page_repo.replace_role_grants(
+        db, role_id=role.id, grants=normalized, actor_id=current_user.id
+    )
+    role.grant_version += 1
+    role.updated_by = current_user.id
+    await _bump_all_user_grant_versions(db, actor_id=current_user.id)
+    await _audit(
+        db,
+        current_user,
+        action="rollback_role_page_permissions",
+        resource_type="identity.role_page_permissions",
+        resource_id=role.id,
+        old_value={"grants": _grant_payload(old)},
+        new_value={
+            "grants": _grant_payload(created),
+            "reason": body.reason,
+            "grant_version": role.grant_version,
+            "rollback_of": str(history.id),
+            "idempotency_key": str(body.idempotency_key)
+            if body.idempotency_key
+            else None,
+            "request_fingerprint": request_fingerprint,
+        },
+    )
+    await db.commit()
+    await publish_permissions_changed_all()
+    result = await service.role_permissions_out(db, role=role)
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@rbac_router.get(
+    "/page-permissions/health",
+    summary="检查页面权限健康状态",
+    response_model=PagePermissionHealthOut,
+)
+async def get_page_permission_health(
+    current_user: IdentityAdminUser,
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    result = await PagePermissionService().permission_health(db)
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@rbac_router.post(
+    "/page-permissions/health/remediate",
+    summary="修复页面权限健康问题",
+    response_model=PagePermissionHealthRemediationOut,
+)
+async def remediate_page_permission_health_issue(
+    body: PagePermissionHealthRemediationRequest,
+    current_user: IdentityAdminUser,
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    page_repo = PagePermissionRepository()
+    permission_repo = PermissionGrantRepository()
+    service = PagePermissionService()
+    target: Role | User
+    grant: RolePageGrant | UserPageGrant | None
+    if body.target_type == "role":
+        role = await page_repo.get_role_for_update(db, role_id=body.target_id)
+        if role is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "角色不存在")
+        if role.code == "super_admin":
+            raise HTTPException(400, "系统管理员页面权限不可自动修复")
+        await _assert_not_own_role(db, current_user, role.id)
+        target = role
+        grant = await page_repo.get_role_grant_for_update(
+            db, role_id=role.id, page_key=body.page_key
+        )
+        resource_type = "identity.role_page_permissions"
+    else:
+        user = await permission_repo.get_user_for_update(db, body.target_id)
+        if user is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "用户不存在")
+        if user.id == current_user.id:
+            raise HTTPException(403, "管理员不能自动修复自己的页面权限")
+        if user.role == "admin":
+            raise HTTPException(400, "系统管理员无需页面权限修复")
+        target = user
+        grant = await page_repo.get_user_grant_for_update(
+            db, user_id=user.id, page_key=body.page_key
+        )
+        resource_type = "identity.user_page_permissions"
+    if target.grant_version != body.expected_grant_version:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"授权版本冲突，当前版本为 {target.grant_version}",
+        )
+    if grant is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "该健康问题已被处理，请重新检查")
+    health = await service.permission_health(db)
+    issue = next(
+        (
+            item
+            for item in health.issues
+            if item.code == body.code
+            and item.target_type == body.target_type
+            and item.target_id == body.target_id
+            and item.page_key == body.page_key
+        ),
+        None,
+    )
+    if issue is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "该健康问题已变化，请重新检查")
+
+    old = (
+        await page_repo.list_role_grants(db, role_ids=[target.id])
+        if body.target_type == "role"
+        else await page_repo.list_user_grants(db, user_id=target.id)
+    )
+    message = "问题已修复"
+    if body.code in {"retired_page", "redundant_user_override"}:
+        await page_repo.remove_grant(db, grant)
+        message = (
+            "已恢复角色基线"
+            if body.code == "redundant_user_override"
+            else "已移除停用页面授权"
+        )
+    else:
+        valid_ids = await page_repo.existing_department_ids(
+            db, department_ids=set(grant.department_ids or [])
+        )
+        if not valid_ids and grant.scope_type == "departments":
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "指定部门已全部失效，请进入授权编辑器选择新的数据范围",
+            )
+        grant.department_ids = sorted(valid_ids)
+        grant.updated_by = current_user.id
+        await db.flush()
+        message = "已清除失效部门引用"
+
+    target.grant_version += 1
+    target.updated_by = current_user.id
+    current = (
+        await page_repo.list_role_grants(db, role_ids=[target.id])
+        if body.target_type == "role"
+        else await page_repo.list_user_grants(db, user_id=target.id)
+    )
+    await _audit(
+        db,
+        current_user,
+        action=f"remediate_{body.target_type}_page_permissions",
+        resource_type=resource_type,
+        resource_id=target.id,
+        old_value={"grants": _grant_payload(old)},
+        new_value={
+            "grants": _grant_payload(current),
+            "reason": body.reason,
+            "grant_version": target.grant_version,
+            "health_issue": body.code,
+        },
+    )
+    if body.target_type == "role":
+        await _bump_all_user_grant_versions(db, actor_id=current_user.id)
+    else:
+        await permission_repo.create_outbox_event(
+            db,
+            user_id=target.id,
+            grant_version=target.grant_version,
+            actor_id=current_user.id,
+            event_type="identity.user_page_grants.changed.v1",
+        )
+    await db.commit()
+    if body.target_type == "role":
+        await publish_permissions_changed_all()
+    else:
+        await publish_permissions_changed(target.id)
+    result = PagePermissionHealthRemediationOut(
+        grant_version=target.grant_version, message=message
+    )
     return success_response(data=result.model_dump(mode="json"))
 
 

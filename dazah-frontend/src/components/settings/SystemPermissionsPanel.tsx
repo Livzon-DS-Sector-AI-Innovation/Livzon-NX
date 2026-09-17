@@ -25,7 +25,7 @@ export const SYSTEM_PERMISSION_PAGES = [
   {
     href: '/system/user-roles',
     title: '用户角色',
-    description: '为用户分配角色，并设置可进入的一级业务模块。',
+    description: '为用户分配页面权限角色基线，并管理模块入口和用户页面覆盖。',
   },
   {
     href: '/system/dept-roles',
@@ -71,7 +71,6 @@ export default function SystemPermissionsPanel({
   departments,
   deptRules,
   menus,
-  users,
 }: SystemPermissionsData) {
   return (
     <section aria-labelledby="system-permissions-title" data-testid="system-permissions-panel">

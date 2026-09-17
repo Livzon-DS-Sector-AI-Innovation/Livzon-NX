@@ -27,6 +27,11 @@ from app.core.upload_security import read_upload_secure
 from app.modules.registration.models import (
     RegistrationDeclarationProgressWorkbookVersion,
 )
+from app.modules.registration.page_scope import (
+    authorize_sheet,
+    authorized_workbook,
+    visible_sheet_keys,
+)
 from app.modules.registration.repository import (
     RegistrationDeclarationProgressWorkbookRepository,
 )
@@ -424,9 +429,7 @@ def _header_matches(
     return True
 
 
-def _build_definitions_from_templates() -> (
-    list[DeclarationProgressSheetDefinition]
-):
+def _build_definitions_from_templates() -> list[DeclarationProgressSheetDefinition]:
     definitions: list[DeclarationProgressSheetDefinition] = []
     for template in DECLARATION_PROGRESS_SHEET_TEMPLATES:
         definitions.append(
@@ -1025,6 +1028,7 @@ class DeclarationProgressWorkbookService:
         )
 
     async def get_sheet_detail(self, sheet_key: str) -> DeclarationProgressSheetDetail:
+        await authorize_sheet(self.session, "declaration-progress", sheet_key)
         await self.ensure_seeded()
         definition = _find_sheet_definition(sheet_key)
         versions = await self.repository.list_versions(sheet_key=sheet_key)
@@ -1056,6 +1060,12 @@ class DeclarationProgressWorkbookService:
         await self.ensure_seeded()
         definitions, updated_at = _parse_workbook_definitions()
         versions = await self.repository.list_versions()
+        allowed_sheets = await visible_sheet_keys(self.session, "declaration-progress")
+        definitions = [
+            definition
+            for definition in definitions
+            if definition.sheet_key in allowed_sheets
+        ]
 
         grouped_by_sheet: dict[
             str, dict[object, list[RegistrationDeclarationProgressWorkbookVersion]]
@@ -1099,94 +1109,101 @@ class DeclarationProgressWorkbookService:
         self,
         upload_file: UploadFile,
     ) -> DeclarationProgressWorkbookImportResult:
-        filename, content = await read_upload_secure(
-            upload_file,
-            max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
-            allowed_extensions={".xlsx"},
-            what="申报进度工作簿",
-        )
-
-        temp_dir = Path(tempfile.mkdtemp(prefix="declaration-progress-import-"))
-        import_path = temp_dir / (filename or DECLARATION_PROGRESS_WORKBOOK_NAME)
-        import_path.write_bytes(content)
-
-        try:
-            await self.ensure_seeded()
-            versions = await asyncio.to_thread(
-                _load_versions_from_workbook_path, import_path
+        async with authorized_workbook(
+            self.session, "declaration-progress", "bulk_import"
+        ):
+            filename, content = await read_upload_secure(
+                upload_file,
+                max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+                allowed_extensions={".xlsx"},
+                what="申报进度工作簿",
             )
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
 
-        try:
-            await self.repository.replace_all_versions(versions)
-            await self.session.commit()
-        except Exception:
-            await self.session.rollback()
-            raise
+            temp_dir = Path(tempfile.mkdtemp(prefix="declaration-progress-import-"))
+            import_path = temp_dir / (filename or DECLARATION_PROGRESS_WORKBOOK_NAME)
+            import_path.write_bytes(content)
 
-        # 配置文件缺失时，将本次上传落盘到配置路径（create-if-missing，绝不覆盖）
-        config_path = _get_workbook_path()
-        if not config_path.exists():
             try:
-                config_path.parent.mkdir(parents=True, exist_ok=True)
-                config_path.write_bytes(content)
-                logger.info("申报进度配置文件已从上传创建: %s", config_path)
-            except OSError as exc:
-                logger.warning(
-                    "申报进度配置文件落盘失败（%s），数据已入库但导出/种子将不可用",
-                    exc,
+                await self.ensure_seeded()
+                versions = await asyncio.to_thread(
+                    _load_versions_from_workbook_path, import_path
                 )
+            finally:
+                shutil.rmtree(temp_dir, ignore_errors=True)
 
-        sheet_record_counts = Counter(
-            version.sheet_key for version in versions if version.version_number == 1
-        )
-        return DeclarationProgressWorkbookImportResult(
-            workbook_name=filename or DECLARATION_PROGRESS_WORKBOOK_NAME,
-            imported_records=sum(sheet_record_counts.values()),
-            sheet_record_counts=dict(sheet_record_counts),
-        )
+            try:
+                await self.repository.replace_all_versions(versions)
+                await self.session.commit()
+            except Exception:
+                await self.session.rollback()
+                raise
+
+            # 配置文件缺失时，将本次上传落盘到配置路径（create-if-missing，绝不覆盖）
+            config_path = _get_workbook_path()
+            if not config_path.exists():
+                try:
+                    config_path.parent.mkdir(parents=True, exist_ok=True)
+                    config_path.write_bytes(content)
+                    logger.info("申报进度配置文件已从上传创建: %s", config_path)
+                except OSError as exc:
+                    logger.warning(
+                        "申报进度配置文件落盘失败（%s），数据已入库但导出/种子将不可用",
+                        exc,
+                    )
+
+            sheet_record_counts = Counter(
+                version.sheet_key for version in versions if version.version_number == 1
+            )
+            return DeclarationProgressWorkbookImportResult(
+                workbook_name=filename or DECLARATION_PROGRESS_WORKBOOK_NAME,
+                imported_records=sum(sheet_record_counts.values()),
+                sheet_record_counts=dict(sheet_record_counts),
+            )
 
     async def export_workbook(self) -> tuple[Path, str]:
-        await self.ensure_seeded()
-        workbook_path = _get_workbook_path()
-        if not workbook_path.exists():
-            raise NotFoundException(
-                "申报进度统计表",
-                f"{workbook_path}（请先在页面导入台账文件后再导出）",
-            )
-
-        definitions, _ = _parse_workbook_definitions()
-        temp_dir = Path(tempfile.mkdtemp(prefix="declaration-progress-export-"))
-        export_path = temp_dir / DECLARATION_PROGRESS_EXPORT_NAME
-        await asyncio.to_thread(shutil.copyfile, workbook_path, export_path)
-
-        workbook = await asyncio.to_thread(load_workbook, export_path)
-        try:
-            for excluded_sheet in DECLARATION_PROGRESS_EXCLUDED_SHEETS:
-                if excluded_sheet in workbook.sheetnames:
-                    workbook.remove(workbook[excluded_sheet])
-
-            for definition in definitions:
-                versions = await self.repository.list_active_versions_by_sheet(
-                    definition.sheet_key
+        async with authorized_workbook(
+            self.session, "declaration-progress", "sensitive_export"
+        ):
+            await self.ensure_seeded()
+            workbook_path = _get_workbook_path()
+            if not workbook_path.exists():
+                raise NotFoundException(
+                    "申报进度统计表",
+                    f"{workbook_path}（请先在页面导入台账文件后再导出）",
                 )
-                rows = _build_export_rows(definition, versions)
-                _fill_declaration_progress_sheet(
-                    workbook[definition.worksheet_title],
-                    definition,
-                    rows,
-                )
-            await asyncio.to_thread(workbook.save, export_path)
-        finally:
-            workbook.close()
 
-        return export_path, DECLARATION_PROGRESS_EXPORT_NAME
+            definitions, _ = _parse_workbook_definitions()
+            temp_dir = Path(tempfile.mkdtemp(prefix="declaration-progress-export-"))
+            export_path = temp_dir / DECLARATION_PROGRESS_EXPORT_NAME
+            await asyncio.to_thread(shutil.copyfile, workbook_path, export_path)
+
+            workbook = await asyncio.to_thread(load_workbook, export_path)
+            try:
+                for excluded_sheet in DECLARATION_PROGRESS_EXCLUDED_SHEETS:
+                    if excluded_sheet in workbook.sheetnames:
+                        workbook.remove(workbook[excluded_sheet])
+
+                for definition in definitions:
+                    versions = await self.repository.list_active_versions_by_sheet(
+                        definition.sheet_key
+                    )
+                    rows = _build_export_rows(definition, versions)
+                    _fill_declaration_progress_sheet(
+                        workbook[definition.worksheet_title],
+                        definition,
+                        rows,
+                    )
+                await asyncio.to_thread(workbook.save, export_path)
+            finally:
+                workbook.close()
+
+            return export_path, DECLARATION_PROGRESS_EXPORT_NAME
 
     async def create_entry(
         self,
         data: DeclarationProgressEntryInput,
     ) -> DeclarationProgressEntryResponse:
+        await authorize_sheet(self.session, "declaration-progress", data.sheet_key)
         await self.ensure_seeded()
         definition = _find_sheet_definition(data.sheet_key)
         values = _normalize_entry_values(definition, data.values)
@@ -1227,6 +1244,7 @@ class DeclarationProgressWorkbookService:
         record_id: Any,
         data: DeclarationProgressEntryInput,
     ) -> DeclarationProgressEntryResponse:
+        await authorize_sheet(self.session, "declaration-progress", data.sheet_key)
         await self.ensure_seeded()
         latest = await self.repository.get_latest_version_by_group(record_id)
         if latest is None:
@@ -1275,6 +1293,7 @@ class DeclarationProgressWorkbookService:
         record_id: Any,
         data: DeclarationProgressEntryInput,
     ) -> DeclarationProgressEntryResponse:
+        await authorize_sheet(self.session, "declaration-progress", data.sheet_key)
         await self.ensure_seeded()
         latest = await self.repository.get_latest_version_by_group(record_id)
         if latest is None:

@@ -18,11 +18,13 @@ import {
 import { UploadOutlined, SendOutlined, CameraOutlined } from '@ant-design/icons'
 import { createOcrTask, submitOcrTaskResult } from '@/actions/pressure'
 import type { OcrResultRecord } from '@/types/pressure'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
 
 export default function OcrInputPage() {
   const { message } = App.useApp()
+  const { canOperate } = useProductionPermissions(PRODUCTION_PAGE_KEYS.pressure)
   const [currentStep, setCurrentStep] = useState(0)
   const [uploading, setUploading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -32,6 +34,7 @@ export default function OcrInputPage() {
   const [editableRecords, setEditableRecords] = useState<OcrResultRecord[]>([])
 
   const handleUpload = async (file: File) => {
+    if (!canOperate) return false
     setUploading(true)
     try {
       // 简化处理：将图片转为 base64 URL（实际应上传到文件服务）
@@ -63,6 +66,7 @@ export default function OcrInputPage() {
   }
 
   const handleSubmit = async () => {
+    if (!canOperate) return
     if (!taskId) return
     setSubmitting(true)
     try {
@@ -182,6 +186,7 @@ export default function OcrInputPage() {
                 accept="image/*"
                 showUploadList={false}
                 beforeUpload={handleUpload}
+                disabled={!canOperate}
                 className="max-w-md mx-auto"
               >
                 <p className="text-4xl mb-4 text-[var(--color-primary)]">
@@ -202,14 +207,14 @@ export default function OcrInputPage() {
               <Text>共识别到 {editableRecords.length} 条记录，请核对后提交</Text>
               <Space>
                 <Button onClick={handleReset}>重新上传</Button>
-                <Button
+                {canOperate && <Button
                   type="primary"
                   icon={<SendOutlined />}
                   loading={submitting}
                   onClick={handleSubmit}
                 >
                   提交
-                </Button>
+                </Button>}
               </Space>
             </div>
             <Table

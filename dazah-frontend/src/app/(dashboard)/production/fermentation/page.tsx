@@ -35,6 +35,7 @@ import type {
   FermentationRecord,
 } from '@/types/production'
 import { FERMENTATION_STATUS_OPTIONS } from '@/types/production'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Text } = Typography
 
@@ -79,6 +80,7 @@ const exportFermentationToCsv = (records: FermentationRecord[]) => {
 
 export default function FermentationPage() {
   const { message, modal } = App.useApp()
+  const { canOperate, canDelete } = useProductionPermissions(PRODUCTION_PAGE_KEYS.overview)
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
@@ -125,6 +127,7 @@ export default function FermentationPage() {
   }
 
   const handleAdd = () => {
+    if (!canOperate) return
     setEditingRecord(null)
     form.resetFields()
     form.setFieldsValue({ product_name: 'L-苯丙氨酸', status: 'in_progress' })
@@ -132,6 +135,7 @@ export default function FermentationPage() {
   }
 
   const handleEdit = (record: FermentationRecord) => {
+    if (!canOperate) return
     setEditingRecord(record)
     form.setFieldsValue({
       batch_no: record.batch_no,
@@ -153,6 +157,7 @@ export default function FermentationPage() {
   }
 
   const handleDelete = (id: string) => {
+    if (!canDelete) return
     modal.confirm({
       title: '确认删除',
       content: '确定要删除这条发酵记录吗？',
@@ -176,6 +181,7 @@ export default function FermentationPage() {
   }
 
   const handleStatusChange = async (id: string, status: string) => {
+    if (!canOperate) return
     try {
       const response = await updateFermentationStatus(id, status)
       if (response.code === 200) {
@@ -190,6 +196,7 @@ export default function FermentationPage() {
   }
 
   const handleSubmit = async () => {
+    if (!canOperate) return
     try {
       const values = await form.validateFields()
       const payload = {
@@ -249,6 +256,7 @@ export default function FermentationPage() {
   }
 
   const handleExport = async () => {
+    if (!canOperate) return
     setExportLoading(true)
     try {
       const response = await getFermentationRecords({ page_size: 1000 })
@@ -332,14 +340,14 @@ export default function FermentationPage() {
       fixed: 'right',
       render: (_, record) => (
         <Space size="small">
-          <Tooltip title="编辑">
+          {canOperate && <Tooltip title="编辑">
             <Button
               type="text"
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
             />
-          </Tooltip>
-          {record.status === 'in_progress' && (
+          </Tooltip>}
+          {canOperate && record.status === 'in_progress' && (
             <Tooltip title="标记完成">
               <Button
                 type="text"
@@ -348,14 +356,14 @@ export default function FermentationPage() {
               />
             </Tooltip>
           )}
-          <Tooltip title="删除">
+          {canDelete && <Tooltip title="删除">
             <Button
               type="text"
               danger
               icon={<DeleteOutlined />}
               onClick={() => handleDelete(record.id)}
             />
-          </Tooltip>
+          </Tooltip>}
         </Space>
       ),
     },
@@ -369,20 +377,20 @@ export default function FermentationPage() {
           <Text type="secondary">发酵批次记录与周期管理</Text>
         </div>
         <Space>
-          <Button
+          {canOperate && <Button
             type="primary"
             icon={<PlusOutlined />}
             onClick={handleAdd}
           >
             新增记录
-          </Button>
-          <Button
+          </Button>}
+          {canOperate && <Button
             icon={<DownloadOutlined />}
             loading={exportLoading}
             onClick={handleExport}
           >
             导出
-          </Button>
+          </Button>}
         </Space>
       </div>
 
@@ -441,7 +449,7 @@ export default function FermentationPage() {
       <Modal
         title={editingRecord ? '编辑发酵记录' : '新增发酵记录'}
         open={modalVisible}
-        onOk={handleSubmit}
+        onOk={canOperate ? handleSubmit : undefined}
         onCancel={() => setModalVisible(false)}
         width={600}
         okText="保存"

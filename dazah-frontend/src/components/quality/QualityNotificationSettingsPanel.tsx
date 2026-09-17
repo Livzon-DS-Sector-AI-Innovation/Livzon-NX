@@ -1,5 +1,7 @@
 'use client'
 
+import { usePagePermissions } from '@/hooks/usePagePermissions'
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Alert, Button, Card, Input, InputNumber, Select, Space, Switch, TimePicker, Typography } from 'antd'
@@ -168,6 +170,7 @@ function ChangeActionPlanDueCard({
   setting: QualityNotificationSettingItem
   onSaved: (next: QualityNotificationSettingItem) => void
 }) {
+  const { canSync } = usePagePermissions('quality:quality-settings')
   const { message } = App.useApp()
   const [enabled, setEnabled] = useState(setting.is_enabled)
   const [leadDays, setLeadDays] = useState<number>(setting.lead_days)
@@ -183,6 +186,7 @@ function ChangeActionPlanDueCard({
   // setting 变更（保存回写）由父组件通过 key 重挂载同步，无需 effect
 
   const handleSave = async () => {
+    if (!canSync) return
     if (!sendTime) {
       message.warning('请选择每天发送时间')
       return
@@ -213,7 +217,7 @@ function ChangeActionPlanDueCard({
       extra={
         <Space>
           <Switch checked={enabled} onChange={setEnabled} />
-          <Button type="primary" loading={saving} onClick={() => void handleSave()}>
+          <Button type="primary" loading={saving} disabled={!canSync} onClick={() => void handleSave()}>
             保存
           </Button>
         </Space>
@@ -277,6 +281,7 @@ function InspectionTrendAlertCard({
   setting: QualityNotificationSettingItem
   onSaved: (next: QualityNotificationSettingItem) => void
 }) {
+  const { canSync } = usePagePermissions('quality:quality-settings')
   const { message } = App.useApp()
   const [enabled, setEnabled] = useState(setting.is_enabled)
   const [lines, setLines] = useState(setting.inspection_lines)
@@ -313,6 +318,7 @@ function InspectionTrendAlertCard({
   }, [])
 
   const handleSave = async () => {
+    if (!canSync) return
     if (!monthlyDay || monthlyDay < 1 || monthlyDay > 31) {
       message.warning('请填写月度分析日（1-31，月底不足则取当月最后一天）')
       return
@@ -359,7 +365,7 @@ function InspectionTrendAlertCard({
         <Space>
           <Typography.Text type="secondary">总开关</Typography.Text>
           <Switch checked={enabled} onChange={setEnabled} />
-          <Button type="primary" loading={saving} onClick={() => void handleSave()}>
+          <Button type="primary" loading={saving} disabled={!canSync} onClick={() => void handleSave()}>
             保存
           </Button>
         </Space>
@@ -442,6 +448,7 @@ function AnomalyEscalationCard({
   setting: QualityNotificationSettingItem
   onSaved: (next: QualityNotificationSettingItem) => void
 }) {
+  const { canSync } = usePagePermissions('quality:quality-settings')
   const { message } = App.useApp()
   const [enabled, setEnabled] = useState(setting.is_enabled)
   const [firstRecipients, setFirstRecipients] = useState(
@@ -453,6 +460,7 @@ function AnomalyEscalationCard({
   const [saving, setSaving] = useState(false)
 
   const handleSave = async () => {
+    if (!canSync) return
     if (!escalationHours || escalationHours < 1) {
       message.warning('请填写升级复检间隔（≥1 小时）')
       return
@@ -489,7 +497,7 @@ function AnomalyEscalationCard({
         <Space>
           <Typography.Text type="secondary">总开关</Typography.Text>
           <Switch checked={enabled} onChange={setEnabled} />
-          <Button type="primary" loading={saving} onClick={() => void handleSave()}>
+          <Button type="primary" loading={saving} disabled={!canSync} onClick={() => void handleSave()}>
             保存
           </Button>
         </Space>
@@ -535,6 +543,7 @@ function ItemsStockAlertCard({
   setting: QualityNotificationSettingItem
   onSaved: (next: QualityNotificationSettingItem) => void
 }) {
+  const { canSync } = usePagePermissions('quality:quality-settings')
   const { message } = App.useApp()
   const [enabled, setEnabled] = useState(setting.is_enabled)
   const [recipients, setRecipients] = useState<QualityNotificationRecipient[]>(
@@ -556,6 +565,7 @@ function ItemsStockAlertCard({
   const [testing, setTesting] = useState(false)
 
   const handleSave = async () => {
+    if (!canSync) return
     if (enabled && recipients.length === 0) {
       message.warning('开启定时推送时请至少选择一位接收人')
       return
@@ -580,6 +590,7 @@ function ItemsStockAlertCard({
   }
 
   const handleTest = async () => {
+    if (!canSync) return
     setTesting(true)
     try {
       const result = await pushItemsLowStockTest()
@@ -600,7 +611,7 @@ function ItemsStockAlertCard({
         <Space>
           <Typography.Text type="secondary">总开关</Typography.Text>
           <Switch checked={enabled} onChange={setEnabled} />
-          <Button type="primary" loading={saving} onClick={() => void handleSave()}>
+          <Button type="primary" loading={saving} disabled={!canSync} onClick={() => void handleSave()}>
             保存
           </Button>
         </Space>
@@ -657,7 +668,7 @@ function ItemsStockAlertCard({
             />
           </div>
         </Space>
-        <Button loading={testing} onClick={() => void handleTest()}>
+        <Button loading={testing} disabled={!canSync} onClick={() => void handleTest()}>
           发送测试推送
         </Button>
       </Space>

@@ -104,6 +104,7 @@ def _employee(**overrides: object) -> SimpleNamespace:
 def _result(value: object) -> MagicMock:
     result = MagicMock()
     result.scalars.return_value.first.return_value = value
+    result.scalar_one_or_none.return_value = value
     return result
 
 

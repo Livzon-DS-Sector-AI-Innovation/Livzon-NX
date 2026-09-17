@@ -7,6 +7,7 @@ import type { WarehousePageFeishuConfig } from '@/types/warehouse'
 import { fetchWarehousePageFeishuConfigs } from '@/lib/api/client/warehouse'
 import { updateWarehousePageFeishuConfigAction } from '@/actions/warehouse'
 import { parseFeishuBitableUrl } from '@/lib/feishu-url'
+import { usePagePermissions } from '@/hooks/usePagePermissions'
 
 interface WarehouseFeishuConfigPageProps {
   initialConfigs: WarehousePageFeishuConfig[]
@@ -34,6 +35,7 @@ function buildFeishuTableUrl(config: WarehousePageFeishuConfig): string {
 
 export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuConfigPageProps) {
   const { message, modal } = App.useApp()
+  const { canSync } = usePagePermissions('warehouse:warehouse-settings')
   const [configs, setConfigs] = useState<WarehousePageFeishuConfig[]>(initialConfigs)
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [form] = Form.useForm()
@@ -43,11 +45,13 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
   const [groupUrlInputs, setGroupUrlInputs] = useState<Record<string, string>>({})
 
   const handleEdit = (record: WarehousePageFeishuConfig) => {
+    if (!canSync) return
     form.setFieldsValue(record)
     setEditingKey(record.page_key)
   }
 
   const handleSave = async () => {
+    if (!canSync) return
     try {
       const values = await form.validateFields()
       setLoading(true)
@@ -105,6 +109,7 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
   /** 批量更新某分组下所有记录的飞书配置 */
   const handleBatchUpdate = useCallback(
     async (baseName: string) => {
+      if (!canSync) return
       const url = groupUrlInputs[baseName]?.trim()
       if (!url) {
         message.warning('请先粘贴多维表格网址')
@@ -181,10 +186,10 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
         },
       })
     },
-    [groupUrlInputs, groupedConfigs, message, modal],
+    [canSync, groupUrlInputs, groupedConfigs, message, modal],
   )
 
-  const renderColumns = (record: WarehousePageFeishuConfig) => {
+  const renderColumns = () => {
     const columns = [
       {
         title: '页面标识',
@@ -266,7 +271,7 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
         render: (_: unknown, row: WarehousePageFeishuConfig) =>
           editingKey === row.page_key ? (
             <Space>
-              <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} loading={loading} size="small">
+              <Button disabled={!canSync} type="primary" icon={<SaveOutlined />} onClick={handleSave} loading={loading} size="small">
                 保存
               </Button>
               <Button onClick={handleCancel} size="small">
@@ -274,7 +279,7 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
               </Button>
             </Space>
           ) : (
-            <Button icon={<EditOutlined />} onClick={() => handleEdit(row)} size="small">
+            <Button disabled={!canSync} title={!canSync ? '需要同步配置权限' : undefined} icon={<EditOutlined />} onClick={() => handleEdit(row)} size="small">
               编辑
             </Button>
           ),
@@ -300,7 +305,7 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
             setGroupUrlInputs((prev) => ({ ...prev, [base]: e.target.value }))
           }
           onPressEnter={() => handleBatchUpdate(base)}
-          disabled={batchLoading}
+          disabled={!canSync || batchLoading}
         />
         {parsed && (
           <span className="text-[12px] text-green-600">
@@ -313,7 +318,7 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
           type="primary"
           onClick={() => handleBatchUpdate(base)}
           loading={batchLoading}
-          disabled={!urlValue.trim()}
+          disabled={!canSync || !urlValue.trim()}
         >
           批量更新
         </Button>
@@ -336,7 +341,7 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
               label: renderGroupLabel(base, items.length),
               children: (
                 <Table
-                  columns={renderColumns(items[0])}
+                  columns={renderColumns()}
                   dataSource={items}
                   rowKey="page_key"
                   pagination={false}

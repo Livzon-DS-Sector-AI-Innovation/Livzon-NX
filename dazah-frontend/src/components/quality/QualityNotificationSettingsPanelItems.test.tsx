@@ -6,6 +6,9 @@ import { App } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const permissions = vi.hoisted(() => ({ canSync: true }))
+vi.mock('@/hooks/usePagePermissions', () => ({ usePagePermissions: () => permissions }))
+
 const qualityActions = vi.hoisted(() => ({
   fetchQualityNotificationSettings: vi.fn(),
   updateQualityNotificationSetting: vi.fn(),
@@ -45,6 +48,7 @@ const SETTINGS = [
 
 let root: Root
 beforeEach(() => {
+  permissions.canSync = true
   qualityActions.fetchQualityNotificationSettings.mockResolvedValue(SETTINGS)
   qualityActions.updateQualityNotificationSetting.mockResolvedValue(SETTINGS[0])
   inspectionActions.pushItemsLowStockTest.mockResolvedValue({
@@ -68,6 +72,24 @@ async function flush() {
 }
 
 describe('QualityNotificationSettingsPanel 物品库存不足预警卡', () => {
+  it('没有同步配置权限时禁止保存及测试推送', async () => {
+    permissions.canSync = false
+    const container = document.createElement('div')
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    root = createRoot(container)
+    await act(async () => {
+      root.render(<QueryClientProvider client={queryClient}><App><QualityNotificationSettingsPanel /></App></QueryClientProvider>)
+    })
+    await flush()
+    const buttons = Array.from(container.querySelectorAll('button')).filter(
+      button => /保\s*存|测试推送/.test(button.textContent || ''),
+    )
+    expect(buttons.length).toBeGreaterThan(0)
+    for (const button of buttons) expect(button.disabled).toBe(true)
+    queryClient.clear()
+  })
+
+
   it('存在 items_stock_alert 设置时渲染卡片并回填判定口径', async () => {
     const container = document.createElement('div')
     document.body.appendChild(container)

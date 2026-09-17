@@ -5,14 +5,16 @@ import { Button, Select, Input, Space, App } from 'antd'
 import { SearchOutlined, NodeIndexOutlined } from '@ant-design/icons'
 import FATraceModal from './FATraceModal'
 import FA_BATCH_TYPES from './faBatchTypes'
+import type { ProductionPageKey } from './useProductionPermissions'
 
 
 interface Props {
   initialModule?: string
   initialBatch?: string
+  pageKey?: ProductionPageKey
 }
 
-export default function FATraceButton({ initialModule, initialBatch }: Props) {
+export default function FATraceButton({ initialModule, initialBatch, pageKey }: Props) {
   const [visible, setVisible] = useState(false)
   const [stage, setStage] = useState(initialModule || 'fermentation')
   const [batchNo, setBatchNo] = useState(initialBatch || '')
@@ -58,6 +60,7 @@ export default function FATraceButton({ initialModule, initialBatch }: Props) {
           stage={stage}
           batchNo={batchNo.trim()}
           onClose={() => setVisible(false)}
+          pageKey={pageKey}
         />
       )}
     </>
