@@ -124,9 +124,6 @@ describe('page permission menu boundary', () => {
     ['/production/batches/workshop/203-3', 'production:batches:workshop-203-3'],
     ['/production/plan', 'production:plan:sales-plan'],
     ['/production/scheduling', 'production:plan:scheduling'],
-    ['/production/process', 'production:process'],
-    ['/production/records', 'production:records'],
-    ['/production/balance', 'production:balance'],
     ['/production/shift-log/deviation', 'production:shift-log:shift-log-deviation'],
     ['/production/shift-log/quality', 'production:shift-log:shift-log-quality'],
     ['/production/shift-log/summary', 'production:shift-log:shift-log-summary'],
@@ -135,6 +132,15 @@ describe('page permission menu boundary', () => {
     ['/production/pressure', 'production:pressure'],
   ])('maps every production menu page to its stable permission key: %s', (path, pageKey) => {
     expect(getPageKeyByPath(path)).toBe(pageKey)
+  })
+
+  it.each([
+    '/production/process',
+    '/production/process/parameters',
+    '/production/records',
+    '/production/balance',
+  ])('does not register a removed production page: %s', (path) => {
+    expect(getPageKeyByPath(path)).toBeUndefined()
   })
 
   it.each([

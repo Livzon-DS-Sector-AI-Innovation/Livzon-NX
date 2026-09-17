@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from datetime import date
-from typing import Any, cast
+from typing import Any, ParamSpec, TypeVar, cast
 
 from pydantic import BaseModel, Field
 
-from app.modules.agent.tools import ToolContext, agent_tool
+from app.modules.agent.tools import ToolContext
+from app.modules.agent.tools import agent_tool as _base_agent_tool
 from app.modules.quality.schemas import (
     CpvBatchResponse,
     CpvBatchWideResponse,
@@ -54,6 +56,10 @@ from app.modules.quality.service import (
     quality_feishu_sync,
     quality_management,
     validation,
+)
+from app.platform.identity.page_policy import (
+    QUALITY_PRODUCT_PAGES,
+    api_binding_for_route,
 )
 
 
@@ -362,6 +368,76 @@ class FeishuValidationIdInput(BaseModel):
 
 class FeishuValidationPullInput(BaseModel):
     validation_type: str | None = None
+
+
+_QUALITY_TOOL_PAGE_KEYS: dict[str, tuple[str, ...]] = {
+    # These CPV operations are tool-only service adapters; the current
+    # product-quality pages are their reviewed owning pages.
+    "quality.create_cpv_parameter": QUALITY_PRODUCT_PAGES,
+    "quality.create_cpv_product": QUALITY_PRODUCT_PAGES,
+    "quality.get_cpv_product": QUALITY_PRODUCT_PAGES,
+    "quality.get_cpv_statistics": QUALITY_PRODUCT_PAGES,
+    "quality.get_cpv_trend": QUALITY_PRODUCT_PAGES,
+    "quality.list_cpv_batches": QUALITY_PRODUCT_PAGES,
+    "quality.list_cpv_cpp_batches": QUALITY_PRODUCT_PAGES,
+    "quality.list_cpv_cqa_batches": QUALITY_PRODUCT_PAGES,
+    "quality.list_cpv_parameters": QUALITY_PRODUCT_PAGES,
+    "quality.list_cpv_products": QUALITY_PRODUCT_PAGES,
+    "quality.update_cpv_parameter": QUALITY_PRODUCT_PAGES,
+    "quality.update_cpv_product": QUALITY_PRODUCT_PAGES,
+    "quality.get_feishu_capa_ledger": ("quality:capas:capa-ledger",),
+    "quality.list_feishu_capa_ledger": ("quality:capas:capa-ledger",),
+    "quality.get_feishu_capa_plan_track": ("quality:capas:capa-plans",),
+    "quality.list_feishu_capa_plan_tracks": ("quality:capas:capa-plans",),
+    "quality.sync_deviation_report_record_to_feishu": (
+        "quality:deviations:deviation-records",
+    ),
+}
+
+_QUALITY_TOOL_SENSITIVE_ACTIONS = {
+    "quality.pull_feishu_validations": "sync_config",
+    "quality.pull_quality_records_from_feishu": "sync_config",
+    "quality.sync_capa_plan_track_to_feishu": "sync_config",
+    "quality.sync_capa_to_feishu": "sync_config",
+    "quality.sync_change_action_plan": "sync_config",
+    "quality.sync_change_action_plans_from_feishu": "sync_config",
+    "quality.sync_deviation_report_record_to_feishu": "sync_config",
+    "quality.sync_deviation_to_feishu": "sync_config",
+}
+
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+def agent_tool(**kwargs: Any) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
+    """Register quality tools with the reviewed page contract.
+
+    HTTP-backed tools project the exact method/path contract from the page
+    policy. Tool-only adapters must be listed in the explicit map above;
+    neither case derives a page from a resource name or HTTP verb.
+    """
+
+    name = str(kwargs.get("name", ""))
+    method = str(kwargs.get("method", "TOOL"))
+    path = str(kwargs.get("path", ""))
+    binding = (
+        api_binding_for_route(method, f"/api/v1{path}")
+        if method != "TOOL" and path
+        else None
+    )
+    if not kwargs.get("page_keys"):
+        kwargs["page_keys"] = (
+            binding.page_keys if binding else _QUALITY_TOOL_PAGE_KEYS.get(name, ())
+        )
+    if kwargs.get("sensitive_action") is None:
+        kwargs["sensitive_action"] = (
+            (binding.sensitive_action if binding else None)
+            or _QUALITY_TOOL_SENSITIVE_ACTIONS.get(name)
+        )
+    return cast(
+        Callable[[Callable[_P, _R]], Callable[_P, _R]],
+        _base_agent_tool(**kwargs),
+    )
 
 
 def _user_id(context: ToolContext) -> str:

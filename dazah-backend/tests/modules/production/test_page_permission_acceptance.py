@@ -56,8 +56,10 @@ def acceptance_app(router, monkeypatch, page_key, actions=()):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("page_key", ["production:records", "production:balance"])
-async def test_record_and_balance_pages_can_load_their_batch_selector(
+@pytest.mark.parametrize(
+    "page_key", ["production:overview", "production:batches:workshop-201-3"]
+)
+async def test_remaining_production_pages_can_load_their_batch_selector(
     monkeypatch, page_key
 ):
     app, _ = acceptance_app(api.router, monkeypatch, page_key)

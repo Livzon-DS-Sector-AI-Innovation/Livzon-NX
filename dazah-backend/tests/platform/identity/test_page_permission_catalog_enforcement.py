@@ -299,8 +299,16 @@ async def test_preview_hash_tracks_live_menu_changes(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_publish_rejects_preview_after_valid_policy_changes(monkeypatch):
+async def test_integration_check_recomputes_after_policy_changes(monkeypatch):
     _preview_facts(monkeypatch)
+    actual_routes = [
+        (item.method, item.route_path) for item in page_policy.PAGE_API_BINDINGS
+    ]
+    monkeypatch.setattr(
+        page_policy,
+        "_api_catalog_provider",
+        lambda: actual_routes,
+    )
     service = PagePermissionService()
     before = await service.rollout_preview(None, module_code="procurement")
     assert not before.catalog_gaps
@@ -315,31 +323,39 @@ async def test_publish_rejects_preview_after_valid_policy_changes(monkeypatch):
     after = await service.rollout_preview(None, module_code="procurement")
     assert not after.catalog_gaps
     assert before.preview_hash != after.preview_hash
-    actor = SimpleNamespace(id=uuid4(), role="admin", status="active", is_deleted=False)
-    db = SimpleNamespace(
-        add=Mock(),
-        commit=AsyncMock(),
-        flush=AsyncMock(),
-        execute=AsyncMock(),
-        scalar=AsyncMock(return_value=actor),
+    assert await service.integration_gaps(None, module_code="procurement") == []
+    assert not after.catalog_gaps
+    monkeypatch.setattr(page_policy, "PAGE_API_BINDINGS", bindings[1:])
+    assert await service.integration_gaps(None, module_code="procurement")
+
+
+@pytest.mark.asyncio
+async def test_module_integration_api_returns_current_gaps(monkeypatch):
+    gaps = ["接口绑定缺失"]
+    service = SimpleNamespace(
+        integration_gaps=AsyncMock(
+            side_effect=lambda db, module_code: gaps if module_code == "hr" else []
+        )
     )
+    monkeypatch.setattr(rbac_api, "PagePermissionService", lambda: service)
     app = FastAPI()
     app.include_router(rbac_api.rbac_router, prefix="/api/v1/identity")
-    app.dependency_overrides[get_db] = lambda: db
-    app.dependency_overrides[deps.get_current_user] = lambda: actor
+    app.dependency_overrides[rbac_api.require_identity_admin] = lambda: SimpleNamespace(
+        role="admin"
+    )
+    app.dependency_overrides[get_db] = lambda: None
+    url = "/api/v1/identity/admin/page-permissions/modules"
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await client.post(
-            "/api/v1/identity/admin/page-permissions/modules/procurement/publish",
-            json={
-                "expected_version": before.current_version,
-                "preview_hash": before.preview_hash,
-                "reason": "测试发布预览过期",
-                "confirmed": True,
-            },
-        )
-    assert response.status_code == 409
-    assert "预览已过期" in response.json()["detail"]
-    db.add.assert_not_called()
-    db.commit.assert_not_awaited()
+        first = await client.get(url)
+        assert first.status_code == 200, first.text
+        hr = next(item for item in first.json()["data"] if item["module_code"] == "hr")
+        assert hr == {"module_code": "hr", "passed": False, "catalog_gaps": gaps}
+        gaps.clear()
+        second = await client.get(url)
+        assert second.status_code == 200, second.text
+        hr = next(item for item in second.json()["data"] if item["module_code"] == "hr")
+        assert hr["passed"] is True
+        assert hr["catalog_gaps"] == []
+        assert (await client.post(url + "/hr/publish", json={})).status_code == 404

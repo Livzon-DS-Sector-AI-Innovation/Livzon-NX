@@ -6,18 +6,14 @@ from typing import Literal
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent  # dazah-backend/
+_WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _get_env_file() -> str:
-    """根据 APP_ENV 选择 .env 文件；缺省环境文件不存在时回退到 .env。"""
+    """开发和测试读取根目录 .env.local，生产读取根目录 .env。"""
     app_env = os.getenv("APP_ENV", "development")
-    env_path = _PROJECT_ROOT / f".env.{app_env}"
-    if not env_path.exists():
-        env_path = _PROJECT_ROOT / ".env"
-    env_file = str(env_path)
-    print(f"Loading environment variables from: {env_file}")
-    return env_file
+    filename = ".env" if app_env == "production" else ".env.local"
+    return str(_WORKSPACE_ROOT / filename)
 
 
 class Settings(BaseSettings):
@@ -310,7 +306,7 @@ class Settings(BaseSettings):
                 )
         if missing:
             raise RuntimeError(
-                "以下 .env 配置项缺失或无效，请检查:\n  " + "\n  ".join(missing),
+                "以下环境配置项缺失或无效，请检查:\n  " + "\n  ".join(missing),
             )
 
 

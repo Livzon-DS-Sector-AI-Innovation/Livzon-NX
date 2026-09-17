@@ -56330,128 +56330,29 @@
         "title": "PermissionAuditItem",
         "type": "object"
       },
-      "PermissionModulePublishRequest": {
+      "PermissionModuleIntegrationOut": {
         "properties": {
-          "confirmed": {
-            "const": true,
-            "title": "Confirmed",
-            "type": "boolean"
-          },
-          "expected_version": {
-            "minimum": 0.0,
-            "title": "Expected Version",
-            "type": "integer"
-          },
-          "preview_hash": {
-            "maxLength": 128,
-            "minLength": 16,
-            "title": "Preview Hash",
-            "type": "string"
-          },
-          "reason": {
-            "maxLength": 500,
-            "minLength": 1,
-            "title": "Reason",
-            "type": "string"
-          }
-        },
-        "required": [
-          "expected_version",
-          "preview_hash",
-          "reason",
-          "confirmed"
-        ],
-        "title": "PermissionModulePublishRequest",
-        "type": "object"
-      },
-      "PermissionModuleRollbackRequest": {
-        "properties": {
-          "confirmed": {
-            "const": true,
-            "title": "Confirmed",
-            "type": "boolean"
-          },
-          "expected_version": {
-            "minimum": 0.0,
-            "title": "Expected Version",
-            "type": "integer"
-          },
-          "reason": {
-            "maxLength": 500,
-            "minLength": 1,
-            "title": "Reason",
-            "type": "string"
-          }
-        },
-        "required": [
-          "expected_version",
-          "reason",
-          "confirmed"
-        ],
-        "title": "PermissionModuleRollbackRequest",
-        "type": "object"
-      },
-      "PermissionModuleRolloutOut": {
-        "properties": {
-          "last_reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Reason"
+          "catalog_gaps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Catalog Gaps",
+            "type": "array"
           },
           "module_code": {
             "title": "Module Code",
             "type": "string"
           },
-          "published_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Published At"
-          },
-          "published_by": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Published By"
-          },
-          "status": {
-            "enum": [
-              "legacy",
-              "draft",
-              "enforced"
-            ],
-            "title": "Status",
-            "type": "string"
-          },
-          "version": {
-            "title": "Version",
-            "type": "integer"
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
           }
         },
         "required": [
           "module_code",
-          "status",
-          "version"
+          "passed"
         ],
-        "title": "PermissionModuleRolloutOut",
+        "title": "PermissionModuleIntegrationOut",
         "type": "object"
       },
       "PermissionModuleRolloutPreviewOut": {
@@ -81447,11 +81348,15 @@
             "title": "Grants",
             "type": "array"
           },
-          "module_rollouts": {
+          "module_checks": {
             "additionalProperties": {
+              "enum": [
+                "passed",
+                "incomplete"
+              ],
               "type": "string"
             },
-            "title": "Module Rollouts",
+            "title": "Module Checks",
             "type": "object"
           },
           "role_grants": {
@@ -125684,7 +125589,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/PermissionModuleRolloutOut"
+                    "$ref": "#/components/schemas/PermissionModuleIntegrationOut"
                   },
                   "title": "Response List Page Permission Rollouts Api V1 Identity Admin Page Permissions Modules Get",
                   "type": "array"
@@ -125704,7 +125609,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "页面权限模块发布状态",
+        "summary": "自动检查模块页面权限接入完整性",
         "tags": [
           "权限管理",
           "权限管理"
@@ -125764,144 +125669,6 @@
           }
         },
         "summary": "预览模块页面权限发布影响",
-        "tags": [
-          "权限管理",
-          "权限管理"
-        ]
-      }
-    },
-    "/api/v1/identity/admin/page-permissions/modules/{module_code}/publish": {
-      "post": {
-        "operationId": "publish_page_permission_rollout_api_v1_identity_admin_page_permissions_modules__module_code__publish_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "module_code",
-            "required": true,
-            "schema": {
-              "title": "Module Code",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PermissionModulePublishRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PermissionModuleRolloutOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "发布模块页面权限",
-        "tags": [
-          "权限管理",
-          "权限管理"
-        ]
-      }
-    },
-    "/api/v1/identity/admin/page-permissions/modules/{module_code}/rollback": {
-      "post": {
-        "operationId": "rollback_page_permission_rollout_api_v1_identity_admin_page_permissions_modules__module_code__rollback_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "module_code",
-            "required": true,
-            "schema": {
-              "title": "Module Code",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PermissionModuleRollbackRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PermissionModuleRolloutOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "紧急回退模块页面权限",
         "tags": [
           "权限管理",
           "权限管理"

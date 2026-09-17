@@ -45,10 +45,9 @@ const scopeNames: Record<string, string> = {
   not_applicable: '不适用', department_tree: '本部门及下级',
   departments: '指定部门及下级', all: '全部部门', self: '仅本人',
 }
-const rolloutNames: Record<string, { label: string; color: string }> = {
-  legacy: { label: '接入未标记', color: 'default' },
-  draft: { label: '接入待核验', color: 'warning' },
-  enforced: { label: '门禁已记录', color: 'success' },
+const integrationNames: Record<string, { label: string; color: string }> = {
+  incomplete: { label: '接入有缺口', color: 'error' },
+  passed: { label: '自动检查通过', color: 'success' },
 }
 
 function normalizePermissions(values: PermissionLevel[]): PermissionLevel[] {
@@ -478,8 +477,8 @@ export default function ModulePermissionsDrawer({ user, open, onClose }: {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <Space wrap><Segmented value={moduleCode} onChange={(value) => setModuleCode(String(value))}
           options={modules.map((code) => ({ value: code, label: <span>{getPermissionModuleName(code)}{' '}
-            <Tag color={rolloutNames[result.module_rollouts?.[code] || 'legacy']?.color}>
-              {rolloutNames[result.module_rollouts?.[code] || 'legacy']?.label}
+            <Tag color={integrationNames[result.module_checks?.[code] || 'incomplete']?.color}>
+              {integrationNames[result.module_checks?.[code] || 'incomplete']?.label}
             </Tag></span> }))} />
           <Segmented value={filter} onChange={(value) => setFilter(value as typeof filter)} options={[
             { label: '全部页面', value: 'all' }, { label: '只看已授权', value: 'authorized' },

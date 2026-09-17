@@ -21,7 +21,7 @@ const user = (id: string): UserManagementItem => ({
   module_codes: ['hr'],
 })
 const result = (id: string): UserPagePermissionsOut => ({
-  user_id: id, grant_version: 3, grants: [], custom_page_keys: [], module_rollouts: { hr: 'draft' },
+  user_id: id, grant_version: 3, grants: [], custom_page_keys: [], module_checks: { hr: 'incomplete' },
   definitions: [{ page_key: 'hr:employee-management:profile', module_code: 'hr',
     page_name: `员工档案${id}`, route_path: '/hr/employee-management',
     supported_scope_types: ['department_tree', 'departments', 'all'] }],

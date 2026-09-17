@@ -86,7 +86,7 @@ export function PagePermissionDiagnostics() {
 
   return <Card title="单用户权限诊断" size="small">
     <Typography.Paragraph type="secondary">
-      按用户、菜单页面和业务动作验证当前已生效权限，并显示模块入口、授权来源与数据范围。
+      按用户、菜单页面和业务动作预判授权条件，并显示模块入口、授权来源与数据范围。实际接口还会核对页面绑定、数据范围及业务规则。
     </Typography.Paragraph>
     <Space wrap align="start">
       <Select showSearch optionFilterProp="label" className="min-w-56" placeholder="选择用户"
@@ -108,7 +108,7 @@ export function PagePermissionDiagnostics() {
       </Button>
     </Space>
     {result && <Alert className="mt-4" showIcon type={result.allowed ? "success" : "error"}
-      title={result.allowed ? "允许执行" : "拒绝执行"} description={<div className="space-y-2">
+      title={result.allowed ? "授权条件满足" : "授权条件不满足"} description={<div className="space-y-2">
         <div>{result.reason}</div>
         <Space wrap>
           <Tag>来源：{source}</Tag>

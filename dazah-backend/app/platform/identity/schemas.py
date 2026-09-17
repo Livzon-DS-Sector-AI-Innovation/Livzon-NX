@@ -356,7 +356,9 @@ class UserPagePermissionsOut(BaseModel):
     role_grants: list[EffectivePageGrantOut] = Field(default_factory=list)
     custom_grants: list[EffectivePageGrantOut] = Field(default_factory=list)
     custom_page_keys: list[str] = Field(default_factory=list)
-    module_rollouts: dict[str, str] = Field(default_factory=dict)
+    module_checks: dict[str, Literal["passed", "incomplete"]] = Field(
+        default_factory=dict
+    )
 
 
 class RolePagePermissionsOut(BaseModel):
@@ -517,6 +519,12 @@ class PermissionModuleRolloutOut(BaseModel):
     published_at: datetime | None = None
     published_by: UUID | None = None
     last_reason: str | None = None
+
+
+class PermissionModuleIntegrationOut(BaseModel):
+    module_code: str
+    passed: bool
+    catalog_gaps: list[str] = Field(default_factory=list)
 
 
 class PermissionModuleRolloutPreviewOut(BaseModel):

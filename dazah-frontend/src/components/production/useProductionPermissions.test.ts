@@ -13,8 +13,8 @@ const baseUser = {
 
 describe('production page permissions', () => {
   it('keeps the complete production page key set stable', () => {
-    expect(Object.values(PRODUCTION_PAGE_KEYS)).toHaveLength(24)
-    expect(new Set(Object.values(PRODUCTION_PAGE_KEYS)).size).toBe(24)
+    expect(Object.values(PRODUCTION_PAGE_KEYS)).toHaveLength(21)
+    expect(new Set(Object.values(PRODUCTION_PAGE_KEYS)).size).toBe(21)
   })
 
   it('denies every level when no authenticated user is available', () => {
@@ -27,15 +27,15 @@ describe('production page permissions', () => {
     const user = {
       ...baseUser,
       page_permissions: [{
-        page_key: PRODUCTION_PAGE_KEYS.process,
+        page_key: PRODUCTION_PAGE_KEYS.overview,
         module_code: 'production',
         permissions: ['access', 'query'] as const,
       }],
     }
 
-    expect(hasProductionPagePermission(user, PRODUCTION_PAGE_KEYS.process, 'access')).toBe(true)
-    expect(hasProductionPagePermission(user, PRODUCTION_PAGE_KEYS.process, 'query')).toBe(true)
-    expect(hasProductionPagePermission(user, PRODUCTION_PAGE_KEYS.process, 'operate')).toBe(false)
+    expect(hasProductionPagePermission(user, PRODUCTION_PAGE_KEYS.overview, 'access')).toBe(true)
+    expect(hasProductionPagePermission(user, PRODUCTION_PAGE_KEYS.overview, 'query')).toBe(true)
+    expect(hasProductionPagePermission(user, PRODUCTION_PAGE_KEYS.overview, 'operate')).toBe(false)
   })
 
   it('requires operate plus the matching sensitive action', () => {

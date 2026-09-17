@@ -96,9 +96,6 @@ export const moduleMenus: ModuleMenu[] = [
           { key: "scheduling", label: "排产计划", path: "/production/scheduling" },
         ],
       },
-      { key: "process", label: "工艺规程（开发中）", path: "/production/process" },
-      { key: "records", label: "生产记录（开发中）", path: "/production/records" },
-      { key: "balance", label: "物料平衡（开发中）", path: "/production/balance" },
       {
         key: "shift-log",
         label: "生产日志",
@@ -978,6 +975,9 @@ const pageRoutePrefixAliases: Record<string, string> = {
 
 export function getPageKeyByPath(pathname: string): string | undefined {
   const normalized = pathname.replace(/\/$/, "") || "/"
+  if (['/production/process', '/production/records', '/production/balance'].some(
+    (path) => normalized === path || normalized.startsWith(`${path}/`),
+  )) return undefined
   // Only reviewed auxiliary forms inherit the ledger page; sibling pages do not.
   if (/^\/quality\/deviations\/(?:new|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.test(normalized)) {
     return 'quality:deviations:deviation-ledger'
