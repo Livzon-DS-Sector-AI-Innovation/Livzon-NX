@@ -341,3 +341,33 @@ async def test_user_context_changes_expire_authorization_snapshots(
     else:
         permissions_changed.assert_not_awaited()
         scope_changed.assert_not_awaited()
+
+
+def test_production_summary_route_bound_to_overview_page():
+    """生产汇总只读端点绑定到生产概览页（query 权限 + dashboard 适配）。"""
+    binding = page_policy.api_binding_for_route(
+        "GET", "/api/v1/production/production-summary"
+    )
+    assert binding is not None
+    assert binding.page_keys == ("production:overview",)
+    assert binding.permission == "query"
+    assert binding.scope_adapter == "production.dashboard"
+
+
+def test_plans_get_route_covers_overview_and_sales_plan_pages():
+    """/plans 读取同时授权产销计划页与生产概览页，写操作不受影响。"""
+    binding = page_policy.api_binding_for_route("GET", "/api/v1/production/plans")
+    assert binding is not None
+    assert "production:overview" in binding.page_keys
+    assert "production:plan:sales-plan" in binding.page_keys
+
+
+def test_hr_feishu_apps_route_bound_to_settings_page():
+    """/feishu-settings/apps 读取双应用配置，绑定到 HR 设置-飞书页并带数据范围。"""
+    binding = page_policy.api_binding_for_route(
+        "GET", "/api/v1/hr/feishu-settings/apps"
+    )
+    assert binding is not None
+    assert "hr:hr-settings:hr-settings-feishu" in binding.page_keys
+    assert binding.permission == "query"
+    assert binding.scope_adapter == "hr.settings"

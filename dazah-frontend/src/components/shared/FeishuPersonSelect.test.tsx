@@ -8,10 +8,12 @@ import { FeishuPersonSelect, type FeishuPersonValue } from './FeishuPersonSelect
 
 const mocks = vi.hoisted(() => ({
   fetchValidationPersonOptions: vi.fn(),
+  fetchQualityPersonOptions: vi.fn(),
 }))
 
 vi.mock('@/lib/api/client/quality', () => ({
   fetchValidationPersonOptions: mocks.fetchValidationPersonOptions,
+  fetchQualityPersonOptions: mocks.fetchQualityPersonOptions,
 }))
 
 const DIRECTORY = [
@@ -82,6 +84,7 @@ describe('FeishuPersonSelect', () => {
       defaultOptions: { queries: { retry: false } },
     })
     mocks.fetchValidationPersonOptions.mockResolvedValue(DIRECTORY)
+    mocks.fetchQualityPersonOptions.mockResolvedValue(DIRECTORY)
   })
 
   afterEach(async () => {
@@ -156,5 +159,11 @@ describe('FeishuPersonSelect', () => {
     await openDropdown()
     expect(optionLabels()).toContain('赵六')
     expect(optionLabels()).toContain('张三（质量部）')
+  })
+  it('按部门收敛候选并走部门过滤接口', async () => {
+    renderSelect({ multiple: true, departments: ['QC', 'AI创新部'] })
+    await openDropdown()
+    expect(mocks.fetchQualityPersonOptions).toHaveBeenCalledWith(['QC', 'AI创新部'])
+    expect(mocks.fetchValidationPersonOptions).not.toHaveBeenCalled()
   })
 })

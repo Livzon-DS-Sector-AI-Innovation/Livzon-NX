@@ -96,3 +96,12 @@ def test_inspection_dashboards_and_equipment_import_use_live_menu_leaves():
         assert binding is not None
         assert binding.page_keys == (equipment,)
         assert binding.sensitive_action == action
+
+    maintenance_export = api_binding_for_route(
+        "GET", "/api/v1/quality/instruments/maintenance/export"
+    )
+    assert maintenance_export is not None
+    assert maintenance_export.page_keys == (
+        "quality:inspection:inspection-instruments:inspection-instruments-maintenance",
+    )
+    assert maintenance_export.sensitive_action == "sensitive_export"

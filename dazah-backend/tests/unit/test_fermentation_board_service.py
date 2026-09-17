@@ -882,6 +882,47 @@ def test_statin_products_share_mp_pipeline() -> None:
     )
 
 
+def test_summary_rate_and_extract_planned_helpers() -> None:
+    """生产汇总纯函数：比率计算与提炼计划 KG 行筛选。"""
+    from types import SimpleNamespace
+
+    # 比率：正常/封顶无关（原值返回）、分母缺失或非正 → None
+    assert board._summary_rate(64.2, 100) == 64.2
+    assert board._summary_rate(50, 0) is None
+    assert board._summary_rate(50, None) is None
+
+    # 提炼计划：只累计非发酵车间行；发酵行与删除行不计；无行 → None
+    plan_rows = [
+        SimpleNamespace(
+            product_name="洛伐他汀",
+            workshop="201-1车间",
+            planned_yield=45200,
+            is_deleted=False,
+        ),
+        SimpleNamespace(
+            product_name="洛伐他汀",
+            workshop="103发酵车间",
+            planned_yield=13.5,
+            is_deleted=False,
+        ),
+        SimpleNamespace(
+            product_name="洛伐他汀",
+            workshop="201-1车间",
+            planned_yield=999,
+            is_deleted=True,
+        ),
+        SimpleNamespace(
+            product_name="美伐他汀",
+            workshop="201-1车间",
+            planned_yield=777,
+            is_deleted=False,
+        ),
+    ]
+    assert board._extract_planned_yield_kg(plan_rows, "洛伐他汀") == 45200
+    assert board._extract_planned_yield_kg(plan_rows, "美伐他汀") == 777
+    assert board._extract_planned_yield_kg(plan_rows, "不存在的产品") is None
+
+
 def test_dr_batch_and_tank_helpers() -> None:
     assert board._dr_is_batch_no("DR-26035")
     assert board._dr_is_batch_no("中试-2620")

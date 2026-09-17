@@ -59,7 +59,7 @@ async def test_profile_matches_code_across_tables(
         "qc_instr_maintenance": [
             {
                 "record_id": "m1",
-                "仪器编号": "QC-1-2-003、QC-1-2-010",
+                "设备编号": "QC-1-2-003、QC-1-2-010",
                 "是否完成": "是",
             },
             {"record_id": "m2", "仪器编号": "QC-1-2-099", "是否完成": "否"},
@@ -128,7 +128,7 @@ async def test_profile_missing_code_returns_all_sections_empty(
 ) -> None:
     pages = {
         "qc_instr_equipment": [{"record_id": "rec-eq", "设备名称": "无编号设备"}],
-        "qc_instr_maintenance": [{"record_id": "m1", "仪器编号": "QC-1-2-010"}],
+        "qc_instr_maintenance": [{"record_id": "m1", "设备编号": "QC-1-2-010"}],
         "qc_instr_contracts": [
             {"record_id": "k1", "涉及仪器及编号": "QC-1-2-010"},
         ],

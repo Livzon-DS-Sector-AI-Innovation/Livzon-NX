@@ -243,14 +243,19 @@ def _get_entity_prefill(entity_code: str) -> dict[str, str | None]:
     return {"app_token": app_token, "table_id": table_id}
 
 
-def _build_app_settings_detail(row: HrFeishuAppSettings) -> HrFeishuAppSettingsDetail:
+def _build_app_settings_detail(
+    row: HrFeishuAppSettings, purpose: str | None = None
+) -> HrFeishuAppSettingsDetail:
     secret_masked = None
     if row.app_secret:
         try:
             secret_masked = mask_api_key(decrypt_api_key(row.app_secret))
         except Exception:
             secret_masked = "****"
+    resolved_purpose = purpose or row.purpose
     return HrFeishuAppSettingsDetail(
+        purpose=resolved_purpose,
+        purpose_label=HR_FEISHU_PURPOSE_LABELS.get(resolved_purpose, resolved_purpose),
         app_id=row.app_id,
         app_secret_masked=secret_masked,
         is_enabled=row.is_enabled,
@@ -302,18 +307,40 @@ class HrFeishuNotConfigured(AppException):
         )
 
 
-async def _ensure_app_settings_seeded(db: AsyncSession) -> HrFeishuAppSettings:
-    """Ensure the singleton app settings row exists.
+# 双应用用途常量：contact=通讯录/部门管理；bitable=多维表格
+HR_FEISHU_PURPOSE_CONTACT = "contact"
+HR_FEISHU_PURPOSE_BITABLE = "bitable"
 
-    严格独立：只保证行存在，不再从平台全局环境变量播种凭证；
+# 用途 -> 页面展示名（前端也用同名）
+HR_FEISHU_PURPOSE_LABELS: dict[str, str] = {
+    HR_FEISHU_PURPOSE_CONTACT: "通讯录与部门管理",
+    HR_FEISHU_PURPOSE_BITABLE: "多维表格同步",
+}
+
+
+async def _ensure_app_settings_seeded(
+    db: AsyncSession, purpose: str = HR_FEISHU_PURPOSE_BITABLE
+) -> HrFeishuAppSettings:
+    """Ensure the app settings row for the given purpose exists.
+
+    严格独立：只保证行存在，不从平台全局环境变量播种凭证；
     凭证一律由用户在人事-飞书设置页填写。
     """
-    result = await db.execute(select(HrFeishuAppSettings).limit(1))
+    result = await db.execute(
+        select(HrFeishuAppSettings).where(HrFeishuAppSettings.purpose == purpose)
+    )
     row = result.scalar_one_or_none()
     if row:
         return row
+    # 兼容旧单行数据（无 purpose 值时 server_default 为 bitable）
+    if purpose == HR_FEISHU_PURPOSE_BITABLE:
+        legacy = await db.execute(select(HrFeishuAppSettings).limit(1))
+        row = legacy.scalar_one_or_none()
+        if row and row.purpose == HR_FEISHU_PURPOSE_BITABLE:
+            return row
 
     row = HrFeishuAppSettings(
+        purpose=purpose,
         app_id="",
         app_secret="",
         is_enabled=True,
@@ -323,13 +350,18 @@ async def _ensure_app_settings_seeded(db: AsyncSession) -> HrFeishuAppSettings:
     return row
 
 
-async def get_hr_feishu_app_credentials(db: AsyncSession) -> tuple[str, str]:
-    """Return ``(app_id, decrypted_app_secret)`` from the HR Feishu app settings DB row.
+async def get_hr_feishu_app_credentials(
+    db: AsyncSession, purpose: str = HR_FEISHU_PURPOSE_BITABLE
+) -> tuple[str, str]:
+    """Return ``(app_id, decrypted_app_secret)`` for the given purpose's app.
 
+    purpose: contact=通讯录/部门管理；bitable=多维表格（默认，兼容旧调用方）。
     严格独立：只读人事自己的 DB 配置；缺失/未启用/解密失败时抛 HrFeishuNotConfigured，
     绝不回退平台全局环境变量（平台应用只用于登录）。
     """
-    result = await db.execute(select(HrFeishuAppSettings).limit(1))
+    result = await db.execute(
+        select(HrFeishuAppSettings).where(HrFeishuAppSettings.purpose == purpose)
+    )
     row = result.scalar_one_or_none()
 
     app_id = ""
@@ -340,17 +372,26 @@ async def get_hr_feishu_app_credentials(db: AsyncSession) -> tuple[str, str]:
             try:
                 app_secret = decrypt_api_key(row.app_secret)
             except Exception:
-                logger.warning("Failed to decrypt HR Feishu app_secret", exc_info=True)
+                logger.warning(
+                    "Failed to decrypt HR Feishu app_secret (%s)", purpose,
+                    exc_info=True,
+                )
 
     if not app_id or not app_secret:
-        raise HrFeishuNotConfigured()
+        label = HR_FEISHU_PURPOSE_LABELS.get(purpose, purpose)
+        raise HrFeishuNotConfigured(
+            f"人事飞书应用（{label}）未配置或密钥无效，"
+            "请到人事管理-设置-飞书设置中重新保存该应用的 App ID 与 App Secret"
+        )
     return app_id, app_secret
 
 
-async def try_get_hr_feishu_app_credentials(db: AsyncSession) -> tuple[str, str] | None:
+async def try_get_hr_feishu_app_credentials(
+    db: AsyncSession, purpose: str = HR_FEISHU_PURPOSE_BITABLE
+) -> tuple[str, str] | None:
     """同 get_hr_feishu_app_credentials，但未配置时返回 None（供后台任务跳过）。"""
     try:
-        return await get_hr_feishu_app_credentials(db)
+        return await get_hr_feishu_app_credentials(db, purpose)
     except AppException:
         return None
 
@@ -440,27 +481,45 @@ async def ensure_hr_feishu_entity_settings(db: AsyncSession) -> None:
     await db.flush()
 
 
-async def get_hr_feishu_app_settings(db: AsyncSession) -> HrFeishuAppSettingsDetail:
-    row = await _ensure_app_settings_seeded(db)
+async def get_hr_feishu_app_settings(
+    db: AsyncSession, purpose: str = HR_FEISHU_PURPOSE_BITABLE
+) -> HrFeishuAppSettingsDetail:
+    row = await _ensure_app_settings_seeded(db, purpose)
     await db.commit()
-    return _build_app_settings_detail(row)
+    return _build_app_settings_detail(row, purpose)
+
+
+async def list_hr_feishu_app_settings(
+    db: AsyncSession,
+) -> list[HrFeishuAppSettingsDetail]:
+    """两组应用配置（contact + bitable），确保行存在后返回。"""
+    result: list[HrFeishuAppSettingsDetail] = []
+    for purpose in (HR_FEISHU_PURPOSE_CONTACT, HR_FEISHU_PURPOSE_BITABLE):
+        row = await _ensure_app_settings_seeded(db, purpose)
+        result.append(_build_app_settings_detail(row, purpose))
+    await db.commit()
+    return result
 
 
 async def update_hr_feishu_app_settings(
-    db: AsyncSession, data: UpdateHrFeishuAppSettingsRequest
+    db: AsyncSession,
+    data: UpdateHrFeishuAppSettingsRequest,
+    purpose: str = HR_FEISHU_PURPOSE_BITABLE,
 ) -> HrFeishuAppSettingsDetail:
-    row = await _ensure_app_settings_seeded(db)
+    row = await _ensure_app_settings_seeded(db, purpose)
     row.app_id = data.app_id.strip()
     if data.app_secret.strip():
         row.app_secret = encrypt_api_key(data.app_secret.strip())
     row.is_enabled = data.is_enabled
     await db.flush()
     await db.commit()
-    return _build_app_settings_detail(row)
+    return _build_app_settings_detail(row, purpose)
 
 
-async def test_hr_feishu_app_settings(db: AsyncSession) -> HrFeishuSettingsTestResult:
-    row = await _ensure_app_settings_seeded(db)
+async def test_hr_feishu_app_settings(
+    db: AsyncSession, purpose: str = HR_FEISHU_PURPOSE_BITABLE
+) -> HrFeishuSettingsTestResult:
+    row = await _ensure_app_settings_seeded(db, purpose)
     now = datetime.now(UTC)
 
     app_id = row.app_id

@@ -46,6 +46,9 @@ from app.modules.quality.service.inspection_finished_mirror import (
     FINISHED_MIRROR_ENTITIES,
     sync_finished_page,
 )
+from app.modules.quality.service.inspection_instrument_mirror import (
+    INSTRUMENT_MIRROR_ENTITIES,
+)
 from app.modules.quality.service.inspection_items_mirror import (
     ITEMS_MIRROR_PAGES,
     sync_items_page,
@@ -74,20 +77,20 @@ async def _maybe_refresh_entity_mirror(
     用独立会话执行：避免在请求事务里中途提交（主会话的写入已完成），
     同步失败不影响已成功的飞书写（写已提交），仅记日志。
     """
+    from app.modules.quality.service.inspection_instrument_mirror import (
+        sync_instrument_page,
+    )
+
     try:
         if record_id is not None and (
             entity_code in MATERIAL_MIRROR_ENTITIES
             or entity_code in FINISHED_MIRROR_ENTITIES
+            or entity_code in INSTRUMENT_MIRROR_ENTITIES
         ):
             await _sync_single_record_to_mirror(
                 entity_code, record_id, deleted=deleted
             )
             return
-        from app.modules.quality.service.inspection_instrument_mirror import (
-            INSTRUMENT_MIRROR_ENTITIES,
-            sync_instrument_page,
-        )
-
         in_scope = (
             entity_code in ITEMS_MIRROR_PAGES
             or entity_code in FINISHED_MIRROR_ENTITIES
@@ -108,13 +111,61 @@ async def _maybe_refresh_entity_mirror(
         logger.warning("mirror refresh failed (%s): %s", entity_code, exc)
 
 
+async def _maybe_spawn_maintenance_next(
+    entity_code: str, record_id: str, submitted_fields: dict[str, Any]
+) -> None:
+    """维保记录填写「维护日期」保存后：自动置完成并生成下一期任务（独立会话）。
+
+    原记录「是否完成」自动置「是」；新任务复制设备信息与通知人（维护人/
+    复核人留空待实际维护填写），是否完成=否，下次维保时间=维护日期+周期表
+    周期。失败仅记日志，不影响保存结果。
+    """
+    if entity_code != "qc_instr_maintenance":
+        return
+    if "维护日期" not in (submitted_fields or {}):
+        return
+    try:
+        from app.modules.quality.service import quality_feishu_sync as fs
+        from app.modules.quality.service.maintenance_schedule import (
+            spawn_next_for_fields,
+        )
+        from app.modules.quality.service.quality_feishu_pages import (
+            _resolve_runtime_entity,
+        )
+        from app.platform.integrations.feishu.bitable import BitableClient
+
+        async with async_session_factory() as spawn_db:
+            runtime, entity = await _resolve_runtime_entity(
+                spawn_db, entity_code, direction="pull"
+            )
+            client = BitableClient(
+                app_token=entity.app_token,
+                app_id=runtime.app_id,
+                app_secret=runtime.app_secret,
+            )
+            table_id = fs._require_table_id(entity)
+            record = await client.get_record(table_id, record_id)
+            if not record or not record.get("record_id"):
+                return
+            created = await spawn_next_for_fields(
+                spawn_db, client, table_id, record_id, record.get("fields") or {}
+            )
+            if created:
+                # 生成的下一期任务立即写穿镜像，页面无需等下一轮同步
+                await _sync_single_record_to_mirror(entity_code, created[0])
+    except AppException as exc:
+        logger.info("maintenance spawn skipped: %s", exc)
+    except Exception as exc:
+        logger.warning("maintenance spawn failed: %s", exc)
+
+
 async def _sync_single_record_to_mirror(
     entity_code: str,
     record_id: str,
     *,
     deleted: bool = False,
 ) -> None:
-    """编辑/新增/删除单条记录后把该行写穿到物料/成品镜像（独立会话）。"""
+    """编辑/新增/删除单条记录后把该行写穿到物料/成品/仪器镜像（独立会话）。"""
     if entity_code in MATERIAL_MIRROR_ENTITIES:
         from app.modules.quality.service.inspection_material_mirror import (
             delete_mirror_record,
@@ -125,6 +176,20 @@ async def _sync_single_record_to_mirror(
             delete_mirror_record,
             upsert_record_by_id,
         )
+    elif entity_code in INSTRUMENT_MIRROR_ENTITIES:
+        # 仪器镜像：新增/编辑走单条 upsert（增量水位有漏行竞态），删除走
+        # 立即软删（增量不做删除对账，否则被删行残留到次日全量）
+        from app.modules.quality.service.inspection_instrument_mirror import (
+            delete_instrument_mirror_record,
+            upsert_instrument_record_by_id,
+        )
+
+        async with async_session_factory() as sync_db:
+            if deleted:
+                await delete_instrument_mirror_record(sync_db, entity_code, record_id)
+            else:
+                await upsert_instrument_record_by_id(sync_db, entity_code, record_id)
+        return
     else:
         return
     async with async_session_factory() as sync_db:
@@ -201,6 +266,8 @@ async def api_update_inspection_feishu_record(
     data = await update_inspection_feishu_record(
         db, entity_code, record_id, body.fields, actor_user_id=user_id
     )
+    # 维保记录：填写维护日期保存后先生成下一期任务，再刷镜像（新任务随刷新入镜）
+    await _maybe_spawn_maintenance_next(entity_code, record_id, body.fields)
     await _maybe_refresh_entity_mirror(entity_code, record_id)
     return success_response(data=data, message="更新成功，已同步飞书")
 

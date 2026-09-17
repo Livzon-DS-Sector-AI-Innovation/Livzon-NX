@@ -681,12 +681,15 @@ async function hrActionFetch<T>(url: string, options?: RequestInit): Promise<T |
   return result.data
 }
 
-export async function updateHrFeishuAppSettings(data: { app_id: string; app_secret: string; is_enabled: boolean }): Promise<unknown> {
-  return hrActionFetch(`${API_BASE}/api/v1/hr/feishu-settings/app`, { method: 'PUT', body: JSON.stringify(data) })
+export async function updateHrFeishuAppSettings(
+  data: { app_id: string; app_secret: string; is_enabled: boolean },
+  purpose: string = 'bitable',
+): Promise<unknown> {
+  return hrActionFetch(`${API_BASE}/api/v1/hr/feishu-settings/app?purpose=${purpose}`, { method: 'PUT', body: JSON.stringify(data) })
 }
 
-export async function testHrFeishuAppSettings(): Promise<unknown> {
-  return hrActionFetch(`${API_BASE}/api/v1/hr/feishu-settings/app/test`, { method: 'POST' })
+export async function testHrFeishuAppSettings(purpose: string = 'bitable'): Promise<unknown> {
+  return hrActionFetch(`${API_BASE}/api/v1/hr/feishu-settings/app/test?purpose=${purpose}`, { method: 'POST' })
 }
 
 export async function updateHrFeishuEntitySetting(entityCode: string, data: unknown): Promise<unknown> {

@@ -35,7 +35,10 @@ from app.modules.quality.models.inspection_items_mirror import (
 )
 from app.modules.quality.repository import inspection_items_mirror as repo
 from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
-from app.modules.quality.service.inspection_helpers import _smart_normalize_value
+from app.modules.quality.service.inspection_helpers import (
+    _smart_normalize_value,
+    resolve_month_range_ms,
+)
 from app.modules.quality.service.quality_feishu_pages import _resolve_runtime_entity
 from app.platform.integrations.feishu.bitable import BitableClient
 
@@ -69,7 +72,8 @@ INSTRUMENT_PAGE_TITLES: dict[str, str] = {
 # 排序/过滤，故用业务日期降序页 + last_modified 降序页双路取并集。
 INSTRUMENT_DATE_SORT_FIELDS: dict[str, str] = {
     "qc_instr_equipment": "入厂日期",
-    "qc_instr_maintenance": "完成日期",
+    # 维保表 2026-09 字段适配：「完成日期」列已改名「维护日期」
+    "qc_instr_maintenance": "维护日期",
     "qc_instr_repair": "维修时间",
     "qc_instr_contracts": "购买维保合同时间",
     "qc_instr_calibration": "校验时间",
@@ -459,24 +463,22 @@ async def sync_instrument_page(
     else:
         records = await _fetch_or_fail(_fetch_full_records(client, table_id))
 
-    # 维护保养记录：把按周期表算出的「下次维保时间」回写飞书空值行
-    # （只填空、手动填过的不动；失败仅记日志不影响同步）
+    # 维护保养记录：填写了维护日期的行自动置完成并生成下一期任务
+    # （单条失败仅记日志不影响同步）
     if entity_code == "qc_instr_maintenance" and records:
         try:
             from app.modules.quality.service.maintenance_schedule import (
-                backfill_next_maintenance_dates,
+                maybe_spawn_next_maintenance,
             )
 
-            backfilled = await backfill_next_maintenance_dates(
+            spawned = await maybe_spawn_next_maintenance(
                 db, client, table_id, records
             )
-            if backfilled:
-                logger.info(
-                    "maintenance next-date backfilled rows=%d", backfilled
-                )
+            if spawned:
+                logger.info("maintenance next-task spawned rows=%d", spawned)
         except Exception as exc:  # noqa: BLE001
             logger.warning(
-                "maintenance next-date backfill skipped (%s): %s", entity_code, exc
+                "maintenance next-task spawn skipped (%s): %s", entity_code, exc
             )
 
     now = datetime.now(UTC)
@@ -535,6 +537,82 @@ async def sync_instrument_page(
 # ── 读取（列表页共用）──────────────────────────────────────────────────
 
 
+async def upsert_instrument_record_by_id(
+    db: AsyncSession,
+    entity_code: str,
+    record_id: str,
+) -> bool:
+    """按飞书记录 ID 拉取最新单条并写穿到本地镜像（新增/编辑后即时生效）。
+
+    仪器镜像的增量同步按水位过滤，新增行的写入请求与水位推进存在竞态，
+    一旦漏行便再也不被增量捕获（直到编辑再次触碰）；单条 get_record 后
+    直接 upsert 对应镜像行，不受水位影响。无快照时返回 False（由增量轮
+    或每日全量兜底）。
+    """
+    if entity_code not in INSTRUMENT_MIRROR_ENTITIES:
+        return False
+    snapshot = await repo.get_snapshot(db, entity_code)
+    if snapshot is None or snapshot.total_rows <= 0:
+        return False
+    # snapshot.columns 即 sync 时 _build_columns 的列结构（含 key/options），
+    # _normalize_record_cells 依赖 options 做单选 id→文字解析
+    columns = [col for col in (snapshot.columns or []) if col.get("key")]
+    if not columns or not record_id:
+        return False
+    runtime, entity = await _resolve_runtime_entity(db, entity_code, direction="pull")
+    client = BitableClient(
+        app_token=entity.app_token,
+        app_id=runtime.app_id,
+        app_secret=runtime.app_secret,
+    )
+    record = await client.get_record(
+        feishu_sync_service._require_table_id(entity), record_id
+    )
+    if not record or not record.get("record_id"):
+        return False
+    existing_row = await db.scalar(
+        select(QualityItemsPageRow).where(
+            QualityItemsPageRow.page_snapshot_id == snapshot.id,
+            QualityItemsPageRow.source_record_id == record_id,
+        )
+    )
+    cells = _normalize_record_cells(record, columns)
+    row = QualityItemsPageRow(
+        page_snapshot_id=snapshot.id,
+        source_record_id=record_id,
+        row_order=existing_row.row_order if existing_row else 0,
+        cells=cells,
+        search_text=_build_search_text(cells),
+        last_synced_at=datetime.now(UTC),
+    )
+    await repo.upsert_rows_incremental(db, snapshot.id, [row])
+    snapshot.total_rows = await repo.count_rows(db, snapshot.id)
+    await db.commit()
+    return True
+
+
+async def delete_instrument_mirror_record(
+    db: AsyncSession,
+    entity_code: str,
+    record_id: str,
+) -> bool:
+    """删除记录后立即软删对应镜像行（无需等每日全量删除对账）。
+
+    仪器镜像的增量同步不做删除对账，页面删除若不写穿，被删行会残留到
+    次日 03:00 全量才消失（2026-09-16 "删除后页面还是老页面"根因）。
+    """
+    if entity_code not in INSTRUMENT_MIRROR_ENTITIES:
+        return False
+    snapshot = await repo.get_snapshot(db, entity_code)
+    if snapshot is None:
+        return False
+    deleted = await repo.delete_row_by_record_id(db, snapshot.id, record_id)
+    if deleted:
+        snapshot.total_rows = await repo.count_rows(db, snapshot.id)
+        await db.commit()
+    return deleted
+
+
 def _row_to_item(row: QualityItemsPageRow, columns: list[str]) -> dict[str, Any]:
     item: dict[str, Any] = {
         "record_id": row.source_record_id,
@@ -570,11 +648,15 @@ async def list_instrument_mirror(
     filters: dict[str, str] | None = None,
     page: int = 1,
     page_size: int = 20,
+    month: str | None = None,
+    month_field: str = "生成日期",
 ) -> dict[str, Any]:
     """从本地镜像读取仪器列表，返回结构与实时 _list_feishu 对齐。
 
     无镜像快照时返回 configured=False 空页（由上层触发同步或降级实时读）。
     过滤/排序/分页下沉 SQL（list_rows_filtered），避免整表载入内存。
+    month 传入时按 month_field（毫秒时间戳数值）落在当月过滤，
+    维保列表「生成日期」月份视图用；与实时兜底路径同一口径。
     """
     snapshot = await repo.get_snapshot(db, entity_code)
     if snapshot is None:
@@ -591,12 +673,17 @@ async def list_instrument_mirror(
     columns = [
         str(col.get("key")) for col in (snapshot.columns or []) if col.get("key")
     ]
+    numeric_ranges = None
+    if month:
+        low_ms, high_ms = resolve_month_range_ms(month)
+        numeric_ranges = {month_field: (low_ms, high_ms)}
     rows, total = await repo.list_rows_filtered(
         db,
         snapshot.id,
         columns=columns,
         keyword=keyword,
         filters=filters,
+        numeric_ranges=numeric_ranges,
         updated_sort_field=f"{_INTERNAL_PREFIX}last_modified",
         offset=(page - 1) * page_size,
         limit=page_size,

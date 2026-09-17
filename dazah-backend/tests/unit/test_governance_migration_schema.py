@@ -20,9 +20,9 @@ def _load_migration(filename: str) -> ModuleType:
 
 
 def test_workshop_ownership_migration(monkeypatch: pytest.MonkeyPatch) -> None:
-    migration = _load_migration("c9d400000039_batch_workshop_ownership.py")
-    assert migration.revision == "c9d400000039"
-    assert migration.down_revision == "c9d400000038"
+    migration = _load_migration("c9d400000041_batch_workshop_ownership.py")
+    assert migration.revision == "c9d400000041"
+    assert migration.down_revision == "c9d400000040"
     calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
     monkeypatch.setattr(
         migration.op, "add_column", lambda *a, **kw: calls.append(("add", a, kw))
@@ -51,9 +51,9 @@ def test_workshop_ownership_migration(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_sensitive_action_expiry_migration(monkeypatch: pytest.MonkeyPatch) -> None:
-    migration = _load_migration("c9d400000040_page_permission_risk_expiry.py")
-    assert migration.revision == "c9d400000040"
-    assert migration.down_revision == "c9d400000039"
+    migration = _load_migration("c9d400000042_page_permission_risk_expiry.py")
+    assert migration.revision == "c9d400000042"
+    assert migration.down_revision == "c9d400000041"
     added: list[tuple[str, sa.Column[object], str]] = []
     dropped: list[tuple[str, str, str]] = []
     monkeypatch.setattr(

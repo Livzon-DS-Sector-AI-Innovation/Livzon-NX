@@ -916,6 +916,8 @@ export interface PositionTransferRecordListResponse {
 export type HrFeishuFieldMappingItem = components['schemas']['HrFeishuFieldMappingItem']
 
 export interface HrFeishuAppSettingsDetail {
+  purpose: string
+  purpose_label: string
   app_id: string
   app_secret_masked?: string | null
   is_enabled: boolean

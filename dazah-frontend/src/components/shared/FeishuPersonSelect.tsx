@@ -4,7 +4,10 @@ import { useMemo } from 'react'
 import { Select } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { pinyin } from 'pinyin-pro'
-import { fetchValidationPersonOptions } from '@/lib/api/client/quality'
+import {
+  fetchQualityPersonOptions,
+  fetchValidationPersonOptions,
+} from '@/lib/api/client/quality'
 
 export interface FeishuPersonValue {
   /** open_id（人事管理-飞书联系人）或多维表格成员字段回显 id，提交后由后端反查写入 */
@@ -26,6 +29,8 @@ interface FeishuPersonSelectProps {
   extraOptions?: FeishuPersonValue[]
   placeholder?: string
   disabled?: boolean
+  /** 候选部门收敛（如质量检验只选 QC/AI创新部）；缺省=全部在职人员 */
+  departments?: string[]
 }
 
 interface LabeledValue {
@@ -39,6 +44,15 @@ interface PersonCatalogEntry {
   email: string | null
   mobile: string | null
   resolved: boolean
+}
+
+/** 两个人员目录端点（质量/验证）返回行的公共形态 */
+interface PersonDirectoryEntry {
+  open_id: string
+  name: string | null
+  department: string | null
+  email?: string | null
+  mobile?: string | null
 }
 
 function toLabeled(selected: FeishuPersonSelectProps['value']): LabeledValue | LabeledValue[] | undefined {
@@ -57,10 +71,15 @@ export function FeishuPersonSelect({
   extraOptions,
   placeholder,
   disabled,
+  departments,
 }: FeishuPersonSelectProps) {
-  const { data: directory = [], isLoading } = useQuery({
-    queryKey: ['quality-person-directory'],
-    queryFn: () => fetchValidationPersonOptions(undefined, 500),
+  const scopedDepartments = departments?.filter((item) => item.trim()) ?? []
+  const { data: directory = [], isLoading } = useQuery<PersonDirectoryEntry[]>({
+    queryKey: ['quality-person-directory', scopedDepartments],
+    queryFn: () =>
+      scopedDepartments.length
+        ? fetchQualityPersonOptions(scopedDepartments)
+        : fetchValidationPersonOptions(undefined, 500),
     // 不做前端缓存：每次打开都重查，保证人事-飞书联系人同步后立刻生效
     staleTime: 0,
   })
@@ -71,10 +90,10 @@ export function FeishuPersonSelect({
     for (const person of directory) {
       if (person.open_id && !map.has(person.open_id)) {
         map.set(person.open_id, {
-          name: person.name,
+          name: person.name || '未命名联系人',
           department: person.department,
-          email: person.email,
-          mobile: person.mobile,
+          email: person.email ?? null,
+          mobile: person.mobile ?? null,
           resolved: false,
         })
       }

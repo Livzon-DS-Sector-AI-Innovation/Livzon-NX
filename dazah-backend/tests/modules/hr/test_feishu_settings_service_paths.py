@@ -54,6 +54,7 @@ class _Db:
 
 def _app_row(**overrides: object) -> SimpleNamespace:
     values: dict[str, object] = {
+        "purpose": "bitable",
         "app_id": "app-id",
         "app_secret": "secret",
         "is_enabled": True,

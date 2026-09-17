@@ -15,10 +15,13 @@ If Feishu is not configured, endpoints return `{"data":[],"meta":{"configured":f
 
 from __future__ import annotations
 
+import io
 import logging
 from typing import Any, cast
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -68,7 +71,10 @@ from app.modules.quality.service import (
     sync_instrument_page,
 )
 from app.modules.quality.service.inspection_dashboard_calc import reanalyze_trend_ai
-from app.modules.quality.service.inspection_helpers import _list_feishu_dynamic
+from app.modules.quality.service.inspection_helpers import (
+    _list_feishu_dynamic,
+    resolve_month_range_ms,
+)
 from app.modules.quality.service.inspection_items_mirror import (
     PAGE_INBOUND,
     PAGE_INVENTORY,
@@ -85,6 +91,9 @@ from app.modules.quality.service.instrument_profile import get_instrument_profil
 from app.modules.quality.service.items_dashboard import (
     get_items_dashboard,
     push_low_stock_alert,
+)
+from app.modules.quality.service.maintenance_export import (
+    export_maintenance_summary,
 )
 from app.modules.quality.service.maintenance_schedule import (
     enrich_maintenance_schedule,
@@ -235,11 +244,15 @@ async def _mirror_page_list(
     force: bool,
     incremental: bool,
     enrich: Any = None,
+    month: str | None = None,
+    month_field: str = "生成日期",
 ) -> Any:
     """镜像页通用列表：镜像优先，可选触发同步；空镜像/未镜像降级实时读。
 
     force=True 强制全量同步后再读；incremental=True 走增量同步。
     未同步（无快照）时降级实时读，保证首次进入不空屏。
+    month 传入时列表按 month_field 落月过滤（镜像 SQL 与实时兜底同口径）；
+    只传给支持该参数的 list_mirror/live_coro 调用（当前仅仪器镜像）。
     """
     if force or incremental:
         try:
@@ -249,6 +262,9 @@ async def _mirror_page_list(
         except Exception as exc:  # noqa: BLE001
             logger.warning("mirror sync failed (%s): %s", entity_code, exc)
 
+    month_kwargs: dict[str, Any] = (
+        {"month": month, "month_field": month_field} if month else {}
+    )
     mirror = await list_mirror(
         db,
         entity_code,
@@ -256,6 +272,7 @@ async def _mirror_page_list(
         filters=filters,
         page=page,
         page_size=page_size,
+        **month_kwargs,
     )
     if enrich is not None and mirror.get("configured"):
         mirror["items"] = await enrich(db, mirror["items"])
@@ -269,6 +286,7 @@ async def _mirror_page_list(
             page=page,
             page_size=page_size,
             filters=filters,
+            **month_kwargs,
         )
     empty_unfiltered = (
         mirror["configured"] and mirror["total"] == 0 and not keyword and not filters
@@ -283,6 +301,7 @@ async def _mirror_page_list(
             page=1,
             page_size=1,
             filters=filters,
+            **month_kwargs,
         )
         if _response_has_data(live_probe):
             return live_probe
@@ -496,6 +515,7 @@ async def _instrument_page_list(
     force: bool,
     incremental: bool,
     enrich: Any = None,
+    month: str | None = None,
 ) -> Any:
     """仪器子表列表：本地镜像优先，未同步时降级实时读（列跟随飞书真实字段）。"""
     return await _mirror_page_list(
@@ -511,6 +531,7 @@ async def _instrument_page_list(
         force=force,
         incremental=incremental,
         enrich=enrich,
+        month=month,
     )
 
 
@@ -578,6 +599,7 @@ async def api_pull_equipment(
 )
 async def api_list_maintenance(
     keyword: str = Query(None),
+    month: str = Query(None, description="按生成日期过滤月份 YYYY-MM；不传=全部"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
     force: bool = Query(False),
@@ -587,6 +609,8 @@ async def api_list_maintenance(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
+    if month:
+        resolve_month_range_ms(month)  # 格式非法直接 400
     return await _instrument_page_list(
         db,
         "qc_instr_maintenance",
@@ -597,6 +621,7 @@ async def api_list_maintenance(
         force=force,
         incremental=incremental,
         enrich=enrich_maintenance_schedule,
+        month=month or None,
     )
 
 
@@ -609,6 +634,25 @@ async def api_pull_maintenance(
 ) -> Any:
     _require_user(current_user)
     return await _safe_pull_mirror(sync_instrument_page, "qc_instr_maintenance", db)
+
+
+@router.get("/instruments/maintenance/export", summary="按月导出维保汇总表 xlsx")
+async def api_export_maintenance_summary(
+    month: str = Query(..., description="月份 YYYY-MM，如 2026-07"),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    """设备年度预防性维护保养汇总表（复刻用户模板格式，维护日期为 YYYY.MM.DD 文本）。"""
+    _require_user(current_user)
+    content, filename = await export_maintenance_summary(db, month)
+    encoded = quote(filename, safe="")
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename*=utf-8''{encoded}"
+        },
+    )
 
 
 @router.get(

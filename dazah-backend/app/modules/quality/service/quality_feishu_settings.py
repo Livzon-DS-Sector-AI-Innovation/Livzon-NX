@@ -252,7 +252,9 @@ PUSH_ONLY_QUALITY_FEISHU_ENTITIES = {
     "inspection_finished_product",
     "inspection_solid_material",
     "inspection_liquid_material",
-    "complaint_ledger",
+    # complaint_ledger 不在此集合：投诉台账页面直连飞书实时读取
+    # （list_complaint_ledger_records 以 direction="pull" 解析实体），
+    # 归入 push-only 会被 ensure 钉死拉取开关，页面必报 400。
     "return_recall_ledger",
     "product_quality_ledger",
     "product_quality_standard_item",

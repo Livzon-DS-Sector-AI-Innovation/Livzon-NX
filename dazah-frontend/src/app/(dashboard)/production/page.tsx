@@ -41,6 +41,7 @@ import dayjs from 'dayjs'
 import ReactECharts from 'echarts-for-react'
 import BoardNavBlocks from '@/components/production/board-nav-blocks'
 import BatchProgressBar from '@/components/production/batch-progress-bar'
+import ProductionSummary from '@/components/production/production-summary'
 import { useProductContextStore } from '@/stores/product-context'
 import { usePermission } from '@/hooks/usePermission'
 import {
@@ -141,10 +142,12 @@ const REFRESH_INTERVAL_MS = 5 * 60 * 1000
 // 提炼计划产量卡的下拉选择记忆（按月份存 {月份: "车间|产品"}），刷新后恢复
 const PLAN_SELECTION_STORAGE_KEY = 'dazah.production.plan-card.selection'
 
-// 产品 Tab 代码 → 展示名（导航块/看板标题）：页面统一叫 MC（车间口径）
+// 产品 Tab 代码 → 展示名（导航块/看板标题）；系统代码 MC 的展示名
+// 统一为霉酚酸（计划产量行按源数据名过滤，见 PLAN_PRODUCT_NAMES）
 const PRODUCT_NAMES: Record<string, string> = {
+  SUMMARY: '汇总',
   FA: 'L-苯丙氨酸',
-  MC: 'MC',
+  MC: '霉酚酸',
   DR: '多拉菌素',
   LV: '洛伐他汀',
   MV: '美伐他汀',
@@ -210,8 +213,10 @@ export default function ProductionDashboard() {
   const [loading, setLoading] = useState(true)
   // 周期回看：空串 = 今天所在周期；否则为所选周期内任意日期
   const [viewDate, setViewDate] = useState<string>('')
-  // 当前产品上下文（导航块第 4 位切换），看板按此产品取数
+  // 当前产品上下文（导航块切换），看板按此产品取数；
+  // SUMMARY 为汇总视图（五产线聚合），非单一产品
   const productCode = useProductContextStore((s) => s.productCode)
+  const isSummaryView = productCode === 'SUMMARY'
   // 首帧不渲染时间（服务端与客户端时区不一致会导致 hydration 不匹配），挂载后再计时
   const [clock, setClock] = useState('')
   const [maintModalOpen, setMaintModalOpen] = useState(false)
@@ -257,10 +262,11 @@ export default function ProductionDashboard() {
   }, [viewDate, productCode])
 
   useEffect(() => {
+    if (isSummaryView) return // 汇总视图无单产品看板可拉
     void loadBoard() // eslint-disable-line react-hooks/set-state-in-effect -- 看板初始加载，与 201-2 页面既有模式一致
     const timer = setInterval(() => void loadBoard(), REFRESH_INTERVAL_MS)
     return () => clearInterval(timer)
-  }, [loadBoard])
+  }, [loadBoard, isSummaryView])
 
   // 提炼计划产量：跟随概览自然月拉生产计划；选择按月记入本地存储，
   // 页面刷新后恢复所选行，仅当该行不在当月数据时才回退第一行
@@ -837,10 +843,10 @@ export default function ProductionDashboard() {
   return (
     <div className="p-4 flex flex-col gap-3">
       {/* 顶部导航块：第 4 位为当前产品 L-苯丙氨酸，第 5/6 位洛伐他汀/美伐他汀
-          （复用 MP 管线），首位为空占位 */}
+          （复用 MP 管线），首位为汇总 Tab（原地切换五产线聚合视图） */}
       <BoardNavBlocks />
 
-      {/* 顶部通栏 */}
+      {/* 顶部标题卡：汇总态标题切换、单产品操作按钮隐藏 */}
       <Card
         variant="borderless"
         className="shadow-sm"
@@ -850,7 +856,9 @@ export default function ProductionDashboard() {
           <Space size={12}>
             <ScheduleOutlined style={{ fontSize: 22, color: '#1677ff' }} />
             <Title level={4} style={{ margin: 0 }}>
-              {`${PRODUCT_NAMES[productCode] ?? PRODUCT_NAMES.FA}生产看板`}
+              {isSummaryView
+                ? '生产汇总'
+                : `${PRODUCT_NAMES[productCode] ?? PRODUCT_NAMES.FA}生产看板`}
             </Title>
             <DatePicker
               size="small"
@@ -860,17 +868,21 @@ export default function ProductionDashboard() {
               value={
                 viewDate
                   ? dayjs(viewDate)
-                  : board?.period.end
-                    ? dayjs(board.period.end)
-                    : null
+                  : isSummaryView
+                    ? dayjs()
+                    : board?.period.end
+                      ? dayjs(board.period.end)
+                      : null
               }
               onChange={(d) => {
                 // 选自然月 → 定位到主要落在该月的扎帐周期（该月 15 日必在其中）
                 if (d) setViewDate(d.date(15).format('YYYY-MM-DD'))
               }}
             />
-            {board?.period && <Tag color="blue">生产周期 {board.period.label}</Tag>}
-            {!isCurrent && (
+            {board?.period && !isSummaryView && (
+              <Tag color="blue">生产周期 {board.period.label}</Tag>
+            )}
+            {!isCurrent && !isSummaryView && (
               <Button size="small" onClick={() => setViewDate('')}>
                 回到本月
               </Button>
@@ -878,25 +890,36 @@ export default function ProductionDashboard() {
           </Space>
           <Space size={16}>
             <Text type="secondary">系统时间：{clock}</Text>
-            <Text type="secondary">数据刷新：5 分钟</Text>
-            <Button
-              size="small"
-              icon={<DatabaseOutlined />}
-              onClick={() => void openActuals()}
-            >
-              历史数据
-            </Button>
-            <Button
-              size="small"
-              icon={<SyncOutlined spin={loading} />}
-              onClick={() => void loadBoard()}
-            >
-              立即刷新
-            </Button>
+            {!isSummaryView && (
+              <Text type="secondary">数据刷新：5 分钟</Text>
+            )}
+            {!isSummaryView && (
+              <>
+                <Button
+                  size="small"
+                  icon={<DatabaseOutlined />}
+                  onClick={() => void openActuals()}
+                >
+                  历史数据
+                </Button>
+                <Button
+                  size="small"
+                  icon={<SyncOutlined spin={loading} />}
+                  onClick={() => void loadBoard()}
+                >
+                  立即刷新
+                </Button>
+              </>
+            )}
           </Space>
         </div>
       </Card>
 
+      {/* 汇总视图：五产线聚合表 + 播报汇总 */}
+      {isSummaryView && <ProductionSummary month={planMonth} />}
+
+      {!isSummaryView && (
+      <>
       {/* 告警跑马灯 */}
       <Card
         variant="borderless"
@@ -1294,6 +1317,8 @@ export default function ProductionDashboard() {
           )}
         </>
       )}
+      </>)
+      }
 
       {/* 检修标注弹窗 */}
       <Modal

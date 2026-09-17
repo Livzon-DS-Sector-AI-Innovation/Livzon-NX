@@ -56,6 +56,7 @@ async def anon_client(client: AsyncClient) -> AsyncIterator[AsyncClient]:
         ("GET", "/api/v1/quality/instruments/cal-external"),
         # 仪器管理仪表盘/档案/批量导入
         ("GET", "/api/v1/quality/instruments/dashboard"),
+        ("GET", "/api/v1/quality/instruments/maintenance/export?month=2026-07"),
         ("GET", "/api/v1/quality/instruments/equipment/rec-x/profile"),
         ("POST", "/api/v1/quality/instruments/equipment/import/preview"),
         ("POST", "/api/v1/quality/instruments/equipment/import/confirm"),

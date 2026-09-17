@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
+from app.core.exceptions import AppException
 from app.modules.quality.service import inspection_helpers as helpers
 
 pytestmark = pytest.mark.anyio
+
+_TZ_SH = timezone(timedelta(hours=8))
 
 
 def _records() -> list[dict[str, Any]]:
@@ -100,3 +104,54 @@ async def test_dynamic_list_keyword_and_filters(
         filters={"设备状态": "完好"},
     )
     assert [it["record_id"] for it in filtered["items"]] == ["rec2"]
+
+
+async def test_dynamic_list_month_filter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """month 过滤：毫秒时间戳（数字字符串）落在当月才保留，与镜像路径同口径。"""
+    _install(monkeypatch)
+
+    # rec1 入厂日期 1768838400000 = 2026-01-20（东八区）
+    hit = await helpers._list_feishu_dynamic(
+        SimpleNamespace(),
+        "qc_instr_equipment",
+        month="2026-01",
+        month_field="入厂日期",
+    )
+    assert [it["record_id"] for it in hit["items"]] == ["rec1"]
+
+    none = await helpers._list_feishu_dynamic(
+        SimpleNamespace(),
+        "qc_instr_equipment",
+        month="2026-02",
+        month_field="入厂日期",
+    )
+    assert none["total"] == 0
+
+    # 无该字段值的行不落入任何月份
+    all_month = await helpers._list_feishu_dynamic(
+        SimpleNamespace(),
+        "qc_instr_equipment",
+        month="2026-01",
+        month_field="生成日期",
+    )
+    assert all_month["total"] == 0
+
+
+def test_resolve_month_range_ms_bounds_and_errors() -> None:
+    start, end = helpers.resolve_month_range_ms("2026-09")
+    assert datetime.fromtimestamp(start / 1000, tz=_TZ_SH) == datetime(
+        2026, 9, 1, tzinfo=_TZ_SH
+    )
+    assert datetime.fromtimestamp(end / 1000, tz=_TZ_SH) == datetime(
+        2026, 10, 1, tzinfo=_TZ_SH
+    )
+    # 十二月滚动次年一月
+    _, end_dec = helpers.resolve_month_range_ms("2026-12")
+    assert datetime.fromtimestamp(end_dec / 1000, tz=_TZ_SH) == datetime(
+        2027, 1, 1, tzinfo=_TZ_SH
+    )
+    for bad in ("2026/09", "abc", "2026-13", "202609"):
+        with pytest.raises(AppException):
+            helpers.resolve_month_range_ms(bad)

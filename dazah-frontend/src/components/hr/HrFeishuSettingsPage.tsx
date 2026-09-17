@@ -38,8 +38,8 @@ import {
   uploadOfferTemplateAction,
 } from '@/actions/hr'
 import {
+  fetchAllHrFeishuAppSettings,
   fetchEmailConfig,
-  fetchHrFeishuAppSettings,
   fetchHrFeishuEntityFieldMappingBundle,
   fetchHrFeishuEntitySettings,
   fetchHrFeishuEntityTables,
@@ -143,9 +143,12 @@ export function HrFeishuSettingsPage() {
   const queryClient = useQueryClient()
   const [resultNotice, setResultNotice] = useState<ResultNotice>(null)
   const [appForm, setAppForm] = useState<UpdateHrFeishuAppSettingsRequest>(EMPTY_APP_FORM)
+  const [contactForm, setContactForm] = useState<UpdateHrFeishuAppSettingsRequest>(EMPTY_APP_FORM)
   const [entityDrafts, setEntityDrafts] = useState<EntityDraftMap>({})
   const [appSaving, setAppSaving] = useState(false)
   const [appTesting, setAppTesting] = useState(false)
+  const [contactSaving, setContactSaving] = useState(false)
+  const [contactTesting, setContactTesting] = useState(false)
   const [rowSaving, setRowSaving] = useState<Record<string, boolean>>({})
   const [rowTesting, setRowTesting] = useState<Record<string, boolean>>({})
   const [rowLoadingTables, setRowLoadingTables] = useState<Record<string, boolean>>({})
@@ -197,9 +200,9 @@ export function HrFeishuSettingsPage() {
     }
   }, [emailForm, emailQuery.data])
 
-  const appQuery = useQuery<HrFeishuAppSettingsDetail>({
-    queryKey: ['hr-feishu-settings', 'app'],
-    queryFn: fetchHrFeishuAppSettings,
+  const appQuery = useQuery<HrFeishuAppSettingsDetail[]>({
+    queryKey: ['hr-feishu-settings', 'apps'],
+    queryFn: fetchAllHrFeishuAppSettings,
   })
 
   const entitiesQuery = useQuery<HrFeishuEntitySettingItem[]>({
@@ -207,7 +210,10 @@ export function HrFeishuSettingsPage() {
     queryFn: fetchHrFeishuEntitySettings,
   })
 
-  const appSettings = appQuery.data ?? null
+  const appSettingsList = appQuery.data ?? []
+  const contactSettings = appSettingsList.find((item) => item.purpose === 'contact') ?? null
+  const bitableSettings = appSettingsList.find((item) => item.purpose === 'bitable') ?? null
+  const appSettings = bitableSettings  // 兼容下方引用
   const entityItems = useMemo(() => entitiesQuery.data ?? [], [entitiesQuery.data])
   const loading = appQuery.isLoading || entitiesQuery.isLoading
   const loadError = appQuery.error instanceof Error
@@ -219,13 +225,19 @@ export function HrFeishuSettingsPage() {
   useEffect(() => {
     if (appQuery.data) {
       queueMicrotask(() => {
-        setAppForm({
-          app_id: appQuery.data?.app_id || '',
+        setContactForm({
+          app_id: contactSettings?.app_id || '',
           app_secret: '',
-          is_enabled: appQuery.data?.is_enabled ?? false,
+          is_enabled: contactSettings?.is_enabled ?? false,
+        })
+        setAppForm({
+          app_id: bitableSettings?.app_id || '',
+          app_secret: '',
+          is_enabled: bitableSettings?.is_enabled ?? false,
         })
       })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appQuery.data])
 
   useEffect(() => {
@@ -303,27 +315,32 @@ export function HrFeishuSettingsPage() {
     []
   )
 
-  const handleSaveApp = useCallback(async () => {
+  const handleSaveApp = useCallback(async (purpose: string = 'bitable') => {
+    const form = purpose === 'contact' ? contactForm : appForm
     try {
-      setAppSaving(true)
-      await updateHrFeishuAppSettings({ ...appForm, app_id: appForm.app_id.trim() })
-      setAppForm((current) => ({ ...current, app_secret: '' }))
+      if (purpose === 'contact') setContactSaving(true)
+      else setAppSaving(true)
+      await updateHrFeishuAppSettings({ ...form, app_id: form.app_id.trim() }, purpose)
+      if (purpose === 'contact') setContactForm((c) => ({ ...c, app_secret: '' }))
+      else setAppForm((c) => ({ ...c, app_secret: '' }))
       setResultNotice({ type: 'success', title: '飞书应用配置已保存' })
       message.success('飞书应用配置已保存')
-      queryClient.invalidateQueries({ queryKey: ['hr-feishu-settings', 'app'] })
+      queryClient.invalidateQueries({ queryKey: ['hr-feishu-settings', 'apps'] })
     } catch (error) {
       const description = error instanceof Error ? (error instanceof Error ? error.message : '') : '保存飞书应用配置失败'
       setResultNotice({ type: 'error', title: '保存飞书应用配置失败', description })
       message.error(error instanceof Error ? (error instanceof Error ? error.message : '') : '保存飞书应用配置失败')
     } finally {
+      setContactSaving(false)
       setAppSaving(false)
     }
-  }, [appForm, message, queryClient])
+  }, [contactForm, appForm, message, queryClient])
 
-  const handleTestApp = useCallback(async () => {
+  const handleTestApp = useCallback(async (purpose: string = 'bitable') => {
     try {
-      setAppTesting(true)
-      const result = await testHrFeishuAppSettings() as { success?: boolean; message?: string }
+      if (purpose === 'contact') setContactTesting(true)
+      else setAppTesting(true)
+      const result = await testHrFeishuAppSettings(purpose) as { success?: boolean; message?: string }
       if (result?.success) {
         setResultNotice({ type: 'success', title: '飞书应用连接测试成功', description: formatHrFeishuTestSummary(result) })
         message.success(formatHrFeishuTestSummary(result))
@@ -331,12 +348,13 @@ export function HrFeishuSettingsPage() {
         setResultNotice({ type: 'warning', title: '飞书应用连接测试未通过', description: formatHrFeishuTestSummary(result) })
         message.error(formatHrFeishuTestSummary(result))
       }
-      queryClient.invalidateQueries({ queryKey: ['hr-feishu-settings', 'app'] })
+      queryClient.invalidateQueries({ queryKey: ['hr-feishu-settings', 'apps'] })
     } catch (error) {
       const description = error instanceof Error ? (error instanceof Error ? error.message : '') : '测试飞书应用连接失败'
       setResultNotice({ type: 'error', title: '测试飞书应用连接失败', description })
       message.error(error instanceof Error ? (error instanceof Error ? error.message : '') : '测试飞书应用连接失败')
     } finally {
+      setContactTesting(false)
       setAppTesting(false)
     }
   }, [message, queryClient])
@@ -710,52 +728,78 @@ export function HrFeishuSettingsPage() {
         />
       ) : null}
 
-      <Card
-        title="飞书应用信息"
-        extra={
-          <Space>
-            <Button icon={<ReloadOutlined />} onClick={() => queryClient.invalidateQueries({ queryKey: ['hr-feishu-settings'] })} loading={loading}>
-              刷新
-            </Button>
-            <Button icon={<SecurityScanOutlined />} onClick={() => void handleTestApp()} loading={appTesting}>
-              测试连接
-            </Button>
-            <Button type="primary" icon={<SaveOutlined />} onClick={() => void handleSaveApp()} loading={appSaving}>
-              保存配置
-            </Button>
-          </Space>
-        }
-      >
-        <Space orientation="vertical" size={12} style={{ display: 'flex' }}>
-          <Space.Compact block>
-            <Button disabled style={{ cursor: 'default', width: 120 }}>App ID</Button>
-            <Input
-              value={appForm.app_id}
-              placeholder="请输入飞书应用 App ID"
-              onChange={(event) => setAppForm((current) => ({ ...current, app_id: event.target.value }))}
-            />
-          </Space.Compact>
-          <Space.Compact block>
-            <Button disabled style={{ cursor: 'default', width: 120 }}>App Secret</Button>
-            <Input.Password
-              value={appForm.app_secret}
-              placeholder={appSettings?.app_secret_masked || '留空则保持当前 Secret 不变'}
-              onChange={(event) => setAppForm((current) => ({ ...current, app_secret: event.target.value }))}
-              onCopy={(e) => e.preventDefault()}
-              onCut={(e) => e.preventDefault()}
-            />
-          </Space.Compact>
-          <Space size={12}>
-            <Typography.Text>启用飞书同步</Typography.Text>
-            <Switch checked={appForm.is_enabled} onChange={(checked) => setAppForm((current) => ({ ...current, is_enabled: checked }))} />
-            {renderStatusTag(appSettings?.last_test_status)}
-            <Typography.Text type="secondary">最近测试：{formatDateTime(appSettings?.last_tested_at)}</Typography.Text>
-          </Space>
-          {appSettings?.last_test_error ? (
-            <Alert type="warning" showIcon title={appSettings.last_test_error} />
-          ) : null}
-        </Space>
-      </Card>
+      {(['contact', 'bitable'] as const).map((purpose) => {
+        const isContact = purpose === 'contact'
+        const form = isContact ? contactForm : appForm
+        const setForm = isContact ? setContactForm : setAppForm
+        const settings = isContact ? contactSettings : bitableSettings
+        const saving = isContact ? contactSaving : appSaving
+        const testing = isContact ? contactTesting : appTesting
+        const label = isContact ? '通讯录与部门管理' : '多维表格同步'
+        return (
+          <Card
+            key={purpose}
+            title={`飞书应用信息 — ${label}`}
+            extra={
+              <Space>
+                <Button
+                  icon={<SecurityScanOutlined />}
+                  onClick={() => void handleTestApp(purpose)}
+                  loading={testing}
+                >
+                  测试连接
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<SaveOutlined />}
+                  onClick={() => void handleSaveApp(purpose)}
+                  loading={saving}
+                >
+                  保存配置
+                </Button>
+              </Space>
+            }
+          >
+            <Space orientation="vertical" size={12} style={{ display: 'flex' }}>
+              <Typography.Text type="secondary">
+                {isContact
+                  ? '用于获取部门组织架构、飞书联系人（人员选择器数据源、跨应用人员身份换发）。'
+                  : '用于人事多维表格数据同步（入离职台账、花名册等 Base 读写）。'}
+              </Typography.Text>
+              <Space.Compact block>
+                <Button disabled style={{ cursor: 'default', width: 120 }}>App ID</Button>
+                <Input
+                  value={form.app_id}
+                  placeholder={`请输入${label}应用的 App ID`}
+                  onChange={(event) => setForm((current) => ({ ...current, app_id: event.target.value }))}
+                />
+              </Space.Compact>
+              <Space.Compact block>
+                <Button disabled style={{ cursor: 'default', width: 120 }}>App Secret</Button>
+                <Input.Password
+                  value={form.app_secret}
+                  placeholder={settings?.app_secret_masked || '留空则保持当前 Secret 不变'}
+                  onChange={(event) => setForm((current) => ({ ...current, app_secret: event.target.value }))}
+                  onCopy={(e) => e.preventDefault()}
+                  onCut={(e) => e.preventDefault()}
+                />
+              </Space.Compact>
+              <Space size={12}>
+                <Typography.Text>启用</Typography.Text>
+                <Switch
+                  checked={form.is_enabled}
+                  onChange={(checked) => setForm((current) => ({ ...current, is_enabled: checked }))}
+                />
+                {renderStatusTag(settings?.last_test_status)}
+                <Typography.Text type="secondary">最近测试：{formatDateTime(settings?.last_tested_at)}</Typography.Text>
+              </Space>
+              {settings?.last_test_error ? (
+                <Alert type="warning" showIcon title={settings.last_test_error} />
+              ) : null}
+            </Space>
+          </Card>
+        )
+      })}
 
       <Card title="人事实体同步配置">
         <Space orientation="vertical" size={12} style={{ display: 'flex' }}>

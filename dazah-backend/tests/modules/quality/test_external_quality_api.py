@@ -210,12 +210,14 @@ async def test_external_quality_entities_are_push_only_and_supplier_can_be_pushe
     }
     assert set(external_defaults) == expected_entity_codes
     assert all(item.enable_push_to_feishu for item in external_defaults.values())
-    # 供应商资质带镜像回拉，默认双向；其余外部质量实体保持 push-only
+    # 供应商资质带镜像回拉、投诉台账直连飞书实时读取，默认双向；
+    # 其余外部质量实体保持 push-only
     assert external_defaults["supplier_qualification"].enable_pull_from_feishu
+    assert external_defaults["complaint_ledger"].enable_pull_from_feishu
     assert all(
         not item.enable_pull_from_feishu
         for code, item in external_defaults.items()
-        if code != "supplier_qualification"
+        if code not in ("supplier_qualification", "complaint_ledger")
     )
 
     created = await client.post(

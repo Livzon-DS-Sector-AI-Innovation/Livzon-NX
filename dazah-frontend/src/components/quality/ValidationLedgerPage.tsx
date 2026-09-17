@@ -186,7 +186,9 @@ export function ValidationLedgerPage({
         try {
           await deleteFeishuValidationAction(
             getRowRecordId(record),
-            mutationValidationType ?? record.validation_type,
+            // 主计划模式必须固定走主计划实体：按 record.validation_type 兜底
+            // 会路由到分类实体，写对表但清错列表缓存，导致页面不即时刷新
+            mutationValidationType,
             mutationYear
           )
           message.success('删除成功')
@@ -208,7 +210,8 @@ export function ValidationLedgerPage({
         await updateFeishuValidationAction(
           getRowRecordId(editingRecord),
           values,
-          mutationValidationType ?? editingRecord.validation_type ?? undefined,
+          // 同删除：主计划模式固定路由，避免清错缓存分组
+          mutationValidationType,
           mutationYear
         )
         message.success(`${title}已更新`)

@@ -240,19 +240,21 @@ body {
   color: #1a1a1a;
 }
 
-/* 按钮样式 */
-.ant-btn-primary {
+/* 按钮样式
+   :where 保持与原规则相同的优先级；排除 ghost 变体：ghost 按钮文字用主色，
+   实心背景会把同色文字盖住（表现为按钮"没字"，悬停才显示）。 */
+.ant-btn-primary:where(:not(.ant-btn-background-ghost)) {
   background: #5645d4;
   border-color: #5645d4;
   box-shadow: none;
 }
 
-.ant-btn-primary:hover {
+.ant-btn-primary:where(:not(.ant-btn-background-ghost)):hover {
   background: #6b5ddb;
   border-color: #6b5ddb;
 }
 
-.ant-btn-primary:active {
+.ant-btn-primary:where(:not(.ant-btn-background-ghost)):active {
   background: #4534b3;
   border-color: #4534b3;
 }

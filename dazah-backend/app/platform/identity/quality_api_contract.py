@@ -156,6 +156,7 @@ QUALITY_REVIEWED_API_ROUTES: tuple[tuple[str, str], ...] = (
     ("GET", "/api/v1/quality/instruments/equipment"),
     ("GET", "/api/v1/quality/instruments/equipment/{record_id}/profile"),
     ("GET", "/api/v1/quality/instruments/maintenance"),
+    ("GET", "/api/v1/quality/instruments/maintenance/export"),
     ("GET", "/api/v1/quality/instruments/plans"),
     ("GET", "/api/v1/quality/instruments/repair"),
     ("GET", "/api/v1/quality/items/dashboard"),

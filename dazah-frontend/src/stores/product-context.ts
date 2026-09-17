@@ -8,7 +8,7 @@ import { create } from "zustand"
 
 const PRODUCT_CONTEXT_STORAGE_KEY = "dazah.production.product-context"
 // LV 洛伐他汀 / MV 美伐他汀：复用 MP 排产解析与看板管线的他汀产品
-const KNOWN_PRODUCT_CODES = new Set(["FA", "MC", "DR", "LV", "MV"])
+const KNOWN_PRODUCT_CODES = new Set(["FA", "MC", "DR", "LV", "MV", "SUMMARY"])
 
 interface ProductContextState {
   productCode: string
