@@ -241,3 +241,82 @@ describe('InstrumentCertificateCreateModal 人工修正后重新匹配', () => {
     })
   })
 })
+
+async function pickFileWith(file: File) {
+  const input = document.querySelector('input[type="file"]')
+  expect(input).toBeTruthy()
+  await act(async () => {
+    await Promise.resolve()
+  })
+  Object.defineProperty(input!, 'files', { value: [file] })
+  input!.dispatchEvent(new Event('change', { bubbles: true }))
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  })
+}
+
+describe('InstrumentCertificateCreateModal 上传校验与关闭', () => {
+  it('拒绝非 PDF/图片格式并提示', async () => {
+    renderModal(vi.fn())
+    const txt = new File(['data'], '证书.txt', { type: 'text/plain' })
+    await pickFileWith(txt)
+    expect(document.body.textContent).toContain(
+      '仅支持 PDF / PNG / JPG 格式的校准证书',
+    )
+    expect(findButton('开始识别')?.disabled).toBe(true)
+  })
+
+  it('拒绝超过 20MB 的证书文件', async () => {
+    renderModal(vi.fn())
+    const big = new File(['x'], 'cert.png', { type: 'image/png' })
+    Object.defineProperty(big, 'size', { value: 21 * 1024 * 1024 })
+    await pickFileWith(big)
+    expect(document.body.textContent).toContain('证书文件不能超过 20MB')
+  })
+
+  it('点关闭回调 onClose', async () => {
+    const onClose = vi.fn()
+    act(() => {
+      root.render(
+        <App>
+          <InstrumentCertificateCreateModal
+            open
+            onClose={onClose}
+            onApply={vi.fn()}
+          />
+        </App>,
+      )
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    // antd 两字中文按钮会在字符间插入空格（「关 闭」），按去空格文本匹配
+    const closeBtn = Array.from(document.querySelectorAll('button')).find(
+      (node) => node.textContent?.replace(/\s/g, '') === '关闭',
+    )
+    expect(closeBtn).toBeTruthy()
+    await act(async () => {
+      closeBtn!.click()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('重新匹配失败时透出错误', async () => {
+    qualityActions.analyzeInstrumentCertificate.mockResolvedValue(ANALYZE_RESULT)
+    qualityActions.rematchInstrumentCertificate.mockRejectedValue(
+      new Error('目录反查失败'),
+    )
+    renderModal(vi.fn())
+    await pickFile()
+    await act(async () => {
+      findButton('开始识别')!.click()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    await act(async () => {
+      findButton('重新匹配')!.click()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    expect(document.body.textContent).toContain('目录反查失败')
+  })
+})
