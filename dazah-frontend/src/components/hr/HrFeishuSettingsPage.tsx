@@ -34,7 +34,6 @@ import {
   testEmailConfig,
   updateHrFeishuAppSettings,
   updateHrFeishuEntitySetting,
-  browseFolderAction,
   uploadOfferTemplateAction,
 } from '@/actions/hr'
 import {
@@ -528,24 +527,6 @@ export function HrFeishuSettingsPage() {
     }
   }
 
-  const [browsing, setBrowsing] = useState(false)
-  const handleBrowseFolder = async () => {
-    setBrowsing(true)
-    try {
-      const json = await browseFolderAction()
-      if (json.data?.path) {
-        emailForm.setFieldValue('watch_dir', json.data.path)
-        message.success('已选择: ' + json.data.path)
-      } else if (json.data?.error) {
-        message.warning('对话框未能打开: ' + json.data.error)
-      }
-    } catch {
-      message.error('打开文件夹对话框失败')
-    } finally {
-      setBrowsing(false)
-    }
-  }
-
   const groupedEntities = useMemo(() => {
     const groups: Record<string, HrFeishuEntitySettingItem[]> = {}
     for (const item of entityItems) {
@@ -1017,11 +998,8 @@ export function HrFeishuSettingsPage() {
                 label: <span style={{ fontWeight: 600, color: '#1677ff' }}>本地存储与自动抓取</span>,
                 children: (
                   <div style={{ maxWidth: 480 }}>
-                    <Form.Item name="watch_dir" label="简历下载文件夹路径" extra="抓取的简历PDF将保存到此文件夹，处理成功并上传飞书后自动删除">
-                      <Space.Compact block>
-                        <Input placeholder="data/hr/resumes" />
-                        <Button loading={browsing} onClick={handleBrowseFolder}>浏览…</Button>
-                      </Space.Compact>
+                    <Form.Item name="watch_dir" label="简历下载文件夹路径" extra="服务器上的目录（容器内路径），如 data/hr/resumes；抓取的简历PDF将保存到此文件夹，处理成功并上传飞书后自动删除">
+                      <Input placeholder="data/hr/resumes" />
                     </Form.Item>
                     <Form.Item name="fetch_enabled" label="启用自动抓取" valuePropName="checked" extra="开启后按设定时间自动扫描收件箱下载简历附件">
                       <Switch />

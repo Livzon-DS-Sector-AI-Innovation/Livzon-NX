@@ -13,7 +13,6 @@ const hrActions = vi.hoisted(() => ({
   testHrFeishuEntitySetting: vi.fn(),
   updateEmailConfig: vi.fn(),
   testEmailConfig: vi.fn(),
-  browseFolderAction: vi.fn(),
   uploadOfferTemplateAction: vi.fn(),
 }))
 
@@ -85,7 +84,6 @@ beforeEach(() => {
   hrActions.testHrFeishuEntitySetting.mockResolvedValue({ success: true, message: 'ok' })
   hrActions.updateEmailConfig.mockResolvedValue({})
   hrActions.testEmailConfig.mockResolvedValue({ success: true })
-  hrActions.browseFolderAction.mockResolvedValue({ ok: true, path: '' })
   hrActions.uploadOfferTemplateAction.mockResolvedValue({})
   hrApi.fetchAllHrFeishuAppSettings.mockResolvedValue([BITABLE_APP, CONTACT_APP])
   hrApi.fetchHrFeishuAppSettings.mockResolvedValue(BITABLE_APP)

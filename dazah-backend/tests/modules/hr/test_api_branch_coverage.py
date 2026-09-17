@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import imaplib
 import smtplib
-import subprocess
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -342,21 +341,6 @@ async def test_hr_email_config_connection_offer_and_folder_error_paths(
     )
     template = await api.get_offer_template(SimpleNamespace(), user)
     assert template["data"]["has_template"] is True  # type: ignore[index]
-
-    monkeypatch.setattr(
-        subprocess,
-        "run",
-        Mock(return_value=SimpleNamespace(stdout="relative/path", returncode=0)),
-    )
-    with pytest.raises(AppException, match="绝对路径"):
-        await api.browse_folder(user)
-    monkeypatch.setattr(
-        subprocess,
-        "run",
-        Mock(side_effect=subprocess.TimeoutExpired("python", 60)),
-    )
-    with pytest.raises(AppException, match="超时"):
-        await api.browse_folder(user)
 
 
 @pytest.mark.asyncio

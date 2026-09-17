@@ -122,7 +122,6 @@ describe('migrated HR server action coverage', () => {
     await call('fetchOffboardingTemplateInfoAction')
     await call('sendOfferEmailAction', { candidate_id: 'candidate-1', to_email: 'a@example.com', subject: 'Offer', body: '您好' })
     await call('sendCandidateNoticeAction', 'candidate-1', 'interview')
-    await call('browseFolderAction')
     await call('uploadOfferTemplateAction', formData)
     await call('updateContractSignStatusAction', 'contract-1', '已签署')
     await call('addCustomTrainingDepartment', '质量部')
@@ -305,7 +304,7 @@ describe('migrated HR server action coverage', () => {
       ['markPlanAttachmentsLedgerImported', [[]]], ['generateNewEmployeeTrainingPlan', [{}]], ['createManualNewEmployeeTrainingPlan', [{}]],
       ['updateNewEmployeeTrainingPlan', ['plan-1', {}]], ['addNewEmployeeTrainingItem', ['plan-1', {}]], ['startNewEmployeeTraining', ['plan-1', {}]],
       ['deleteNewEmployeeTrainingPlan', ['plan-1']], ['addNewEmployeeTrainingTrainees', ['plan-1', {}]], ['createPositionTrainingMappingAction', [{}]],
-      ['sendOfferEmailAction', [{}]], ['sendCandidateNoticeAction', ['candidate-1', 'interview']], ['browseFolderAction', []],
+      ['sendOfferEmailAction', [{}]], ['sendCandidateNoticeAction', ['candidate-1', 'interview']],
       ['uploadOfferTemplateAction', [formData]], ['updateContractSignStatusAction', ['contract-1', '已签署']],
       ['addCustomTrainingDepartment', ['质量部']], ['deleteCustomTrainingDepartment', ['质量部']], ['createTrainingDeptMappingAction', [{}]],
       ['updateTrainingDeptMappingAction', ['mapping-1', {}]], ['deleteTrainingDeptMappingAction', ['mapping-1']],
