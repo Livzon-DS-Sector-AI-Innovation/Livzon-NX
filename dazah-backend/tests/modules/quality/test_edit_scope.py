@@ -12,13 +12,35 @@ import pytest
 from app.core.exceptions import AppException
 from app.modules.quality.api import deps as quality_deps
 from app.modules.quality.models import CapaPlanTrack, ChangeActionPlan, Deviation
-from app.platform.identity.data_scope import DepartmentScope
+from app.platform.identity.data_scope import DepartmentScope, current_page_key
 
 
 class _User:
     def __init__(self, uid: uuid.UUID, name: str = "测试用户"):
         self.id = uid
         self.name = name
+
+
+@pytest.mark.asyncio
+async def test_page_scope_is_not_widened_by_legacy_quality_write(monkeypatch) -> None:
+    from unittest.mock import AsyncMock
+
+    _patch_permissions(monkeypatch, ["quality:write", "*"])
+    restricted = DepartmentScope(department_names={"验收部门"})
+    monkeypatch.setattr(
+        quality_deps,
+        "resolve_user_department_scope",
+        AsyncMock(return_value=restricted),
+    )
+    token = current_page_key.set("quality:deviations:deviation-ledger")
+    try:
+        result = await quality_deps.resolve_quality_list_scope(
+            None, _User(uuid.uuid4())
+        )
+        assert result is restricted
+        assert not result.allows("其他部门")
+    finally:
+        current_page_key.reset(token)
 
 
 def _patch_permissions(monkeypatch, permissions: list[str]) -> None:

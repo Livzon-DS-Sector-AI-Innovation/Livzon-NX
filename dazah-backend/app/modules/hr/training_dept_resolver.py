@@ -251,6 +251,14 @@ async def visible_training_dept_names(db: AsyncSession, user: Any) -> set[str] |
     白名单制：管理员（hr:write/通配）→ 全部；否则按配置表指定；
     未配置 → 空集合（什么都看不到，需管理员在「部门权限配置」中授权）。
     """
+    from app.platform.identity.data_scope import (
+        current_page_key,
+        resolve_user_department_scope,
+    )
+
+    if (current_page_key.get() or "").startswith("hr:"):
+        scope = await resolve_user_department_scope(db, user)
+        return None if scope.is_all else scope.department_names
     if await _user_is_hr_admin(db, user):
         return None
     norms = await _load_user_dept_scope(db, user)

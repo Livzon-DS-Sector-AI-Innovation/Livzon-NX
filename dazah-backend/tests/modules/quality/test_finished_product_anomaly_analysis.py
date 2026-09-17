@@ -102,7 +102,11 @@ def _patch_llm(monkeypatch: pytest.MonkeyPatch, chat_json: AsyncMock) -> AsyncMo
         "get_config",
         AsyncMock(return_value=SimpleNamespace(model_name="q-test")),
     )
-    monkeypatch.setattr(type(svc.llm_client), "chat_json", chat_json)
+    monkeypatch.setattr(
+        svc,
+        "llm_client",
+        SimpleNamespace(chat_json=chat_json),
+    )
     return chat_json
 
 
@@ -238,7 +242,11 @@ async def test_no_config_marks_batch_failed_without_logs(
         svc, "get_config", AsyncMock(side_effect=LLMConfigError("no config"))
     )
     chat_mock = AsyncMock()
-    monkeypatch.setattr(type(svc.llm_client), "chat_json", chat_mock)
+    monkeypatch.setattr(
+        svc,
+        "llm_client",
+        SimpleNamespace(chat_json=chat_mock),
+    )
     db = _FakeDB()
 
     summary = await svc.classify_year(db, 2026)

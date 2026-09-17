@@ -30,11 +30,13 @@ import {
 import { useProductionStore } from '@/stores/production'
 import { getBatches, getMaterialBalance, calculateMaterialBalance } from '@/actions/production'
 import type { Batch, MaterialBalance } from '@/types/production'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Text, Title } = Typography
 
 export default function BalancePage() {
   const { message } = App.useApp()
+  const { canOperate } = useProductionPermissions(PRODUCTION_PAGE_KEYS.balance)
   const [loading, setLoading] = useState(false)
   const [selectedBatchId, setSelectedBatchId] = useState<string | undefined>()
   const [minBalanceRate, setMinBalanceRate] = useState<number>(95)
@@ -96,6 +98,7 @@ export default function BalancePage() {
   }, [selectedBatchId])
 
   const handleCalculate = async () => {
+    if (!canOperate) return
     if (!selectedBatchId) {
       message.warning('请先选择批次')
       return
@@ -124,6 +127,7 @@ export default function BalancePage() {
 
   // 手动计算平衡（基于用户输入的值）
   const calculateManualBalance = () => {
+    if (!canOperate) return
     if (!materialBalance) return
 
     const input = manualInput.input_qty
@@ -154,14 +158,14 @@ export default function BalancePage() {
         extra={
           <Space>
             <Text type="secondary">手动输入</Text>
-            <Switch size="small" checked={editMode} onChange={setEditMode} />
-            <Button
+            {canOperate && <Switch size="small" checked={editMode} onChange={setEditMode} />}
+            {canOperate && <Button
               size="small"
               icon={<EditOutlined />}
               onClick={() => setEditMode(!editMode)}
             >
               {editMode ? '取消编辑' : '编辑'}
-            </Button>
+            </Button>}
           </Space>
         }
       >
@@ -193,7 +197,7 @@ export default function BalancePage() {
             </Space.Compact>
           </Col>
           <Col span={4}>
-            <Button
+            {canOperate && <Button
               type="primary"
               icon={<CalculatorOutlined />}
               onClick={handleCalculate}
@@ -201,7 +205,7 @@ export default function BalancePage() {
               disabled={!selectedBatchId}
             >
               自动计算
-            </Button>
+            </Button>}
           </Col>
           <Col span={4}>
             <Button
@@ -231,7 +235,7 @@ export default function BalancePage() {
             />
 
             {/* 投入产出编辑区域 */}
-            {editMode && (
+            {editMode && canOperate && (
               <Card className="mb-4" style={{ background: '#fafafa' }}>
                 <Row gutter={24} align="middle">
                   <Col span={8}>

@@ -23,6 +23,7 @@ interface DepartmentTableProps {
   onEdit: (dept: Department) => void
   onDelete: (id: string) => void
   canEdit: boolean
+  canDelete: boolean
   allDepartments: Department[]
 }
 
@@ -69,6 +70,7 @@ export default function DepartmentTable({
   onEdit,
   onDelete,
   canEdit,
+  canDelete,
   allDepartments,
 }: DepartmentTableProps) {
   const treeData = useMemo(() => buildDepartmentTree(allDepartments), [allDepartments])
@@ -144,7 +146,7 @@ export default function DepartmentTable({
     },
   ]
 
-  if (canEdit) {
+  if (canEdit || canDelete) {
     columns.push({
       title: '操作',
       key: 'action',
@@ -153,39 +155,43 @@ export default function DepartmentTable({
       render: (_: unknown, record: OrgTreeNode) =>
         record.type === 'department' ? (
           <Space size="small">
-            <Button
-              type="text"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={(e) => {
-                e.stopPropagation()
-                const dept = allDepartments.find(d => d.id === record.id)
-                if (dept) onEdit(dept)
-              }}
-            >
-              编辑
-            </Button>
-            <Popconfirm
-              title="确认删除"
-              description={`确定要删除 ${record.name} 吗？`}
-              onConfirm={(e) => {
-                e?.stopPropagation()
-                onDelete(record.id)
-              }}
-              onCancel={(e) => e?.stopPropagation()}
-              okText="确定"
-              cancelText="取消"
-            >
+            {canEdit ? (
               <Button
                 type="text"
                 size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={(e) => e.stopPropagation()}
+                icon={<EditOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  const dept = allDepartments.find(d => d.id === record.id)
+                  if (dept) onEdit(dept)
+                }}
               >
-                删除
+                编辑
               </Button>
-            </Popconfirm>
+            ) : null}
+            {canDelete ? (
+              <Popconfirm
+                title="确认删除"
+                description={`确定要删除 ${record.name} 吗？`}
+                onConfirm={(e) => {
+                  e?.stopPropagation()
+                  onDelete(record.id)
+                }}
+                onCancel={(e) => e?.stopPropagation()}
+                okText="确定"
+                cancelText="取消"
+              >
+                <Button
+                  type="text"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  删除
+                </Button>
+              </Popconfirm>
+            ) : null}
           </Space>
         ) : <></>,
     })

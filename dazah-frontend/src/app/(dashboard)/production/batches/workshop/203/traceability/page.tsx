@@ -10,6 +10,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import FA_BATCH_TYPES, { FA_STAGE_ORDER } from '@/components/production/faBatchTypes'
 import { useFAChat } from '@/hooks/useFAChat'
+import { PRODUCTION_PAGE_KEYS } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
 const BASE = '/api/v1/production/fa'
@@ -52,7 +53,8 @@ function FATraceabilityContent() {
     historyRecords, historyLoading,
     doAiAnalysis, doChatSend, loadHistory,
     setChatInput, setChatMessages, setAiResult, aiResultRef,
-  } = useFAChat({ stage, batchNo })
+    canOperate, permissionsEnabled,
+  } = useFAChat({ stage, batchNo, pageKey: PRODUCTION_PAGE_KEYS.workshop203 })
 
   // ═══════════════ 搜索追溯 ═══════════════
   const handleSearch = useCallback(async () => {
@@ -325,9 +327,9 @@ function FATraceabilityContent() {
                       value={chatInput}
                       onChange={e => setChatInput(e.target.value)}
                       onPressEnter={doChatSend}
-                      disabled={chatSending}
+                      disabled={chatSending || (permissionsEnabled && !canOperate)}
                     />
-                    <Button size="small" type="primary" icon={<SendOutlined />} loading={chatSending} onClick={doChatSend} />
+                    {(!permissionsEnabled || canOperate) && <Button size="small" type="primary" icon={<SendOutlined />} loading={chatSending} onClick={doChatSend} />}
                   </Space.Compact>
                 </div>
               </Card>

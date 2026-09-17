@@ -4,10 +4,12 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import case, func, select, update
+from sqlalchemy import Select, case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.sql.elements import ColumnElement
 
+from app.modules.production.batch_scope import allowed_batch_workshops
 from app.modules.production.models import (
     Batch,
     BatchMaterial,
@@ -41,6 +43,16 @@ class ProductionRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    async def _batch_predicate(self, *, write: bool = False) -> ColumnElement[bool]:
+        allowed = await allowed_batch_workshops(self.session, write=write)
+        active = Batch.is_deleted.is_(False)
+        return active if allowed is None else active & Batch.workshop_code.in_(allowed)
+
+    async def _owned_batch_ids(
+        self, *, write: bool = False
+    ) -> Select[tuple[uuid.UUID]]:
+        return select(Batch.id).where(await self._batch_predicate(write=write))
+
     async def get_active_feishu_config(self) -> ProductionFeishuConfig | None:
         """Return the latest active Feishu configuration for compatibility jobs."""
         query = (
@@ -73,7 +85,8 @@ class ProductionRepository:
         Args:
             exclude_cancelled: 是否排除已取消的批次，用于生产记录下拉框等场景
         """
-        query = select(Batch).where(Batch.is_deleted.is_(False))
+        predicate = await self._batch_predicate()
+        query = select(Batch).where(predicate)
 
         if exclude_cancelled:
             query = query.where(Batch.status != "cancelled")
@@ -88,25 +101,22 @@ class ProductionRepository:
         if end_date:
             query = query.where(Batch.end_time <= end_date)
 
-        count_query = select(func.count(Batch.id)).where(Batch.is_deleted.is_(False))
-        if exclude_cancelled:
-            count_query = count_query.where(Batch.status != "cancelled")
-        if status:
-            count_query = count_query.where(Batch.status == status)
-        if product_code:
-            count_query = count_query.where(Batch.product_code == product_code)
-        if batch_no:
-            count_query = count_query.where(Batch.batch_no.contains(batch_no))
-
+        count_query = select(func.count()).select_from(query.subquery())
         total = await self.session.scalar(count_query)
         query = query.offset(skip).limit(limit).order_by(Batch.created_at.desc())
         result = await self.session.execute(query)
         batches = list(result.scalars().all())
         return batches, total or 0
 
-    async def get_batch_by_id(self, batch_id: uuid.UUID) -> Batch | None:
+    async def get_batch_by_id(
+        self, batch_id: uuid.UUID, *, for_write: bool = False
+    ) -> Batch | None:
         """获取批次详情"""
-        query = select(Batch).where(Batch.id == batch_id, Batch.is_deleted.is_(False))
+        query = select(Batch).where(
+            Batch.id == batch_id, await self._batch_predicate(write=for_write)
+        )
+        if for_write:
+            query = query.with_for_update()
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
@@ -124,7 +134,7 @@ class ProductionRepository:
         """更新批次"""
         query = (
             update(Batch)
-            .where(Batch.id == batch_id, Batch.is_deleted.is_(False))
+            .where(Batch.id == batch_id, await self._batch_predicate(write=True))
             .values(**data)
             .returning(Batch)
         )
@@ -135,7 +145,7 @@ class ProductionRepository:
         """删除批次(软删除)"""
         query = (
             update(Batch)
-            .where(Batch.id == batch_id, Batch.is_deleted.is_(False))
+            .where(Batch.id == batch_id, await self._batch_predicate(write=True))
             .values(is_deleted=True)
         )
         result = await self.session.execute(query)
@@ -146,7 +156,9 @@ class ProductionRepository:
     async def get_batch_materials(self, batch_id: uuid.UUID) -> list[BatchMaterial]:
         """获取批次物料列表"""
         query = select(BatchMaterial).where(
-            BatchMaterial.batch_id == batch_id, BatchMaterial.is_deleted.is_(False)
+            BatchMaterial.batch_id == batch_id,
+            BatchMaterial.is_deleted.is_(False),
+            BatchMaterial.batch_id.in_(await self._owned_batch_ids()),
         )
         result = await self.session.execute(query)
         return list(result.scalars().all())
@@ -165,7 +177,11 @@ class ProductionRepository:
         """更新批次物料"""
         query = (
             update(BatchMaterial)
-            .where(BatchMaterial.id == material_id, BatchMaterial.is_deleted.is_(False))
+            .where(
+                BatchMaterial.id == material_id,
+                BatchMaterial.is_deleted.is_(False),
+                BatchMaterial.batch_id.in_(await self._owned_batch_ids(write=True)),
+            )
             .values(**data)
             .returning(BatchMaterial)
         )
@@ -176,7 +192,11 @@ class ProductionRepository:
         """删除批次物料"""
         query = (
             update(BatchMaterial)
-            .where(BatchMaterial.id == material_id, BatchMaterial.is_deleted.is_(False))
+            .where(
+                BatchMaterial.id == material_id,
+                BatchMaterial.is_deleted.is_(False),
+                BatchMaterial.batch_id.in_(await self._owned_batch_ids(write=True)),
+            )
             .values(is_deleted=True)
         )
         result = await self.session.execute(query)
@@ -219,10 +239,7 @@ class ProductionRepository:
 
         total = await self.session.scalar(count_query)
         workshop_rank = case(
-            {
-                name: index
-                for index, name in enumerate(PRODUCTION_PLAN_WORKSHOP_ORDER)
-            },
+            {name: index for index, name in enumerate(PRODUCTION_PLAN_WORKSHOP_ORDER)},
             value=ProductionPlan.workshop,
             else_=len(PRODUCTION_PLAN_WORKSHOP_ORDER),
         )
@@ -251,7 +268,8 @@ class ProductionRepository:
                 ProductionPlan.unit,
                 func.coalesce(func.sum(ProductionPlan.planned_yield), 0.0),
                 func.coalesce(func.sum(ProductionPlan.actual_completion), 0.0),
-            ).where(
+            )
+            .where(
                 ProductionPlan.is_deleted.is_(False),
                 ProductionPlan.plan_date >= date_from,
                 ProductionPlan.plan_date <= date_to,
@@ -500,6 +518,7 @@ class ProductionRepository:
             .where(
                 ProductionRecord.batch_id == batch_id,
                 ProductionRecord.is_deleted.is_(False),
+                ProductionRecord.batch_id.in_(await self._owned_batch_ids()),
             )
             .offset(skip)
             .limit(limit)
@@ -511,7 +530,9 @@ class ProductionRepository:
     async def get_record_by_id(self, record_id: uuid.UUID) -> ProductionRecord | None:
         """通过ID获取单条生产记录"""
         query = select(ProductionRecord).where(
-            ProductionRecord.id == record_id, ProductionRecord.is_deleted.is_(False)
+            ProductionRecord.id == record_id,
+            ProductionRecord.is_deleted.is_(False),
+            ProductionRecord.batch_id.in_(await self._owned_batch_ids()),
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
@@ -531,7 +552,9 @@ class ProductionRepository:
         query = (
             update(ProductionRecord)
             .where(
-                ProductionRecord.id == record_id, ProductionRecord.is_deleted.is_(False)
+                ProductionRecord.id == record_id,
+                ProductionRecord.is_deleted.is_(False),
+                ProductionRecord.batch_id.in_(await self._owned_batch_ids(write=True)),
             )
             .values(**data)
             .returning(ProductionRecord)
@@ -544,7 +567,9 @@ class ProductionRepository:
         query = (
             update(ProductionRecord)
             .where(
-                ProductionRecord.id == record_id, ProductionRecord.is_deleted.is_(False)
+                ProductionRecord.id == record_id,
+                ProductionRecord.is_deleted.is_(False),
+                ProductionRecord.batch_id.in_(await self._owned_batch_ids(write=True)),
             )
             .values(is_deleted=True)
         )
@@ -556,7 +581,9 @@ class ProductionRepository:
     async def get_material_balance(self, batch_id: uuid.UUID) -> MaterialBalance | None:
         """获取物料平衡"""
         query = select(MaterialBalance).where(
-            MaterialBalance.batch_id == batch_id, MaterialBalance.is_deleted.is_(False)
+            MaterialBalance.batch_id == batch_id,
+            MaterialBalance.is_deleted.is_(False),
+            MaterialBalance.batch_id.in_(await self._owned_batch_ids()),
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
@@ -578,6 +605,7 @@ class ProductionRepository:
             .where(
                 MaterialBalance.batch_id == batch_id,
                 MaterialBalance.is_deleted.is_(False),
+                MaterialBalance.batch_id.in_(await self._owned_batch_ids(write=True)),
             )
             .values(**data)
             .returning(MaterialBalance)
@@ -592,6 +620,7 @@ class ProductionRepository:
             .where(
                 MaterialBalance.batch_id == batch_id,
                 MaterialBalance.is_deleted.is_(False),
+                MaterialBalance.batch_id.in_(await self._owned_batch_ids(write=True)),
             )
             .values(is_deleted=True)
         )

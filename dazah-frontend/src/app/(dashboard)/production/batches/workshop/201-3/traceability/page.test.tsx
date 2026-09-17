@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { App } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAuthStore } from '@/stores/auth'
 
 const { routerPushMock } = vi.hoisted(() => ({ routerPushMock: vi.fn() }))
 
@@ -150,6 +151,18 @@ describe('TraceabilityPage (201-3)', () => {
   let container: HTMLElement
 
   beforeEach(() => {
+    useAuthStore.getState().setUser({
+      id: 'trace-export-user',
+      name: '追溯导出用户',
+      page_permissions: [{
+        page_key: 'production:batches:workshop-201-3',
+        module_code: 'production',
+        permissions: ['access', 'query', 'operate'],
+        sensitive_actions: ['sensitive_export'],
+        data_scope: { scope_type: 'not_applicable' },
+        source: 'user',
+      }],
+    })
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -159,6 +172,7 @@ describe('TraceabilityPage (201-3)', () => {
     act(() => root.unmount())
     container?.remove()
     vi.clearAllMocks()
+    useAuthStore.getState().clearUser()
   })
 
   it('renders the full-chain traceability page and triggers an auto trace from URL params', async () => {

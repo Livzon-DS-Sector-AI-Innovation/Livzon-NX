@@ -32,3 +32,15 @@ it('paginates and encodes user searches without changing existing callers', asyn
   await fetchAdminUsers()
   expect(request).toHaveBeenLastCalledWith('/api/v1/identity/admin/users?limit=500', { cache: 'no-store' })
 })
+
+it('preserves user status and grant metadata for permission management', async () => {
+  const user = {
+    id: 'user-1', name: '张三', role: 'user', status: 'disabled',
+    auth_source: 'feishu', grant_version: 4, module_codes: ['quality'], roles: [],
+  }
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+    new Response(JSON.stringify({ data: { items: [user], total: 1 } })),
+  ))
+
+  await expect(fetchAdminUsers()).resolves.toEqual({ items: [user], total: 1 })
+})

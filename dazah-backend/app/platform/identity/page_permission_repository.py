@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.platform.audit.models import AuditLog
 from app.platform.identity.models import (
     Department,
     Menu,
@@ -16,6 +18,32 @@ from app.platform.identity.models import (
     User,
     UserPageGrant,
 )
+
+PAGE_PERMISSION_HISTORY_ACTIONS = (
+    "replace_user_page_permissions",
+    "rollback_user_page_permissions",
+    "replace_role_page_permissions",
+    "rollback_role_page_permissions",
+    "remediate_user_page_permissions",
+    "remediate_role_page_permissions",
+)
+
+
+def _history_actions(source: str | None) -> list[str]:
+    return {
+        "manual": [
+            "replace_user_page_permissions",
+            "replace_role_page_permissions",
+        ],
+        "rollback": [
+            "rollback_user_page_permissions",
+            "rollback_role_page_permissions",
+        ],
+        "health_remediation": [
+            "remediate_user_page_permissions",
+            "remediate_role_page_permissions",
+        ],
+    }.get(source or "", list(PAGE_PERMISSION_HISTORY_ACTIONS))
 
 
 class PagePermissionRepository:
@@ -73,6 +101,209 @@ class PagePermissionRepository:
             )
         )
         return list(result.scalars().all())
+
+    async def list_all_role_grants(self, db: AsyncSession) -> list[RolePageGrant]:
+        result = await db.execute(
+            select(RolePageGrant).where(RolePageGrant.is_deleted.is_(False))
+        )
+        return list(result.scalars().all())
+
+    async def list_user_grants_for_users(
+        self, db: AsyncSession, *, user_ids: list[UUID]
+    ) -> list[UserPageGrant]:
+        if not user_ids:
+            return []
+        result = await db.execute(
+            select(UserPageGrant).where(
+                UserPageGrant.user_id.in_(user_ids),
+                UserPageGrant.is_deleted.is_(False),
+            )
+        )
+        return list(result.scalars().all())
+
+    async def list_all_user_grants(self, db: AsyncSession) -> list[UserPageGrant]:
+        result = await db.execute(
+            select(UserPageGrant).where(UserPageGrant.is_deleted.is_(False))
+        )
+        return list(result.scalars().all())
+
+    async def get_role_grant_for_update(
+        self, db: AsyncSession, *, role_id: UUID, page_key: str
+    ) -> RolePageGrant | None:
+        result = await db.execute(
+            select(RolePageGrant)
+            .where(
+                RolePageGrant.role_id == role_id,
+                RolePageGrant.page_key == page_key,
+                RolePageGrant.is_deleted.is_(False),
+            )
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
+    async def get_user_grant_for_update(
+        self, db: AsyncSession, *, user_id: UUID, page_key: str
+    ) -> UserPageGrant | None:
+        result = await db.execute(
+            select(UserPageGrant)
+            .where(
+                UserPageGrant.user_id == user_id,
+                UserPageGrant.page_key == page_key,
+                UserPageGrant.is_deleted.is_(False),
+            )
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def remove_grant(
+        db: AsyncSession, grant: RolePageGrant | UserPageGrant
+    ) -> None:
+        await db.delete(grant)
+        await db.flush()
+
+    async def list_roles_by_ids(
+        self, db: AsyncSession, *, role_ids: set[UUID]
+    ) -> list[Role]:
+        if not role_ids:
+            return []
+        result = await db.execute(
+            select(Role).where(Role.id.in_(role_ids), Role.is_deleted.is_(False))
+        )
+        return list(result.scalars().all())
+
+    async def list_users_by_ids(
+        self, db: AsyncSession, *, user_ids: set[UUID]
+    ) -> list[User]:
+        if not user_ids:
+            return []
+        result = await db.execute(
+            select(User).where(User.id.in_(user_ids), User.is_deleted.is_(False))
+        )
+        return list(result.scalars().all())
+
+    async def user_labels_by_ids(
+        self, db: AsyncSession, *, user_ids: set[UUID]
+    ) -> dict[UUID, str]:
+        if not user_ids:
+            return {}
+        result = await db.execute(
+            select(User.id, User.name).where(User.id.in_(user_ids))
+        )
+        return {user_id: name for user_id, name in result.all()}
+
+    async def list_page_permission_history(
+        self,
+        db: AsyncSession,
+        *,
+        resource_type: str,
+        resource_id: UUID,
+        limit: int = 50,
+        offset: int = 0,
+        actor_user_id: UUID | None = None,
+        source: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> list[AuditLog]:
+        query = select(AuditLog).where(
+            AuditLog.resource_type == resource_type,
+            AuditLog.resource_id == resource_id,
+            AuditLog.action.in_(_history_actions(source)),
+        )
+        if actor_user_id is not None:
+            query = query.where(AuditLog.user_id == actor_user_id)
+        if date_from is not None:
+            query = query.where(AuditLog.created_at >= date_from)
+        if date_to is not None:
+            query = query.where(AuditLog.created_at <= date_to)
+        result = await db.execute(
+            query.order_by(AuditLog.created_at.desc()).offset(offset).limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def count_page_permission_history(
+        self,
+        db: AsyncSession,
+        *,
+        resource_type: str,
+        resource_id: UUID,
+        actor_user_id: UUID | None = None,
+        source: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> int:
+        query = select(func.count(AuditLog.id)).where(
+            AuditLog.resource_type == resource_type,
+            AuditLog.resource_id == resource_id,
+            AuditLog.action.in_(_history_actions(source)),
+        )
+        if actor_user_id is not None:
+            query = query.where(AuditLog.user_id == actor_user_id)
+        if date_from is not None:
+            query = query.where(AuditLog.created_at >= date_from)
+        if date_to is not None:
+            query = query.where(AuditLog.created_at <= date_to)
+        return int(await db.scalar(query) or 0)
+
+    async def page_permission_history_actors(
+        self,
+        db: AsyncSession,
+        *,
+        resource_type: str,
+        resource_id: UUID,
+    ) -> dict[UUID, str]:
+        result = await db.execute(
+            select(AuditLog.user_id, User.name)
+            .join(User, User.id == AuditLog.user_id)
+            .where(
+                AuditLog.resource_type == resource_type,
+                AuditLog.resource_id == resource_id,
+                AuditLog.action.in_(PAGE_PERMISSION_HISTORY_ACTIONS),
+                AuditLog.user_id.is_not(None),
+            )
+            .distinct()
+            .order_by(User.name)
+        )
+        return {user_id: name for user_id, name in result.all() if user_id is not None}
+
+    async def find_page_permission_idempotency(
+        self,
+        db: AsyncSession,
+        *,
+        resource_type: str,
+        resource_id: UUID,
+        idempotency_key: UUID,
+    ) -> AuditLog | None:
+        result = await db.execute(
+            select(AuditLog)
+            .where(
+                AuditLog.resource_type == resource_type,
+                AuditLog.resource_id == resource_id,
+                AuditLog.new_value["idempotency_key"].as_string()
+                == str(idempotency_key),
+            )
+            .order_by(AuditLog.created_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_page_permission_history(
+        self,
+        db: AsyncSession,
+        *,
+        audit_id: UUID,
+        resource_type: str,
+        resource_id: UUID,
+    ) -> AuditLog | None:
+        result = await db.execute(
+            select(AuditLog).where(
+                AuditLog.id == audit_id,
+                AuditLog.resource_type == resource_type,
+                AuditLog.resource_id == resource_id,
+                AuditLog.action.in_(PAGE_PERMISSION_HISTORY_ACTIONS),
+            )
+        )
+        return result.scalar_one_or_none()
 
     async def replace_user_grants(
         self,

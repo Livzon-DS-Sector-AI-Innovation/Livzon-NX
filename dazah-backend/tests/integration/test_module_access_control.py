@@ -254,10 +254,9 @@ async def test_production_uses_saved_module_grants_even_with_legacy_all_setting(
         granted = await client.get("/api/v1/identity/me")
         assert granted.status_code == 200
         assert granted.json()["data"]["module_codes"] == ["warehouse"]
-        # The saved module grant now passes the module boundary immediately;
-        # page authorization is a separate mandatory layer and rejects this
-        # context-free request before the endpoint runs.
-        assert (await client.get("/api/v1/warehouse/")).status_code == 400
+        # The module grant is visible in /me, while a context-free request
+        # still fails the separate mandatory page authorization layer.
+        assert (await client.get("/api/v1/warehouse/")).status_code == 403
         assert (await client.get("/api/v1/production/")).status_code == 403
 
         await replace([])

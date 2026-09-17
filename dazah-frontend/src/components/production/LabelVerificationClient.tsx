@@ -6,6 +6,11 @@ import {SearchOutlined, CheckCircleOutlined, CloseCircleOutlined, BarChartOutlin
 import { LabelVerification, LabelVerificationCreateInput } from '@/types/label-verification'
 import { fetchLabelVerifications, fetchLabelVerificationStatistics, createLabelVerification, autoCompareVideo, AutoCompareResult } from '@/lib/api/label-verification'
 import dayjs from 'dayjs'
+import {
+  PRODUCTION_PAGE_KEYS,
+  useProductionPermissions,
+  type ProductionPageKey,
+} from './useProductionPermissions'
 
 const { RangePicker } = DatePicker
 const { Option } = Select
@@ -13,13 +18,19 @@ const { Option } = Select
 interface LabelVerificationClientProps {
   initialVerifications: LabelVerification[]
   initialTotal: number
+  pageKey?: ProductionPageKey
 }
 
 export default function LabelVerificationClient({
   initialVerifications,
   initialTotal,
+  pageKey,
 }: LabelVerificationClientProps) {
   const { message } = App.useApp()
+  const permissions = useProductionPermissions(pageKey || PRODUCTION_PAGE_KEYS.labelVerification)
+  const permissionsEnabled = Boolean(pageKey)
+  const canQuery = !permissionsEnabled || permissions.canQuery
+  const canOperate = !permissionsEnabled || permissions.canOperate
 
   const [verifications, setVerifications] = useState<LabelVerification[]>(initialVerifications)
   const [total, setTotal] = useState(initialTotal)
@@ -43,6 +54,7 @@ export default function LabelVerificationClient({
   const [autoCompareProgress, setAutoCompareProgress] = useState('')
 
   const loadData = useCallback(async () => {
+    if (!canQuery) return
     setLoading(true)
     try {
       const res = await fetchLabelVerifications({
@@ -61,16 +73,17 @@ export default function LabelVerificationClient({
     } finally {
       setLoading(false)
     }
-  }, [batchNumber, productName, filterStatus, dateRange, page, pageSize]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [batchNumber, productName, filterStatus, dateRange, page, pageSize, canQuery]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadStatistics = useCallback(async () => {
+    if (!canQuery) return
     try {
       const res = await fetchLabelVerificationStatistics()
       setStatistics(res.data)
     } catch (err) {
       console.error('加载统计数据失败', err)
     }
-  }, [])
+  }, [canQuery])
 
   useEffect(() => {
     loadData() // eslint-disable-line react-hooks/set-state-in-effect
@@ -83,6 +96,7 @@ export default function LabelVerificationClient({
   }
 
   const handleVideoUpload = async (file: File) => {
+    if (!canOperate) return false
     setVideoUploading(true)
     try {
       const formData = new FormData()
@@ -109,6 +123,7 @@ export default function LabelVerificationClient({
   // ─── 自动对比 ───
 
   const handleAutoCompare = async () => {
+    if (!canOperate) return
     try {
       const values = await createForm.validateFields([
         'video_file_key', 'batch_number', 'product_name',
@@ -171,6 +186,7 @@ export default function LabelVerificationClient({
   }
 
   const handleCreate = async (values: Omit<LabelVerificationCreateInput, 'production_date' | 'expiry_date' | 'verification_date' | 'verification_time'> & { production_date: dayjs.Dayjs; expiry_date: dayjs.Dayjs; verification_date: dayjs.Dayjs; verification_time: dayjs.Dayjs }) => {
+    if (!canOperate) return
     try {
       const data: LabelVerificationCreateInput = {
         batch_number: values.batch_number,
@@ -375,7 +391,10 @@ export default function LabelVerificationClient({
   }
 
   return (
-    <div className="space-y-4">
+      <div className="space-y-4">
+        {permissionsEnabled && !canQuery && (
+          <Alert type="info" showIcon title="可以访问标签复核，但尚未获得查询数据权限，请联系系统管理员。" />
+        )}
       {/* 统计卡片 */}
       {statistics && (
         <Row gutter={16}>
@@ -421,9 +440,9 @@ export default function LabelVerificationClient({
       {/* 筛选和表格 */}
       <Card>
         <Space style={{ marginBottom: 16 }} wrap>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
+          {canOperate && <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
             新增
-          </Button>
+          </Button>}
           <Input
             placeholder="批号搜索"
             prefix={<SearchOutlined />}
@@ -476,9 +495,9 @@ export default function LabelVerificationClient({
       {/* 新增弹窗 */}
       <Modal
         title="新增标签复核记录"
-        open={createModalOpen}
+        open={createModalOpen && canOperate}
         onCancel={() => { setCreateModalOpen(false); createForm.resetFields(); setAutoCompareResult(null) }}
-        onOk={() => createForm.submit()}
+        onOk={canOperate ? () => createForm.submit() : undefined}
         width={850}
         okText="保存"
         cancelText="取消"

@@ -76,7 +76,7 @@ export default function ButylAcetatePage() {
         乙酸丁酯台账
       </Title>
       <Space>
-        <MCSheetsSyncButton />
+        <MCSheetsSyncButton pageKey="production:batches:workshop-201-2" />
       </Space>
     </div>
 

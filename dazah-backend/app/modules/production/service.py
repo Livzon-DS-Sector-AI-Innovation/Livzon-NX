@@ -6,6 +6,8 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import NotFoundException
+from app.modules.production.batch_scope import authorize_batch_workshop
 from app.modules.production.models import (
     Batch,
     BatchMaterial,
@@ -43,6 +45,12 @@ class ProductionService:
         self.session = session
         self.repo = ProductionRepository(session)
 
+    async def _require_writable_batch(self, batch_id: uuid.UUID) -> Batch:
+        batch = await self.repo.get_batch_by_id(batch_id, for_write=True)
+        if batch is None:
+            raise NotFoundException("当前授权范围内的批次")
+        return batch
+
     # ============ Batch Operations ============
 
     async def get_batches(
@@ -71,6 +79,9 @@ class ProductionService:
     async def create_batch(self, data: BatchCreate) -> Batch:
         """创建批次"""
         batch_data = data.model_dump()
+        batch_data["workshop_code"] = await authorize_batch_workshop(
+            self.session, data.workshop_code, assign_current=True
+        )
         return await self.repo.create_batch(batch_data)
 
     async def update_batch(
@@ -78,6 +89,10 @@ class ProductionService:
     ) -> Batch | None:
         """更新批次"""
         update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+        if "workshop_code" in data.model_fields_set:
+            update_data["workshop_code"] = await authorize_batch_workshop(
+                self.session, data.workshop_code
+            )
         return await self.repo.update_batch(batch_id, update_data)
 
     async def update_batch_status(
@@ -109,9 +124,7 @@ class ProductionService:
         current_status = str(getattr(batch.status, "value", batch.status))
         target_status = data.status.value
         if target_status not in valid_transitions.get(current_status, []):
-            raise ValueError(
-                f"无效的状态转换: {current_status} -> {target_status}"
-            )
+            raise ValueError(f"无效的状态转换: {current_status} -> {target_status}")
 
         # 处理状态变更的副作用
         next_status = BatchStatus(target_status)
@@ -138,6 +151,7 @@ class ProductionService:
         self, batch_id: uuid.UUID, data: dict[str, Any]
     ) -> BatchMaterial:
         """添加批次物料"""
+        await self._require_writable_batch(batch_id)
         data["batch_id"] = batch_id
         return await self.repo.create_batch_material(data)
 
@@ -326,6 +340,7 @@ class ProductionService:
         self, data: ProductionRecordCreate
     ) -> ProductionRecord:
         """创建生产记录"""
+        await self._require_writable_batch(data.batch_id)
         record_data = data.model_dump()
         record = await self.repo.create_production_record(record_data)
 
@@ -407,9 +422,7 @@ class ProductionService:
     ) -> MaterialBalance | None:
         """计算物料平衡"""
         # 获取批次
-        batch = await self.repo.get_batch_by_id(batch_id)
-        if not batch:
-            return None
+        batch = await self._require_writable_batch(batch_id)
 
         # 获取批次物料（从物料表获取投入）
         materials = await self.repo.get_batch_materials(batch_id)

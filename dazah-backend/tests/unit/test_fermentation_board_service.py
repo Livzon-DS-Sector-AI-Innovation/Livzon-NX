@@ -1049,4 +1049,3 @@ def test_build_mp_board_tank_states_and_kpis() -> None:
     assert any("【排产备注】黄色正常罐批。" in t for t in texts)
     # recent 取最近已放罐（9/6 的跨块批）
     assert payload["recent"][0]["batch_no"] == "MC-26244"
-

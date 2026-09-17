@@ -908,15 +908,28 @@ interface ModuleLandingAccess {
   page_permission_rollouts?: Record<string, string>
 }
 
-/** 登录后进入顶部菜单栏中从左到右的第一个可见模块。 */
+export const NO_AUTHORIZED_PAGE_PATH = "/no-access"
+
+/** 登录后按导航顺序进入首个已授权、可路由的页面。 */
 export function getFirstAuthorizedModulePath(user: ModuleLandingAccess): string {
-  const visibleModules = user.role === "admin"
-    ? moduleMenus
-    : getAuthorizedPageMenus(
-        user.module_codes,
-        user.page_permissions,
-      )
-  return visibleModules[0]?.path || "/production"
+  if (user.role === "admin") return moduleMenus[0].path
+  const allowedKeys = new Set((user.page_permissions || [])
+    .filter((grant) => grant.permissions?.includes("access"))
+    .map((grant) => grant.page_key))
+  function firstAuthorizedPage(items: SubMenuItem[]): string | undefined {
+    for (const item of items) {
+      if (item.disabled || item.adminOnly) continue
+      const key = item.path && getPageKeyByPath(item.path.split('?')[0])
+      if (key && allowedKeys.has(key)) return item.path
+      const nested = item.children && firstAuthorizedPage(item.children)
+      if (nested) return nested
+    }
+  }
+  for (const moduleMenu of getAuthorizedModuleMenus(user.module_codes)) {
+    const path = firstAuthorizedPage(moduleMenu.children)
+    if (path) return path
+  }
+  return NO_AUTHORIZED_PAGE_PATH
 }
 
 function collectPageRoutes(
@@ -937,6 +950,7 @@ function collectPageRoutes(
 // must explicitly inherit a stable leaf page identity.
 const pageRouteAliases: Record<string, string> = {
   "/hr/employee-management": "hr:employee-management:profile",
+  "/hr/contracts": "hr:contracts:contracts-ledger",
   "/hr/training": "hr:training:annual-plan",
   "/hr/settings/feishu": "hr:hr-settings:hr-settings-feishu",
   "/hr/new/profile": "hr:employee-management:profile",

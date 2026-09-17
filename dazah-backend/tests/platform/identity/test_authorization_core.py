@@ -19,6 +19,7 @@ from app.platform.identity.models import (
     PermissionOutboxEvent,
     Role,
     User,
+    UserModuleGrant,
     UserPageGrant,
     UserRole,
 )
@@ -37,9 +38,107 @@ def application(db_provider, actor_provider, monkeypatch):
     app.dependency_overrides[deps.get_current_user] = actor_provider
     monkeypatch.setattr(rbac_api, "publish_permissions_changed", AsyncMock())
     monkeypatch.setattr(rbac_api, "publish_permissions_changed_all", AsyncMock())
+    monkeypatch.setattr(rbac_api, "publish_data_scope_changed", AsyncMock())
     monkeypatch.setattr(api, "publish_permissions_changed", AsyncMock())
     monkeypatch.setattr(api, "publish_data_scope_changed", AsyncMock())
     return app
+
+
+@pytest.mark.asyncio
+async def test_manual_role_assignment_replaces_roles_and_reactivates_removed_rows(
+    db_session, monkeypatch
+):
+    async with AsyncSession(
+        bind=await db_session.connection(),
+        join_transaction_mode="create_savepoint",
+        expire_on_commit=False,
+    ) as db:
+        actor = User(name="角色授权管理员", role="admin")
+        target = User(name="角色替换目标", role="user")
+        old_role = Role(name="旧角色", code=f"old-{uuid4().hex}")
+        new_role = Role(name="新角色", code=f"new-{uuid4().hex}")
+        revived_role = Role(name="重新启用角色", code=f"revived-{uuid4().hex}")
+        db.add_all([actor, target, old_role, new_role, revived_role])
+        await db.flush()
+        db.add_all(
+            [
+                UserRole(user_id=target.id, role_id=old_role.id, source="manual"),
+                UserRole(
+                    user_id=target.id,
+                    role_id=revived_role.id,
+                    source="manual",
+                    is_deleted=True,
+                ),
+            ]
+        )
+        await db.flush()
+        app = application(lambda: db, lambda: actor, monkeypatch)
+        url = f"/identity/admin/users/{target.id}/roles"
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                url,
+                json={
+                    "role_ids": [str(new_role.id), str(revived_role.id)],
+                    "mode": "replace",
+                    "expected_grant_version": 0,
+                    "reason": "岗位职责调整",
+                },
+            )
+            assert response.status_code == 200, response.text
+            assert response.json()["data"]["added_count"] == 2
+            assert response.json()["data"]["removed_count"] == 1
+            active_roles = await db.scalars(
+                select(UserRole).where(
+                    UserRole.user_id == target.id,
+                    UserRole.is_deleted.is_(False),
+                )
+            )
+            assert {row.role_id for row in active_roles.all()} == {
+                new_role.id,
+                revived_role.id,
+            }
+            audit = await db.scalar(
+                select(AuditLog).where(
+                    AuditLog.resource_type == "identity.user_roles",
+                    AuditLog.resource_id == target.id,
+                )
+            )
+            assert audit is not None
+            assert audit.new_value["reason"] == "岗位职责调整"
+            additive = await client.post(
+                url,
+                json={
+                    "role_ids": [str(old_role.id)],
+                    "mode": "add",
+                    "expected_grant_version": 1,
+                    "reason": "部门映射追加角色",
+                },
+            )
+            assert additive.status_code == 200, additive.text
+            assert additive.json()["data"]["added_count"] == 1
+            assert additive.json()["data"]["removed_count"] == 0
+            active_roles = await db.scalars(
+                select(UserRole).where(
+                    UserRole.user_id == target.id,
+                    UserRole.is_deleted.is_(False),
+                )
+            )
+            assert {row.role_id for row in active_roles.all()} == {
+                old_role.id,
+                new_role.id,
+                revived_role.id,
+            }
+            stale = await client.post(
+                url,
+                json={
+                    "role_ids": [str(new_role.id)],
+                    "expected_grant_version": 0,
+                    "reason": "使用旧页面提交",
+                },
+            )
+            assert stale.status_code == 409
 
 
 @pytest.mark.asyncio
@@ -193,6 +292,85 @@ async def test_locking_reads_refresh_stale_identity_map(db_session):
         db_session, actor_id=user.id
     )
     assert next(item for item in users if item.id == user.id).grant_version == 41
+
+
+@pytest.mark.asyncio
+async def test_role_page_permission_preview_counts_effective_users_and_overrides(
+    db_session, monkeypatch
+):
+    actor = User(name="权限预演管理员", role="admin")
+    affected = User(name="受角色基线影响", role="user")
+    overridden = User(name="保留用户覆盖", role="user")
+    role = Role(name="预演角色", code=uuid4().hex)
+    db_session.add_all([actor, affected, overridden, role])
+    await db_session.flush()
+    db_session.add_all(
+        [
+            UserRole(user_id=affected.id, role_id=role.id, source="manual"),
+            UserRole(user_id=overridden.id, role_id=role.id, source="manual"),
+            UserModuleGrant(
+                user_id=affected.id,
+                module_code="hr",
+                permissions=["module.view"],
+                data_scope={},
+                grant_version=affected.grant_version,
+                granted_by=actor.id,
+                status="active",
+            ),
+            UserModuleGrant(
+                user_id=overridden.id,
+                module_code="hr",
+                permissions=["module.view"],
+                data_scope={},
+                grant_version=overridden.grant_version,
+                granted_by=actor.id,
+                status="active",
+            ),
+            UserPageGrant(
+                user_id=overridden.id,
+                page_key="hr:employee-management:profile",
+                permissions=[],
+                sensitive_actions=[],
+                scope_type="department_tree",
+                department_ids=[],
+            ),
+        ]
+    )
+    await db_session.flush()
+    app = application(lambda: db_session, lambda: actor, monkeypatch)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            f"/identity/admin/roles/{role.id}/page-permissions/preview",
+            json={
+                "expected_grant_version": role.grant_version,
+                "reason": "预演角色授权影响",
+                "grants": [
+                    {
+                        "page_key": "hr:employee-management:profile",
+                        "mode": "custom",
+                        "permissions": ["access", "query"],
+                        "sensitive_actions": [],
+                        "data_scope": {"scope_type": "department_tree"},
+                    }
+                ],
+            },
+        )
+    assert response.status_code == 200, response.text
+    preview = response.json()["data"]
+    assert preview["member_count"] == 2
+    assert preview["affected_user_count"] == 1
+    assert preview["expanded_user_count"] == 1
+    assert preview["restricted_user_count"] == 0
+    assert preview["users_with_overrides"] == 1
+    assert preview["affected_user_samples"] == [
+        {
+            "user_id": str(affected.id),
+            "user_name": "受角色基线影响",
+            "impact": "expanded",
+        }
+    ]
 
 
 @pytest.mark.asyncio

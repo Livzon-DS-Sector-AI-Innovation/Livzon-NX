@@ -21,14 +21,24 @@ vi.mock('@/actions/admin', () => ({
   setRoleMenus: vi.fn(),
   setRolePermissions: vi.fn(),
   simulatePermission: vi.fn(),
+  simulatePagePermission: vi.fn(),
+  getPagePermissionHealth: vi.fn(async () => ({ checked_at: '', issue_count: 0, error_count: 0, warning_count: 0, issues: [] })),
+  remediatePagePermissionHealth: vi.fn(),
   updateMenu: vi.fn(),
   updateRole: vi.fn(),
+}))
+
+vi.mock('@/actions/users', () => ({
+  getUsers: vi.fn(),
+  getUserPagePermissions: vi.fn(),
+  getPermissionDepartments: vi.fn(async () => []),
 }))
 
 vi.mock('@/lib/api/client/admin', () => ({
   fetchAdminUsers: vi.fn(async () => ({ items: [] })),
   fetchDataScopes: vi.fn(async () => []),
   fetchRoleMenus: vi.fn(async () => []),
+  fetchRoles: vi.fn(async () => []),
 }))
 
 import { DataScopeConfig } from './DataScopeConfig'
@@ -133,8 +143,9 @@ describe('system permissions settings pages', () => {
       value: { scopeType: 'departments', departmentNames: ['质量部'] },
       onChange: vi.fn(),
     }))
-    expect(scopeHtml).not.toContain('指定部门')
-    expect(scopeHtml).not.toContain('全部部门')
+    expect(scopeHtml).toContain('指定部门')
+    expect(scopeHtml).toContain('全部部门')
+    expect(scopeHtml).toContain('质量部')
 
     const roleHtml = renderInApp(React.createElement(RoleManager, {
       initialRoles: roles,
@@ -177,8 +188,10 @@ describe('system permissions settings pages', () => {
 
     const verificationHtml = renderInApp(React.createElement(PermissionVerification))
     expect(verificationHtml).toContain('模块权限接入状态')
+    expect(verificationHtml).toContain('单用户权限诊断')
+    expect(verificationHtml).toContain('权限健康检查')
     expect(verificationHtml).toContain('接入状态')
     expect(verificationHtml).not.toContain('保存后立即生效')
-    expect(verificationHtml).not.toContain('按页面验证生效权限')
+    expect(verificationHtml).toContain('按用户、菜单页面和业务动作验证当前已生效权限')
   })
 })

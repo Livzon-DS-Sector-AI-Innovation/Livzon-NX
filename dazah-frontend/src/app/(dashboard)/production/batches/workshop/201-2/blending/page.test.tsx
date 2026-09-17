@@ -3,6 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { clearProductionAuthForTest, setProductionAdminForTest } from '@/test/production-auth'
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -58,6 +59,7 @@ describe('BlendingPage', () => {
   let container: HTMLElement
 
   beforeEach(() => {
+    setProductionAdminForTest()
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -66,6 +68,7 @@ describe('BlendingPage', () => {
   afterEach(() => {
     act(() => root.unmount())
     container?.remove()
+    clearProductionAuthForTest()
   })
 
   it('renders the blending ledger with impurity columns', async () => {

@@ -20,7 +20,7 @@ def test_migrated_quality_submodules_are_mounted() -> None:
     assert "/api/v1/quality/document-entries/{entry_id}/attachments" in paths
     assert "/api/v1/quality/instruments/equipment" in paths
     assert "/api/v1/quality/oos-oot/oot-limit-products" in paths
-    assert "/api/v1/quality/cpv/products" in paths
+    assert "/api/v1/quality/cpv/products" not in paths
 
 
 def test_quality_routes_do_not_register_duplicate_method_path_pairs() -> None:

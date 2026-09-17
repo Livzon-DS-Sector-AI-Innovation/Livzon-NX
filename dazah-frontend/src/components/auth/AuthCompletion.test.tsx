@@ -120,6 +120,6 @@ describe('AuthCompletion', () => {
       await vi.runAllTimersAsync()
     })
 
-    expect(routerReplace).toHaveBeenCalledWith('/rd')
+    expect(routerReplace).toHaveBeenCalledWith('/rd/project-initiation')
   })
 })

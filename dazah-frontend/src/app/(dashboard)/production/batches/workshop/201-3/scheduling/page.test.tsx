@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { clearProductionAuthForTest, setProductionAdminForTest } from '@/test/production-auth'
 import dayjs from 'dayjs'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -81,6 +82,7 @@ describe('Scheduling2013Page', () => {
   let container: HTMLElement
 
   beforeEach(() => {
+    setProductionAdminForTest()
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -89,6 +91,7 @@ describe('Scheduling2013Page', () => {
   afterEach(() => {
     act(() => root.unmount())
     container?.remove()
+    clearProductionAuthForTest()
     vi.clearAllMocks()
     vi.unstubAllGlobals()
   })
@@ -181,6 +184,10 @@ describe('Scheduling2013Page actions', () => {
     return new Promise<void>((resolve) => { setTimeout(() => { resolve() }, 80) })
   }
 
+  beforeEach(() => {
+    setProductionAdminForTest()
+  })
+
   async function flush(ms = 80) {
     await act(async () => { await new Promise((r) => setTimeout(r, ms)) })
   }
@@ -194,6 +201,7 @@ describe('Scheduling2013Page actions', () => {
   afterEach(() => {
     act(() => root.unmount())
     container?.remove()
+    clearProductionAuthForTest()
     vi.unstubAllGlobals()
     vi.clearAllMocks()
   })

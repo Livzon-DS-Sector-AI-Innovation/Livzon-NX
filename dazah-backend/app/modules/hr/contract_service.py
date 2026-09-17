@@ -6,11 +6,16 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import ForbiddenException
 from app.modules.hr.contract_repository import ContractRepository
 from app.modules.hr.contract_schemas import (
     ContractManagementCreate,
     ContractManagementResponse,
     ContractManagementUpdate,
+)
+from app.platform.identity.data_scope import (
+    current_page_actor,
+    resolve_user_department_scope,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,6 +35,15 @@ class ContractService:
     def __init__(self, session: AsyncSession) -> None:
         self.repo = ContractRepository(session)
         self.session = session
+
+    async def _authorize_department(
+        self, first: str | None, second: str | None
+    ) -> None:
+        actor = current_page_actor.get()
+        if actor is not None:
+            scope = await resolve_user_department_scope(self.session, actor)
+            if not scope.allows(first) and not scope.allows(second):
+                raise ForbiddenException("无权操作该部门的合同记录")
 
     async def list(self, page: Any = 1, page_size: Any = 20, **filters: Any) -> Any:
         records, total = await self.repo.list(page=page, page_size=page_size, **filters)
@@ -51,6 +65,7 @@ class ContractService:
         return ContractManagementResponse.model_validate(record)
 
     async def create(self, data: ContractManagementCreate) -> Any:
+        await self._authorize_department(data.dept_level1, data.dept_level2)
         record = await self.repo.create(data.model_dump())
         response = ContractManagementResponse.model_validate(record)
         # 方向 A：新增 → 飞书多维表格（响应返回后异步同步）
@@ -61,6 +76,11 @@ class ContractService:
         record = await self.repo.get_by_id(record_id)
         if not record:
             raise ValueError("合同记录不存在")
+        changes = data.model_dump(exclude_unset=True)
+        await self._authorize_department(
+            changes.get("dept_level1", record.dept_level1),
+            changes.get("dept_level2", record.dept_level2),
+        )
         record = await self.repo.update(record, data.model_dump(exclude_unset=True))
         # 台账编辑回写员工档案（合同字段，保证两边一致）
         await self._sync_back_to_employee(record)

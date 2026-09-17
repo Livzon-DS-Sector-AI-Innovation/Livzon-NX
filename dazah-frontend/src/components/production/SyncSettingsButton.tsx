@@ -3,6 +3,10 @@
 import {useState, useEffect, useCallback} from 'react'
 import { Button, Modal, Form, Input, AutoComplete, Typography, App, Alert, Space, Tag } from 'antd'
 import { LinkOutlined, SyncOutlined, PlayCircleOutlined, ClockCircleOutlined } from '@ant-design/icons'
+import {
+  useProductionPermissions,
+  type ProductionPageKey,
+} from './useProductionPermissions'
 
 const { Text } = Typography
 const API = (p: string) => `/api/v1/production${p}`
@@ -80,10 +84,14 @@ interface Props {
   syncTarget?: string
   onSync?: () => void
   autoSync?: boolean
+  /** When supplied, the sync/config controls follow the reviewed page grant. */
+  pageKey?: ProductionPageKey
 }
 
-export default function SyncSettingsButton({ productName, syncTarget = 'seed_culture', onSync, autoSync = false }: Props) {
+export default function SyncSettingsButton({ productName, syncTarget = 'seed_culture', onSync, autoSync = false, pageKey }: Props) {
   const { message } = App.useApp()
+  const permissions = useProductionPermissions(pageKey || 'production:overview')
+  const canSync = !pageKey || permissions.canSync
   const [visible, setVisible] = useState(false)
   const [form] = Form.useForm()
   const [, setLoading] = useState(false)
@@ -97,6 +105,7 @@ export default function SyncSettingsButton({ productName, syncTarget = 'seed_cul
   const [parsedUrl, setParsedUrl] = useState<ParsedUrl | null>(null)
 
   const open = async () => {
+    if (!canSync) return
     const saved = loadApps()
     setApps(saved)
     setVisible(true); setTestResult(null); setParsedUrl(null); form.resetFields()
@@ -146,6 +155,7 @@ export default function SyncSettingsButton({ productName, syncTarget = 'seed_cul
   }
 
   const handleSave = async () => {
+    if (!canSync) return
     const vals = await form.validateFields()
     setSaving(true)
     try {
@@ -170,6 +180,7 @@ export default function SyncSettingsButton({ productName, syncTarget = 'seed_cul
   }
 
   const handleTest = async () => {
+    if (!canSync) return
     const vals = await form.validateFields()
     setTesting(true); setTestResult(null)
     try {
@@ -185,7 +196,7 @@ export default function SyncSettingsButton({ productName, syncTarget = 'seed_cul
   }
 
   const handleSync = useCallback(async () => {
-    if (!configId) return
+    if (!canSync || !configId) return
     setSyncing(true)
     try {
       const res = await authFetch(API(`/feishu/tables/${configId}/sync`), { method: 'POST' })
@@ -194,7 +205,7 @@ export default function SyncSettingsButton({ productName, syncTarget = 'seed_cul
         onSync?.()
       }
     } catch { /* ignore */ } finally { setSyncing(false) }
-  }, [configId, onSync])
+  }, [canSync, configId, onSync])
 
   // auto-sync every 5s when enabled
   const [autoSyncOn, setAutoSyncOn] = useState(autoSync)
@@ -214,8 +225,8 @@ export default function SyncSettingsButton({ productName, syncTarget = 'seed_cul
   return (
     <>
       <Space size={4}>
-        <Button size="small" icon={<SyncOutlined spin={autoSyncOn} />} onClick={open} title="同步设置" />
-        {configId && (
+        {canSync && <Button size="small" icon={<SyncOutlined spin={autoSyncOn} />} onClick={open} title="同步设置" />}
+        {canSync && configId && (
           <Button size="small"
             type={autoSyncOn ? 'primary' : 'default'}
             icon={<ClockCircleOutlined />}
@@ -225,7 +236,7 @@ export default function SyncSettingsButton({ productName, syncTarget = 'seed_cul
           />
         )}
       </Space>
-      <Modal title={`${productName} · 飞书同步设置`} open={visible} onCancel={() => setVisible(false)} width={520}
+      <Modal title={`${productName} · 飞书同步设置`} open={visible && canSync} onCancel={() => setVisible(false)} width={520}
         footer={[
           <Button key="test" icon={<PlayCircleOutlined />} loading={testing} onClick={handleTest}>测试连接</Button>,
           <Button key="sync" icon={<SyncOutlined />} loading={syncing} onClick={handleSync}>同步</Button>,

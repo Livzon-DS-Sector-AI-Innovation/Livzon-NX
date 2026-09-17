@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import CurrentUser, get_current_user
+from app.core.exceptions import NotFoundException
 from app.core.response import ApiResponse
 from app.modules.production.schemas import (  # noqa: E402
     BatchCreate,
@@ -90,7 +91,7 @@ async def get_batch(
     service = ProductionService(db)
     batch = await service.get_batch(batch_id)
     if not batch:
-        return ApiResponse(code=404, message="批次不存在")
+        raise NotFoundException("批次")
     return ApiResponse(data=BatchResponse.model_validate(batch))
 
 
@@ -118,7 +119,7 @@ async def update_batch(
     service = ProductionService(db)
     batch = await service.update_batch(batch_id, data)
     if not batch:
-        return ApiResponse(code=404, message="批次不存在")
+        raise NotFoundException("批次")
     await db.commit()
     return ApiResponse(data=BatchResponse.model_validate(batch))
 
@@ -137,7 +138,7 @@ async def update_batch_status(
     try:
         batch = await service.update_batch_status(batch_id, data)
         if not batch:
-            return ApiResponse(code=404, message="批次不存在")
+            raise NotFoundException("批次")
         await db.commit()
         return ApiResponse(data=BatchResponse.model_validate(batch))
     except ValueError as e:
@@ -154,7 +155,7 @@ async def delete_batch(
     service = ProductionService(db)
     result = await service.delete_batch(batch_id)
     if not result:
-        return ApiResponse(code=404, message="批次不存在")
+        raise NotFoundException("批次")
     await db.commit()
     return ApiResponse(message="删除成功")
 
@@ -1080,24 +1081,18 @@ from app.modules.production.schedule_excel_api import (  # noqa: E402
     router as schedule_excel_router,
 )
 
-router.include_router(
-    schedule_excel_router, tags=["生产管理 - 排产计划存档"]
-)
+router.include_router(schedule_excel_router, tags=["生产管理 - 排产计划存档"])
 
 
 from app.modules.production.fermentation_board_api import (  # noqa: E402
     router as fermentation_board_router,
 )
 
-router.include_router(
-    fermentation_board_router, tags=["生产管理 - 发酵车间看板"]
-)
+router.include_router(fermentation_board_router, tags=["生产管理 - 发酵车间看板"])
 
 
 from app.modules.production.extraction_report_api import (  # noqa: E402
     router as extraction_report_router,
 )
 
-router.include_router(
-    extraction_report_router, tags=["生产管理 - 提炼工段"]
-)
+router.include_router(extraction_report_router, tags=["生产管理 - 提炼工段"])

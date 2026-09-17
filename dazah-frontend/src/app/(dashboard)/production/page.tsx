@@ -45,6 +45,12 @@ import ProductionSummary from '@/components/production/production-summary'
 import { useProductContextStore } from '@/stores/product-context'
 import { usePermission } from '@/hooks/usePermission'
 import {
+  hasProductionPagePermission,
+  PRODUCTION_PAGE_KEYS,
+  useProductionPermissions,
+} from '@/components/production/useProductionPermissions'
+import { useAuthStore } from '@/stores/auth'
+import {
   getFermentationBoard,
   markTankMaintenance,
   removeTankMaintenance,
@@ -68,54 +74,63 @@ const { Title, Text } = Typography
 const workshopItems = [
   {
     key: '/production/batches/workshop/101-1',
+    pageKey: PRODUCTION_PAGE_KEYS.workshop1011,
     title: '101一车间（菌种）',
     description: '摇瓶种子制备全流程',
     color: '#52c41a',
   },
   {
     key: '/production/batches/workshop/101-2',
+    pageKey: PRODUCTION_PAGE_KEYS.workshop1012,
     title: '101二车间',
     description: '发酵数据（林可霉素/霉酚酸/他汀类）',
     color: '#08979c',
   },
   {
     key: '/production/batches/workshop/102-1',
+    pageKey: PRODUCTION_PAGE_KEYS.workshop1021,
     title: '102一车间',
     description: '发酵数据（多拉菌素）',
     color: '#1d39c4',
   },
   {
     key: '/production/batches/workshop/103/phenylalanine',
+    pageKey: PRODUCTION_PAGE_KEYS.workshop103Phenylalanine,
     title: '103车间 · 苯丙氨酸',
     description: '发酵数据（L-苯丙氨酸）',
     color: '#531dab',
   },
   {
     key: '/production/batches/workshop/103/lovastatin',
+    pageKey: PRODUCTION_PAGE_KEYS.workshop103Lovastatin,
     title: '103车间 · 洛伐他汀/美伐他汀',
     description: '发酵数据',
     color: '#c41d7f',
   },
   {
     key: '/production/batches/workshop/201-2',
+    pageKey: PRODUCTION_PAGE_KEYS.workshop2012,
     title: '201二车间 · 霉酚酸（MC）',
     description: '提炼至混粉入库',
     color: '#d4380d',
   },
   {
     key: '/production/batches/workshop/201-3',
+    pageKey: PRODUCTION_PAGE_KEYS.workshop2013,
     title: '201三车间 · 多拉菌素（DR）',
     description: '提炼至混粉入库',
     color: '#fa8c16',
   },
   {
     key: '/production/batches/workshop/202',
+    pageKey: PRODUCTION_PAGE_KEYS.workshop202,
     title: '202车间',
     description: '停产中，暂无生产数据',
     color: '#8c8c8c',
   },
   {
     key: '/production/batches/workshop/203',
+    pageKey: PRODUCTION_PAGE_KEYS.workshop203,
     title: '203车间 · L-苯丙氨酸（FA）',
     description: '发酵放罐至精制回收',
     color: '#237804',
@@ -184,10 +199,15 @@ const STATUS_META: Record<string, { label: string; color: string }> = {
 export default function ProductionDashboard() {
   const router = useRouter()
   const { message } = App.useApp()
+  const productionUser = useAuthStore((state) => state.user)
+  const { canOperate, canDelete } = useProductionPermissions(PRODUCTION_PAGE_KEYS.overview)
   // 工段数据权限：发酵模块挂发酵权限，提炼汇总挂提炼权限，收率需双权限
   const { has } = usePermission()
   const canFerm = has('production:fermentation-yield')
   const canExtract = has('production:extraction-yield')
+  const authorizedWorkshopItems = workshopItems.filter((item) =>
+    hasProductionPagePermission(productionUser, item.pageKey, 'access'),
+  )
   const [board, setBoard] = useState<FermentationBoard | null>(null)
   const [boardMessage, setBoardMessage] = useState<string>('')
   const [loading, setLoading] = useState(true)
@@ -329,6 +349,7 @@ export default function ProductionDashboard() {
   }, [])
 
   const submitMaintenance = async () => {
+    if (!canOperate) return
     if (!maintTank || !maintReason.trim()) {
       message.warning('请填写检修原因')
       return
@@ -345,6 +366,7 @@ export default function ProductionDashboard() {
   }
 
   const releaseMaintenance = async (tank: BoardTank) => {
+    if (!canDelete) return
     const record = board?.maintenance.find((m) => m.tank_no === tank.tank_no)
     if (!record) return
     const res = await removeTankMaintenance(record.id)
@@ -378,6 +400,7 @@ export default function ProductionDashboard() {
   }
 
   const openActualModal = (item: FermentationBatchActual | null) => {
+    if (!canOperate) return
     setEditingActual(item)
     setActualBatchNo(item?.batch_no ?? '')
     setActualDumpDate(item?.dump_date ? dayjs(item.dump_date) : null)
@@ -387,6 +410,7 @@ export default function ProductionDashboard() {
   }
 
   const submitActual = async () => {
+    if (!canOperate) return
     if (!actualBatchNo.trim()) {
       message.warning('请填写批次号')
       return
@@ -414,6 +438,7 @@ export default function ProductionDashboard() {
   }
 
   const removeActual = async (item: FermentationBatchActual) => {
+    if (!canDelete) return
     const res = await deleteFermentationBatchActual(item.id)
     if (res.code === 200) {
       message.success('已删除批次产量记录')
@@ -425,11 +450,13 @@ export default function ProductionDashboard() {
   }
 
   const openCapacityModal = () => {
+    if (!canOperate) return
     setCapacityKg(board?.month_planned_capacity_kg ?? null)
     setCapacityModalOpen(true)
   }
 
   const submitCapacity = async () => {
+    if (!canOperate) return
     const res = await setFermentationMonthCapacity(capacityKg, productCode)
     if (res.code === 200) {
       message.success('已保存本月计划产能')
@@ -642,11 +669,11 @@ export default function ProductionDashboard() {
           // 占位与操作列 small 按钮同高（主题 controlHeightSM），保证已放罐行与其他行行高一致；
           // 历史周期为只读视图，不提供检修操作
           <span style={{ display: 'inline-block', height: 36, lineHeight: '36px' }}>-</span>
-        ) : record.status === 'maintenance' ? (
+        ) : record.status === 'maintenance' && canDelete ? (
           <Button size="small" onClick={() => void releaseMaintenance(record)}>
             解除检修
           </Button>
-        ) : (
+        ) : canOperate ? (
           <Button
             size="small"
             icon={<ToolOutlined />}
@@ -658,7 +685,7 @@ export default function ProductionDashboard() {
           >
             标记检修
           </Button>
-        ),
+        ) : null,
     },
   ]
 
@@ -740,11 +767,11 @@ export default function ProductionDashboard() {
       key: 'actions',
       width: 110,
       render: (_: unknown, record: FermentationBatchActual) => (
-        <Space size={0}>
-          <Button size="small" type="link" onClick={() => openActualModal(record)}>
+      <Space size={0}>
+          {canOperate && <Button size="small" type="link" onClick={() => openActualModal(record)}>
             编辑
-          </Button>
-          <Popconfirm
+          </Button>}
+          {canDelete && <Popconfirm
             title="删除后看板图表不再统计该批次，确认删除？"
             okText="删除"
             cancelText="取消"
@@ -753,7 +780,7 @@ export default function ProductionDashboard() {
             <Button size="small" type="link" danger>
               删除
             </Button>
-          </Popconfirm>
+          </Popconfirm>}
         </Space>
       ),
     },
@@ -1038,7 +1065,7 @@ export default function ProductionDashboard() {
                           <div style={{ fontSize: 26, fontWeight: 600, lineHeight: 1.35 }}>
                             {card.extra.value}
                           </div>
-                          {card.extra.editable && isCurrent && (
+                           {card.extra.editable && isCurrent && canOperate && (
                             <Button
                               type="text"
                               size="small"
@@ -1318,16 +1345,14 @@ export default function ProductionDashboard() {
         size={560}
         open={actualsOpen}
         onClose={() => setActualsOpen(false)}
-        extra={
-          <Button
+        extra={canOperate ? <Button
             type="primary"
             size="small"
             icon={<PlusOutlined />}
             onClick={() => openActualModal(null)}
           >
             录入批次产量
-          </Button>
-        }
+          </Button> : null}
       >
         <Table
           rowKey="id"
@@ -1346,8 +1371,8 @@ export default function ProductionDashboard() {
       {/* 批次产量录入弹窗 */}
       <Modal
         title={editingActual ? `编辑批次产量：${editingActual.batch_no}` : '录入批次产量'}
-        open={actualModalOpen}
-        onOk={() => void submitActual()}
+        open={actualModalOpen && canOperate}
+        onOk={canOperate ? () => void submitActual() : undefined}
         onCancel={() => setActualModalOpen(false)}
         okText="保存"
         cancelText="取消"
@@ -1403,8 +1428,8 @@ export default function ProductionDashboard() {
       {/* 本月计划产能设置弹窗 */}
       <Modal
         title={`设置本月计划产能：${board?.period.label ?? ''}`}
-        open={capacityModalOpen}
-        onOk={() => void submitCapacity()}
+        open={capacityModalOpen && canOperate}
+        onOk={canOperate ? () => void submitCapacity() : undefined}
         onCancel={() => setCapacityModalOpen(false)}
         okText="保存"
         cancelText="取消"
@@ -1425,7 +1450,7 @@ export default function ProductionDashboard() {
       {/* 底部：生产车间入口 */}
       <Card title="生产车间" variant="borderless" className="shadow-sm">
         <Row gutter={[12, 12]}>
-          {workshopItems.map((item) => (
+          {authorizedWorkshopItems.map((item) => (
             <Col span={8} key={item.key}>
               <div
                 data-testid={`workshop-entry:${item.key}`}

@@ -59,8 +59,8 @@ useEffect(() => {    fetch(`/api/v1/production/fa/monthly-averages?table=mother_
         </Title>
         <Space><Text type="secondary">共 {total} 条</Text>
           <Select size="small" style={{ width: 76 }} value={month} onChange={v => {setMonth(v); setPage(1)}} options={[{ value: 0, label: '全部' }, ...[1,2,3,4,5,6,7,8,9,10,11,12].map(m => ({ value: m, label: `${m}月` }))]} />
-          <FASheetsSyncButton />
-          <FATraceButton initialModule="mother_liquor" />
+          <FASheetsSyncButton pageKey="production:batches:workshop-203" />
+          <FATraceButton initialModule="mother_liquor" pageKey="production:batches:workshop-203" />
         </Space>
       </div>
       {avgData.length > 0 && (

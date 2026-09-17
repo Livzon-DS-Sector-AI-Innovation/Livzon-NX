@@ -9,8 +9,6 @@ from app.modules.quality.api.complaint import router as complaint_router
 from app.modules.quality.api.complaint_return_feishu import (
     router as complaint_return_feishu_router,
 )
-from app.modules.quality.api.cpv_import import router as cpv_import_router
-from app.modules.quality.api.cpv_products import router as cpv_products_router
 from app.modules.quality.api.document_catalog import router as document_catalog_router
 from app.modules.quality.api.external_quality import router as external_quality_router
 from app.modules.quality.api.feishu_capa import router as feishu_capa_router
@@ -95,10 +93,8 @@ def _include_compatibility_routes(source: APIRouter, *, tags: list[str | Enum]) 
     router.include_router(unique_router, tags=tags)
 
 
-# Preserve the current CPV and Feishu read-mirror entry points while the
-# migrated quality submodules provide the broader quality workflow.
-router.include_router(cpv_products_router, prefix="/cpv", tags=["CPV-产品"])
-router.include_router(cpv_import_router, prefix="/cpv", tags=["CPV-导入"])
+# CPV legacy HTTP entry points are retired. Their models and persisted data
+# remain available for an explicitly approved future migration.
 router.include_router(read_mirror_router, tags=["Quality-Feishu-Read"])
 
 # Mount quality management routes (deviations, CAPA, contacts, etc.)

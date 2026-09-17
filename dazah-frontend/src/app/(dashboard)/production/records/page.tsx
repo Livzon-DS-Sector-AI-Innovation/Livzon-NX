@@ -41,11 +41,13 @@ import type {
   ProductionRecord,
   Batch,
 } from '@/types/production'
+import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Text } = Typography
 
 export default function RecordsPage() {
   const { message, modal } = App.useApp()
+  const { canOperate, canDelete } = useProductionPermissions(PRODUCTION_PAGE_KEYS.records)
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
@@ -99,6 +101,7 @@ export default function RecordsPage() {
   }, [selectedBatchId])
 
   const handleAdd = () => {
+    if (!canOperate) return
     if (!selectedBatchId) {
       message.warning('请先选择批次')
       return
@@ -110,6 +113,7 @@ export default function RecordsPage() {
   }
 
   const handleEdit = (record: ProductionRecord) => {
+    if (!canOperate) return
     setEditingRecord(record)
     setOperationType(record.operation_type)
     form.resetFields()
@@ -139,6 +143,7 @@ export default function RecordsPage() {
   }
 
   const handleDelete = async (id: string) => {
+    if (!canDelete) return
     modal.confirm({
       title: '确认删除',
       content: '确定要删除这条生产记录吗？',
@@ -159,6 +164,7 @@ export default function RecordsPage() {
   }
 
   const handleSubmit = async () => {
+    if (!canOperate) return
     if (!selectedBatchId) return
 
     try {
@@ -288,12 +294,12 @@ export default function RecordsPage() {
       fixed: 'right',
       render: (_, record) => (
         <Space size="small">
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          {canOperate && <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             编辑
-          </Button>
-          <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
+          </Button>}
+          {canDelete && <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
             删除
-          </Button>
+          </Button>}
         </Space>
       ),
     },
@@ -318,14 +324,14 @@ export default function RecordsPage() {
             />
           </Col>
           <Col span={4}>
-            <Button
+            {canOperate && <Button
               type="primary"
               icon={<PlusOutlined />}
               onClick={handleAdd}
               disabled={!selectedBatchId}
             >
               新建记录
-            </Button>
+            </Button>}
           </Col>
         </Row>
 
@@ -342,8 +348,8 @@ export default function RecordsPage() {
 
       <Modal
         title={editingRecord ? '编辑生产记录' : '新建生产记录'}
-        open={modalVisible}
-        onOk={handleSubmit}
+        open={modalVisible && canOperate}
+        onOk={canOperate ? handleSubmit : undefined}
         onCancel={() => setModalVisible(false)}
         width={600}
         okText="确认"

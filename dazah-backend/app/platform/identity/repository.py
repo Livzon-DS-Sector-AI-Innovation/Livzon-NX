@@ -747,15 +747,33 @@ class RbacRepository:
                 UserRole.user_id == user_id,
                 UserRole.role_id == role_id,
                 UserRole.source == "manual",
-                UserRole.is_deleted.is_(False),
             )
         )
         row = result.scalar_one_or_none()
         if row is None:
             row = UserRole(user_id=user_id, role_id=role_id, source="manual")
             session.add(row)
-            await session.flush()
+        else:
+            row.is_deleted = False
+        await session.flush()
         return row
+
+    async def replace_user_roles(
+        self, session: AsyncSession, user_id: UUID, role_ids: list[UUID]
+    ) -> None:
+        desired = set(role_ids)
+        result = await session.execute(
+            select(UserRole).where(
+                UserRole.user_id == user_id,
+                UserRole.source == "manual",
+            )
+        )
+        existing = {row.role_id: row for row in result.scalars().all()}
+        for role_id, row in existing.items():
+            row.is_deleted = role_id not in desired
+        for role_id in desired - existing.keys():
+            session.add(UserRole(user_id=user_id, role_id=role_id, source="manual"))
+        await session.flush()
 
     async def remove_user_role(
         self, session: AsyncSession, user_id: UUID, role_id: UUID

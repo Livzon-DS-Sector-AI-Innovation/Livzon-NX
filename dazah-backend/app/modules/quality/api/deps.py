@@ -12,6 +12,7 @@ from app.core.exceptions import AppException
 from app.core.redis import acquire_lock, release_lock
 from app.platform.identity.data_scope import (
     DepartmentScope,
+    current_page_key,
     resolve_user_department_scope,
 )
 from app.platform.identity.rbac import resolve_user_permissions
@@ -186,6 +187,8 @@ async def resolve_quality_list_scope(
     仅作用于质量模块端点，不影响 HR/仓储等其他模块的数据范围隔离。
     """
     assert current_user is not None
+    if (current_page_key.get() or "").startswith("quality:"):
+        return await resolve_user_department_scope(db, current_user)
     permissions = await resolve_user_permissions(db, current_user.id)
     if (
         "*" in permissions

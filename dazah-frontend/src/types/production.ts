@@ -1,4 +1,5 @@
 // production module TypeScript types
+import type { components } from '@/types/generated/schema'
 
 export interface ApiResponse<T = unknown> {
   code: number
@@ -78,6 +79,7 @@ export const FERMENTATION_STATUS_OPTIONS = [
 // ============ Batch Types ============
 
 export interface Batch {
+  workshop_code?: components['schemas']['BatchCreate']['workshop_code']
   id: string
   batch_no: string
   product_code: string
@@ -114,6 +116,7 @@ export interface BatchMaterial {
 }
 
 export interface BatchFormData {
+  workshop_code?: components['schemas']['BatchCreate']['workshop_code']
   batch_no: string
   product_code: string
   product_name?: string

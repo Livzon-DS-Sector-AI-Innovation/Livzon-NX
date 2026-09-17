@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { usePagePermissions } from '@/hooks/usePagePermissions'
 import {
   App,
   Button,
@@ -64,6 +65,7 @@ interface DocumentCatalogPageProps {
 }
 
 export default function DocumentCatalogPage({ initialDepartments = [] }: DocumentCatalogPageProps) {
+  const { canOperate, canDelete, canImport, canExport } = usePagePermissions('quality:documents')
   const { message, modal } = App.useApp()
   const queryClient = useQueryClient()
 
@@ -128,6 +130,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
   // ---------- 条目 ----------
 
   const openCreateEntry = () => {
+    if (!canOperate) return
     setEditingEntry(null)
     entryForm.resetFields()
     entryForm.setFieldsValue({
@@ -137,6 +140,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
   }
 
   const openEditEntry = (entry: DocumentEntryItem) => {
+    if (!canOperate) return
     setEditingEntry(entry)
     entryForm.setFieldsValue({
       department_id: entry.department_id,
@@ -149,6 +153,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
   }
 
   const handleSaveEntry = async () => {
+    if (!canOperate) return
     let values: EntryFormValues
     try {
       values = await entryForm.validateFields()
@@ -181,6 +186,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
   }
 
   const handleDeleteEntry = (entry: DocumentEntryItem) => {
+    if (!canDelete) return
     const attachmentCount = entry.attachments?.length ?? 0
     // 双重确认：整条目录删除影响范围大（历史上有误把"删条目"当"删附件"的情况）
     modal.confirm({
@@ -216,6 +222,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
   // ---------- 部门 ----------
 
   const openCreateDept = () => {
+    if (!canOperate) return
     setEditingDept(null)
     deptForm.resetFields()
     deptForm.setFieldsValue({ sort_order: (departments.at(-1)?.sort_order ?? 0) + 1 })
@@ -223,12 +230,14 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
   }
 
   const openEditDept = (dept: DocumentDepartmentItem) => {
+    if (!canOperate) return
     setEditingDept(dept)
     deptForm.setFieldsValue({ name: dept.name, sort_order: dept.sort_order })
     setDeptModalOpen(true)
   }
 
   const handleSaveDept = async () => {
+    if (!canOperate) return
     let values: DepartmentFormValues
     try {
       values = await deptForm.validateFields()
@@ -255,6 +264,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
   }
 
   const handleDeleteDept = (dept: DocumentDepartmentItem) => {
+    if (!canDelete) return
     modal.confirm({
       title: '删除部门',
       content: `确定删除「${dept.name}」吗？该部门下的 ${dept.document_count} 条文件目录将一并删除。`,
@@ -277,6 +287,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
   // ---------- Excel/Word 导入 ----------
 
   const handleImportUpload = async (file: File): Promise<void> => {
+    if (!canImport) return
     setImporting(true)
     try {
       const formData = new FormData()
@@ -296,6 +307,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
   // ---------- 统一附件导入（自动识别名称/编号，失败 LLM 匹配） ----------
 
   const handleAttachmentImport = async (fileList: File[]) => {
+    if (!canImport) return
     if (fileList.length === 0) return
     setAttImporting(true)
     try {
@@ -345,6 +357,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
   // ---------- 导出 ----------
 
   const handleExport = async () => {
+    if (!canExport) return
     if (selectedKey === ALL_DEPARTMENTS_KEY) {
       message.info('请先在左侧选择要导出的部门')
       return
@@ -471,7 +484,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
       width: 120,
       render: (_: unknown, record: DocumentEntryItem) => (
         <Space size="small">
-          <Button type="link" size="small" onClick={() => openEditEntry(record)}>
+          <Button type="link" size="small" disabled={!canOperate} onClick={() => openEditEntry(record)}>
             编辑
           </Button>
           <Button
@@ -479,7 +492,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
             size="small"
             danger
             title="删除整个目录条目（删除附件请用「管理」）"
-            onClick={() => handleDeleteEntry(record)}
+            disabled={!canDelete} onClick={() => handleDeleteEntry(record)}
           >
             删除
           </Button>
@@ -499,7 +512,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
           </span>
         }
         extra={
-          <Button type="link" size="small" icon={<PlusOutlined />} onClick={openCreateDept}>
+          <Button type="link" size="small" icon={<PlusOutlined />} disabled={!canOperate} onClick={openCreateDept}>
             新增
           </Button>
         }
@@ -526,14 +539,14 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
                 type="text"
                 size="small"
                 icon={<EditOutlined />}
-                onClick={() => openEditDept(selectedDept)}
+                disabled={!canOperate} onClick={() => openEditDept(selectedDept)}
               />
               <Button
                 type="text"
                 size="small"
                 danger
                 icon={<DeleteOutlined />}
-                onClick={() => handleDeleteDept(selectedDept)}
+                disabled={!canDelete} onClick={() => handleDeleteDept(selectedDept)}
               />
             </Space>
           ) : (
@@ -552,6 +565,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
               }}
             />
             <Upload
+              disabled={!canImport}
               accept=".docx,.doc,.xls,.xlsx"
               multiple
               showUploadList={false}
@@ -560,11 +574,12 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
                 return false
               }}
             >
-              <Button icon={<UploadOutlined />} loading={importing}>
+              <Button icon={<UploadOutlined />} loading={importing} disabled={!canImport}>
                 导入文件目录
               </Button>
             </Upload>
             <Upload
+              disabled={!canImport}
               accept=".doc,.docx,.wps,.pdf,.png,.jpg,.jpeg,.md"
               multiple
               showUploadList={false}
@@ -575,14 +590,14 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
                 return false
               }}
             >
-              <Button icon={<PaperClipOutlined />} loading={attImporting}>
+              <Button icon={<PaperClipOutlined />} loading={attImporting} disabled={!canImport}>
                 导入附件
               </Button>
             </Upload>
-            <Button icon={<DownloadOutlined />} loading={exporting} onClick={handleExport}>
+            <Button icon={<DownloadOutlined />} loading={exporting} onClick={handleExport} disabled={!canExport}>
               导出
             </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreateEntry}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreateEntry} disabled={!canOperate}>
               新增条目
             </Button>
           </Space>
@@ -612,7 +627,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
 
       <Modal
         title={editingEntry ? '编辑文件条目' : '新增文件条目'}
-        open={entryModalOpen}
+        open={entryModalOpen && canOperate}
         onOk={handleSaveEntry}
         confirmLoading={entrySaving}
         onCancel={() => setEntryModalOpen(false)}
@@ -653,7 +668,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
 
       <Modal
         title={editingDept ? '重命名部门' : '新增部门'}
-        open={deptModalOpen}
+        open={deptModalOpen && canOperate}
         onOk={handleSaveDept}
         confirmLoading={deptSaving}
         onCancel={() => setDeptModalOpen(false)}
