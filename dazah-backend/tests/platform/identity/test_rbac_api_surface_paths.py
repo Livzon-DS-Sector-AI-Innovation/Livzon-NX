@@ -260,6 +260,11 @@ async def test_rbac_permission_preview_simulation_and_export(
     monkeypatch.setattr(
         rbac_api.PagePermissionService, "effective_grants", AsyncMock(return_value=[])
     )
+    monkeypatch.setattr(
+        rbac_api.PagePermissionService,
+        "integration_gaps",
+        AsyncMock(return_value=[]),
+    )
     response = await rbac_api.export_permissions(actor, db)
     assert response.status_code == 200
     assert "姓名" in response.body.decode("utf-8-sig")  # type: ignore[union-attr]
