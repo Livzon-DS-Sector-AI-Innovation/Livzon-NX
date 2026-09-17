@@ -99,7 +99,10 @@ function fermentCell(
   if (!row.ferment) return dash
   const v = row.ferment[key]
   if (v == null) return dash
-  const digits = key === 'planned_batches' && v % 1 ? 2 : 0
+  // 已完成产能为实测口径，保留两位小数（与单产品看板「发酵已完成产能」一致）；
+  // 计划批次数仅小数批（他汀折算）带小数；月计划产能维持整数
+  const digits =
+    key === 'done_yield_kg' || (key === 'planned_batches' && v % 1) ? 2 : 0
   const unit = key === 'planned_batches' ? '批' : 'kg'
   return <ValueCell v={v} digits={digits} unit={unit} big={key === 'done_yield_kg'} />
 }

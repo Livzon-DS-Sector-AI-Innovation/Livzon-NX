@@ -37,13 +37,13 @@ def paginated_response(
     page_size: int,
     total: int,
     message: str = "success",
+    extra_meta: dict[str, Any] | None = None,
 ) -> JSONResponse:
-    return success_response(
-        data=data,
-        message=message,
-        meta={
-            "page": page,
-            "page_size": page_size,
-            "total": total,
-        },
-    )
+    meta = {
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+    }
+    if extra_meta:
+        meta.update(extra_meta)
+    return success_response(data=data, message=message, meta=meta)

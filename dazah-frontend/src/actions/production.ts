@@ -396,7 +396,24 @@ export async function deleteFermentationRecord(id: string) {
 }
 // ============ 排产计划 Excel 存档 Actions ============
 
-export async function uploadScheduleExcel(formData: FormData, product = 'FA') {
+export interface UploadScheduleExcelOptions {
+  /** 以新文件修正「今天之前」的历史列（需 production:schedule-archive 权限） */
+  allowHistoryFix?: boolean
+  /** 历史修正原因（修正时后端必填） */
+  historyFixReason?: string
+}
+
+export async function uploadScheduleExcel(
+  formData: FormData,
+  product = 'FA',
+  options?: UploadScheduleExcelOptions,
+) {
+  if (options?.allowHistoryFix) {
+    formData.append('allow_history_fix', 'true')
+  }
+  if (options?.historyFixReason) {
+    formData.append('history_fix_reason', options.historyFixReason)
+  }
   const authHeaders = await getAuthHeaders()
   // multipart boundary 必须由运行时生成，剔除通用 JSON Content-Type
   delete authHeaders['Content-Type']

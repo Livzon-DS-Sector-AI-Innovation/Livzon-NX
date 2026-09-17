@@ -63,6 +63,20 @@ def _fake_archive(**overrides: Any) -> ScheduleExcelArchive:
     return ScheduleExcelArchive(**defaults)
 
 
+def _merge_report(**overrides: Any) -> dict[str, Any]:
+    """create_archive 合并报告的默认形态（无历史差异）。"""
+    report: dict[str, Any] = {
+        "recognized": True,
+        "matched_blocks": 0,
+        "frozen_columns": 0,
+        "discarded_changes": [],
+        "truncated": False,
+        "corrected": False,
+    }
+    report.update(overrides)
+    return report
+
+
 @pytest.fixture
 def isolated_uploads(tmp_path: Any, monkeypatch: Any) -> None:
     """上传原件写入临时目录，避免污染开发 uploads。"""
@@ -82,10 +96,13 @@ def mock_db_service(monkeypatch: Any) -> None:
         schedule_api.schedule_excel_service,
         "create_archive",
         AsyncMock(
-            return_value=_fake_archive(
-                rows=[["x"] * 3] * 301,
-                row_count=301,
-                col_count=3,
+            return_value=(
+                _fake_archive(
+                    rows=[["x"] * 3] * 301,
+                    row_count=301,
+                    col_count=3,
+                ),
+                _merge_report(),
             )
         ),
     )
@@ -95,6 +112,11 @@ def mock_db_service(monkeypatch: Any) -> None:
         AsyncMock(
             return_value=([(_fake_archive(row_count=5), "排产测试员")], 1)
         ),
+    )
+    monkeypatch.setattr(
+        schedule_api.schedule_excel_service,
+        "count_history_fixes",
+        AsyncMock(return_value=0),
     )
     monkeypatch.setattr(
         schedule_api.schedule_excel_service,
@@ -246,6 +268,160 @@ async def test_upload_rejects_bad_extension_and_corrupted_file(
     assert "解析失败" in corrupted.json()["message"]
 
 
+def _upload_files() -> dict[str, tuple[str, bytes, str]]:
+    return {
+        "file": (
+            "2026-09排产.xlsx",
+            _make_xlsx_bytes(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    }
+
+
+@pytest.mark.anyio
+async def test_upload_history_fix_requires_permission(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    isolated_uploads: None,
+    monkeypatch: Any,
+) -> None:
+    """allow_history_fix 需 production:schedule-archive 权限，缺失 403。"""
+    from app.platform.identity import rbac as identity_rbac
+
+    async def _no_archive_perm(_db: Any, _user_id: Any) -> set[str]:
+        return {"production:read"}
+
+    monkeypatch.setattr(
+        identity_rbac, "resolve_user_permissions", _no_archive_perm
+    )
+    response = await auth_client.post(
+        API_PREFIX,
+        files=_upload_files(),
+        data={"allow_history_fix": "true", "history_fix_reason": "修正笔误"},
+    )
+    assert response.status_code == 403
+    schedule_api.schedule_excel_service.create_archive.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_upload_history_fix_with_permission_writes_audit(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    isolated_uploads: None,
+    monkeypatch: Any,
+) -> None:
+    """有权限且报告 corrected：写审计日志，响应携带合并报告。"""
+    from app.platform.identity import rbac as identity_rbac
+
+    async def _with_archive_perm(_db: Any, _user_id: Any) -> set[str]:
+        return {"production:schedule-archive"}
+
+    monkeypatch.setattr(
+        identity_rbac, "resolve_user_permissions", _with_archive_perm
+    )
+    audit_mock = AsyncMock()
+    monkeypatch.setattr(schedule_api, "record_audit_log", audit_mock)
+    schedule_api.schedule_excel_service.create_archive.return_value = (
+        _fake_archive(),
+        _merge_report(
+            corrected=True,
+            discarded_changes=[
+                {
+                    "block": "2026-04",
+                    "row": "发酵罐号",
+                    "date": "2026-04-05",
+                    "column": 1,
+                    "old": "B403",
+                    "new": "B404",
+                }
+            ],
+        ),
+    )
+    response = await auth_client.post(
+        API_PREFIX,
+        files=_upload_files(),
+        data={"allow_history_fix": "true", "history_fix_reason": "排产表笔误"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["merge"]["corrected"] is True
+    assert "修正历史" in body["message"]
+    audit_mock.assert_awaited_once()
+    assert (
+        audit_mock.await_args.kwargs["action"]
+        == "schedule_excel_history_fix"
+    )
+    assert audit_mock.await_args.kwargs["extra"]["reason"] == "排产表笔误"
+
+
+@pytest.mark.anyio
+async def test_upload_rejects_unrecognized_sheet(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    isolated_uploads: None,
+) -> None:
+    """服务层报周期块未识别：400 并透出标准格式提示。"""
+    schedule_api.schedule_excel_service.create_archive.side_effect = ValueError(
+        "未能在新文件中识别任何排产周期块，已取消存档。"
+        "DR 排产表块标题格式应为：102车间2026年09月份多拉计划（09.05）"
+    )
+    response = await auth_client.post(API_PREFIX, files=_upload_files())
+    assert response.status_code == 400
+    assert "未能在新文件中识别任何排产周期块" in response.json()["message"]
+    # 建档失败时本次已落盘的原件被清理：目录只剩 fixture 预置文件
+    remaining = sorted(
+        p.name for p in schedule_api._original_upload_dir().iterdir()
+    )
+    assert remaining == ["fake.xlsx"]
+
+
+@pytest.mark.anyio
+async def test_list_archives_carries_history_fixes(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+) -> None:
+    """存档列表并轨展示历史修正审计摘要。"""
+    call_return = schedule_api.schedule_excel_service.list_archives.return_value
+    archive = call_return[0][0][0]
+    fixes_loader = AsyncMock(
+        return_value={
+            archive.id: [
+                {
+                    "fixed_at": "2026-09-17T08:00:00+08:00",
+                    "fixed_by_name": "张工",
+                    "reason": "排产表笔误",
+                    "product_code": "DR",
+                    "file_name": "多拉.xlsx",
+                    "changes": [
+                        {
+                            "block": "2026-04",
+                            "row": "发酵罐号",
+                            "date": "2026-04-05",
+                            "column": 1,
+                            "old": "B403",
+                            "new": "B404",
+                        }
+                    ],
+                    "changes_total": 1,
+                }
+            ]
+        }
+    )
+    monkeypatch.setattr(
+        schedule_api.schedule_excel_service, "list_history_fixes", fixes_loader
+    )
+    schedule_api.schedule_excel_service.count_history_fixes.return_value = 2
+    listing = await auth_client.get(f"{API_PREFIX}?page=1&page_size=20")
+    assert listing.status_code == 200
+    body = listing.json()
+    item = body["data"][0]
+    assert item["history_fixes"][0]["reason"] == "排产表笔误"
+    assert item["history_fixes"][0]["changes"][0]["old"] == "B403"
+    # 累计口径：当前产品全部历史修正次数随 meta 返回
+    assert body["meta"]["history_fix_total"] == 2
+
+
 @pytest.mark.anyio
 async def test_unauthenticated_requests_are_rejected(client: AsyncClient) -> None:
     assert (await client.get(API_PREFIX)).status_code == 401
@@ -270,7 +446,7 @@ async def test_service_persistence_roundtrip() -> None:
             parsed = schedule_excel_service.parse_workbook_bytes(
                 _make_xlsx_bytes(5)
             )
-            archive = await schedule_excel_service.create_archive(
+            archive, _report = await schedule_excel_service.create_archive(
                 session,
                 file_name="冒烟.xlsx",
                 sheet_name=parsed["sheet_name"],

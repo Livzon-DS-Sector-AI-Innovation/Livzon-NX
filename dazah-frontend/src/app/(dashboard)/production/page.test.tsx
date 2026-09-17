@@ -1019,8 +1019,8 @@ describe('ProductionHomePage (fermentation board)', () => {
     expect(text).toContain('发酵罐实时状态')
     expect(text).not.toContain('提炼已出成品')
     expect(text).not.toContain('提炼收率（实时）')
-    // 收率分析占位对发酵岗可见（无敏感数据）
-    expect(text).toContain('收率分析（待接入）')
+    // 待接入占位对发酵岗可见（无敏感数据）
+    expect(text).toContain('待接入')
     expect(text).not.toContain('批次台账')
     expect(text).not.toContain('成品日报')
   })
@@ -1046,8 +1046,8 @@ describe('ProductionHomePage (fermentation board)', () => {
     // 批次台账/饼状图/成品日报卡片已下线
     expect(text).not.toContain('批次台账')
     expect(text).not.toContain('成品日报')
-    // 收率分析占位卡对提炼岗可见
-    expect(text).toContain('收率分析（待接入）')
+    // 待接入占位卡对提炼岗可见
+    expect(text).toContain('待接入')
     // 发酵模块（KPI/罐状态/图表）对提炼岗不可见
     expect(text).not.toContain('本月计划批次')
     expect(text).not.toContain('发酵罐实时状态')
@@ -1064,7 +1064,7 @@ describe('ProductionHomePage (fermentation board)', () => {
     // 收率卡已改为占位，不再展示实时/配对口径数值
     expect(text).not.toContain('提炼收率（实时）')
     expect(text).not.toContain('88.8%')
-    expect(text).toContain('收率分析（待接入）')
+    expect(text).toContain('待接入')
     // 最近完成批次表已移除提炼成品/单批收率列
     expect(text).not.toContain('提炼成品(kg)')
     expect(text).not.toContain('单批收率')

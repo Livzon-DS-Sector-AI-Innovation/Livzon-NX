@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta, timezone
 from io import BytesIO
 from typing import Any
 
@@ -229,6 +229,10 @@ def serialize_archive_summary(
     return payload
 
 
+# 排产表按北京时间维护，容器多为 UTC：冻结基准日统一取北京日期
+_BEIJING_TZ = timezone(timedelta(hours=8))
+
+
 async def create_archive(
     session: AsyncSession,
     *,
@@ -242,16 +246,52 @@ async def create_archive(
     row_count: int,
     col_count: int,
     created_by: uuid.UUID | None = None,
-) -> ScheduleExcelArchive:
+    history_fix: bool = False,
+    history_fix_reason: str = "",
+) -> tuple[ScheduleExcelArchive, dict[str, Any]]:
     # 同产品重复存档时冻结历史：今天之前的日列沿用当前最新存档，
     # 避免重发的排产改动/漏带历史放罐记录覆盖看板历史口径。
+    # history_fix=True 时以新文件修正历史（须填原因，由 API 层校验权限）。
     latest = await fermentation_board_service.load_latest_archive(
         session, product_code=product_code
     )
+    report: dict[str, Any] = {
+        "recognized": True,
+        "matched_blocks": 0,
+        "frozen_columns": 0,
+        "discarded_changes": [],
+        "truncated": False,
+        "corrected": False,
+    }
     if latest is not None and latest.rows:
-        rows = fermentation_board_service.merge_schedule_rows_preserve_past(
-            rows, latest.rows, date.today()
+        merged, report = (
+            fermentation_board_service.merge_schedule_rows_for_product(
+                rows,
+                latest.rows,
+                datetime.now(_BEIJING_TZ).date(),
+                product_code,
+                freeze_past=not history_fix,
+            )
         )
+        if not report["recognized"]:
+            example = fermentation_board_service.SHEET_FORMAT_EXAMPLES.get(
+                product_code, "标准扎帐周期块标题（对照最近一次正常存档的排产表）"
+            )
+            raise ValueError(
+                f"未能在新文件中识别任何排产周期块，已取消存档。"
+                f"{product_code} 排产表块标题格式应为：{example}"
+            )
+        rows = merged
+        if report["discarded_changes"] and history_fix:
+            if not history_fix_reason.strip():
+                raise ValueError("应用历史修正必须填写修正原因")
+            report["corrected"] = True
+        elif report["discarded_changes"]:
+            report["warning"] = (
+                f"检测到 {len(report['discarded_changes'])} 处「今天之前」的"
+                "历史改动，已按冻结规则保留原存档"
+                + ("（仅展示前 200 处）" if report["truncated"] else "")
+            )
     archive = ScheduleExcelArchive(
         product_code=product_code,
         file_name=file_name,
@@ -267,7 +307,78 @@ async def create_archive(
     session.add(archive)
     await session.commit()
     await session.refresh(archive)
-    return archive
+    return archive, report
+
+
+async def count_history_fixes(session: AsyncSession, product_code: str) -> int:
+    """统计某产品累计历史修正次数（audit.logs 为唯一事实源）。
+
+    修正记录量级极小,取回后在 Python 侧按 extra.product_code 过滤,
+    避免 JSON/JSONB 方言差异（extra 列是通用 JSON,无 .astext）。
+    """
+    from app.platform.audit.models import AuditLog
+
+    result = await session.execute(
+        select(AuditLog.extra).where(
+            AuditLog.action == "schedule_excel_history_fix",
+            AuditLog.resource_type == "schedule_excel_archive",
+        )
+    )
+    return sum(
+        1
+        for (extra,) in result
+        if isinstance(extra, dict)
+        and extra.get("product_code") == product_code
+    )
+
+
+async def list_history_fixes(
+    session: AsyncSession,
+    archive_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, list[dict[str, Any]]]:
+    """批量查询存档的历史修正记录（展示用，audit.logs 仍为唯一事实源）。
+
+    返回 {存档 id: [修正记录]}；每条含操作时间/操作人/原因与逐格改动
+    （changes 最多返回 50 条，changes_total 记实际总数）。
+    """
+    if not archive_ids:
+        return {}
+    # 平台审计模型在服务层懒加载，避免模块导入期耦合（同 hr/service 模式）
+    from app.platform.audit.models import AuditLog
+    from app.platform.identity.models import User
+
+    rows = (
+        await session.execute(
+            select(AuditLog, User.name)
+            .outerjoin(User, User.id == AuditLog.user_id)
+            .where(
+                AuditLog.action == "schedule_excel_history_fix",
+                AuditLog.resource_type == "schedule_excel_archive",
+                AuditLog.resource_id.in_(archive_ids),
+            )
+            .order_by(AuditLog.created_at.asc())
+        )
+    ).all()
+    fixes: dict[uuid.UUID, list[dict[str, Any]]] = {}
+    for log, user_name in rows:
+        if log.resource_id is None:
+            continue
+        extra = log.extra or {}
+        changes = (log.new_value or {}).get("changes") or []
+        fixes.setdefault(log.resource_id, []).append(
+            {
+                "fixed_at": (
+                    log.created_at.isoformat() if log.created_at else None
+                ),
+                "fixed_by_name": user_name,
+                "reason": extra.get("reason"),
+                "product_code": extra.get("product_code"),
+                "file_name": extra.get("file_name"),
+                "changes": changes[:50],
+                "changes_total": len(changes),
+            }
+        )
+    return fixes
 
 
 async def list_archives(
