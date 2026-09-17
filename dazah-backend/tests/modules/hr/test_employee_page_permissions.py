@@ -316,9 +316,15 @@ async def test_employee_http_permissions_fail_before_service(
 
 
 def test_employee_policy_is_reviewed_but_hr_publish_gate_remains_closed():
+    # 员工列表 GET 同时授权培训签到页（跨页调用，referer 派生 sign-in key）；
+    # 写操作仍仅限员工管理页
     assert api_binding_for_route("GET", "/api/v1/hr/employees").page_keys == (
         EMPLOYEE_PAGE_KEY,
+        "hr:training:sign-in-sheet",
     )
+    assert api_binding_for_route(
+        "PUT", "/api/v1/hr/employees/{employee_id}"
+    ).page_keys == (EMPLOYEE_PAGE_KEY,)
     assert (
         api_binding_for_route(
             "DELETE", "/api/v1/hr/employees/{employee_id}"

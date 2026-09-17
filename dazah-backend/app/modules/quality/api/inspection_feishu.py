@@ -43,6 +43,10 @@ from app.modules.quality.schemas.inspection_dashboard import (
     InspectionDashboardResponse,
     TrendAIReanalyzeRequest,
 )
+from app.modules.quality.schemas.instrument_certificate import (
+    CertificateRematchRequest,
+    InstrumentCertificateAnalyzeResult,
+)
 from app.modules.quality.service import (
     ensure_finished_entity_in_group,
     ensure_material_entity_in_group,
@@ -82,6 +86,12 @@ from app.modules.quality.service.inspection_items_mirror import (
     list_distinct_column_values,
     list_items_mirror,
     sync_items_page,
+)
+from app.modules.quality.service.instrument_certificate_analyze import (
+    CERTIFICATE_ALLOWED_EXTENSIONS,
+    CERTIFICATE_MAX_BYTES,
+    analyze_calibration_certificate,
+    rematch_certificate_fields,
 )
 from app.modules.quality.service.instrument_import import (
     confirm_instrument_import,
@@ -463,9 +473,7 @@ async def api_items_inventory_filter_options(
     _require_user(current_user)
     locations = await list_distinct_column_values(db, PAGE_INVENTORY, "存放位置")
     alarms = await list_distinct_column_values(db, PAGE_INVENTORY, "库存报警")
-    return success_response(
-        data={"存放位置": locations, "库存报警": alarms}
-    )
+    return success_response(data={"存放位置": locations, "库存报警": alarms})
 
 
 @router.post(
@@ -503,6 +511,7 @@ async def api_push_low_stock_test(
 # ═══════════════════════════════════════
 #  仪器管理（本地镜像优先，8 张飞书子表 / 两个 Base）
 # ═══════════════════════════════════════
+
 
 async def _instrument_page_list(
     db: AsyncSession,
@@ -649,9 +658,7 @@ async def api_export_maintenance_summary(
     return StreamingResponse(
         io.BytesIO(content),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition": f"attachment; filename*=utf-8''{encoded}"
-        },
+        headers={"Content-Disposition": f"attachment; filename*=utf-8''{encoded}"},
     )
 
 
@@ -876,6 +883,67 @@ async def api_pull_instr_cal_external(
 ) -> Any:
     _require_user(current_user)
     return await _safe_pull_mirror(sync_instrument_page, "qc_instr_cal_external", db)
+
+
+@router.post(
+    "/instruments/cal-external/certificate-analyze",
+    response_model=ApiResponseEnvelope[InstrumentCertificateAnalyzeResult],
+)
+async def api_analyze_instrument_certificate(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    """上传校准证书 → AI 识别 → 实时反查 QC 设备目录，返回外部校准表预填字段。
+
+    只做识别与预填，不写飞书记录；记录由前端人工确认后走通用新增接口提交。
+    """
+    user_id = _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["qc"],
+    )
+    filename, content = await read_upload_secure(
+        file,
+        max_bytes=CERTIFICATE_MAX_BYTES,
+        allowed_extensions=CERTIFICATE_ALLOWED_EXTENSIONS,
+        what="校准证书文件",
+    )
+    result = await analyze_calibration_certificate(
+        db,
+        file_name=filename,
+        content=content,
+        content_type=file.content_type or "",
+    )
+    logger.info(
+        "instrument certificate analyzed by user=%s file=%s", str(user_id), filename
+    )
+    return success_response(data=result)
+
+
+@router.post(
+    "/instruments/cal-external/certificate-rematch",
+    response_model=ApiResponseEnvelope[InstrumentCertificateAnalyzeResult],
+)
+async def api_rematch_instrument_certificate(
+    payload: CertificateRematchRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    """人工修正识别字段后重新反查 QC 设备目录（填入表单前的修正闭环）。
+
+    按修正后的出厂编号重新匹配目录、重算下次检定日期、刷新序号；
+    证书附件复用首次识别上传的 token，不重复上传。
+    """
+    _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["qc"],
+    )
+    result = await rematch_certificate_fields(db, request=payload)
+    return success_response(data=result)
 
 
 # ── 仪器管理仪表盘 / 仪器档案 / 仪器台账批量导入 ──

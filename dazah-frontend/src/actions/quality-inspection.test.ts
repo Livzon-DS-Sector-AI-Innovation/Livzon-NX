@@ -14,11 +14,13 @@ vi.mock('next/headers', () => ({
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 
 import {
+  analyzeInstrumentCertificate,
   createInspectionFeishuRecord,
   deleteInspectionFeishuRecord,
   pullInspectionFeishuRecords,
   pushItemsLowStock,
   pushItemsLowStockTest,
+  rematchInstrumentCertificate,
   updateInspectionFeishuRecord,
 } from './quality-inspection'
 
@@ -149,5 +151,65 @@ describe('quality inspection feishu record actions', () => {
       `${API_BASE}/api/v1/quality/items/dashboard/push-low-stock/test`,
       expect.objectContaining({ method: 'POST' }),
     )
+  })
+
+  it('analyzes an instrument certificate via multipart POST', async () => {
+    const payload = {
+      extracted: { instrument_name: 'pH计' },
+      preset_fields: { 器具名称: 'pH计' },
+      attachment_token: 'tok-1',
+    }
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ code: 200, data: payload }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const file = new File(['cert'], 'cert.png', { type: 'image/png' })
+    await expect(analyzeInstrumentCertificate(file)).resolves.toEqual(payload)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe(
+      `${API_BASE}/api/v1/quality/instruments/cal-external/certificate-analyze`,
+    )
+    expect(init.method).toBe('POST')
+    expect(init.body).toBeInstanceOf(FormData)
+  })
+
+  it('throws when certificate analyze returns no data', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ code: 200 })))
+    const file = new File(['cert'], 'cert.png', { type: 'image/png' })
+    await expect(analyzeInstrumentCertificate(file)).rejects.toThrow(
+      '未收到证书识别结果',
+    )
+  })
+
+  it('rematches a certificate with corrected fields', async () => {
+    const payload = {
+      extracted: { serial_no: 'SN-2' },
+      preset_fields: { 出厂编号: 'SN-2' },
+      attachment_token: 'tok-1',
+    }
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ code: 200, data: payload }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const req = { serial_no: 'SN-2', attachment_token: 'tok-1' }
+    await expect(
+      rematchInstrumentCertificate(req as never),
+    ).resolves.toEqual(payload)
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/quality/instruments/cal-external/certificate-rematch`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify(req),
+      }),
+    )
+  })
+
+  it('throws when rematch returns no data', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ code: 200 })))
+    await expect(
+      rematchInstrumentCertificate({ serial_no: 'SN-2' } as never),
+    ).rejects.toThrow('未收到重新匹配结果')
   })
 })

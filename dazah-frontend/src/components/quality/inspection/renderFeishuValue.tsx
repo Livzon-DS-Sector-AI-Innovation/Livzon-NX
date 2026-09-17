@@ -116,6 +116,9 @@ function formatFormulaDateValue(value: unknown): string {
 
 const DATE_LIKE_UI_TYPES = ['DateTime', 'CreatedTime', 'ModifiedTime']
 
+/** 列名带日期语义的公式/查找列：元数据缺 result_ui_type 时按列名兜底换算日期。 */
+const FORMULA_DATE_NAME_PATTERN = /日期|有效期|时间/
+
 function formatCheckboxValue(value: unknown): string {
   if (value === true || value === 'True' || value === 'true') return '是'
   if (value === false || value === 'False' || value === 'false') return '否'
@@ -388,6 +391,17 @@ export function renderFeishuValue(
     DATE_LIKE_UI_TYPES.includes(options.resultUiType) &&
     (typeof value === 'number' || typeof value === 'string')
   ) {
+    return formatFormulaDateValue(value)
+  }
+  if (
+    (uiType === 'Formula' || uiType === 'Lookup') &&
+    fieldName &&
+    FORMULA_DATE_NAME_PATTERN.test(fieldName) &&
+    (typeof value === 'number' ||
+      (typeof value === 'string' && /^\d+(\.\d+)?$/.test(value.trim())))
+  ) {
+    // 部分飞书 Base 的公式列（如「下次检定日期」= EDATE(检定日期, 周期)-1）
+    // 元数据不带结果类型，回读值为 Excel 序列号或毫秒时间戳字符串，按列名兜底换算
     return formatFormulaDateValue(value)
   }
   if (

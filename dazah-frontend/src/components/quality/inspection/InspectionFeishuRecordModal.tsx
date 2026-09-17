@@ -89,6 +89,16 @@ export function InspectionFeishuRecordModal({
         if (v === undefined || v === null || v === '') continue
         fields[f.field_name] = toApiValue(f, v)
       }
+      if (mode === 'create' && initialValues) {
+        // 证书识别预填的附件字段是只读控件（表单不收集），创建时合并提交；
+        // 编辑模式不回写只读字段
+        for (const f of fieldsMeta) {
+          if (isFieldEditable(f) || f.ui_type !== 'Attachment') continue
+          const preset = initialValues[f.field_name]
+          if (preset === undefined || preset === null || preset === '') continue
+          fields[f.field_name] = preset
+        }
+      }
       setSubmitting(true)
       if (mode === 'create') {
         await createInspectionFeishuRecord(entityCode, fields)

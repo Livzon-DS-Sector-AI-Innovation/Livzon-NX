@@ -16993,6 +16993,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quality/instruments/cal-external/certificate-analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Api Analyze Instrument Certificate
+         * @description 上传校准证书 → AI 识别 → 实时反查 QC 设备目录，返回外部校准表预填字段。
+         *
+         *     只做识别与预填，不写飞书记录；记录由前端人工确认后走通用新增接口提交。
+         */
+        post: operations["api_analyze_instrument_certificate_api_v1_quality_instruments_cal_external_certificate_analyze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/instruments/cal-external/certificate-rematch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Api Rematch Instrument Certificate
+         * @description 人工修正识别字段后重新反查 QC 设备目录（填入表单前的修正闭环）。
+         *
+         *     按修正后的出厂编号重新匹配目录、重算下次检定日期、刷新序号；
+         *     证书附件复用首次识别上传的 token，不重复上传。
+         */
+        post: operations["api_rematch_instrument_certificate_api_v1_quality_instruments_cal_external_certificate_rematch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quality/instruments/cal-external/pull": {
         parameters: {
             query?: never;
@@ -27972,6 +28017,24 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[InstrumentCertificateAnalyzeResult] */
+        ApiResponseEnvelope_InstrumentCertificateAnalyzeResult_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["InstrumentCertificateAnalyzeResult"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[KnowledgeArticleDetail] */
         ApiResponseEnvelope_KnowledgeArticleDetail_: {
             /**
@@ -30793,6 +30856,11 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_api_analyze_instrument_certificate_api_v1_quality_instruments_cal_external_certificate_analyze_post */
+        Body_api_analyze_instrument_certificate_api_v1_quality_instruments_cal_external_certificate_analyze_post: {
+            /** File */
+            file: string;
+        };
         /** Body_api_confirm_instrument_import_api_v1_quality_instruments_equipment_import_confirm_post */
         Body_api_confirm_instrument_import_api_v1_quality_instruments_equipment_import_confirm_post: {
             /** File */
@@ -32519,6 +32587,52 @@ export interface components {
             validity_period?: string | null;
         };
         /**
+         * CertificateExtractedFields
+         * @description AI 从证书中提取的原始字段（值可能为空，供人工核对）。
+         */
+        CertificateExtractedFields: {
+            /**
+             * Calibration Agency
+             * @description 检定/校准机构
+             */
+            calibration_agency?: string | null;
+            /**
+             * Calibration Date
+             * @description 检定/校准日期 YYYY-MM-DD
+             */
+            calibration_date?: string | null;
+            /**
+             * Certificate No
+             * @description 证书编号
+             */
+            certificate_no?: string | null;
+            /**
+             * Conclusion
+             * @description 检定/校准结论
+             */
+            conclusion?: string | null;
+            /**
+             * Instrument Name
+             * @description 仪器/器具名称
+             */
+            instrument_name?: string | null;
+            /**
+             * Model
+             * @description 型号/规格
+             */
+            model?: string | null;
+            /**
+             * Next Calibration Date Stated
+             * @description 证书载明的下次检定日期/有效期至（可能缺失）
+             */
+            next_calibration_date_stated?: string | null;
+            /**
+             * Serial No
+             * @description 出厂编号/器具编号
+             */
+            serial_no?: string | null;
+        };
+        /**
          * CertificateRecordSummary
          * @description Compact certificate record for dashboard lists.
          */
@@ -32578,6 +32692,38 @@ export interface components {
              * @description 子表名称
              */
             sheet_name: string;
+        };
+        /**
+         * CertificateRematchRequest
+         * @description 人工修正后的证书字段 → 重新反查设备目录并重建预填字段。
+         */
+        CertificateRematchRequest: {
+            /**
+             * Attachment File Token
+             * @description 首次识别上传的证书附件 token（复用，不重复上传）
+             */
+            attachment_file_token?: string | null;
+            /** Attachment Name */
+            attachment_name?: string | null;
+            /** Calibration Agency */
+            calibration_agency?: string | null;
+            /** Calibration Date */
+            calibration_date?: string | null;
+            /** Certificate No */
+            certificate_no?: string | null;
+            /** Conclusion */
+            conclusion?: string | null;
+            /** Instrument Name */
+            instrument_name?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Next Calibration Date Stated */
+            next_calibration_date_stated?: string | null;
+            /**
+             * Serial No
+             * @description 修正后的出厂编号
+             */
+            serial_no?: string | null;
         };
         /**
          * CertificateReminderRecipientOption
@@ -37637,6 +37783,47 @@ export interface components {
             report_system_prompt: string;
             /** Updated At */
             updated_at?: string | null;
+        };
+        /**
+         * DeviceDirectoryMatch
+         * @description QC 设备目录实时反查结果。
+         */
+        DeviceDirectoryMatch: {
+            /**
+             * Instrument Name
+             * @description 目录中的器具名称
+             */
+            instrument_name?: string | null;
+            /**
+             * Location
+             * @description 使用地点
+             */
+            location?: string | null;
+            /**
+             * Match By
+             * @description 命中的目录列名（如 器具编号）
+             */
+            match_by?: string | null;
+            /**
+             * Matched
+             * @description 是否在设备目录中命中
+             */
+            matched: boolean;
+            /**
+             * Period Months
+             * @description 检定周期（月）
+             */
+            period_months?: number | null;
+            /**
+             * Period Text
+             * @description 目录中的周期原文
+             */
+            period_text?: string | null;
+            /**
+             * Record Id
+             * @description 目录记录 ID
+             */
+            record_id?: string | null;
         };
         /**
          * DocumentDepartmentOut
@@ -43682,6 +43869,36 @@ export interface components {
              * @default
              */
             training_name: string;
+        };
+        /**
+         * InstrumentCertificateAnalyzeResult
+         * @description 证书识别端点响应：提取结果 + 目录反查 + 预填字段（人工确认后提交）。
+         */
+        InstrumentCertificateAnalyzeResult: {
+            /**
+             * Attachment File Token
+             * @description 已上传证书的附件 token（重新匹配时透传复用，不重复上传）
+             */
+            attachment_file_token?: string | null;
+            /**
+             * Computed Next Calibration Date
+             * @description 按目录周期推算的下次检定日期 YYYY-MM-DD（检定日期+周期-1天）
+             */
+            computed_next_calibration_date?: string | null;
+            directory: components["schemas"]["DeviceDirectoryMatch"];
+            extracted: components["schemas"]["CertificateExtractedFields"];
+            /**
+             * Mapped Fields
+             * @description 可写入外部校准表的字段（键=飞书字段名）
+             */
+            mapped_fields?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Warnings
+             * @description 识别/反查/映射过程中的提示
+             */
+            warnings?: string[];
         };
         /** InteractionFormField */
         InteractionFormField: {
@@ -104695,6 +104912,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponseEnvelope_list_dict_str__Any___"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_analyze_instrument_certificate_api_v1_quality_instruments_cal_external_certificate_analyze_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_api_analyze_instrument_certificate_api_v1_quality_instruments_cal_external_certificate_analyze_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_InstrumentCertificateAnalyzeResult_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_rematch_instrument_certificate_api_v1_quality_instruments_cal_external_certificate_rematch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CertificateRematchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_InstrumentCertificateAnalyzeResult_"];
                 };
             };
             /** @description Validation Error */

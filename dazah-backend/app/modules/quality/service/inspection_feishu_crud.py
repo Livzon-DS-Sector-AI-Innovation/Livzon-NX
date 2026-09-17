@@ -421,6 +421,12 @@ async def get_inspection_entity_fields(
         )
         if isinstance(inner_type, dict):
             result_ui_type = str(inner_type.get("ui_type") or "")
+        # 公式结果为单选/多选时（如内部校验计划「状态」=IFS(...)），选项元数据
+        # 挂在 property.type.ui_property.options；前端筛选下拉依赖它
+        if not options_raw and isinstance(inner_type, dict):
+            ui_prop = inner_type.get("ui_property")
+            if isinstance(ui_prop, dict):
+                options_raw = ui_prop.get("options")
         fields.append(
             {
                 "field_name": field_name,
