@@ -52,6 +52,15 @@ WAREHOUSE_INBOUND_PRODUCT_NAMES: dict[str, str] = {
 # 窗口结束后批次才视为「已放罐/完成」（罐状态、recent 最近完成、完成 KPI 同口径）。
 DUMP_WINDOW = timedelta(hours=2)
 
+# 漏录提醒：批次过放罐窗口超 24h 仍未录产量 → info；超 72h 升级 warn
+YIELD_ENTRY_GRACE_HOURS = 24
+YIELD_ENTRY_WARN_HOURS = 72
+# 周期末进度预警：周期剩余 ≤7 天且已录产量进度落后时间进度 ≥10 个百分点
+PROGRESS_WARN_DAYS = 7
+PROGRESS_LAG_PCT = 10
+# 下周期排产提醒：当前周期剩余 ≤3 天且无存档覆盖下一周期
+SCHEDULE_UPLOAD_WARN_DAYS = 3
+
 _TITLE_RE = re.compile(
     r"(\d{4})年(\d{1,2})月27日～(\d{4})年(\d{1,2})月26日"
 )
@@ -657,14 +666,105 @@ def _append_schedule_alerts(
         )
 
 
+def _fmt_batches(value: float | int) -> str:
+    """批次数文案：整数批显示整数；他汀折算小数批保留有效小数（9.65→9.65）。"""
+    if isinstance(value, float) and value % 1:
+        return f"{value:.2f}".rstrip("0").rstrip(".")
+    return str(int(value))
+
+
+def _append_kpi_alerts(
+    alerts: list[dict[str, Any]],
+    *,
+    block: dict[str, Any],
+    now: datetime,
+    kpis: dict[str, Any],
+    missing_dumps: list[tuple[str, datetime]],
+    today: date | None = None,
+) -> None:
+    """漏录提醒与周期末进度预警（FA/DR/MP 看板共用，阈值见模块头部常量）。
+
+    - 待录：批次过放罐窗口超宽限期仍未录产量；超 72h 升级 warn（此时不再
+      重复播 info 档，录入抽屉的下拉本就列出全部未录批次）；
+    - 进度：周期临期（剩余 ≤7 天）且已录产量进度落后时间进度 ≥10 个百分点。
+    仅「真实今天落在周期内」时播报：历史周期只读回看不播旧账，
+    未来周期无产可录；汇总路径须传真实 today（其 now 为所选月 15 日）。
+    """
+    ref_today = today or now.date()
+    if not (block["start"] <= ref_today <= block["end"]):
+        return
+    grace = timedelta(hours=YIELD_ENTRY_GRACE_HOURS)
+    warn_after = timedelta(hours=YIELD_ENTRY_WARN_HOURS)
+    stale_info: list[str] = []
+    stale_warn: list[str] = []
+    for batch_no, dump_end in missing_dumps:
+        overdue = now - dump_end
+        if overdue > warn_after:
+            stale_warn.append(batch_no)
+        elif overdue > grace:
+            stale_info.append(batch_no)
+    if stale_warn:
+        sample = "、".join(stale_warn[:2])
+        prefix = "如 " if len(stale_warn) > 1 else ""
+        alerts.append(
+            {
+                "level": "warn",
+                "text": (
+                    f"【待录】{len(stale_warn)} 批已放罐超 3 天未录产量"
+                    f"（{prefix}{sample}），影响完成 KPI 与产量图表"
+                ),
+            }
+        )
+    elif stale_info:
+        sample = "、".join(stale_info[:2])
+        prefix = "如 " if len(stale_info) > 1 else ""
+        alerts.append(
+            {
+                "level": "info",
+                "text": (
+                    f"【待录】{len(stale_info)} 批已放罐超 1 天未录产量"
+                    f"（{prefix}{sample}），请录入"
+                ),
+            }
+        )
+    remaining_days = (block["end"] - ref_today).days
+    if remaining_days <= PROGRESS_WARN_DAYS:
+        planned = kpis.get("month_planned")
+        done = kpis.get("done_with_yield")
+        if planned and done is not None:
+            span_days = (block["end"] - block["start"]).days + 1
+            elapsed_pct = (
+                (ref_today - block["start"]).days + 1
+            ) / span_days * 100
+            actual_pct = done / planned * 100
+            lag = elapsed_pct - actual_pct
+            if lag >= PROGRESS_LAG_PCT:
+                alerts.append(
+                    {
+                        "level": "warn",
+                        "text": (
+                            f"【进度】本周期剩 {remaining_days} 天，已录产量 "
+                            f"{_fmt_batches(done)}/{_fmt_batches(planned)} 批"
+                            f"（{round(actual_pct)}%），"
+                            f"落后时间进度 {round(lag)} 个百分点"
+                        ),
+                    }
+                )
+
+
 def build_dr_board(
     rows: list[list[Any]],
     maintenance: list[dict[str, Any]],
     now: datetime,
     actuals: list[dict[str, Any]] | None = None,
     block: dict[str, Any] | None = None,
+    today: date | None = None,
+    alert_now: datetime | None = None,
 ) -> dict[str, Any] | None:
-    """DR（102车间）看板组装：罐状态按进罐/放罐日期推算，KPI 按批次计。"""
+    """DR（102车间）看板组装：罐状态按进罐/放罐日期推算，KPI 按批次计。
+
+    today/alert_now 为漏录/进度告警的真实时间基准（汇总路径传入）。
+    """
     if block is None:
         block = find_dr_period_block(rows, now)
     if block is None:
@@ -702,6 +802,12 @@ def build_dr_board(
         key=lambda b: (b["dump"], b["batch_no"]),  # type: ignore[arg-type, return-value]
         reverse=True,
     )
+    # 已放罐未录产量批次（供漏录提醒；DR 排产无放罐时刻，按当日零点折算）
+    missing_dumps = [
+        (b["batch_no"], datetime.combine(b["dump"], time(0, 0)))
+        for b in done
+        if not actual_by_batch.get(b["batch_no"], {}).get("yield_kg")
+    ]
     # 运行中/未开始按「本周期计划放罐」口径（放罐日期在周期内）：
     # 跨周期放罐的在制罐不计入 KPI，保证四段进度之和 = 计划放罐数
     #（罐状态板仍完整展示在制罐）
@@ -868,8 +974,17 @@ def build_dr_board(
         for b in sorted(batches, key=lambda x: x["batch_no"])
     ]
     note_text = _note_row_text(rows[block["start_row"] + _DR_ROW_NOTE])
-    # 播报：预放罐/检修冲突/待进罐/排产备注（对齐 FA 播报体验）
+    # 播报：漏录/进度告警 + 预放罐/检修冲突/待进罐/排产备注（对齐 FA 播报体验）；
+    # KPI 告警先入列，_append_schedule_alerts 的空列表兜底才不会误触发
     alerts: list[dict[str, Any]] = []
+    _append_kpi_alerts(
+        alerts,
+        block=block,
+        now=alert_now or now,
+        kpis=kpis,
+        missing_dumps=missing_dumps,
+        today=today,
+    )
     _append_schedule_alerts(
         alerts,
         tanks=tanks,
@@ -1390,11 +1505,14 @@ def build_mp_board(
     actuals: list[dict[str, Any]] | None = None,
     block: dict[str, Any] | None = None,
     product: str = "MC",
+    today: date | None = None,
+    alert_now: datetime | None = None,
 ) -> dict[str, Any] | None:
     """MP（101车间）看板组装：批号时间线推算罐状态，KPI 按批次计。
 
     product 为 LV/MV 时复用同一组装，改走 103 他汀自然月块解析
     （块内批次整体计入，罐号按倒罐/直放规则回填）。
+    today/alert_now 为漏录/进度告警的真实时间基准（汇总路径传入）。
     """
     if block is None:
         block = find_mp_period_block(rows, now, product=product)
@@ -1431,6 +1549,12 @@ def build_mp_board(
         key=lambda b: (b["dump"], b["batch_no"]),  # type: ignore[arg-type, return-value]
         reverse=True,
     )
+    # 已放罐未录产量批次（供漏录提醒；与 KPI 的产量真值语义一致）
+    missing_dumps = [
+        (b["batch_no"], b["dump"] + DUMP_WINDOW)
+        for b in done
+        if not actual_by_batch.get(b["batch_no"], {}).get("yield_kg")
+    ]
     # 运行中/未开始按「本周期计划放罐」口径（放罐日期在周期内）：
     # 跨周期放罐的在制罐不计入 KPI，保证四段进度之和 = 计划放罐数
     running = [
@@ -1627,8 +1751,17 @@ def build_mp_board(
         else:
             note_row = []
     note_text = _note_row_text(note_row)
-    # 播报：预放罐/检修冲突/待进罐/排产备注（对齐 FA 播报体验）
+    # 播报：漏录/进度告警 + 预放罐/检修冲突/待进罐/排产备注（对齐 FA 播报体验）；
+    # KPI 告警先入列，_append_schedule_alerts 的空列表兜底才不会误触发
     alerts: list[dict[str, Any]] = []
+    _append_kpi_alerts(
+        alerts,
+        block=block,
+        now=alert_now or now,
+        kpis=kpis,
+        missing_dumps=missing_dumps,
+        today=today,
+    )
     _append_schedule_alerts(
         alerts,
         tanks=tanks,
@@ -1746,45 +1879,275 @@ def _set_cell(
     row[col_index] = value
 
 
+# ═══════════════════ 重存档历史冻结（按产品适配） ═══════════════════
+# 重新上传排产 Excel 时冻结「今天之前」的日列，防止车间重发文件漏带或
+# 改动历史放罐/移种记录，覆盖看板已依赖的历史口径（罐完成状态、最近
+# 完成、完成 KPI、批次产量归属周期）。各产品表布局不同，周期块识别、
+# 日列解析与冻结行跨度按产品适配；历史修正（以新文件为准）由调用方
+# 通过 freeze_past=False 显式开启。
+
+
+# 各产品排产表的标准块标题示例（识别失败时的存档拒绝提示）
+SHEET_FORMAT_EXAMPLES: dict[str, str] = {
+    "FA": "2026年08月27日～2026年09月26日",
+    "DR": "102车间2026年09月份多拉计划（09.05）",
+    "MC": "2026年08月MC放罐计划",
+    "LV": "2026年08月27日～2026年09月26日 103发酵洛伐计划",
+    "MV": "2026年08月27日～2026年09月26日 103发酵美伐计划",
+}
+
+# 历史改动清单上限：超出只记数不展开，避免整表重排撑爆响应与审计
+MERGE_DIFF_LIMIT = 200
+
+
+def _fa_sheet_blocks(rows: list[list[Any]]) -> list[dict[str, Any]]:
+    """FA 表周期块枚举：key=扎帐起始日，冻结行跨度=日期行～备注行。"""
+    blocks: list[dict[str, Any]] = []
+    for start, block in _index_blocks(rows).items():
+        blocks.append(
+            {
+                "key": start,
+                "start_row": block["start_row"],
+                "label": f"{start.year}-{start.month:02d}",
+                "row_span": (_ROW_DATE, _ROW_NOTE),
+                "columns": {
+                    offset + 2: day
+                    for offset, day in _block_day_columns(rows, block)
+                },
+                "labels": {
+                    _ROW_DATE: "日期",
+                    _ROW_SEED_BATCH: "种子批号",
+                    _ROW_SEED_TANK: "种子罐号",
+                    _ROW_SEED_TIME: "接种时间",
+                    _ROW_FERM_BATCH: "进罐批号",
+                    _ROW_FERM_TANK: "发酵罐号",
+                    _ROW_FERM_TIME: "移种时间",
+                    _ROW_DUMP_BATCH: "放罐批号",
+                    _ROW_DUMP_TANK: "放罐罐号",
+                    _ROW_DUMP_TIME: "放罐时间",
+                    _ROW_NOTE: "排产备注",
+                },
+            }
+        )
+    return blocks
+
+
+def _dr_sheet_blocks(rows: list[list[Any]]) -> list[dict[str, Any]]:
+    """DR 表周期块枚举：key=标题月 1 日（扎帐归属月），列为自然月日。"""
+    blocks: list[dict[str, Any]] = []
+    for index, row in enumerate(rows):
+        if not row:
+            continue
+        match = _DR_TITLE_RE.search(str(row[0]))
+        if match is None:
+            continue
+        blocks.append(
+            {
+                "key": date(int(match.group(1)), int(match.group(2)), 1),
+                "start_row": index,
+                "label": f"{match.group(1)}-{int(match.group(2)):02d}",
+                "row_span": (_DR_ROW_DATE, _DR_ROW_NOTE),
+                "columns": _dr_column_dates(rows, {"start_row": index}),
+                "labels": {
+                    _DR_ROW_DATE: "日期",
+                    _DR_ROW_FERM_BATCH: "进罐批号",
+                    _DR_ROW_FERM_TANK: "发酵罐号",
+                    _DR_ROW_DUMP_BATCH: "放罐批号",
+                    _DR_ROW_DUMP_TANK: "放罐罐号",
+                    _DR_ROW_CYCLE: "培养周期",
+                    _DR_ROW_NOTE: "备注",
+                },
+            }
+        )
+    return blocks
+
+
+def _mp_sheet_blocks(rows: list[list[Any]]) -> list[dict[str, Any]]:
+    """MC 表周期块枚举：key=标题月 1 日，序号行 n = 标题月第 n 日。"""
+    blocks: list[dict[str, Any]] = []
+    for index, row in enumerate(rows):
+        if not row:
+            continue
+        match = _MP_TITLE_RE.search(str(row[0]))
+        if match is None:
+            continue
+        blocks.append(
+            {
+                "key": date(int(match.group(1)), int(match.group(2)), 1),
+                "start_row": index,
+                "label": f"{match.group(1)}-{int(match.group(2)):02d}",
+                "row_span": (_MP_ROW_SEQ, _MP_ROW_NOTE),
+                "columns": _mp_column_dates(rows, index),
+                "labels": {
+                    _MP_ROW_SEQ: "日期",
+                    _MP_ROW_FERM_BATCH: "进罐批号",
+                    _MP_ROW_FERM_TANK: "发酵罐号",
+                    _MP_ROW_FERM_TIME: "移种时间",
+                    _MP_ROW_DUMP_BATCH: "放罐批号",
+                    _MP_ROW_DUMP_TANK: "放罐罐号",
+                    _MP_ROW_DUMP_TIME: "放罐时间",
+                    _MP_ROW_NOTE: "备注",
+                },
+            }
+        )
+    return blocks
+
+
+def _statin_sheet_blocks(rows: list[list[Any]]) -> list[dict[str, Any]]:
+    """他汀（LV/MV）周期块枚举：行布局 label 驱动无固定偏移，
+    冻结行跨度取整块（标题行下一行～下块标题前一行），行标签取首列。"""
+    all_blocks = _statin_blocks(rows)
+    blocks: list[dict[str, Any]] = []
+    for block in all_blocks:
+        following = next(
+            (
+                b["start_row"]
+                for b in all_blocks
+                if b["start_row"] > block["start_row"]
+            ),
+            len(rows),
+        )
+        labels: dict[int, str] = {}
+        labeled: dict[str, tuple[int, list[Any]]] = {}
+        for r in range(block["start_row"] + 1, following):
+            row = rows[r] or []
+            label = str(row[0]).strip() if row else ""
+            if not label and len(row) > 1:
+                label = str(row[1]).strip()
+            labels[r - block["start_row"]] = label or f"第{r + 1}行"
+            if label and label not in labeled:
+                labeled[label] = (r, row)
+        blocks.append(
+            {
+                "key": block["start"],
+                "start_row": block["start_row"],
+                "label": f"{block['year']}-{block['month']:02d}",
+                "row_span": (1, max(1, following - block["start_row"] - 1)),
+                "columns": _statin_column_dates(
+                    block, labeled.get("日期", (0, []))[1]
+                ),
+                "labels": labels,
+            }
+        )
+    return blocks
+
+
+def _sheet_blocks_for_product(
+    rows: list[list[Any]], product_code: str
+) -> list[dict[str, Any]]:
+    """按产品分派周期块枚举（与看板管线的产品分派一致）。"""
+    if product_code == "DR":
+        return _dr_sheet_blocks(rows)
+    if product_code in _STATIN_KEYWORD:
+        return _statin_sheet_blocks(rows)
+    if product_code == "MC":
+        return _mp_sheet_blocks(rows)
+    return _fa_sheet_blocks(rows)
+
+
+def _merge_cell_text(value: Any) -> str:
+    return str(value).strip() if value is not None else ""
+
+
+def merge_schedule_rows_for_product(
+    new_rows: list[list[Any]],
+    old_rows: list[list[Any]],
+    today: date,
+    product_code: str = "FA",
+    *,
+    freeze_past: bool = True,
+) -> tuple[list[list[Any]], dict[str, Any]]:
+    """重新存档排产表：冻结「今天之前」的日列，仅采用新文件当天及以后的计划。
+
+    防止车间重发的排产漏带或改动历史放罐/移种记录，覆盖看板已依赖的
+    历史口径：
+    - 新旧文件按同 key 周期块对齐（各产品适配，见 _sheet_blocks_for_product）；
+    - 块内日期 < today 的日列整体沿用旧存档（行跨度见各适配器）；
+    - 旧存档无对应周期块/日列时保持新文件原样（无更可信的历史来源）；
+    - freeze_past=False 时保留新文件值（显式历史修正），差异照常记录。
+    返回 (merged_rows, report)：recognized=新文件是否识别出周期块；
+    discarded_changes=被冻结放弃（修正时为被应用）的逐格改动，
+    上限 MERGE_DIFF_LIMIT 条，超出置 truncated。
+    返回深拷贝，不修改入参。
+    """
+    merged = [list(row) if isinstance(row, list) else row for row in new_rows]
+    new_blocks = _sheet_blocks_for_product(new_rows, product_code)
+    old_by_key = {
+        block["key"]: block
+        for block in _sheet_blocks_for_product(old_rows, product_code)
+    }
+    discarded: list[dict[str, Any]] = []
+    truncated = False
+    frozen_columns = 0
+    matched_blocks = 0
+    for new_block in new_blocks:
+        old_block = old_by_key.get(new_block["key"])
+        if old_block is None:
+            continue
+        matched_blocks += 1
+        old_by_date = {
+            day: col for col, day in old_block["columns"].items()
+        }
+        span_start, span_end = new_block["row_span"]
+        for col, col_date in sorted(new_block["columns"].items()):
+            if col_date >= today:
+                continue
+            old_col = old_by_date.get(col_date)
+            if old_col is None:
+                continue
+            if freeze_past:
+                frozen_columns += 1
+            for rel in range(span_start, span_end + 1):
+                old_value = _cell_at(
+                    old_rows, old_block["start_row"] + rel, old_col
+                )
+                new_value = _cell_at(
+                    new_rows, new_block["start_row"] + rel, col
+                )
+                if freeze_past:
+                    _set_cell(
+                        merged, new_block["start_row"] + rel, col, old_value
+                    )
+                if _merge_cell_text(old_value) == _merge_cell_text(new_value):
+                    continue
+                if len(discarded) >= MERGE_DIFF_LIMIT:
+                    truncated = True
+                    continue
+                discarded.append(
+                    {
+                        "block": new_block["label"],
+                        "row": new_block["labels"].get(
+                            rel, f"第{new_block['start_row'] + rel + 1}行"
+                        ),
+                        "date": col_date.isoformat(),
+                        "column": col,
+                        "old": _merge_cell_text(old_value),
+                        "new": _merge_cell_text(new_value),
+                    }
+                )
+    report = {
+        "recognized": bool(new_blocks),
+        "matched_blocks": matched_blocks,
+        "frozen_columns": frozen_columns,
+        "discarded_changes": discarded,
+        "truncated": truncated,
+        # 修正已生效 = 显式修正模式且确有差异：无差异时为 False，
+        # 调用方据此避免写入空审计记录与"修正 0 处"的误导文案
+        "corrected": not freeze_past and bool(discarded),
+    }
+    return merged, report
+
+
 def merge_schedule_rows_preserve_past(
     new_rows: list[list[Any]],
     old_rows: list[list[Any]],
     today: date,
 ) -> list[list[Any]]:
-    """重新存档排产表时，冻结「今天之前」的日列，仅采用新文件当天及以后的计划。
+    """兼容包装：FA 表冻结历史列，仅返回合并后的行。
 
-    防止车间重发的排产漏带或改动历史放罐/移种记录，覆盖看板已依赖的
-    历史口径（罐完成状态、最近完成、完成 KPI、批次产量归属周期）：
-    - 按扎帐周期块标题匹配新旧文件中同一起始周期的块；
-    - 块内日期 < today 的列整体沿用旧存档（日期行～排产备注行）；
-    - 旧存档无对应周期块时该块保持新文件原样（无更可信的历史来源）。
-    返回深拷贝，不修改入参。
+    原实现按 FA 布局内联，现统一走按产品适配的合并管线，FA 行为不变。
     """
-    merged = [list(row) if isinstance(row, list) else row for row in new_rows]
-    old_blocks = _index_blocks(old_rows)
-    for start, new_block in _index_blocks(new_rows).items():
-        old_block = old_blocks.get(start)
-        if old_block is None:
-            continue
-        old_cols = {
-            day: offset for offset, day in _block_day_columns(old_rows, old_block)
-        }
-        for offset, day in _block_day_columns(new_rows, new_block):
-            if day >= today:
-                continue
-            old_offset = old_cols.get(day)
-            if old_offset is None:
-                continue
-            for row_offset in range(_ROW_DATE, _ROW_NOTE + 1):
-                value = _cell_at(
-                    old_rows, old_block["start_row"] + row_offset, old_offset + 2
-                )
-                _set_cell(
-                    merged,
-                    new_block["start_row"] + row_offset,
-                    offset + 2,
-                    value,
-                )
+    merged, _ = merge_schedule_rows_for_product(new_rows, old_rows, today, "FA")
     return merged
 
 
@@ -1827,6 +2190,8 @@ def build_board(
     now: datetime,
     actuals: list[dict[str, Any]] | None = None,
     block: dict[str, Any] | None = None,
+    today: date | None = None,
+    alert_now: datetime | None = None,
 ) -> dict[str, Any] | None:
     """由存档行与检修标注组装看板数据；无当前周期返回 None。
 
@@ -1834,6 +2199,8 @@ def build_board(
     用于回填最近完成批次的放罐产量，并生成单批产量图表序列。
     block 为外部已定位的扎帐周期块（历史回看时传入，避免按 now 重新定位）；
     缺省时按 now 所在周期定位。
+    today/alert_now 为漏录/进度告警的真实时间基准（汇总按所选月 15 日
+    构建 now 时传入，单看板缺省即真实时间）。
     """
     if block is None:
         block = find_period_block(rows, now)
@@ -1997,6 +2364,7 @@ def build_board(
     month_done_with_yield = 0
     month_yield_pending = 0
     month_done_yield_kg: float | None = None
+    missing_dumps: list[tuple[str, datetime]] = []
     for item in days:
         if not item["dump_batch"]:
             continue
@@ -2006,6 +2374,7 @@ def build_board(
         yield_kg = (actual_by_batch.get(item["dump_batch"]) or {}).get("yield_kg")
         if yield_kg is None:
             month_yield_pending += 1
+            missing_dumps.append((item["dump_batch"], dump_at + DUMP_WINDOW))
         else:
             month_done_with_yield += 1
             month_done_yield_kg = (month_done_yield_kg or 0) + float(yield_kg)
@@ -2206,6 +2575,18 @@ def build_board(
                 ),
             }
         )
+    # 漏录/进度告警（放罐未录产量、周期末达成率落后；仅当前周期播）
+    _append_kpi_alerts(
+        alerts,
+        block=block,
+        now=alert_now or now,
+        kpis={
+            "month_planned": month_dump_count,
+            "done_with_yield": month_done_with_yield,
+        },
+        missing_dumps=missing_dumps,
+        today=today,
+    )
 
     if not alerts:
         alerts = [{"level": "info", "text": "车间运行正常，无待处理播报"}]
@@ -2509,6 +2890,37 @@ async def load_archive_covering(
     return None
 
 
+async def next_period_coverage_alert(
+    session: AsyncSession,
+    *,
+    product_code: str,
+    block: dict[str, Any],
+    today: date,
+) -> dict[str, Any] | None:
+    """下周期排产未上传提醒：当前周期剩余 ≤3 天且无存档覆盖周期结束次日。
+
+    仅临期窗口内查询存档（其余情形零额外查询）；块已结束（历史回看）
+    或远期周期不提醒。复用 load_archive_covering 按产品格式找块，
+    同一份竖排多月块的存档即可命中下一周期，不会误报。
+    """
+    remaining = (block["end"] - today).days
+    if remaining < 0 or remaining > SCHEDULE_UPLOAD_WARN_DAYS:
+        return None
+    covered = await load_archive_covering(
+        session, block["end"] + timedelta(days=1), product_code
+    )
+    if covered is not None:
+        return None
+    return {
+        "level": "warn",
+        "text": (
+            f"【排产】本周期 {block['start'].isoformat()}～"
+            f"{block['end'].isoformat()} 于 {block['end'].strftime('%m-%d')} 结束，"
+            "尚无存档覆盖下一周期，请上传排产 Excel"
+        ),
+    }
+
+
 # ═══════════════════ 批次实际产量（历史数据） ═══════════════════
 
 
@@ -2684,13 +3096,24 @@ def _extract_planned_yield_kg(
 
 
 async def build_production_summary(
-    db: AsyncSession, *, ref_date: date, has_ferm: bool, has_extract: bool
+    db: AsyncSession,
+    *,
+    ref_date: date,
+    has_ferm: bool,
+    has_extract: bool,
+    today: date | None = None,
+    alert_now: datetime | None = None,
 ) -> dict[str, Any]:
     """生产汇总：五条产线的发酵/提炼关键指标。
 
     逐产品复用既有看板口径（月计划批次、月计划产能、已完成产能），
     提炼段取产销计划提炼车间行与仓储成品入库；权限不足的段返回 None。
+    today/alert_now 为告警的真实时间基准：本函数的 now 取所选月 15 日，
+    漏录/进度/排产告警必须按真实今天门控（回看历史月不播旧账），
+    由 API 层传入；缺省时退回所选日期（直调兼容）。
     """
+    kpi_today = today or ref_date
+    kpi_now = alert_now or datetime.combine(ref_date, time(12, 0))
     month_start = ref_date.replace(day=1)
     month_end = month_start.replace(
         day=calendar.monthrange(ref_date.year, ref_date.month)[1]
@@ -2749,8 +3172,16 @@ async def build_production_summary(
                             serialize_batch_actual(item) for item in actuals
                         ],
                         block=block,
+                        today=kpi_today,
+                        alert_now=kpi_now,
                     )
                     board_alerts = payload.get("alerts") or []
+                    # 下周期排产未上传提醒：同样按真实今天判定临期
+                    schedule_alert = await next_period_coverage_alert(
+                        db, product_code=code, block=block, today=kpi_today
+                    )
+                    if schedule_alert:
+                        board_alerts.append(schedule_alert)
                     kpis = payload.get("kpis") or {}
                     ferment["planned_batches"] = kpis.get("month_planned")
                     setting = await get_month_setting(

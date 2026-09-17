@@ -31348,10 +31348,22 @@ export interface components {
         /** Body_upload_schedule_excel_api_v1_production_schedule_excel_post */
         Body_upload_schedule_excel_api_v1_production_schedule_excel_post: {
             /**
+             * Allow History Fix
+             * @description 以新文件修正「今天之前」的历史列（需专属权限）
+             * @default false
+             */
+            allow_history_fix: boolean;
+            /**
              * File
              * @description 排产计划 .xlsx / .xls 文件
              */
             file: string;
+            /**
+             * History Fix Reason
+             * @description 历史修正原因（修正时必填）
+             * @default
+             */
+            history_fix_reason: string;
         };
         /** Body_upload_task_photo_api_v1_equipment_inspection_tasks__task_id__photos_post */
         Body_upload_task_photo_api_v1_equipment_inspection_tasks__task_id__photos_post: {

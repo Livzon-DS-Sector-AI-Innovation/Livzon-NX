@@ -1005,6 +1005,12 @@ export default function ProductionDashboard() {
           height: 100%;
           overflow: hidden;
         }
+        /* 卡体随卡定高：内容（占位框 height:100%）以 body 高度解析，
+           否则 body 被内容撑破卡片、占位虚线框被裁断 */
+        .extraction-summary-row .ant-card-body {
+          height: 100%;
+          overflow: hidden;
+        }
         .extraction-summary-row .extraction-rate-placeholder {
           min-height: 0;
         }
@@ -1209,10 +1215,10 @@ export default function ProductionDashboard() {
                     className="shadow-sm h-full"
                     styles={{ body: { padding: '10px 14px' } }}
                   >
-                    {/* 收率分析预留位：内容待后续接入 */}
+                    {/* 占位卡：内容待后续接入 */}
                     <div className="extraction-rate-placeholder">
                       <Empty
-                        description="收率分析（待接入）"
+                        description="待接入"
                         image={Empty.PRESENTED_IMAGE_SIMPLE}
                       />
                     </div>

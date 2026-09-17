@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -939,6 +939,59 @@ async def test_partial_upsert_preserves_other_stage_data() -> None:
 
 
 @pytest.mark.anyio
+async def test_board_appends_next_period_schedule_alert(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+) -> None:
+    """周期剩 ≤3 天且无存档覆盖下一周期 → 看板播报追加【排产】提醒。"""
+    today = datetime.now().date()
+    _patch_period(monkeypatch, today - timedelta(days=27), today + timedelta(days=2))
+    monkeypatch.setattr(
+        board,
+        "build_board",
+        MagicMock(return_value={"kpis": {}, "period": {}, "alerts": []}),
+    )
+    # 第 1 次调用命中当前周期存档；第 2 次（下周期覆盖检查）无存档
+    monkeypatch.setattr(
+        board,
+        "load_archive_covering",
+        AsyncMock(side_effect=[SimpleNamespace(rows=[]), None]),
+    )
+
+    response = await auth_client.get(f"{API}/fermentation-board")
+    assert response.status_code == 200
+    texts = [a["text"] for a in response.json()["data"]["alerts"]]
+    assert any(t.startswith("【排产】") for t in texts)
+
+
+@pytest.mark.anyio
+async def test_board_no_schedule_alert_when_next_period_covered(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+) -> None:
+    """下一周期已有存档覆盖（如竖排多月块文件）→ 不播【排产】提醒。"""
+    today = datetime.now().date()
+    _patch_period(monkeypatch, today - timedelta(days=27), today + timedelta(days=2))
+    monkeypatch.setattr(
+        board,
+        "build_board",
+        MagicMock(return_value={"kpis": {}, "period": {}, "alerts": []}),
+    )
+    monkeypatch.setattr(
+        board,
+        "load_archive_covering",
+        AsyncMock(return_value=SimpleNamespace(rows=[])),
+    )
+
+    response = await auth_client.get(f"{API}/fermentation-board")
+    assert response.status_code == 200
+    texts = [a["text"] for a in response.json()["data"]["alerts"]]
+    assert all(not t.startswith("【排产】") for t in texts)
+
+
+@pytest.mark.anyio
 async def test_production_summary_endpoint_returns_payload(
     auth_client: AsyncClient,
     mock_db_service: None,
@@ -955,3 +1008,5 @@ async def test_production_summary_endpoint_returns_payload(
     assert kwargs["has_ferm"] is True
     assert kwargs["has_extract"] is True
     assert str(kwargs["ref_date"]) == "2026-09-15"
+    # 漏录/进度/排产告警按真实今天门控（回看历史月不播旧账）
+    assert kwargs["today"] == datetime.now().date()
