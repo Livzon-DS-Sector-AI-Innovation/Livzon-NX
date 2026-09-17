@@ -310,6 +310,8 @@ QUALITY_REVIEWED_API_ROUTES: tuple[tuple[str, str], ...] = (
     ("POST", "/api/v1/quality/inspection/feishu/{entity_code}/pull"),
     ("POST", "/api/v1/quality/inspection/feishu/{entity_code}/records"),
     ("POST", "/api/v1/quality/inspections"),
+    ("POST", "/api/v1/quality/instruments/cal-external/certificate-analyze"),
+    ("POST", "/api/v1/quality/instruments/cal-external/certificate-rematch"),
     ("POST", "/api/v1/quality/instruments/cal-external/pull"),
     ("POST", "/api/v1/quality/instruments/cal-plan/pull"),
     ("POST", "/api/v1/quality/instruments/calibration/pull"),
