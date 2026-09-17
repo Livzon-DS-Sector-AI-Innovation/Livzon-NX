@@ -19,7 +19,7 @@ function permissionResult(
     ],
     grants: [],
     custom_page_keys: [],
-    module_rollouts: { hr: 'draft' },
+    module_checks: { hr: 'incomplete' },
     ...overrides,
   }
 }

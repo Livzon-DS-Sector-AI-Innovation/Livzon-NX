@@ -291,38 +291,38 @@
       }
     },
     "production:process": {
-      "status": "active",
+      "status": "retired",
       "module_code": "production",
       "route_path": "/production/process",
       "actions": {
         "delete": {
-          "status": "active",
+          "status": "retired",
           "category": "destructive"
         }
       }
     },
     "production:records": {
-      "status": "active",
+      "status": "retired",
       "module_code": "production",
       "route_path": "/production/records",
       "actions": {
         "delete": {
-          "status": "active",
+          "status": "retired",
           "category": "destructive"
         },
         "sensitive_export": {
-          "status": "active",
+          "status": "retired",
           "category": "sensitive_export"
         }
       }
     },
     "production:balance": {
-      "status": "active",
+      "status": "retired",
       "module_code": "production",
       "route_path": "/production/balance",
       "actions": {
         "delete": {
-          "status": "active",
+          "status": "retired",
           "category": "destructive"
         }
       }
@@ -2016,6 +2016,42 @@
         }
       }
     },
+    "quality:validation-confirmation": {
+      "status": "retired",
+      "module_code": "quality",
+      "route_path": "/quality/validation",
+      "actions": {}
+    },
+    "quality:validation-confirmation:cleaning-validation": {
+      "status": "retired",
+      "module_code": "quality",
+      "route_path": "/quality/validation/cleaning-validation",
+      "actions": {}
+    },
+    "quality:validation-confirmation:equipment-qualification": {
+      "status": "retired",
+      "module_code": "quality",
+      "route_path": "/quality/validation/equipment-qualification",
+      "actions": {}
+    },
+    "quality:validation-confirmation:other-validations": {
+      "status": "retired",
+      "module_code": "quality",
+      "route_path": "/quality/validation/other-validations",
+      "actions": {}
+    },
+    "quality:validation-confirmation:process-validation": {
+      "status": "retired",
+      "module_code": "quality",
+      "route_path": "/quality/validation/process-validation",
+      "actions": {}
+    },
+    "quality:validation-confirmation:validation-plans": {
+      "status": "retired",
+      "module_code": "quality",
+      "route_path": "/quality/validation/plans",
+      "actions": {}
+    },
     "hr:departments": {
       "status": "active",
       "module_code": "hr",
@@ -3005,6 +3041,25 @@
         }
       }
     },
+    "purchasing:request:request-labor-protection": {
+      "status": "retired",
+      "module_code": "procurement",
+      "route_path": "/purchasing/request/labor-protection",
+      "actions": {
+        "delete": {
+          "status": "retired",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "retired",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "retired",
+          "category": "bulk_change"
+        }
+      }
+    },
     "purchasing:material-library": {
       "status": "active",
       "module_code": "procurement",
@@ -3652,6 +3707,36 @@
         },
         "reject": {
           "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-labor-protection:approval-labor-protection-department-head": {
+      "status": "retired",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/labor-protection/department-head",
+      "actions": {
+        "approve": {
+          "status": "retired",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "retired",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-labor-protection:approval-labor-protection-responsible-leader": {
+      "status": "retired",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/labor-protection/responsible-leader",
+      "actions": {
+        "approve": {
+          "status": "retired",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "retired",
           "category": "decision"
         }
       }

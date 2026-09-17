@@ -11,6 +11,7 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.platform.identity.models import Role, User
 from app.platform.identity.page_permission_repository import PagePermissionRepository
 from app.platform.identity.page_policy import (
@@ -558,11 +559,12 @@ class PagePermissionService:
     ) -> UserPagePermissionsOut:
         effective = await self.effective_grants(db, user=user)
         custom = await self.repo.list_user_grants(db, user_id=user.id)
-        rollouts = await self.repo.list_rollouts(db)
         active_keys = await self.repo.active_page_keys(db)
-        rollout_statuses = {item.module_code: item.status for item in rollouts}
-        for module_code in REVIEW_PENDING_ROLLOUT_MODULES:
-            rollout_statuses.setdefault(module_code, "draft")
+        module_checks = {
+            code: "passed" if not await self.integration_gaps(db, module_code=code)
+            else "incomplete"
+            for code in sorted(set(MODULES_BY_CODE) | set(PAGES_BY_MODULE))
+        }
         custom_outputs: list[EffectivePageGrantOut] = []
         for grant in custom:
             page_key = canonical_page_key(grant.page_key)
@@ -606,7 +608,7 @@ class PagePermissionService:
             custom_page_keys=sorted(
                 canonical_page_key(grant.page_key) for grant in custom
             ),
-            module_rollouts=rollout_statuses,
+            module_checks=module_checks,
         )
 
     async def role_permissions_out(
@@ -864,6 +866,7 @@ class PagePermissionService:
         module_access = await PermissionGrantRepository().list_module_access_by_user(
             db, user_ids=list(user_ids), module_codes=module_codes
         )
+        enforce_module_access = get_settings().effective_module_access_mode == "roles"
         roles_by_user = await resolve_users_roles(db, list(users.values()))
         baseline_by_user: dict[UUID, dict[str, EffectivePageGrantOut]] = {}
         for user in users.values():
@@ -997,6 +1000,7 @@ class PagePermissionService:
             if (
                 definition
                 and user_grant.permissions
+                and enforce_module_access
                 and definition.module_code
                 not in module_access.get(user_grant.user_id, set())
                 and getattr(target_user, "role", None) != "admin"
@@ -1211,6 +1215,55 @@ class PagePermissionService:
                 for item in grants
             ):
                 without_access += 1
+        gaps = await self.integration_gaps(db, module_code=module_code)
+        tools = tool_page_bindings() or []
+        menu_catalog = await self.repo.active_menu_page_catalog(db)
+        module_roots = {page.page_key.split(":", 1)[0] for page in pages}
+        module = MODULES_BY_CODE.get(module_code)
+        if not module_roots and module:
+            module_roots.add(module.path.strip("/").split("/", 1)[0])
+        module_menu_catalog = [
+            item for item in menu_catalog if item.root_key in module_roots
+        ]
+        payload = {
+            "module_code": module_code,
+            "version": rollout.version,
+            "page_keys": [item.page_key for item in pages],
+            "user_count": len(users),
+            "users_without_access": without_access,
+            "catalog_gaps": gaps,
+            "menu_catalog": [asdict(item) for item in module_menu_catalog],
+            "page_policies": [asdict(item) for item in pages],
+            "api_policies": [
+                asdict(item) for item in api_bindings_for_module(module_code)
+            ],
+            "actual_api_routes": api_route_catalog(module_code),
+            "tool_policies": [
+                asdict(item) for item in tools if item.module_code == module_code
+            ],
+            "authorization_facts": sorted(
+                authorization_facts, key=lambda item: str(item["user_id"])
+            ),
+        }
+        preview_hash = hashlib.sha256(
+            json.dumps(payload, sort_keys=True, ensure_ascii=True).encode()
+        ).hexdigest()
+        return PermissionModuleRolloutPreviewOut(
+            module_code=module_code,
+            current_status=rollout.status,
+            current_version=rollout.version,
+            preview_hash=preview_hash,
+            page_count=len(pages),
+            user_count=len(users),
+            users_without_access=without_access,
+            catalog_gaps=gaps,
+        )
+
+    async def integration_gaps(
+        self, db: AsyncSession, *, module_code: str
+    ) -> list[str]:
+        """Check current menu, API and tool contracts without rollout state."""
+        pages = PAGES_BY_MODULE.get(module_code, ())
         gaps = [] if pages else ["未登记有效菜单页面"]
         menu_catalog = await self.repo.active_menu_page_catalog(db)
         menu_by_key = {
@@ -1265,39 +1318,7 @@ class PagePermissionService:
                     action.key for action in definition.sensitive_actions
                 }:
                     gaps.append(f"Livzon 工具高风险动作绑定无效：{spec.summary}")
-        payload = {
-            "module_code": module_code,
-            "version": rollout.version,
-            "page_keys": [item.page_key for item in pages],
-            "user_count": len(users),
-            "users_without_access": without_access,
-            "catalog_gaps": gaps,
-            "menu_catalog": [asdict(item) for item in module_menu_catalog],
-            "page_policies": [asdict(item) for item in pages],
-            "api_policies": [
-                asdict(item) for item in api_bindings_for_module(module_code)
-            ],
-            "actual_api_routes": api_route_catalog(module_code),
-            "tool_policies": [
-                asdict(item) for item in tools or [] if item.module_code == module_code
-            ],
-            "authorization_facts": sorted(
-                authorization_facts, key=lambda item: str(item["user_id"])
-            ),
-        }
-        preview_hash = hashlib.sha256(
-            json.dumps(payload, sort_keys=True, ensure_ascii=True).encode()
-        ).hexdigest()
-        return PermissionModuleRolloutPreviewOut(
-            module_code=module_code,
-            current_status=rollout.status,
-            current_version=rollout.version,
-            preview_hash=preview_hash,
-            page_count=len(pages),
-            user_count=len(users),
-            users_without_access=without_access,
-            catalog_gaps=gaps,
-        )
+        return gaps
 
     @staticmethod
     def _merge_role_scopes(

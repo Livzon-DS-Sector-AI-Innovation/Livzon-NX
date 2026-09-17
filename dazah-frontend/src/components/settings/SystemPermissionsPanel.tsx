@@ -40,7 +40,7 @@ export const SYSTEM_PERMISSION_PAGES = [
   {
     href: '/system/permission-verification',
     title: '权限接入检查',
-    description: '查看各模块的权限接入详情与门禁结果。',
+    description: '自动检查模块权限接入完整性，并诊断用户授权与健康问题。',
   },
 ] as const
 

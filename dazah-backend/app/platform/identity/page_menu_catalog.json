@@ -173,33 +173,6 @@
         ]
       },
       {
-        "key": "process",
-        "name": "工艺规程（开发中）",
-        "path": "/production/process",
-        "icon": null,
-        "permission_code": null,
-        "disabled": false,
-        "children": null
-      },
-      {
-        "key": "records",
-        "name": "生产记录（开发中）",
-        "path": "/production/records",
-        "icon": null,
-        "permission_code": null,
-        "disabled": false,
-        "children": null
-      },
-      {
-        "key": "balance",
-        "name": "物料平衡（开发中）",
-        "path": "/production/balance",
-        "icon": null,
-        "permission_code": null,
-        "disabled": false,
-        "children": null
-      },
-      {
         "key": "shift-log",
         "name": "生产日志",
         "path": "",

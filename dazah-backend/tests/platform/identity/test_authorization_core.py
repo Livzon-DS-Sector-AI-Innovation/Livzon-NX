@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.database import get_db
 from app.platform.audit.models import AuditLog
-from app.platform.identity import api, deps, page_permissions, page_policy, rbac_api
+from app.platform.identity import api, deps, page_permissions, rbac_api
 from app.platform.identity.models import (
     Menu,
     PermissionModuleRollout,
@@ -23,10 +23,7 @@ from app.platform.identity.models import (
     UserPageGrant,
     UserRole,
 )
-from app.platform.identity.page_permission_repository import (
-    ActiveMenuPage,
-    PagePermissionRepository,
-)
+from app.platform.identity.page_permission_repository import PagePermissionRepository
 from app.platform.identity.permission_repository import PermissionGrantRepository
 
 
@@ -544,110 +541,41 @@ async def test_parallel_grant_writes_and_queued_actor_revocation(
 
 
 @pytest.mark.asyncio
-async def test_publish_rechecks_grants_then_rollback_preserves_authorization_facts(
-    db_session, monkeypatch
-):
+async def test_module_integration_result_uses_current_catalog(db_session, monkeypatch):
     async with AsyncSession(
         bind=await db_session.connection(),
         join_transaction_mode="create_savepoint",
         expire_on_commit=False,
     ) as db:
-        actor = User(name="发布核心管理员", role="admin")
-        target = User(name="发布核心用户", role="user")
-        db.add_all([actor, target])
+        actor = User(name="接入检查管理员", role="admin")
+        db.add(actor)
         await db.flush()
-        # Catalog business coverage is intentionally outside this core test.
-        monkeypatch.setattr(page_permissions, "page_api_catalog_gaps", lambda _: [])
-        monkeypatch.setattr(page_permissions, "tool_page_bindings", lambda: [])
+        service = page_permissions.PagePermissionService()
+        gaps = ["接口绑定缺失"]
         monkeypatch.setattr(
-            PagePermissionRepository,
-            "active_page_keys",
-            AsyncMock(return_value=set(page_policy.PAGES_BY_KEY)),
-        )
-        monkeypatch.setattr(
-            PagePermissionRepository,
-            "active_menu_page_catalog",
+            service, "integration_gaps",
             AsyncMock(
-                return_value=[
-                    ActiveMenuPage(
-                        key=page.page_key,
-                        name=page.page_name,
-                        route_path=page.route_path,
-                        root_key=page.page_key.split(":", 1)[0],
-                    )
-                    for page in page_policy.PAGE_DEFINITIONS
-                ]
+                side_effect=lambda db, module_code: gaps if module_code == "hr" else []
             ),
         )
+        monkeypatch.setattr(rbac_api, "PagePermissionService", lambda: service)
         app = application(lambda: db, lambda: actor, monkeypatch)
-        root = "/identity/admin/page-permissions/modules/hr"
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
-            preview = (await client.get(root + "/preview")).json()["data"]
-            body = {
-                "expected_version": preview["current_version"],
-                "preview_hash": preview["preview_hash"],
-                "reason": "核心发布事务验证",
-                "confirmed": True,
-            }
-            response = await client.put(
-                f"/identity/admin/users/{target.id}/page-permissions",
-                json={
-                    "expected_grant_version": target.grant_version,
-                    "reason": "发布前权限变化",
-                    "grants": [],
-                },
-            )
+            url = "/identity/admin/page-permissions/modules"
+            response = await client.get(url)
             assert response.status_code == 200, response.text
-            assert (await client.post(root + "/publish", json=body)).status_code == 409
-            preview = (await client.get(root + "/preview")).json()["data"]
-            body.update(
-                expected_version=preview["current_version"],
-                preview_hash=preview["preview_hash"],
+            hr = next(
+                item for item in response.json()["data"] if item["module_code"] == "hr"
             )
-            published = await client.post(root + "/publish", json=body)
-            assert published.status_code == 200, published.text
-            assert published.json()["data"]["status"] == "enforced"
-            assert (await client.post(root + "/publish", json=body)).status_code == 409
-            version = published.json()["data"]["version"]
-            assert (
-                await client.post(
-                    root + "/rollback",
-                    json={
-                        "expected_version": version - 1,
-                        "reason": "过期回退测试",
-                        "confirmed": True,
-                    },
-                )
-            ).status_code == 409
-            response = await client.post(
-                root + "/rollback",
-                json={
-                    "expected_version": version,
-                    "reason": "核心回退验证",
-                    "confirmed": True,
-                },
-            )
+            assert hr == {"module_code": "hr", "passed": False, "catalog_gaps": gaps}
+            gaps.clear()
+            response = await client.get(url)
             assert response.status_code == 200, response.text
-            assert response.json()["data"]["status"] == "legacy"
-            assert response.json()["data"]["version"] == version + 1
-            assert not (
-                await PagePermissionRepository().list_user_grants(db, user_id=target.id)
+            hr = next(
+                item for item in response.json()["data"] if item["module_code"] == "hr"
             )
-            events = (
-                await db.scalars(
-                    select(PermissionOutboxEvent).where(
-                        PermissionOutboxEvent.user_id == target.id
-                    )
-                )
-            ).all()
-            assert len(events) == 3
-            assert len({event.grant_version for event in events}) == 3
-            logs = (
-                await db.scalars(select(AuditLog).where(AuditLog.user_id == actor.id))
-            ).all()
-            assert {log.action for log in logs} >= {
-                "publish_page_permission_module",
-                "rollback_page_permission_module",
-            }
+            assert hr["passed"] is True
+            assert hr["catalog_gaps"] == []
+            assert (await client.post(url + "/hr/publish", json={})).status_code == 404

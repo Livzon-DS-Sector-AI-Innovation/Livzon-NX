@@ -7451,7 +7451,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 页面权限模块发布状态 */
+        /** 自动检查模块页面权限接入完整性 */
         get: operations["list_page_permission_rollouts_api_v1_identity_admin_page_permissions_modules_get"];
         put?: never;
         post?: never;
@@ -7472,40 +7472,6 @@ export interface paths {
         get: operations["preview_page_permission_rollout_api_v1_identity_admin_page_permissions_modules__module_code__preview_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity/admin/page-permissions/modules/{module_code}/publish": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** 发布模块页面权限 */
-        post: operations["publish_page_permission_rollout_api_v1_identity_admin_page_permissions_modules__module_code__publish_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity/admin/page-permissions/modules/{module_code}/rollback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** 紧急回退模块页面权限 */
-        post: operations["rollback_page_permission_rollout_api_v1_identity_admin_page_permissions_modules__module_code__rollback_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -48437,49 +48403,14 @@ export interface components {
             /** Reason */
             reason?: string | null;
         };
-        /** PermissionModulePublishRequest */
-        PermissionModulePublishRequest: {
-            /**
-             * Confirmed
-             * @constant
-             */
-            confirmed: true;
-            /** Expected Version */
-            expected_version: number;
-            /** Preview Hash */
-            preview_hash: string;
-            /** Reason */
-            reason: string;
-        };
-        /** PermissionModuleRollbackRequest */
-        PermissionModuleRollbackRequest: {
-            /**
-             * Confirmed
-             * @constant
-             */
-            confirmed: true;
-            /** Expected Version */
-            expected_version: number;
-            /** Reason */
-            reason: string;
-        };
-        /** PermissionModuleRolloutOut */
-        PermissionModuleRolloutOut: {
-            /** Last Reason */
-            last_reason?: string | null;
+        /** PermissionModuleIntegrationOut */
+        PermissionModuleIntegrationOut: {
+            /** Catalog Gaps */
+            catalog_gaps?: string[];
             /** Module Code */
             module_code: string;
-            /** Published At */
-            published_at?: string | null;
-            /** Published By */
-            published_by?: string | null;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "legacy" | "draft" | "enforced";
-            /** Version */
-            version: number;
+            /** Passed */
+            passed: boolean;
         };
         /** PermissionModuleRolloutPreviewOut */
         PermissionModuleRolloutPreviewOut: {
@@ -58292,9 +58223,9 @@ export interface components {
             grant_version: number;
             /** Grants */
             grants?: components["schemas"]["EffectivePageGrantOut"][];
-            /** Module Rollouts */
-            module_rollouts?: {
-                [key: string]: string;
+            /** Module Checks */
+            module_checks?: {
+                [key: string]: "passed" | "incomplete";
             };
             /** Role Grants */
             role_grants?: components["schemas"]["EffectivePageGrantOut"][];
@@ -80034,7 +79965,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PermissionModuleRolloutOut"][];
+                    "application/json": components["schemas"]["PermissionModuleIntegrationOut"][];
                 };
             };
             /** @description Validation Error */
@@ -80068,80 +79999,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PermissionModuleRolloutPreviewOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    publish_page_permission_rollout_api_v1_identity_admin_page_permissions_modules__module_code__publish_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                module_code: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PermissionModulePublishRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PermissionModuleRolloutOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    rollback_page_permission_rollout_api_v1_identity_admin_page_permissions_modules__module_code__rollback_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                module_code: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PermissionModuleRollbackRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PermissionModuleRolloutOut"];
                 };
             };
             /** @description Validation Error */

@@ -12,7 +12,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 from starlette.requests import Request
 
-from app.platform.identity import rbac
+from app.platform.identity import page_permissions, rbac
 from app.platform.identity.deps import require_module_view
 from app.platform.identity.page_permissions import PagePermissionService
 from app.platform.identity.page_policy import (
@@ -96,6 +96,20 @@ class _PageRepo:
 
     async def department_labels(self, _db: object) -> dict[str, str]:
         return {}
+
+
+@pytest.mark.asyncio
+async def test_user_permission_output_uses_live_integration_checks() -> None:
+    service = PagePermissionService(repo=_PageRepo())
+    service.effective_grants = AsyncMock(return_value=[])  # type: ignore[method-assign]
+    service.integration_gaps = AsyncMock(  # type: ignore[method-assign]
+        side_effect=lambda db, module_code: ["接口绑定缺失"]
+        if module_code == "hr" else []
+    )
+    user = SimpleNamespace(id=uuid4(), grant_version=0)
+    result = await service.user_permissions_out(None, user=user)
+    assert result.module_checks["hr"] == "incomplete"
+    assert result.module_checks["warehouse"] == "passed"
 
 
 @pytest.mark.asyncio
@@ -379,6 +393,42 @@ async def test_health_check_reports_sensitive_action_without_expiry(
     assert health.issues[0].target_id == role_id
     assert health.issues[0].remediation == "edit"
     assert health.issues[0].grant_version == 0
+
+
+@pytest.mark.asyncio
+async def test_health_missing_module_access_respects_access_mode(monkeypatch) -> None:
+    user_id = uuid4()
+    grant = SimpleNamespace(
+        user_id=user_id,
+        page_key="hr:employee-management:profile",
+        permissions=["query"],
+        sensitive_actions=[],
+        sensitive_actions_expires_at=None,
+        scope_type="department_tree",
+        department_ids=[],
+    )
+    repo = _PageRepo(user_grants=[grant])
+    user = SimpleNamespace(id=user_id, name="员工", role="user", grant_version=0)
+    monkeypatch.setattr(repo, "list_users_by_ids", AsyncMock(return_value=[user]))
+    monkeypatch.setattr(rbac, "resolve_users_roles", AsyncMock(return_value={}))
+    monkeypatch.setattr(
+        page_permissions.PermissionGrantRepository,
+        "list_module_access_by_user",
+        AsyncMock(return_value={}),
+    )
+    service = PagePermissionService(repo=repo)
+    monkeypatch.setattr(service, "effective_grants", AsyncMock(return_value=[]))
+    monkeypatch.setattr(
+        page_permissions, "get_settings",
+        lambda: SimpleNamespace(effective_module_access_mode="all"),
+    )
+    assert not (await service.permission_health(None)).issues
+    monkeypatch.setattr(
+        page_permissions, "get_settings",
+        lambda: SimpleNamespace(effective_module_access_mode="roles"),
+    )
+    issues = (await service.permission_health(None)).issues
+    assert [issue.code for issue in issues] == ["missing_module_access"]
 
 
 @pytest.mark.asyncio
@@ -710,3 +760,14 @@ async def test_permission_verification_reports_missing_module_access_first(
 
     assert payload["data"]["allowed"] is False
     assert payload["data"]["reason"] == "当前账号未获得所属模块访问权限"
+    allowed = await rbac_api.simulate_page_permission(
+        PagePermissionSimulationRequest(
+            user_id=user.id,
+            page_key="hr:employee-management:profile",
+            permission="query",
+        ),
+        SimpleNamespace(role="admin"),
+        Any,  # type: ignore[arg-type]
+        SimpleNamespace(effective_module_access_mode="all"),
+    )
+    assert "实际接口还需核对" in json.loads(allowed.body)["data"]["reason"]
