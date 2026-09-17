@@ -3966,7 +3966,6 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
             "/candidates/ai-analyze-batch",
             "/candidates/{candidate_id}/send-notice",
             "/jobs",
-            "/email/browse-folder",
             "/email/config/test",
             "/email/fetch-now",
             "/email/send-offer",

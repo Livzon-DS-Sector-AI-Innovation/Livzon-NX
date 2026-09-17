@@ -4268,26 +4268,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/hr/email/browse-folder": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 打开原生文件夹选择对话框
-         * @description 弹出 Windows 原生文件夹选择对话框，返回用户选择的路径。
-         */
-        post: operations["browse_folder_api_v1_hr_email_browse_folder_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/hr/email/config": {
         parameters: {
             query?: never;
@@ -72393,37 +72373,6 @@ export interface operations {
             path: {
                 user_id: string;
             };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    browse_folder_api_v1_hr_email_browse_folder_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
             cookie?: {
                 auth_token?: string | null;
             };

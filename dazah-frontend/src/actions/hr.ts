@@ -2288,18 +2288,6 @@ export async function sendCandidateNoticeAction(
   return res.json()
 }
 
-export async function browseFolderAction(): Promise<{ code: number; message: string; data?: { path?: string; error?: string } }> {
-  const res = await authedFetch(`${API_BASE}/api/v1/hr/email/browse-folder`, {
-    method: 'POST',
-    cache: 'no-store',
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.message || err.detail || '打开文件夹对话框失败')
-  }
-  return res.json()
-}
-
 export async function uploadOfferTemplateAction(
   formData: FormData
 ): Promise<{ code: number; message: string; data?: unknown }> {

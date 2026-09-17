@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from datetime import date, datetime
 from io import BytesIO
 from types import SimpleNamespace
@@ -405,12 +404,6 @@ async def test_hr_email_and_recruitment_routes_cover_success_and_fallbacks(
     await api.test_email_config(session=SimpleNamespace(), current_user=user)
     monkeypatch.setattr(api, "submit_job", AsyncMock(return_value="job-1"))
     assert (await api.trigger_mail_fetch({}, user))["data"]["job_id"] == "job-1"
-    monkeypatch.setattr(
-        subprocess,
-        "run",
-        lambda *_args, **_kwargs: SimpleNamespace(stdout="", returncode=0),
-    )
-    assert (await api.browse_folder(user))["data"]["path"] is None
 
     job_service = SimpleNamespace(
         list_jobs=AsyncMock(return_value=([], 0)),

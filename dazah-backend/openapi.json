@@ -110319,56 +110319,6 @@
         ]
       }
     },
-    "/api/v1/hr/email/browse-folder": {
-      "post": {
-        "description": "弹出 Windows 原生文件夹选择对话框，返回用户选择的路径。",
-        "operationId": "browse_folder_api_v1_hr_email_browse_folder_post",
-        "parameters": [
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Browse Folder Api V1 Hr Email Browse Folder Post"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "打开原生文件夹选择对话框",
-        "tags": [
-          "人事管理"
-        ]
-      }
-    },
     "/api/v1/hr/email/config": {
       "get": {
         "description": "查询邮箱 IMAP/SMTP 配置状态和上次扫描结果。密码不返回。",
