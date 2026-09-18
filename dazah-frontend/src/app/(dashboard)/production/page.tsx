@@ -4,9 +4,10 @@
 // 数据源：最新排产 Excel 存档（当前扎帐周期块）+ 人工检修标注。
 // 实际完成/收率/合格率等指标待实际数据接入后启用（当前显示 --）。
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
+  Alert,
   Card,
   Row,
   Col,
@@ -143,7 +144,8 @@ const REFRESH_INTERVAL_MS = 5 * 60 * 1000
 const PLAN_SELECTION_STORAGE_KEY = 'dazah.production.plan-card.selection'
 
 // 产品 Tab 代码 → 展示名（导航块/看板标题）；系统代码 MC 的展示名
-// 统一为霉酚酸（计划产量行按源数据名过滤，见 PLAN_PRODUCT_NAMES）
+// 统一为霉酚酸（计划产量行按源数据名过滤，见 PLAN_PRODUCT_NAMES）。
+// 氟苯尼考导航块展示短名，看板标题等空间充足处展示全名
 const PRODUCT_NAMES: Record<string, string> = {
   SUMMARY: '汇总',
   FA: 'L-苯丙氨酸',
@@ -151,15 +153,20 @@ const PRODUCT_NAMES: Record<string, string> = {
   DR: '多拉菌素',
   LV: '洛伐他汀',
   MV: '美伐他汀',
+  TY: 'L-色氨酸',
+  FL: '2%氟苯尼考预混剂',
 }
 // 计划产量行的源数据产品名（production_plans.product_name）：
-// 霉酚酸的源数据名不是 MC，计划卡过滤须用源名，与展示名分离
+// 霉酚酸的源数据名不是 MC，计划卡过滤须用源名，与展示名分离。
+// TY/FL 的产销计划源名按产品名录入，待生产计划同步覆盖后自动匹配
 const PLAN_PRODUCT_NAMES: Record<string, string> = {
   FA: 'L-苯丙氨酸',
   MC: '霉酚酸',
   DR: '多拉菌素',
   LV: '洛伐他汀',
   MV: '美伐他汀',
+  TY: 'L-色氨酸',
+  FL: '2%氟苯尼考预混剂',
 }
 
 function fmtDateTime(value?: string | null): string {
@@ -250,7 +257,14 @@ export default function ProductionDashboard() {
       )
       if (res.code === 200) {
         setBoard(res.data)
-        setBoardMessage(res.data ? '' : res.message || '')
+        // 未覆盖骨架（covered=false）时保留后端提示，卡片以空值兜底渲染
+        setBoardMessage(
+          res.data && res.data.covered === false
+            ? res.message || ''
+            : res.data
+              ? ''
+              : res.message || '',
+        )
       } else {
         setBoardMessage(res.message || '看板数据加载失败')
       }
@@ -476,6 +490,11 @@ export default function ProductionDashboard() {
   // 「提炼计划产量」当前选中行（车间+产品，仅当前产品的行）
   const selectedPlan =
     productPlanRows.find((r) => planKey(r) === selectedPlanKey) ?? null
+  // 取数间隙（切产品/切月）内 selectedPlanKey 可能仍是上一产品的行键，
+  // 仅当它属于当前产品行时才回显，避免下拉短暂显示其它产品的「车间|产品」
+  const selectedPlanKeyInProduct = productPlanRows.some(
+    (r) => planKey(r) === selectedPlanKey,
+  )
   // 完成率 = 已出成品 ÷ 当前选中行的计划产量，百分比保留两位小数
   const extractPlanRate =
     extractInboundKg != null && selectedPlan?.planned_yield
@@ -840,6 +859,24 @@ export default function ProductionDashboard() {
   const hasWarn = (board?.alerts || []).some((a) => a.level === 'warn')
   const alertText = (board?.alerts || []).map((a) => a.text).join('　　｜　　')
 
+  // 告警跑马灯恒速：按内容实测宽度换算动画时长（速度 130px/s，最短 8s）。
+  // 轨迹为 100% → -100%（两倍内容宽），故时长 = 2 × 宽度 ÷ 速度
+  const marqueeRef = useRef<HTMLDivElement | null>(null)
+  const [marqueeDuration, setMarqueeDuration] = useState(24)
+  useLayoutEffect(() => {
+    const el = marqueeRef.current
+    if (!el) return
+    const measure = () => {
+      const w = el.scrollWidth
+      if (w > 0) setMarqueeDuration(Math.max(8, (2 * w) / 130))
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [alertText])
+
   return (
     <div className="p-4 flex flex-col gap-3">
       {/* 顶部导航块：第 4 位为当前产品 L-苯丙氨酸，第 5/6 位洛伐他汀/美伐他汀
@@ -932,10 +969,11 @@ export default function ProductionDashboard() {
           />
           <div className="overflow-hidden flex-1">
             <div
+              ref={marqueeRef}
               style={{
                 display: 'inline-block',
                 whiteSpace: 'nowrap',
-                animation: 'board-marquee 24s linear infinite',
+                animation: `board-marquee ${marqueeDuration}s linear infinite`,
                 color: hasWarn ? '#d46b08' : '#389e0d',
               }}
             >
@@ -1016,17 +1054,17 @@ export default function ProductionDashboard() {
         }
       `}</style>
 
-      {/* 主体 */}
+      {/* 主体：卡片框架对所有产品一致，数值按数据有无落位；
+          无排产存档时仅显示警示条，卡片以空值兜底渲染 */}
       {loading && !board ? (
         <Card variant="borderless" className="shadow-sm">
           <Empty description="看板加载中…" />
         </Card>
-      ) : boardMessage && !board ? (
-        <Card variant="borderless" className="shadow-sm">
-          <Empty description={boardMessage} />
-        </Card>
       ) : (
         <>
+          {boardMessage && (
+            <Alert type="warning" showIcon title={boardMessage} />
+          )}
           {canFerm && (
             <>
           {/* KPI 卡片区 */}
@@ -1071,7 +1109,10 @@ export default function ProductionDashboard() {
                           <div style={{ fontSize: 26, fontWeight: 600, lineHeight: 1.35 }}>
                             {card.extra.value}
                           </div>
-                           {card.extra.editable && isCurrent && canOperate && (
+                           {card.extra.editable &&
+                            board?.covered !== false &&
+                            isCurrent &&
+                            canOperate && (
                             <Button
                               type="text"
                               size="small"
@@ -1120,7 +1161,9 @@ export default function ProductionDashboard() {
                         size="small"
                         variant="borderless"
                         className="plan-product-select"
-                        value={selectedPlanKey || undefined}
+                        value={
+                          selectedPlanKeyInProduct ? selectedPlanKey : undefined
+                        }
                         onChange={handlePlanSelect}
                         placeholder="车间 · 产品"
                         style={{ width: 168, fontSize: 12 }}
@@ -1172,7 +1215,9 @@ export default function ProductionDashboard() {
                         <Text type="secondary" style={{ fontSize: 11 }}>
                           {extractInboundKg != null
                             ? `${PRODUCT_NAMES[productCode] ?? PRODUCT_NAMES.FA} · 本月合计(kg)`
-                            : '数据源待接入'}
+                            : board && board.covered !== false
+                              ? '数据源待接入'
+                              : '上传排产后按周期统计'}
                         </Text>
                       </div>
                       <div className="flex-1 min-w-0 pl-3 border-l border-[var(--color-hairline)]">
@@ -1238,7 +1283,7 @@ export default function ProductionDashboard() {
           >
             <div className="flex items-center justify-between flex-wrap gap-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <Text strong>{isCurrent ? '本月批次进度' : '历史批次进度'}</Text>
+                <Text strong>{isCurrent ? '本月发酵进度' : '历史发酵进度'}</Text>
                 {!isCurrent && <Tag color="orange">历史周期</Tag>}
               </div>
               {!capacityMode && isCurrent && (

@@ -30,6 +30,7 @@ import type {
   FermentationBatchActual,
   FermentationBatchActualFormData,
   ProductionSummary,
+  SalesPlanDetail,
 } from '@/types/production'
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000'
@@ -160,6 +161,28 @@ export async function getPlans(params: PlanQueryParams = {}) {
 export async function getPlanMonthlySummary(month: string) {
   const endpoint = `/api/v1/production/plans/monthly-summary?month=${encodeURIComponent(month)}`
   return fetchApi<PlanMonthlySummary[]>(endpoint)
+}
+
+// ============ Sales Plan (产销计划 · 销售计划执行表) ============
+
+export async function getSalesPlanDetails(
+  params: {
+    page?: number
+    page_size?: number
+    product_name?: string
+    month?: string
+  } = {},
+) {
+  const searchParams = new URLSearchParams()
+  if (params.page) searchParams.set('page', String(params.page))
+  if (params.page_size) searchParams.set('page_size', String(params.page_size))
+  if (params.product_name)
+    searchParams.set('product_name', params.product_name)
+  if (params.month) searchParams.set('month', params.month)
+  const query = searchParams.toString()
+  return fetchApi<SalesPlanDetail[]>(
+    `/api/v1/production/sales-plan-details${query ? `?${query}` : ''}`,
+  )
 }
 
 export async function getPlan(id: string) {

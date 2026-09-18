@@ -996,6 +996,9 @@ async def get_sales_plan_details(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
     product_name: str | None = None,
+    month: str | None = Query(
+        None, description="数据月份（YYYY-MM），按源数据表名归属"
+    ),
     session: AsyncSession = Depends(get_db),
 ) -> Any:
     query = select(SalesPlanDetail).where(SalesPlanDetail.is_deleted.is_(False))
@@ -1005,6 +1008,9 @@ async def get_sales_plan_details(
     if product_name:
         query = query.where(SalesPlanDetail.product_name == product_name)
         count_q = count_q.where(SalesPlanDetail.product_name == product_name)
+    if month:
+        query = query.where(SalesPlanDetail.data_month == month)
+        count_q = count_q.where(SalesPlanDetail.data_month == month)
     total = (await session.execute(count_q)).scalar() or 0
     offset = (page - 1) * page_size
     rows = (

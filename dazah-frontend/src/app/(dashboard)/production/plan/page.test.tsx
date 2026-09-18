@@ -13,6 +13,7 @@ vi.mock('@/components/production/SyncSettingsButton', () => ({
 }))
 const prodActions = vi.hoisted(() => ({
   getPlans: vi.fn(),
+  getSalesPlanDetails: vi.fn(),
 }))
 vi.mock('@/actions/production', () => prodActions)
 
@@ -40,11 +41,18 @@ describe('PlanPage', () => {
   let container: HTMLElement
 
   beforeEach(() => {
+    window.localStorage.setItem('dazah.production.plan-page.tab', 'plan')
     prodActions.getPlans.mockResolvedValue({
       code: 200,
       message: 'success',
       data: PLANS,
       meta: { total: 1 },
+    })
+    prodActions.getSalesPlanDetails.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [],
+      meta: { total: 0 },
     })
     container = document.createElement('div')
     document.body.append(container)
@@ -147,6 +155,99 @@ describe('PlanPage', () => {
       await new Promise((r) => setTimeout(r, 200))
     })
     const lastCall = prodActions.getPlans.mock.calls.at(-1)?.[0] as
+      | { month?: string }
+      | undefined
+    expect(lastCall?.month).toBe('2026-10')
+  })
+
+  it('renders the sales plan tab with sync entry and detail table', async () => {
+    prodActions.getSalesPlanDetails.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [
+        {
+          id: 'sp-1',
+          product_name: 'L-色氨酸',
+          unit: 'KG',
+          month_planned_delivery: 69000,
+          month_delivered_qty: 0,
+          delivery_completion_rate: 0,
+        },
+      ],
+      meta: { total: 1 },
+    })
+    await renderAndSettle()
+    // 切到销售计划 Tab
+    const salesTab = Array.from(
+      container.querySelectorAll('.ant-tabs-tab'),
+    ).find((t) => (t.textContent || '').trim() === '销售计划') as HTMLElement
+    expect(salesTab).toBeTruthy()
+    await act(async () => {
+      salesTab.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const text = container.textContent || ''
+    // 同步入口 + 销售计划执行表列头与数据
+    expect(text).toContain('同步设置')
+    expect(text).toContain('销售计划执行表 · 飞书同步数据')
+    expect(text).toContain('本月计划发货量')
+    expect(text).toContain('本月已发货量')
+    expect(text).toContain('L-色氨酸')
+    expect(text).toContain('69,000')
+    expect(prodActions.getSalesPlanDetails).toHaveBeenCalled()
+  })
+
+  it('restores the last active tab after a reload', async () => {
+    await renderAndSettle()
+    const salesTab = Array.from(
+      container.querySelectorAll('.ant-tabs-tab'),
+    ).find((t) => (t.textContent || '').trim() === '销售计划') as HTMLElement
+    await act(async () => {
+      salesTab.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    // 模拟刷新：卸载后重新挂载（localStorage 保留），应停留在销售计划
+    act(() => root.unmount())
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await renderAndSettle()
+    const active = container.querySelector('.ant-tabs-tab-active')
+    expect((active?.textContent || '').trim()).toBe('销售计划')
+  })
+
+  it('filters sales plan details by month via the picker', async () => {
+    await renderAndSettle()
+    // 切到销售计划 Tab 后使用月份选择器
+    const salesTab = Array.from(
+      container.querySelectorAll('.ant-tabs-tab'),
+    ).find((t) => (t.textContent || '').trim() === '销售计划') as HTMLElement
+    await act(async () => {
+      salesTab.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    prodActions.getSalesPlanDetails.mockClear()
+    const pane = container.querySelector(
+      '.ant-tabs-tabpane-active',
+    ) as HTMLElement
+    const pickerRoot = pane.querySelector('.ant-picker') as HTMLElement
+    expect(pickerRoot).toBeTruthy()
+    const input = pickerRoot.querySelector('input') as HTMLInputElement
+    await act(async () => {
+      input.focus()
+      pickerRoot.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      pickerRoot.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const monthCell = Array.from(
+      document.body.querySelectorAll('.ant-picker-cell'),
+    ).find((c) => c.getAttribute('title') === '2026-10') as HTMLElement | undefined
+    expect(monthCell).toBeTruthy()
+    await act(async () => {
+      ;(monthCell!.querySelector('.ant-picker-cell-inner') as HTMLElement | null)?.click()
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    const lastCall = prodActions.getSalesPlanDetails.mock.calls.at(-1)?.[0] as
       | { month?: string }
       | undefined
     expect(lastCall?.month).toBe('2026-10')

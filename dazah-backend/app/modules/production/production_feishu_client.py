@@ -61,6 +61,21 @@ class ProductionFeishuClient:
             raise RuntimeError(body.get("msg", str(body)))
         return body.get("data") or {}
 
+    async def list_tables(self, page_size: int = 100) -> list[dict[str, Any]]:
+        """列出多维表格中的数据表（按界面顺序，第一个即默认同步目标）。"""
+        data = await self._request(
+            "GET",
+            f"/bitable/v1/apps/{self.app_token}/tables",
+            params={"page_size": page_size},
+        )
+        return [
+            {
+                "table_id": item.get("table_id"),
+                "name": item.get("name"),
+            }
+            for item in (data.get("items") or [])
+        ]
+
     async def list_records(
         self, table_id: str, page_size: int = 100, page_token: str | None = None
     ) -> dict[str, Any]:
