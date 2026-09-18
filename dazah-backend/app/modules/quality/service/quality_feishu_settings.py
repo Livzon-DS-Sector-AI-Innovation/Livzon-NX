@@ -149,6 +149,8 @@ DEFAULT_QUALITY_FEISHU_ENTITIES: list[tuple[str, str, str, int]] = [
     ("qc_instr_calibration", "内校汇总", "仪器管理", 221),
     ("qc_instr_cal_plan", "内部校验计划", "仪器管理", 222),
     ("qc_instr_cal_external", "外部校准、检定", "仪器管理", 223),
+    # QC 计量器具台账目录（证书识别时实时反查使用地点/检定周期，不进镜像）
+    ("qc_instr_device_directory", "QC设备目录", "仪器管理", 224),
     # 供应商管理
     ("supplier_qualification", "供应商资质", "供应商管理", 215),
     # 产品质量客户标准
@@ -242,8 +244,8 @@ DEFAULT_QUALITY_FEISHU_ENTITY_MAP = {
 }
 
 PUSH_ONLY_QUALITY_FEISHU_ENTITIES = {
-    "oos_ledger",
-    "oot_ledger",
+    # oos_ledger / oot_ledger 不在此集合：OOS/OOT 台账页面直连飞书实时读取
+    # （direction="pull"），归入 push-only 会被 ensure 钉死拉取开关，页面必报 400。
     "oot_limit_product",
     "oot_limit_item",
     "inspection_general",
@@ -516,6 +518,8 @@ QUALITY_FEISHU_ENTITY_ENV_PREFILLS: dict[str, dict[str, str]] = {
         "app_token": "Cencb8KRja1vL8s7DLqcXiQtnMf",
         "table_id": "tblhiX6LUYC1uxTl",
         "table_name": "设备维修记录",
+        # 新增记录走飞书共享表单（可在质量设置-飞书设置中更换）
+        "form_url": "https://j0eukrlohu.feishu.cn/share/base/form/shrcnexQSNoIwPZ8LPOL6nuKOF0",
     },
     "qc_instr_contracts": {
         "app_token": "Cencb8KRja1vL8s7DLqcXiQtnMf",
@@ -544,6 +548,13 @@ QUALITY_FEISHU_ENTITY_ENV_PREFILLS: dict[str, dict[str, str]] = {
         "app_token": "Vyn1bfLOwaUG15sWXGMcwy5Gnah",
         "table_id": "tblvF1h7klsT2TuP",
         "table_name": "外部校准、检定",
+    },
+    # Base 三：QC 计量器具台账目录（数据频繁变化，证书识别时实时反查，
+    # 不进镜像定时同步；换表可在质量设置-飞书设置改绑）
+    "qc_instr_device_directory": {
+        "app_token": "PhuqbjfxeaLvmxs2VvjcxwYUnDg",
+        "table_id": "tbl3Lar2iH7u8afN",
+        "table_name": "QC",
     },
     # 成品检验（固定 Base 配置 - 所有成品检验子表共用同一 Base）
     "qc_finished_internal": {

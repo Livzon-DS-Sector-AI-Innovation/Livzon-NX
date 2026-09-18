@@ -72,7 +72,10 @@ async def test_admin_keeps_business_context_for_registered_routes():
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await client.get("/api/v1/hr/employees")
+        response = await client.get(
+            "/api/v1/hr/employees",
+            headers={"X-Dazah-Page-Key": "hr:employee-management:profile"},
+        )
         assert response.status_code == 200
         assert response.json() == {
             "actor": str(user.id),

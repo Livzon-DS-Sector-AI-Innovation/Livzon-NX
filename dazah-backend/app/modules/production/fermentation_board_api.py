@@ -166,6 +166,13 @@ async def get_fermentation_board(
         if has_extract
         else None
     )
+    # 下周期排产未上传提醒：当前周期剩余 ≤3 天且无存档覆盖下一周期
+    # （内部自筛临期窗口，其余情形零额外查询；历史回看自然静音）
+    schedule_alert = await board.next_period_coverage_alert(
+        db, product_code=product, block=block, today=now.date()
+    )
+    if schedule_alert:
+        payload.setdefault("alerts", []).append(schedule_alert)
     # 「提炼已出成品」以成品日报为唯一数据源：合计/天数/实时收率按日报覆盖
     if has_extract:
         daily_quantities = await board.sum_extraction_daily_reports(
@@ -213,6 +220,9 @@ async def get_production_summary(
         ref_date=date or now.date(),
         has_ferm=has_ferm,
         has_extract=has_extract,
+        # 汇总按所选月 15 日取数，漏录/进度/排产告警按真实今天门控
+        today=now.date(),
+        alert_now=now,
     )
     return success_response(data=payload)
 

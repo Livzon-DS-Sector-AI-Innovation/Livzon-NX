@@ -102,8 +102,8 @@ export default function OosOotInvestigationPushPage() {
   const loadInvCodes = useCallback(async () => {
     try {
       const [oosRes, ootRes] = await Promise.all([
-        fetchOosLedgerRecords({ page_size: '500' }),
-        fetchOotLedgerRecords({ page_size: '500' }),
+        fetchOosLedgerRecords({ page_size: '200' }),
+        fetchOotLedgerRecords({ page_size: '200' }),
       ])
       const codes = new Set<string>()
       for (const item of (oosRes.data || [])) {

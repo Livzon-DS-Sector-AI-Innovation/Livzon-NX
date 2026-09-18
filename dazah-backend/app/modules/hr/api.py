@@ -5444,55 +5444,6 @@ async def trigger_mail_fetch(
     return success_response(data={"job_id": job_id}, message="邮箱抓取已提交")
 
 
-@router.post("/email/browse-folder", summary="打开原生文件夹选择对话框")
-async def browse_folder(
-    current_user: CurrentUser = None,
-) -> Any:
-    """弹出 Windows 原生文件夹选择对话框，返回用户选择的路径。"""
-    _require_user(current_user)
-    import subprocess
-    import sys
-    from pathlib import Path
-
-    # 用 Python tkinter 弹窗（同步阻塞，但通过 subprocess 隔离）
-    py_script = r"""
-import tkinter as tk
-from tkinter import filedialog
-root = tk.Tk()
-root.withdraw()
-path = filedialog.askdirectory(title="选择简历下载文件夹")
-if path:
-    print(path)
-"""
-
-    try:
-        # 使用当前 Python 解释器（确保 tkinter 可用）
-        result = subprocess.run(
-            [sys.executable, "-c", py_script],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        path = result.stdout.strip()
-        if path:
-            # 路径安全校验：只允许本地绝对路径
-            path_obj = Path(path)
-            if not path_obj.is_absolute():
-                raise AppException(status_code=403, message="只能选择本地绝对路径")
-            return success_response(data={"path": path})
-        return success_response(data={"path": None})
-    except subprocess.TimeoutExpired:
-        raise AppException(status_code=408, message="对话框超时（60秒）")
-    except AppException:
-        raise
-    except Exception:
-        logger.exception("打开文件夹对话框失败")
-        raise AppException(
-            status_code=500,
-            message="打开文件夹对话框失败，请检查服务器目录配置",
-        )
-
-
 # ─── 招聘管理（Recruitment）Routes ───
 # 数据通过飞书多维表格操作，Repository
 # 层对未配置场景做了兜底（读操作返回空、写操作抛 RuntimeError）

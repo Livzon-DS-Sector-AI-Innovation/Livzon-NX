@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => {
   const moduleFactory = (moduleName: string) => {
     const known = Object.fromEntries([
     'testHrFeishuAppSettings', 'testHrFeishuEntitySetting', 'updateEmailConfig', 'testEmailConfig',
-    'updateHrFeishuAppSettings', 'updateHrFeishuEntitySetting', 'browseFolderAction', 'uploadOfferTemplateAction',
+    'updateHrFeishuAppSettings', 'updateHrFeishuEntitySetting', 'uploadOfferTemplateAction',
     'fetchAnnualTrainingPlans', 'fetchPlanItems', 'fetchPlanAttachmentSections', 'fetchUsedTrainingContent',
     'fetchTrainingSession', 'fetchSessionDocuments', 'fetchNewHires', 'fetchTrainingPersonnelConfigs',
     'fetchTrainingDepartments', 'createTrainingLedger', 'markTrainingContentUsed', 'upsertTrainingSession',
@@ -745,7 +745,6 @@ describe('migrated component coverage', () => {
     getMock('actions/hr', 'testHrFeishuEntitySetting').mockResolvedValue({ success: true, status: 'success', message: '连接成功', entity_name: '候选人' })
     getMock('actions/hr', 'updateEmailConfig').mockResolvedValue({})
     getMock('actions/hr', 'testEmailConfig').mockResolvedValue({ data: { imap: '成功', smtp: '成功' } })
-    getMock('actions/hr', 'browseFolderAction').mockResolvedValue({ data: { path: 'data/hr/resumes' } })
     getMock('lib/api/hr', 'formatHrFeishuTestSummary').mockReturnValue('连接成功')
     const rendered = renderClient(createElement(HrFeishuSettingsPage))
     await settle()
@@ -808,7 +807,6 @@ describe('migrated component coverage', () => {
     getMock('actions/hr', 'testHrFeishuEntitySetting').mockResolvedValue({ success: false, status: 'failed', message: '实体连接失败' })
     getMock('actions/hr', 'updateEmailConfig').mockResolvedValue({})
     getMock('actions/hr', 'testEmailConfig').mockResolvedValue({ data: { imap: '成功', smtp: '成功' } })
-    getMock('actions/hr', 'browseFolderAction').mockResolvedValue({ data: { path: 'data/resumes-selected' } })
     getMock('actions/hr', 'uploadOfferTemplateAction').mockResolvedValue({ filename: 'offer.pdf' })
     getMock('lib/api/hr', 'formatHrFeishuTestSummary').mockReturnValue('HR连接失败')
     const rendered = renderClient(createElement(HrFeishuSettingsPage))
@@ -864,8 +862,6 @@ describe('migrated component coverage', () => {
 
     buttons('上传 PDF 模板')[0]?.click()
     await settle()
-    buttons('浏览…')[0]?.click()
-    await settle()
     const emailTestButtons = buttons('测试连接')
     emailTestButtons[emailTestButtons.length - 1]?.click()
     await settle()
@@ -873,9 +869,6 @@ describe('migrated component coverage', () => {
     await settle()
     getMock('actions/hr', 'testEmailConfig').mockRejectedValueOnce(new Error('邮箱连接失败'))
     emailTestButtons[emailTestButtons.length - 1]?.click()
-    await settle()
-    getMock('actions/hr', 'browseFolderAction').mockRejectedValueOnce(new Error('目录不可用'))
-    buttons('浏览…')[0]?.click()
     await settle()
     getMock('actions/hr', 'updateHrFeishuAppSettings').mockRejectedValueOnce(new Error('保存失败'))
     buttons('保存配置')[0]?.click()

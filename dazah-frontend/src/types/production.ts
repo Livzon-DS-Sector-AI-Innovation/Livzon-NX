@@ -9,6 +9,8 @@ export interface ApiResponse<T = unknown> {
     page?: number
     page_size?: number
     total?: number
+    /** 排产存档列表：当前产品累计历史修正次数 */
+    history_fix_total?: number
   }
 }
 
@@ -449,6 +451,18 @@ export interface ScheduleMergeRange {
   e: { r: number; c: number }
 }
 
+/** 一条历史修正审计摘要（与 audit.logs 记录对应，读取时并轨到存档上） */
+export interface ScheduleHistoryFix {
+  fixed_at?: string | null
+  fixed_by_name?: string | null
+  reason?: string | null
+  product_code?: string | null
+  file_name?: string | null
+  /** 逐格改动（最多返回 50 条） */
+  changes?: ScheduleMergeChange[]
+  changes_total?: number
+}
+
 /** 排产 Excel 存档记录（上传/详情返回全量，列表项不含 rows） */
 export interface ScheduleExcelArchive {
   id: string
@@ -463,6 +477,38 @@ export interface ScheduleExcelArchive {
   col_count: number
   created_at?: string
   updated_at?: string
+  /** 重复存档时的历史冻结/修正报告（仅上传响应携带） */
+  merge?: ScheduleMergeReport
+  /** 该存档关联的历史修正记录（仅列表接口携带） */
+  history_fixes?: ScheduleHistoryFix[]
+}
+
+/** 被冻结放弃（或修正应用）的单格历史改动 */
+export interface ScheduleMergeChange {
+  /** 周期块标识，如 2026-09 */
+  block: string
+  /** 行中文名（进罐批号/发酵罐号等） */
+  row: string
+  /** 该列日期 */
+  date: string
+  /** 绝对列号 */
+  column: number
+  old: string
+  new: string
+}
+
+/** 重存档合并报告：冻结今天之前的历史列，仅采用新文件当天及以后 */
+export interface ScheduleMergeReport {
+  /** 新文件是否识别出至少一个周期块 */
+  recognized: boolean
+  matched_blocks?: number
+  frozen_columns?: number
+  discarded_changes?: ScheduleMergeChange[]
+  /** 差异清单超出上限只记数不展开 */
+  truncated?: boolean
+  /** 本次以新文件修正了历史 */
+  corrected?: boolean
+  warning?: string
 }
 
 // ============ 发酵车间实时看板 ============

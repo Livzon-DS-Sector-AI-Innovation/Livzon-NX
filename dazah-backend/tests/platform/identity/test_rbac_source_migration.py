@@ -44,12 +44,15 @@ def test_catalog_count() -> None:
     # + HR 员工档案细分 1（employee:read）
     # + 质量子域编辑 6（qc/product_qa/change_qa/validation_qa/
     #   system_qa/material_qa:write）
-    # + 生产工段级数据权限 2（fermentation-yield / extraction-yield）= 45
-    assert len(catalog) == 45
+    # + 生产工段级数据权限 2（fermentation-yield / extraction-yield）
+    # + 排产历史修正 1（schedule-archive）= 46
+    assert len(catalog) == 46
     codes = {c["code"] for c in catalog}
     # 工段级产量数据权限（控制看板产量字段可见性）
     assert "production:fermentation-yield" in codes
     assert "production:extraction-yield" in codes
+    # 排产历史修正（重传排产表以新文件覆盖「今天之前」的历史列）
+    assert "production:schedule-archive" in codes
     assert "hr:read" in codes and "hr:write" in codes
     assert "identity:admin" in codes
     assert "quality:read" in codes

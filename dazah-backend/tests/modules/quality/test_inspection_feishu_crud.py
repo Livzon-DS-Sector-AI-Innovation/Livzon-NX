@@ -160,8 +160,7 @@ async def test_resolve_user_field_open_ids_union_mode_translates_hr_ids(
         return {oid: union for oid, union in table.items() if oid in open_ids}
 
     monkeypatch.setattr(
-        "app.modules.quality.service.hr_identity."
-        "translate_hr_open_ids_to_union_ids",
+        "app.modules.quality.service.hr_identity.translate_hr_open_ids_to_union_ids",
         _fake_translate,
     )
     fields = {
@@ -184,8 +183,7 @@ async def test_resolve_user_field_open_ids_union_mode_raises_when_unknown(
         return {}
 
     monkeypatch.setattr(
-        "app.modules.quality.service.hr_identity."
-        "translate_hr_open_ids_to_union_ids",
+        "app.modules.quality.service.hr_identity.translate_hr_open_ids_to_union_ids",
         _fake_translate,
     )
     fields = {"检验人": [{"id": "ou_unknown", "name": "赵六"}]}
@@ -205,8 +203,7 @@ async def test_resolve_user_field_open_ids_legacy_mode_keeps_unknown_ids(
         return {}
 
     monkeypatch.setattr(
-        "app.modules.quality.service.hr_identity."
-        "translate_hr_open_ids_to_union_ids",
+        "app.modules.quality.service.hr_identity.translate_hr_open_ids_to_union_ids",
         _fake_translate,
     )
     fields = {"检验人": [{"id": "ou_legacy", "name": "张三"}]}
@@ -488,8 +485,7 @@ async def test_resolve_user_field_open_ids_translates_resolved_prefill_ids(
         return {oid: union for oid, union in table.items() if oid in ids}
 
     monkeypatch.setattr(
-        "app.modules.quality.service.hr_identity."
-        "translate_hr_open_ids_to_union_ids",
+        "app.modules.quality.service.hr_identity.translate_hr_open_ids_to_union_ids",
         _fake_translate,
     )
     fields = {
@@ -517,8 +513,7 @@ async def test_resolve_user_field_open_ids_mixed_unresolved_raises_clearly(
         return {"ou_picked": "on_picked"}
 
     monkeypatch.setattr(
-        "app.modules.quality.service.hr_identity."
-        "translate_hr_open_ids_to_union_ids",
+        "app.modules.quality.service.hr_identity.translate_hr_open_ids_to_union_ids",
         _fake_translate,
     )
     fields = {
@@ -533,3 +528,71 @@ async def test_resolve_user_field_open_ids_mixed_unresolved_raises_clearly(
         await service._resolve_user_field_open_ids(
             object(), user_map, fields, union_mode=False
         )
+
+
+@pytest.mark.anyio
+async def test_get_inspection_entity_fields_extracts_formula_result_options(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """公式结果为单选时（内校计划「状态」），选项在公式结果的 ui_property 里。"""
+    from unittest.mock import AsyncMock
+
+    from app.modules.quality.service import inspection_feishu_crud as crud
+
+    class _Runtime:
+        app_id = "cli_1"
+        app_secret = "s"
+
+    class _Entity:
+        app_token = "app_x"
+        table_id = "tbl_x"
+        enable_push_to_feishu = False
+        enable_pull_from_feishu = True
+
+    async def _resolve(db, entity_code, *, direction):
+        return _Runtime(), _Entity()
+
+    class _Client:
+        async def list_fields(self, _table_id):
+            return [
+                {
+                    "field_name": "状态",
+                    "ui_type": "Formula",
+                    "property": {
+                        "formatter": "",
+                        "formula_expression": "IFS(...)",
+                        "type": {
+                            "ui_type": "SingleSelect",
+                            "ui_property": {
+                                "options": [
+                                    {"name": "已完成"},
+                                    {"name": "提醒中"},
+                                    {"name": "未提醒"},
+                                ]
+                            },
+                        },
+                    },
+                },
+                {
+                    "field_name": "是否知晓",
+                    "ui_type": "SingleSelect",
+                    "property": {"options": [{"name": "已知晓"}]},
+                },
+            ]
+
+    monkeypatch.setattr(crud, "_resolve_runtime_entity", _resolve)
+    monkeypatch.setattr(crud, "BitableClient", lambda **_kw: _Client())
+    monkeypatch.setattr(crud, "_get_entity_form_url", AsyncMock(return_value=None))
+
+    result = await crud.get_inspection_entity_fields(None, "qc_instr_cal_plan")
+    by_name = {f["field_name"]: f for f in result["fields"]}
+    assert by_name["状态"]["result_ui_type"] == "SingleSelect"
+    assert by_name["状态"]["options"] == [
+        {"name": "已完成"},
+        {"name": "提醒中"},
+        {"name": "未提醒"},
+    ]
+    # 公式列只读
+    assert by_name["状态"]["editable"] is False
+    # 普通单选不受影响
+    assert by_name["是否知晓"]["options"] == [{"name": "已知晓"}]

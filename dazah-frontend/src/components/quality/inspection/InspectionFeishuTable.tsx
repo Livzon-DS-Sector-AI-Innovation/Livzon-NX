@@ -5,8 +5,8 @@ import { TableEmptyState } from '../TableEmptyState'
 import { qualityTokens } from '../themeTokens'
 
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { Table, Card, Button, Input, Space, Typography, Alert, Select, App, Popconfirm, Tag } from 'antd'
-import { SyncOutlined, SearchOutlined, FilterOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { Table, Card, Button, Input, Space, Typography, Alert, Select, App, Popconfirm, Tag, Tooltip } from 'antd'
+import { SyncOutlined, SearchOutlined, FilterOutlined, PlusOutlined, ReloadOutlined, RobotOutlined } from '@ant-design/icons'
 import type { TablePaginationConfig } from 'antd'
 import type { ColumnsType, ColumnType } from 'antd/es/table'
 import { createPortal } from 'react-dom'
@@ -16,6 +16,7 @@ import { fetchInspectionFeishuFields, fetchInspectionFeishuRecordDetail } from '
 import type { InspectionFeishuFieldMeta } from '@/types/quality'
 import { InspectionFeishuRecordModal } from './InspectionFeishuRecordModal'
 import { InspectionFeishuRecordDetailDrawer } from './InspectionFeishuRecordDetailDrawer'
+import { InstrumentCertificateCreateModal } from './InstrumentCertificateCreateModal'
 import { InstrumentProfileDrawer } from './InstrumentProfileDrawer'
 import {
   InspectionCreateByMaterialModal,
@@ -54,6 +55,10 @@ interface Props {
   enableEquipmentProfile?: boolean
   /** 开启后「新增」改按物料名称/代码选料（固体/液体原辅料） */
   createWithMaterialPicker?: boolean
+  /** 新增仅走飞书共享表单：未配置表单链接时不显示「新增」，不回退本地弹窗 */
+  createFormOnly?: boolean
+  /** 开启后提供「证书识别新增」：上传校准证书 AI 识别预填外部校准表新增弹窗 */
+  enableCertificateCreate?: boolean
   /** 选料弹窗的物料范围：固体页只列固体、液体页只列液体 */
   materialPickerModule?: 'solid' | 'liquid'
   /** 跳转携带的新建记录 ID：加载后自动打开该记录详情抽屉 */
@@ -110,6 +115,8 @@ export function InspectionFeishuTable({
   editablePersonFields = false,
   enableEquipmentProfile = false,
   createWithMaterialPicker = false,
+  createFormOnly = false,
+  enableCertificateCreate = false,
   materialPickerModule,
   highlightRecordId = null,
   highlightEntityCode = null,
@@ -134,6 +141,9 @@ export function InspectionFeishuTable({
   const [modalOpen, setModalOpen] = useState(false)
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create')
   const [editingRecord, setEditingRecord] = useState<Record<string, unknown>>()
+  /** 证书识别预填值：仅在 create 模式下作为表单初始值 */
+  const [createPresetValues, setCreatePresetValues] = useState<Record<string, unknown>>()
+  const [certModalOpen, setCertModalOpen] = useState(false)
   const [attachmentPreview, setAttachmentPreview] = useState<{
     fileName: string
     previewSrc: string
@@ -263,12 +273,30 @@ export function InspectionFeishuTable({
     }
   }
 
-  /** 刷新：仅重新加载当前列表（读本地镜像最新数据），不回拉飞书。 */
-  const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['quality-inspection', 'list', listApi] })
+  /** 刷新：仅重新加载当前列表（读本地镜像最新数据），不回拉飞书；
+   * 如需从飞书拉取最新数据用「同步飞书数据」。 */
+  const [refreshing, setRefreshing] = useState(false)
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    try {
+      await queryClient.invalidateQueries({
+        queryKey: ['quality-inspection', 'list', listApi],
+      })
+      message.success('已重新加载列表数据')
+    } finally {
+      setRefreshing(false)
+    }
   }
 
   const openCreate = () => {
+    setCreatePresetValues(undefined)
+    // 仅表单模式：新增只打开飞书共享表单，本地弹窗录入入口彻底关闭
+    if (createFormOnly) {
+      if (formUrl) {
+        window.open(formUrl, '_blank', 'noopener,noreferrer')
+      }
+      return
+    }
     if (createWithMaterialPicker) {
       setCreateModalOpen(true)
       return
@@ -559,14 +587,21 @@ export function InspectionFeishuTable({
               筛选
             </Button>
           )}
-          {editable && !disableCreate && (canPush || formUrl) && (
+          {editable && !disableCreate && (canPush || formUrl) && (!createFormOnly || formUrl) && (
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
               {createLabel}
             </Button>
           )}
-          <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
-            刷新
-          </Button>
+          {editable && !disableCreate && enableCertificateCreate && entityCode && canPush && (
+            <Button icon={<RobotOutlined />} onClick={() => setCertModalOpen(true)}>
+              证书识别新增
+            </Button>
+          )}
+          <Tooltip title="重新加载本地镜像数据；如需从飞书拉取最新，请点「同步飞书数据」">
+            <Button icon={<ReloadOutlined />} loading={refreshing} onClick={handleRefresh}>
+              刷新
+            </Button>
+          </Tooltip>
           {pullApi && entityCode && (
             <Button type="primary" icon={<SyncOutlined />} onClick={handlePull} loading={syncing}>
               同步飞书数据
@@ -669,12 +704,25 @@ export function InspectionFeishuTable({
           open={modalOpen}
           entityCode={entityCode}
           mode={modalMode}
-          initialValues={editingRecord}
+          initialValues={modalMode === 'create' ? createPresetValues : editingRecord}
           editablePersonFields={editablePersonFields}
           onClose={() => setModalOpen(false)}
           onSuccess={() =>
             queryClient.invalidateQueries({ queryKey: ['quality-inspection', 'list', listApi] })
           }
+        />
+      )}
+      {editable && enableCertificateCreate && entityCode && (
+        <InstrumentCertificateCreateModal
+          open={certModalOpen}
+          onClose={() => setCertModalOpen(false)}
+          onApply={(mappedFields) => {
+            setCertModalOpen(false)
+            setModalMode('create')
+            setEditingRecord(undefined)
+            setCreatePresetValues(mappedFields)
+            setModalOpen(true)
+          }}
         />
       )}
       {editable && createWithMaterialPicker && (

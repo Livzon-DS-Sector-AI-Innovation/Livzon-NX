@@ -33,7 +33,12 @@ const PRODUCT_TAB_SLOTS: readonly ProductTab[] = [
   { code: 'MV', name: '美伐他汀', color: '#08979c' },
 ]
 
-export default function BoardNavBlocks() {
+export default function BoardNavBlocks({
+  hideCodes,
+}: {
+  /** 本页不可用的产品 Tab（如排产页无汇总排产，隐藏 SUMMARY） */
+  hideCodes?: readonly string[]
+} = {}) {
   const productCode = useProductContextStore((s) => s.productCode)
   const setProductCode = useProductContextStore((s) => s.setProductCode)
 
@@ -42,9 +47,24 @@ export default function BoardNavBlocks() {
     restoreProductContext()
   }, [])
 
+  // 恢复出的产品在本页被隐藏时（如排产页残留汇总），回落到首个可见产品，
+  // 避免高亮落在不可用 Tab 上、页面数据按不可用产品取数
+  useEffect(() => {
+    if (hideCodes?.includes(productCode)) {
+      const fallback =
+        PRODUCT_TAB_SLOTS.find((tab) => !hideCodes.includes(tab.code))?.code ??
+        'FA'
+      setProductCode(fallback)
+    }
+  }, [productCode, hideCodes, setProductCode])
+
+  const visibleTabs = PRODUCT_TAB_SLOTS.filter(
+    (tab) => !hideCodes?.includes(tab.code),
+  )
+
   return (
     <Row gutter={[12, 12]}>
-      {PRODUCT_TAB_SLOTS.map((tab) => (
+      {visibleTabs.map((tab) => (
         <Col xs={12} sm={8} md={4} key={tab.code}>
           <div
             title={`切换到 ${tab.name}${tab.code === 'SUMMARY' ? '（五产线聚合）' : ' 看板与排产数据'}`}

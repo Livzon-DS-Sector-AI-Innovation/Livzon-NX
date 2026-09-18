@@ -361,6 +361,34 @@ describe('renderFeishuValue', () => {
       }),
     )
     expect(container.textContent).toBe('46406')
+
+    // 部分飞书 Base 的公式列元数据不带结果类型：列名带日期语义时按列名兜底
+    // （真实案例：外部校准检定表「下次检定日期」= EDATE(检定日期, 12)-1）
+    renderValue(
+      renderFeishuValue('46406', {}, undefined, makeMessage() as never, {
+        uiType: 'Formula',
+        fieldName: '下次检定日期',
+      }),
+    )
+    expect(container.textContent).toBe('2027-01-19')
+
+    // 同列名兜底也兼容毫秒时间戳字符串
+    renderValue(
+      renderFeishuValue('1769774400000', {}, undefined, makeMessage() as never, {
+        uiType: 'Lookup',
+        fieldName: '下次检定日期',
+      }),
+    )
+    expect(container.textContent).toBe('2026-01-30')
+
+    // 纯数字公式列（如「剩余天数」）列名无日期语义，不受兜底影响
+    renderValue(
+      renderFeishuValue('46406', {}, undefined, makeMessage() as never, {
+        uiType: 'Formula',
+        fieldName: '剩余天数',
+      }),
+    )
+    expect(container.textContent).toBe('46406')
   })
 
   it('renders image attachment with direct url when no file_token', async () => {
