@@ -110,16 +110,24 @@ def stage_perms(monkeypatch: Any):
 
 
 @pytest.mark.anyio
-async def test_board_returns_no_archive_message(
+async def test_board_returns_unified_period_fallback_when_no_archive(
     auth_client: AsyncClient,
     mock_db_service: None,
 ) -> None:
+    """新产品排产未上传：返回统一扎帐周期兜底结构而非空数据。"""
     response = await auth_client.get(f"{API}/fermentation-board")
     assert response.status_code == 200
     body = response.json()
     assert body["code"] == 200
-    assert body["data"] is None
-    assert "排产" in body["message"]
+    data = body["data"]
+    assert data["covered"] is False
+    assert data["kpis"] is None
+    assert data["tanks"] == []
+    assert data["recent"] == []
+    # 统一扎帐周期（27日～26日）覆盖今天 → 周期结构与当前周期标记返回
+    assert data["period"] is not None
+    assert data["is_current_period"] is True
+    assert data["alerts"] == []
 
 
 @pytest.mark.anyio
