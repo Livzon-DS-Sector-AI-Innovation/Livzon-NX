@@ -290,7 +290,12 @@ def _parse_xml_tool_calls(content: str) -> list[dict[str, Any]] | None:
 async def _tool_query_records(db: AsyncSession, arguments: dict[str, Any]) -> str:
     year = arguments.get("year")
     # 未指定年份时遍历全部预置年份（未配置的在拉取时自然跳过），与聚合工具口径一致
-    years = [int(year)] if int(year or 0) in ANALYSIS_YEARS else list(ANALYSIS_YEARS)
+    year_value = int(str(year or 0))
+    years = (
+        [year_value]
+        if year_value in ANALYSIS_YEARS
+        else list(ANALYSIS_YEARS)
+    )
     month_filter = str(arguments.get("month") or "").strip()
     product_filter = str(arguments.get("product") or "").strip()
     type_filter = str(arguments.get("anomaly_type") or "").strip().replace(

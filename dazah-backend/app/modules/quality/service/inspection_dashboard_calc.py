@@ -13,6 +13,7 @@ import logging
 import re
 import uuid as uuid_module
 import weakref
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from statistics import StatisticsError, fmean, pstdev
 from typing import Any
@@ -82,6 +83,16 @@ from app.modules.quality.service.trend_anomaly_rules import (
 from app.modules.quality.service.trend_chart_render import render_trend_chart_png
 
 logger = logging.getLogger(__name__)
+
+# These helpers are consumed by the escalation worker and intentionally remain
+# available from this module for the existing worker/test integration surface.
+__all__ = [
+    "FINISHED_DASHBOARD_BATCH_FIELD",
+    "_normalize",
+    "_search_entity_records_with_fallback",
+    "load_inspection_trend_alert_config",
+    "load_inspection_trend_alert_escalation_config",
+]
 
 
 def _parse_numeric_metric(value: Any) -> float | None:
@@ -462,7 +473,7 @@ async def _materialize_merged_dashboard_alerts(
     notifications_paused = not trend_config.is_enabled
     line_paused = bool(line_config and not line_config.get("enabled", True))
     if notifications_paused or line_paused:
-        error = (
+        paused_error = (
             "该产品线趋势异常提醒已停用"
             if line_paused
             else "趋势异常提醒通知已停用"
@@ -479,7 +490,7 @@ async def _materialize_merged_dashboard_alerts(
                 upper_control_limit=upper_control_limit,
                 lower_control_limit=lower_control_limit,
                 spec_lines=spec_lines,
-                error=error,
+                error=paused_error,
             )
             for p in points
         ]
@@ -517,9 +528,9 @@ async def _materialize_merged_dashboard_alerts(
         db, entity_code=entity_code, batch_no=first_batch, line_config=line_config
     )
     if not recipients:
-        rows = []
+        unmapped_rows: list[FinishedTrendAlertNotification] = []
         for p in fresh or points:
-            rows.append(
+            unmapped_rows.append(
                 await _create_dashboard_notification(
                     db,
                     entity_code=entity_code,
@@ -541,14 +552,14 @@ async def _materialize_merged_dashboard_alerts(
                 notification_deduplicated=False,
                 notification_error="未找到通知对象",
             )
-            for row in rows
+            for row in unmapped_rows
         ]
     if not any(
         r.get("open_id") or r.get("email") for r in recipients
     ):
-        rows = []
+        missing_open_id_rows: list[FinishedTrendAlertNotification] = []
         for p in fresh:
-            rows.append(
+            missing_open_id_rows.append(
                 await _create_dashboard_notification(
                     db,
                     entity_code=entity_code,
@@ -570,7 +581,7 @@ async def _materialize_merged_dashboard_alerts(
                 notification_deduplicated=False,
                 notification_error="未找到通知对象 open_id 或邮箱",
             )
-            for row in rows
+            for row in missing_open_id_rows
         ]
 
     # 合并卡正文：按指标分组列出超标批次
@@ -627,14 +638,14 @@ async def _materialize_merged_dashboard_alerts(
 
     if sent_ids:
         status = "sent" if not failed_names else "partial"
-        error = (
+        notification_error: str | None = (
             f"以下通知对象发送失败：{'、'.join(failed_names)}"
             if failed_names
             else None
         )
     else:
         status = "failed"
-        error = (
+        notification_error = (
             f"以下通知对象发送失败：{'、'.join(failed_names)}"
             if failed_names
             else "飞书通知发送失败"
@@ -642,9 +653,9 @@ async def _materialize_merged_dashboard_alerts(
     message_id = ",".join(sent_ids) or None
     notified_at = datetime.now(UTC) if sent_ids else None
 
-    rows: list[FinishedTrendAlertNotification] = []
+    notification_rows: list[FinishedTrendAlertNotification] = []
     for p in fresh:
-        rows.append(
+        notification_rows.append(
             await _create_dashboard_notification(
                 db,
                 entity_code=entity_code,
@@ -675,7 +686,7 @@ async def _materialize_merged_dashboard_alerts(
                 FinishedTrendAlertNotification.id == row.id
             )
         )
-        rows.append(refreshed.scalar_one())
+        notification_rows.append(refreshed.scalar_one())
 
     return [
         _serialize_dashboard_alert(
@@ -684,9 +695,9 @@ async def _materialize_merged_dashboard_alerts(
             std_dev=std_dev,
             spec_lines=spec_lines,
             notification_deduplicated=False,
-            notification_error=error,
+            notification_error=notification_error,
         )
-        for row in rows
+        for row in notification_rows
     ]
 
 
@@ -1521,12 +1532,13 @@ def _trend_ai_row_to_chart_model(
     confidence_order = {"low": 0, "medium": 1, "high": 2}
     best_confidence = "low"
     for row in completed:
-        summary = row.ai_summary or {}
+        summary: dict[str, Any] = (
+            row.ai_summary if isinstance(row.ai_summary, dict) else {}
+        )
         metrics = list((row.payload or {}).get("metrics") or [])
-        verdicts = (
-            summary.get("metric_verdicts")
-            if isinstance(summary.get("metric_verdicts"), dict)
-            else {}
+        raw_verdicts = summary.get("metric_verdicts")
+        verdicts: dict[Any, Any] = (
+            raw_verdicts if isinstance(raw_verdicts, dict) else {}
         )
         approved_keys = {
             str(key)
@@ -1602,7 +1614,9 @@ def _build_trend_ai_markdown(
     metric_label: str,
     anomaly: FinishedTrendAIAnalysis,
 ) -> str:
-    summary = anomaly.ai_summary or {}
+    summary: dict[str, Any] = (
+        anomaly.ai_summary if isinstance(anomaly.ai_summary, dict) else {}
+    )
     lines: list[str]
     if anomaly.metric_key == TREND_PRODUCT_METRIC_KEY:
         # 产品级合并卡：整体研判 + AI 终审判定异常的逐指标结论（含复核口径）
@@ -1613,10 +1627,9 @@ def _build_trend_ai_markdown(
         ]
         if summary.get("summary"):
             lines.append(f"**AI 整体研判：**{summary['summary']}")
-        verdicts = (
-            summary.get("metric_verdicts")
-            if isinstance(summary.get("metric_verdicts"), dict)
-            else {}
+        raw_verdicts = summary.get("metric_verdicts")
+        verdicts: dict[Any, Any] = (
+            raw_verdicts if isinstance(raw_verdicts, dict) else {}
         )
         approved_labels = {
             str(key)
@@ -2036,7 +2049,13 @@ def _sanitize_product_signals(
     for signal in signals:
         if not isinstance(signal, dict):
             continue
-        index = signal.get("metric_index")
+        raw_index = signal.get("metric_index")
+        if raw_index is None:
+            continue
+        try:
+            index = int(raw_index)
+        except (TypeError, ValueError):
+            continue
         if index not in approved:
             continue
         signal = dict(signal)
@@ -2370,7 +2389,7 @@ async def reanalyze_trend_ai(
         get_water_dashboard_data,
     )
 
-    runners = {
+    runners: dict[str, Callable[..., Awaitable[Any]]] = {
         "mpa": get_mpa_dashboard_data,
         "mvt": get_mvt_dashboard_data,
         "lft": get_lft_dashboard_data,
@@ -2698,8 +2717,8 @@ async def _get_finished_dashboard_data(
         elif product_trend_status == "completed":
             trend_ai_completed_count = 1
         approved_count = 0
-        for chart in charts:
-            chart_key = str(chart.get("metric_key") or "")
+        for chart_data in charts:
+            chart_key = str(chart_data.get("metric_key") or "")
             verdict_item = verdicts.get(chart_key) or {}
             approved = (
                 product_trend_status == "completed"
@@ -2709,8 +2728,8 @@ async def _get_finished_dashboard_data(
             # 判据与红点；AI 未完成 / 未裁决 / normal / improved 一律清空——
             # 产品级模型是各图共享的，红点必须逐图按该指标被点头的批次覆盖
             if not approved:
-                chart["trend_anomalies"] = []
-            if chart["trend_anomalies"]:
+                chart_data["trend_anomalies"] = []
+            if chart_data["trend_anomalies"]:
                 approved_count += 1
             model = (
                 product_trend_ai.model_dump(mode="json")
@@ -2723,8 +2742,8 @@ async def _get_finished_dashboard_data(
                     if approved
                     else []
                 )
-            chart["trend_ai"] = model
-            chart["trend_ai_status"] = product_trend_status
+            chart_data["trend_ai"] = model
+            chart_data["trend_ai_status"] = product_trend_status
         # 计数与红点口径一致：AI 认可的异常指标数（不再用粗筛候选数）
         trend_alert_metric_count = approved_count
 

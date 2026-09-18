@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import date, timedelta
-from types import SimpleNamespace
 from typing import Any
 
 from sqlalchemy import and_, select
@@ -420,7 +419,7 @@ class RegulatoryTrackerNotificationService:
             if setting and (
                 str(setting.recipient_open_id or "").strip() == normalized_open_id
             ):
-                recipient = SimpleNamespace(
+                recipient = RegulatoryTrackerNotificationRecipientOption(
                     open_id=normalized_open_id,
                     name=str(setting.recipient_name or "已配置接收人"),
                     department=str(setting.recipient_department or "") or None,

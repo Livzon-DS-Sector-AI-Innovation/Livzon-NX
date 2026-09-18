@@ -4,6 +4,7 @@ import asyncio
 import copy
 import logging
 import re
+from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 from io import BytesIO
 from typing import Any, cast
@@ -490,7 +491,7 @@ class EmployeeService:
         except IntegrityError:
             # 并发窗口兜底：查重通过后另一请求先插入同工号 → 部分唯一索引冲突转 409
             await self.session.rollback()
-            raise DuplicateException("工号", data.employee_number)
+            raise DuplicateException("工号", str(data.employee_number or ""))
         # Sync to Feishu
         sync_status = "success"
         try:
@@ -4269,7 +4270,7 @@ class TrainingLedgerService:
         return resolved.get(name) or fallback_dept
 
     async def _resolve_teaching_depts(
-        self, instructors: list[str | None]
+        self, instructors: Sequence[str | None]
     ) -> dict[str, str]:
         """批量解析多个培训师的授课部门（一次 IN 查询），返回 {instructor: dept}.
 

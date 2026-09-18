@@ -475,7 +475,9 @@ async def create_capa_ledger_record(
     record = await client.create_record(
         _require_table_id(entity),
         fields,
-        user_id_type="union_id" if fields_need_union_user_id(fields) else None,
+        user_id_type=(
+            "union_id" if fields_need_union_user_id(fields) else "open_id"
+        ),
     )
     record_id = str(record.get("record_id") or "")
     logger.info("CAPA ledger record created", extra={"record_id": record_id})
@@ -514,7 +516,9 @@ async def update_capa_ledger_record(
         _require_table_id(entity),
         record_id,
         fields,
-        user_id_type="union_id" if fields_need_union_user_id(fields) else None,
+        user_id_type=(
+            "union_id" if fields_need_union_user_id(fields) else "open_id"
+        ),
     )
     logger.info("CAPA ledger record updated", extra={"record_id": record_id})
     return await get_capa_ledger_record(db, record_id)
@@ -642,7 +646,9 @@ async def create_capa_plan_track_record(
     record = await client.create_record(
         _require_table_id(entity),
         fields,
-        user_id_type="union_id" if fields_need_union_user_id(fields) else None,
+        user_id_type=(
+            "union_id" if fields_need_union_user_id(fields) else "open_id"
+        ),
     )
     record_id = str(record.get("record_id") or "")
     logger.info("CAPA plan track record created", extra={"record_id": record_id})
@@ -681,7 +687,9 @@ async def update_capa_plan_track_record(
         _require_table_id(entity),
         record_id,
         fields,
-        user_id_type="union_id" if fields_need_union_user_id(fields) else None,
+        user_id_type=(
+            "union_id" if fields_need_union_user_id(fields) else "open_id"
+        ),
     )
     logger.info("CAPA plan track record updated", extra={"record_id": record_id})
     return await get_capa_plan_track_record(db, record_id)

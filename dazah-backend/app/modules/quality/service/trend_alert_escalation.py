@@ -20,13 +20,20 @@ from app.modules.quality.models.finished_trend_alert_escalation import (
 )
 from app.modules.quality.service import inspection_dashboard_calc as calc
 from app.modules.quality.service.quality_notification_settings import (
-    load_inspection_trend_alert_escalation_config,
+    InspectionTrendAlertEscalationConfig,
 )
 
 logger = logging.getLogger(__name__)
 
 MAX_ESCALATION_RETRIES = 3
 _ESCALATION_BATCH_LIMIT = 20
+
+
+async def load_inspection_trend_alert_escalation_config(
+    db: AsyncSession,
+) -> InspectionTrendAlertEscalationConfig:
+    """读取升级配置；保留模块入口以兼容定时任务和测试注入。"""
+    return await calc.load_inspection_trend_alert_escalation_config(db)
 
 
 async def find_due_trend_alert_escalations(
@@ -149,7 +156,9 @@ async def _fetch_current_and_series(
     values: list[float] = []
     for record in records:
         fields = record.get("fields") or {}
-        batch_no = calc._normalize(fields.get(calc.FINISHED_DASHBOARD_BATCH_FIELD))
+        batch_no = calc._normalize(
+            fields.get(calc.FINISHED_DASHBOARD_BATCH_FIELD)
+        )
         if not batch_no:
             continue
         value = calc._parse_numeric_metric(fields.get(item.metric_key))

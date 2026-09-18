@@ -444,7 +444,7 @@ async def extract_article_from_file(
     current_user: CurrentUser,
     file: UploadFile = File(...),
 ) -> Any:
-    _require_user(current_user)
+    user_id = _require_user(current_user)
 
     safe_name, file_content = await read_upload_secure(
         file,
@@ -456,7 +456,7 @@ async def extract_article_from_file(
     task_id = await jobs.submit_job(
         _extract_article_task,
         ttl=600,
-        status_extra={"owner": str(current_user.id)},
+        status_extra={"owner": str(user_id)},
         file_name=safe_name,
         content_type=sniff_upload_mime(safe_name, file_content),
         file_content=file_content,
@@ -473,12 +473,12 @@ async def summarize_attachment(
     attachment_id: uuid.UUID,
     current_user: CurrentUser,
 ) -> Any:
-    _require_user(current_user)
+    user_id = _require_user(current_user)
 
     task_id = await jobs.submit_job(
         _summarize_attachment_task,
         ttl=600,
-        status_extra={"owner": str(current_user.id)},
+        status_extra={"owner": str(user_id)},
         attachment_id=attachment_id,
     )
     return success_response(
@@ -491,13 +491,13 @@ async def get_task_status(
     task_id: str,
     current_user: CurrentUser,
 ) -> Any:
-    _require_user(current_user)
+    user_id = _require_user(current_user)
     job = await jobs.get_job_status(task_id)
     if job is None:
         raise AppException(message="任务不存在或已过期", status_code=404)
     # 归属校验：任务结果（可能含文档内容）仅提交人可查看
     owner = str(job.get("owner") or "")
-    if owner and owner != str(current_user.id):
+    if owner and owner != str(user_id):
         raise AppException(message="无权查看该任务", status_code=403)
     # 适配前端轮询契约：{task_id, status:
     # pending/running/completed/failed,

@@ -94,8 +94,11 @@ async def _classify_via_llm(titles: list[str]) -> dict[str, str] | None:
     for item in items:
         if not isinstance(item, dict):
             continue
+        raw_index = item.get("index")
+        if raw_index is None:
+            continue
         try:
-            index = int(item.get("index"))
+            index = int(raw_index)
             category = str(item.get("category") or "").strip()
         except (TypeError, ValueError):
             continue
