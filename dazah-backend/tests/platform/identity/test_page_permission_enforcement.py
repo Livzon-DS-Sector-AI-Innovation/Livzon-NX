@@ -397,3 +397,100 @@ def test_browse_folder_route_removed_from_bindings():
         )
         is None
     )
+
+
+def test_quality_shared_read_routes_cover_sibling_pages():
+    """跨页共享的只读端点同时授权调用页，写操作保持属主页绑定。"""
+    binding = page_policy.api_binding_for_route("GET", "/api/v1/quality/capas")
+    assert binding is not None
+    assert "quality:capas:capa-ledger" in binding.page_keys
+    assert "quality:capas:capa-plans" in binding.page_keys
+    write_binding = page_policy.api_binding_for_route(
+        "POST", "/api/v1/quality/capas"
+    )
+    assert write_binding is not None
+    assert write_binding.page_keys == ("quality:capas:capa-ledger",)
+
+    binding = page_policy.api_binding_for_route(
+        "GET", "/api/v1/quality/deviation-report-records"
+    )
+    assert binding is not None
+    assert "quality:deviations:deviation-records" in binding.page_keys
+    assert "quality:deviations:deviation-investigations" in binding.page_keys
+
+    binding = page_policy.api_binding_for_route(
+        "GET", "/api/v1/quality/feishu/validations"
+    )
+    assert binding is not None
+    assert "quality:validation:validation-plans" in binding.page_keys
+    for suffix in (
+        "equipment-qualification",
+        "process-validation",
+        "cleaning-validation",
+        "other-validations",
+    ):
+        assert f"quality:validation:{suffix}" in binding.page_keys
+    delete_binding = page_policy.api_binding_for_route(
+        "DELETE", "/api/v1/quality/feishu/validations/{record_id}"
+    )
+    assert delete_binding is not None
+    assert delete_binding.page_keys == ("quality:validation:validation-plans",)
+
+
+def test_quality_feishu_settings_read_covers_push_ledger_pages():
+    """飞书应用配置读取授权四个业务推送页（响应仅含掩码密钥），写入仍仅设置页。"""
+    binding = page_policy.api_binding_for_route(
+        "GET", "/api/v1/quality/feishu-settings/app"
+    )
+    assert binding is not None
+    assert binding.permission == "query"
+    assert set(binding.page_keys) == {
+        "quality:quality-settings",
+        "quality:deviations:deviation-records",
+        "quality:deviations:deviation-investigations",
+        "quality:oos-oot:oos-oot-report-records",
+        "quality:oos-oot:oos-oot-investigation-push",
+    }
+    write_binding = page_policy.api_binding_for_route(
+        "PUT", "/api/v1/quality/feishu-settings/app"
+    )
+    assert write_binding is not None
+    assert write_binding.page_keys == ("quality:quality-settings",)
+
+
+def test_quality_module_landing_routes_resolve_reviewed_alias():
+    """变更控制与仪器管理目录页路由解析到评审别名页，仪表盘绑定包含别名页。"""
+    assert (
+        page_policy.page_key_for_route("/quality/change")
+        == "quality:change:change-ledger"
+    )
+    assert (
+        page_policy.page_key_for_route("/quality/inspection/instruments")
+        == "quality:inspection:inspection-instruments:"
+        "inspection-instruments-equipment"
+    )
+    # 子页面路由不受目录别名影响，仍按最长前缀解析到叶子页。
+    assert (
+        page_policy.page_key_for_route("/quality/change/ledger")
+        == "quality:change:change-ledger"
+    )
+    assert (
+        page_policy.page_key_for_route(
+            "/quality/inspection/instruments/equipment"
+        )
+        == "quality:inspection:inspection-instruments:"
+        "inspection-instruments-equipment"
+    )
+    dashboard = page_policy.api_binding_for_route(
+        "GET", "/api/v1/quality/instruments/dashboard"
+    )
+    assert dashboard is not None
+    assert (
+        "quality:inspection:inspection-instruments:"
+        "inspection-instruments-equipment"
+    ) in dashboard.page_keys
+    stats = page_policy.api_binding_for_route(
+        "GET", "/api/v1/quality/statistics/changes"
+    )
+    assert stats is not None
+    assert "quality:change:change-ledger" in stats.page_keys
