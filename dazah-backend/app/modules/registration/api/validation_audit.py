@@ -201,9 +201,9 @@ async def parse_files(
     try:
         await service.parse_files(task)
         # Re-fetch task after status update
-        task = await service.get_task(task_id)
+        refreshed_task = await service.get_task(task_id)
         return success_response(
-            data=ValidationAuditTaskResponse.model_validate(task),
+            data=ValidationAuditTaskResponse.model_validate(refreshed_task),
             message="文件解析完成",
         )
     except AppException as e:
@@ -227,9 +227,9 @@ async def run_audit(
         await service.generate_report(task, result)
 
         # Re-fetch task after updates
-        task = await service.get_task(task_id)
+        refreshed_task = await service.get_task(task_id)
         return success_response(
-            data=ValidationAuditTaskResponse.model_validate(task),
+            data=ValidationAuditTaskResponse.model_validate(refreshed_task),
             message="审核完成",
         )
     except AppException:

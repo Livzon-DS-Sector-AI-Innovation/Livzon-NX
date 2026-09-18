@@ -102,8 +102,11 @@ def _parse_limit_values(
     lower: float | None = None
     for line in spec_lines or []:
         label = str(line.get("label") or "")
+        raw_value = line.get("value")
+        if raw_value is None:
+            continue
         try:
-            value = float(line.get("value"))
+            value = float(raw_value)
         except (TypeError, ValueError):
             continue
         if "下限" in label:
@@ -247,11 +250,14 @@ def build_trend_ai_prompt(
         parts.append("【已算好的确定性趋势判据命中】\n（无趋势规则命中，仅按统计事实研判）")
 
     tail = points[-MAX_SERIES_POINTS_IN_PROMPT:]
-    series_rows = [
-        f"{p.get('batch_no')}: {format(float(p.get('value')), 'g')}"
-        for p in tail
-        if p.get("value") is not None
-    ]
+    series_rows: list[str] = []
+    for point in tail:
+        raw_value = point.get("value")
+        if raw_value is None:
+            continue
+        series_rows.append(
+            f"{point.get('batch_no')}: {format(float(raw_value), 'g')}"
+        )
     prefix = (
         f"（仅显示最近 {len(tail)} 批，共 {len(points)} 批）"
         if len(points) > len(tail)

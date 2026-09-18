@@ -233,13 +233,14 @@ async def load_page_row(
     )
     if snapshot is None:
         return None
-    return await session.scalar(
+    row = await session.scalar(
         select(MaterialPageRow).where(
             MaterialPageRow.page_snapshot_id == snapshot.id,
             MaterialPageRow.source_record_id == record_id,
             MaterialPageRow.is_deleted.is_(False),
         )
     )
+    return row
 
 
 async def load_transitions(

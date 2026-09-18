@@ -61,3 +61,12 @@ async def test_execute_tool_call_blocks_write_without_confirmation() -> None:
     assert result["success"] is False
     assert result["needs_confirmation"] is True
     assert "确认" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_call_blocks_write_when_messages_are_none() -> None:
+    tool = sorted(WRITE_TOOLS)[0]
+    result = json.loads(await execute_tool_call(None, tool, {}, messages=None))
+
+    assert result["success"] is False
+    assert result["needs_confirmation"] is True

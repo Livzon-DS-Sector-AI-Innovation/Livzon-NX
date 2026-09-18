@@ -302,7 +302,9 @@ class ChangeActionPlanFeishuSync:
         )
 
         fields = await self.build_fields(db, plan, include_users=include_users)
-        user_id_type = "union_id" if fields_need_union_user_id(fields) else None
+        user_id_type = (
+            "union_id" if fields_need_union_user_id(fields) else "open_id"
+        )
         if plan.feishu_record_id:
             record = await client.update_record(
                 table_id,

@@ -18,7 +18,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
-from openpyxl import load_workbook
+from openpyxl import load_workbook  # type: ignore[import-untyped]
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
@@ -115,7 +115,7 @@ async def export_maintenance_summary(
     ]
     rows.sort(
         key=lambda item: (
-            parse_feishu_date(item.get("维护日期")) or 0,  # type: ignore[arg-type]
+            parse_feishu_date(item.get("维护日期")) or 0,
             str(item.get("record_id") or ""),
         )
     )

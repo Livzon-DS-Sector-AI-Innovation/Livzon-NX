@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app.core.exceptions import DuplicateException, NotFoundException
 from app.modules.hr import service as hr_service
@@ -234,6 +235,37 @@ async def test_employee_crud_duplicate_and_feishu_failures(monkeypatch: Any) -> 
             sort_order="asc",
         )
     )[1] == 1
+
+
+@pytest.mark.asyncio
+async def test_create_employee_integrity_error_becomes_duplicate() -> None:
+    repo: Any = AsyncMock()
+    session: Any = SimpleNamespace(rollback=AsyncMock())
+    service = _bare(
+        hr_service.EmployeeService,
+        repo=repo,
+        session=session,
+        feishu=AsyncMock(),
+    )
+    repo.get_by_employee_number.return_value = None
+    repo.create.side_effect = IntegrityError(
+        "insert employee", {}, RuntimeError("duplicate key")
+    )
+
+    with pytest.raises(DuplicateException, match="E001"):
+        await service.create_employee(
+            cast(Any, Dump)(
+                employee_number="E001",
+                name="张三",
+                department="生产部",
+                sub_department=None,
+                position="操作员",
+                hire_date=date.today(),
+                phone=None,
+            )
+        )
+
+    session.rollback.assert_awaited_once()
 
 
 @pytest.mark.asyncio

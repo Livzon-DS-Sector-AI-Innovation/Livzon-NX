@@ -356,6 +356,29 @@ async def test_build_board_excludes_actuals_with_unparseable_dump_date() -> None
     assert "FA-M1" in payload["trend"]["batches"]
 
 
+@pytest.mark.anyio
+async def test_build_board_accepts_datetime_dump_date_for_unmapped_batch() -> None:
+    payload = board.build_board(
+        _mini_rows(),
+        [],
+        datetime(2026, 8, 28, 12, 0),
+        actuals=[
+            {
+                "batch_no": "FA-DATETIME",
+                "dump_date": datetime(2026, 8, 28, 12, 0),
+                "yield_kg": 8.5,
+                "remark": None,
+            }
+        ],
+    )
+
+    assert payload is not None
+    assert payload["trend"] == {
+        "batches": ["FA-DATETIME"],
+        "outputs": [8.5],
+    }
+
+
 # ═══════════════════ 提炼工段汇总（收率两口径） ═══════════════════
 
 

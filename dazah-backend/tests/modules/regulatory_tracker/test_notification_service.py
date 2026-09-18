@@ -8,6 +8,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.core.exceptions import AppException
+from app.modules.regulatory_tracker.schemas.notification import (
+    RegulatoryTrackerNotificationRecipientOption,
+)
+from app.modules.regulatory_tracker.services import (
+    notification_service as notification_module,
+)
 from app.modules.regulatory_tracker.services.notification_service import (
     RegulatoryTrackerNotificationService,
     _build_notification_content,
@@ -673,9 +679,23 @@ async def test_send_test_notification_paths(monkeypatch) -> None:
         credentials=("cli_app", "secret"),
         resolved=("zhangqizhi01", "user_id"),
     )
+    recipient_constructor = MagicMock(
+        side_effect=RegulatoryTrackerNotificationRecipientOption
+    )
+    monkeypatch.setattr(
+        notification_module,
+        "RegulatoryTrackerNotificationRecipientOption",
+        recipient_constructor,
+    )
     result = await service.send_test_notification(recipient_open_id="ou_saved")
     assert result["sent"] is True
     assert result["recipient_name"] == "张起智"
+    recipient_constructor.assert_called_once_with(
+        open_id="ou_saved",
+        name="张起智",
+        department="AI创新部",
+        enterprise_email=None,
+    )
 
     monkeypatch.setattr(
         service,

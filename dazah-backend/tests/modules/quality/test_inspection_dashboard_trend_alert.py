@@ -590,6 +590,7 @@ def test_build_metric_verdicts_unreviewed_and_signal_sanitize() -> None:
             {"metric_index": 1, "batch_no": "B9", "rule_type": "month_level"},
             {"metric_index": 2, "batch_no": "B3", "rule_type": "month_level"},
             {"batch_no": "B4", "rule_type": "month_level"},  # 无序号 → 丢
+            {"metric_index": "bad", "batch_no": "B5", "rule_type": "month_level"},
         ],
         metrics,
         verdicts,

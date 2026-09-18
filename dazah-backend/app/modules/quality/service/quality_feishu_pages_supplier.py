@@ -395,12 +395,15 @@ async def create_supplier_qualification_record(
         app_id=runtime.app_id,
         app_secret=runtime.app_secret,
     )
+    table_id = feishu_sync_service._require_table_id(entity)
     try:
         # 成员字段出现 on_ 前缀 union_id 时必须声明 union_id 命名空间
         created = await client.create_record(
-            entity.table_id,
+            table_id,
             fields,
-            user_id_type="union_id" if fields_need_union_user_id(fields) else None,
+            user_id_type=(
+                "union_id" if fields_need_union_user_id(fields) else "open_id"
+            ),
         )
     except AppException:
         raise
@@ -417,7 +420,7 @@ async def create_supplier_qualification_record(
         )
     try:
         return await _write_mirror_from_remote(
-            db, client, entity.table_id, record_id, entity
+            db, client, table_id, record_id, entity
         )
     except (NotFoundException, AppException):
         # 飞书写入成功但镜像回写失败：返回飞书 record_id 兜底行，不重复写飞书
@@ -462,7 +465,9 @@ async def update_supplier_qualification_record(
             table_id,
             record_id,
             fields,
-            user_id_type="union_id" if fields_need_union_user_id(fields) else None,
+            user_id_type=(
+                "union_id" if fields_need_union_user_id(fields) else "open_id"
+            ),
         )
     except AppException:
         raise

@@ -531,7 +531,7 @@ def _row_to_item(row: QualityItemsPageRow, columns: list[str]) -> dict[str, Any]
 
 async def _load_page(
     db: AsyncSession, page_key: str
-) -> tuple[Any, list[dict[str, Any]], list[QualityItemsPageRow], int]:
+) -> tuple[Any, list[str], list[QualityItemsPageRow], int]:
     snapshot = await repo.get_snapshot(db, page_key)
     if snapshot is None:
         return None, [], [], 0

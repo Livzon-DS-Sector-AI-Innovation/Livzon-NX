@@ -300,3 +300,20 @@ async def test_list_validation_records_filters_and_paginates(
     )
     result = await pages.list_validation_records_from_feishu(SimpleNamespace())
     assert result["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_list_validation_records_returns_valid_cached_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cached = '{"items": [{"record_id": "cached-1"}], "total": 1}'
+    monkeypatch.setattr(pages, "cache_get", AsyncMock(return_value=cached))
+    resolve = AsyncMock(side_effect=AssertionError("cache hit should return early"))
+    monkeypatch.setattr(pages, "_resolve_runtime_entity", resolve)
+
+    result = await pages.list_validation_records_from_feishu(
+        SimpleNamespace(), year=2026
+    )
+
+    assert result == {"items": [{"record_id": "cached-1"}], "total": 1}
+    resolve.assert_not_awaited()

@@ -18,9 +18,10 @@ from __future__ import annotations
 import calendar
 import logging
 import re
+from collections.abc import Callable, Sequence
 from datetime import date, datetime, time, timedelta
 from functools import partial
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,7 +32,8 @@ from app.modules.production.fermentation_batch_actual_models import (
 from app.modules.production.fermentation_month_setting_models import (
     FermentationMonthSetting,
 )
-from app.modules.production.models import ProductionPlan, ScheduleExcelArchive
+from app.modules.production.models import ProductionPlan
+from app.modules.production.schedule_excel_models import ScheduleExcelArchive
 from app.modules.production.tank_maintenance_models import TankMaintenance
 
 FERMENT_TANKS = ("302A", "303A", "304A")
@@ -799,7 +801,7 @@ def build_dr_board(
 
     done = sorted(
         (b for b in batches if _in_period(b["dump"]) and b["dump"] <= as_of),
-        key=lambda b: (b["dump"], b["batch_no"]),  # type: ignore[arg-type, return-value]
+        key=lambda b: (b["dump"], b["batch_no"]),
         reverse=True,
     )
     # 已放罐未录产量批次（供漏录提醒；DR 排产无放罐时刻，按当日零点折算）
@@ -1546,7 +1548,7 @@ def build_mp_board(
     )
     done = sorted(
         (b for b in batches if _in_period(b["dump"]) and b["dump"] <= now),
-        key=lambda b: (b["dump"], b["batch_no"]),  # type: ignore[arg-type, return-value]
+        key=lambda b: (b["dump"], b["batch_no"]),
         reverse=True,
     )
     # 已放罐未录产量批次（供漏录提醒；与 KPI 的产量真值语义一致）
@@ -1605,7 +1607,7 @@ def build_mp_board(
         ]
         own.sort(
             key=lambda b: (
-                b["inoculate"] or b["dump"] or datetime.max,  # type: ignore[arg-type]
+                b["inoculate"] or b["dump"] or datetime.max,
             )
         )
         active = [
@@ -2448,16 +2450,23 @@ def build_board(
 
     # ── 单批产量（本周期内已录入实际产量的批次，按批次顺序升序，最多 31 批）──
     # 批次归属周期：排产表有放罐日期的按排产判断，否则按录入的放罐日期判断
+    block_start = cast(date, block["start"])
+    block_end = cast(date, block["end"])
+
     def _batch_in_period(batch_no: str, record_date: Any) -> bool:
-        dump_day = dump_map.get(batch_no)
-        if dump_day is None:
-            dump_day = record_date
-        if not isinstance(dump_day, date):
+        raw_dump_day: Any = dump_map.get(batch_no)
+        if raw_dump_day is None:
+            raw_dump_day = record_date
+        if isinstance(raw_dump_day, datetime):
+            dump_day = raw_dump_day.date()
+        elif isinstance(raw_dump_day, date):
+            dump_day = raw_dump_day
+        else:
             try:
-                dump_day = date.fromisoformat(str(dump_day))
+                dump_day = date.fromisoformat(str(raw_dump_day))
             except (TypeError, ValueError):
                 return False
-        return block["start"] <= dump_day <= block["end"]
+        return block_start <= dump_day <= block_end
 
     measured = sorted(
         (
@@ -2847,7 +2856,9 @@ async def load_latest_archive(
     return result.scalar_one_or_none()
 
 
-def _board_functions(product_code: str):
+def _board_functions(
+    product_code: str,
+) -> tuple[Callable[..., Any], Callable[..., Any]]:
     """按产品分派（块定位, 看板组装）函数对。
 
     FA/DR/MC 各自排产格式；他汀 LV/MV 复用 MC 管线。取档覆盖检查、
@@ -3075,7 +3086,7 @@ def _summary_rate(
 
 
 def _extract_planned_yield_kg(
-    plan_rows: list[Any], product_name: str
+    plan_rows: Sequence[ProductionPlan], product_name: str
 ) -> float | None:
     """产销计划中该产品提炼车间行（车间名不含'发酵'）的 KG 计划合计。
 
@@ -3132,13 +3143,13 @@ async def build_production_summary(
     rows: list[dict[str, Any]] = []
     period: dict[str, str] | None = None
     for code, name in _SUMMARY_PRODUCTS:
-        ferment = {
+        ferment: dict[str, Any] = {
             "planned_batches": None,
             "planned_capacity_kg": None,
             "done_yield_kg": None,
             "capacity_rate": None,
         }
-        extract = {
+        extract: dict[str, Any] = {
             "planned_yield_kg": None,
             "finished_inbound_kg": None,
             "completion_rate": None,
