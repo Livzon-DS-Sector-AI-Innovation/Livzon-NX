@@ -28,6 +28,18 @@ describe('system permission server actions', () => {
     }))
   })
 
+  it.each([
+    [403, '仅系统管理员可以分配系统管理员角色'],
+    [409, '授权版本冲突'],
+  ])('shows the backend reason when administrator assignment returns %i', async (status, detail) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ detail }), { status },
+    )))
+    await expect(adminActions.assignUserRoles('user-1', ['role-admin']))
+      .rejects.toThrow(detail)
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
+
   it('appends deduplicated department roles without replacing current manual roles', async () => {
     const request = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { message: '角色已分配' } })))
     vi.stubGlobal('fetch', request)

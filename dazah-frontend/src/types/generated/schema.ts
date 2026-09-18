@@ -34745,6 +34745,8 @@ export interface components {
             capa_items?: components["schemas"]["CapaItem"][] | null;
             /** Category */
             category?: string | null;
+            /** Department */
+            department?: string | null;
             /** Deviation Id */
             deviation_id?: string | null;
             /** Executors */
@@ -48237,7 +48239,7 @@ export interface components {
              * @default department_tree
              * @enum {string}
              */
-            scope_type: "not_applicable" | "department_tree" | "departments" | "all" | "self";
+            scope_type: "not_applicable" | "department_tree" | "departments" | "all" | "self" | "production_fermentation" | "production_extraction";
         };
         /** PageGrantInput */
         PageGrantInput: {
@@ -48276,7 +48278,7 @@ export interface components {
             /** Sensitive Actions */
             sensitive_actions?: components["schemas"]["SensitiveActionDefinitionOut"][];
             /** Supported Scope Types */
-            supported_scope_types?: ("not_applicable" | "department_tree" | "departments" | "all" | "self")[];
+            supported_scope_types?: ("not_applicable" | "department_tree" | "departments" | "all" | "self" | "production_fermentation" | "production_extraction")[];
         };
         /** PagePermissionHealthIssueOut */
         PagePermissionHealthIssueOut: {

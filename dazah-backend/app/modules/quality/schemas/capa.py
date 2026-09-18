@@ -129,6 +129,7 @@ class CapaDetail(BaseModel):
 
 class CreateCapaRequest(BaseModel):
     title: str | None = None
+    department: str | None = None
     deviation_id: uuid.UUID | None = None
     source: str | None = None
     source_code: str | None = None

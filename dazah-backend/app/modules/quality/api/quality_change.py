@@ -55,10 +55,22 @@ from app.modules.quality.service import quality_import_export as ie_service
 from app.modules.quality.service.change_ledger_export import (
     generate_change_ledger_export_docx,
 )
+from app.platform.identity.data_scope import current_page_key
 from app.shared.schemas import ApiResponseEnvelope
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+async def _require_full_change_page_scope(
+    db: AsyncSession, current_user: CurrentUser
+) -> None:
+    if current_page_key.get() is None:
+        return
+    assert current_user is not None
+    scope = await _resolve_quality_list_scope(db, current_user)
+    if not scope.is_all:
+        raise HTTPException(403, "批量同步或导入变更需要全部数据范围")
 
 
 @router.get(
@@ -140,6 +152,8 @@ async def list_change_action_plans(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     _require_user(current_user)
+    assert current_user is not None
+    department_scope = await _resolve_quality_list_scope(db, current_user)
     result = await service.get_change_action_plan_list(
         db,
         change_id=change_id,
@@ -155,6 +169,7 @@ async def list_change_action_plans(
         deadline_date_to=deadline_date_to,
         page=page,
         page_size=page_size,
+        scope=department_scope,
     )
     return success_response(
         data=result["items"],
@@ -209,6 +224,7 @@ async def sync_change_action_plans_from_feishu(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     user_id = _current_user_id(_require_user(current_user))
+    await _require_full_change_page_scope(db, current_user)
     try:
         result = await service.sync_change_action_plans_from_feishu(db, user_id)
         return success_response(data=result.model_dump())
@@ -407,6 +423,8 @@ async def sync_changes_from_feishu(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
+    await _require_full_change_page_scope(db, current_user)
+    await _require_full_change_page_scope(db, current_user)
     result = await service.quality_feishu_pages.sync_changes_from_feishu(db)
     return success_response(data=result)
 
@@ -446,6 +464,7 @@ async def confirm_change_import(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     _require_user(current_user)
+    await _require_full_change_page_scope(db, current_user)
     if not file.filename or not file.filename.endswith((".docx", ".doc")):
         raise AppException(message="请上传 Word 文件 (.docx)")
     content = await read_upload_with_limit(file, IMPORT_FILE_MAX_SIZE, "导入文件")

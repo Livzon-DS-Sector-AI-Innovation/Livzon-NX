@@ -52,7 +52,9 @@ from app.platform.identity.permission_cache import (
 )
 from app.platform.identity.permission_repository import PermissionGrantRepository
 from app.platform.identity.rbac import (
+    ORDINARY_ADMIN_ROLE_CODE,
     active_system_admin_count,
+    is_ordinary_admin,
     lock_admin_changes,
     resolve_user_menu_ids,
     resolve_user_permissions,
@@ -117,8 +119,10 @@ async def require_identity_admin(
     user = await require_current_user(current_user)
     if request.method not in {"GET", "HEAD", "OPTIONS"}:
         user = await lock_authorization_actor(db, user)
-    if user.role == "admin":
+    if user.role == "admin" and not await is_ordinary_admin(db, user.id):
         return user
+    if user.role == "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "普通管理员不能访问系统设置")
     permissions = await resolve_user_permissions(db, user.id)
     if "*" not in permissions and "identity:admin" not in permissions:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "需要 identity:admin 权限")
@@ -399,7 +403,7 @@ async def update_role(
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     role = await _get_role_or_404(db, role_id)
-    if role.code == "super_admin":
+    if role.code in {"super_admin", ORDINARY_ADMIN_ROLE_CODE}:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "系统管理员角色不允许修改")
     old = {"name": role.name, "description": role.description}
     role = await RbacRepository().update_role(
@@ -431,7 +435,7 @@ async def delete_role(
 ) -> JSONResponse:
     role = await _get_role_or_404(db, role_id)
     await _assert_not_own_role(db, current_user, role_id)
-    if role.code == "super_admin":
+    if role.code in {"super_admin", ORDINARY_ADMIN_ROLE_CODE}:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "系统管理员角色不允许删除")
     await RbacRepository().soft_delete_role(db, role)
     await _bump_all_user_grant_versions(db, actor_id=current_user.id)
@@ -457,7 +461,7 @@ async def set_role_permissions(
 ) -> JSONResponse:
     role = await _get_role_or_404(db, role_id)
     await _assert_not_own_role(db, current_user, role_id)
-    if role.is_system and role.code == "super_admin":
+    if role.code in {"super_admin", ORDINARY_ADMIN_ROLE_CODE}:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "系统管理员权限不可修改")
     permission_ids = list(dict.fromkeys(body.permission_ids))
     permission_stmt = select(Permission.id).where(Permission.is_deleted.is_(False))
@@ -525,7 +529,8 @@ async def list_admin_users(
             _role_payload(role) for role in await repo.list_user_roles(db, user.id)
         ]
         if user.role == "admin" and not any(
-            role["code"] == "super_admin" for role in item["roles"]
+            role["code"] in {"super_admin", ORDINARY_ADMIN_ROLE_CODE}
+            for role in item["roles"]
         ):
             system_role = await db.scalar(
                 select(Role).where(
@@ -566,7 +571,7 @@ async def assign_user_roles(
     for role_id in dict.fromkeys(body.role_ids):
         role = await _get_role_or_404(db, role_id)
         if (
-            role.code == "super_admin"
+            role.code in {"super_admin", ORDINARY_ADMIN_ROLE_CODE}
             and not await PagePermissionService().is_super_admin(
                 db, user_id=current_user.id
             )
@@ -579,11 +584,26 @@ async def assign_user_roles(
     selected_by_id = (
         {**current_by_id, **requested_by_id} if body.mode == "add" else requested_by_id
     )
+    administrator_roles = [
+        role for role in selected_by_id.values()
+        if role.code in {"super_admin", ORDINARY_ADMIN_ROLE_CODE}
+    ]
+    if administrator_roles and len(selected_by_id) != 1:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "管理员角色不能与其他角色同时分配"
+        )
     removed_super_admin = any(
         role.code == "super_admin" and role_id not in selected_by_id
         for role_id, role in current_by_id.items()
     )
-    if removed_super_admin:
+    demoting_to_ordinary = (
+        user.role == "admin"
+        and not any(
+            role.code == ORDINARY_ADMIN_ROLE_CODE for role in current_by_id.values()
+        )
+        and any(role.code == ORDINARY_ADMIN_ROLE_CODE for role in administrator_roles)
+    )
+    if removed_super_admin or demoting_to_ordinary:
         if not await PagePermissionService().is_super_admin(
             db, user_id=current_user.id
         ):
@@ -605,7 +625,7 @@ async def assign_user_roles(
     await repo.replace_user_roles(db, user.id, list(selected_ids))
     user.role = (
         "admin"
-        if any(role.code == "super_admin" for role in selected_by_id.values())
+        if administrator_roles
         else "user"
     )
     user.grant_version += 1
@@ -656,20 +676,32 @@ async def remove_user_role(
     await lock_admin_changes(db)
     user = await _get_target_user_or_404(db, user_id)
     role = await _get_role_or_404(db, role_id)
-    if role.code == "super_admin":
+    if role.code in {"super_admin", ORDINARY_ADMIN_ROLE_CODE}:
         if not await PagePermissionService().is_super_admin(
             db, user_id=current_user.id
         ):
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN, "仅系统管理员可以移除系统管理员角色"
             )
-        if user.status == "active" and await _active_super_admin_count(db) <= 1:
+        if (
+            role.code == "super_admin"
+            and user.status == "active"
+            and await _active_super_admin_count(db) <= 1
+        ):
             raise HTTPException(
                 status.HTTP_409_CONFLICT, "不能移除最后一个可用的系统管理员"
             )
     removed = await RbacRepository().remove_user_role(db, user.id, role_id)
-    if role.code == "super_admin" and user.role == "admin":
-        user.role = "user"
+    if (
+        role.code in {"super_admin", ORDINARY_ADMIN_ROLE_CODE}
+        and user.role == "admin"
+    ):
+        remaining_roles = await RbacRepository().list_user_roles(db, user.id)
+        if not any(
+            item.code in {"super_admin", ORDINARY_ADMIN_ROLE_CODE}
+            for item in remaining_roles
+        ):
+            user.role = "user"
         removed = True
     if removed:
         user.grant_version += 1
@@ -725,7 +757,7 @@ async def create_dept_rule(
         department_name=body.department_name,
     )
     role = await _get_role_or_404(db, body.role_id)
-    if role.code == "super_admin":
+    if role.code in {"super_admin", ORDINARY_ADMIN_ROLE_CODE}:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             "系统管理员角色只能逐个用户明确分配，不能通过部门映射授予",
@@ -926,7 +958,7 @@ async def set_role_menus(
 ) -> JSONResponse:
     role = await _get_role_or_404(db, role_id)
     await _assert_not_own_role(db, current_user, role_id)
-    if role.code == "super_admin":
+    if role.code in {"super_admin", ORDINARY_ADMIN_ROLE_CODE}:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, "系统管理员角色不允许修改菜单绑定"
         )
@@ -1281,7 +1313,7 @@ async def replace_role_page_permissions(
     role = await page_repo.get_role_for_update(db, role_id=role_id)
     if role is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "角色不存在")
-    if role.code == "super_admin":
+    if role.code in {"super_admin", ORDINARY_ADMIN_ROLE_CODE}:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "系统管理员页面权限不可修改")
     actor_roles = await resolve_user_roles(db, current_user.id)
     if (
@@ -1363,7 +1395,7 @@ async def preview_role_page_permissions(
     settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
     role = await _get_role_or_404(db, role_id)
-    if role.code == "super_admin":
+    if role.code in {"super_admin", ORDINARY_ADMIN_ROLE_CODE}:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "系统管理员页面权限不可修改")
     service = PagePermissionService()
     if role.grant_version != body.expected_grant_version:
@@ -1735,7 +1767,7 @@ async def rollback_role_page_permissions(
     role = await page_repo.get_role_for_update(db, role_id=role_id)
     if role is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "角色不存在")
-    if role.code == "super_admin":
+    if role.code in {"super_admin", ORDINARY_ADMIN_ROLE_CODE}:
         raise HTTPException(400, "系统管理员页面权限不可回滚")
     actor_roles = await resolve_user_roles(db, current_user.id)
     if (
@@ -1843,7 +1875,7 @@ async def remediate_page_permission_health_issue(
         role = await page_repo.get_role_for_update(db, role_id=body.target_id)
         if role is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "角色不存在")
-        if role.code == "super_admin":
+        if role.code in {"super_admin", ORDINARY_ADMIN_ROLE_CODE}:
             raise HTTPException(400, "系统管理员页面权限不可自动修复")
         await _assert_not_own_role(db, current_user, role.id)
         target = role

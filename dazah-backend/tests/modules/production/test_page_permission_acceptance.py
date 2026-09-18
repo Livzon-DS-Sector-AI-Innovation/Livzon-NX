@@ -16,7 +16,9 @@ from app.platform.identity.page_permissions import PagePermissionService
 from app.platform.identity.schemas import EffectivePageGrantOut, PageDataScopeInput
 
 
-def acceptance_app(router, monkeypatch, page_key, actions=()):
+def acceptance_app(
+    router, monkeypatch, page_key, actions=(), scope_type="all"
+):
     app = FastAPI()
     app.include_router(
         router,
@@ -46,13 +48,72 @@ def acceptance_app(router, monkeypatch, page_key, actions=()):
         module_code="production",
         permissions=["access", "query", "operate"],
         sensitive_actions=list(actions),
-        data_scope=PageDataScopeInput(scope_type="not_applicable"),
+        data_scope=PageDataScopeInput(scope_type=scope_type),
         source="user",
     )
     monkeypatch.setattr(
         PagePermissionService, "effective_grants", AsyncMock(return_value=[grant])
     )
     return app, session
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "scope_type,expected",
+    [
+        ("all", (True, True)),
+        ("production_fermentation", (True, False)),
+        ("production_extraction", (False, True)),
+    ],
+)
+async def test_overview_uses_real_stage_scope_without_legacy_permission(
+    monkeypatch, scope_type, expected
+):
+    from app.modules.production import fermentation_board_api
+    from app.platform.identity import rbac
+
+    app, _ = acceptance_app(
+        fermentation_board_api.router, monkeypatch, "production:overview",
+        scope_type=scope_type,
+    )
+    monkeypatch.setattr(rbac, "resolve_user_permissions", AsyncMock(return_value=[]))
+    summary = AsyncMock(return_value={"visible": True})
+    monkeypatch.setattr(
+        fermentation_board_api.board, "build_production_summary", summary
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            "/api/v1/production/production-summary",
+            headers={"X-Dazah-Page-Key": "production:overview"},
+        )
+    assert response.status_code == 200
+    assert response.json()["data"] == {"visible": True}
+    assert summary.await_args.kwargs["has_ferm"] is expected[0]
+    assert summary.await_args.kwargs["has_extract"] is expected[1]
+
+
+@pytest.mark.asyncio
+async def test_extraction_scope_cannot_change_fermentation_actuals(monkeypatch):
+    from app.modules.production import fermentation_board_api
+
+    app, _ = acceptance_app(
+        fermentation_board_api.router, monkeypatch, "production:overview",
+        scope_type="production_extraction",
+    )
+    save = AsyncMock()
+    monkeypatch.setattr(fermentation_board_api.board, "upsert_batch_actual", save)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/production/fermentation-batch-actuals",
+            json={"batch_no": "FA26233", "yield_kg": 100},
+            headers={"X-Dazah-Page-Key": "production:overview"},
+        )
+    assert response.status_code == 403
+    save.assert_not_awaited()
 
 
 @pytest.mark.asyncio

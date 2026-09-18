@@ -89,6 +89,31 @@ describe('Sidebar role filtering', () => {
   })
 })
 
+describe('system settings entry', () => {
+  const modules: ModuleMenu[] = [{
+    key: 'purchasing', moduleCode: 'procurement', label: '采购管理',
+    icon: 'shopping', path: '/purchasing', children: menuItems,
+  }]
+
+  it.each([
+    { roles: ['super_admin'], visible: true },
+    { roles: ['ordinary_admin'], visible: false },
+  ])('shows settings only to system administrators: $roles', async ({ roles, visible }) => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    try {
+      await act(async () => root.render(createElement(Sidebar, {
+        user: { ...user, role: 'admin', roles }, modules,
+      })))
+      expect(host.textContent?.includes('系统设置')).toBe(visible)
+    } finally {
+      await act(async () => root.unmount())
+    }
+  })
+})
+
 describe('Sidebar navigation feedback', () => {
   it('shows a live pending message until the route changes', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)

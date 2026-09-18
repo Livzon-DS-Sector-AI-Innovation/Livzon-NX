@@ -5,7 +5,7 @@ import uuid
 from io import BytesIO
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,10 +54,22 @@ from app.modules.quality.schemas import (
     UpdateCapaRequest,
 )
 from app.modules.quality.service import quality_import_export as ie_service
+from app.platform.identity.data_scope import current_page_key
 from app.shared.schemas import ApiResponseEnvelope
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+async def _require_full_capa_page_scope(
+    db: AsyncSession, current_user: CurrentUser
+) -> None:
+    if current_page_key.get() is None:
+        return
+    assert current_user is not None
+    scope = await _resolve_quality_list_scope(db, current_user)
+    if not scope.is_all:
+        raise HTTPException(403, "批量同步或导入CAPA需要全部数据范围")
 
 
 @router.get(
@@ -79,6 +91,8 @@ async def list_capa_plan_tracks(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     _require_user(current_user)
+    assert current_user is not None
+    scope = await _resolve_quality_list_scope(db, current_user)
     result = await service.get_capa_plan_track_list(
         db,
         capa_id=capa_id,
@@ -90,6 +104,7 @@ async def list_capa_plan_tracks(
         due_date_to=due_date_to,
         page=page,
         page_size=page_size,
+        scope=scope,
     )
     return success_response(
         data=result["items"],
@@ -238,6 +253,53 @@ async def auto_fill_capa_from_deviation(
     _require_user(current_user)
     result = await service.auto_fill_from_deviation(db, deviation_id)
     return success_response(data=result)
+
+
+@router.get("/capas/export", summary="导出CAPA数据")
+async def export_capas(
+    status: str | None = None,
+    source: str | None = None,
+    category: str | None = None,
+    keyword: str | None = None,
+    capa_code: str | None = None,
+    affected_product: str | None = None,
+    source_code: str | None = None,
+    evaluation_result: str | None = None,
+    closure_date_from: str | None = None,
+    closure_date_to: str | None = None,
+    department: str | None = None,
+    qa_confirmer: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    _require_user(current_user)
+    assert current_user is not None
+    scope = await _resolve_quality_list_scope(db, current_user)
+    data = await ie_service.export_capas(
+        db,
+        None,
+        status,
+        source,
+        category,
+        keyword,
+        capa_code,
+        affected_product,
+        source_code,
+        evaluation_result,
+        closure_date_from,
+        closure_date_to,
+        department,
+        qa_confirmer,
+        scope=scope,
+    )
+    return StreamingResponse(
+        BytesIO(data),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers=_build_docx_download_headers(
+            "CAPA登记汇总表.docx",
+            "capa-register.docx",
+        ),
+    )
 
 
 @router.get(
@@ -516,6 +578,7 @@ async def sync_capas_from_feishu(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
+    await _require_full_capa_page_scope(db, current_user)
     result = await service.quality_feishu_pages.sync_capas_from_feishu(db)
     return success_response(data=result)
 
@@ -530,6 +593,7 @@ async def sync_capa_plan_tracks_from_feishu(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
+    await _require_full_capa_page_scope(db, current_user)
     result = await service.quality_feishu_pages.sync_capa_plan_tracks_from_feishu(db)
     return success_response(data=result)
 
@@ -565,6 +629,7 @@ async def confirm_capa_import(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     _require_user(current_user)
+    await _require_full_capa_page_scope(db, current_user)
     if not file.filename or not file.filename.endswith((".docx", ".doc")):
         raise AppException(message="请上传 Word 文件 (.docx)")
     content = await read_upload_with_limit(file, IMPORT_FILE_MAX_SIZE, "导入文件")
@@ -588,50 +653,6 @@ async def export_capa_template(
         io.BytesIO(buffer),
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"},
-    )
-
-
-@router.get("/capas/export", summary="导出CAPA数据")
-async def export_capas(
-    status: str | None = None,
-    source: str | None = None,
-    category: str | None = None,
-    keyword: str | None = None,
-    capa_code: str | None = None,
-    affected_product: str | None = None,
-    source_code: str | None = None,
-    evaluation_result: str | None = None,
-    closure_date_from: str | None = None,
-    closure_date_to: str | None = None,
-    department: str | None = None,
-    qa_confirmer: str | None = None,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
-) -> Any:
-    _require_user(current_user)
-    data = await ie_service.export_capas(
-        db,
-        None,
-        status,
-        source,
-        category,
-        keyword,
-        capa_code,
-        affected_product,
-        source_code,
-        evaluation_result,
-        closure_date_from,
-        closure_date_to,
-        department,
-        qa_confirmer,
-    )
-    return StreamingResponse(
-        BytesIO(data),
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers=_build_docx_download_headers(
-            "CAPA登记汇总表.docx",
-            "capa-register.docx",
-        ),
     )
 
 

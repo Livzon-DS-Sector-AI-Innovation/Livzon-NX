@@ -90,6 +90,18 @@ async def require_admin(current_user: CurrentUser) -> User:
     return user
 
 
+async def require_system_admin(
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    from app.platform.identity.rbac import is_ordinary_admin
+
+    user = await require_admin(current_user)
+    if await is_ordinary_admin(db, user.id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "普通管理员不能访问系统设置")
+    return user
+
+
 def require_module_view(module_code: str) -> Callable[..., Awaitable[User]]:
     """Create a dependency enforcing the configured module access policy.
 
@@ -247,3 +259,4 @@ RequiredUser = Annotated[User, Depends(require_current_user)]
 # Backwards-compatible name used by the migrated warehouse endpoints.
 RequireUser = RequiredUser
 AdminUser = Annotated[User, Depends(require_admin)]
+SystemAdminUser = Annotated[User, Depends(require_system_admin)]

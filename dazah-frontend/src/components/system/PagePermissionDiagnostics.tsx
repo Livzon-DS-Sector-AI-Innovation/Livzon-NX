@@ -113,7 +113,7 @@ export function PagePermissionDiagnostics() {
         <Space wrap>
           <Tag>来源：{source}</Tag>
           <Tag>最终档位：{pagePermissionTierLabel(effective?.permissions || [])}</Tag>
-          <Tag>数据范围：{pageScopeSummary(effective?.data_scope.scope_type || "not_applicable", effective?.data_scope.department_ids || [])}</Tag>
+          <Tag>数据范围：{effective ? pageScopeSummary(effective.data_scope.scope_type, effective.data_scope.department_ids || [], undefined, pageKey) : "未授权"}</Tag>
         </Space>
         {!!effective?.resolution?.length && <div>
           <Typography.Text strong>判定过程</Typography.Text>
@@ -127,7 +127,7 @@ export function PagePermissionDiagnostics() {
             <Tag color="geekblue">{item.role_name}</Tag>
             <Typography.Text type="secondary">
               {pagePermissionTierLabel(item.permissions || [])} · {pageScopeSummary(
-                item.data_scope.scope_type, item.data_scope.department_ids || [])}
+                item.data_scope.scope_type, item.data_scope.department_ids || [], undefined, pageKey)}
               {!!item.sensitive_actions?.length && ` · 高风险动作 ${item.sensitive_actions.length} 项`}
             </Typography.Text>
           </div>)}</div>
