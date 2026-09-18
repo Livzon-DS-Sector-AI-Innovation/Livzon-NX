@@ -43,8 +43,8 @@ import BoardNavBlocks from '@/components/production/board-nav-blocks'
 import BatchProgressBar from '@/components/production/batch-progress-bar'
 import ProductionSummary from '@/components/production/production-summary'
 import { useProductContextStore } from '@/stores/product-context'
-import { usePermission } from '@/hooks/usePermission'
 import {
+  hasProductionOverviewStage,
   hasProductionPagePermission,
   PRODUCTION_PAGE_KEYS,
   useProductionPermissions,
@@ -201,10 +201,8 @@ export default function ProductionDashboard() {
   const { message } = App.useApp()
   const productionUser = useAuthStore((state) => state.user)
   const { canOperate, canDelete } = useProductionPermissions(PRODUCTION_PAGE_KEYS.overview)
-  // 工段数据权限：发酵模块挂发酵权限，提炼汇总挂提炼权限，收率需双权限
-  const { has } = usePermission()
-  const canFerm = has('production:fermentation-yield')
-  const canExtract = has('production:extraction-yield')
+  const canFerm = hasProductionOverviewStage(productionUser, 'fermentation')
+  const canExtract = hasProductionOverviewStage(productionUser, 'extraction')
   const authorizedWorkshopItems = workshopItems.filter((item) =>
     hasProductionPagePermission(productionUser, item.pageKey, 'access'),
   )

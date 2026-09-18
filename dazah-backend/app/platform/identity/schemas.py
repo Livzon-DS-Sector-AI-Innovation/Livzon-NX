@@ -11,7 +11,8 @@ AuthSource = Literal["local", "feishu"]
 PagePermissionLevel = Literal["access", "query", "operate"]
 PageGrantMode = Literal["inherit", "custom"]
 PageScopeType = Literal[
-    "not_applicable", "department_tree", "departments", "all", "self"
+    "not_applicable", "department_tree", "departments", "all", "self",
+    "production_fermentation", "production_extraction",
 ]
 
 

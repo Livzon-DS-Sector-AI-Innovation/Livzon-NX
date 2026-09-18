@@ -5,16 +5,23 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import DuplicateException, NotFoundException
+from app.core.exceptions import AppException, DuplicateException, NotFoundException
 from app.modules.quality.models.oos_oot import OosOotRecord
 from app.modules.quality.models.oot_limit import OotLimitItem, OotLimitProduct
+from app.modules.quality.page_access import assert_quality_record_department
 from app.modules.quality.repository import oos_oot as repository
+from app.platform.identity.data_scope import (
+    current_page_actor,
+    current_page_key,
+    resolve_user_department_scope,
+)
 
 
 async def _get_record(db: AsyncSession, record_id: uuid.UUID) -> OosOotRecord:
     record = await repository.get_oos_oot_record(db, record_id)
     if record is None:
         raise NotFoundException("OOS/OOT记录", str(record_id))
+    await assert_quality_record_department(db, record.department)
     return record
 
 
@@ -27,6 +34,12 @@ async def list_oos_oot_records(
     page: int,
     page_size: int,
 ) -> tuple[list[OosOotRecord], int]:
+    actor = current_page_actor.get()
+    scope = (
+        await resolve_user_department_scope(db, actor)
+        if current_page_key.get() is not None and actor is not None
+        else None
+    )
     return await repository.list_oos_oot_records(
         db,
         record_type=record_type,
@@ -34,6 +47,7 @@ async def list_oos_oot_records(
         keyword=keyword,
         page=page,
         page_size=page_size,
+        scope=scope,
     )
 
 
@@ -44,6 +58,15 @@ async def get_oos_oot_record(db: AsyncSession, record_id: uuid.UUID) -> OosOotRe
 async def create_oos_oot_record(
     db: AsyncSession, data: dict[str, object]
 ) -> OosOotRecord:
+    actor = current_page_actor.get()
+    raw_department = data.get("department") or (actor.department if actor else None)
+    if raw_department is not None and not isinstance(raw_department, str):
+        raise AppException(message="责任部门格式无效", status_code=400)
+    data = {
+        **data,
+        "department": raw_department,
+    }
+    await assert_quality_record_department(db, raw_department)
     record_code = str(data["record_code"]).strip()
     if await repository.get_oos_oot_record_by_code(db, record_code):
         raise DuplicateException("OOS/OOT记录编号", record_code)
@@ -56,6 +79,11 @@ async def update_oos_oot_record(
     db: AsyncSession, record_id: uuid.UUID, data: dict[str, object]
 ) -> OosOotRecord:
     record = await _get_record(db, record_id)
+    if "department" in data:
+        department = data["department"]
+        if department is not None and not isinstance(department, str):
+            raise AppException(message="责任部门格式无效", status_code=400)
+        await assert_quality_record_department(db, department)
     if record.status == "closed":
         raise ValueError("已关闭的 OOS/OOT 记录不能编辑")
     return await repository.update_oos_oot_record(db, record, data)

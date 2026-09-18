@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.quality import repository as repo
 from app.modules.quality.models import Deviation
+from app.platform.identity.data_scope import DepartmentScope
 
 logger = logging.getLogger(__name__)
 
@@ -606,6 +607,8 @@ async def export_capas(
     closure_date_to: str | None = None,
     department: str | None = None,
     qa_confirmer: str | None = None,
+    *,
+    scope: DepartmentScope | None = None,
 ) -> bytes:
     """Export CAPA data to Word docx, preserving template format."""
     import docx
@@ -636,6 +639,7 @@ async def export_capas(
         qa_confirmer,
         1,
         10000,
+        scope=scope,
     )
 
     if template_content:

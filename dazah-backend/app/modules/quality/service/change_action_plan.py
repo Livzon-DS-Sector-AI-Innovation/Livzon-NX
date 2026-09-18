@@ -21,6 +21,7 @@ from app.modules.quality.feishu_notification import (
     update_card,
 )
 from app.modules.quality.models import ChangeActionPlan
+from app.modules.quality.page_access import assert_quality_record_department
 from app.modules.quality.schemas.change_action_plan import (
     ChangeActionPlanDetail,
     ChangeActionPlanPersonOption,
@@ -33,6 +34,12 @@ from app.modules.quality.schemas.change_action_plan import (
 from app.modules.quality.service.quality_notification_settings import (
     ChangeActionPlanDueConfig,
     load_change_action_plan_due_config,
+)
+from app.platform.identity.data_scope import (
+    DepartmentScope,
+    current_page_actor,
+    current_page_key,
+    resolve_user_department_scope,
 )
 from app.platform.integrations.feishu.bitable import BitableClient, _to_ms_timestamp
 from app.platform.integrations.feishu.contact import get_all_users
@@ -538,6 +545,22 @@ async def _resolve_change_id(
     return change.id if change else None
 
 
+async def _assert_change_plan_department(
+    db: AsyncSession, change_code: str
+) -> None:
+    if current_page_key.get() is None:
+        return
+    actor = current_page_actor.get()
+    if actor is not None and (
+        await resolve_user_department_scope(db, actor)
+    ).is_all:
+        return
+    change = await repository.get_change_by_code(db, change_code)
+    if not change:
+        raise NotFoundException(resource="变更", resource_id=change_code)
+    await assert_quality_record_department(db, change.applicant_department)
+
+
 def _serialize_plan(plan: ChangeActionPlan) -> dict[str, Any]:
     data = ChangeActionPlanDetail.model_validate(plan).model_dump()
     for field_name in (
@@ -684,6 +707,7 @@ async def send_change_action_plan_reminder_for_plan(
     plan = await repository.get_change_action_plan_by_id(db, plan_id)
     if not plan:
         raise NotFoundException(resource="变更行动计划", resource_id=str(plan_id))
+    await _assert_change_plan_department(db, plan.change_code)
 
     await send_change_action_plan_reminder(db, plan, force=True)
     await db.commit()
@@ -703,6 +727,7 @@ async def confirm_change_action_plan_reminder(
     plan = await repository.get_change_action_plan_by_id(db, plan_id)
     if not plan:
         raise NotFoundException(resource="变更行动计划", resource_id=str(plan_id))
+    await _assert_change_plan_department(db, plan.change_code)
 
     if plan.reminder_confirmed_at is None:
         confirmed_at = datetime.now(UTC)
@@ -875,6 +900,7 @@ async def get_change_action_plan_list(
     deadline_date_to: str | None = None,
     page: int = 1,
     page_size: int = 20,
+    scope: DepartmentScope | None = None,
 ) -> dict[str, Any]:
     items, total = await repository.get_change_action_plans(
         db,
@@ -891,6 +917,7 @@ async def get_change_action_plan_list(
         deadline_date_to=_parse_date_value(deadline_date_to),
         page=page,
         page_size=page_size,
+        scope=scope,
     )
     return {
         "items": [_serialize_plan(item) for item in items],
@@ -903,6 +930,10 @@ async def get_change_action_plan_list(
 async def get_change_action_plans_for_change(
     db: AsyncSession, change_id: uuid.UUID
 ) -> list[dict[str, Any]]:
+    change = await repository.get_change_by_id(db, change_id)
+    if not change:
+        raise NotFoundException(resource="变更", resource_id=str(change_id))
+    await assert_quality_record_department(db, change.applicant_department)
     items, _ = await repository.get_change_action_plans(
         db,
         change_id=change_id,
@@ -917,6 +948,7 @@ async def create_change_action_plan_record(
     data: CreateChangeActionPlanRequest,
     user_id: str,
 ) -> dict[str, Any]:
+    await _assert_change_plan_department(db, data.change_code)
     payload = data.model_dump()
     payload["change_id"] = await _resolve_change_id(
         db,
@@ -945,6 +977,7 @@ async def update_change_action_plan_record(
     plan = await repository.get_change_action_plan_by_id(db, plan_id)
     if not plan:
         raise NotFoundException(resource="变更行动计划", resource_id=str(plan_id))
+    await _assert_change_plan_department(db, plan.change_code)
 
     update_data = data.model_dump(exclude_unset=True)
     person_fields = {
@@ -958,6 +991,7 @@ async def update_change_action_plan_record(
     ):
         raise ValueError("负责人/部门总监请在飞书多维表中维护")
     target_change_code = update_data.get("change_code", plan.change_code)
+    await _assert_change_plan_department(db, target_change_code)
     target_change_id = await _resolve_change_id(
         db,
         change_id=update_data.get("change_id"),
@@ -983,6 +1017,7 @@ async def delete_change_action_plan_record(
     plan = await repository.get_change_action_plan_by_id(db, plan_id)
     if not plan:
         raise NotFoundException(resource="变更行动计划", resource_id=str(plan_id))
+    await _assert_change_plan_department(db, plan.change_code)
 
     if plan.feishu_record_id:
         try:
@@ -1002,6 +1037,7 @@ async def sync_change_action_plan_to_feishu(
     plan = await repository.get_change_action_plan_by_id(db, plan_id)
     if not plan:
         raise NotFoundException(resource="变更行动计划", resource_id=str(plan_id))
+    await _assert_change_plan_department(db, plan.change_code)
 
     await _sync_plan_to_feishu(db, plan)
     await db.commit()

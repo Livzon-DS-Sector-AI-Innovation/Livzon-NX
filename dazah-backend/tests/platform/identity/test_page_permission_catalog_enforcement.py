@@ -17,6 +17,22 @@ from app.platform.identity.page_permissions import PagePermissionService
 from app.platform.identity.schemas import EffectivePageGrantOut, PageDataScopeInput
 
 
+def test_reviewed_modules_have_complete_runtime_page_api_bindings() -> None:
+    from app.main import app
+
+    assert app.routes
+    reviewed = {
+        "production", "registration", "hr", "quality", "warehouse", "procurement"
+    }
+    pages = [
+        page for page in page_policy.PAGE_DEFINITIONS
+        if page.module_code in reviewed
+    ]
+    assert len(pages) == 237
+    for module_code in reviewed:
+        assert page_policy.page_api_catalog_gaps(module_code) == []
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "scenario", ["hidden", "duplicate", "risk_query", "write_query", "cross_module"]

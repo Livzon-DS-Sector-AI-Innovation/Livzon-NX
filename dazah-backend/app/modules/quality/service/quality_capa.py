@@ -14,6 +14,7 @@ from app.modules.quality.models import (
     CAPA,
     Deviation,
 )
+from app.modules.quality.page_access import assert_quality_record_department
 from app.modules.quality.schemas import (
     CapaDetail,
     CapaListItem,
@@ -26,7 +27,11 @@ from app.modules.quality.service.quality_common import (
     _parse_datetime_filter_end_exclusive,
 )
 from app.platform.audit.service import record_audit_log
-from app.platform.identity.data_scope import DepartmentScope
+from app.platform.identity.data_scope import (
+    DepartmentScope,
+    current_page_actor,
+    current_page_key,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -107,12 +112,24 @@ async def get_capa_detail(db: AsyncSession, capa_id: uuid.UUID) -> CapaDetail:
     capa = result.scalar_one_or_none()
     if not capa:
         raise NotFoundException(resource="CAPA", resource_id=str(capa_id))
+    await assert_quality_record_department(db, capa.department)
     return CapaDetail.model_validate(capa)
 
 
 async def create_capa(
     db: AsyncSession, data: CreateCapaRequest, user_id: str
 ) -> dict[str, str]:
+    actor = current_page_actor.get()
+    department = data.department or (actor.department if actor else None)
+    if current_page_key.get() is not None:
+        await assert_quality_record_department(db, department)
+        if data.deviation_id is not None:
+            deviation = await repository.get_deviation_by_id(db, data.deviation_id)
+            if not deviation:
+                raise NotFoundException(
+                    resource="偏差", resource_id=str(data.deviation_id)
+                )
+            await assert_quality_record_department(db, deviation.department)
     capa = CAPA(
         capa_code=f"CAPA-{datetime.now(UTC).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6]}",
         title=data.title,
@@ -132,6 +149,7 @@ async def create_capa(
         if data.expected_completion_date
         else None,
         reporter=data.reporter,
+        department=department,
         status="draft",
         status_updated_at=datetime.now(UTC),
     )
@@ -160,8 +178,11 @@ async def update_capa(
     capa = result.scalar_one_or_none()
     if not capa:
         raise NotFoundException(resource="CAPA", resource_id=str(capa_id))
+    await assert_quality_record_department(db, capa.department)
 
     update_data = data.model_dump(exclude_unset=True)
+    if "department" in update_data:
+        await assert_quality_record_department(db, update_data["department"])
     for field, value in update_data.items():
         if field in [
             "capa_items",
@@ -212,6 +233,7 @@ async def delete_capa(
     capa = result.scalar_one_or_none()
     if not capa:
         raise NotFoundException(resource="CAPA", resource_id=str(capa_id))
+    await assert_quality_record_department(db, capa.department)
     capa.is_deleted = True
     capa.deleted_by = deleted_by
     capa.deleted_at = datetime.now(UTC)
@@ -261,6 +283,7 @@ async def auto_fill_from_deviation(
     deviation = await db.get(Deviation, deviation_id)
     if not deviation or deviation.is_deleted:
         raise NotFoundException(resource="偏差")
+    await assert_quality_record_department(db, getattr(deviation, "department", None))
 
     # Extract from AI analysis
     ai_analysis = deviation.ai_analysis or {}
@@ -310,6 +333,7 @@ async def link_deviation(
     capa = await db.get(CAPA, capa_id)
     if not capa or capa.is_deleted:
         raise NotFoundException(resource="CAPA")
+    await assert_quality_record_department(db, capa.department)
     deviation = await db.get(Deviation, deviation_id)
     if not deviation or deviation.is_deleted:
         raise NotFoundException(resource="偏差")
@@ -331,6 +355,7 @@ async def complete_part(
     capa = await db.get(CAPA, capa_id)
     if not capa or capa.is_deleted:
         raise NotFoundException(resource="CAPA")
+    await assert_quality_record_department(db, capa.department)
 
     # Store completion in capa_items or a tracking field
     # For simplicity, update status when both parts are complete
@@ -353,6 +378,7 @@ async def submit_capa(
     capa = await db.get(CAPA, capa_id)
     if not capa or capa.is_deleted:
         raise NotFoundException(resource="CAPA")
+    await assert_quality_record_department(db, capa.department)
     if capa.status not in ("draft",):
         raise AppException(
             message=f"只有草稿状态的CAPA可以提交，当前状态: {capa.status}"
@@ -375,6 +401,7 @@ async def confirm_dept_head(
     capa = await db.get(CAPA, capa_id)
     if not capa or capa.is_deleted:
         raise NotFoundException(resource="CAPA")
+    await assert_quality_record_department(db, capa.department)
 
     confirmations = capa.dept_head_confirmations or []
     now = datetime.now(UTC).isoformat()
@@ -430,6 +457,7 @@ async def approve_capa(
     capa = await db.get(CAPA, capa_id)
     if not capa or capa.is_deleted:
         raise NotFoundException(resource="CAPA")
+    await assert_quality_record_department(db, capa.department)
 
     now = datetime.now(UTC)
 
@@ -466,6 +494,7 @@ async def resubmit_capa(
     capa = await db.get(CAPA, capa_id)
     if not capa or capa.is_deleted:
         raise NotFoundException(resource="CAPA")
+    await assert_quality_record_department(db, capa.department)
     if capa.status != "returned":
         raise AppException(
             message=f"只有已退回状态的CAPA可以重新提交，当前状态: {capa.status}"
@@ -489,6 +518,7 @@ async def add_execution_track(
     capa = await db.get(CAPA, capa_id)
     if not capa or capa.is_deleted:
         raise NotFoundException(resource="CAPA")
+    await assert_quality_record_department(db, capa.department)
 
     tracks = capa.execution_tracks or []
     track = {
@@ -514,6 +544,7 @@ async def delete_execution_track(
     capa = await db.get(CAPA, capa_id)
     if not capa or capa.is_deleted:
         raise NotFoundException(resource="CAPA")
+    await assert_quality_record_department(db, capa.department)
 
     tracks = capa.execution_tracks or []
     if index < 0 or index >= len(tracks):
@@ -533,6 +564,7 @@ async def confirm_execution(
     capa = await db.get(CAPA, capa_id)
     if not capa or capa.is_deleted:
         raise NotFoundException(resource="CAPA")
+    await assert_quality_record_department(db, capa.department)
     if capa.status != "executing":
         raise AppException(
             message=f"只有执行中状态的CAPA可以确认执行完成，当前状态: {capa.status}"
@@ -555,6 +587,7 @@ async def submit_evaluation(
     capa = await db.get(CAPA, capa_id)
     if not capa or capa.is_deleted:
         raise NotFoundException(resource="CAPA")
+    await assert_quality_record_department(db, capa.department)
     if capa.status != "pending_evaluation":
         raise AppException(
             message=f"只有待效果评价状态的CAPA可以提交评价，当前状态: {capa.status}"

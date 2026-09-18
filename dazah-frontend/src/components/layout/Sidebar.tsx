@@ -7,6 +7,7 @@ import type { MenuProps } from "antd"
 import type { ModuleMenu, SubMenuItem } from "@/lib/menu-config"
 import { LoadingOutlined, SettingOutlined } from "@ant-design/icons"
 import type { User } from "@/types/user"
+import { isSystemAdministrator } from "@/lib/administrator-role"
 
 type MenuItem = Required<MenuProps>['items'][number]
 
@@ -334,7 +335,7 @@ export function Sidebar({ user, modules }: SidebarProps) {
         <p className="text-[12px] text-[var(--color-stone)]">
           v0.1.1
         </p>
-        {user?.role === "admin" && (
+        {user && isSystemAdministrator(user) && (
           <button
             onClick={() => navigateTo("/settings")}
             className="inline-flex min-h-8 items-center gap-1.5 rounded-[var(--rounded-sm)] px-2 text-[12px] font-medium text-[var(--color-stone)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-primary)]"

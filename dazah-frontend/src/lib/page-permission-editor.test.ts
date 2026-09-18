@@ -22,7 +22,11 @@ it('summarizes stored data scope without exposing raw department ids', () => {
   expect(pageScopeSummary('department_tree', [])).toBe('本部门及下级')
   expect(pageScopeSummary('departments', ['od-1'])).toBe('指定 1 个部门')
   expect(pageScopeSummary('departments', ['od-1'], new Map([['od-1', '质量部']]))).toBe('指定部门：质量部')
-  expect(pageScopeSummary('all', [])).toBe('全部部门')
+  expect(pageScopeSummary('all', [])).toBe('本页面全部数据')
+  expect(pageScopeSummary('all', [], new Map(), 'production:overview')).toBe('全部生产数据')
+  expect(pageScopeSummary('production_fermentation', [])).toBe('发酵数据')
+  expect(pageScopeSummary('production_extraction', [])).toBe('提炼数据')
+  expect(pageScopeSummary('not_applicable', [])).toBe('待接入数据范围')
 })
 
 it('rejects empty, stale and unsupported editable data scopes', () => {

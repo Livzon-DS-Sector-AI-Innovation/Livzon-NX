@@ -76,13 +76,13 @@ export function RoleManager({ initialRoles, initialDepartments }: RoleManagerPro
       { title: "页面授权版本", dataIndex: "grant_version", key: "grant_version" },
       { title: "描述", dataIndex: "description", key: "description", ellipsis: true },
       { title: "操作", key: "actions", width: 260, fixed: "right", render: (_: unknown, role: RoleItem) => <div className="flex min-w-max gap-2">
-        <Button size="small" disabled={role.code === "super_admin"} onClick={() => setPageRole(role)}>
+        <Button size="small" disabled={role.code === "super_admin" || role.code === "ordinary_admin"} onClick={() => setPageRole(role)}>
           页面权限
         </Button>
-        <Button size="small" disabled={role.code === "super_admin"} onClick={() => openEdit(role)}>编辑信息</Button>
+        <Button size="small" disabled={role.code === "super_admin" || role.code === "ordinary_admin"} onClick={() => openEdit(role)}>编辑信息</Button>
         <Popconfirm title={`确认删除角色“${role.name}”？`} description="删除后，该角色将不再为用户提供授权。"
-          disabled={role.code === "super_admin"} onConfirm={() => remove(role)}>
-          <Button size="small" danger disabled={role.code === "super_admin"}>删除</Button>
+          disabled={role.code === "super_admin" || role.code === "ordinary_admin"} onConfirm={() => remove(role)}>
+          <Button size="small" danger disabled={role.code === "super_admin" || role.code === "ordinary_admin"}>删除</Button>
         </Popconfirm>
       </div> },
     ]} />

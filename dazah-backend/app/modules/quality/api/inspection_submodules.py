@@ -36,6 +36,7 @@ from app.modules.quality.models.liquid_material_inspection import (
     LiquidMaterialInspection,
 )
 from app.modules.quality.models.solid_material_inspection import SolidMaterialInspection
+from app.modules.quality.page_access import assert_quality_record_department
 from app.modules.quality.schemas.lab_instrument import (
     CreateLabInstrumentRequest,
     LabInstrumentOut,
@@ -66,6 +67,7 @@ from app.modules.quality.service.inspection_dashboard import (
 from app.modules.quality.service.inspection_feishu import (
     sync_inspection_record_to_feishu,
 )
+from app.platform.identity.data_scope import current_page_actor
 from app.shared.schemas import ApiResponseEnvelope
 
 logger = logging.getLogger(__name__)
@@ -187,6 +189,8 @@ def _make_crud_routes(
         item = result.scalar_one_or_none()
         if item is None:
             raise NotFoundException(resource_label, str(record_id))
+        if dept_field:
+            await assert_quality_record_department(db, getattr(item, dept_field))
         return success_response(
             data=list_schema.model_validate(item).model_dump(mode="json")
         )
@@ -202,7 +206,14 @@ def _make_crud_routes(
         db: AsyncSession = Depends(get_db),
     ) -> Any:
         _require_user(current_user)
-        record = model_cls(**data.model_dump())
+        values = data.model_dump()
+        if dept_field:
+            actor = current_page_actor.get()
+            values[dept_field] = values.get(dept_field) or (
+                actor.department if actor else None
+            )
+            await assert_quality_record_department(db, values[dept_field])
+        record = model_cls(**values)
         db.add(record)
         try:
             await db.flush()
@@ -241,6 +252,8 @@ def _make_crud_routes(
         item = result.scalar_one_or_none()
         if item is None:
             raise NotFoundException(resource_label, str(record_id))
+        if dept_field:
+            await assert_quality_record_department(db, getattr(item, dept_field))
         await _assert_quality_edit_scope(
             db,
             current_user,
@@ -249,6 +262,8 @@ def _make_crud_routes(
         )
 
         update_data = data.model_dump(exclude_unset=True)
+        if dept_field and dept_field in update_data:
+            await assert_quality_record_department(db, update_data[dept_field])
         for key, value in update_data.items():
             setattr(item, key, value)
 
@@ -286,6 +301,8 @@ def _make_crud_routes(
         item = result.scalar_one_or_none()
         if item is None:
             raise NotFoundException(resource_label, str(record_id))
+        if dept_field:
+            await assert_quality_record_department(db, getattr(item, dept_field))
         await _assert_quality_edit_scope(
             db,
             current_user,

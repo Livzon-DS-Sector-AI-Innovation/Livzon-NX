@@ -26,7 +26,8 @@ from app.core.response import success_response
 from app.platform.audit.service import record_audit_log
 from app.platform.identity.authorization_guard import lock_authorization_actor
 from app.platform.identity.data_scope import publish_data_scope_changed
-from app.platform.identity.deps import AdminUser, CurrentUser
+from app.platform.identity.deps import CurrentUser
+from app.platform.identity.deps import SystemAdminUser as AdminUser
 from app.platform.identity.models import Department, Role, UserRole
 from app.platform.identity.permission_cache import publish_permissions_changed
 from app.platform.identity.permission_repository import PermissionGrantRepository
@@ -34,6 +35,7 @@ from app.platform.identity.rbac import (
     active_system_admin_count,
     resolve_user_permissions,
     resolve_user_roles,
+    resolve_users_roles,
 )
 from app.platform.identity.repository import (
     DepartmentRepository,
@@ -336,8 +338,14 @@ async def list_users(
         offset=offset,
         limit=limit,
     )
+    roles_by_user = await resolve_users_roles(db, users)
+    items = []
+    for user in users:
+        item = UserManagementItem.model_validate(user)
+        item.roles = [role.code for role in roles_by_user.get(user.id, [])]
+        items.append(item)
     response = UserManagementListResponse(
-        items=[UserManagementItem.model_validate(user) for user in users],
+        items=items,
         total=total,
         offset=offset,
         limit=limit,
@@ -456,12 +464,16 @@ async def update_user(
     for field, value in updates.items():
         setattr(user, field, value)
     if updates.get("role") == "user":
-        # A demotion must revoke the historical wildcard binding as well.
+        # A demotion must revoke both administrator role bindings as well.
         await db.execute(
             update(UserRole)
             .where(
                 UserRole.user_id == user.id,
-                UserRole.role_id.in_(select(Role.id).where(Role.code == "super_admin")),
+                UserRole.role_id.in_(
+                    select(Role.id).where(
+                        Role.code.in_(("super_admin", "ordinary_admin"))
+                    )
+                ),
                 UserRole.is_deleted.is_(False),
             )
             .values(is_deleted=True)

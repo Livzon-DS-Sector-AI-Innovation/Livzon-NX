@@ -6,6 +6,7 @@ import { isSecurePublicRequest } from '@/lib/public-origin'
 import { getModuleByKey, getPageKeyByPath, getAuthorizedPageMenus } from '@/lib/menu-config'
 import type { SubMenuItem } from '@/lib/menu-config'
 import type { User } from '@/types/user'
+import { isSystemAdministrator, isSystemSettingsPath } from '@/lib/administrator-role'
 
 const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24
 
@@ -82,7 +83,7 @@ export async function proxy(request: NextRequest) {
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set('X-Dazah-Page-Path', request.nextUrl.pathname)
   const currentModule = getModuleByKey(request.nextUrl.pathname.split('/')[1])
-  if (currentModule) {
+  if (currentModule || isSystemSettingsPath(request.nextUrl.pathname)) {
     // This gate runs before the App Router evaluates any child Server Component.
     // Layout-only guards can render concurrently with protected data requests.
     let user: User | undefined
@@ -101,6 +102,12 @@ export async function proxy(request: NextRequest) {
     } catch {
       return denied('暂时无法验证页面权限，请稍后重试。', 503)
     }
+    if (isSystemSettingsPath(request.nextUrl.pathname)) {
+      return isSystemAdministrator(user)
+        ? NextResponse.next({ request: { headers: requestHeaders } })
+        : denied('仅系统管理员可以进入系统设置。')
+    }
+    if (!currentModule) return NextResponse.next({ request: { headers: requestHeaders } })
     if (user.role !== 'admin') {
       if (request.nextUrl.pathname.replace(/\/$/, '') === currentModule.path) {
         const visible = getAuthorizedPageMenus(user.module_codes, user.page_permissions)
