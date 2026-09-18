@@ -3,11 +3,15 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterator
+from datetime import datetime
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
 
 from app.main import app
+from app.modules.production import api
 from app.modules.production.label_verification_api import get_label_verification_service
 from app.platform.identity.deps import get_current_user
 from app.platform.identity.models import User
@@ -30,6 +34,21 @@ def _authenticate_production_routes() -> Iterator[None]:
     app.dependency_overrides[get_current_user] = _override_current_user
     yield
     app.dependency_overrides.pop(get_current_user, None)
+
+
+@pytest.mark.anyio
+async def test_plan_month_filter_uses_full_day_datetime_bounds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = SimpleNamespace(get_plans=AsyncMock(return_value=([], 0)))
+    monkeypatch.setattr(api, "ProductionService", lambda _db: service)
+
+    await api.get_plans(page=1, page_size=20, month="2026-02", db=object())
+
+    args = service.get_plans.await_args.args
+    assert args[4] == datetime(2026, 2, 1, 0, 0, 0)
+    assert args[5] == datetime(2026, 2, 28, 23, 59, 59, 999999)
+
 
 # (路径模板, 是否详情类端点)
 LIST_ENDPOINTS = [

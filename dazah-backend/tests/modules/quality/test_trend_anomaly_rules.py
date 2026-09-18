@@ -9,6 +9,7 @@ from app.modules.quality.service.trend_anomaly_rules import (
     RULE_SLOPE_CHANGE,
     SEVERITY_HIGH,
     SEVERITY_MEDIUM,
+    _nearest_limits,
     detect_trend_anomalies,
     parse_batch_month,
 )
@@ -223,6 +224,18 @@ def test_spec_direction_classification():
         )
         == "up_only"
     )
+
+
+def test_nearest_limits_ignores_missing_spec_values():
+    assert _nearest_limits(
+        [
+            {"label": "标准上限", "value": None},
+            {"label": "标准下限", "value": None},
+            {"label": "标准上限", "value": 5},
+        ],
+        upper_control_limit=10.0,
+        lower_control_limit=0.0,
+    ) == (5.0, 0.0)
 
 
 def test_up_only_indicator_decline_is_improvement_not_flagged():

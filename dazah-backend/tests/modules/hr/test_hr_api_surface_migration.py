@@ -232,7 +232,25 @@ async def test_training_scope_plan_and_attachment_routes_cover_success_paths(
         is_deleted=False,
     )
     approval_db = _Db([_Result([dept]), _Result([config])])
-    await api.list_dept_approval_configs(db=approval_db, current_user=user)
+    approval_response = await api.list_dept_approval_configs(
+        db=approval_db, current_user=user
+    )
+    assert approval_response["data"] == [
+        {
+            "id": str(config.id),
+            "department_id": str(dept.id),
+            "department_name": "质量部",
+            "direct_leader_name": "负责人",
+            "direct_leader_open_id": None,
+            "manager_name": None,
+            "manager_open_id": None,
+            "director_name": None,
+            "director_open_id": None,
+            "vp_name": None,
+            "vp_open_id": None,
+            "sort_order": 1,
+        }
+    ]
     names_resp = await api.list_dept_approval_config_names(
         db=_Db([_Result([("质量部",), ("质量部",), ("生产部",)])]),
         current_user=user,

@@ -2330,7 +2330,7 @@ async def list_dept_approval_configs(
                     "sort_order": cfg.sort_order,
                 }
             )
-    return success_response(data=data)
+        return success_response(data=data)
 
     for dept in display_depts:
         matched_cfg = config_map.get(dept.id)
