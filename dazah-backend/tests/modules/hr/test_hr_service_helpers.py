@@ -72,7 +72,8 @@ def test_parse_feishu_employee_record_maps_fields_and_sync_date() -> None:
     assert parsed["hire_date"] == date(2026, 8, 20)
     assert parsed["contract_end_2"] == date(2027, 8, 20)
     assert parsed["remarks"] == ["重点培养"]
-    assert parsed["status"] == "在职"
+    # 离职台账解析：缺「在职状态」字段时兜底「离职」（业务口径）
+    assert parsed["status"] == "离职"
     assert parsed["feishu_synced_at"] == date(2026, 8, 20)
 
     invalid = service._parse_feishu_record({"updated_time": "bad", "fields": {}})

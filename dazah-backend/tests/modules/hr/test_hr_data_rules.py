@@ -97,7 +97,7 @@ def test_parse_feishu_record_maps_full_employee_payload_and_fallbacks() -> None:
     assert parsed["hire_date"] == date(2026, 8, 20)
     assert parsed["phone"] == "13800000000"
     assert parsed["remarks"] == ["重点培养"]
-    assert parsed["status"] == "在职"
+    assert parsed["status"] == "离职"
     assert parsed["feishu_synced_at"] == date(2026, 8, 20)
 
 
@@ -107,7 +107,7 @@ def test_parse_feishu_record_uses_today_for_missing_or_invalid_update_time() -> 
 
     assert missing["feishu_synced_at"] == date.today()
     assert invalid["feishu_synced_at"] == date.today()
-    assert missing["status"] == "在职"
+    assert missing["status"] == "离职"
 
 
 def test_department_mapping_serializes_timestamps() -> None:
