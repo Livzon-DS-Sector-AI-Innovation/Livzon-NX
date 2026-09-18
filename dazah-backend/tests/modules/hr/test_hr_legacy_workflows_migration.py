@@ -504,7 +504,13 @@ async def test_offboarding_sync_from_feishu_upserts_and_marks_missing(
 ) -> None:
     setting = SimpleNamespace(app_token="app", base_table_id="tbl")
     execute_result = SimpleNamespace(scalar_one_or_none=lambda: setting)
-    stale = SimpleNamespace(feishu_record_id="off-old", is_deleted=False)
+    stale = SimpleNamespace(
+        feishu_record_id="off-old",
+        is_deleted=False,
+        employee_number="1001",
+        name="张三",
+        reason="正常离职",
+    )
     employee = SimpleNamespace(id=uuid4())
     record = {
         "record_id": "off-1",
@@ -544,7 +550,14 @@ async def test_offboarding_sync_from_feishu_upserts_and_marks_missing(
     )
 
     stats = await instance.sync_from_feishu()
-    assert stats == {"created": 1, "updated": 0, "deleted": 1, "failed": 1, "total": 2}
+    assert stats == {
+        "created": 1,
+        "updated": 0,
+        "deleted": 1,
+        "failed": 1,
+        "total": 2,
+        "dedup_deleted": 0,
+    }
     session.add.assert_called_once()
     assert stale.is_deleted is True
     session.commit.assert_awaited_once()

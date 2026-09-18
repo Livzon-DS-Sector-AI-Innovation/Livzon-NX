@@ -563,33 +563,47 @@ async def _auto_offboard(
     await emp_repo.update(employee)
 
     # 2. 创建离职台账记录（内部同步飞书离职管理表 + 设状态离职）
+    # 同工号同名已有未删除离职记录（如 HR 已手动录入）时跳过自动建档，
+    # 避免产生重复；员工档案联动（转离职/删飞书档案/软删）照常执行
     svc = OffboardingRecordService(db)
-    # 仅「暂停使用/冻结」（status=4）标记为账号冻结；正常离职（status=2）用正常离职原因
-    is_frozen = str(item.get("status")) == "4"
-    data = OffboardingRecordCreate(
-        employee_id=employee.id,
-        employee_number=emp_no,
-        name=employee.name,
-        domain_account=employee.domain_account,
-        gender=employee.gender,
-        department=employee.department,
-        sub_department=employee.sub_department,
-        position=employee.position,
-        level=employee.level,
-        employment_type=employee.employment_type,
-        hire_date=employee.hire_date,
-        phone=employee.phone,
-        email=employee.email,
-        offboarding_date=change_d,
-        offboarding_type="其他" if is_frozen else "正常离职",
-        reason=(
-            "飞书账号冻结/暂停使用，自动转离职"
-            if is_frozen
-            else "飞书账号状态变更离职，自动转离职"
-        ),
-        status="离职",
+    existing_record = await svc.repo.get_active_by_employee_number_and_name(
+        emp_no, employee.name
     )
-    await svc.create_record(data)
+    if existing_record:
+        logger.info(
+            "[AutoOffboard] 同工号同名已有离职记录(%s)，跳过自动建档: %s (%s)",
+            existing_record.id,
+            employee.name,
+            emp_no,
+        )
+    else:
+        # 仅「暂停使用/冻结」（status=4）标记为账号冻结；
+        # 正常离职（status=2）用正常离职原因
+        is_frozen = str(item.get("status")) == "4"
+        data = OffboardingRecordCreate(
+            employee_id=employee.id,
+            employee_number=emp_no,
+            name=employee.name,
+            domain_account=employee.domain_account,
+            gender=employee.gender,
+            department=employee.department,
+            sub_department=employee.sub_department,
+            position=employee.position,
+            level=employee.level,
+            employment_type=employee.employment_type,
+            hire_date=employee.hire_date,
+            phone=employee.phone,
+            email=employee.email,
+            offboarding_date=change_d,
+            offboarding_type="其他" if is_frozen else "正常离职",
+            reason=(
+                "飞书账号冻结/暂停使用，自动转离职"
+                if is_frozen
+                else "飞书账号状态变更离职，自动转离职"
+            ),
+            status="离职",
+        )
+        await svc.create_record(data)
 
     # 3. 删除飞书员工档案多维表格记录（失败不影响本地）
     try:

@@ -2023,6 +2023,8 @@ async def sync_offboarding_from_feishu(
         f"删除 {stats['deleted']} 条，"
         f"失败 {stats['failed']} 条"
     )
+    if stats.get("dedup_deleted"):
+        msg += f"，去重删除 {stats['dedup_deleted']} 条"
     return success_response(
         data=stats,
         message=msg,

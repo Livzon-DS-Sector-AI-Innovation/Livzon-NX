@@ -232,6 +232,23 @@ def _parse_contract_date(value: Any) -> date | None:
     return None
 
 
+# 自动转离职建档时写入的固定原因文案标记（contract_settings_api._auto_offboard），
+# 飞书同步去重据此识别「系统自动生成」的记录；HR 手动录入不会带此文案
+_AUTO_OFFBOARD_REASON_MARKER = "自动转离职"
+
+
+def _is_auto_offboarding_record(record: OffboardingRecord) -> bool:
+    return bool(record.reason and _AUTO_OFFBOARD_REASON_MARKER in record.reason)
+
+
+def _offboarding_age_key(record: OffboardingRecord) -> tuple[int, datetime, Any]:
+    """按创建时间排序的健壮 key（兼容 tz-aware / naive / NULL created_at）"""
+    ts = record.created_at
+    if ts is not None and ts.tzinfo is not None:
+        ts = ts.astimezone(UTC).replace(tzinfo=None)
+    return (0, ts, record.id) if ts is not None else (1, datetime.min, record.id)
+
+
 def _parse_feishu_record(record: dict[str, Any]) -> dict[str, Any]:
     """Convert a raw Feishu record into Employee constructor kwargs."""
     fields = record.get("fields", {})
@@ -317,7 +334,9 @@ def _parse_feishu_record(record: dict[str, Any]) -> dict[str, Any]:
         "work_experience_4": _extract_text(gt("工作经验四")),
         "offboarding_type": _extract_text(gt("离职类型")),
         "offboarding_reason": _extract_text(gt("离职原因")),
-        "status": _extract_text(gt("在职状态")) or "在职",
+        # 离职台账的在职状态：按飞书实际值；取不到时兜底「离职」而非「在职」
+        # （能出现在离职台账的记录业务上均已离职，历史兜底「在职」造成 211 条错标）。
+        "status": _extract_text(gt("在职状态")) or "离职",
     }
     # Parse updated_time for sync tracking
     if updated_time:
@@ -2543,7 +2562,8 @@ class OffboardingRecordService:
         Records in local DB but not in Feishu will be soft-deleted.
 
         Returns:
-            {"created": N, "updated": N, "deleted": N, "failed": N, "total": N}
+            {"created": N, "updated": N, "deleted": N, "failed": N, "total": N,
+             "dedup_deleted": N}
         """
         query = select(HrFeishuEntitySetting).where(
             HrFeishuEntitySetting.entity_code == "offboarding_record",
@@ -2713,8 +2733,14 @@ class OffboardingRecordService:
                 )
                 stats["failed"] += 1
 
-        # 软删除飞书中不存在的本地记录（以飞书为主）
+        # 同工号同名去重：HR 手动在飞书补录离职信息后，系统自动转离职生成的
+        # 那条（含推送到飞书 Base 的行）成为重复，删自动、保留手动录入
         local_records = await self.repo.list_all()
+        stats = await self._dedup_auto_duplicates(
+            client, setting.base_table_id, local_records, stats
+        )
+
+        # 软删除飞书中不存在的本地记录（以飞书为主）
         for local in local_records:
             if (
                 local.feishu_record_id
@@ -2724,6 +2750,68 @@ class OffboardingRecordService:
                 stats["deleted"] += 1
 
         await self.session.commit()
+        return stats
+
+    async def _dedup_auto_duplicates(
+        self,
+        client: Any,
+        table_id: str,
+        local_records: list[OffboardingRecord],
+        stats: dict[str, Any],
+    ) -> dict[str, Any]:
+        """同工号同名去重：删除系统自动生成的记录（含飞书 Base 行），保留手动录入。
+
+        工号或姓名为空不参与匹配，宁漏删不误删；飞书删行失败时本地本轮
+        不删，待下次同步重试；手动+手动重复不在处理范围内。
+        """
+        groups: dict[tuple[str, str], list[OffboardingRecord]] = {}
+        for record in local_records:
+            if record.is_deleted:
+                continue
+            emp_no = (record.employee_number or "").strip()
+            name = (record.name or "").strip()
+            if not emp_no or not name:
+                continue
+            groups.setdefault((emp_no, name), []).append(record)
+
+        stats.setdefault("dedup_deleted", 0)
+        for records in groups.values():
+            if len(records) <= 1:
+                continue
+            auto_records = [r for r in records if _is_auto_offboarding_record(r)]
+            has_manual = len(auto_records) < len(records)
+            if has_manual:
+                to_delete = auto_records
+            elif len(auto_records) > 1:
+                # 全是自动记录（历史重复冻结等）：保留最早一条
+                auto_records.sort(key=_offboarding_age_key)
+                to_delete = auto_records[1:]
+            else:
+                continue
+            for record in to_delete:
+                deleted = True
+                if record.feishu_record_id:
+                    try:
+                        await client.delete_record(table_id, record.feishu_record_id)
+                    except Exception:
+                        logger.exception(
+                            "离职记录去重删除飞书行失败，本轮跳过待下次重试: "
+                            "employee_number=%s, feishu_record_id=%s",
+                            record.employee_number,
+                            record.feishu_record_id,
+                            extra={"hr_module": "hr"},
+                        )
+                        stats["failed"] += 1
+                        deleted = False
+                if deleted:
+                    record.is_deleted = True
+                    stats["dedup_deleted"] += 1
+                    logger.info(
+                        "离职记录去重：删除系统自动生成记录 %s (%s)",
+                        record.name,
+                        record.employee_number,
+                        extra={"hr_module": "hr"},
+                    )
         return stats
 
 

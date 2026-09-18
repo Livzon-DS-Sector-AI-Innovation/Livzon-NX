@@ -1011,6 +1011,22 @@ class OffboardingRecordRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_active_by_employee_number_and_name(
+        self, employee_number: str, name: str
+    ) -> OffboardingRecord | None:
+        """按工号+姓名取未删除离职记录（最早一条），用于自动转离职防重"""
+        result = await self.session.execute(
+            select(OffboardingRecord)
+            .where(
+                OffboardingRecord.employee_number == employee_number,
+                OffboardingRecord.name == name,
+                OffboardingRecord.is_deleted.is_(False),
+            )
+            .order_by(OffboardingRecord.created_at)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def list_all(self) -> list[OffboardingRecord]:
         """获取所有记录（含已软删残留，用于飞书主源同步对比后物理清理）"""
         result = await self.session.execute(select(OffboardingRecord))
