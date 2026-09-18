@@ -218,11 +218,17 @@ class SalesPlanDetail(BaseModel):
     __tablename__ = "sales_plan_details"
     __table_args__ = (
         Index("ix_sales_plan_product", "product_name"),
+        Index("ix_sales_plan_data_month", "data_month"),
         {"schema": "production"},
     )
 
     product_name: Mapped[str] = mapped_column(
         String(128), nullable=False, comment="产品名称"
+    )
+    data_month: Mapped[str | None] = mapped_column(
+        String(7),
+        nullable=True,
+        comment="数据月份(YYYY-MM)，按源数据表名归属",
     )
     unit: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="单位")
     last_month_delivered_uninvoiced: Mapped[float | None] = mapped_column(

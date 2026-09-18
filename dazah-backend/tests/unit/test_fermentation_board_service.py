@@ -111,6 +111,32 @@ async def test_build_board_returns_none_outside_period() -> None:
     )
 
 
+def test_unified_accounting_period_boundaries() -> None:
+    """统一扎帐周期：每月 27 日至次月 26 日，所有产品同规则。"""
+    assert board.unified_accounting_period(date(2026, 9, 18)) == (
+        date(2026, 8, 27),
+        date(2026, 9, 26),
+    )
+    # 26 日仍属上一周期，27 日起进入下一周期
+    assert board.unified_accounting_period(date(2026, 9, 26)) == (
+        date(2026, 8, 27),
+        date(2026, 9, 26),
+    )
+    assert board.unified_accounting_period(date(2026, 9, 27)) == (
+        date(2026, 9, 27),
+        date(2026, 10, 26),
+    )
+    # 跨年边界
+    assert board.unified_accounting_period(date(2026, 12, 31)) == (
+        date(2026, 12, 27),
+        date(2027, 1, 26),
+    )
+    assert board.unified_accounting_period(date(2027, 1, 5)) == (
+        date(2026, 12, 27),
+        date(2027, 1, 26),
+    )
+
+
 @pytest.mark.anyio
 async def test_dump_window_gates_completion() -> None:
     """计划放罐时间 + 2h 窗口内为「放罐中」；窗口结束后才算已完成。"""

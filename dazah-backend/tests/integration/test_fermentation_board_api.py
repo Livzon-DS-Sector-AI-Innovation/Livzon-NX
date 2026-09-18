@@ -110,16 +110,24 @@ def stage_perms(monkeypatch: Any):
 
 
 @pytest.mark.anyio
-async def test_board_returns_no_archive_message(
+async def test_board_returns_unified_period_fallback_when_no_archive(
     auth_client: AsyncClient,
     mock_db_service: None,
 ) -> None:
+    """新产品排产未上传：返回统一扎帐周期兜底结构而非空数据。"""
     response = await auth_client.get(f"{API}/fermentation-board")
     assert response.status_code == 200
     body = response.json()
     assert body["code"] == 200
-    assert body["data"] is None
-    assert "排产" in body["message"]
+    data = body["data"]
+    assert data["covered"] is False
+    assert data["kpis"] is None
+    assert data["tanks"] == []
+    assert data["recent"] == []
+    # 统一扎帐周期（27日～26日）覆盖今天 → 周期结构与当前周期标记返回
+    assert data["period"] is not None
+    assert data["is_current_period"] is True
+    assert data["alerts"] == []
 
 
 @pytest.mark.anyio
@@ -1010,3 +1018,35 @@ async def test_production_summary_endpoint_returns_payload(
     assert str(kwargs["ref_date"]) == "2026-09-15"
     # 漏录/进度/排产告警按真实今天门控（回看历史月不播旧账）
     assert kwargs["today"] == datetime.now().date()
+
+
+@pytest.mark.anyio
+async def test_fermentation_board_without_archive_returns_unified_skeleton(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+) -> None:
+    """无排产存档：返回未覆盖骨架，提炼入库按统一扎帐周期（27日～26日）。"""
+    monkeypatch.setattr(
+        board,
+        "get_warehouse_finished_inbound_kg",
+        AsyncMock(return_value=7920.0),
+    )
+    res = await auth_client.get(f"{API}/fermentation-board?product=TY")
+    assert res.status_code == 200
+    assert res.json()["message"].startswith("尚未上传覆盖")
+    data = res.json()["data"]
+    assert data is not None
+    assert data["covered"] is False
+    # 发酵段无数据
+    assert data["kpis"] is None
+    assert data["tanks"] == []
+    # 统一扎帐周期边界（27日～26日）+ 仓储入库合计
+    assert data["period"] is not None
+    assert data["period"]["start"].endswith("-27")
+    assert data["period"]["end"].endswith("-26")
+    assert data["extract_finished_inbound_kg"] == 7920.0
+    # 入库取数按统一周期区间调用
+    board.get_warehouse_finished_inbound_kg.assert_awaited_once()
+    kwargs = board.get_warehouse_finished_inbound_kg.call_args.kwargs
+    assert str(kwargs["period_end"]) == "2026-09-26"

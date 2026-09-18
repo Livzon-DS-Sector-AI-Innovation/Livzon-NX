@@ -95,8 +95,44 @@ async def get_fermentation_board(
     ref_date = date or now.date()
     archive = await board.load_archive_covering(db, ref_date, product)
     if archive is None:
+        # 无存档（如新产线排产未上传）：发酵段无数据；统一扎帐周期
+        # （27日～26日）覆盖所选日期时，提炼入库合计仍按该周期返回
+        period_start, period_end = board.unified_accounting_period(now.date())
+        unified_covers = period_start <= ref_date <= period_end
+        payload: dict[str, Any] = {
+            "covered": False,
+            "period": None,
+            "kpis": None,
+            "tanks": [],
+            "recent": [],
+            "trend": None,
+            "alerts": [],
+            "is_current_period": unified_covers,
+            "maintenance": [],
+            "dumped_batches": [],
+            "extraction": None,
+            "extraction_ledger": [],
+        }
+        if unified_covers:
+            payload["period"] = {
+                "start": period_start.isoformat(),
+                "end": period_end.isoformat(),
+                "label": (
+                    f"{period_start.month}月{period_start.day}日～"
+                    f"{period_end.month}月{period_end.day}日"
+                ),
+            }
+            if has_extract:
+                payload["extract_finished_inbound_kg"] = (
+                    await board.get_warehouse_finished_inbound_kg(
+                        db,
+                        product_code=product,
+                        period_start=period_start,
+                        period_end=period_end,
+                    )
+                )
         return success_response(
-            data=None,
+            data=payload,
             message=f"尚未上传覆盖 {ref_date.isoformat()} 所在扎帐周期的排产 Excel",
         )
     # FA / DR / MP(及他汀 LV/MV，复用 MP 管线+103自然月块解析) 排产表
