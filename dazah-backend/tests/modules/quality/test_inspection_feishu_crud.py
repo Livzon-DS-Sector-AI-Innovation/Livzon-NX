@@ -359,6 +359,30 @@ async def test_get_attachment_content_downloads_with_token(
 
 
 @pytest.mark.anyio
+async def test_attachment_cache_empty_results_map_to_502(
+    db_session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _EmptyCache:
+        async def get_or_fetch(self, *_args, **_kwargs):
+            return None
+
+    monkeypatch.setattr(service, "get_attachment_cache", lambda: _EmptyCache())
+
+    with pytest.raises(AppException) as content_exc:
+        await service.get_inspection_feishu_attachment_content(
+            db_session, "qc_items_inventory", "rec_1", "tok_report"
+        )
+    assert content_exc.value.status_code == 502
+
+    with pytest.raises(AppException) as preview_exc:
+        await service.get_inspection_feishu_attachment_preview(
+            db_session, "qc_items_inventory", "rec_1", "tok_report"
+        )
+    assert preview_exc.value.status_code == 502
+
+
+@pytest.mark.anyio
 async def test_download_attachment_bytes_falls_back_to_no_auth(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

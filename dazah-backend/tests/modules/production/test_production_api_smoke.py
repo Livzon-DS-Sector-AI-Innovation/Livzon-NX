@@ -50,6 +50,21 @@ async def test_plan_month_filter_uses_full_day_datetime_bounds(
     assert args[5] == datetime(2026, 2, 28, 23, 59, 59, 999999)
 
 
+@pytest.mark.anyio
+async def test_plan_monthly_summary_uses_full_day_datetime_bounds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = SimpleNamespace(get_plan_monthly_summary=AsyncMock(return_value=[]))
+    monkeypatch.setattr(api, "ProductionService", lambda _db: service)
+
+    response = await api.get_plan_monthly_summary(month="2026-02", db=object())
+
+    assert response.data == []
+    kwargs = service.get_plan_monthly_summary.await_args.kwargs
+    assert kwargs["date_from"] == datetime(2026, 2, 1, 0, 0, 0)
+    assert kwargs["date_to"] == datetime(2026, 2, 28, 23, 59, 59, 999999)
+
+
 # (路径模板, 是否详情类端点)
 LIST_ENDPOINTS = [
     "/api/v1/production/batch-progress",

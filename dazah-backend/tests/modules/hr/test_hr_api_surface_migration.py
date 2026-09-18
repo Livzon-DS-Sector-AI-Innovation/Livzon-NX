@@ -251,6 +251,10 @@ async def test_training_scope_plan_and_attachment_routes_cover_success_paths(
             "sort_order": 1,
         }
     ]
+    fallback_response = await api.list_dept_approval_configs(
+        db=_Db([_Result([]), _Result([config])]), current_user=user
+    )
+    assert fallback_response["data"] == approval_response["data"]
     names_resp = await api.list_dept_approval_config_names(
         db=_Db([_Result([("质量部",), ("质量部",), ("生产部",)])]),
         current_user=user,

@@ -298,6 +298,108 @@ async def test_materialize_dashboard_alert_handles_existing_and_new_states(
 
 
 @pytest.mark.anyio
+async def test_materialize_merged_alerts_covers_pause_recipient_and_retry_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = SimpleNamespace(commit=AsyncMock(), execute=AsyncMock())
+    points = [
+        {
+            "batch_no": "B1",
+            "metric_key": "含量",
+            "metric_label": "含量",
+            "actual_value": 101.0,
+        }
+    ]
+    kwargs: dict[str, Any] = {
+        "sender_user_open_id": None,
+        "source_label": "成品",
+        "entity_code": "finished",
+        "points": points,
+        "mean": 95.0,
+        "std_dev": 2.0,
+        "upper_control_limit": 100.0,
+        "lower_control_limit": 90.0,
+        "spec_lines": [{"label": "标准上限", "value": 100}],
+        "line_config": {"enabled": True},
+    }
+
+    monkeypatch.setattr(
+        calc,
+        "load_inspection_trend_alert_config",
+        AsyncMock(return_value=SimpleNamespace(is_enabled=False)),
+    )
+    paused = await calc._materialize_merged_dashboard_alerts(db, **kwargs)
+    assert paused[0]["notification_status"] == "paused"
+
+    monkeypatch.setattr(
+        calc,
+        "load_inspection_trend_alert_config",
+        AsyncMock(return_value=SimpleNamespace(is_enabled=True)),
+    )
+    monkeypatch.setattr(
+        calc, "_get_existing_dashboard_notification", AsyncMock(return_value=None)
+    )
+
+    def _created(*_args: Any, **call_kwargs: Any) -> FinishedTrendAlertNotification:
+        return _notification(str(call_kwargs["notification_status"]))
+
+    monkeypatch.setattr(
+        calc, "_create_dashboard_notification", AsyncMock(side_effect=_created)
+    )
+    recipients = AsyncMock(return_value=[])
+    monkeypatch.setattr(calc, "_resolve_dashboard_recipients", recipients)
+
+    unmapped = await calc._materialize_merged_dashboard_alerts(db, **kwargs)
+    assert unmapped[0]["notification_status"] == "unmapped"
+
+    recipients.return_value = [{"name": "张三", "open_id": None, "email": None}]
+    missing = await calc._materialize_merged_dashboard_alerts(db, **kwargs)
+    assert missing[0]["notification_status"] == "missing_open_id"
+
+    recipients.return_value = [{"name": "张三", "open_id": "ou1", "email": None}]
+    send = AsyncMock(return_value="m1")
+    monkeypatch.setattr(calc, "send_user_card_with_message_id", send)
+    sent = await calc._materialize_merged_dashboard_alerts(db, **kwargs)
+    assert sent[0]["notification_status"] == "sent"
+
+    send.return_value = None
+    failed = await calc._materialize_merged_dashboard_alerts(db, **kwargs)
+    assert failed[0]["notification_status"] == "failed"
+
+    retry = _notification("unmapped")
+    monkeypatch.setattr(
+        calc, "_get_existing_dashboard_notification", AsyncMock(return_value=retry)
+    )
+    db.execute.return_value = SimpleNamespace(scalar_one=lambda: retry)
+    send.return_value = "m2"
+    retried = await calc._materialize_merged_dashboard_alerts(db, **kwargs)
+    assert retried[0]["notification_status"] == "sent"
+    db.commit.assert_awaited()
+
+
+def test_trend_ai_row_and_markdown_tolerate_missing_verdict_maps() -> None:
+    row = SimpleNamespace(
+        ai_summary={},
+        payload={"metrics": []},
+        trend_end_batch="2026-09",
+        updated_at=None,
+    )
+    model = calc._trend_ai_row_to_chart_model([row])
+    assert model is not None
+    assert model.confidence == "low"
+
+    anomaly = SimpleNamespace(
+        metric_key=calc.TREND_PRODUCT_METRIC_KEY,
+        trend_end_batch="2026-09",
+        ai_summary={},
+    )
+    markdown = calc._build_trend_ai_markdown(
+        source_label="成品", metric_label="全部指标", anomaly=anomaly
+    )
+    assert "产品系列" in markdown
+
+
+@pytest.mark.anyio
 async def test_finished_dashboard_data_handles_unconfigured_and_alerting_records(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -369,3 +471,50 @@ async def test_finished_dashboard_data_handles_unconfigured_and_alerting_records
     assert data["summary"]["alert_metric_count"] == 1
     assert data["summary"]["failed_notification_count"] == 1
     assert data["charts"][0]["actual_series"] == [5.0, 20.0]
+
+
+@pytest.mark.anyio
+async def test_finished_dashboard_data_applies_product_ai_result_to_charts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        calc, "_resolve_runtime_entity", AsyncMock(return_value=(None, None))
+    )
+    monkeypatch.setattr(
+        calc,
+        "_search_entity_records_with_fallback",
+        AsyncMock(
+            return_value=[
+                {"fields": {calc.FINISHED_DASHBOARD_BATCH_FIELD: "B1", "含量": "5"}}
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        calc, "_get_oot_limit_items_by_product_code", AsyncMock(return_value={})
+    )
+    monkeypatch.setattr(calc, "detect_trend_anomalies", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        calc, "_materialize_merged_dashboard_alerts", AsyncMock(return_value=[])
+    )
+    process = AsyncMock(return_value=(None, "completed", {}))
+    monkeypatch.setattr(calc, "_process_product_trend", process)
+
+    data = await calc._get_finished_dashboard_data(
+        SimpleNamespace(),
+        source_entity_code="finished",
+        source_label="成品",
+        frontend_group="mpa",
+        enable_trend_ai=True,
+        metric_configs=(
+            {
+                "metric_key": "含量",
+                "metric_label": "含量",
+                "spec_lines": [],
+                "alert_spec_lines": [],
+            },
+        ),
+    )
+
+    process.assert_awaited_once()
+    assert data["summary"]["trend_ai_completed_count"] == 1
+    assert data["charts"][0]["trend_ai_status"] == "completed"
