@@ -5,7 +5,10 @@ import sys
 import unittest
 from pathlib import Path
 
+import yaml
+
 SCRIPT = Path(__file__).parents[1] / "ci_gate.py"
+WORKFLOW = Path(__file__).parents[2] / "workflows" / "ci.yml"
 SPEC = importlib.util.spec_from_file_location("ci_gate", SCRIPT)
 assert SPEC and SPEC.loader
 ci_gate = importlib.util.module_from_spec(SPEC)
@@ -27,6 +30,18 @@ def results(value: str = "success") -> dict[str, str]:
 
 
 class GateTests(unittest.TestCase):
+    def test_independent_checks_start_after_scope_and_remain_required(self) -> None:
+        jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+        independent = {
+            "backend-integration",
+            "backend-image-verify",
+            "hermes-contract",
+        }
+        for job in independent:
+            with self.subTest(job=job):
+                self.assertEqual(jobs[job]["needs"], "change-scope")
+                self.assertIn(job, jobs["ci-gate"]["needs"])
+
     def test_metadata_still_requires_security_and_scope_success(self) -> None:
         job_results = results("skipped")
         job_results["change-scope"] = "success"
