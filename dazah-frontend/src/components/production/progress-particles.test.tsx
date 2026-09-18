@@ -9,10 +9,39 @@ import ProgressParticles from './progress-particles'
 type Ctx = {
   calls: string[]
   arcs: Array<{ x: number; y: number; r: number }>
+  setTransform: (...args: unknown[]) => void
+  clearRect: (...args: unknown[]) => void
+  save: () => void
+  beginPath: () => void
+  rect: (...args: unknown[]) => void
+  clip: () => void
+  fillRect: (...args: unknown[]) => void
+  fill: () => void
+  stroke: () => void
+  restore: () => void
+  createLinearGradient: () => {
+    addColorStop: (offset: number, color: string) => void
+  }
+  arc: (x: number, y: number, r: number) => void
 }
 
 function makeCtx(): Ctx {
-  const ctx: Ctx = { calls: [], arcs: [] }
+  const ctx: Ctx = {
+    calls: [],
+    arcs: [],
+    setTransform: () => undefined,
+    clearRect: () => undefined,
+    save: () => undefined,
+    beginPath: () => undefined,
+    rect: () => undefined,
+    clip: () => undefined,
+    fillRect: () => undefined,
+    fill: () => undefined,
+    stroke: () => undefined,
+    restore: () => undefined,
+    createLinearGradient: () => ({ addColorStop: () => undefined }),
+    arc: () => undefined,
+  }
   const record = (name: string) => (...args: unknown[]) => {
     ctx.calls.push(`${name}:${args.length}`)
   }
