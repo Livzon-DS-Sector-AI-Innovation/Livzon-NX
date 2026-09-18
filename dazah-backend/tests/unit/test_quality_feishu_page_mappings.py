@@ -7,8 +7,13 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from app.modules.quality.service import quality_feishu_pages as pages
-from app.modules.quality.service import quality_feishu_sync
+from app.modules.quality.service import (
+    change_action_plan,
+    quality_feishu_sync,
+)
+from app.modules.quality.service import (
+    quality_feishu_pages as pages,
+)
 
 SimpleNamespace: Any = _SimpleNamespace
 
@@ -303,6 +308,25 @@ async def test_entity_record_helpers_and_change_sync_paths(
 
     find.return_value = None
     assert await pages.delete_change_from_feishu(db, "BG-404") is False
+
+
+@pytest.mark.anyio
+async def test_change_action_plan_upsert_uses_open_id_without_union_fields() -> None:
+    client = SimpleNamespace(
+        create_record=AsyncMock(return_value={"record_id": "rec-open"}),
+        update_record=AsyncMock(),
+    )
+    sync = change_action_plan.ChangeActionPlanFeishuSync()
+    sync._resolve_runtime = AsyncMock(return_value=(client, "tbl-change"))
+    sync.build_fields = AsyncMock(return_value={"项目名称": "普通字段"})
+    plan = SimpleNamespace(feishu_record_id=None)
+
+    result = await sync.upsert_record(object(), plan)
+
+    assert result == "rec-open"
+    client.create_record.assert_awaited_once_with(
+        "tbl-change", {"项目名称": "普通字段"}, user_id_type="open_id"
+    )
 
 
 @pytest.mark.anyio

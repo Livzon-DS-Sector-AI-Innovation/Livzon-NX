@@ -668,6 +668,10 @@ PAGE_ROUTE_ALIASES = {
     "/hr/new/offboarding": "hr:offboarding",
     "/hr/new/departure": "hr:offboarding",
     "/hr/new/departments": "hr:departments",
+    "/quality/change": "quality:change:change-ledger",
+    "/quality/inspection/instruments": (
+        "quality:inspection:inspection-instruments:inspection-instruments-equipment"
+    ),
     "/warehouse/materials/dashboard": "warehouse:materials:raw-summary",
     "/warehouse/hardware/dashboard": "warehouse:hardware:hardware-hardware-summary",
     "/warehouse/product/dashboard": "warehouse:product-inventory:product-summary",
@@ -1048,6 +1052,29 @@ def _quality_shared_ledger_bindings() -> tuple[PageApiBinding, ...]:
 PAGE_API_BINDINGS += _quality_shared_ledger_bindings()
 
 
+# The app-settings read backs the Feishu push entry points rendered on the
+# deviation/OOS-OOT ledger pages; the response carries a masked secret only.
+# Writes and connection tests stay on the settings page.
+PAGE_API_BINDINGS += _module_api_bindings(
+    "quality",
+    [
+        (
+            "GET",
+            "/feishu-settings/app",
+            (
+                "quality:quality-settings",
+                "quality:deviations:deviation-records",
+                "quality:deviations:deviation-investigations",
+                "quality:oos-oot:oos-oot-report-records",
+                "quality:oos-oot:oos-oot-investigation-push",
+            ),
+            "query",
+            None,
+            "not_applicable",
+        ),
+    ],
+)
+
 PAGE_API_BINDINGS += _module_api_bindings(
     "quality",
     [
@@ -1060,7 +1087,6 @@ PAGE_API_BINDINGS += _module_api_bindings(
             "not_applicable",
         )
         for method, path, permission, action in (
-            ("GET", "/feishu-settings/app", "query", None),
             ("PUT", "/feishu-settings/app", "operate", "sync_config"),
             ("POST", "/feishu-settings/app/test", "operate", "sync_config"),
             ("GET", "/feishu-settings/entities", "query", None),
@@ -1176,8 +1202,20 @@ def _quality_remaining_api_bindings() -> tuple[PageApiBinding, ...]:
     validation_review = ("quality:validation:validation-ai-review",)
     settings = ("quality:quality-settings",)
 
-    def pages_for(path: str) -> tuple[str, ...]:
+    def pages_for(method: str, path: str) -> tuple[str, ...]:
         suffix = path.removeprefix("/api/v1/quality/")
+        # Read-only resources also consumed by sibling leaf pages (cross-page
+        # dropdown options and child-ledger reads). Writes keep the owning
+        # page mapping below; each reviewed route still declares one binding.
+        shared_read_pages = {
+            "capas": capa_ledger + capa_plans,
+            "deviation-report-records": deviation_records
+            + deviation_investigations,
+            "feishu/validations": validation_plans + validation_execution_pages,
+        }
+        shared = shared_read_pages.get(suffix) if method == "GET" else None
+        if shared is not None:
+            return shared
         parts = suffix.split("/")
         first = parts[0]
         second = parts[1] if len(parts) > 1 else ""
@@ -1318,7 +1356,7 @@ def _quality_remaining_api_bindings() -> tuple[PageApiBinding, ...]:
             PageApiBinding(
                 route_path=path,
                 method=method,
-                page_keys=pages_for(path),
+                page_keys=pages_for(method, path),
                 permission="query" if method == "GET" and action is None else "operate",
                 sensitive_action=action,
                 scope_adapter="quality.reviewed_resource",

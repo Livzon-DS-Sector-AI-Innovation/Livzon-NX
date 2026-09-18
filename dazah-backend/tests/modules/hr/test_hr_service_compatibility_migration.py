@@ -170,9 +170,10 @@ def test_employee_mapping_helpers_cover_fallbacks_and_timestamps() -> None:
     assert raw["qualifications"] == ["GMP"]
     assert raw["status"] == "在职"
     assert raw["feishu_synced_at"] == date(2026, 8, 20)
+    # 缺「在职状态」字段时兜底「离职」（离职台账记录业务上均已离职）
     assert (
         service._parse_feishu_record({"updated_time": "bad", "fields": {}})["status"]
-        == "在职"
+        == "离职"
     )
 
     obj = _employee()

@@ -185,3 +185,12 @@ async def test_invalid_llm_categories_fall_back(
 @pytest.mark.anyio
 async def test_empty_titles_noop(db_session: AsyncSession) -> None:
     assert await service.resolve_validation_categories(db_session, []) == {}
+
+
+@pytest.mark.anyio
+async def test_llm_items_without_index_are_ignored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _mock_llm(monkeypatch, {"items": [{"category": "process_validation"}]})
+
+    assert await service._classify_via_llm(["工艺验证"]) is None

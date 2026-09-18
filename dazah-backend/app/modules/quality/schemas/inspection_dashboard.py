@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -108,7 +109,7 @@ class InspectionDashboardTrendAnomaly(BaseModel):
     start_batch: str
     end_batch: str
     description: str
-    evidence: dict
+    evidence: dict[str, Any]
     affected_batches: list[str] = []
 
 

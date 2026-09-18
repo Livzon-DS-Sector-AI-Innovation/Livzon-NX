@@ -1590,8 +1590,9 @@ async def _build_validation_feishu_fields(
             else:
                 names_str = str(participants).strip()
             if names_str:
-                participant_ids = await _resolve_bitable_user_ids_from_names(
-                    db, names_str
+                participant_ids = (
+                    await _resolve_bitable_user_ids_from_names(db, names_str)
+                    or []
                 )
                 if participant_ids:
                     fields["人员"] = [{"id": oid} for oid in participant_ids]
@@ -1609,7 +1610,9 @@ async def _build_validation_feishu_fields(
                 else "、".join(str(o) for o in owner if o)
             )
             if owner_str:
-                owner_ids = await _resolve_bitable_user_ids_from_names(db, owner_str)
+                owner_ids = (
+                    await _resolve_bitable_user_ids_from_names(db, owner_str) or []
+                )
                 if owner_ids:
                     fields["负责人"] = [{"id": oid} for oid in owner_ids[:1]]
 
@@ -1767,7 +1770,9 @@ async def _search_validation_records_safe(
         )
         safe_names = [
             str(item.get("field_name") or "")
-            for item in await client.list_fields(entity.table_id)
+            for item in await client.list_fields(
+                feishu_sync_service._require_table_id(entity)
+            )
             if item.get("field_name")
             and not str(item.get("field_name")).startswith("无权限")
         ]
@@ -1816,7 +1821,9 @@ async def list_validation_records_from_feishu(
     cached = await cache_get(cache_key)
     if cached is not None:
         try:
-            return json.loads(cached)
+            cached_data = json.loads(cached)
+            if isinstance(cached_data, dict):
+                return cached_data
         except (TypeError, ValueError):
             pass
 
@@ -1978,7 +1985,9 @@ async def _adapt_validation_fields_to_remote(
         )
         remote_map: dict[str, dict[str, Any]] = {
             str(item.get("field_name") or ""): item
-            for item in await client.list_fields(entity.table_id)
+            for item in await client.list_fields(
+                feishu_sync_service._require_table_id(entity)
+            )
             if item.get("field_name")
         }
     except Exception:

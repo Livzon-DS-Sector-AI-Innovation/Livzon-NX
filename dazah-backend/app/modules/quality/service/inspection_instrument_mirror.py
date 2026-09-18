@@ -673,10 +673,10 @@ async def list_instrument_mirror(
     columns = [
         str(col.get("key")) for col in (snapshot.columns or []) if col.get("key")
     ]
-    numeric_ranges = None
+    numeric_ranges: dict[str, tuple[float, float]] | None = None
     if month:
         low_ms, high_ms = resolve_month_range_ms(month)
-        numeric_ranges = {month_field: (low_ms, high_ms)}
+        numeric_ranges = {month_field: (float(low_ms), float(high_ms))}
     rows, total = await repo.list_rows_filtered(
         db,
         snapshot.id,

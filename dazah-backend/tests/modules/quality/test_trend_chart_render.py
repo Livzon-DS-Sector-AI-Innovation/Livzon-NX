@@ -46,3 +46,14 @@ def test_render_degrades_when_matplotlib_missing() -> None:
     with patch.dict("sys.modules", {"matplotlib": None}):
         data = r.render_trend_chart_png(**_payload())
     assert data is None
+
+
+def test_render_closes_all_after_matplotlib_render_error() -> None:
+    import matplotlib.pyplot as plt
+
+    real_close = plt.close
+    with patch.object(plt, "subplots", side_effect=RuntimeError("render failed")), \
+        patch.object(plt, "close", wraps=real_close) as close:
+        assert r.render_trend_chart_png(**_payload()) is None
+
+    close.assert_called_once_with("all")

@@ -169,7 +169,7 @@ def render_trend_chart_png(
     except Exception as exc:  # noqa: BLE001 —— 渲染失败降级为无图
         logger.warning("trend chart render failed: %s", type(exc).__name__)
         try:
-            plt.close("all")  # type: ignore[name-defined]
+            plt.close("all")
         except Exception:  # noqa: BLE001
             pass
         return None

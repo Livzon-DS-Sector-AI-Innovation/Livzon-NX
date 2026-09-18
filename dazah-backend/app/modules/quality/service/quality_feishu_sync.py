@@ -1435,15 +1435,15 @@ async def pull_quality_records_from_feishu(
             continue
         fields = record.get("fields") or {}
         source_updated_at = _get_record_modified_at(record)
-        deviation = None
+        deviation: Deviation | None = None
         if record.get("record_id"):
-            result = await db.execute(
+            deviation_result = await db.execute(
                 select(Deviation).where(
                     Deviation.feishu_base_record_id == record["record_id"],
                     Deviation.is_deleted.is_(False),
                 )
             )
-            deviation = result.scalar_one_or_none()
+            deviation = deviation_result.scalar_one_or_none()
         code = _normalize_text(
             _get_mapped_field_value(deviation_entity, fields, "偏差编号")
         )

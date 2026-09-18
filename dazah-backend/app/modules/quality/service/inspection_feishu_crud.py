@@ -24,10 +24,10 @@ from app.modules.quality.service import quality_feishu_sync as feishu_sync_servi
 from app.modules.quality.service.feishu_attachment_preview import (
     resolve_preview_content,
 )
-from app.modules.quality.service.inspection_finished_material import (
+from app.modules.quality.service.inspection_helpers import _base_map, _pull_count
+from app.modules.quality.service.quality_feishu_finished_groups import (
     FINISHED_PRODUCT_GROUP_ENTITY_MAP,
 )
-from app.modules.quality.service.inspection_helpers import _base_map, _pull_count
 from app.modules.quality.service.quality_feishu_material_groups import (
     MATERIAL_ENTITY_CODES,
 )
@@ -974,7 +974,9 @@ async def get_inspection_feishu_attachment_content(
         entity_code, record_id, file_token, _fetch
     )
     # _fetch 失败会抛异常直接传播，成功时 result 必不为 None
-    return result  # type: ignore[return-value]
+    if result is None:
+        raise AppException(message="飞书附件内容为空", status_code=502)
+    return result
 
 
 async def get_inspection_feishu_attachment_preview(
@@ -1001,9 +1003,12 @@ async def get_inspection_feishu_attachment_preview(
             resolve_preview_content, content, content_type, filename
         )
 
-    return await get_attachment_cache().get_or_fetch(
+    result = await get_attachment_cache().get_or_fetch(
         entity_code, record_id, file_token, _convert, key_suffix="preview:v1"
     )
+    if result is None:
+        raise AppException(message="飞书附件预览内容为空", status_code=502)
+    return result
 
 
 # bitable 附件字段单文件上限 20MB

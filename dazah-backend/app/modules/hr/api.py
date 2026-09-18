@@ -2023,6 +2023,8 @@ async def sync_offboarding_from_feishu(
         f"删除 {stats['deleted']} 条，"
         f"失败 {stats['failed']} 条"
     )
+    if stats.get("dedup_deleted"):
+        msg += f"，去重删除 {stats['dedup_deleted']} 条"
     return success_response(
         data=stats,
         message=msg,
@@ -2333,23 +2335,31 @@ async def list_dept_approval_configs(
         return success_response(data=data)
 
     for dept in display_depts:
-        cfg = config_map.get(dept.id)
+        matched_cfg = config_map.get(dept.id)
         data.append(
             {
-                "id": str(cfg.id) if cfg else None,
+                "id": str(matched_cfg.id) if matched_cfg else None,
                 "department_id": str(dept.id),
                 "department_name": dept.name,
-                "direct_leader_name": cfg.direct_leader_name
-                if cfg
+                "direct_leader_name": matched_cfg.direct_leader_name
+                if matched_cfg
                 else dept.leader_name,
-                "direct_leader_open_id": cfg.direct_leader_open_id if cfg else None,
-                "manager_name": cfg.manager_name if cfg else None,
-                "manager_open_id": cfg.manager_open_id if cfg else None,
-                "director_name": cfg.director_name if cfg else None,
-                "director_open_id": cfg.director_open_id if cfg else None,
-                "vp_name": cfg.vp_name if cfg else None,
-                "vp_open_id": cfg.vp_open_id if cfg else None,
-                "sort_order": cfg.sort_order if cfg else dept.sort_order,
+                "direct_leader_open_id": (
+                    matched_cfg.direct_leader_open_id if matched_cfg else None
+                ),
+                "manager_name": matched_cfg.manager_name if matched_cfg else None,
+                "manager_open_id": (
+                    matched_cfg.manager_open_id if matched_cfg else None
+                ),
+                "director_name": matched_cfg.director_name if matched_cfg else None,
+                "director_open_id": (
+                    matched_cfg.director_open_id if matched_cfg else None
+                ),
+                "vp_name": matched_cfg.vp_name if matched_cfg else None,
+                "vp_open_id": matched_cfg.vp_open_id if matched_cfg else None,
+                "sort_order": (
+                    matched_cfg.sort_order if matched_cfg else dept.sort_order
+                ),
             }
         )
     return success_response(data=data)

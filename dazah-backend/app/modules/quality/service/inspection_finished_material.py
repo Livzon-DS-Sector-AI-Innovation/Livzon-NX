@@ -794,7 +794,7 @@ async def _list_mirror_first(
     """
     # 1) 已同步：直接读本地镜像
     try:
-        result = await list_mirror(
+        result: dict[str, Any] = await list_mirror(
             db,
             entity_code,
             keyword=keyword,
@@ -814,7 +814,7 @@ async def _list_mirror_first(
     except Exception as exc:  # noqa: BLE001
         logger.warning("%s mirror sync failed for %s: %s", label, entity_code, exc)
     try:
-        result = await list_mirror(
+        refreshed_result: dict[str, Any] = await list_mirror(
             db,
             entity_code,
             keyword=keyword,
@@ -822,8 +822,8 @@ async def _list_mirror_first(
             page_size=page_size,
             filters=filters,
         )
-        if result["configured"]:
-            return result
+        if refreshed_result["configured"]:
+            return refreshed_result
     except Exception as exc:  # noqa: BLE001
         logger.warning("%s mirror re-read failed for %s: %s", label, entity_code, exc)
 

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -101,6 +102,31 @@ def test_extract_text_from_supported_formats(tmp_path: Path) -> None:
         knowledge_ai._extract_text_from_file("notes.unknown", b"fallback") == "fallback"
     )
     assert knowledge_ai._extract_text_from_file("broken.docx", b"not-a-docx") == ""
+
+
+def test_extract_text_from_pdf_uses_runtime_pymupdf_open(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_pymupdf = ModuleType("pymupdf")
+
+    class _Page:
+        def __init__(self, text: str) -> None:
+            self.text = text
+
+        def get_text(self) -> str:
+            return self.text
+
+    def _open(*, stream: bytes, filetype: str) -> list[_Page]:
+        assert stream == b"pdf-bytes"
+        assert filetype == "pdf"
+        return [_Page("第一页"), _Page("第二页")]
+
+    setattr(fake_pymupdf, "open", _open)
+    monkeypatch.setitem(sys.modules, "pymupdf", fake_pymupdf)
+
+    assert knowledge_ai._extract_text_from_file("notes.pdf", b"pdf-bytes") == (
+        "第一页\n第二页"
+    )
 
 
 @pytest.mark.asyncio

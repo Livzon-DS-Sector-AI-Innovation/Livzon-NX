@@ -12,7 +12,6 @@ from copy import copy
 from datetime import date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
-from types import SimpleNamespace
 from uuid import UUID
 
 from fastapi import UploadFile
@@ -1336,7 +1335,7 @@ class CertificateWorkbookService:
             if setting and (
                 str(setting.recipient_open_id or "").strip() == normalized_open_id
             ):
-                recipient = SimpleNamespace(
+                recipient = CertificateReminderRecipientOption(
                     open_id=normalized_open_id,
                     name=str(setting.recipient_name or "已配置通知人"),
                     department=str(setting.recipient_department or "") or None,
