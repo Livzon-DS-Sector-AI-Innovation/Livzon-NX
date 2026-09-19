@@ -152,3 +152,98 @@ async def test_sync_contract_from_onboarding_resolves_employee_number(
     )
     assert data.employee_number == "10086"
     service.sync_from_onboarding.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_get_onboarding_service_tolerates_entity_query_failure(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """实体查询异常（表缺失等）时不抛错，数据源按未配置处理。"""
+    from app.modules.hr import api as hr_api
+
+    async def fake_creds(session, purpose="bitable"):
+        return ("cli_hr_test", "secret-plain")
+
+    monkeypatch.setattr(hr_api, "get_hr_feishu_app_credentials", fake_creds)
+
+    class _BrokenSession:
+        async def execute(self, _stmt):
+            raise RuntimeError("table missing")
+
+    svc = await hr_api.get_onboarding_service(_BrokenSession())
+    assert svc.bitable._is_enabled() is False
+
+
+@pytest.mark.asyncio
+async def test_sync_contract_from_onboarding_handles_unbound_table(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """员工档案表未绑定时跳过按姓名查找，不阻断合同同步。"""
+    from app.core.exceptions import RecruitmentNotConfigured
+    from app.modules.hr import contract_api
+
+    class _Repo:
+        async def _get_client(self):
+            return SimpleNamespace()
+
+        async def _table_id(self, entity_code: str) -> str:
+            raise RecruitmentNotConfigured()
+
+    repo = _Repo()
+    monkeypatch.setattr(
+        "app.modules.hr.recruitment_repository.RecruitmentBitableRepo",
+        lambda: repo,
+    )
+    service = SimpleNamespace(
+        sync_from_onboarding=AsyncMock(return_value=SimpleNamespace(id="contract-2"))
+    )
+    monkeypatch.setattr(contract_api, "ContractService", lambda _db: service)
+    monkeypatch.setattr(contract_api, "_require_user", lambda *a, **k: None)
+
+    data = contract_api.OnboardingSyncRequest(name="无工号员工")
+    await contract_api.sync_contract_from_onboarding(
+        data, db=AsyncMock(), current_user=object()
+    )
+    assert data.employee_number is None
+    service.sync_from_onboarding.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_sync_contract_from_onboarding_accepts_string_employee_number(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """工号列为文本时同样能提取（非数字分支）。"""
+    from app.modules.hr import contract_api
+
+    class _Repo:
+        async def _get_client(self):
+            return SimpleNamespace(
+                search_records=AsyncMock(
+                    return_value=[
+                        {
+                            "record_id": "emp-2",
+                            "fields": {"姓名": [{"text": "文本工号"}], "工号": "E-9"},
+                        }
+                    ]
+                )
+            )
+
+        async def _table_id(self, entity_code: str) -> str:
+            return "tbl-employee"
+
+    repo = _Repo()
+    monkeypatch.setattr(
+        "app.modules.hr.recruitment_repository.RecruitmentBitableRepo",
+        lambda: repo,
+    )
+    service = SimpleNamespace(
+        sync_from_onboarding=AsyncMock(return_value=SimpleNamespace(id="contract-3"))
+    )
+    monkeypatch.setattr(contract_api, "ContractService", lambda _db: service)
+    monkeypatch.setattr(contract_api, "_require_user", lambda *a, **k: None)
+
+    data = contract_api.OnboardingSyncRequest(name="文本工号")
+    await contract_api.sync_contract_from_onboarding(
+        data, db=AsyncMock(), current_user=object()
+    )
+    assert data.employee_number == "E-9"
