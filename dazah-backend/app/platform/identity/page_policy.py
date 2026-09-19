@@ -795,7 +795,7 @@ PAGE_API_BINDINGS += (
         ),
         permission="query",
         sensitive_action=None,
-        scope_adapter=None,
+        scope_adapter="warehouse.material_page_department",
     ),
 )
 
