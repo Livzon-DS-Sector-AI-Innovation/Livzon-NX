@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Alert, Card, Spin, Table, Tag, Typography } from 'antd'
 import { getProductionSummary } from '@/actions/production'
 import type { ProductionSummaryRow } from '@/types/production'
@@ -9,13 +9,15 @@ const { Text } = Typography
 
 const dash = '--'
 
-// 产线识别色（与顶部导航块一致；美伐用青色，避免与主题紫混淆）
+// 产线识别色（与顶部导航块一致；色相互不重叠，新增红/金避开既有紫蓝橙绿玫红青）
 const PRODUCT_COLORS: Record<string, string> = {
   MC: '#1677ff',
   DR: '#d46b08',
   FA: '#389e0d',
   LV: '#c41d7f',
   MV: '#08979c',
+  TY: '#cf1322',
+  FL: '#d4b106',
 }
 
 // 比率分档配色：≥100 绿（达成/超额）、70~100 主色（正常推进）、<70 橙（偏低）
@@ -157,6 +159,24 @@ export default function ProductionSummary({ month }: { month: string }) {
       productCode: r.product_code,
     })),
   )
+
+  // 恒速跑马灯：按单份内容实测宽度换算动画时长（速度 130px/s，最短 8s）
+  const MARQUEE_SPEED = 130
+  const marqueeRef = useRef<HTMLDivElement | null>(null)
+  const [marqueeDuration, setMarqueeDuration] = useState(60)
+  useLayoutEffect(() => {
+    const el = marqueeRef.current
+    if (!el) return
+    const measure = () => {
+      const half = el.scrollWidth / 2
+      if (half > 0) setMarqueeDuration(Math.max(8, half / MARQUEE_SPEED))
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [mergedAlerts])
   const marqueeItems = [...mergedAlerts, ...mergedAlerts]
 
   const columns = [
@@ -185,25 +205,25 @@ export default function ProductionSummary({ month }: { month: string }) {
       ),
     },
     {
-      title: '月计划批次',
+      title: '发酵月计划批次',
       key: 'planned_batches',
       render: (_: unknown, row: ProductionSummaryRow) =>
         fermentCell(row, 'planned_batches'),
     },
     {
-      title: '月计划产能(kg)',
+      title: '发酵月计划产能(kg)',
       key: 'planned_capacity_kg',
       render: (_: unknown, row: ProductionSummaryRow) =>
         fermentCell(row, 'planned_capacity_kg'),
     },
     {
-      title: '已完成产能(kg)',
+      title: '发酵已完成产能(kg)',
       key: 'done_yield_kg',
       render: (_: unknown, row: ProductionSummaryRow) =>
         fermentCell(row, 'done_yield_kg'),
     },
     {
-      title: '产能达成率',
+      title: '发酵产能达成率',
       key: 'capacity_rate',
       width: 240,
       render: (_: unknown, row: ProductionSummaryRow) => (
@@ -217,13 +237,13 @@ export default function ProductionSummary({ month }: { month: string }) {
         extractCell(row, 'planned_yield_kg'),
     },
     {
-      title: '已出成品(kg)',
+      title: '提炼已出成品(kg)',
       key: 'finished_inbound_kg',
       render: (_: unknown, row: ProductionSummaryRow) =>
         extractCell(row, 'finished_inbound_kg'),
     },
     {
-      title: '完成率',
+      title: '提炼完成率',
       key: 'completion_rate',
       width: 240,
       render: (_: unknown, row: ProductionSummaryRow) => (
@@ -250,7 +270,11 @@ export default function ProductionSummary({ month }: { month: string }) {
                 汇总播报
               </span>
               <div className="overflow-hidden flex-1">
-                <div className="production-summary-marquee">
+                <div
+                  className="production-summary-marquee"
+                  ref={marqueeRef}
+                  style={{ animationDuration: `${marqueeDuration}s` }}
+                >
                 {marqueeItems.map((a, index) => (
                   <span
                     key={index}

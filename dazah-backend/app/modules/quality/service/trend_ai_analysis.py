@@ -85,7 +85,7 @@ def _clean_signal(item: Any) -> dict[str, Any] | None:
     severity = str(item.get("severity") or "").strip()
     if severity not in SEVERITY_LEVELS:
         severity = "medium"
-    cleaned = {
+    cleaned: dict[str, Any] = {
         "batch_no": _clip(item.get("batch_no"), 128),
         "rule_type": rule_type,
         "severity": severity,

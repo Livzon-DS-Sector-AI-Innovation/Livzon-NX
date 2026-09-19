@@ -7,6 +7,8 @@
 """
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import Integer, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -35,13 +37,13 @@ class ScheduleExcelArchive(BaseModel):
     original_path: Mapped[str] = mapped_column(
         String(512), nullable=False, comment="原件相对路径（uploads/ 下）"
     )
-    rows: Mapped[list] = mapped_column(
+    rows: Mapped[list[Any]] = mapped_column(
         JSONB, nullable=False, default=list, comment="全量二维数组（不截断）"
     )
-    merges: Mapped[list] = mapped_column(
+    merges: Mapped[list[Any]] = mapped_column(
         JSONB, nullable=False, default=list, comment="合并单元格（0-based）"
     )
-    col_widths: Mapped[list] = mapped_column(
+    col_widths: Mapped[list[Any]] = mapped_column(
         JSONB, nullable=False, default=list, comment="各列宽度"
     )
     row_count: Mapped[int] = mapped_column(

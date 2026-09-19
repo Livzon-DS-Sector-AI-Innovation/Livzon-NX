@@ -154067,6 +154067,24 @@
             }
           },
           {
+            "description": "数据月份（YYYY-MM），按源数据表名归属",
+            "in": "query",
+            "name": "month",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "数据月份（YYYY-MM），按源数据表名归属",
+              "title": "Month"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,

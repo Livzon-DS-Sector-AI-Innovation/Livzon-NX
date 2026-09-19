@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException
 
+from app.modules.warehouse.inspection_progress import load_page_row
 from app.modules.warehouse.schemas import WarehouseFeishuColumn
 from app.modules.warehouse.service import (
     CHINA_TIMEZONE,
@@ -28,6 +29,15 @@ from app.modules.warehouse.service import (
 )
 
 SimpleNamespace: Any = _SimpleNamespace
+
+
+@pytest.mark.asyncio
+async def test_load_page_row_returns_the_scalar_row() -> None:
+    snapshot = SimpleNamespace(id="snapshot-1")
+    row = SimpleNamespace(source_record_id="record-1")
+    session = SimpleNamespace(scalar=AsyncMock(side_effect=[snapshot, row]))
+
+    assert await load_page_row(session, "materials", "record-1") is row
 
 
 @pytest.fixture

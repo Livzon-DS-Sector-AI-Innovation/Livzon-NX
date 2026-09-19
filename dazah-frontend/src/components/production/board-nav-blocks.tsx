@@ -1,10 +1,11 @@
 'use client'
 
-// 生产/排产页顶部共用的 6 个导航块：同位置同目标，一一对应。
+// 生产/排产页顶部共用的 8 个导航块：同位置同目标，一一对应。
 // 产品 Tab 按业务约定位置摆放（点击切换产品上下文，不跳转页面）：
 // 首位汇总（SUMMARY，五产线聚合视图）、第 2 位霉酚酸（系统代码 MC）、
 // 第 3 位多拉菌素、第 4 位 L-苯丙氨酸、第 5 位洛伐他汀（LV）、
-// 第 6 位美伐他汀（MV）——他汀复用 MC 看板管线。
+// 第 6 位美伐他汀（MV）——他汀复用 MC 看板管线；
+// 第 7/8 位 L-色氨酸（TY）、氟苯尼考（FL，Tab 展示短名，悬停提示全名）。
 
 import { useEffect } from 'react'
 import { Col, Row, Typography } from 'antd'
@@ -16,12 +17,14 @@ import {
 
 const { Text } = Typography
 
-// 产品 Tab 位置表：代码与后端排产存档 product_code 一致（FA/MC/DR/LV/MV）；
-// SUMMARY 为汇总视图（五产线聚合），非单一产品
+// 产品 Tab 位置表：代码与后端排产存档 product_code 一致
+// （FA/MC/DR/LV/MV/TY/FL）；SUMMARY 为汇总视图（五产线聚合），非单一产品。
+// 2%氟苯尼考预混剂全名过长，Tab 展示短名，fullName 用于悬停提示
 interface ProductTab {
   code: string
   name: string
   color: string
+  fullName?: string
 }
 
 const PRODUCT_TAB_SLOTS: readonly ProductTab[] = [
@@ -31,6 +34,13 @@ const PRODUCT_TAB_SLOTS: readonly ProductTab[] = [
   { code: 'FA', name: 'L-苯丙氨酸', color: '#389e0d' },
   { code: 'LV', name: '洛伐他汀', color: '#c41d7f' },
   { code: 'MV', name: '美伐他汀', color: '#08979c' },
+  { code: 'TY', name: 'L-色氨酸', color: '#cf1322' },
+  {
+    code: 'FL',
+    name: '氟苯尼考',
+    color: '#d4b106',
+    fullName: '2%氟苯尼考预混剂',
+  },
 ]
 
 export default function BoardNavBlocks({
@@ -65,9 +75,10 @@ export default function BoardNavBlocks({
   return (
     <Row gutter={[12, 12]}>
       {visibleTabs.map((tab) => (
-        <Col xs={12} sm={8} md={4} key={tab.code}>
+        // lg（≥992px）起 24/3=8 个一行；md 平板宽度回退 6+2 两行
+        <Col xs={12} sm={8} md={4} lg={3} key={tab.code}>
           <div
-            title={`切换到 ${tab.name}${tab.code === 'SUMMARY' ? '（五产线聚合）' : ' 看板与排产数据'}`}
+            title={`切换到 ${tab.fullName ?? tab.name}${tab.code === 'SUMMARY' ? '（五产线聚合）' : ' 看板与排产数据'}`}
             onClick={() => setProductCode(tab.code)}
             className="flex items-center justify-center gap-2 rounded-lg border bg-white cursor-pointer transition-colors"
             style={{

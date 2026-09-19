@@ -81,7 +81,7 @@ def _parse_xlsx_bytes(data: bytes) -> dict[str, Any]:
         for rng in worksheet.merged_cells.ranges
     ]
 
-    from openpyxl.utils import get_column_letter
+    from openpyxl.utils import get_column_letter  # type: ignore[import-untyped]
 
     col_widths: list[int] = []
     for index in range(1, worksheet.max_column + 1):

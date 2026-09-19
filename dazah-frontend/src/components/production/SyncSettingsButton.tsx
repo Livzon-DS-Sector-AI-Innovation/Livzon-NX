@@ -1,6 +1,6 @@
 'use client'
 
-import {useState, useEffect, useCallback} from 'react'
+import {useState, useEffect, useCallback, useMemo} from 'react'
 import { Button, Modal, Form, Input, AutoComplete, Typography, App, Alert, Space, Tag } from 'antd'
 import { LinkOutlined, SyncOutlined, PlayCircleOutlined, ClockCircleOutlined } from '@ant-design/icons'
 import {
@@ -74,8 +74,11 @@ function saveApps(apps: SavedApp[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(apps))
 }
 
-async function authFetch(url: string, options?: RequestInit) {
-  const res = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...options?.headers } })
+async function authFetch(url: string, options?: RequestInit, pageContextHeaders?: HeadersInit) {
+  const res = await fetch(url, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...options?.headers, ...pageContextHeaders },
+  })
   return res.json()
 }
 
@@ -86,9 +89,11 @@ interface Props {
   autoSync?: boolean
   /** When supplied, the sync/config controls follow the reviewed page grant. */
   pageKey?: ProductionPageKey
+  /** 数据表 ID 选填（留空自动同步多维表格中第一个数据表） */
+  tableIdOptional?: boolean
 }
 
-export default function SyncSettingsButton({ productName, syncTarget = 'seed_culture', onSync, autoSync = false, pageKey }: Props) {
+export default function SyncSettingsButton({ productName, syncTarget = 'seed_culture', onSync, autoSync = false, pageKey, tableIdOptional = false }: Props) {
   const { message } = App.useApp()
   const permissions = useProductionPermissions(pageKey || 'production:overview')
   const canSync = !pageKey || permissions.canSync
@@ -103,6 +108,12 @@ export default function SyncSettingsButton({ productName, syncTarget = 'seed_cul
   const [lastSync, setLastSync] = useState<string>('')
   const [apps, setApps] = useState<SavedApp[]>([])
   const [parsedUrl, setParsedUrl] = useState<ParsedUrl | null>(null)
+  // 同步配置接口被多页面共享：显式携带页面上下文，
+  // 不依赖 Referer 推断（生产网关可能剥离该头）
+  const pageContextHeaders = useMemo(
+    () => (pageKey ? { 'X-Dazah-Page-Key': pageKey } : undefined),
+    [pageKey],
+  )
 
   const open = async () => {
     if (!canSync) return
@@ -111,7 +122,7 @@ export default function SyncSettingsButton({ productName, syncTarget = 'seed_cul
     setVisible(true); setTestResult(null); setParsedUrl(null); form.resetFields()
     setLoading(true)
     try {
-      const res = await authFetch(API('/feishu-configs'))
+      const res = await authFetch(API('/feishu-configs'), undefined, pageContextHeaders)
       if (res.code === 200) {
         const cfg = res.data.find((c: { product_name: string; sync_target: string; id: string; updated_at?: string }) => c.product_name === productName && c.sync_target === syncTarget)
         if (cfg) {
@@ -173,7 +184,7 @@ export default function SyncSettingsButton({ productName, syncTarget = 'seed_cul
           bitable_app_token: vals.bitable_app_token, table_id: vals.table_id,
           sync_target: syncTarget, is_active: true,
         }),
-      })
+      }, pageContextHeaders)
       if (res.code === 200) { message.success('保存成功'); setConfigId(res.data.id); setLastSync(res.data.updated_at) }
       else message.error(res.message || '保存失败')
     } catch { message.error('保存失败') } finally { setSaving(false) }
@@ -190,7 +201,7 @@ export default function SyncSettingsButton({ productName, syncTarget = 'seed_cul
           bitable_app_token: vals.bitable_app_token, table_id: vals.table_id,
           product_name: '', name: '', sync_target: '',
         }),
-      })
+      }, pageContextHeaders)
       setTestResult(res.data)
     } catch { message.error('测试失败') } finally { setTesting(false) }
   }
@@ -199,13 +210,13 @@ export default function SyncSettingsButton({ productName, syncTarget = 'seed_cul
     if (!canSync || !configId) return
     setSyncing(true)
     try {
-      const res = await authFetch(API(`/feishu/tables/${configId}/sync`), { method: 'POST' })
+      const res = await authFetch(API(`/feishu/tables/${configId}/sync`), { method: 'POST' }, pageContextHeaders)
       if (res.code === 200) {
         setLastSync(new Date().toISOString())
         onSync?.()
       }
     } catch { /* ignore */ } finally { setSyncing(false) }
-  }, [canSync, configId, onSync])
+  }, [canSync, configId, onSync, pageContextHeaders])
 
   // auto-sync every 5s when enabled
   const [autoSyncOn, setAutoSyncOn] = useState(autoSync)
@@ -290,9 +301,21 @@ export default function SyncSettingsButton({ productName, syncTarget = 'seed_cul
             <Input placeholder="从飞书 URL 获取，或粘贴链接自动填入" />
           </Form.Item>
           <Form.Item name="table_id" label="数据表 ID"
-            rules={[{ required: true, message: '请输入' }]}
-            help={parsedUrl?.type === 'spreadsheet' ? '电子表格模式下即为子表 sheet_id' : undefined}>
-            <Input placeholder="tblxxxxxxxxxxxx，或粘贴链接自动填入" />
+            rules={tableIdOptional ? [] : [{ required: true, message: '请输入' }]}
+            help={
+              tableIdOptional
+                ? '留空自动同步多维表格中的第一个数据表'
+                : parsedUrl?.type === 'spreadsheet'
+                  ? '电子表格模式下即为子表 sheet_id'
+                  : undefined
+            }>
+            <Input
+              placeholder={
+                tableIdOptional
+                  ? '留空自动取第一个数据表，或粘贴链接自动填入'
+                  : 'tblxxxxxxxxxxxx，或粘贴链接自动填入'
+              }
+            />
           </Form.Item>
         </Form>
         {lastSync && <Text type="secondary" style={{ fontSize: 12 }}>上次同步：{new Date(lastSync).toLocaleString()}</Text>}

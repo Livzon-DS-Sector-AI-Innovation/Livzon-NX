@@ -94438,6 +94438,8 @@ export interface operations {
                 page?: number;
                 page_size?: number;
                 product_name?: string | null;
+                /** @description 数据月份（YYYY-MM），按源数据表名归属 */
+                month?: string | null;
             };
             header?: never;
             path?: never;

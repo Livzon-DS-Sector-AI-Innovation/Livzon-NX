@@ -85,8 +85,9 @@ def map_record_to_mirror_fields(
                 )
         groups = group_items if group_items else None
     elif group_raw:
-        name = normalize_text(group_raw)
-        groups = [{"id": "", "name": name, "avatar_url": ""}]
+        group_name = normalize_text(group_raw)
+        if group_name:
+            groups = [{"id": "", "name": group_name, "avatar_url": ""}]
 
     completed_raw = get_value(entity, fields, "是否完成")
     is_completed = (

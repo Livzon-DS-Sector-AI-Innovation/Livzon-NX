@@ -1,7 +1,7 @@
 """Production API routes."""
 
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -273,8 +273,14 @@ async def get_plans(
         date_from, date_to = parsed
     service = ProductionService(db)
     skip = (page - 1) * page_size
+    date_from_dt = (
+        datetime.combine(date_from, time.min) if date_from is not None else None
+    )
+    date_to_dt = (
+        datetime.combine(date_to, time.max) if date_to is not None else None
+    )
     plans, total = await service.get_plans(
-        skip, page_size, product_name, workshop, date_from, date_to
+        skip, page_size, product_name, workshop, date_from_dt, date_to_dt
     )
     return ApiResponse(
         data=[ProductionPlanResponse.model_validate(p) for p in plans],
@@ -298,7 +304,10 @@ async def get_plan_monthly_summary(
         return ApiResponse(code=400, message="月份格式应为 YYYY-MM")
     date_from, date_to = parsed
     service = ProductionService(db)
-    data = await service.get_plan_monthly_summary(date_from=date_from, date_to=date_to)
+    data = await service.get_plan_monthly_summary(
+        date_from=datetime.combine(date_from, time.min),
+        date_to=datetime.combine(date_to, time.max),
+    )
     return ApiResponse(data=data)
 
 
@@ -996,6 +1005,9 @@ async def get_sales_plan_details(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
     product_name: str | None = None,
+    month: str | None = Query(
+        None, description="数据月份（YYYY-MM），按源数据表名归属"
+    ),
     session: AsyncSession = Depends(get_db),
 ) -> Any:
     query = select(SalesPlanDetail).where(SalesPlanDetail.is_deleted.is_(False))
@@ -1005,6 +1017,9 @@ async def get_sales_plan_details(
     if product_name:
         query = query.where(SalesPlanDetail.product_name == product_name)
         count_q = count_q.where(SalesPlanDetail.product_name == product_name)
+    if month:
+        query = query.where(SalesPlanDetail.data_month == month)
+        count_q = count_q.where(SalesPlanDetail.data_month == month)
     total = (await session.execute(count_q)).scalar() or 0
     offset = (page - 1) * page_size
     rows = (

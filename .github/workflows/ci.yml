@@ -384,9 +384,7 @@ jobs:
 
   backend-integration:
     name: Backend Integration
-    needs:
-      - change-scope
-      - backend-quality
+    needs: change-scope
     if: >-
       ${{ needs.change-scope.outputs.backend_changed == 'true' ||
           needs.change-scope.outputs.shared_changed == 'true' }}
@@ -474,9 +472,7 @@ jobs:
 
   backend-image-verify:
     name: Backend Image Verify
-    needs:
-      - change-scope
-      - backend-quality
+    needs: change-scope
     if: >-
       ${{ needs.change-scope.outputs.backend_changed == 'true' ||
           needs.change-scope.outputs.shared_changed == 'true' }}
@@ -667,20 +663,11 @@ jobs:
 
   hermes-contract:
     name: Hermes Contract
-    needs:
-      - change-scope
-      - backend-quality
-      - hermes-quality
+    needs: change-scope
     if: >-
-      ${{ always() &&
-          needs.change-scope.result == 'success' &&
-          (needs.change-scope.outputs.backend_changed == 'true' ||
-           needs.change-scope.outputs.hermes_changed == 'true' ||
-           needs.change-scope.outputs.shared_changed == 'true') &&
-          (needs.backend-quality.result == 'success' ||
-           needs.backend-quality.result == 'skipped') &&
-          (needs.hermes-quality.result == 'success' ||
-           needs.hermes-quality.result == 'skipped') }}
+      ${{ needs.change-scope.outputs.backend_changed == 'true' ||
+          needs.change-scope.outputs.hermes_changed == 'true' ||
+          needs.change-scope.outputs.shared_changed == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     services:

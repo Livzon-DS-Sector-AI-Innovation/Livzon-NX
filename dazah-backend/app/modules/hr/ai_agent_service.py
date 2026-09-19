@@ -119,7 +119,7 @@ async def execute_tool_call(
 
     # 写工具必须由用户在最近一条消息中显式确认后才执行（防 LLM 误写）
     if tool_name in WRITE_TOOLS:
-        latest_user_text = _latest_user_text(messages)
+        latest_user_text = _latest_user_text(messages or [])
         if not any(k in latest_user_text for k in _CONFIRM_KEYWORDS):
             logger.warning(
                 "Write tool blocked pending user confirmation",

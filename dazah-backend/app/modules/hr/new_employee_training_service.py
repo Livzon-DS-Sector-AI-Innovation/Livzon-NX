@@ -95,7 +95,10 @@ class NewEmployeeTrainingService:
                 continue
             name = item.get("textbook_name") or ""
             for ledger in ledgers:
-                if self._is_item_done(ledger, name):
+                if (
+                    self._is_item_done(ledger, name)
+                    and ledger.training_date is not None
+                ):
                     done_map[item_id] = ledger.training_date
                     break
         return done_map

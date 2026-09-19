@@ -84,6 +84,17 @@ def test_map_record_handles_checkbox_bool_and_empty_fields() -> None:
     assert mapped["groups"] is None
 
 
+def test_map_record_normalizes_scalar_group_name() -> None:
+    mapped = map_record_to_mirror_fields(
+        _record({"供应商名称": "D", "群组": "  供应商资质群  "}),
+        _entity(),
+    )
+
+    assert mapped["groups"] == [
+        {"id": "", "name": "供应商资质群", "avatar_url": ""}
+    ]
+
+
 def test_map_record_captures_responsible_users_and_groups() -> None:
     mapped = map_record_to_mirror_fields(
         _record(

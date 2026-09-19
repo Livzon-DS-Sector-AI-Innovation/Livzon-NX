@@ -13,6 +13,7 @@ from app.modules.production.production_plan_service import (
     _extract_date,
     _extract_number,
     _extract_text,
+    _sales_plan_data_month,
     _sync_production_plan,
     _sync_sales_plan,
     sync_config_by_target,
@@ -281,11 +282,25 @@ def test_sync_production_plan_updates_existing_and_skips() -> Any:
 # ═══════════ _sync_sales_plan ═══════════
 
 
+def test_sales_plan_data_month_from_table_name() -> Any:
+    """数据月份从源数据表名解析：月份取表名，年份取同步时当前年。"""
+    today = date(2026, 9, 18)
+    assert _sales_plan_data_month("5月份销售计划执行表", today) == "2026-05"
+    assert _sales_plan_data_month("12月份销售计划执行表", today) == "2026-12"
+    # 解析失败（无月份/越界）回退当前月
+    assert _sales_plan_data_month("执行表", today) == "2026-09"
+    assert _sales_plan_data_month("13月份表", today) == "2026-09"
+    assert _sales_plan_data_month("", today) == "2026-09"
+
+
 def test_sync_sales_plan_creates_and_updates() -> Any:
     import asyncio
 
     existing = SimpleNamespace(product_name="霉酚酸", unit=None)
     client = MagicMock()
+    client.list_tables = AsyncMock(
+        return_value=[{"table_id": "tbl1", "name": "9月份销售计划执行表"}]
+    )
     client.list_records = AsyncMock(
         return_value=_records_page(
             [
@@ -296,6 +311,7 @@ def test_sync_sales_plan_creates_and_updates() -> Any:
                         "本月计划发货量": {"type": 2, "value": [500]},
                         "本月已发货量": "300",
                         "未发货量": "200",
+                        "2025年当月发货量": {"type": 2, "value": [12000]},
                         "备注": "x",
                     }
                 }
@@ -320,12 +336,19 @@ def test_sync_sales_plan_creates_and_updates() -> Any:
     assert result["updated"] == 1
     assert existing.month_planned_delivery == 500.0
     assert existing.month_delivered_qty == 300.0
+    # 数据月份按源数据表名解析，写入行上
+    assert existing.data_month == f"{date.today().year}-09"
+    # 同比参照列按“<上一年>年当月发货量”动态匹配
+    assert existing.current_year_delivered == 12000.0
 
 
 def test_sync_sales_plan_creates_new_without_product_field() -> Any:
     import asyncio
 
     client = MagicMock()
+    client.list_tables = AsyncMock(
+        return_value=[{"table_id": "tbl1", "name": "9月份销售计划执行表"}]
+    )
     client.list_records = AsyncMock(
         return_value=_records_page(
             [
@@ -355,6 +378,42 @@ def test_sync_sales_plan_creates_new_without_product_field() -> Any:
         )
     assert result["created"] == 1
     assert result["updated"] == 0
+    added = session.add.call_args_list[0].args[0]
+    assert added.data_month == f"{date.today().year}-09"
+
+
+def test_sync_sales_plan_targets_first_table_when_table_id_empty() -> Any:
+    """数据表 ID 留空：自动取多维表格中第一个数据表（当月执行表）。"""
+    import asyncio
+
+    session = make_session(scalar_result=None)
+    client = MagicMock()
+    client.list_tables = AsyncMock(
+        return_value=[
+            {"table_id": "tbl-first", "name": "5月份销售计划执行表"},
+            {"table_id": "tbl-second", "name": "次日发货量"},
+        ]
+    )
+    client.list_records = AsyncMock(return_value=_records_page([]))
+    with (
+        patch(
+            "app.modules.production.production_plan_service.decrypt_secret",
+            return_value="secret",
+        ),
+        patch(
+            "app.modules.production.production_plan_service.ProductionFeishuClient",
+            return_value=client,
+        ),
+    ):
+        result = asyncio.run(
+            _sync_sales_plan(
+                make_config(sync_target="sales_plan", table_id=""), session
+            )
+        )
+    # 仅同步第一个数据表，数据月份按其表名归属当年 5 月
+    client.list_records.assert_awaited_once()
+    assert client.list_records.await_args_list[0].args[0] == "tbl-first"
+    assert result["data_month"] == f"{date.today().year}-05"
 
 
 # ═══════════ sync_config_by_target 路由 ═══════════
@@ -449,7 +508,8 @@ def test_sync_targets_catalog() -> Any:
     assert SYNC_TARGETS["production_plan"] == "生产计划"
     assert SYNC_TARGETS["sales_plan"] == "销售计划执行表"
     assert SYNC_TARGETS["dr_fourth_refinement"] == "DR 四次精制"
-    assert len(SALES_FIELD_MAP) >= 14
+    # 同比列（“<上一年>年当月发货量”）按动态年份匹配，不在静态映射中
+    assert len(SALES_FIELD_MAP) == 13
 
 
 def test_sync_config_by_target_dr_ledger() -> Any:

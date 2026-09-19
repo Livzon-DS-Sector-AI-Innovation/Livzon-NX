@@ -220,8 +220,11 @@ def _nearest_limits(
     lower = lower_control_limit
     for line in spec_lines or []:
         label = str(line.get("label") or "")
+        raw_value = line.get("value")
+        if raw_value is None:
+            continue
         try:
-            value = float(line.get("value"))
+            value = float(raw_value)
         except (TypeError, ValueError):
             continue
         if "上限" in label:

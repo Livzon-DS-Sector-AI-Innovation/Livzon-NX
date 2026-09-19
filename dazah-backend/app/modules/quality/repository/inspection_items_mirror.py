@@ -166,7 +166,7 @@ async def delete_row_by_record_id(
         .values(is_deleted=True)
     )
     await db.flush()
-    return bool(result.rowcount)
+    return bool(getattr(result, "rowcount", 0))
 
 
 async def list_rows(

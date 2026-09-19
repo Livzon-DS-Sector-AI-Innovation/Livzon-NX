@@ -413,6 +413,118 @@ describe('ProductionHomePage (fermentation board)', () => {
     expect(text).toContain('看板数据加载失败')
   })
 
+  it('renders placeholder cards with plan yield when no archive covers the period', async () => {
+    actions.getFermentationBoard.mockResolvedValue({
+      code: 200,
+      message: '排产表未覆盖当前日期，请上传当前扎帐周期的排产 Excel',
+      data: null,
+    })
+    actions.getPlans.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [
+        {
+          id: 'p-1',
+          workshop: '103发酵车间',
+          product_name: 'L-苯丙氨酸',
+          plan_date: '2026-09-01',
+          planned_yield: 790000,
+          unit: 'KG',
+          remarks: '',
+          source: 'feishu',
+        },
+      ],
+      meta: { total: 1 },
+    })
+    await render()
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    // 无存档：后端提示降级为警示条，但卡片框架照常渲染
+    expect(text).toContain('排产表未覆盖当前日期')
+    expect(text).toContain('发酵本月计划批次')
+    expect(text).toContain('提炼计划产量')
+    expect(text).toContain('本月发酵进度')
+    // 发酵侧数值走空值兜底（"--"），不再整页替换为空态
+    expect(text).toContain('--')
+    // 提炼计划产量卡照常出飞书计划数
+    expect(text).toContain('790,000')
+    expect(text).toContain('103发酵车间 L-苯丙氨酸')
+    // 成品入库副文案提示先上传排产，而不是"数据源待接入"
+    expect(text).toContain('上传排产后按周期统计')
+    expect(text).not.toContain('数据源待接入')
+  })
+
+  it('shows unified-period inbound and plan rate on the uncovered skeleton', async () => {
+    // 无排产存档的未覆盖骨架：发酵段空值兜底，提炼入库按统一扎帐周期返回
+    actions.getFermentationBoard.mockResolvedValue({
+      code: 200,
+      message: '尚未上传覆盖 2026-09-18 所在扎帐周期的排产 Excel',
+      data: {
+        covered: false,
+        now: '2026-09-18T12:00:00',
+        period: {
+          start: '2026-08-27',
+          end: '2026-09-26',
+          label: '8月27日～9月26日',
+        },
+        kpis: null,
+        is_current_period: true,
+        month_planned_capacity_kg: null,
+        extract_finished_inbound_kg: 7920,
+        tanks: [],
+        recent: [],
+        trend: null,
+        dumped_batches: [],
+        extraction: null,
+        alerts: [],
+        maintenance: [],
+      },
+    })
+    actions.getPlans.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [
+        {
+          id: 'p-fl',
+          workshop: '102-2车间',
+          product_name: '2%氟苯尼考预混剂',
+          plan_date: '2026-09-01',
+          planned_yield: 60000,
+          unit: 'KG',
+          remarks: '',
+          source: 'feishu',
+        },
+      ],
+      meta: { total: 1 },
+    })
+    await render()
+    // 切到氟苯尼考 Tab（新产品）
+    const flTab = Array.from(container.querySelectorAll('.rounded-lg')).find(
+      (b) => (b.textContent || '').trim() === '氟苯尼考',
+    ) as HTMLElement
+    expect(flTab).toBeTruthy()
+    await act(async () => {
+      flTab.click()
+      await new Promise((r) => setTimeout(r, 150))
+    })
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    // 未覆盖警示条保留，看板标题用全名
+    expect(text).toContain('尚未上传覆盖 2026-09-18 所在扎帐周期的排产 Excel')
+    expect(text).toContain('2%氟苯尼考预混剂生产看板')
+    // 提炼入库按统一扎帐周期出数，完成率 = 7920 ÷ 60000
+    expect(text).toContain('7,920')
+    expect(text).toContain('13.20%')
+    expect(text).toContain('60,000')
+    expect(text).not.toContain('上传排产后按周期统计')
+    // 切回 FA，避免产品上下文泄漏到后续用例
+    const faTab = Array.from(container.querySelectorAll('.rounded-lg')).find(
+      (b) => (b.textContent || '').trim() === 'L-苯丙氨酸',
+    ) as HTMLElement
+    await act(async () => {
+      faTab.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+  })
+
   it('shows and edits the month planned capacity', async () => {
     actions.getFermentationBoard.mockResolvedValue({
       code: 200,
@@ -994,7 +1106,7 @@ describe('ProductionHomePage (fermentation board)', () => {
     await render()
     const text = (container.textContent || '') + (document.body.textContent || '')
     // 历史标记与标题
-    expect(text).toContain('历史批次进度')
+    expect(text).toContain('历史发酵进度')
     expect(text).toContain('历史周期')
     expect(text).toContain('回到本月')
     // 写操作隐藏：产能编辑与检修按钮均不渲染
@@ -1219,6 +1331,76 @@ describe('ProductionHomePage (fermentation board)', () => {
     const textAfter = (container.textContent || '') + (document.body.textContent || '')
     expect(textAfter).toContain('61,000')
     expect(textAfter).not.toContain('790,000')
+    // 切回 FA，避免产品上下文泄漏到后续用例
+    const faTab = Array.from(container.querySelectorAll('.rounded-lg')).find(
+      (b) => (b.textContent || '').trim() === 'L-苯丙氨酸',
+    ) as HTMLElement
+    await act(async () => {
+      faTab.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+  })
+
+  it('does not echo the previous product key while the plan list refetches', async () => {
+    // 两个产品的行都在首次返回里（真实同步即全量行），切 Tab 后
+    // 的重新拉取延迟返回，制造取数间隙
+    const planRows = [
+      {
+        id: 'p-fa',
+        workshop: '203车间',
+        product_name: 'L-苯丙氨酸',
+        plan_date: '2026-09-01',
+        planned_yield: 790000,
+        unit: 'KG',
+        remarks: '',
+        source: 'feishu',
+      },
+      {
+        id: 'p-mp',
+        workshop: '201-2车间',
+        product_name: '霉酚酸',
+        plan_date: '2026-09-01',
+        planned_yield: 61000,
+        unit: 'KG',
+        remarks: '',
+        source: 'feishu',
+      },
+    ]
+    const planPayload = {
+      code: 200,
+      message: 'success',
+      data: planRows,
+      meta: { total: planRows.length },
+    }
+    actions.getPlans
+      .mockResolvedValueOnce(planPayload)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => setTimeout(() => resolve(planPayload), 300)),
+      )
+    await render()
+    let text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('203车间 L-苯丙氨酸')
+    // 切到霉酚酸 Tab：取数间隙内不得回显上一产品的选中行
+    // （修复前 Select 会以原值格式短暂显示「203车间|L-苯丙氨酸」）
+    const mpTab = Array.from(container.querySelectorAll('.rounded-lg')).find(
+      (b) => (b.textContent || '').trim() === '霉酚酸',
+    ) as HTMLElement
+    expect(mpTab).toBeTruthy()
+    await act(async () => {
+      mpTab.click()
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).not.toContain('203车间 L-苯丙氨酸')
+    expect(text).not.toContain('203车间|L-苯丙氨酸')
+    // 重新拉取完成后正常回显霉酚酸行
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 400))
+    })
+    text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('61,000')
+    expect(text).toContain('201-2车间 霉酚酸')
     // 切回 FA，避免产品上下文泄漏到后续用例
     const faTab = Array.from(container.querySelectorAll('.rounded-lg')).find(
       (b) => (b.textContent || '').trim() === 'L-苯丙氨酸',
