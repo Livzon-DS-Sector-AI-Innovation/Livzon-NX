@@ -219288,6 +219288,56 @@
         ]
       }
     },
+    "/api/v1/warehouse/home-quick-form-links": {
+      "get": {
+        "description": "返回已配置表单链接的页面映射（page_key → 入库/出库链接），驱动首页快捷卡。",
+        "operationId": "get_home_quick_form_links_api_v1_warehouse_home_quick_form_links_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Home Quick Form Links Api V1 Warehouse Home Quick Form Links Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "仓储首页快捷表单卡链接",
+        "tags": [
+          "仓储管理"
+        ]
+      }
+    },
     "/api/v1/warehouse/inspection-progress/ai-analysis": {
       "get": {
         "description": "对检验进度统计做 AI 分析（LLM 辅助解读，不替代人工判断）。\n\n结果缓存 10 分钟；AI 未配置/失败时返回降级文案。",
@@ -219749,6 +219799,65 @@
           }
         },
         "summary": "仓储页面数据",
+        "tags": [
+          "仓储管理"
+        ]
+      }
+    },
+    "/api/v1/warehouse/material-pages/{page_key}/form-links": {
+      "get": {
+        "description": "返回该页面在仓储设置-页面映射中配置的表单链接；未配置为 null（前端隐藏按钮）。",
+        "operationId": "get_material_page_form_links_api_v1_warehouse_material_pages__page_key__form_links_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "page_key",
+            "required": true,
+            "schema": {
+              "title": "Page Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Material Page Form Links Api V1 Warehouse Material Pages  Page Key  Form Links Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "台账页入库/出库登记表单链接",
         "tags": [
           "仓储管理"
         ]
