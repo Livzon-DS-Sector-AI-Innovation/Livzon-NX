@@ -383,6 +383,13 @@ class WarehousePageFeishuConfig(BaseModel):
     view_id: Mapped[str | None] = mapped_column(
         String(50), nullable=True, comment="飞书多维表格视图 ID（可选）"
     )
+    # 飞书多维表单分享链接（入库/出库登记新增入口；为空表示未配置）
+    feishu_inbound_form_url: Mapped[str | None] = mapped_column(
+        String(512), nullable=True, comment="飞书多维表单分享链接（入库登记入口）"
+    )
+    feishu_outbound_form_url: Mapped[str | None] = mapped_column(
+        String(512), nullable=True, comment="飞书多维表单分享链接（出库登记入口）"
+    )
 
 
 # The migrated page mirror is the active implementation; these imports keep

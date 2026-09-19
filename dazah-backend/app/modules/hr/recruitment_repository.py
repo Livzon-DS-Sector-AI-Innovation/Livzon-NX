@@ -6,16 +6,8 @@ from typing import Any
 
 from app.core.exceptions import NotFoundException, RecruitmentNotConfigured
 from app.modules.hr.feishu.bitable import BitableClient
-from app.shared.config_reader import get_module_setting
 
 logger = logging.getLogger(__name__)
-
-# ─── Table IDs ───
-
-TBL_JOB_POSTING = "tbldWBRTNm5RrQHw"
-TBL_CANDIDATE = "tblx3KvkQoHdGjFL"
-TBL_ONBOARDING = "tblK1IWXATe2Nn2q"
-TBL_EMPLOYEE = "tblDThp5wAUfDopZ"  # 员工档案表
 
 # ═══════════════════════════════════════════════════════════════
 # Read maps: English → Chinese field name (search_records returns Chinese names)
@@ -191,10 +183,12 @@ class RecruitmentBitableRepo:
         self._resolved_token: str | None = None
 
     async def _get_client(self) -> BitableClient | None:
-        """延迟初始化 client。从 module_settings → env → entity_settings 找 token.
+        """延迟初始化 client。app_token 只认 HR设置-飞书设置 维护的 DB 配置。
 
+        优先级：构造参数 > hr_feishu_entity_settings（招聘三实体任一启用非空）。
         应用凭证（app_id/secret）严格使用人事模块自己的 DB 配置，未配置时抛
-        HrFeishuNotConfigured，不回退平台全局凭证。
+        HrFeishuNotConfigured，不回退平台全局凭证；token 缺失时返回 None，
+        列表端点据此返回空数据，写操作抛 RecruitmentNotConfigured。
         """
         if self._client is None:
             from app.core.database import async_session_factory
@@ -204,16 +198,7 @@ class RecruitmentBitableRepo:
 
             async with async_session_factory() as session:
                 app_id, app_secret = await get_hr_feishu_app_credentials(session)
-            token = self._app_token
-            if not token:
-                token = await get_module_setting("hr", "HR_FEISHU_APP_TOKEN", "")
-            if not token:
-                from app.core.config import get_settings
-
-                token = get_settings().FEISHU_BITABLE_APP_TOKEN
-            if not token:
-                # 兜底：从 HR 飞书实体设置表读取（HR设置-飞书设置 页面配置的）
-                token = await self._read_token_from_entity_settings()
+            token = self._app_token or await self._read_token_from_entity_settings()
             if not token:
                 logger.warning(
                     "Feishu bitable app_token not configured,"
@@ -260,11 +245,8 @@ class RecruitmentBitableRepo:
             )
         return None
 
-    async def _table_id(self, entity_code: str, fallback: str) -> str:
-        """表 id 优先读 HR设置-飞书设置 维护的现网 Base 表，缺失时回退历史常量。
-
-        历史常量是旧应用 Base 的表 id，在现网 Base 里不存在（TableIdNotFound）。
-        """
+    async def _table_id(self, entity_code: str) -> str:
+        """表 id 只认 HR设置-飞书设置 维护的现网 Base 表，缺失即视为未配置。"""
         try:
             from sqlalchemy import text
 
@@ -285,7 +267,7 @@ class RecruitmentBitableRepo:
                     return str(row[0])
         except Exception:
             logger.exception("Failed to read table id for %s", entity_code)
-        return fallback
+        raise RecruitmentNotConfigured()
 
     # ─── Job Posting ────────────────────────────────────────────────
 
@@ -296,7 +278,7 @@ class RecruitmentBitableRepo:
         if not client:
             return [], 0
         records = await client.search_records(
-            await self._table_id("job_posting", TBL_JOB_POSTING),
+            await self._table_id("job_posting"),
             page_size=500,
         )
         items = [_from_feishu_fields(F_JOB_R, r) for r in records]
@@ -312,7 +294,7 @@ class RecruitmentBitableRepo:
         if not client:
             raise RecruitmentNotConfigured()
         record = await client.create_record(
-            await self._table_id("job_posting", TBL_JOB_POSTING),
+            await self._table_id("job_posting"),
             _to_feishu_fields(F_JOB_W, fields),
         )
         return _from_feishu_fields(F_JOB_R, record)
@@ -322,7 +304,7 @@ class RecruitmentBitableRepo:
         if not client:
             raise RecruitmentNotConfigured()
         records = await client.search_records(
-            await self._table_id("job_posting", TBL_JOB_POSTING),
+            await self._table_id("job_posting"),
             page_size=500,
         )
         for r in records:
@@ -336,7 +318,7 @@ class RecruitmentBitableRepo:
         if not client:
             return {}
         records = await client.search_records(
-            await self._table_id("job_posting", TBL_JOB_POSTING),
+            await self._table_id("job_posting"),
             page_size=500,
         )
         result = {}
@@ -374,7 +356,7 @@ class RecruitmentBitableRepo:
         if not client:
             raise RecruitmentNotConfigured()
         await client.update_record(
-            await self._table_id("job_posting", TBL_JOB_POSTING),
+            await self._table_id("job_posting"),
             record_id,
             _to_feishu_fields(F_JOB_W, fields),
         )
@@ -396,7 +378,7 @@ class RecruitmentBitableRepo:
         if not client:
             return [], 0
         records = await client.search_records(
-            await self._table_id("candidate", TBL_CANDIDATE),
+            await self._table_id("candidate"),
             page_size=500,
         )
         items = [_from_feishu_fields(F_CANDIDATE_R, r) for r in records]
@@ -434,7 +416,7 @@ class RecruitmentBitableRepo:
         if not client:
             raise RecruitmentNotConfigured()
         record = await client.create_record(
-            await self._table_id("candidate", TBL_CANDIDATE),
+            await self._table_id("candidate"),
             _to_feishu_fields(F_CANDIDATE_W, fields),
         )
         return _from_feishu_fields(F_CANDIDATE_R, record)
@@ -444,7 +426,7 @@ class RecruitmentBitableRepo:
         if not client:
             raise RecruitmentNotConfigured()
         records = await client.search_records(
-            await self._table_id("candidate", TBL_CANDIDATE),
+            await self._table_id("candidate"),
             page_size=500,
         )
         for r in records:
@@ -470,7 +452,7 @@ class RecruitmentBitableRepo:
         if not client:
             raise RecruitmentNotConfigured()
         await client.update_record(
-            await self._table_id("candidate", TBL_CANDIDATE),
+            await self._table_id("candidate"),
             record_id,
             _to_feishu_fields(F_CANDIDATE_W, fields),
         )
@@ -483,7 +465,7 @@ class RecruitmentBitableRepo:
         if not client:
             raise RecruitmentNotConfigured()
         await client.delete_record(
-            await self._table_id("candidate", TBL_CANDIDATE), record_id
+            await self._table_id("candidate"), record_id
         )
 
     # ─── Onboarding ─────────────────────────────────────────────────
@@ -499,7 +481,7 @@ class RecruitmentBitableRepo:
         if not client:
             return [], 0
         records = await client.search_records(
-            await self._table_id("onboarding", TBL_ONBOARDING),
+            await self._table_id("onboarding"),
             page_size=500,
         )
         items = [_from_feishu_fields(F_ONBOARDING_R, r) for r in records]
@@ -520,7 +502,7 @@ class RecruitmentBitableRepo:
         if not client:
             raise RecruitmentNotConfigured()
         record = await client.create_record(
-            await self._table_id("onboarding", TBL_ONBOARDING),
+            await self._table_id("onboarding"),
             _to_feishu_fields(F_ONBOARDING_W, fields),
         )
         record_id = record.get("record_id", "")
@@ -533,7 +515,7 @@ class RecruitmentBitableRepo:
         if not client:
             raise RecruitmentNotConfigured()
         records = await client.search_records(
-            await self._table_id("onboarding", TBL_ONBOARDING),
+            await self._table_id("onboarding"),
             page_size=500,
         )
         for r in records:
@@ -548,7 +530,7 @@ class RecruitmentBitableRepo:
         if not client:
             raise RecruitmentNotConfigured()
         await client.update_record(
-            await self._table_id("onboarding", TBL_ONBOARDING),
+            await self._table_id("onboarding"),
             record_id,
             _to_feishu_fields(F_ONBOARDING_W, fields),
         )
@@ -561,6 +543,6 @@ class RecruitmentBitableRepo:
         if not client:
             raise RecruitmentNotConfigured()
         await client.delete_record(
-            await self._table_id("onboarding", TBL_ONBOARDING), record_id
+            await self._table_id("onboarding"), record_id
         )
 

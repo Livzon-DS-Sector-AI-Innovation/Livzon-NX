@@ -859,6 +859,8 @@ class WarehouseRepository:
                 "table_id": r.table_id,
                 "table_name": r.table_name,
                 "view_id": r.view_id,
+                "feishu_inbound_form_url": r.feishu_inbound_form_url,
+                "feishu_outbound_form_url": r.feishu_outbound_form_url,
             }
             for r in rows
         ]
@@ -880,6 +882,8 @@ class WarehouseRepository:
             "table_id": row.table_id,
             "table_name": row.table_name,
             "view_id": row.view_id,
+            "feishu_inbound_form_url": row.feishu_inbound_form_url,
+            "feishu_outbound_form_url": row.feishu_outbound_form_url,
         }
 
     async def upsert_page_feishu_config(self, config: dict[str, Any]) -> None:
@@ -896,6 +900,8 @@ class WarehouseRepository:
             row.table_id = config["table_id"]
             row.table_name = config["table_name"]
             row.view_id = config.get("view_id")
+            row.feishu_inbound_form_url = config.get("feishu_inbound_form_url")
+            row.feishu_outbound_form_url = config.get("feishu_outbound_form_url")
         else:
             new_row = WarehousePageFeishuConfig(**config)
             self.session.add(new_row)

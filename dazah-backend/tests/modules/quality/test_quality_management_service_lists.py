@@ -1233,12 +1233,13 @@ async def test_quality_feishu_settings_do_not_prefill_from_env(
     assert change_item.base_table_name == "变更总表"
     assert change_item.is_enabled is True
 
-    # 验证与确认实体已固定绑定验证主计划 Base（不再读取 env 回退）
+    # 验证与确认实体的写死绑定已移除：表绑定属于部署数据，实体行由 ensure
+    # 创建（未绑定、未启用），由管理员在质量设置-飞书设置中配置
     validation_item = entity_map["validation_process"]
-    assert validation_item.app_token == "FTbkbpgNUa9jUCsjK8ac1A4Wn7f"
-    assert validation_item.base_table_id == "tbl3lBei5Sv8wBVV"
+    assert validation_item.app_token is None
+    assert validation_item.base_table_id is None
     assert validation_item.base_table_name == "2026年验证台账"
-    assert validation_item.is_enabled is True
+    assert validation_item.is_enabled is False
 
 @pytest.mark.anyio
 async def test_legacy_department_contact_entity_is_soft_deleted(

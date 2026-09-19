@@ -23,6 +23,7 @@ from app.modules.hr.schemas import (
 )
 from app.platform.integrations.feishu.auth import FeishuAuth
 from app.platform.integrations.feishu.bitable import BitableClient
+from app.platform.integrations.feishu.utils import resolve_bitable_reference
 
 logger = logging.getLogger(__name__)
 _settings = get_settings()
@@ -177,19 +178,9 @@ HR_FEISHU_SYSTEM_FIELDS: dict[str, list[tuple[str, str, str]]] = {
 
 # ─── Known Feishu Bitable defaults ───
 
-# HR_FEISHU_BITABLE_APP_TOKEN 已从硬编码迁移到数据库配置
-# 使用 _settings.FEISHU_BITABLE_APP_TOKEN 从环境变量读取
-
-# 飞书多维表格真实子表 Table ID（经 API 核实，Base: VNXObZivrasMlDs5et2ckovRnxd）
-HR_FEISHU_ENTITY_DEFAULT_TABLE_IDS: dict[str, str] = {
-    "employee": "tblDThp5wAUfDopZ",
-    "contract_management": "tblbClIxUJUP8rA3",
-    "offboarding_record": "tbl9RpqAQf7t4Acw",
-    "position_transfer": "tblHMBTmte529H9K",
-    "job_posting": "tbldWBRTNm5RrQHw",
-    "candidate": "tblx3KvkQoHdGjFL",
-    "onboarding": "tblK1IWXATe2Nn2q",
-}
+# 表绑定属于部署数据，不进代码：各实体 Base/Table 由用户在"人事-飞书设置"
+# 页配置（或经 env 预填渠道下发），此处不再维护历史 Base 的写死表 id。
+HR_FEISHU_ENTITY_DEFAULT_TABLE_IDS: dict[str, str] = {}
 
 # 飞书多维表格真实子表名称（回填 base_table_name 用）
 HR_FEISHU_DEFAULT_TABLE_NAMES: dict[str, str] = {
@@ -274,6 +265,7 @@ def _build_entity_setting_item(row: HrFeishuEntitySetting) -> HrFeishuEntitySett
         app_token=row.app_token,
         base_table_name=row.base_table_name,
         base_table_id=row.base_table_id,
+        feishu_form_url=row.feishu_form_url,
         is_enabled=row.is_enabled,
         enable_push_to_feishu=row.enable_push_to_feishu,
         enable_pull_from_feishu=row.enable_pull_from_feishu,
@@ -471,7 +463,8 @@ async def ensure_hr_feishu_entity_settings(db: AsyncSession) -> None:
             app_token=prefill["app_token"],
             base_table_name=default_table_name,
             base_table_id=prefill["table_id"],
-            is_enabled=True,
+            # 只有绑定齐全时才默认启用，避免空绑定行被误认为已就绪
+            is_enabled=bool(prefill["app_token"] and prefill["table_id"]),
             enable_push_to_feishu=True,
             enable_pull_from_feishu=True,
             field_mappings=[],
@@ -699,9 +692,17 @@ async def update_hr_feishu_entity_setting(
     if not row:
         raise ValueError(f"实体配置 {entity_code} 不存在")
 
-    row.app_token = data.app_token
+    # 支持直接粘贴多维表格链接，自动拆出 app_token / table_id
+    reference = resolve_bitable_reference(
+        app_token=data.app_token,
+        table_id=data.base_table_id,
+    )
+    row.app_token = reference.app_token
     row.base_table_name = data.base_table_name
-    row.base_table_id = data.base_table_id
+    row.base_table_id = reference.table_id
+    row.feishu_form_url = (
+        data.feishu_form_url.strip() if data.feishu_form_url else None
+    )
     row.is_enabled = data.is_enabled
     row.enable_push_to_feishu = data.enable_push_to_feishu
     row.enable_pull_from_feishu = data.enable_pull_from_feishu

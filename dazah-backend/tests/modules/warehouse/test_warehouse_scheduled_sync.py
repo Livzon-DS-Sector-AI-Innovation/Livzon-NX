@@ -120,6 +120,10 @@ async def test_full_sync_runs_in_window_and_resets_flag(
         def __init__(self, session: object) -> None:
             pass
 
+        async def is_material_page_bound(self, page_key: str) -> bool:
+            # 全部页面视为已绑定，覆盖原有断言路径
+            return True
+
         async def sync_material_page_to_local(
             self, page_key: str, *, incremental: bool = True
         ) -> None:
@@ -167,6 +171,9 @@ async def test_incremental_round_covers_pages_and_inventory(
     class _FakeService:
         def __init__(self, session: object) -> None:
             pass
+
+        async def is_material_page_bound(self, page_key: str) -> bool:
+            return True
 
         async def sync_material_page_to_local(
             self, page_key: str, *, incremental: bool = True

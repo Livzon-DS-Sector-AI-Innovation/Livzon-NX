@@ -14,6 +14,7 @@ import {
   fetchOnboardingList,
   fetchOnboardingById,
   fetchOnboardingAttachmentContent,
+  fetchOnboardingFormUrl,
   fetchDepartments,
   fetchJobPostings,
 } from '@/lib/api/client/hr'
@@ -23,9 +24,6 @@ import {
   uploadOnboardingAttachmentAction,
 } from '@/actions/hr'
 import OnboardingAttachmentPreviewModal from './OnboardingAttachmentPreviewModal'
-
-// 新增入口：飞书多维「入职信息表」公开表单
-const ONBOARDING_FORM_URL = 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnds8SEIlMXMdB3qS9QzWlth'
 
 const ATTACHMENT_FIELDS = [
   { key: 'resignation_attachment', label: '离职证明附件' },
@@ -85,6 +83,12 @@ export default function OnboardingManagementPage() {
   const { data: listData, isLoading, refetch } = useQuery({
     queryKey: ['onboarding-list', page, pageSize, keyword],
     queryFn: () => fetchOnboardingList({ keyword: keyword || undefined, page, page_size: pageSize }),
+  })
+
+  // 「新增」表单链接：来自人事-飞书设置（onboarding 实体的表单链接），未配置时隐藏按钮
+  const { data: onboardingFormUrl } = useQuery({
+    queryKey: ['onboarding-form-url'],
+    queryFn: fetchOnboardingFormUrl,
   })
 
   const { data: deptData } = useQuery({
@@ -280,13 +284,16 @@ export default function OnboardingManagementPage() {
             allowClear
           />
           <Button icon={<ReloadOutlined />} onClick={() => refetch()}>刷新</Button>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => window.open(ONBOARDING_FORM_URL, '_blank', 'noopener,noreferrer')}
-          >
-            新增
-          </Button>
+          {onboardingFormUrl ? (
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => window.open(onboardingFormUrl, '_blank', 'noopener,noreferrer')}
+              title="在人事-飞书设置中配置 onboarding 表单链接"
+            >
+              新增
+            </Button>
+          ) : null}
         </Space>
       </div>
 

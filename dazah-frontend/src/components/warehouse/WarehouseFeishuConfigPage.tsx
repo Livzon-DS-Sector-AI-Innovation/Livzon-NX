@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { App, Button, Card, Collapse, Form, Input, Space, Table, Tag } from 'antd'
 import { EditOutlined, LinkOutlined, SaveOutlined } from '@ant-design/icons'
 import type { WarehousePageFeishuConfig } from '@/types/warehouse'
@@ -13,28 +14,47 @@ interface WarehouseFeishuConfigPageProps {
   initialConfigs: WarehousePageFeishuConfig[]
 }
 
-// 数据源 Base 配置（与后端 feishu_material_pages.py 保持一致）
-const BASE_CONFIGS = [
-  { name: '原辅料', appToken: 'ZWuBb4cziadvVqsRGP8c93JOnOb', tagColor: 'blue' },
-  { name: '液体入库', appToken: 'NX5GbfHJhaYrnLszxbZcrmwvnKf', tagColor: 'cyan' },
-  { name: '成品', appToken: 'S9KobSXEIaU9K4sgohycpiLqnhg', tagColor: 'green' },
-  { name: '五金', appToken: 'DPjgbn78nao1lWsU7a3c3JUdnSb', tagColor: 'purple' },
-] as const
+const GROUP_TAG_COLORS = ['blue', 'cyan', 'green', 'purple', 'geekblue', 'orange']
 
-const APP_TOKEN_TO_BASE = Object.fromEntries(
-  BASE_CONFIGS.map((c) => [c.appToken, c.name]),
-) as Record<string, string>
+// 分组展示名：注册表不再携带 Base 标识，按 app_token 动态分组，
+// 标签展示 token 末 6 位（展示用途，不参与任何调用）
+function groupLabelFor(appToken: string): string {
+  return `Base ${appToken.slice(-6)}`.trim()
+}
 
 function buildFeishuTableUrl(config: WarehousePageFeishuConfig): string {
-  let url = `https://j0eukrlohu.feishu.cn/base/${config.app_token}?table=${config.table_id}`
+  let url = `https://www.feishu.cn/base/${config.app_token}?table=${config.table_id}`
   if (config.view_id) {
     url += `&view=${config.view_id}`
   }
   return url
 }
 
+/** 组装 PUT payload：显式携带表单链接字段，避免批量/单行保存互相覆盖 */
+function buildConfigPayload(
+  values: Record<string, unknown>,
+  current?: WarehousePageFeishuConfig
+): Omit<WarehousePageFeishuConfig, 'page_key'> {
+  return {
+    app_token: values.app_token as string,
+    table_id: values.table_id as string,
+    table_name:
+      (current?.table_name ?? (values.table_name as string | undefined) ?? '') as string,
+    view_id: (values.view_id as string | undefined) || undefined,
+    feishu_inbound_form_url:
+      (values.feishu_inbound_form_url as string | undefined) ||
+      current?.feishu_inbound_form_url ||
+      undefined,
+    feishu_outbound_form_url:
+      (values.feishu_outbound_form_url as string | undefined) ||
+      current?.feishu_outbound_form_url ||
+      undefined,
+  }
+}
+
 export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuConfigPageProps) {
   const { message, modal } = App.useApp()
+  const queryClient = useQueryClient()
   const { canSync } = usePagePermissions('warehouse:warehouse-settings')
   const [configs, setConfigs] = useState<WarehousePageFeishuConfig[]>(initialConfigs)
   const [editingKey, setEditingKey] = useState<string | null>(null)
@@ -58,13 +78,10 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
       const pageKey = editingKey ?? (values as WarehousePageFeishuConfig).page_key
       // table_name 不在编辑表单内，保存时从当前记录补全（后端 schema 必填）
       const current = configs.find((config) => config.page_key === pageKey)
-      const config = {
-        app_token: values.app_token as string,
-        table_id: values.table_id as string,
-        table_name: (current?.table_name ?? (values as WarehousePageFeishuConfig).table_name ?? '') as string,
-        view_id: (values.view_id as string | undefined) || undefined,
-      }
-      await updateWarehousePageFeishuConfigAction(pageKey, config)
+      await updateWarehousePageFeishuConfigAction(
+        pageKey,
+        buildConfigPayload(values, current)
+      )
       message.success('配置已更新，立即生效')
       setEditingKey(null)
       await refreshConfigs()
@@ -81,7 +98,7 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
     form.resetFields()
   }
 
-  // 刷新配置列表
+  // 刷新配置列表，并让依赖表单链接的其他页面（台账登记按钮/首页快捷卡）同步
   const refreshConfigs = async () => {
     try {
       const updated = await fetchWarehousePageFeishuConfigs()
@@ -89,22 +106,26 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
     } catch {
       // ignore
     }
+    queryClient.invalidateQueries({ queryKey: ['warehouse-page-form-links'] })
+    queryClient.invalidateQueries({ queryKey: ['warehouse-home-quick-form-links'] })
   }
 
-  // 按 Base 分组（保持 BASE_CONFIGS 顺序）
+  // 按 app_token 动态分组（不依赖写死的 Base 清单，换 Base 后照常分组）
   const groupedConfigs = useMemo(() => {
     const groups: Record<string, WarehousePageFeishuConfig[]> = {}
     for (const config of configs) {
-      const base = APP_TOKEN_TO_BASE[config.app_token] ?? '未知'
+      const base = groupLabelFor(config.app_token)
       if (!groups[base]) groups[base] = []
       groups[base].push(config)
     }
-    const ordered: string[] = BASE_CONFIGS.map((c) => c.name).filter((base) => groups[base])
-    for (const base of Object.keys(groups)) {
-      if (!ordered.includes(base)) ordered.push(base)
-    }
-    return ordered.map((base) => ({ base, items: groups[base] }))
+    return Object.keys(groups).map((base) => ({ base, items: groups[base] }))
   }, [configs])
+
+  const groupColor = useCallback((base: string) => {
+    const names = groupedConfigs.map((g) => g.base)
+    const index = names.indexOf(base)
+    return GROUP_TAG_COLORS[index % GROUP_TAG_COLORS.length] ?? 'default'
+  }, [groupedConfigs])
 
   /** 批量更新某分组下所有记录的飞书配置 */
   const handleBatchUpdate = useCallback(
@@ -152,6 +173,9 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
                 view_id：<code>{viewId}</code>
               </p>
             )}
+            <p className="text-[12px] text-[var(--color-steel)]">
+              各页面已配置的表单链接将保留不变
+            </p>
           </div>
         ),
         okText: '确认更新',
@@ -165,6 +189,9 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
                 table_id: tableId,
                 table_name: item.table_name,
                 view_id: viewId,
+                // 批量换绑只改数据源，保留各页面已配置的表单链接
+                feishu_inbound_form_url: item.feishu_inbound_form_url,
+                feishu_outbound_form_url: item.feishu_outbound_form_url,
               }),
             ),
           )
@@ -234,6 +261,36 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
           ),
       },
       {
+        title: '入库表单链接',
+        dataIndex: 'feishu_inbound_form_url',
+        key: 'feishu_inbound_form_url',
+        width: 170,
+        ellipsis: true,
+        render: (text: string | null, row: WarehousePageFeishuConfig) =>
+          editingKey === row.page_key ? (
+            <Form.Item name="feishu_inbound_form_url">
+              <Input size="small" placeholder="粘贴飞书共享表单链接，留空隐藏入库按钮" />
+            </Form.Item>
+          ) : (
+            text || '-'
+          ),
+      },
+      {
+        title: '出库表单链接',
+        dataIndex: 'feishu_outbound_form_url',
+        key: 'feishu_outbound_form_url',
+        width: 170,
+        ellipsis: true,
+        render: (text: string | null, row: WarehousePageFeishuConfig) =>
+          editingKey === row.page_key ? (
+            <Form.Item name="feishu_outbound_form_url">
+              <Input size="small" placeholder="粘贴飞书共享表单链接，留空隐藏出库按钮" />
+            </Form.Item>
+          ) : (
+            text || '-'
+          ),
+      },
+      {
         title: '视图 ID',
         dataIndex: 'view_id',
         key: 'view_id',
@@ -294,7 +351,7 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
     const parsed = urlValue ? parseFeishuBitableUrl(urlValue) : null
     return (
       <Space size={12} wrap align="center">
-        <Tag color={BASE_CONFIGS.find((c) => c.name === base)?.tagColor ?? 'default'}>{base}</Tag>
+        <Tag color={groupColor(base)}>{base}</Tag>
         <span className="text-[13px]">共 {itemCount} 页</span>
         <Input
           size="small"
@@ -331,11 +388,12 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
       <h1 className="mb-2 text-2xl font-semibold">仓储页面飞书配置</h1>
       <p className="mb-4 text-[13px] text-[var(--color-steel)]">
         页面数据实时读取对应多维表格子表；修改配置后立即生效，更换表格无需改代码。
+        入库/出库表单链接控制台账页与首页的「登记/新增」按钮，留空即隐藏入口。
       </p>
       <Card>
         <Form form={form} component={false}>
           <Collapse
-            defaultActiveKey={BASE_CONFIGS.map((c) => c.name)}
+            defaultActiveKey={groupedConfigs.map(({ base }) => base)}
             items={groupedConfigs.map(({ base, items }) => ({
               key: base,
               label: renderGroupLabel(base, items.length),

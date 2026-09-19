@@ -8,10 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.hr.feishu_settings_service import (
-    _get_entity_prefill,
-    get_hr_feishu_app_credentials,
-)
+from app.modules.hr.feishu_settings_service import get_hr_feishu_app_credentials
 from app.modules.hr.models import ContractManagement, HrFeishuEntitySetting
 from app.platform.integrations.feishu.bitable import BitableClient, _to_ms_timestamp
 
@@ -22,7 +19,6 @@ _CHINA_TIMEZONE = ZoneInfo("Asia/Shanghai")
 logger = logging.getLogger(__name__)
 
 ENTITY_CODE = "contract_management"
-PREFILL = _get_entity_prefill(ENTITY_CODE)
 
 
 def _build_contract_fields(record: ContractManagement) -> dict[str, Any]:
@@ -107,7 +103,7 @@ class ContractSyncService:
     async def _get_bitable_config(
         self,
     ) -> tuple[str | None, str | None, str | None, str | None]:
-        """获取飞书多维表格配置：按优先级 DB entity setting > env prefill"""
+        """获取飞书多维表格配置：只认 DB entity setting，未配置返回空。"""
         result = await self.session.execute(
             select(HrFeishuEntitySetting).where(
                 HrFeishuEntitySetting.entity_code == ENTITY_CODE
@@ -115,16 +111,8 @@ class ContractSyncService:
         )
         entity_row = result.scalar_one_or_none()
 
-        app_token = (
-            entity_row.app_token
-            if entity_row and entity_row.app_token
-            else PREFILL.get("app_token")
-        )
-        table_id = (
-            entity_row.base_table_id
-            if entity_row and entity_row.base_table_id
-            else PREFILL.get("table_id")
-        )
+        app_token = entity_row.app_token if entity_row else None
+        table_id = entity_row.base_table_id if entity_row else None
 
         if not app_token or not table_id:
             return None, None, None, None

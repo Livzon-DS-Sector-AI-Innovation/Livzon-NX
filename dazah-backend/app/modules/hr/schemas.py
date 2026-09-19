@@ -2045,6 +2045,7 @@ class HrFeishuEntitySettingItem(BaseModel):
     app_token: str | None = None
     base_table_name: str | None = None
     base_table_id: str | None = None
+    feishu_form_url: str | None = None
     is_enabled: bool = False
     enable_push_to_feishu: bool = False
     enable_pull_from_feishu: bool = False
@@ -2066,6 +2067,7 @@ class UpdateHrFeishuEntitySettingRequest(BaseModel):
     app_token: str | None = None
     base_table_name: str | None = None
     base_table_id: str | None = None
+    feishu_form_url: str | None = None
     is_enabled: bool = True
     enable_push_to_feishu: bool = True
     enable_pull_from_feishu: bool = True

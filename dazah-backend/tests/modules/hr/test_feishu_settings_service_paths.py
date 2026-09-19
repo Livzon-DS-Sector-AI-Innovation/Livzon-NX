@@ -74,6 +74,7 @@ def _entity_row(**overrides: object) -> SimpleNamespace:
         "app_token": "token",
         "base_table_name": "员工档案",
         "base_table_id": "table-id",
+        "feishu_form_url": None,
         "is_enabled": True,
         "enable_push_to_feishu": True,
         "enable_pull_from_feishu": True,

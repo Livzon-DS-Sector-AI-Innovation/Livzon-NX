@@ -336,16 +336,14 @@ async def test_validation_person_options_reads_hr_feishu_members(
 async def test_validation_form_links_cover_reserved_years(
     client: AsyncClient,
 ) -> None:
-    """表单链接：2024-2026 预填默认表单；2027/2028 预留（链接为空）。"""
+    """表单链接与年度绑定只认 DB 配置：全新空库（未配置）各年表单为空、未绑定。"""
     response = await client.get("/api/v1/quality/feishu/validations/form-links")
 
     assert response.status_code == 200
     years = response.json()["data"]["years"]
     by_year = {item["year"]: item for item in years}
     assert set(by_year) == {2024, 2025, 2026, 2027, 2028}
-    assert "shrcnw2P5gEnFsiwKGpR8TuJ1Nh" in by_year[2026]["form_url"]
-    assert "shrcnrXPjhpZb40QhpQnUqgodHc" in by_year[2025]["form_url"]
-    assert "shrcnQEeBbkDhG8CrvmW5urZ8vd" in by_year[2024]["form_url"]
-    assert by_year[2026]["table_configured"] is True
-    assert by_year[2027]["form_url"] == ""
-    assert by_year[2027]["table_configured"] is False
+    # 写死的默认表单链接已移除：链接由管理员在质量设置-飞书设置中配置
+    for year in (2024, 2025, 2026, 2027, 2028):
+        assert by_year[year]["form_url"] == ""
+        assert by_year[year]["table_configured"] is False

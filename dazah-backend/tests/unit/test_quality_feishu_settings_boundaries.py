@@ -402,8 +402,8 @@ async def test_ensure_soft_deletes_legacy_supplier_ledger_setting() -> None:
     assert "supplier_ledger" not in service.DEFAULT_QUALITY_FEISHU_ENTITY_MAP
 
 
-def test_finished_product_anomaly_entities_seeded_and_prefilled() -> None:
-    """成品异常报告按年分表：默认集播种 2025-2028，2025/2026 预填专用 Base。"""
+def test_finished_product_anomaly_entities_seeded_unbound() -> None:
+    """成品异常报告按年分表：默认集播种 2025-2028，绑定留空（部署数据进 DB）。"""
     anomaly = [
         (code, name, group, sort)
         for code, name, group, sort in service.DEFAULT_QUALITY_FEISHU_ENTITIES
@@ -424,27 +424,15 @@ def test_finished_product_anomaly_entities_seeded_and_prefilled() -> None:
     ]
     assert [sort for *_, sort in anomaly] == [281, 282, 283, 284]
 
-    prefill_2025 = service.QUALITY_FEISHU_ENTITY_ENV_PREFILLS[
-        "finished_product_anomaly_2025"
-    ]
-    assert prefill_2025["app_token"] == "NIEJbSxyIaHBp4shIPjcpVS2nZe"
-    assert prefill_2025["table_id"] == "tblivbUvnYDjATiL"
-    assert prefill_2025["table_name"] == "2025年"
-    prefill_2026 = service.QUALITY_FEISHU_ENTITY_ENV_PREFILLS[
-        "finished_product_anomaly_2026"
-    ]
-    assert prefill_2026["app_token"] == "NIEJbSxyIaHBp4shIPjcpVS2nZe"
-    assert prefill_2026["table_id"] == "tblYanzll8A5rGro"
-    assert prefill_2026["table_name"] == "2026年"
-    # 2027/2028 未预填：由用户在同步设置中自行绑定
-    assert (
-        "finished_product_anomaly_2027"
-        not in service.QUALITY_FEISHU_ENTITY_ENV_PREFILLS
-    )
-    assert (
-        "finished_product_anomaly_2028"
-        not in service.QUALITY_FEISHU_ENTITY_ENV_PREFILLS
-    )
+    # 写死的预填绑定已移除：预填只剩名称/说明，不含任何 token/table/form
+    for year in (2025, 2026):
+        prefill = service.QUALITY_FEISHU_ENTITY_ENV_PREFILLS[
+            f"finished_product_anomaly_{year}"
+        ]
+        assert not prefill.get("app_token")
+        assert not prefill.get("table_id")
+        assert not prefill.get("form_url")
+        assert prefill["table_name"] == f"{year}年"
 
     # 直读直写实体：默认双向开关开启（非 push-only）
     assert service._get_default_sync_directions("finished_product_anomaly_2025") == (
@@ -453,8 +441,8 @@ def test_finished_product_anomaly_entities_seeded_and_prefilled() -> None:
     )
 
 
-def test_instrument_entities_seeded_prefilled_and_pullable() -> None:
-    """仪器管理 8 张子表必须在质量设置可见（DEFAULT 列表）且预填两个新 Base。"""
+def test_instrument_entities_seeded_unbound_and_pullable() -> None:
+    """仪器管理 8 张子表必须在质量设置可见（DEFAULT 列表），绑定留空待配置。"""
     instrument_codes = {
         "qc_instr_equipment",
         "qc_instr_maintenance",
@@ -474,38 +462,15 @@ def test_instrument_entities_seeded_prefilled_and_pullable() -> None:
     assert all(item.entity_group == "仪器管理" for item in default_map.values())
     assert default_map["qc_instr_equipment"].entity_name == "设备数据管理"
     assert default_map["qc_instr_cal_external"].entity_name == "外部校准、检定"
-    # 预填绑定齐全：ensure 建行时会以 (app_token and table_id) 决定 is_enabled
+    # 无写死预填绑定：实体默认未绑定、未启用（ensure 以绑定齐全决定 is_enabled）
     for item in default_map.values():
-        prefill = service.QUALITY_FEISHU_ENTITY_ENV_PREFILLS[item.entity_code]
-        assert prefill.get("app_token") and prefill.get("table_id"), item.entity_code
-
-    prefills = service.QUALITY_FEISHU_ENTITY_ENV_PREFILLS
-    equipment_base = "Cencb8KRja1vL8s7DLqcXiQtnMf"
-    calibration_base = "Vyn1bfLOwaUG15sWXGMcwy5Gnah"
-    for code in (
-        "qc_instr_equipment",
-        "qc_instr_maintenance",
-        "qc_instr_repair",
-        "qc_instr_contracts",
-        "qc_instr_plans",
-    ):
-        assert prefills[code]["app_token"] == equipment_base, code
-    for code in (
-        "qc_instr_calibration",
-        "qc_instr_cal_plan",
-        "qc_instr_cal_external",
-    ):
-        assert prefills[code]["app_token"] == calibration_base, code
-    assert prefills["qc_instr_calibration"]["table_id"] == "tblRELoVEYKJ6fHB"
-    assert prefills["qc_instr_cal_plan"]["table_id"] == "tblcztwNpMGXLQ8j"
-    assert prefills["qc_instr_cal_external"]["table_id"] == "tblvF1h7klsT2TuP"
-    # 维修记录/维保合同「新增」走飞书共享表单（质量设置-飞书设置中可更换）
-    assert prefills["qc_instr_repair"]["form_url"] == (
-        "https://j0eukrlohu.feishu.cn/share/base/form/shrcnexQSNoIwPZ8LPOL6nuKOF0"
-    )
-    assert prefills["qc_instr_contracts"]["form_url"] == (
-        "https://j0eukrlohu.feishu.cn/share/base/form/shrcnrm7ld6TLNwaoPuAWP36Z42"
-    )
+        assert item.app_token is None
+        assert item.base_table_id is None
+        assert item.is_enabled is False
+        prefill = service.QUALITY_FEISHU_ENTITY_ENV_PREFILLS.get(item.entity_code, {})
+        assert not prefill.get("app_token")
+        assert not prefill.get("table_id")
+        assert not prefill.get("form_url")
 
     # 页面可编辑：仪器实体不在 push-only 名单，默认双向开关开启
     for code in instrument_codes:

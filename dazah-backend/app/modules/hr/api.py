@@ -394,13 +394,36 @@ def get_offboarding_service(
 async def get_onboarding_service(
     session: AsyncSession = Depends(get_db),
 ) -> OnboardingRecordService:
-    # 老厂读数据源优先用人事自有应用；应用未配置时回退平台应用保持可用
+    # 老厂入职读数据源只认人事-飞书设置的 DB 配置
+    # （bitable 应用凭证 + onboarding 实体绑定），均缺失时按未配置数据源处理
+    app_id, app_secret = "", ""
+    app_token, table_id = "", ""
     try:
         app_id, app_secret = await get_hr_feishu_app_credentials(session)
     except HrFeishuNotConfigured:
-        return OnboardingRecordService(session)
+        pass
+    try:
+        from app.modules.hr.models import HrFeishuEntitySetting
+
+        row = (
+            await session.execute(
+                select(HrFeishuEntitySetting).where(
+                    HrFeishuEntitySetting.entity_code == "onboarding",
+                    HrFeishuEntitySetting.is_enabled.is_(True),
+                )
+            )
+        ).scalar_one_or_none()
+        if row:
+            app_token = row.app_token or ""
+            table_id = row.base_table_id or ""
+    except Exception:
+        logger.warning("Failed to resolve onboarding entity setting", exc_info=True)
     return OnboardingRecordService(
-        session, feishu_app_id=app_id, feishu_app_secret=app_secret
+        session,
+        feishu_app_token=app_token or None,
+        feishu_table_id=table_id or None,
+        feishu_app_id=app_id or None,
+        feishu_app_secret=app_secret or None,
     )
 
 
@@ -5636,18 +5659,16 @@ async def get_candidate_resume_file(
     """从飞书下载候选人简历文件（PDF/DOCX）。"""
     _require_user(current_user)
     from app.modules.hr.feishu.client import FeishuClient
-    from app.modules.hr.recruitment_repository import (
-        TBL_CANDIDATE,
-        RecruitmentBitableRepo,
-    )
+    from app.modules.hr.recruitment_repository import RecruitmentBitableRepo
 
     repo = RecruitmentBitableRepo()
     client = await repo._get_client()
     if not client:
         raise AppException(status_code=404, message="飞书多维表格未配置")
 
-    # 获取候选人记录
-    records = await client.search_records(TBL_CANDIDATE, page_size=500)
+    # 获取候选人记录（表 id 只认 HR设置-飞书设置的 DB 配置）
+    candidate_table = await repo._table_id("candidate")
+    records = await client.search_records(candidate_table, page_size=500)
     candidate_record = None
     for r in records:
         if r.get("record_id") == record_id:
@@ -5974,18 +5995,16 @@ async def sync_onboarding_to_employee(
         raise AppException(status_code=400, message="入职记录缺少姓名，无法同步")
 
     # 2. 按姓名从飞书员工档案表查找工号
-    from app.modules.hr.recruitment_repository import (
-        TBL_EMPLOYEE,
-        RecruitmentBitableRepo,
-    )
+    from app.modules.hr.recruitment_repository import RecruitmentBitableRepo
 
     repo = RecruitmentBitableRepo()
     client = await repo._get_client()
     if not client:
         raise AppException(status_code=503, message="飞书连接未配置")
 
-    # 搜索员工档案表，按姓名匹配
-    records = await client.search_records(TBL_EMPLOYEE, page_size=500)
+    # 搜索员工档案表，按姓名匹配（表 id 只认 HR设置-飞书设置的 DB 配置）
+    employee_table = await repo._table_id("employee")
+    records = await client.search_records(employee_table, page_size=500)
     employee_number = None
     for r in records:
         fields = r.get("fields", {})
@@ -6111,6 +6130,28 @@ async def list_onboarding_records_compat(
         page=page_params.page,
         page_size=page_params.page_size,
         total=total,
+    )
+
+
+@router.get("/onboarding-records/form-url", summary="老厂入职台账新增表单链接")
+async def get_onboarding_form_url(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    """返回人事-飞书设置中配置的入职信息表公开表单链接；未配置为空（前端隐藏入口）。"""
+    _require_user(current_user)
+    from app.modules.hr.models import HrFeishuEntitySetting
+
+    row = (
+        await db.execute(
+            select(HrFeishuEntitySetting).where(
+                HrFeishuEntitySetting.entity_code == "onboarding",
+                HrFeishuEntitySetting.is_deleted.is_(False),
+            )
+        )
+    ).scalar_one_or_none()
+    return success_response(
+        data={"form_url": (row.feishu_form_url if row else None) or None}
     )
 
 

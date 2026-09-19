@@ -104,13 +104,13 @@ async def start_ws_from_db() -> WarehouseFeishuWsStatus:
 
     try:
         from app.core.secrets import decrypt_secret
-        from app.modules.warehouse.feishu_material_pages import (
-            FEISHU_WAREHOUSE_MATERIAL_PAGES,
-        )
         from app.modules.warehouse.repository import WarehouseRepository
 
         async with async_session_factory() as session:
-            config = await WarehouseRepository(session).get_active_feishu_config()
+            repo = WarehouseRepository(session)
+            config = await repo.get_active_feishu_config()
+            # 订阅范围只认仓储设置页维护的页面绑定（DB），换 Base 后新表照常订阅
+            page_configs = await repo.list_page_feishu_configs()
         app_id = config.app_id if config else ""
         app_secret = (
             decrypt_secret(config.encrypted_app_secret)
@@ -121,7 +121,9 @@ async def start_ws_from_db() -> WarehouseFeishuWsStatus:
             f"source_{index + 1}": token
             for index, token in enumerate(
                 dict.fromkeys(
-                    page.app_token for page in FEISHU_WAREHOUSE_MATERIAL_PAGES.values()
+                    item.get("app_token")
+                    for item in page_configs
+                    if item.get("app_token")
                 )
             )
         }

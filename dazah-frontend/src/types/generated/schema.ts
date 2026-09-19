@@ -5674,6 +5674,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/hr/onboarding-records/form-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 老厂入职台账新增表单链接
+         * @description 返回人事-飞书设置中配置的入职信息表公开表单链接；未配置为空（前端隐藏入口）。
+         */
+        get: operations["get_onboarding_form_url_api_v1_hr_onboarding_records_form_url_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/hr/onboarding-records/sync-from-feishu": {
         parameters: {
             query?: never;
@@ -25416,6 +25436,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/warehouse/home-quick-form-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 仓储首页快捷表单卡链接
+         * @description 返回已配置表单链接的页面映射（page_key → 入库/出库链接），驱动首页快捷卡。
+         */
+        get: operations["get_home_quick_form_links_api_v1_warehouse_home_quick_form_links_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/warehouse/inspection-progress/ai-analysis": {
         parameters: {
             query?: never;
@@ -25472,6 +25512,26 @@ export interface paths {
          * @description 仓储页面数据（五金车间明细页按当前用户可见部门做行级过滤）。
          */
         get: operations["get_material_page_api_v1_warehouse_material_pages__page_key__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/warehouse/material-pages/{page_key}/form-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 台账页入库/出库登记表单链接
+         * @description 返回该页面在仓储设置-页面映射中配置的表单链接；未配置为 null（前端隐藏按钮）。
+         */
+        get: operations["get_material_page_form_links_api_v1_warehouse_material_pages__page_key__form_links_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -57783,6 +57843,8 @@ export interface components {
              * @default true
              */
             enable_push_to_feishu: boolean;
+            /** Feishu Form Url */
+            feishu_form_url?: string | null;
             /** Field Mappings */
             field_mappings?: components["schemas"]["HrFeishuFieldMappingItem"][] | null;
             /**
@@ -60165,6 +60227,10 @@ export interface components {
         WarehousePageFeishuConfig: {
             /** App Token */
             app_token: string;
+            /** Feishu Inbound Form Url */
+            feishu_inbound_form_url?: string | null;
+            /** Feishu Outbound Form Url */
+            feishu_outbound_form_url?: string | null;
             /** Page Key */
             page_key: string;
             /** Table Id */
@@ -75621,6 +75687,37 @@ export interface operations {
                 page?: number;
                 page_size?: number;
             };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_onboarding_form_url_api_v1_hr_onboarding_records_form_url_get: {
+        parameters: {
+            query?: never;
             header?: never;
             path?: never;
             cookie?: {
@@ -126589,6 +126686,37 @@ export interface operations {
             };
         };
     };
+    get_home_quick_form_links_api_v1_warehouse_home_quick_form_links_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_inspection_progress_ai_analysis_api_v1_warehouse_inspection_progress_ai_analysis_get: {
         parameters: {
             query?: {
@@ -126711,6 +126839,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WarehouseFeishuMaterialPageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_material_page_form_links_api_v1_warehouse_material_pages__page_key__form_links_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page_key: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

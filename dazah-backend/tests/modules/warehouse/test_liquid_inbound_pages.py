@@ -1,10 +1,10 @@
 """液体入库两页（liquid-raw-inbound / liquid-sugar-inbound）配置与接口测试。
 
 两页复用 warehouse 模块通用 material-pages CRUD，本文件验证新增 pageKey：
-- 页面映射指向液体入库 Base（NX5Gbf…）的两张子表
-- 数据源解析（DB 无配置时回退硬编码映射）
+- 页面注册表保留 page_key/标题（绑定字段留空，属部署数据）
+- 数据源解析只认 DB 配置；未绑定占位可被 _page_binding_missing 识别
 - 日期倒序登记（增量同步与列表排序；液糖表业务日期是「日期」而非公式列「入库日期」）
-- 列表接口对该 pageKey 路由正常
+- 列表接口对该 pageKey 路由正常（绑定来自设置页 DB 配置）
 - 未注册的 pageKey 返回 404（可预期分支不得转 500）
 """
 
@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, patch
 from httpx import AsyncClient
 
 from app.modules.warehouse.feishu_material_pages import (
-    FEISHU_LIQUID_WAREHOUSE_APP_TOKEN,
     FEISHU_WAREHOUSE_MATERIAL_PAGES,
+    FeishuWarehouseMaterialPage,
 )
 from app.modules.warehouse.service import (
     _DATE_SORT_DESC_FIELDS,
@@ -28,13 +28,13 @@ PAGES = {
 
 
 def test_page_mappings_registered() -> None:
-    """两个 pageKey 已注册到液体入库 Base，指向对应子表。"""
-    for page_key, (title, table_id, _) in PAGES.items():
+    """两个 pageKey 已注册（标题保留；绑定字段一律留空，属部署数据）。"""
+    for page_key, (title, _table_id, _date_field) in PAGES.items():
         page = FEISHU_WAREHOUSE_MATERIAL_PAGES[page_key]
         assert page.page_key == page_key
         assert page.title == title
-        assert page.table_id == table_id
-        assert page.app_token == FEISHU_LIQUID_WAREHOUSE_APP_TOKEN
+        assert page.table_id == ""
+        assert page.app_token == ""
 
 
 def test_date_sort_desc_registered() -> None:
@@ -43,34 +43,55 @@ def test_date_sort_desc_registered() -> None:
         assert _DATE_SORT_DESC_FIELDS[page_key] == date_field
 
 
-def test_liquid_base_in_edit_scope_permission() -> None:
-    """液体 Base 必须登记细分编辑权限（raw scope），否则编辑/删除必 403。"""
+def test_liquid_pages_in_edit_scope_permission() -> None:
+    """液体页面必须登记细分编辑权限（raw scope），否则编辑/删除必 403。"""
     from app.modules.warehouse.api import WAREHOUSE_EDIT_SCOPE_PERMISSION
 
-    assert (
-        WAREHOUSE_EDIT_SCOPE_PERMISSION[FEISHU_LIQUID_WAREHOUSE_APP_TOKEN]
-        == "warehouse:raw:write"
-    )
+    for page_key in PAGES:
+        assert WAREHOUSE_EDIT_SCOPE_PERMISSION[page_key] == "warehouse:raw:write"
 
 
-async def test_get_material_page_config_falls_back_to_hardcoded() -> None:
-    """数据库无配置时回退硬编码映射，仍返回液体入库子表。"""
-    for page_key, (_, table_id, _) in PAGES.items():
+async def test_get_material_page_config_unbound_placeholder_and_db_binding() -> None:
+    """DB 无配置时返回未绑定占位；有 DB 配置时按配置解析。"""
+    for page_key in PAGES:
         service = WarehouseService.__new__(WarehouseService)
         service.repo = AsyncMock()
         service.repo.get_page_feishu_config = AsyncMock(return_value=None)
 
         config = await service._get_material_page_config(page_key)
-
         assert config.page_key == page_key
-        assert config.table_id == table_id
-        assert config.app_token == FEISHU_LIQUID_WAREHOUSE_APP_TOKEN
+        assert service._page_binding_missing(config)
+
+        service.repo.get_page_feishu_config = AsyncMock(
+            return_value={
+                "page_key": page_key,
+                "app_token": "app-token-liquid",
+                "table_id": "tblLiquid",
+                "table_name": "液体原辅料入库",
+                "view_id": None,
+            }
+        )
+        bound = await service._get_material_page_config(page_key)
+        assert bound.table_id == "tblLiquid"
+        assert bound.app_token == "app-token-liquid"
+        assert not service._page_binding_missing(bound)
 
 
 async def test_get_material_page_returns_configured_title(client: AsyncClient) -> None:
-    """列表接口返回液体原辅料入库页配置及动态列。"""
+    """列表接口按设置页 DB 绑定读取，返回液体原辅料入库页配置及动态列。"""
     page_key, (title, _, _) = next(iter(PAGES.items()))
+    bound_config = FeishuWarehouseMaterialPage(
+        page_key=page_key,
+        title=title,
+        table_id="tblLiquid",
+        app_token="app-token-liquid",
+    )
     with (
+        patch.object(
+            WarehouseService,
+            "_get_material_page_config",
+            new=AsyncMock(return_value=bound_config),
+        ),
         patch.object(
             WarehouseService,
             "fetch_feishu_table_fields",

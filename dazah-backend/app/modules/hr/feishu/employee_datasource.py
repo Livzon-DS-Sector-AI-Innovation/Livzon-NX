@@ -11,11 +11,9 @@ import logging
 from datetime import date, datetime
 from typing import Any
 
-from app.core.config import get_settings
 from app.modules.hr.feishu.bitable import BitableClient, _to_ms_timestamp
 
 logger = logging.getLogger(__name__)
-_settings = get_settings()
 
 # ─── Field type constants ───
 TEXT = 1
@@ -100,7 +98,8 @@ class EmployeeBitableDataSource:
         self.client = BitableClient(
             app_token=app_token, app_id=app_id, app_secret=app_secret
         )
-        self.table_id = table_id or _settings.FEISHU_BITABLE_EMPLOYEE_TABLE_ID or ""
+        # table_id 只认调用方传入的 DB 配置解析值，不再回退环境变量
+        self.table_id = table_id or ""
 
     def _is_enabled(self) -> bool:
         return bool(self.client.app_token)
