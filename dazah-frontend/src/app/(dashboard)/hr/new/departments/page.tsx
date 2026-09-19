@@ -2,7 +2,13 @@ import { fetchNewDepartmentsServer } from '@/lib/api/server/hr'
 import { DepartmentClient } from '@/components/hr'
 
 export default async function NewDepartmentsPage() {
-  const res = await fetchNewDepartmentsServer({ page: 1, page_size: 100 })
+  let res
+  try {
+    res = await fetchNewDepartmentsServer({ page: 1, page_size: 100 })
+  } catch {
+    // 后端不可用时使用空数据初始化，客户端会自动重试
+    res = { data: [], meta: { total: 0 } }
+  }
 
   return (
     <div className="space-y-4">

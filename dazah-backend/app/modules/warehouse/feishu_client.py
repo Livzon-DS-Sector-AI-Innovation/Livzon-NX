@@ -12,6 +12,7 @@ from urllib.parse import quote
 
 import httpx
 
+from app.core.exceptions import AppException
 from app.core.redis import redis_client
 from app.platform.integrations.feishu.utils import OPEN_API_BASE_URL
 
@@ -62,7 +63,11 @@ class WarehouseFeishuClient:
 
     async def get_tenant_access_token(self, *, force_refresh: bool = False) -> str:
         if not self.app_id or not self.app_secret:
-            raise RuntimeError("App ID 或 App Secret 未配置")
+            # 业务化降级：未配置凭证时返回 503 业务提示，避免裸 RuntimeError 变 500
+            raise AppException(
+                status_code=503,
+                message="仓储飞书应用未配置，请先在仓储设置中填写 App ID 与 App Secret",
+            )
 
         cache_key = _token_cache_key(self.app_id, self.app_secret)
         if not force_refresh:

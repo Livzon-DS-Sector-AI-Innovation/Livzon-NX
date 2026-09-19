@@ -81,6 +81,7 @@ function createEntityDraft(
     app_token: item.app_token || '',
     base_table_name: item.base_table_name || '',
     base_table_id: item.base_table_id || '',
+    feishu_form_url: item.feishu_form_url || '',
     is_enabled: item.is_enabled,
     enable_push_to_feishu: item.enable_push_to_feishu,
     enable_pull_from_feishu: item.enable_pull_from_feishu,
@@ -368,11 +369,14 @@ export function HrFeishuSettingsPage() {
           ...draft,
           base_table_name: draft.base_table_name?.trim() || '',
           base_table_id: draft.base_table_id?.trim() || '',
+          feishu_form_url: draft.feishu_form_url?.trim() || '',
         }) as { entity_name?: string } | null
         if (!result) return
         setResultNotice({ type: 'success', title: `${result.entity_name} 配置已保存` })
         message.success(`${result.entity_name} 配置已保存`)
         queryClient.invalidateQueries({ queryKey: ['hr-feishu-settings', 'entities'] })
+        // 入职台账页的「新增」按钮读这个缓存：保存后立即失效，让已打开的页面同步
+        queryClient.invalidateQueries({ queryKey: ['onboarding-form-url'] })
       } catch (error) {
         const description = error instanceof Error ? (error instanceof Error ? error.message : '') : '保存实体配置失败'
         setResultNotice({ type: 'error', title: '保存实体配置失败', description })
@@ -608,6 +612,18 @@ export function HrFeishuSettingsPage() {
             value={entityDrafts[record.entity_code]?.base_table_id || ''}
             placeholder="例如：tblxxxxxxxx"
             onChange={(event) => patchEntityDraft(record.entity_code, { base_table_id: event.target.value })}
+          />
+        ),
+      },
+      {
+        title: '表单链接',
+        key: 'feishu_form_url',
+        width: 220,
+        render: (_: unknown, record: HrFeishuEntitySettingItem) => (
+          <Input
+            value={entityDrafts[record.entity_code]?.feishu_form_url || ''}
+            placeholder="飞书共享表单链接（可选）"
+            onChange={(event) => patchEntityDraft(record.entity_code, { feishu_form_url: event.target.value })}
           />
         ),
       },

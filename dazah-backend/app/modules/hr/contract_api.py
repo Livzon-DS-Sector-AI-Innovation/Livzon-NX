@@ -1317,30 +1317,34 @@ async def sync_contract_from_onboarding(
 
     # 如果没有工号，按姓名查找
     if not data.employee_number and data.name:
-        from app.modules.hr.recruitment_repository import (
-            TBL_EMPLOYEE,
-            RecruitmentBitableRepo,
-        )
+        from app.core.exceptions import RecruitmentNotConfigured
+        from app.modules.hr.recruitment_repository import RecruitmentBitableRepo
 
         repo = RecruitmentBitableRepo()
         client = await repo._get_client()
         if client:
-            records = await client.search_records(TBL_EMPLOYEE, page_size=500)
-            for r in records:
-                fields = r.get("fields", {})
-                name_field = fields.get("姓名", "")
-                emp_name = (
-                    name_field[0].get("text", "")
-                    if isinstance(name_field, list) and name_field
-                    else str(name_field)
-                )
-                if emp_name == data.name:
-                    emp_no_field = fields.get("工号", "")
-                    if isinstance(emp_no_field, (int, float)):
-                        data.employee_number = str(int(emp_no_field))
-                    elif emp_no_field:
-                        data.employee_number = str(emp_no_field)
-                    break
+            # 表 id 只认 HR设置-飞书设置的 DB 配置；未绑定时跳过自动查找
+            try:
+                employee_table = await repo._table_id("employee")
+            except RecruitmentNotConfigured:
+                employee_table = None
+            if employee_table:
+                records = await client.search_records(employee_table, page_size=500)
+                for r in records:
+                    fields = r.get("fields", {})
+                    name_field = fields.get("姓名", "")
+                    emp_name = (
+                        name_field[0].get("text", "")
+                        if isinstance(name_field, list) and name_field
+                        else str(name_field)
+                    )
+                    if emp_name == data.name:
+                        emp_no_field = fields.get("工号", "")
+                        if isinstance(emp_no_field, (int, float)):
+                            data.employee_number = str(int(emp_no_field))
+                        elif emp_no_field:
+                            data.employee_number = str(emp_no_field)
+                        break
 
     record = await service.sync_from_onboarding(data.model_dump(exclude_none=True))
     if record:

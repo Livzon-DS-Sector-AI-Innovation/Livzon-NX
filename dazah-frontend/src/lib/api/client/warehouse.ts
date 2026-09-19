@@ -54,6 +54,33 @@ export async function fetchWarehousePageFeishuConfigs(): Promise<WarehousePageFe
   return body.data
 }
 
+/** 台账页入库/出库登记表单链接（仓储设置-页面映射维护；未配置为 null） */
+export async function fetchWarehousePageFormLinks(
+  pageKey: string
+): Promise<{ inbound_form_url: string | null; outbound_form_url: string | null }> {
+  const res = await fetch(
+    `/api/v1/warehouse/material-pages/${pageKey}/form-links`,
+    { cache: 'no-store' }
+  )
+  if (!res.ok) throw new Error('获取表单链接失败')
+  const body = await res.json()
+  return body.data
+}
+
+/** 首页快捷表单卡链接：仅含已配置表单的页面（page_key → 入库/出库链接） */
+export async function fetchWarehouseHomeQuickFormLinks(): Promise<
+  Record<string, { inbound_form_url: string | null; outbound_form_url: string | null }>
+> {
+  // 首页不是注册业务页，显式携带快捷卡目标台账（入库总账）的页面上下文
+  const res = await fetch('/api/v1/warehouse/home-quick-form-links', {
+    cache: 'no-store',
+    headers: { 'X-Dazah-Page-Key': 'warehouse:materials:inbound-ledger' },
+  })
+  if (!res.ok) throw new Error('获取快捷表单链接失败')
+  const body = await res.json()
+  return body.data ?? {}
+}
+
 /** 人员姓名 → 飞书头像 URL 映射（人事-飞书联系人，在职），供文本人员字段渲染真实头像 */
 export async function fetchWarehousePersonAvatarMap(): Promise<Record<string, string>> {
   const res = await fetch('/api/v1/warehouse/person-avatar-map')

@@ -39,7 +39,10 @@ from app.modules.hr.feishu.employee_datasource import (
     EmployeeBitableDataSource,
 )
 from app.modules.hr.feishu.onboarding_datasource import OnboardingBitableDataSource
-from app.modules.hr.feishu_settings_service import get_hr_feishu_app_credentials
+from app.modules.hr.feishu_settings_service import (
+    HrFeishuNotConfigured,
+    get_hr_feishu_app_credentials,
+)
 from app.modules.hr.legacy_models import (
     DepartureRecord as LegacyDepartureRecord,
 )
@@ -357,13 +360,28 @@ def _parse_feishu_record(record: dict[str, Any]) -> dict[str, Any]:
 # ─── Services ───
 
 
-async def _resolve_feishu_sync_session(session: Any) -> FeishuBitableSync:
-    """从 DB 解析飞书应用凭据，构造 FeishuBitableSync 实例。
+async def _resolve_feishu_sync_session(session: Any) -> FeishuBitableSync | None:
+    """从 DB 解析员工表绑定与飞书凭据，构造 FeishuBitableSync；未配置返回 None。
 
-    供 EmployeeService 和 DepartmentService 复用，避免 _ensure_feishu_creds 重复。
+    绑定/凭据均只认人事-飞书设置维护的 DB 配置，缺失时调用方跳过飞书推送，
+    不回退环境变量或平台全局凭证。
     """
+    result = await session.execute(
+        select(HrFeishuEntitySetting).where(
+            HrFeishuEntitySetting.entity_code == "employee",
+            HrFeishuEntitySetting.is_enabled.is_(True),
+        )
+    )
+    setting = result.scalar_one_or_none()
+    if not setting or not setting.app_token or not setting.base_table_id:
+        return None
     app_id, app_secret = await get_hr_feishu_app_credentials(session)
-    return FeishuBitableSync(app_id=app_id or None, app_secret=app_secret or None)
+    return FeishuBitableSync(
+        app_token=setting.app_token,
+        app_id=app_id or None,
+        app_secret=app_secret or None,
+        employee_table=setting.base_table_id,
+    )
 
 
 class EmployeeService:
@@ -372,8 +390,8 @@ class EmployeeService:
         self.session = session
         self._feishu: FeishuBitableSync | None = None
 
-    async def _ensure_feishu_creds(self) -> FeishuBitableSync:
-        """Lazy-load FeishuBitableSync cache (delegates to module helper)."""
+    async def _ensure_feishu_creds(self) -> FeishuBitableSync | None:
+        """Lazy-load FeishuBitableSync cache（未配置返回 None，调用方跳过推送）。"""
         legacy_feishu = getattr(self, "feishu", None)
         if legacy_feishu is not None:
             return cast(FeishuBitableSync, legacy_feishu)
@@ -644,7 +662,7 @@ class EmployeeService:
                 await bitable.delete(employee.feishu_record_id)
             else:
                 feishu = await self._ensure_feishu_creds()
-                if employee_number:
+                if feishu and employee_number:
                     await feishu.sync_employee_deleted(employee_number)
         except Exception as e:
             logger.warning("Feishu sync failed for employee deleted: %s", e)
@@ -1176,13 +1194,6 @@ class DepartmentService:
     def __init__(self, session: AsyncSession) -> None:
         self.repo = DepartmentRepository(session)
         self.session = session
-        self._feishu: FeishuBitableSync | None = None
-
-    async def _ensure_feishu_creds(self) -> FeishuBitableSync:
-        """Lazy-load FeishuBitableSync cache (delegates to module helper)."""
-        if self._feishu is None:
-            self._feishu = await _resolve_feishu_sync_session(self.session)
-        return self._feishu
 
     async def get_department(self, department_id: UUID) -> HrDepartment:
         department = await self.repo.get_by_id(department_id)
@@ -1197,12 +1208,6 @@ class DepartmentService:
 
         department = HrDepartment(**data.model_dump())
         result = await self.repo.create(department)
-
-        try:
-            feishu = await self._ensure_feishu_creds()
-            await feishu.sync_department_created(result.__dict__)
-        except Exception as e:
-            logger.warning("Feishu sync failed for department created: %s", e)
 
         return result
 
@@ -1227,24 +1232,11 @@ class DepartmentService:
 
         result = await self.repo.update(department)
 
-        try:
-            feishu = await self._ensure_feishu_creds()
-            await feishu.sync_department_updated(result.__dict__)
-        except Exception as e:
-            logger.warning("Feishu sync failed for department updated: %s", e)
-
         return result
 
     async def delete_department(self, department_id: UUID) -> None:
         department = await self.get_department(department_id)
-        code = department.code
         await self.repo.soft_delete(department)
-
-        try:
-            feishu = await self._ensure_feishu_creds()
-            await feishu.sync_department_deleted(code)
-        except Exception as e:
-            logger.warning("Feishu sync failed for department deleted: %s", e)
 
     async def list_departments(
         self,
@@ -1482,10 +1474,16 @@ class DepartmentService:
             )
         else:
             # 缓存 miss，从飞书 BFS 获取本公司子树（root 必定有效，不回退 "0"）
+            # 凭证用人事-飞书设置的通讯录应用，不回退平台登录应用
             from app.platform.integrations.feishu.contact import get_all_departments
 
+            contact_app_id, contact_app_secret = await get_hr_feishu_app_credentials(
+                self.session, purpose="contact"
+            )
             departments_data = await get_all_departments(
-                root_department_id=root_department_id
+                root_department_id=root_department_id,
+                app_id=contact_app_id,
+                app_secret=contact_app_secret,
             )
             if not departments_data:
                 # 空树不写缓存也不进入后续流程：否则空结果会被缓存 24 小时，
@@ -1982,12 +1980,6 @@ class OffboardingRecordService:
             result = await self.repo.create(record)
             employee.status = "离职"
             await self.employee_repo.update(employee)
-            try:
-                legacy_feishu = getattr(self, "feishu", None)
-                if legacy_feishu is not None:
-                    await legacy_feishu.sync_offboarding_created(result.__dict__)
-            except Exception as exc:
-                logger.warning("Feishu sync failed for offboarding created: %s", exc)
             return result
 
         employee = None
@@ -2023,13 +2015,10 @@ class OffboardingRecordService:
                 await self.employee_repo.update(employee)
             await self.employee_repo.soft_delete(employee)
             try:
-                from app.modules.hr.feishu.bitable import FeishuBitableSync
-
-                app_id, app_secret = await get_hr_feishu_app_credentials(self.session)
-                sync = FeishuBitableSync(
-                    app_id=app_id or None, app_secret=app_secret or None
-                )
-                await sync.sync_employee_deleted(record.employee_number or "")
+                # 员工档案已软删，尽力删除飞书员工档案记录（DB 配置缺失时跳过）
+                sync = await _resolve_feishu_sync_session(self.session)
+                if sync:
+                    await sync.sync_employee_deleted(record.employee_number or "")
             except Exception:
                 logger.exception(
                     "创建离职记录联动删除飞书员工档案失败: %s",
@@ -2125,15 +2114,12 @@ class OffboardingRecordService:
                         await self.employee_repo.update(employee)
                     await self.employee_repo.soft_delete(employee)
                     try:
-                        from app.modules.hr.feishu.bitable import FeishuBitableSync
-
-                        app_id, app_secret = await get_hr_feishu_app_credentials(
-                            self.session
-                        )
-                        sync = FeishuBitableSync(
-                            app_id=app_id or None, app_secret=app_secret or None
-                        )
-                        await sync.sync_employee_deleted(record.employee_number or "")
+                        # 员工档案已软删，尽力删除飞书员工档案记录（DB 配置缺失时跳过）
+                        sync = await _resolve_feishu_sync_session(self.session)
+                        if sync:
+                            await sync.sync_employee_deleted(
+                                record.employee_number or ""
+                            )
                     except Exception:
                         logger.exception(
                             "离职联动删除飞书员工档案失败: %s",
@@ -2144,12 +2130,6 @@ class OffboardingRecordService:
         result = await self.repo.update(record)
 
         if not hasattr(self, "session"):
-            try:
-                legacy_feishu = getattr(self, "feishu", None)
-                if legacy_feishu is not None:
-                    await legacy_feishu.sync_offboarding_updated(result.__dict__)
-            except Exception as exc:
-                logger.warning("Feishu sync failed for offboarding updated: %s", exc)
             return result
 
         # 离职联动：员工档案在职状态同步为离职（如尚未软删时）
@@ -2261,8 +2241,8 @@ class OffboardingRecordService:
     # ─── Feishu 读写方法 ───
 
     async def _get_offboarding_bitable(self) -> Any:
+        """解析离职实体绑定：只认人事-飞书设置的 DB 配置，未配置返回 None。"""
         from app.modules.hr.feishu.bitable import BitableClient
-        from app.modules.hr.feishu_settings_service import _get_entity_prefill
 
         result = await self.session.execute(
             select(HrFeishuEntitySetting).where(
@@ -2271,19 +2251,8 @@ class OffboardingRecordService:
             )
         )
         entity = result.scalar_one_or_none()
-
-        # Fallback 到默认配置
-        prefill = _get_entity_prefill("offboarding_record")
-        app_token = (
-            entity.app_token
-            if entity and entity.app_token
-            else prefill.get("app_token")
-        )
-        table_id = (
-            entity.base_table_id
-            if entity and entity.base_table_id
-            else prefill.get("table_id")
-        )
+        app_token = entity.app_token if entity else None
+        table_id = entity.base_table_id if entity else None
 
         if not app_token or not table_id:
             logger.warning(
@@ -4171,6 +4140,11 @@ class _LegacyFeishuRecordService:
         raise NotImplementedError
 
     async def sync_from_feishu(self) -> dict[str, int]:
+        if not self.bitable._is_enabled():
+            raise HrFeishuNotConfigured(
+                f"{self.record_label}的飞书数据源未配置，"
+                "请先在人事-飞书设置中绑定对应实体的表格"
+            )
         raw_records = await self.bitable.client.search_records(
             self.bitable.table_id,
             page_size=500,
@@ -4222,12 +4196,17 @@ class OnboardingRecordService(_LegacyFeishuRecordService):
         self,
         session: AsyncSession,
         *,
+        feishu_app_token: str | None = None,
+        feishu_table_id: str | None = None,
         feishu_app_id: str | None = None,
         feishu_app_secret: str | None = None,
     ) -> None:
         self.repo = OnboardingRecordRepository(session)
         self.bitable = OnboardingBitableDataSource(
-            app_id=feishu_app_id, app_secret=feishu_app_secret
+            app_token=feishu_app_token,
+            table_id=feishu_table_id,
+            app_id=feishu_app_id,
+            app_secret=feishu_app_secret,
         )
 
     async def _parse_feishu_record(self, record: dict[str, Any]) -> dict[str, Any]:

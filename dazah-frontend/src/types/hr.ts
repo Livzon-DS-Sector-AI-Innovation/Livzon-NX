@@ -936,6 +936,7 @@ export interface HrFeishuEntitySettingItem {
   app_token?: string | null
   base_table_name?: string | null
   base_table_id?: string | null
+  feishu_form_url?: string | null
   is_enabled: boolean
   enable_push_to_feishu: boolean
   enable_pull_from_feishu: boolean

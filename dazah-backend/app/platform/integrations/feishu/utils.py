@@ -7,6 +7,7 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 
+from app.core.exceptions import AppException
 from app.core.redis import cache_get, cache_set
 
 OPEN_API_BASE_URL = "https://open.feishu.cn/open-apis"
@@ -170,7 +171,11 @@ async def get_tenant_access_token(
 ) -> str:
     """Get tenant_access_token from explicit app credentials."""
     if not app_id or not app_secret:
-        raise RuntimeError("App ID 或 App Secret 未配置")
+        # 业务化降级：凭证缺失返回 503 业务提示，避免裸 RuntimeError 变 500
+        raise AppException(
+            status_code=503,
+            message="飞书应用未配置，请先在对应模块设置中填写 App ID 与 App Secret",
+        )
 
     if cache_key:
         try:

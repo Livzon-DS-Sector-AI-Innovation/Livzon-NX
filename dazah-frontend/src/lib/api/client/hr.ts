@@ -134,6 +134,14 @@ export async function fetchOnboardingList(
   return res.json()
 }
 
+// 老厂入职台账「新增」表单链接（人事-飞书设置中维护，未配置为空）
+export async function fetchOnboardingFormUrl(): Promise<string | null> {
+  const res = await fetch(`/api/v1/hr/onboarding-records/form-url`, { cache: 'no-store' })
+  if (!res.ok) return null
+  const body = (await res.json()) as { data?: { form_url?: string | null } }
+  return body.data?.form_url || null
+}
+
 export async function fetchOnboardingById(id: string): Promise<{ code: number; message: string; data: OnboardingListItem }> {
   const res = await fetch(`/api/v1/hr/onboarding/${id}`, { cache: 'no-store' })
   if (!res.ok) throw new Error('获取入职详情失败')

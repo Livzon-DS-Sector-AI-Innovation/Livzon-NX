@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.exceptions import AppException, NotFoundException
 from app.core.llm.encryption import decrypt_api_key
+from app.core.llm.exceptions import LLMConfigError
 from app.modules.quality import repository
 from app.modules.quality.models import (
     CAPA,
@@ -637,7 +638,18 @@ class QualityFeishuSync:
             )
         ):
             app_id = app_model.app_id
-            app_secret = decrypt_api_key(app_model.app_secret)
+            # 解密失败（加密密钥轮换）时不得让 LLMConfigError 冒泡成
+            # "AI 服务尚未配置"503——转为明确的飞书配置业务错误
+            try:
+                app_secret = decrypt_api_key(app_model.app_secret)
+            except LLMConfigError:
+                raise AppException(
+                    status_code=400,
+                    message=(
+                        "质量飞书 App Secret 解密失败（加密密钥可能已轮换），"
+                        "请到质量设置-飞书设置重新输入 App Secret 并保存"
+                    ),
+                )
             legacy_app_token = app_model.app_token or legacy_app_token
             is_app_enabled = app_model.is_enabled
 

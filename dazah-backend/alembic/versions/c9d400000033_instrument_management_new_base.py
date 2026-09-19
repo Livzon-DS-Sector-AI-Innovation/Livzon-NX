@@ -27,11 +27,14 @@ Base 必须由本迁移显式改写 app_token / base_table_id / base_table_name�
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 
 import sqlalchemy as sa
 
 from alembic import op
+
+logger = logging.getLogger("alembic.runtime.migration")
 
 # revision identifiers, used by Alembic.
 revision: str = "c9d400000033"
@@ -106,18 +109,6 @@ _ENTITY_TABLE_MAP: dict[str, tuple[str, str, str, str, str]] = {
 # 退役实体（旧 Base 独有、新 Base 已删除的表）
 _RETIRED_ENTITY_CODES: tuple[str, ...] = ("qc_instr_change", "qc_instr_assets")
 
-# 新实体插入时的名称/分组/排序（与 DEFAULT_QUALITY_FEISHU_ENTITIES 对齐）
-_ENTITY_META: dict[str, tuple[str, str, int]] = {
-    "qc_instr_equipment": ("设备数据管理", "仪器管理", 216),
-    "qc_instr_maintenance": ("设备维护保养记录", "仪器管理", 217),
-    "qc_instr_repair": ("设备维修记录", "仪器管理", 218),
-    "qc_instr_contracts": ("设备维保合同", "仪器管理", 219),
-    "qc_instr_plans": ("QC检测仪器维护保养周期表", "仪器管理", 220),
-    "qc_instr_calibration": ("内校汇总", "仪器管理", 221),
-    "qc_instr_cal_plan": ("内部校验计划", "仪器管理", 222),
-    "qc_instr_cal_external": ("外部校准、检定", "仪器管理", 223),
-}
-
 # 退役菜单（key -> route_path），页面已下线：置 disabled，不删除历史行
 _RETIRED_MENUS: tuple[tuple[str, str], ...] = (
     ("quality:inspection:inspection-instruments:inspection-instruments-change",
@@ -169,16 +160,6 @@ _UPDATE_CONTRACT_FORM_URL_SQL = (
     "WHERE entity_code = 'qc_instr_contracts'"
 )
 
-_INSERT_SETTING_SQL = (
-    "INSERT INTO quality.quality_feishu_entity_settings "
-    "(id, entity_code, entity_name, entity_group, sort_order, app_token, "
-    " base_table_id, base_table_name, is_enabled, enable_push_to_feishu, "
-    " enable_pull_from_feishu, created_at, updated_at, is_deleted) "
-    "VALUES (gen_random_uuid(), :entity_code, :entity_name, :entity_group, "
-    " :sort_order, :app_token, :table_id, :table_name, true, true, true, "
-    " now(), now(), false)"
-)
-
 _MENU_TABLE = sa.Table(
     "menus",
     sa.MetaData(),
@@ -208,17 +189,13 @@ def upgrade() -> None:
         )
         if result.rowcount:
             continue
-        entity_name, entity_group, sort_order = _ENTITY_META[entity_code]
-        bind.execute(
-            sa.text(_INSERT_SETTING_SQL).bindparams(
-                entity_code=entity_code,
-                entity_name=entity_name,
-                entity_group=entity_group,
-                sort_order=sort_order,
-                app_token=app_token,
-                table_id=table_id,
-                table_name=table_name,
-            )
+        # 不再在全新库上 INSERT 写死绑定：表绑定属于部署数据，实体行由运行期
+        # ensure_quality_feishu_entity_settings 创建（未绑定、未启用状态），
+        # 由管理员在质量设置-飞书设置中配置，避免部署即写旧 Base。
+        logger.info(
+            "instrument entity %s has no existing binding row; "
+            "skip insert (runtime ensure will create unbound row)",
+            entity_code,
         )
 
     for entity_code in _RETIRED_ENTITY_CODES:

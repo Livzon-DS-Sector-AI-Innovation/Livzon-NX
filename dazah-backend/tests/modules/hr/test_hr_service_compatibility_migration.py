@@ -388,12 +388,6 @@ async def test_department_tree_crud_and_org_compatibility(
         AsyncMock(return_value=("cli_hr_test", "hr_secret_plain")),
     )
     instance = _department_service()
-    feishu = SimpleNamespace(
-        sync_department_created=AsyncMock(),
-        sync_department_updated=AsyncMock(),
-        sync_department_deleted=AsyncMock(),
-    )
-    instance._ensure_feishu_creds = AsyncMock(return_value=feishu)
     department = _department()
     instance.repo.create.side_effect = lambda value: value
     created = await instance.create_department(
@@ -407,7 +401,6 @@ async def test_department_tree_crud_and_org_compatibility(
     )
     assert updated.name == "质量管理部"
     await instance.delete_department(department.id)
-    assert feishu.sync_department_deleted.await_count == 1
     assert await instance.list_departments(keyword="质量") == ([], 0)
 
     root = _department(

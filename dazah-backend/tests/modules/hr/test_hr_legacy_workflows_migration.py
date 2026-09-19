@@ -202,7 +202,9 @@ async def test_department_sync_prefers_top_dept_with_children_as_root(
     monkeypatch.setattr("app.core.redis.cache_set", cache_set)
     captured_root: dict[str, str] = {}
 
-    async def _fake_get_all_departments(root_department_id: str) -> list[dict]:
+    async def _fake_get_all_departments(
+        root_department_id: str, **_kwargs: object
+    ) -> list[dict]:
         captured_root["root"] = root_department_id
         return [
             {
@@ -266,7 +268,9 @@ async def test_department_sync_empty_tree_aborts_without_caching(
     cache_set = AsyncMock()
     monkeypatch.setattr("app.core.redis.cache_set", cache_set)
 
-    async def _fake_get_all_departments(root_department_id: str) -> list[dict]:
+    async def _fake_get_all_departments(
+        root_department_id: str, **_kwargs: object
+    ) -> list[dict]:
         return []
 
     monkeypatch.setattr(
@@ -685,6 +689,7 @@ async def test_legacy_record_service_sync_status_and_failure_paths() -> None:
     )
     bitable = SimpleNamespace(
         table_id="tbl",
+        _is_enabled=lambda: True,
         client=SimpleNamespace(
             search_records=AsyncMock(
                 return_value=[

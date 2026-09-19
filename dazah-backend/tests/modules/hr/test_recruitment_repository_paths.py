@@ -5,13 +5,21 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.modules.hr import recruitment_repository
-from app.modules.hr.recruitment_repository import (
-    TBL_CANDIDATE,
-    TBL_JOB_POSTING,
-    TBL_ONBOARDING,
-    RecruitmentBitableRepo,
-)
+from app.modules.hr.recruitment_repository import RecruitmentBitableRepo
+
+# 表 id 只认 DB 配置；测试内用固定假 id 路由 fake 客户端
+FAKE_TABLE_IDS = {
+    "job_posting": "tblJobPosting",
+    "candidate": "tblCandidate",
+    "onboarding": "tblOnboarding",
+}
+
+
+def _stub_table_ids(repo: RecruitmentBitableRepo) -> None:
+    async def fake_table_id(entity_code: str) -> str:
+        return FAKE_TABLE_IDS[entity_code]
+
+    repo._table_id = fake_table_id  # type: ignore[method-assign]
 
 
 @pytest.mark.asyncio
@@ -71,15 +79,15 @@ async def test_recruitment_repository_maps_and_filters_all_tables() -> None:
         table_id: str, **_kwargs: object
     ) -> list[dict[str, object]]:
         return {
-            TBL_JOB_POSTING: [job],
-            TBL_CANDIDATE: [candidate],
-            TBL_ONBOARDING: onboarding,
+            FAKE_TABLE_IDS["job_posting"]: [job],
+            FAKE_TABLE_IDS["candidate"]: [candidate],
+            FAKE_TABLE_IDS["onboarding"]: onboarding,
         }.get(table_id, [])
 
     async def create_record(
         table_id: str, _fields: dict[str, object]
     ) -> dict[str, object]:
-        if table_id == TBL_ONBOARDING:
+        if table_id == FAKE_TABLE_IDS["onboarding"]:
             return onboarding[0]
         return job
 
@@ -92,6 +100,7 @@ async def test_recruitment_repository_maps_and_filters_all_tables() -> None:
     repo = RecruitmentBitableRepo(app_token="app-token")
     repo._client = client
     repo._resolved_token = "app-token"
+    _stub_table_ids(repo)
 
     jobs, job_total = await repo.list_jobs(keyword="质量")
     assert job_total == 1
@@ -121,21 +130,12 @@ async def test_recruitment_repository_unconfigured_and_not_found_paths(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo = RecruitmentBitableRepo()
-    monkeypatch.setattr(
-        recruitment_repository,
-        "get_module_setting",
-        AsyncMock(return_value=""),
-    )
     # 凭证严格独立：_get_client 先解析人事专属凭证，这里隔离外部 DB 依赖
     monkeypatch.setattr(
         "app.modules.hr.feishu_settings_service.get_hr_feishu_app_credentials",
         AsyncMock(return_value=("cli_hr_test", "hr_secret_plain")),
     )
-    monkeypatch.setattr(
-        "app.core.config.get_settings",
-        lambda: type("Settings", (), {"FEISHU_BITABLE_APP_TOKEN": ""})(),
-    )
-    # 第三来源（HR飞书实体设置表）也需隔离：连到有真实配置的库时
+    # 唯一 token 来源（HR飞书实体设置表）也需隔离：连到有真实配置的库时
     # 不应让"未配置"路径误判为已配置
     monkeypatch.setattr(
         repo, "_read_token_from_entity_settings", AsyncMock(return_value="")

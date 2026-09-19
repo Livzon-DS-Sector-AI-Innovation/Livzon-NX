@@ -10,10 +10,7 @@ from app.core.database import get_db
 from app.core.response import success_response
 from app.modules.warehouse.ai_service import WarehouseAIService
 from app.modules.warehouse.feishu_material_pages import (
-    FEISHU_FINISHED_PRODUCT_APP_TOKEN,
-    FEISHU_HARDWARE_APP_TOKEN,
-    FEISHU_LIQUID_WAREHOUSE_APP_TOKEN,
-    FEISHU_WAREHOUSE_APP_TOKEN,
+    FEISHU_WAREHOUSE_MATERIAL_PAGES,
 )
 from app.modules.warehouse.inspection_progress import build_inspection_overview
 from app.modules.warehouse.inspection_progress_ai import run_inspection_ai_analysis
@@ -67,25 +64,44 @@ router = create_module_router(MODULES_BY_CODE["warehouse"])
 logger = logging.getLogger(__name__)
 
 
-# 页面所属 Base → 细分编辑权限码（按飞书部门映射的子领域）
-WAREHOUSE_EDIT_SCOPE_PERMISSION = {
-    FEISHU_WAREHOUSE_APP_TOKEN: "warehouse:raw:write",
+# 页面 → 细分编辑权限码（按飞书部门映射的子领域）。以稳定的 page_key 为键，
+# 页面换绑 Base/表后无需改动。
+_RAW_PAGE_KEYS = (
+    "raw-summary",
+    "raw-detail",
+    "raw-ledger",
+    "packaging-summary",
+    "packaging-detail",
+    "packaging-ledger",
+    "inbound-ledger",
+    "qualified-suppliers",
+    "material-name-code-map",
     # 液体入库页挂在原辅料及包材分组下，编辑权限与前端 warehouseScope.ts 的
     # raw scope 归类保持一致
-    FEISHU_LIQUID_WAREHOUSE_APP_TOKEN: "warehouse:raw:write",
-    FEISHU_FINISHED_PRODUCT_APP_TOKEN: "warehouse:product:write",
-    FEISHU_HARDWARE_APP_TOKEN: "warehouse:hardware:write",
+    "liquid-raw-inbound",
+    "liquid-sugar-inbound",
+)
+_PRODUCT_PAGE_KEYS = tuple(
+    key for key in FEISHU_WAREHOUSE_MATERIAL_PAGES if key.startswith("product-")
+)
+_HARDWARE_PAGE_KEYS = tuple(
+    key for key in FEISHU_WAREHOUSE_MATERIAL_PAGES if key.startswith("hardware-")
+)
+WAREHOUSE_EDIT_SCOPE_PERMISSION: dict[str, str] = {
+    **{key: "warehouse:raw:write" for key in _RAW_PAGE_KEYS},
+    **{key: "warehouse:product:write" for key in _PRODUCT_PAGE_KEYS},
+    **{key: "warehouse:hardware:write" for key in _HARDWARE_PAGE_KEYS},
 }
 
 
-def _assert_warehouse_edit_scope(app_token: str, permissions: list[str]) -> None:
-    """按页面所属 Base 校验细分编辑权限（纵深防御；中间件已放行模块级写）。
+def _assert_warehouse_edit_scope(page_key: str, permissions: list[str]) -> None:
+    """按页面所属子领域校验细分编辑权限（纵深防御；中间件已放行模块级写）。
 
     通过条件：通配（super_admin）/ 模块级 warehouse:write / 对应子领域细分码。
     """
     if "*" in permissions or "warehouse:write" in permissions:
         return
-    required = WAREHOUSE_EDIT_SCOPE_PERMISSION.get(app_token)
+    required = WAREHOUSE_EDIT_SCOPE_PERMISSION.get(page_key)
     if required and required in permissions:
         return
     raise HTTPException(
@@ -690,6 +706,27 @@ async def update_page_feishu_config(
 
 
 @router.get(
+    "/material-pages/{page_key}/form-links",
+    summary="台账页入库/出库登记表单链接",
+)
+async def get_material_page_form_links(
+    page_key: str,
+    service: WarehouseService = Depends(get_warehouse_service),
+) -> Any:
+    """返回该页面在仓储设置-页面映射中配置的表单链接；未配置为 null（前端隐藏按钮）。"""
+    assert_material_page(page_key)
+    return success_response(data=await service.get_page_form_links(page_key))
+
+
+@router.get("/home-quick-form-links", summary="仓储首页快捷表单卡链接")
+async def get_home_quick_form_links(
+    service: WarehouseService = Depends(get_warehouse_service),
+) -> Any:
+    """返回已配置表单链接的页面映射（page_key → 入库/出库链接），驱动首页快捷卡。"""
+    return success_response(data=await service.get_home_quick_form_links())
+
+
+@router.get(
     "/person-avatar-map",
     summary="人员姓名→飞书头像映射（人事-飞书联系人，在职）",
 )
@@ -807,8 +844,7 @@ async def update_material_page_record(
     assert_material_page(page_key)
     if current_page_key.get() is None:
         permissions = await resolve_user_permissions(db, current_user.id)
-        page_config = await service._get_material_page_config(page_key)
-        _assert_warehouse_edit_scope(page_config.app_token, permissions)
+        _assert_warehouse_edit_scope(page_key, permissions)
     scope = await resolve_user_department_scope(db, current_user)
     try:
         record = await service.update_material_page_record(
@@ -840,8 +876,7 @@ async def delete_material_page_record(
     assert_material_page(page_key)
     if current_page_key.get() is None:
         permissions = await resolve_user_permissions(db, current_user.id)
-        page_config = await service._get_material_page_config(page_key)
-        _assert_warehouse_edit_scope(page_config.app_token, permissions)
+        _assert_warehouse_edit_scope(page_key, permissions)
     scope = await resolve_user_department_scope(db, current_user)
     try:
         await service.delete_material_page_record(page_key, record_id, scope=scope)

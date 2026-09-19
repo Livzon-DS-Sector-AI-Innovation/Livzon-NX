@@ -78,6 +78,9 @@ describe('migrated app route coverage', () => {
       // These routes are client components rather than server data loaders;
       // their interaction coverage is provided by component tests.
       if (path.includes('/cpv/') || path.includes('/production/')) continue
+      // 仓储首页是带 hooks 的客户端页（快捷表单卡读页面映射配置），
+      // 直接调用页面函数会绕过 React 渲染；交互覆盖在组件测试里
+      if (path.match(/\/app\/\(dashboard\)\/warehouse\/page\.tsx$/)) continue
       const loadedModule = await load()
       const page = loadedModule.default
       if (typeof page !== 'function') continue

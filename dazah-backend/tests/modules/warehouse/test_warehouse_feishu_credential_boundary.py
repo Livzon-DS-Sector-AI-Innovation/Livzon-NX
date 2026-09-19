@@ -32,6 +32,12 @@ async def test_warehouse_ws_without_own_config_does_not_start(monkeypatch):
     monkeypatch.setattr(
         WarehouseRepository, "get_active_feishu_config", AsyncMock(return_value=None)
     )
+    # 页面绑定列表也来自 DB；无绑定行时订阅集合为空，同样不启动
+    monkeypatch.setattr(
+        WarehouseRepository,
+        "list_page_feishu_configs",
+        AsyncMock(return_value=[]),
+    )
     start = AsyncMock()
     monkeypatch.setattr(ws_client, "restart_ws_with_config", start)
     status = await ws_client.start_ws_from_db()

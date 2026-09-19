@@ -32,7 +32,6 @@ from app.modules.warehouse.feishu_fields import (
     is_view_only_field,
 )
 from app.modules.warehouse.feishu_material_pages import (
-    FEISHU_WAREHOUSE_BASE_NAMES,
     FEISHU_WAREHOUSE_MATERIAL_PAGES,
     FINISHED_INBOUND_DATE_FIELD,
     FINISHED_INBOUND_KG_FIELD,
@@ -514,10 +513,11 @@ class WarehouseService:
     async def _get_material_page_config(
         self, page_key: str
     ) -> FeishuWarehouseMaterialPage:
-        """解析页面数据源配置：数据库（warehouse_page_feishu_configs）优先，硬编码映射回退。
+        """解析页面数据源配置：只认 DB（warehouse_page_feishu_configs）。
 
-        设置页可修改数据库配置实现更换多维表格，无需改代码；
-        查询失败（表不存在等）时静默回退硬编码，保证页面可用。
+        设置页可修改数据库配置实现更换多维表格；DB 无该页配置时返回注册表
+        占位（app_token/table_id 为空，注册表不再携带任何环境标识符），
+        调用方须以 _page_binding_missing 判定未配置。
         """
         try:
             db_config = await self.repo.get_page_feishu_config(page_key)
@@ -534,6 +534,19 @@ class WarehouseService:
         if not page_config:
             raise HTTPException(status_code=404, detail="仓储飞书模板页不存在")
         return page_config
+
+    @staticmethod
+    def _page_binding_missing(page_config: FeishuWarehouseMaterialPage) -> bool:
+        """页面未在仓储设置页绑定 Base/表（注册表占位或 DB 行缺失字段）。"""
+        return not page_config.app_token or not page_config.table_id
+
+    async def is_material_page_bound(self, page_key: str) -> bool:
+        """页面是否已绑定飞书数据源（供定时任务静默跳过未绑定页面）。"""
+        try:
+            config = await self._get_material_page_config(page_key)
+        except HTTPException:
+            return False
+        return not self._page_binding_missing(config)
 
     async def _resolve_material_page_source(self, source: str | None) -> str:
         from app.shared.config_reader import get_module_setting
@@ -760,7 +773,8 @@ class WarehouseService:
         page_config = FEISHU_WAREHOUSE_MATERIAL_PAGES.get(page_key)
         if not page_config:
             return ""
-        return FEISHU_WAREHOUSE_BASE_NAMES.get(page_config.app_token, "")
+        # 注册表不再携带 Base 标识；未绑定时回退页面标题，避免展示空串
+        return page_config.title
 
     def _build_page_stats(
         self,
@@ -1334,6 +1348,11 @@ class WarehouseService:
         dict[str, str],
     ]:
         page_config = await self._get_material_page_config(page_key)
+        if self._page_binding_missing(page_config):
+            raise HTTPException(
+                status_code=400,
+                detail="仓储页面飞书数据源未配置，请先在仓储设置-页面映射中绑定表格",
+            )
         fields_response = await self.fetch_feishu_table_fields(
             app_token=page_config.app_token,
             table_id=page_config.table_id,
@@ -1366,6 +1385,11 @@ class WarehouseService:
         无日期字段（不在 _DATE_SORT_DESC_FIELDS）的表不支持增量，回退全量。
         """
         page_config = await self._get_material_page_config(page_key)
+        if self._page_binding_missing(page_config):
+            raise HTTPException(
+                status_code=400,
+                detail="仓储页面飞书数据源未配置，请先在仓储设置-页面映射中绑定表格",
+            )
         sort_field = _DATE_SORT_DESC_FIELDS.get(page_key)
         if not sort_field or not last_synced_at:
             return await self.fetch_material_page_from_feishu(page_key)
@@ -1577,6 +1601,24 @@ class WarehouseService:
         now = datetime.now(UTC)
         cached = self._page_cache.get(cache_key)
         page_config = await self._get_material_page_config(page_key)
+        if self._page_binding_missing(page_config):
+            # 数据源未绑定（如全新环境未配置）：降级返回本地快照空数据，保证页面可打开
+            return await self.get_local_material_page(
+                page_key,
+                page=page,
+                page_size=page_size,
+                keyword=keyword,
+                start_date=start_date,
+                end_date=end_date,
+                date_field=date_field,
+                product=product,
+                area=area,
+                quality_status=quality_status,
+                warning_status=warning_status,
+                material_category=material_category,
+                advanced_filters=advanced_filters,
+                scope=scope,
+            )
         columns: list[WarehouseFeishuColumn]
         normalized_rows: list[dict[str, object | None]]
         if (
@@ -1665,7 +1707,7 @@ class WarehouseService:
             page_size=page_size,
             last_sync_time=now,
             source="feishu_bitable",
-            base_name=FEISHU_WAREHOUSE_BASE_NAMES.get(page_config.app_token, ""),
+            base_name=page_config.title,
             stats=self._build_page_stats(page_key, filtered_rows),
         )
 
@@ -1676,6 +1718,11 @@ class WarehouseService:
         incremental: bool = True,
     ) -> WarehouseFeishuMaterialPageResponse:
         page_config = await self._get_material_page_config(page_key)
+        if self._page_binding_missing(page_config):
+            raise HTTPException(
+                status_code=400,
+                detail="仓储页面飞书数据源未配置，请先在仓储设置-页面映射中绑定表格",
+            )
         prev_snapshot = await self.repo.get_material_page_snapshot(page_key)
         last_synced_at = prev_snapshot.last_synced_at if prev_snapshot else None
 
@@ -1786,7 +1833,7 @@ class WarehouseService:
             page_size=50,
             last_sync_time=now,
             source="local_snapshot",
-            base_name=FEISHU_WAREHOUSE_BASE_NAMES.get(page_config.app_token, ""),
+            base_name=page_config.title,
             stats=self._build_page_stats(page_key, normalized_rows),
         )
 
@@ -3068,6 +3115,33 @@ class WarehouseService:
         """获取指定页面的飞书配置"""
         return await self.repo.get_page_feishu_config(page_key)
 
+    async def get_page_form_links(self, page_key: str) -> dict[str, str | None]:
+        """台账页入库/出库登记表单链接（仓储设置-页面映射维护；未配置为 None）。"""
+        try:
+            config = await self.repo.get_page_feishu_config(page_key)
+        except Exception:
+            config = None
+        return {
+            "inbound_form_url": (config or {}).get("feishu_inbound_form_url"),
+            "outbound_form_url": (config or {}).get("feishu_outbound_form_url"),
+        }
+
+    async def get_home_quick_form_links(self) -> dict[str, dict[str, str | None]]:
+        """首页快捷表单卡所需链接：page_key → 入库/出库表单链接（仅含已配置项）。"""
+        try:
+            configs = await self.repo.list_page_feishu_configs()
+        except Exception:
+            configs = []
+        return {
+            str(item.get("page_key")): {
+                "inbound_form_url": item.get("feishu_inbound_form_url"),
+                "outbound_form_url": item.get("feishu_outbound_form_url"),
+            }
+            for item in configs
+            if item.get("feishu_inbound_form_url")
+            or item.get("feishu_outbound_form_url")
+        }
+
     async def update_page_feishu_config(
         self, page_key: str, config: dict[str, Any]
     ) -> None:
@@ -3720,21 +3794,36 @@ class WarehouseService:
         update_time: int | None,
         actions: list[dict[str, str | None]],
     ) -> dict[str, str | bool | None]:
-        """Refresh the matching migrated material page after a WS event."""
+        """Refresh the matching migrated material page after a WS event.
 
-        for page_key, page_config in FEISHU_WAREHOUSE_MATERIAL_PAGES.items():
-            if page_config.table_id == table_id and page_config.app_token == file_token:
-                try:
-                    await self.sync_material_page_to_local(page_key)
-                except Exception:
-                    logger.exception("warehouse page WS refresh failed: %s", page_key)
-                    return {
-                        "matched": True,
-                        "status": "error",
-                        "error": "仓储页面同步失败，请稍后重试",
-                    }
-                return {"matched": True, "status": "synced", "table_kind": page_key}
-        return {"matched": False, "status": "ignored"}
+        页面匹配只认仓储设置页维护的 DB 绑定（warehouse_page_feishu_configs），
+        换 Base/表后新表事件照常命中，无需改代码。
+        """
+        matched_page_key: str | None = None
+        try:
+            configs = await self.repo.list_page_feishu_configs()
+        except Exception:
+            logger.exception("warehouse WS event match failed to load page configs")
+            return {"matched": False, "status": "ignored"}
+        for item in configs:
+            if (
+                item.get("table_id") == table_id
+                and item.get("app_token") == file_token
+            ):
+                matched_page_key = str(item.get("page_key") or "")
+                break
+        if not matched_page_key:
+            return {"matched": False, "status": "ignored"}
+        try:
+            await self.sync_material_page_to_local(matched_page_key)
+        except Exception:
+            logger.exception("warehouse page WS refresh failed: %s", matched_page_key)
+            return {
+                "matched": True,
+                "status": "error",
+                "error": "仓储页面同步失败，请稍后重试",
+            }
+        return {"matched": True, "status": "synced", "table_kind": matched_page_key}
 
     # ── Former warehouse settings/page-data/analysis contract ───────────
 

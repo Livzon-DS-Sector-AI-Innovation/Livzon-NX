@@ -5,7 +5,7 @@ import logging
 from typing import Any, cast
 
 from app.core.llm import LLMOutputError, LLMProviderError, LLMRateLimitError, llm_client
-from app.modules.hr.recruitment_repository import TBL_CANDIDATE, RecruitmentBitableRepo
+from app.modules.hr.recruitment_repository import RecruitmentBitableRepo
 
 logger = logging.getLogger(__name__)
 
@@ -713,9 +713,10 @@ max-width: 600px; margin: 0 auto;">
                 bitable = await self.repo._get_client()
                 if bitable is None:
                     raise RuntimeError("飞书招聘数据源未配置")
+                candidate_table = await self.repo._table_id("candidate")
                 resp = await bitable.client.request(
                     "GET",
-                    bitable._path(TBL_CANDIDATE, f"/records/{cid}"),
+                    bitable._path(candidate_table, f"/records/{cid}"),
                 )
                 raw = resp.get("record", {})
                 fields_data = raw.get("fields", {})

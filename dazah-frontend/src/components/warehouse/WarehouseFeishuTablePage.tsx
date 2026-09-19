@@ -17,6 +17,7 @@ import {
   Modal,
   Popconfirm,
   Select,
+  Skeleton,
   Space,
   Spin,
   Statistic,
@@ -49,6 +50,7 @@ import { useAuthStore } from '@/stores/auth'
 import { getPageKeyByPath } from '@/lib/menu-config'
 import {
   fetchWarehouseMaterialPage,
+  fetchWarehousePageFormLinks,
   fetchWarehousePersonAvatarMap,
   fetchWarehouseRecordDetail,
 } from '@/lib/api/client/warehouse'
@@ -344,67 +346,45 @@ const NOWRAP_COLUMNS_PER_PAGE: Partial<Record<string, string[]>> = {
   'product-inbound-detail': ['入库日期'],
 }
 
-// 出入库登记入口：仅语义对应的台账页面显示，新窗口打开飞书表单填写（飞书写入后系统刷新可见）。
-// outboundLabel/inboundLabel 可定制按钮文案（如发货情况「新增发货」、入库明细「新增」），
-// 缺省分别回落「出库登记」「入库登记」。
-const WAREHOUSE_INOUT_LINKS: Record<
+// 出入库登记入口：链接来自仓储设置-页面映射维护的表单链接（DB 配置），
+// 未配置表单的按钮自动隐藏，不再写死飞书表单 ID。
+// inboundLabel/outboundLabel 可定制按钮文案（如发货情况「新增发货」、入库明细「新增」），
+// 缺省分别回落「入库登记」「出库登记」。
+const WAREHOUSE_INOUT_LABELS: Record<
   string,
-  { inbound?: string; outbound?: string; outboundLabel?: string; inboundLabel?: string }
+  { inboundLabel?: string; outboundLabel?: string }
 > = {
-  // 入库总账（原辅料/包材共用）→ 原辅料入库表单（2026-09 换新 Base 表单）
-  'inbound-ledger': {
-    inbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnLl9xrz5e60vRG4P8Cy85FC',
-  },
-  // 原辅料出库总账 → 原辅料入库 + 出库表单
-  'raw-ledger': {
-    inbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnLl9xrz5e60vRG4P8Cy85FC',
-    outbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnsJ8U9aoOqqEBS5b1mpG2Zd',
-  },
-  // 包材出库总账 → 包材出库表单
-  'packaging-ledger': {
-    outbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnOZBGw46qWth2auB1F09kNd',
-  },
-  // 液体原辅料入库 → 液体原辅料入库表单
-  'liquid-raw-inbound': {
-    inbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnfWaTJinJrjFh0hcqvYG0De',
-  },
-  // 液糖入库 → 液糖入库表单
-  'liquid-sugar-inbound': {
-    inbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnPdocHXYzag4Uyj0biU9bYc',
-  },
-  // 成品入库明细 → 成品入库表单（按钮「新增」）
-  'product-inbound-detail': {
-    inbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnDSOkJ2pyfcd3azP25WHJ9f',
-    inboundLabel: '新增',
-  },
-  // 成品入库总账 → 成品入库表单
-  'product-inbound-ledger': {
-    inbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnDSOkJ2pyfcd3azP25WHJ9f',
-  },
-  // 成品发货情况 → 新增发货表单（按钮「新增发货」）
-  'product-shipping': {
-    outbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnUrGx4FJwY9zEDAR8NLkWDL',
-    outboundLabel: '新增发货',
-  },
-  // 成品出库台账 → 成品出库表单（按钮「出库登记」）
-  'product-outbound-ledger': {
-    outbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnnZl0PPBDqISGj02c9h2JBh',
-  },
+  // 成品入库明细 → 按钮「新增」
+  'product-inbound-detail': { inboundLabel: '新增' },
+  // 成品发货情况 → 按钮「新增发货」
+  'product-shipping': { outboundLabel: '新增发货' },
 }
 
-// 基础数据表页面：不展示统计仪表卡片
-const NO_STAT_CARD_PAGE_KEYS = new Set(['qualified-suppliers', 'material-name-code-map'])
-
 export function resolveInoutLinks(
-  pageKey: string
+  links?: {
+    inbound_form_url?: string | null
+    outbound_form_url?: string | null
+  } | null
 ): {
   inbound?: string
   outbound?: string
   outboundLabel?: string
   inboundLabel?: string
 } | null {
-  return WAREHOUSE_INOUT_LINKS[pageKey] ?? null
+  if (!links) return null
+  const result: {
+    inbound?: string
+    outbound?: string
+    outboundLabel?: string
+    inboundLabel?: string
+  } = {}
+  if (links.inbound_form_url) result.inbound = links.inbound_form_url
+  if (links.outbound_form_url) result.outbound = links.outbound_form_url
+  return result.inbound || result.outbound ? result : null
 }
+
+// 基础数据表页面：不展示统计仪表卡片
+const NO_STAT_CARD_PAGE_KEYS = new Set(['qualified-suppliers', 'material-name-code-map'])
 
 const ADVANCED_OPERATOR_OPTIONS: Array<{ label: string; value: WarehouseAdvancedFilter['operator'] }> = [
   { label: '包含', value: 'contains' },
@@ -1093,11 +1073,17 @@ export function WarehouseFeishuTablePage({
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
+  // 登录态由 AppShell 在客户端挂载后写入 store：SSR 与客户端首帧统一渲染骨架，
+  // 避免"无权限警告 ↔ 数据内容"的服务端/客户端首帧不一致（hydration mismatch）
+  const [isMounted, setIsMounted] = useState(false)
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
   const currentKeyword = searchParams.get('keyword') ?? ''
   const resolvedPageKey = pageKey ?? data.page_key
   const { hasPagePermission } = useAuthStore()
   const permissionPageKey = getPageKeyByPath(pathname) ?? ''
-  const canQueryThisPage = hasPagePermission(permissionPageKey, 'query')
+  const canQueryThisPage = isMounted && hasPagePermission(permissionPageKey, 'query')
   // 编辑权限：本页面所属子领域（成品/五金/原辅料及包材）细分码或模块级 write；
   // 由后台部门角色映射决定，无权限时隐藏写按钮（后端端点校验为最终边界）
   const canEditThisPage = hasPagePermission(permissionPageKey, 'operate')
@@ -1838,8 +1824,17 @@ export function WarehouseFeishuTablePage({
     [localData.columns]
   )
 
-  // 出入库登记链接（按页面前缀映射飞书视图）
-  const inoutLinks = useMemo(() => resolveInoutLinks(resolvedPageKey), [resolvedPageKey])
+  // 出入库登记链接：来自仓储设置-页面映射维护的表单链接（DB 配置）
+  const { data: pageFormLinks } = useQuery({
+    queryKey: ['warehouse-page-form-links', resolvedPageKey],
+    queryFn: () => fetchWarehousePageFormLinks(resolvedPageKey),
+  })
+  const inoutLinks = useMemo(() => {
+    const links = resolveInoutLinks(pageFormLinks)
+    if (!links) return null
+    const labels = WAREHOUSE_INOUT_LABELS[resolvedPageKey]
+    return labels ? { ...links, ...labels } : links
+  }, [pageFormLinks, resolvedPageKey])
 
   // 本地快照新鲜度：15 分钟内同步过视为新鲜（增量同步每 10 分钟一轮）
   const [snapshotNow, setSnapshotNow] = useState(() => Date.now())
@@ -1906,6 +1901,14 @@ export function WarehouseFeishuTablePage({
     nextParams.set('page', String(pagination.current ?? 1))
     nextParams.set('page_size', String(pagination.pageSize ?? localData.page_size ?? 50))
     pushWithParams(nextParams)
+  }
+
+  if (!isMounted) {
+    return (
+      <Card variant="borderless">
+        <Skeleton active title paragraph={{ rows: 6 }} />
+      </Card>
+    )
   }
 
   if (!canQueryThisPage) {

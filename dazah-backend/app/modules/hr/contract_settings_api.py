@@ -605,14 +605,13 @@ async def _auto_offboard(
         )
         await svc.create_record(data)
 
-    # 3. 删除飞书员工档案多维表格记录（失败不影响本地）
+    # 3. 删除飞书员工档案多维表格记录（失败不影响本地；绑定/凭证缺失时跳过）
     try:
-        from app.modules.hr.feishu.bitable import FeishuBitableSync
-        from app.modules.hr.feishu_settings_service import get_hr_feishu_app_credentials
+        from app.modules.hr.service import _resolve_feishu_sync_session
 
-        app_id, app_secret = await get_hr_feishu_app_credentials(db)
-        sync = FeishuBitableSync(app_id=app_id or None, app_secret=app_secret or None)
-        await sync.sync_employee_deleted(emp_no)
+        sync = await _resolve_feishu_sync_session(db)
+        if sync:
+            await sync.sync_employee_deleted(emp_no)
     except Exception:
         logger.exception("[AutoOffboard] 删除飞书员工档案失败: %s", emp_no)
 

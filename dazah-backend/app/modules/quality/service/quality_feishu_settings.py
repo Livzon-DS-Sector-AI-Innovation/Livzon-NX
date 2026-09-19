@@ -70,24 +70,16 @@ def _raise_feishu_metadata_error(action: str, exc: Exception) -> None:
 
 
 # 偏差报告新建表单链接（飞书多维表格表单）
-DEVIATION_REPORT_FORM_URL = (
-    "https://j0eukrlohu.feishu.cn/share/base/form/shrcnPO2JJt1gEVoMWHXtPUxske"
-)
+DEVIATION_REPORT_FORM_URL = ""
 
 # 偏差调查推送新建表单链接（飞书多维表格表单）
-DEVIATION_INVESTIGATION_PUSH_FORM_URL = (
-    "https://j0eukrlohu.feishu.cn/share/base/form/shrcnzeKBo8EJze3h00kpsbxRVo"
-)
+DEVIATION_INVESTIGATION_PUSH_FORM_URL = ""
 
 # OOSOOT报告新建表单链接（飞书多维表格表单）
-OOS_OOT_REPORT_FORM_URL = (
-    "https://j0eukrlohu.feishu.cn/share/base/form/shrcnQrwet0LSPEL2RLFuGaLvub"
-)
+OOS_OOT_REPORT_FORM_URL = ""
 
 # OOSOOT调查推送新建表单链接（飞书多维表格表单）
-OOS_OOT_INVESTIGATION_PUSH_FORM_URL = (
-    "https://j0eukrlohu.feishu.cn/share/base/form/shrcnBFO62RSpL99u5sCLF9UCLf"
-)
+OOS_OOT_INVESTIGATION_PUSH_FORM_URL = ""
 
 # Base/table identifiers are deployment data, not source-code defaults. Keep
 # existing database values intact and require new deployments to configure
@@ -319,62 +311,41 @@ QUALITY_FEISHU_ENTITY_ENV_PREFILLS: dict[str, dict[str, str]] = {
         "table_name": "变更计划",
     },
     "validation_master_plan": {
-        "app_token": "FTbkbpgNUa9jUCsjK8ac1A4Wn7f",
-        "table_id": "tbl3lBei5Sv8wBVV",
         "table_name": "2026年验证台账",
         "source_note": "验证与确认统一绑定验证主计划 Base；总表默认读写当前年度台账。",
     },
     # 验证主计划年度台账：2024/2025/2026 已固定绑定到"验证主计划"Base 的对应年度表；
     # 其余年份用户在同步设置中绑定或由平台按年度展示为 0。
     "validation_master_plan_2024": {
-        "app_token": "FTbkbpgNUa9jUCsjK8ac1A4Wn7f",
-        "table_id": "tbl1HxgOWu3zujVE",
         "table_name": "2024年验证台账",
-        "form_url": "https://j0eukrlohu.feishu.cn/share/base/form/shrcnQEeBbkDhG8CrvmW5urZ8vd",
         "source_note": "验证主计划年度台账（2024）；新增记录走飞书多维表单。",
     },
     "validation_master_plan_2025": {
-        "app_token": "FTbkbpgNUa9jUCsjK8ac1A4Wn7f",
-        "table_id": "tbloihomWEAXrZPX",
         "table_name": "2025年验证台账",
-        "form_url": "https://j0eukrlohu.feishu.cn/share/base/form/shrcnrXPjhpZb40QhpQnUqgodHc",
         "source_note": "验证主计划年度台账（2025）；新增记录走飞书多维表单。",
     },
     "validation_master_plan_2026": {
-        "app_token": "FTbkbpgNUa9jUCsjK8ac1A4Wn7f",
-        "table_id": "tbl3lBei5Sv8wBVV",
         "table_name": "2026年验证台账",
-        "form_url": "https://j0eukrlohu.feishu.cn/share/base/form/shrcnw2P5gEnFsiwKGpR8TuJ1Nh",
         "source_note": "验证主计划年度台账（2026）；新增记录走飞书多维表单。",
     },
     "validation_equipment_qualification": {
-        "app_token": "FTbkbpgNUa9jUCsjK8ac1A4Wn7f",
-        "table_id": "tbl3lBei5Sv8wBVV",
         "table_name": "2026年验证台账",
         "source_note": "验证与确认统一绑定验证主计划 Base，按验证类别截取到不同模块。",
     },
     "validation_process": {
-        "app_token": "FTbkbpgNUa9jUCsjK8ac1A4Wn7f",
-        "table_id": "tbl3lBei5Sv8wBVV",
         "table_name": "2026年验证台账",
         "source_note": "验证与确认统一绑定验证主计划 Base，按验证类别截取到不同模块。",
     },
     "validation_cleaning": {
-        "app_token": "FTbkbpgNUa9jUCsjK8ac1A4Wn7f",
-        "table_id": "tbl3lBei5Sv8wBVV",
         "table_name": "2026年验证台账",
         "source_note": "验证与确认统一绑定验证主计划 Base，按验证类别截取到不同模块。",
     },
     "validation_other": {
-        "app_token": "FTbkbpgNUa9jUCsjK8ac1A4Wn7f",
-        "table_id": "tbl3lBei5Sv8wBVV",
         "table_name": "2026年验证台账",
         "source_note": "验证与确认统一绑定验证主计划 Base，按验证类别截取到不同模块。",
     },
     # QC验证 2026 年表固定绑定专用 Base；其余年份由用户在同步设置中自行绑定
     "validation_qc_2026": {
-        "app_token": "GMFmbYxSlaVv16szQHHc51Dwn4d",
-        "table_id": "tbl39A8QUDCrC1TJ",
         "table_name": "2026年",
         "source_note": (
             "QC验证按年分表，2026 年已固定绑定飞书源表；其余年份请在同步设置中配置。"
@@ -382,8 +353,6 @@ QUALITY_FEISHU_ENTITY_ENV_PREFILLS: dict[str, dict[str, str]] = {
     },
     # 成品异常报告 2025/2026 年表固定绑定专用 Base；其余年份由用户在同步设置中自行绑定
     "finished_product_anomaly_2025": {
-        "app_token": "NIEJbSxyIaHBp4shIPjcpVS2nZe",
-        "table_id": "tblivbUvnYDjATiL",
         "table_name": "2025年",
         "source_note": (
             "成品异常报告按年分表，2025 年已固定绑定飞书源表；"
@@ -391,8 +360,6 @@ QUALITY_FEISHU_ENTITY_ENV_PREFILLS: dict[str, dict[str, str]] = {
         ),
     },
     "finished_product_anomaly_2026": {
-        "app_token": "NIEJbSxyIaHBp4shIPjcpVS2nZe",
-        "table_id": "tblYanzll8A5rGro",
         "table_name": "2026年",
         "source_note": (
             "成品异常报告按年分表，2026 年已固定绑定飞书源表；"
@@ -443,8 +410,6 @@ QUALITY_FEISHU_ENTITY_ENV_PREFILLS: dict[str, dict[str, str]] = {
     },
     # 供应商管理（固定 Base 配置）
     "supplier_qualification": {
-        "app_token": "Mbi5bHLMnaahEJs8gizcR2CNnTc",
-        "table_id": "tbly4nZgfCYWQOVk",
         "table_name": "供应商资质",
     },
     # 产品质量客户标准（共用一个 App Token，各产品独立子表）
@@ -486,441 +451,267 @@ QUALITY_FEISHU_ENTITY_ENV_PREFILLS: dict[str, dict[str, str]] = {
     **MATERIAL_ENTITY_PREFILLS,
     # 物品管理（固定 Base 配置）
     "qc_items_inventory": {
-        "app_token": "EXeQbY7ezasdVfsq6dTc09Q1ngl",
-        "table_id": "tblj4lvynAQ4QoW3",
         "table_name": "关键物资库存",
     },
     "qc_items_inbound": {
-        "app_token": "EXeQbY7ezasdVfsq6dTc09Q1ngl",
-        "table_id": "tblRLbBXURRS1usI",
         "table_name": "关键物资入库明细",
-        "form_url": "https://j0eukrlohu.feishu.cn/share/base/form/shrcny4YSzF7Dojc7225te6UmYb",
     },
     "qc_items_outbound": {
-        "app_token": "EXeQbY7ezasdVfsq6dTc09Q1ngl",
-        "table_id": "tbl7OK2j8Y8IVvk9",
         "table_name": "关键物资领用明细",
-        "form_url": "https://j0eukrlohu.feishu.cn/share/base/form/shrcnzxLM8wD8gVXESsVN3M4amh",
     },
     # 仪器管理（固定 Base 配置）
     # Base 一：设备全生命周期管理系统（设备台账 + 维保 + 周期表）
     "qc_instr_equipment": {
-        "app_token": "Cencb8KRja1vL8s7DLqcXiQtnMf",
-        "table_id": "tblIKMhgGxdLNoow",
         "table_name": "设备数据管理",
     },
     "qc_instr_maintenance": {
-        "app_token": "Cencb8KRja1vL8s7DLqcXiQtnMf",
-        "table_id": "tblTw5RseafXYYdK",
         "table_name": "设备维护保养记录",
     },
     "qc_instr_repair": {
-        "app_token": "Cencb8KRja1vL8s7DLqcXiQtnMf",
-        "table_id": "tblhiX6LUYC1uxTl",
         "table_name": "设备维修记录",
         # 新增记录走飞书共享表单（可在质量设置-飞书设置中更换）
-        "form_url": "https://j0eukrlohu.feishu.cn/share/base/form/shrcnexQSNoIwPZ8LPOL6nuKOF0",
     },
     "qc_instr_contracts": {
-        "app_token": "Cencb8KRja1vL8s7DLqcXiQtnMf",
-        "table_id": "tblpyvFJI0tBZBhz",
         "table_name": "设备维保合同",
         # 新增记录走飞书共享表单（可在质量设置-飞书设置中更换）
-        "form_url": "https://j0eukrlohu.feishu.cn/share/base/form/shrcnrm7ld6TLNwaoPuAWP36Z42",
     },
     "qc_instr_plans": {
-        "app_token": "Cencb8KRja1vL8s7DLqcXiQtnMf",
-        "table_id": "tblaLERnzZEp7JcL",
         "table_name": "QC检测仪器维护保养周期表",
     },
     # Base 二：QC 年度内部校验计划（内校 / 内部计划 / 外部校准检定）
     "qc_instr_calibration": {
-        "app_token": "Vyn1bfLOwaUG15sWXGMcwy5Gnah",
-        "table_id": "tblRELoVEYKJ6fHB",
         "table_name": "内校汇总",
     },
     "qc_instr_cal_plan": {
-        "app_token": "Vyn1bfLOwaUG15sWXGMcwy5Gnah",
-        "table_id": "tblcztwNpMGXLQ8j",
         "table_name": "内部校验计划",
     },
     "qc_instr_cal_external": {
-        "app_token": "Vyn1bfLOwaUG15sWXGMcwy5Gnah",
-        "table_id": "tblvF1h7klsT2TuP",
         "table_name": "外部校准、检定",
     },
     # Base 三：QC 计量器具台账目录（数据频繁变化，证书识别时实时反查，
     # 不进镜像定时同步；换表可在质量设置-飞书设置改绑）
     "qc_instr_device_directory": {
-        "app_token": "PhuqbjfxeaLvmxs2VvjcxwYUnDg",
-        "table_id": "tbl3Lar2iH7u8afN",
         "table_name": "QC",
     },
     # 成品检验（固定 Base 配置 - 所有成品检验子表共用同一 Base）
     "qc_finished_internal": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblqBNTcL5sAmWPB",
         "table_name": "霉酚酸（内控）",
     },
     "qc_finished_high_spec": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblWOnPe70lCMBE6",
         "table_name": "霉酚酸（高规）",
     },
     "qc_finished_mvt": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblNNSJrS63BvXjS",
         "table_name": "美伐他汀（DMF）",
     },
     "qc_finished_lft_ep": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblggX48LPZ0Necu",
         "table_name": "洛伐他汀（EP）",
     },
     "qc_finished_lft_usp": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblzH3FCoIacWbfS",
         "table_name": "洛伐他汀（USP）",
     },
     "qc_finished_dor_gb": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tbllcsvK8NSDOFhW",
         "table_name": "多拉菌素（GB）",
     },
     "qc_finished_dor_vet": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblHu5WFFaF8rH0d",
         "table_name": "多拉菌素（兽药）",
     },
     "qc_finished_fcc14": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tbl6o4MKGzhQ24Ih",
         "table_name": "FCC14",
     },
     "qc_finished_usp": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tbl6kEnRNGIMcypl",
         "table_name": "USP",
     },
     "qc_finished_trp_granule": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tbleN43GUDiAcXNT",
         "table_name": "色氨酸颗粒",
     },
     "qc_finished_trp_powder": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblKvwJRXD7u7GKC",
         "table_name": "色氨酸粉末",
     },
     "qc_finished_flu_powder": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblLYvJk3vTTreSp",
         "table_name": "2%氟苯尼考预混剂",
     },
     "qc_finished_fen_powder": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblOnW5HzHsZQJJ8",
         "table_name": "5%芬苯达唑粉",
     },
     "qc_finished_pure_water": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblf3dpM2mMrj8uF",
         "table_name": "纯化水",
     },
     "qc_finished_lkms_vet": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblCbhBiv7b4rnoE",
         "table_name": "林可霉素（兽药）",
     },
     "qc_finished_crude": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblEABQ3HfrehXFS",
         "table_name": "霉酚酸（粗品）",
     },
     "qc_finished_bbas_hanguang_k1": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblJewMM317AsHXQ",
         "table_name": "汉光（K1）",
     },
     "qc_finished_bbas_weiduo_k2": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tbltfBKzUdKTqZnP",
         "table_name": "维多（K2）",
     },
     "qc_finished_bbas_changmao_k3": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblNLiH5w5vaUWpx",
         "table_name": "常茂（K3）",
     },
     "qc_finished_bbas_jinghai_k4": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblCnqiYEJjUlLd6",
         "table_name": "晶海（k4）",
     },
     "qc_finished_bbas_xiehe_k5": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblGGINN48sf6mav",
         "table_name": "协和（K5）",
     },
     "qc_finished_bbas_hongshan_k10": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblXTmzGmuvyelYH",
         "table_name": "红衫（K10）未做",
     },
     "qc_finished_bbas_bafeng_k11": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblKZ4fMBKSUREDD",
         "table_name": "八峰（k11）",
     },
     "qc_finished_bbas_haitian_k12": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblG2ra9gXW49sdA",
         "table_name": "海天（k12）",
     },
     "qc_finished_bbas_feed_q": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblXYF4OvY97V8x9",
         "table_name": "饲料（Q）",
     },
     "qc_finished_mvt_bt_k1": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblGeVGGlijwetNQ",
         "table_name": "BT-K1",
     },
     "qc_finished_mvt_tw_k2": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblLbisE6ovk6LOh",
         "table_name": "TW-K2",
     },
     "qc_finished_mvt_zh_k3": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblqMuCsPr3vSUuN",
         "table_name": "ZH-K3（未做）",
     },
     "qc_finished_mvt_tapi_k5": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblmR9BiIZMLRYBV",
         "table_name": "TAPI-K5",
     },
     "qc_finished_lft_lp_k3": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblB5Yb7ncGkuB93",
         "table_name": "LP-K3",
     },
     "qc_finished_lft_tapi_k4": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tbl2DSG2rwgZFHOT",
         "table_name": "TAPI-K4",
     },
     "qc_finished_lft_gn_k6": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblDZ7EP9r4t2nlU",
         "table_name": "GN-K6",
     },
     "qc_finished_lft_jingxin_k7": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblPhpC87mdwRCCB",
         "table_name": "京新-K7",
     },
     "qc_finished_lft_jb_k9": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblaf2D8RQ8ED6eQ",
         "table_name": "JB-K9",
     },
     "qc_finished_lft_jinbao_k10": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tbld4qecyx8MWrR3",
         "table_name": "金宝-K10",
     },
     "qc_finished_lft_lp_crude_k11": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblxo9BVuSaoBWxj",
         "table_name": "LP粗品-K11",
     },
     "qc_finished_dls_norbrook_k2": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblDRqQ67E223d1Z",
         "table_name": "Norbrook-K2",
     },
     "qc_finished_dls_zenex_k10": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblZsdO0KKJyvGRF",
         "table_name": "Zenex-K10",
     },
     "qc_finished_dls_microsules_k6": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblOBYBPWhHmDHVX",
         "table_name": "Microsules-K6",
     },
     "qc_finished_dls_elanco_kr_k11": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblPe3Us5bpE47sL",
         "table_name": "Elanco韩国-K11",
     },
     "qc_finished_dls_adwia_k12": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblTr49wDPWx6eOp",
         "table_name": "ADWIA-K12",
     },
     "qc_finished_dls_qilu_k13": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblhP1wmbqKEjcc5",
         "table_name": "齐鲁动保-K13",
     },
     "qc_finished_dls_eurofarwa_k14": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblJ7DNBED84r0gi",
         "table_name": "EUROFARWA-K14",
     },
     "qc_finished_dls_msd_k15": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblx9N4ajDyy77xc",
         "table_name": "MSD-K15",
     },
     "qc_finished_dls_haoze_k16": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblZcldAaXyAdt5O",
         "table_name": "昊泽-K16",
     },
     "qc_finished_dls_vetni_k17": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblqobizVPPvBbzH",
         "table_name": "Vetni-K17",
     },
     "qc_finished_dls_eva_k18": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tbl7LaJcKiuW5xZd",
         "table_name": "EVA-K18",
     },
     "qc_finished_dls_cronus_k19": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tbldJRt0AFquanUF",
         "table_name": "Cronus-K19",
     },
     "qc_finished_mpa_tapi_k1": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblWpBWVe1ZSdzz8",
         "table_name": "TAPI-K1",
     },
     "qc_finished_mpa_emcure_k2": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblt5MyX6f7LoGgF",
         "table_name": "Emcure-K2",
     },
     "qc_finished_mpa_rakshit_k3": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblL9tpwDDslFWy9",
         "table_name": "RAKSHIT-K3",
     },
     "qc_finished_mpa_apotex_k4": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblFSzbw5UeQlb3w",
         "table_name": "APOTEX-K4",
     },
     "qc_finished_mpa_sloara_k6": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblDeg3cfkx6eJ8b",
         "table_name": "Sloara-K6",
     },
     "qc_finished_mpa_concord_k7": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblSFULKsqlmQxYo",
         "table_name": "Concord-K7",
     },
     "qc_finished_mpa_concord_high_spec_k11": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblOfXVUreGJxcuT",
         "table_name": "Concord高规-K11",
     },
     "qc_finished_mpa_taiwan_china_k12": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tbl1Q65Nvoc2XfdT",
         "table_name": "台湾中化-K12",
     },
     "qc_finished_mpa_biocon_k13": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tbl3pUrikw8xVSbe",
         "table_name": "Biocon-K13",
     },
     "qc_finished_mpa_fis_k15": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblsty5ITrQabct4",
         "table_name": "FIS-K15",
     },
     "qc_finished_mpa_dasami_k14": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tbleknNYxaBebkd7",
         "table_name": "Dasami-K14",
     },
     "qc_finished_mpa_intas_k16": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblD7J1XE264ptwF",
         "table_name": "Intas-K16",
     },
     "qc_finished_lkms_internal": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tbl3IzD32icgXFcU",
         "table_name": "林可霉素内控-未做",
     },
     "qc_finished_lkms_usp": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblXXONRRbdALt33",
         "table_name": "林可霉素USP",
     },
     "qc_finished_lkms_k1": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tbl6NLbSm53lCly6",
         "table_name": "林可霉素K1",
     },
     "qc_finished_lkms_k2": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tbl4Agh3BDniZAg6",
         "table_name": "林可霉素K2",
     },
     "qc_finished_lkms_k3": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tbldK93NpTU8CWk5",
         "table_name": "林可霉素 K3",
     },
     "qc_finished_boiler_water": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblOXTsCsaH7aNeu",
         "table_name": "锅炉水",
     },
     "qc_finished_lkms_ep": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblSxeQEFOhfA2y4",
         "table_name": "林可霉素（EP）",
     },
     "qc_finished_bbas_weizhisu_k6": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tbl0ZJQ3gmFama1x",
         "table_name": "味之素（k6）",
     },
     "qc_finished_pf": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblTqwQqRq9PjVYU",
         "table_name": "PF",
     },
     "qc_finished_drink_water": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblTj8TPewzMGrHY",
         "table_name": "饮用水",
     },
     # 补充缺失 token 的实体
     "qc_finished_bbas_jiuling_k7": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblT42rhDtE73HPB",
         "table_name": "久凌（K7）",
     },
     "qc_finished_bbas_jirong_k8": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tblb4jP6cV6QqotV",
         "table_name": "冀荣（k8）",
     },
     "qc_finished_bbas_yuanda_k9": {
-        "app_token": "AF0aboP2ka2YmystEDLchTCHnQb",
-        "table_id": "tbl9pHECCnCN4UbT",
         "table_name": "远大（K9）",
     },
 }

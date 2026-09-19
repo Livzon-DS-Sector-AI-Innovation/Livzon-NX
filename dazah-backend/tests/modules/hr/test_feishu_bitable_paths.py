@@ -107,32 +107,24 @@ async def test_bitable_client_configuration_and_sync_branches() -> None:
     sync = bitable.FeishuBitableSync.__new__(bitable.FeishuBitableSync)
     sync.bitable = SimpleNamespace(
         app_token="app",
-        create_record=AsyncMock(return_value={"record_id": "d1"}),
-        update_record=AsyncMock(),
         delete_record=AsyncMock(),
         search_records=AsyncMock(return_value=[{"record_id": "found"}]),
     )
     sync.employee_table = "employee"
-    sync.department_table = "department"
-    assert sync._is_enabled()
-    assert await sync._find_department_record("QA") == "found"
-    assert await sync._find_department_record(None) is None
     assert await sync._find_employee_record("E1") == "found"
-    await sync.sync_department_created({"name": "质量部", "code": "QA"})
-    await sync.sync_department_updated(
-        {"name": "质量部", "code": "QA", "_feishu_record_id": "d1"}
-    )
-    await sync.sync_department_deleted("QA")
+    assert await sync._find_employee_record(None) is None
     await sync.sync_employee_deleted("E1")
-    assert sync.bitable.create_record.await_count == 1
-    assert sync.bitable.update_record.await_count == 1
-    assert sync.bitable.delete_record.await_count == 2
+    assert sync.bitable.delete_record.await_count == 1
 
+    # 部门台账镜像推送已下线：FeishuBitableSync 不再提供 department 方法
+    assert not hasattr(bitable.FeishuBitableSync, "sync_department_created")
+    assert not hasattr(bitable.FeishuBitableSync, "sync_department_updated")
+    assert not hasattr(bitable.FeishuBitableSync, "sync_department_deleted")
+
+    # 绑定缺失（空 token）时静默跳过删除联动
     disabled = bitable.FeishuBitableSync.__new__(bitable.FeishuBitableSync)
     disabled.bitable = SimpleNamespace(app_token="")
-    disabled.employee_table = ""
-    disabled.department_table = ""
-    await disabled.sync_department_created({})
-    await disabled.sync_department_updated({})
-    await disabled.sync_department_deleted("QA")
+    disabled.employee_table = "employee"
+    disabled.bitable.delete_record = AsyncMock()
     await disabled.sync_employee_deleted("E1")
+    assert disabled.bitable.delete_record.await_count == 0

@@ -62,6 +62,9 @@ async def _run_warehouse_sync() -> None:
             service = WarehouseService(session)
             for page_key in FEISHU_WAREHOUSE_MATERIAL_PAGES:
                 try:
+                    # 未绑定数据源的页面（如全新环境）静默跳过，不刷错误日志
+                    if not await service.is_material_page_bound(page_key):
+                        continue
                     await service.sync_material_page_to_local(
                         page_key, incremental=True
                     )
@@ -104,6 +107,9 @@ async def _run_warehouse_full_sync() -> None:
             try:
                 async with async_session_factory() as session:
                     service = WarehouseService(session)
+                    # 未绑定数据源的页面静默跳过（不计入失败）
+                    if not await service.is_material_page_bound(page_key):
+                        continue
                     await service.sync_material_page_to_local(
                         page_key, incremental=False
                     )

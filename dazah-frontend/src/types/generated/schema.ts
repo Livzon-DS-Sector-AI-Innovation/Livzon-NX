@@ -5674,6 +5674,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/hr/onboarding-records/form-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 老厂入职台账新增表单链接
+         * @description 返回人事-飞书设置中配置的入职信息表公开表单链接；未配置为空（前端隐藏入口）。
+         */
+        get: operations["get_onboarding_form_url_api_v1_hr_onboarding_records_form_url_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/hr/onboarding-records/sync-from-feishu": {
         parameters: {
             query?: never;
@@ -57783,6 +57803,8 @@ export interface components {
              * @default true
              */
             enable_push_to_feishu: boolean;
+            /** Feishu Form Url */
+            feishu_form_url?: string | null;
             /** Field Mappings */
             field_mappings?: components["schemas"]["HrFeishuFieldMappingItem"][] | null;
             /**
@@ -60165,6 +60187,10 @@ export interface components {
         WarehousePageFeishuConfig: {
             /** App Token */
             app_token: string;
+            /** Feishu Inbound Form Url */
+            feishu_inbound_form_url?: string | null;
+            /** Feishu Outbound Form Url */
+            feishu_outbound_form_url?: string | null;
             /** Page Key */
             page_key: string;
             /** Table Id */
@@ -75621,6 +75647,37 @@ export interface operations {
                 page?: number;
                 page_size?: number;
             };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_onboarding_form_url_api_v1_hr_onboarding_records_form_url_get: {
+        parameters: {
+            query?: never;
             header?: never;
             path?: never;
             cookie?: {

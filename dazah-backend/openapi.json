@@ -78517,6 +78517,17 @@
             "title": "Enable Push To Feishu",
             "type": "boolean"
           },
+          "feishu_form_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feishu Form Url"
+          },
           "field_mappings": {
             "anyOf": [
               {
@@ -85763,6 +85774,28 @@
           "app_token": {
             "title": "App Token",
             "type": "string"
+          },
+          "feishu_inbound_form_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feishu Inbound Form Url"
+          },
+          "feishu_outbound_form_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feishu Outbound Form Url"
           },
           "page_key": {
             "title": "Page Key",
@@ -117101,6 +117134,56 @@
           }
         },
         "summary": "老厂入职台账列表",
+        "tags": [
+          "人事管理"
+        ]
+      }
+    },
+    "/api/v1/hr/onboarding-records/form-url": {
+      "get": {
+        "description": "返回人事-飞书设置中配置的入职信息表公开表单链接；未配置为空（前端隐藏入口）。",
+        "operationId": "get_onboarding_form_url_api_v1_hr_onboarding_records_form_url_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Onboarding Form Url Api V1 Hr Onboarding Records Form Url Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "老厂入职台账新增表单链接",
         "tags": [
           "人事管理"
         ]

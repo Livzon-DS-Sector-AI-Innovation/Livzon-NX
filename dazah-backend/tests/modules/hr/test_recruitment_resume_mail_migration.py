@@ -325,8 +325,12 @@ async def test_recruitment_batch_analysis_covers_vision_skip_and_failure(
 
     client = _Client()
     bitable = SimpleNamespace(client=client, _path=client._path)
+    async def _fake_table_id(entity_code: str) -> str:
+        return "tblCandidate"
+
     repo = SimpleNamespace(
         _get_client=AsyncMock(return_value=bitable),
+        _table_id=_fake_table_id,
         update_candidate=AsyncMock(),
         get_job=AsyncMock(
             return_value={

@@ -56,6 +56,7 @@ vi.mock('@/lib/api/client/warehouse', () => ({
   fetchWarehouseMaterialPage: vi.fn(async () => undefined),
   fetchWarehouseRecordDetail: vi.fn(async () => undefined),
   fetchWarehousePersonAvatarMap: vi.fn(async () => ({})),
+  fetchWarehousePageFormLinks: vi.fn(async () => ({ inbound_form_url: null, outbound_form_url: null })),
 }))
 
 vi.mock('@/actions/warehouse', () => ({
@@ -152,7 +153,9 @@ describe('migrated page smoke contracts', () => {
       })
     )
     useAuthStore.getState().clearUser()
-    expect(html).toContain('原辅料库存')
+    // 登录态由 AppShell 在客户端挂载后写入 store：SSR 首帧统一渲染骨架占位
+    // （与客户端首帧一致，避免 hydration mismatch），数据由客户端挂载后渲染
+    expect(html).toContain('ant-skeleton')
   })
 
   it('renders quality, HR, registration and warehouse summary components with empty data', async () => {
