@@ -1,0 +1,11 @@
+# Trivy vulnerability exemptions — reviewed 2026-09-19
+#
+# Hermes-Lite 依赖锁的 anyio 升级需要 Hermes-Lite 目录的 CODEOWNERS 批准，
+# 无法随业务 PR 合并。以下 CVE 在 Hermes-Lite 单独的依赖升级 PR 中处理。
+# 跟踪：anyio 4.14.1 -> 4.14.2（dazah-backend/uv.lock 已在同批升级至 4.14.2）
+
+# AnyIO: TLSStream IDNA 2003 host name encoding enables potential TLS certificate spoofing
+CVE-2026-63374
+
+# AnyIO run_process/open_process ignores extra_groups and can retain parent supplementary groups
+CVE-2026-63349
