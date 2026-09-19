@@ -10,9 +10,10 @@ from app.modules.quality.service import quality_feishu_sync
 @pytest.mark.asyncio
 async def test_decrypt_failure_raises_clear_business_error(db_session, monkeypatch):
     """App Secret 解密失败（密钥轮换）→ 400 明确提示，不再冒泡成"AI 未配置"503。"""
-    monkeypatch.setattr(
-        quality_feishu_sync, "decrypt_api_key", lambda _v: (_ for _ in ()).throw(LLMConfigError("bad key"))
-    )
+    def _raise_bad_key(_value: str) -> str:
+        raise LLMConfigError("bad key")
+
+    monkeypatch.setattr(quality_feishu_sync, "decrypt_api_key", _raise_bad_key)
 
     from app.modules.quality.models import QualityFeishuAppSettings
 

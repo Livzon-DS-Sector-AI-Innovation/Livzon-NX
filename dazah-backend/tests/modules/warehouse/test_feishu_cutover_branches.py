@@ -4,14 +4,12 @@
 WS 事件匹配的 DB 绑定路径、repository upsert 新行分支。
 """
 
-from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
 
 from app.modules.warehouse.feishu_material_pages import (
-    FEISHU_WAREHOUSE_MATERIAL_PAGES,
     FeishuWarehouseMaterialPage,
 )
 from app.modules.warehouse.service import WarehouseService
@@ -177,7 +175,6 @@ async def test_ws_event_match_uses_db_bindings() -> None:
 @pytest.mark.asyncio
 async def test_repository_upsert_page_feishu_config_insert_and_update() -> None:
     """repository 双路径：新页 insert、已有页 update（含表单链接字段）。"""
-    from sqlalchemy import select
 
     from app.modules.warehouse.models import WarehousePageFeishuConfig
     from app.modules.warehouse.repository import WarehouseRepository
