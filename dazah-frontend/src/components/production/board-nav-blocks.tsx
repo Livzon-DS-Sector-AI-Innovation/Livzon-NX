@@ -78,7 +78,7 @@ export default function BoardNavBlocks({
         // lg（≥992px）起 24/3=8 个一行；md 平板宽度回退 6+2 两行
         <Col xs={12} sm={8} md={4} lg={3} key={tab.code}>
           <div
-            title={`切换到 ${tab.fullName ?? tab.name}${tab.code === 'SUMMARY' ? '（五产线聚合）' : ' 看板与排产数据'}`}
+            title={`切换到 ${tab.fullName ?? tab.name}${tab.code === 'SUMMARY' ? '（五产线聚合）' : ' 生产线与排产数据'}`}
             onClick={() => setProductCode(tab.code)}
             className="flex items-center justify-center gap-2 rounded-lg border bg-white cursor-pointer transition-colors"
             style={{
