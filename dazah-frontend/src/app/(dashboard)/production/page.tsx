@@ -5,7 +5,6 @@
 // 实际完成/收率/合格率等指标待实际数据接入后启用（当前显示 --）。
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import {
   Alert,
   Card,
@@ -32,8 +31,6 @@ import {
   SyncOutlined,
   ToolOutlined,
   AlertOutlined,
-  ArrowRightOutlined,
-  ShopOutlined,
   DatabaseOutlined,
   PlusOutlined,
   EditOutlined,
@@ -43,14 +40,13 @@ import ReactECharts from 'echarts-for-react'
 import BoardNavBlocks from '@/components/production/board-nav-blocks'
 import BatchProgressBar from '@/components/production/batch-progress-bar'
 import ProductionSummary from '@/components/production/production-summary'
+import SalesPlanCard from '@/components/production/sales-plan-card'
 import { useProductContextStore } from '@/stores/product-context'
 import { usePermission } from '@/hooks/usePermission'
 import {
-  hasProductionPagePermission,
   PRODUCTION_PAGE_KEYS,
   useProductionPermissions,
 } from '@/components/production/useProductionPermissions'
-import { useAuthStore } from '@/stores/auth'
 import {
   getFermentationBoard,
   markTankMaintenance,
@@ -70,73 +66,6 @@ import type {
 } from '@/types/production'
 
 const { Title, Text } = Typography
-
-// 车间工段首页：与侧边菜单「批次管理 → 车间」保持一致，只列实际存在页面的车间。
-const workshopItems = [
-  {
-    key: '/production/batches/workshop/101-1',
-    pageKey: PRODUCTION_PAGE_KEYS.workshop1011,
-    title: '101一车间（菌种）',
-    description: '摇瓶种子制备全流程',
-    color: '#52c41a',
-  },
-  {
-    key: '/production/batches/workshop/101-2',
-    pageKey: PRODUCTION_PAGE_KEYS.workshop1012,
-    title: '101二车间',
-    description: '发酵数据（林可霉素/霉酚酸/他汀类）',
-    color: '#08979c',
-  },
-  {
-    key: '/production/batches/workshop/102-1',
-    pageKey: PRODUCTION_PAGE_KEYS.workshop1021,
-    title: '102一车间',
-    description: '发酵数据（多拉菌素）',
-    color: '#1d39c4',
-  },
-  {
-    key: '/production/batches/workshop/103/phenylalanine',
-    pageKey: PRODUCTION_PAGE_KEYS.workshop103Phenylalanine,
-    title: '103车间 · 苯丙氨酸',
-    description: '发酵数据（L-苯丙氨酸）',
-    color: '#531dab',
-  },
-  {
-    key: '/production/batches/workshop/103/lovastatin',
-    pageKey: PRODUCTION_PAGE_KEYS.workshop103Lovastatin,
-    title: '103车间 · 洛伐他汀/美伐他汀',
-    description: '发酵数据',
-    color: '#c41d7f',
-  },
-  {
-    key: '/production/batches/workshop/201-2',
-    pageKey: PRODUCTION_PAGE_KEYS.workshop2012,
-    title: '201二车间 · 霉酚酸（MC）',
-    description: '提炼至混粉入库',
-    color: '#d4380d',
-  },
-  {
-    key: '/production/batches/workshop/201-3',
-    pageKey: PRODUCTION_PAGE_KEYS.workshop2013,
-    title: '201三车间 · 多拉菌素（DR）',
-    description: '提炼至混粉入库',
-    color: '#fa8c16',
-  },
-  {
-    key: '/production/batches/workshop/202',
-    pageKey: PRODUCTION_PAGE_KEYS.workshop202,
-    title: '202车间',
-    description: '停产中，暂无生产数据',
-    color: '#8c8c8c',
-  },
-  {
-    key: '/production/batches/workshop/203',
-    pageKey: PRODUCTION_PAGE_KEYS.workshop203,
-    title: '203车间 · L-苯丙氨酸（FA）',
-    description: '发酵放罐至精制回收',
-    color: '#237804',
-  },
-]
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000
 
@@ -204,17 +133,12 @@ const STATUS_META: Record<string, { label: string; color: string }> = {
 }
 
 export default function ProductionDashboard() {
-  const router = useRouter()
   const { message } = App.useApp()
-  const productionUser = useAuthStore((state) => state.user)
   const { canOperate, canDelete } = useProductionPermissions(PRODUCTION_PAGE_KEYS.overview)
   // 工段数据权限：发酵模块挂发酵权限，提炼汇总挂提炼权限，收率需双权限
   const { has } = usePermission()
   const canFerm = has('production:fermentation-yield')
   const canExtract = has('production:extraction-yield')
-  const authorizedWorkshopItems = workshopItems.filter((item) =>
-    hasProductionPagePermission(productionUser, item.pageKey, 'access'),
-  )
   const [board, setBoard] = useState<FermentationBoard | null>(null)
   const [boardMessage, setBoardMessage] = useState<string>('')
   const [loading, setLoading] = useState(true)
@@ -895,7 +819,7 @@ export default function ProductionDashboard() {
             <Title level={4} style={{ margin: 0 }}>
               {isSummaryView
                 ? '生产汇总'
-                : `${PRODUCT_NAMES[productCode] ?? PRODUCT_NAMES.FA}生产看板`}
+                : `${PRODUCT_NAMES[productCode] ?? PRODUCT_NAMES.FA}生产线`}
             </Title>
             <DatePicker
               size="small"
@@ -953,7 +877,13 @@ export default function ProductionDashboard() {
       </Card>
 
       {/* 汇总视图：五产线聚合表 + 播报汇总 */}
-      {isSummaryView && <ProductionSummary month={planMonth} />}
+      {isSummaryView && (
+        <>
+          <ProductionSummary month={planMonth} />
+          {/* 产销计划卡：销售计划执行表（飞书同步），跟随概览月份切换 */}
+          <SalesPlanCard month={planMonth} />
+        </>
+      )}
 
       {!isSummaryView && (
       <>
@@ -1497,39 +1427,6 @@ export default function ProductionDashboard() {
           按当前扎帐月保存；输入 310000 表示 310 吨。留空保存则清除设置。
         </Text>
       </Modal>
-
-      {/* 底部：生产车间入口 */}
-      <Card title="生产车间" variant="borderless" className="shadow-sm">
-        <Row gutter={[12, 12]}>
-          {authorizedWorkshopItems.map((item) => (
-            <Col span={8} key={item.key}>
-              <div
-                data-testid={`workshop-entry:${item.key}`}
-                className="h-full p-4 rounded-lg border border-[var(--color-hairline)] hover:border-[var(--color-primary)] cursor-pointer transition-colors"
-                onClick={() => router.push(item.key)}
-              >
-                <Space align="start">
-                  <div
-                    className="w-10 h-10 rounded-lg flex items-center justify-center text-white text-lg"
-                    style={{ backgroundColor: item.color }}
-                  >
-                    <ShopOutlined />
-                  </div>
-                  <div>
-                    <Text strong className="block">
-                      {item.title}
-                    </Text>
-                    <Text type="secondary" className="text-xs">
-                      {item.description}
-                    </Text>
-                  </div>
-                  <ArrowRightOutlined className="text-[var(--color-muted)] ml-auto" />
-                </Space>
-              </div>
-            </Col>
-          ))}
-        </Row>
-      </Card>
     </div>
   )
 }

@@ -18,6 +18,8 @@ const actions = vi.hoisted(() => ({
   deleteFermentationBatchActual: vi.fn(),
   setFermentationMonthCapacity: vi.fn(),
   getPlans: vi.fn(),
+  getProductionSummary: vi.fn(),
+  getSalesPlanDetails: vi.fn(),
 }))
 
 vi.mock('@/actions/production', () => actions)
@@ -51,6 +53,7 @@ const authStore = vi.hoisted(() => {
 vi.mock('@/stores/auth', () => authStore)
 
 import ProductionHomePage from './page'
+import { useProductContextStore } from '@/stores/product-context'
 
 const BOARD = {
   now: '2026-09-08T12:00:00',
@@ -169,6 +172,21 @@ describe('ProductionHomePage (fermentation board)', () => {
       data: [],
       meta: { total: 0 },
     })
+    // 汇总视图：生产汇总默认空数据
+    actions.getProductionSummary.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: { rows: [], period: null },
+    })
+    // 产销计划卡：默认无销售计划数据
+    actions.getSalesPlanDetails.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [],
+      meta: { total: 0 },
+    })
+    // 产品 Tab 复位为默认值，避免用例间状态串扰
+    useProductContextStore.setState({ productCode: 'FA' })
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -194,7 +212,7 @@ describe('ProductionHomePage (fermentation board)', () => {
     await render()
     expect(actions.getFermentationBoard).toHaveBeenCalled()
     const text = (container.textContent || '') + (document.body.textContent || '')
-    expect(text).toContain('L-苯丙氨酸生产看板')
+    expect(text).toContain('L-苯丙氨酸生产线')
     expect(text).toContain('生产周期 8月27日～9月26日')
     expect(text).toContain('本月计划批次')
     expect(text).toContain('31')
@@ -398,19 +416,19 @@ describe('ProductionHomePage (fermentation board)', () => {
     expect(text).toContain('排产表未覆盖当前日期')
   })
 
-  it('keeps workshop entries at the bottom', async () => {
-    await render()
-    const text = container.textContent || ''
-    expect(text).toContain('生产车间')
-    expect(text).toContain('101一车间（菌种）')
-    expect(text).toContain('201三车间 · 多拉菌素（DR）')
-  })
-
   it('shows a load failure hint when the board request rejects', async () => {
     actions.getFermentationBoard.mockRejectedValue(new Error('network down'))
     await render()
     const text = (container.textContent || '') + (document.body.textContent || '')
     expect(text).toContain('看板数据加载失败')
+  })
+
+  it('shows the production-sales plan card in summary view', async () => {
+    useProductContextStore.setState({ productCode: 'SUMMARY' })
+    await render()
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('产销计划')
+    expect(text).toContain('暂无销售计划数据，请先完成飞书同步设置并同步')
   })
 
   it('renders placeholder cards with plan yield when no archive covers the period', async () => {
@@ -509,7 +527,7 @@ describe('ProductionHomePage (fermentation board)', () => {
     const text = (container.textContent || '') + (document.body.textContent || '')
     // 未覆盖警示条保留，看板标题用全名
     expect(text).toContain('尚未上传覆盖 2026-09-18 所在扎帐周期的排产 Excel')
-    expect(text).toContain('2%氟苯尼考预混剂生产看板')
+    expect(text).toContain('2%氟苯尼考预混剂生产线')
     // 提炼入库按统一扎帐周期出数，完成率 = 7920 ÷ 60000
     expect(text).toContain('7,920')
     expect(text).toContain('13.20%')
@@ -1068,9 +1086,9 @@ describe('ProductionHomePage (fermentation board)', () => {
 
   it('switches period via the month picker and reloads with a located date', async () => {
     await render()
-    // 月份选择器：顶部标题栏（L-苯丙氨酸生产看板 与 生产周期 标签之间）
+    // 月份选择器：顶部标题栏（L-苯丙氨酸生产线 与 生产周期 标签之间）
     const pickerInput = Array.from(container.querySelectorAll('.ant-picker input')).find(
-      (i) => i.closest('.ant-space')?.textContent?.includes('L-苯丙氨酸生产看板'),
+      (i) => i.closest('.ant-space')?.textContent?.includes('L-苯丙氨酸生产线'),
     ) as HTMLInputElement
     expect(pickerInput).toBeTruthy()
     await act(async () => {

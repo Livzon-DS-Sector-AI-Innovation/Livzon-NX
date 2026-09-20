@@ -3,22 +3,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Alert, Card, Spin, Table, Tag, Typography } from 'antd'
 import { getProductionSummary } from '@/actions/production'
+import { PRODUCT_COLORS } from './product-colors'
 import type { ProductionSummaryRow } from '@/types/production'
 
 const { Text } = Typography
 
 const dash = '--'
-
-// 产线识别色（与顶部导航块一致；色相互不重叠，新增红/金避开既有紫蓝橙绿玫红青）
-const PRODUCT_COLORS: Record<string, string> = {
-  MC: '#1677ff',
-  DR: '#d46b08',
-  FA: '#389e0d',
-  LV: '#c41d7f',
-  MV: '#08979c',
-  TY: '#cf1322',
-  FL: '#d4b106',
-}
 
 // 比率分档配色：≥100 绿（达成/超额）、70~100 主色（正常推进）、<70 橙（偏低）
 function rateColor(rate: number): string {

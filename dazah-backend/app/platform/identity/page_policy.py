@@ -1608,10 +1608,18 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
     # 计划列表 GET：概览页（production:overview）提炼计划产量卡按自然月
     # 读取产销计划，与排产计划页共用同一接口；写操作仅限排产计划页
     add("GET", "/plans", sales_plan_page + overview, scope_adapter="production.plan")
-    add_many(
+    add(
         "GET",
-        ("/plans/{plan_id}", "/sales-plan-details"),
+        "/plans/{plan_id}",
         sales_plan_page,
+        scope_adapter="production.plan",
+    )
+    # 销售计划明细 GET：概览页（production:overview）产销计划卡按概览月份
+    # 读取销售计划执行表，与产销计划页共用同一接口；写操作仍仅限产销计划页
+    add(
+        "GET",
+        "/sales-plan-details",
+        sales_plan_page + overview,
         scope_adapter="production.plan",
     )
     # 生产汇总：五产线发酵/提炼关键指标聚合（只读），由生产概览页调用
