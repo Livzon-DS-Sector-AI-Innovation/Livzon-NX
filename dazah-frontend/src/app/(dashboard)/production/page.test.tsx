@@ -1077,6 +1077,65 @@ describe('ProductionHomePage (fermentation board)', () => {
     )
   })
 
+  it('switches a line to halted after the confirm countdown', async () => {
+    actions.setProductionLineStatus.mockResolvedValue({
+      code: 200,
+      message: '已标记为停产中',
+      data: null,
+    })
+    await render()
+    // 当前产品 MC 的运行/停产切换器（Select）
+    const trigger = container.querySelector(
+      '[data-testid="line-status-select"]',
+    ) as HTMLElement
+    expect(trigger).toBeTruthy()
+    // 假定时器需在弹窗挂载前接管，倒计时链才会被确定性推进
+    vi.useFakeTimers()
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      await vi.advanceTimersByTimeAsync(120)
+    })
+    const haltOption = Array.from(
+      document.body.querySelectorAll(
+        '.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option',
+      ),
+    ).find((o) => o.textContent?.includes('停产')) as HTMLElement | undefined
+    expect(haltOption).toBeTruthy()
+    await act(async () => {
+      haltOption!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      haltOption!.click()
+      await vi.advanceTimersByTimeAsync(120)
+    })
+    // 确认弹窗：倒计时期间确认按钮禁用
+    expect(document.body.textContent || '').toContain('确认（')
+    const okBtn = () =>
+      Array.from(
+        document.body.querySelectorAll('.ant-modal .ant-btn-primary'),
+      ).find((b) => !b.hasAttribute('disabled')) as HTMLElement | undefined
+    expect(okBtn()).toBeUndefined()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5100)
+    })
+    // act 边界每次只放行一拍：循环推进直至倒计时结束（6 拍冗余）
+    for (let i = 0; i < 6; i++) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1100)
+      })
+    }
+    const ready = okBtn()
+    expect(ready).toBeTruthy()
+    await act(async () => {
+      ready!.click()
+      await vi.advanceTimersByTimeAsync(200)
+    })
+    vi.useRealTimers()
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    expect(actions.setProductionLineStatus).toHaveBeenCalledWith(true, 'FA')
+    expect(document.body.textContent || '').toContain('已标记为停产中')
+  })
+
   it('closes the drawer and modals without saving', async () => {
     actions.getFermentationBatchActuals.mockResolvedValue({ code: 200, data: [] })
     await render()
