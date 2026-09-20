@@ -1608,7 +1608,9 @@ export function WarehouseFeishuTablePage({
       setDetailOpen(false)
       setDetailData(null)
       setEditMode(false)
-      refreshIncremental()
+      // 后端已单条写穿本地镜像，直接重读快照即可看到最新值，
+      // 不依赖「同步」权限（incremental 刷新仅同步权限用户可用）
+      refreshData(false)
     } catch (error) {
       const detail = error instanceof Error ? error.message : '未知错误'
       message.error(`保存失败：${detail}，请重试`)
@@ -1627,7 +1629,9 @@ export function WarehouseFeishuTablePage({
       message.success('删除成功，已从飞书多维表格移除')
       setDetailOpen(false)
       setDetailData(null)
-      refreshIncremental()
+      // 后端删除成功时已同步软删本地镜像行；增量同步追不掉删除，
+      // 这里直接重读快照，不依赖「同步」权限
+      refreshData(false)
     } catch (error) {
       const detail = error instanceof Error ? error.message : '未知错误'
       message.error(`删除失败：${detail}，请重试`)

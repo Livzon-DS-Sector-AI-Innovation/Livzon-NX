@@ -115,7 +115,7 @@ async def test_attachment_storage_matching_and_llm_fallback(
         await service.match_entry_by_name(_Db([unrelated]), "状态标识管理程序.md")
         is None
     )
-    # 名称匹配在编号之前生效
+    # 文件名编码 + 修订号精确命中（文件名用 - 代替 / 表示版本）
     code_entry = _entry(code="SOP-QA-001/12")
     assert (
         await service.find_entry_by_file_name(_Db([code_entry]), "SOP-QA-001-12.pdf")
@@ -141,6 +141,26 @@ async def test_attachment_storage_matching_and_llm_fallback(
     assert (
         await service.llm_match_entry(_Db([candidate]), "SOP-QA-001-附件.pdf") is None
     )
+
+    # 编号匹配优先于名称匹配：同名不同编码的文档普遍存在，
+    # 编号（含修订号）才是唯一身份，名称同名命中不得抢先
+    code_hit = _entry(code="SMP-XF2-001/03", name="102一车间虫害控制管理程序")
+    name_hit = _entry(code="SMP-HR-006/09", name="虫害控制管理程序")
+    monkeypatch.setattr(
+        service, "find_entry_by_file_name", AsyncMock(return_value=code_hit)
+    )
+    monkeypatch.setattr(
+        service, "match_entry_by_name", AsyncMock(return_value=name_hit)
+    )
+    assert await service.match_entry_for_attachment(
+        _Db(), "SMP-XF2-001-03虫害控制管理程序.md"
+    ) == (code_hit, "code")
+    service.match_entry_by_name.assert_not_awaited()
+    # 编号未命中时名称匹配兜底
+    service.find_entry_by_file_name.return_value = None
+    assert await service.match_entry_for_attachment(
+        _Db(), "SMP-XF2-001-03虫害控制管理程序.md"
+    ) == (name_hit, "name")
 
     monkeypatch.setattr(
         service, "find_entry_by_file_name", AsyncMock(return_value=None)

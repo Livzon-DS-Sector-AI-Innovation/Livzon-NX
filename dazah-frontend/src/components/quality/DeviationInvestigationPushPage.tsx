@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import dayjs, { type Dayjs } from 'dayjs'
 import { App, Avatar, Button, DatePicker, Descriptions, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography } from 'antd'
+import { UserOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { deleteDeviationInvestigationPushRecord as deleteDeviationInvestigationPushRecordAction, updateDeviationInvestigationPushRecord as updateDeviationInvestigationPushRecordAction } from '@/actions/quality-deviation'
@@ -466,6 +467,34 @@ export function DeviationInvestigationPushPage({
               optionFilterProp="label"
               options={submitterOptions}
               disabled={!selectedDeviationCode}
+              optionRender={(option) => {
+                const contact = contacts.find(
+                  (item) => item.open_id === option.value,
+                )
+                if (!contact) return <span>{option.label}</span>
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Avatar
+                      size={24}
+                      src={contact.avatar_url || undefined}
+                      style={{
+                        backgroundColor: contact.avatar_url
+                          ? 'transparent'
+                          : undefined,
+                        flexShrink: 0,
+                        fontSize: 12,
+                        fontWeight: 700,
+                      }}
+                      icon={!contact.avatar_url ? <UserOutlined /> : undefined}
+                    >
+                      {!contact.avatar_url
+                        ? (contact.name || '').charAt(0)
+                        : undefined}
+                    </Avatar>
+                    <span>{option.label}</span>
+                  </div>
+                )
+              }}
               placeholder={
                 selectedReportRecord?.department
                   ? `请选择${selectedReportRecord.department}的提交人`

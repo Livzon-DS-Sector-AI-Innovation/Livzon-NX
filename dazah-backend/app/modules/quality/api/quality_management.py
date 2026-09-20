@@ -1822,12 +1822,6 @@ async def submit_capa_evaluation(
 # ============ Statistics ============
 
 
-@router.get("/statistics/deviations", summary="获取偏差统计")
-async def get_deviation_statistics(db: AsyncSession = Depends(get_db)) -> Any:
-    stats = await service.get_deviation_statistics(db)
-    return {"data": stats.model_dump()}
-
-
 @router.get("/statistics/capas", summary="获取CAPA统计")
 async def get_capa_statistics(db: AsyncSession = Depends(get_db)) -> Any:
     stats = await service.get_capa_statistics(db)

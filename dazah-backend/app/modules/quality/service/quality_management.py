@@ -33,7 +33,6 @@ from app.modules.quality.schemas import (
     DeviationDetail,
     DeviationListItem,
     DeviationReportRecordListItem,
-    DeviationStatistics,
     SubmitInvestigationRequest,
     SubmitReviewRequest,
     UpdateCapaRequest,
@@ -274,6 +273,18 @@ async def _build_deviation_report_record_items_from_feishu(
             feishu_synced_at=get_record_modified_at(record),
             feishu_source_updated_at=get_record_modified_at(record),
         ).model_dump()
+        item["reporters"] = feishu_sync_service._parse_person_field(
+            field_value(report_entity, fields, "报告人")
+        )
+        item["department_heads"] = feishu_sync_service._parse_person_field(
+            field_value(report_entity, fields, "部门负责人")
+        )
+        item["qas"] = feishu_sync_service._parse_person_field(
+            field_value(report_entity, fields, "QA")
+        )
+        item["qa_heads"] = feishu_sync_service._parse_person_field(
+            field_value(report_entity, fields, "QA负责人")
+        )
         item["report_status"] = _pick_report_status(item)
         items.append(item)
 
@@ -1386,68 +1397,8 @@ async def delete_capa(db: AsyncSession, capa_id: uuid.UUID) -> dict[str, bool]:
 
 
 # ============ Statistics ============
-async def get_deviation_statistics(db: AsyncSession) -> DeviationStatistics:
-    from app.modules.quality.service import quality_feishu_pages
-
-    try:
-        result = await quality_feishu_pages.list_deviation_ledger_records(
-            db,
-            page=1,
-            page_size=99999,
-        )
-        items = result.get("items", [])
-    except Exception:
-        items = []
-
-    total = len(items)
-    pending = sum(1 for item in items if item.get("status") != "closed")
-    closed_count = sum(1 for item in items if item.get("status") == "closed")
-
-    department_counts: dict[str, int] = {}
-    status_counts: dict[str, int] = {}
-    level_counts: dict[str, int] = {}
-    root_cause_counts: dict[str, int] = {}
-
-    for item in items:
-        # Status
-        status = item.get("status") or "draft"
-        status_counts[status] = status_counts.get(status, 0) + 1
-
-        # Level
-        level = item.get("level") or "unknown"
-        level_counts[level] = level_counts.get(level, 0) + 1
-
-        # Department
-        dept = item.get("department") or "未知"
-        department_counts[dept] = department_counts.get(dept, 0) + 1
-
-        # Root cause category
-        rc = item.get("root_cause_category") or "unknown"
-        root_cause_counts[rc] = root_cause_counts.get(rc, 0) + 1
-
-    department_distribution = [
-        {"name": k, "count": v} for k, v in department_counts.items()
-    ]
-    status_distribution = [{"status": k, "count": v} for k, v in status_counts.items()]
-    level_distribution = [{"level": k, "count": v} for k, v in level_counts.items()]
-    root_cause_distribution = [
-        {"category": k, "count": v} for k, v in root_cause_counts.items()
-    ]
-
-    step_breakdown: list[dict[str, Any]] = []
-
-    return DeviationStatistics(
-        total=total,
-        pending=pending,
-        closed_count=closed_count,
-        capa_total=0,
-        department_distribution=department_distribution,
-        status_distribution=status_distribution,
-        level_distribution=level_distribution,
-        root_cause_distribution=root_cause_distribution,
-        step_breakdown=step_breakdown,
-        monthly_trend=[],
-    )
+# 偏差统计已收敛到 service/quality_statistics.py（/statistics/deviations 生效路由），
+# 此处不再保留重复实现。
 
 
 async def get_capa_statistics(db: AsyncSession) -> CapaStatistics:

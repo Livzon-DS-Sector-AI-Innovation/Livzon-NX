@@ -530,6 +530,43 @@ describe('WarehouseFeishuTablePage', () => {
     expect(mocks.fetchWarehouseMaterialPage).toHaveBeenCalled()
   })
 
+  it('refetches the local snapshot after save/delete even without sync permission', async () => {
+    // 不授予 sync_config：旧实现在保存/删除后调 incremental 刷新会被权限门控拦下，
+    // 页面停留旧数据；新实现后端已写穿本地镜像，保存/删除后直接重读快照
+    authorize('operate', ['delete'])
+    await mount(tableData, 'product-summary')
+    mocks.fetchWarehouseMaterialPage.mockClear()
+    const buttons = () => Array.from(container.querySelectorAll('button'))
+    const findButton = (text: string) => buttons().find((button) => button.textContent?.includes(text))
+    const flush = () =>
+      act(async () => {
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+    await act(async () => findButton('详情')?.click())
+    await flush()
+    await act(async () => findButton('编辑')?.click())
+    await act(async () => findButton('保存修改')?.click())
+    await flush()
+
+    expect(mocks.updateWarehouseRecordAction).toHaveBeenCalledWith('product-summary', 'row-1', expect.any(Object))
+    let lastCall = mocks.fetchWarehouseMaterialPage.mock.calls.at(-1)
+    expect(lastCall?.[1]?.force).toBeFalsy()
+    expect(lastCall?.[1]?.incremental).toBeFalsy()
+
+    await act(async () => findButton('详情')?.click())
+    await flush()
+    await act(async () => findButton('删除记录')?.click())
+    await act(async () => findButton('确认删除')?.click())
+    await flush()
+
+    expect(mocks.deleteWarehouseRecordAction).toHaveBeenCalledWith('product-summary', 'row-1')
+    lastCall = mocks.fetchWarehouseMaterialPage.mock.calls.at(-1)
+    expect(lastCall?.[1]?.force).toBeFalsy()
+    expect(lastCall?.[1]?.incremental).toBeFalsy()
+  })
+
   it('renders snapshot/no-permission and error branches without exposing write controls', async () => {
     authorize('query')
     mocks.hasAny.mockReturnValue(false)

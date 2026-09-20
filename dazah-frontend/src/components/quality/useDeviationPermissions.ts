@@ -8,7 +8,6 @@ export function useDeviationPermissions() {
   const { user, hasPagePermission } = useAuthStore()
   return {
     authorizationKey: JSON.stringify([user?.id, user?.role, user?.grant_version, user?.page_permissions]),
-    workflowFieldsReadOnly: Boolean(user),
     canQuery: hasPagePermission(DEVIATION_LEDGER_PAGE, 'query'),
     canOperate: hasPagePermission(DEVIATION_LEDGER_PAGE, 'operate'),
     canDelete: hasPagePermission(DEVIATION_LEDGER_PAGE, 'operate', 'delete'),

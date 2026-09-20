@@ -18,6 +18,20 @@ from app.platform.integrations.feishu.utils import OPEN_API_BASE_URL
 
 TOKEN_TTL_SECONDS = 90 * 60
 
+_shared_http_client: httpx.AsyncClient | None = None
+
+
+def _shared_http() -> httpx.AsyncClient:
+    """进程级共享连接池：避免每次请求重建 TCP+TLS 连接。
+
+    编辑保存/详情打开/增量同步都走这里，单次请求省去 100-500ms 的
+    连接建立开销；超时按调用点以 per-request timeout 传入。
+    """
+    global _shared_http_client
+    if _shared_http_client is None or getattr(_shared_http_client, "is_closed", False):
+        _shared_http_client = httpx.AsyncClient(base_url=OPEN_API_BASE_URL)
+    return _shared_http_client
+
 
 def _token_cache_key(app_id: str, app_secret: str) -> str:
     digest = hashlib.sha256(f"{app_id}\0{app_secret}".encode()).hexdigest()[:24]
@@ -75,13 +89,13 @@ class WarehouseFeishuClient:
             if cached:
                 return str(cached)
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(
-                f"{OPEN_API_BASE_URL}/auth/v3/tenant_access_token/internal",
-                json={"app_id": self.app_id, "app_secret": self.app_secret},
-            )
-            resp.raise_for_status()
-            body = resp.json()
+        resp = await _shared_http().post(
+            f"{OPEN_API_BASE_URL}/auth/v3/tenant_access_token/internal",
+            json={"app_id": self.app_id, "app_secret": self.app_secret},
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+        body = resp.json()
 
         if body.get("code") != 0:
             raise RuntimeError(body.get("msg") or str(body))
@@ -116,20 +130,17 @@ class WarehouseFeishuClient:
                     force_refresh=force_token_refresh or attempt > 0
                 )
                 try:
-                    async with httpx.AsyncClient(
-                        base_url=OPEN_API_BASE_URL,
+                    resp = await _shared_http().request(
+                        method,
+                        path,
+                        params=params,
+                        json=json_body,
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "Content-Type": "application/json; charset=utf-8",
+                        },
                         timeout=timeout,
-                    ) as client:
-                        resp = await client.request(
-                            method,
-                            path,
-                            params=params,
-                            json=json_body,
-                            headers={
-                                "Authorization": f"Bearer {token}",
-                                "Content-Type": "application/json; charset=utf-8",
-                            },
-                        )
+                    )
                     self._last_request_at[self.app_id] = time.monotonic()
                     body = resp.json()
                     code = body.get("code")
@@ -251,15 +262,12 @@ class WarehouseFeishuClient:
     async def download_media(self, file_token: str) -> tuple[bytes, str, str | None]:
         await self._wait_for_shared_rate_slot()
         token = await self.get_tenant_access_token()
-        async with httpx.AsyncClient(
-            base_url=OPEN_API_BASE_URL,
+        response = await _shared_http().get(
+            f"/drive/v1/medias/{quote(file_token, safe='')}/download",
+            headers={"Authorization": f"Bearer {token}"},
             timeout=30.0,
             follow_redirects=True,
-        ) as client:
-            response = await client.get(
-                f"/drive/v1/medias/{quote(file_token, safe='')}/download",
-                headers={"Authorization": f"Bearer {token}"},
-            )
+        )
         response.raise_for_status()
         return (
             response.content,

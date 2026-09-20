@@ -205,7 +205,6 @@ async def test_ledger_http_scope_crud_export_and_audit(db_session, monkeypatch):
             for payload in (
                 {"status": "closed"},
                 {"review_opinions": [{"result": "approved"}]},
-                {"is_closed": True},
                 {"needs_cross_dept_review": False},
             ):
                 assert (
@@ -225,6 +224,22 @@ async def test_ledger_http_scope_crud_export_and_audit(db_session, monkeypatch):
                     json={"description": "修订内容", "status": "draft"},
                 )
             ).status_code == 200
+            # 台账口径：范围内用户可在编辑中登记是否关闭/关闭时间，
+            # 其余流程字段仍被拒绝；关闭登记会按写入路径触发飞书自动同步
+            assert (
+                await client.put(
+                    f"{base}/{own.id}",
+                    json={"is_closed": True, "close_time": "2026-09-20"},
+                )
+            ).status_code == 200
+            closed = (await client.get(f"{base}/{own.id}")).json()["data"]
+            assert closed["status"] == "closed"
+            assert closed["close_time"] is not None
+            assert (
+                await client.put(f"{base}/{own.id}", json={"is_closed": False})
+            ).status_code == 200
+            reopened = (await client.get(f"{base}/{own.id}")).json()["data"]
+            assert reopened["status"] == "draft"
             created = await client.post(
                 base,
                 json={
@@ -512,7 +527,12 @@ async def test_reporter_options_are_scoped_minimal_and_create_revalidates(
             )
             assert result.status_code == 200, result.text
             assert result.json()["data"] == [
-                {"open_id": "own", "name": "王报告", "department": dept.name}
+                {
+                    "open_id": "own",
+                    "name": "王报告",
+                    "department": dept.name,
+                    "avatar_url": None,
+                }
             ]
             assert result.json()["meta"]["total"] == 1
             assert (
