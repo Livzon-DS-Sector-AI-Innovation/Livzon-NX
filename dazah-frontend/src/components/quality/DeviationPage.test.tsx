@@ -214,15 +214,16 @@ it('renders read-only details without save or delete actions', async () => {
   expect(Array.from(container.querySelectorAll('textarea')).every((input) => input.disabled)).toBe(true)
 })
 
-it('ordinary editing never submits workflow state or grants deletion', async () => {
+it('ordinary editing submits ledger close status without deletion rights', async () => {
   setGrant(['access', 'query', 'operate'])
   await renderPage(<DeviationDetail />)
-  expect(container.textContent).toContain('关闭状态由业务流程维护')
+  expect(container.textContent).not.toContain('关闭状态由业务流程维护')
+  expect(container.textContent).toContain('是否关闭')
   expect(container.textContent).not.toContain('删除')
   const save = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.replace(/\s/g, '') === '保存')
   await act(async () => save?.click())
   expect(mocks.updateDeviation).toHaveBeenCalledOnce()
-  expect(mocks.updateDeviation.mock.calls[0][1]).not.toHaveProperty('status')
+  expect(mocks.updateDeviation.mock.calls[0][1]).toMatchObject({ is_closed: false, close_time: null })
 })
 
 it('does not seed a new authorization version with stale server detail props', async () => {

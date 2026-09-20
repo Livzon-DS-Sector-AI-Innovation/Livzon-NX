@@ -391,19 +391,32 @@ async def test_get_deviation_report_record_list_reads_feishu_report_records(
                     "偏差报告": "https://example.com/report-1.docx",
                     "涉及产品名称/批号": "原料A/B-001",
                     "部门": "质量部",
-                    "报告人": "报告人甲",
-                    "部门负责人": {
-                        "type": 11,
-                        "value": [
-                            {
-                                "name": "部门负责人甲",
-                            }
-                        ],
-                    },
+                    "报告人": [
+                        {
+                            "name": "报告人甲",
+                            "avatar_url": "https://feishu.example/avatar-a.png",
+                            "id": "ou_reporter_a",
+                        }
+                    ],
+                    "部门负责人": [
+                        {
+                            "name": "部门负责人甲",
+                            "avatar_url": "https://feishu.example/avatar-b.png",
+                            "id": "ou_head_b",
+                        }
+                    ],
                     "部门负责人确认": "是",
-                    "QA": "QA甲",
+                    "QA": [
+                        {
+                            "name": "QA甲",
+                            "avatar_url": "https://feishu.example/avatar-c.png",
+                            "id": "ou_qa_c",
+                        }
+                    ],
                     "QA确认": "否",
-                    "QA负责人": "QA负责人甲",
+                    "QA负责人": [
+                        {"name": "QA负责人甲", "id": "ou_qa_head_d"}
+                    ],
                     "QA负责人确认": "是",
                     "报告状态": "已完成",
                 },
@@ -452,6 +465,30 @@ async def test_get_deviation_report_record_list_reads_feishu_report_records(
     assert first_item["report_document"] == "https://example.com/report-1.docx"
     assert first_item["product_batch"] == "原料A/B-001"
     assert first_item["reporter_name"] == "报告人甲"
+    assert first_item["reporters"] == [
+        {
+            "name": "报告人甲",
+            "avatar_url": "https://feishu.example/avatar-a.png",
+            "id": "ou_reporter_a",
+        }
+    ]
+    assert first_item["department_heads"] == [
+        {
+            "name": "部门负责人甲",
+            "avatar_url": "https://feishu.example/avatar-b.png",
+            "id": "ou_head_b",
+        }
+    ]
+    assert first_item["qas"] == [
+        {
+            "name": "QA甲",
+            "avatar_url": "https://feishu.example/avatar-c.png",
+            "id": "ou_qa_c",
+        }
+    ]
+    assert first_item["qa_heads"] == [
+        {"name": "QA负责人甲", "avatar_url": "", "id": "ou_qa_head_d"}
+    ]
     assert first_item["department_head"] == "部门负责人甲"
     assert first_item["qa_head_name"] == "QA负责人甲"
     assert first_item["qa_result"] == "rejected"
@@ -467,6 +504,9 @@ async def test_get_deviation_report_record_list_reads_feishu_report_records(
     assert second_item["description"] == "纯飞书记录"
     assert second_item["department"] == "生产部"
     assert second_item["department_head"] is None
+    assert second_item["department_heads"] is None
+    assert second_item["reporters"] is None
+    assert second_item["qas"] is None
     assert second_item["qa_name"] is None
     assert second_item["report_time"] == now
 

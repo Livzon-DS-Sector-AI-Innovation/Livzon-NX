@@ -58,6 +58,8 @@ async def test_quality_statistics_cover_local_and_feishu_branches(
             status="closed",
             department="质量部",
             level="major",
+            root_cause_category="设施/设备",
+            discovery_date=now,
             investigation_completed_at=now,
             created_at=now,
         ),
@@ -65,24 +67,35 @@ async def test_quality_statistics_cover_local_and_feishu_branches(
             status="investigating",
             department=None,
             level="minor",
+            root_cause_category=None,
+            discovery_date=None,
             investigation_completed_at=None,
             created_at=now,
         ),
     ]
     db = SimpleNamespace(execute=AsyncMock(return_value=_Result(scalars=deviations)))
+    async def fake_fill_missing_analysis(_db, records, **_kwargs):
+        for record in records:
+            record.root_cause_category = record.root_cause_category or "其它"
+        return None
+
     monkeypatch.setattr(
-        quality_statistics,
-        "_fetch_feishu_records",
-        AsyncMock(return_value=[{"fields": {}}]),
+        "app.modules.quality.service.deviation_cause_analysis."
+        "fill_missing_analysis",
+        fake_fill_missing_analysis,
     )
     deviation_stats = await quality_statistics.get_deviation_statistics(db)
     assert deviation_stats.total == 2
     assert deviation_stats.closed_count == 1
-    assert deviation_stats.capa_total == 1
-    assert {item["name"] for item in deviation_stats.department_distribution} == {
-        "质量部",
-        "未知",
+    assert deviation_stats.major_count == 1
+    assert {
+        item.name for item in deviation_stats.department_distribution
+    } == {"质量部", "未知"}
+    assert deviation_stats.root_cause_distribution[0].name in {
+        "设施/设备",
+        "其它",
     }
+    assert len(deviation_stats.monthly_trend) == 6
 
     import app.modules.quality.service.quality_feishu_sync as sync_module
 

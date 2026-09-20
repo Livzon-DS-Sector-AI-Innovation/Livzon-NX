@@ -72,7 +72,7 @@ export function DeviationDetail(props: DeviationDetailProps = {}) {
   const { message, modal } = App.useApp()
   const queryClient = useQueryClient()
   const id = params.id as string
-  const { canQuery, canOperate, canDelete, workflowFieldsReadOnly, authorizationKey } = useDeviationPermissions()
+  const { canQuery, canOperate, canDelete, authorizationKey } = useDeviationPermissions()
   const [initialAuthorizationKey] = useState(authorizationKey)
 
   const { data: deviation, isLoading: loading, error } = useQuery<DeviationJsonView>({
@@ -86,6 +86,7 @@ export function DeviationDetail(props: DeviationDetailProps = {}) {
   const [editForm] = Form.useForm()
   // 监听"偏差是否曾发生"勾选值，控制曾发生编号输入框的可用/显隐
   const hasOccurredBefore = Form.useWatch('has_occurred_before', editForm)
+  const isClosed = Form.useWatch('is_closed', editForm)
 
   useEffect(() => {
     if (props.initialLoadError) {
@@ -116,6 +117,7 @@ export function DeviationDetail(props: DeviationDetailProps = {}) {
         corrective_actions: deviation.corrective_actions,
         material_disposition: deviation.material_disposition,
         is_closed: deviation.status === 'closed',
+        close_time: deviation.close_time ? dayjs(deviation.close_time) : null,
       })
     } else {
       editForm.resetFields()
@@ -126,7 +128,7 @@ export function DeviationDetail(props: DeviationDetailProps = {}) {
     if (!canOperate || !deviation) return
     try {
       const values = await editForm.validateFields()
-      // 组装更新数据：可编辑列对齐桌面台账
+      // 组装更新数据：可编辑列对齐桌面台账，关闭状态按台账实际登记维护
       await updateDeviation(deviation!.id, {
         description: values.description,
         affected_items: values.affected_items || null,
@@ -141,10 +143,12 @@ export function DeviationDetail(props: DeviationDetailProps = {}) {
           : null,
         corrective_actions: values.corrective_actions,
         material_disposition: values.material_disposition,
-        // 是否关闭：选择"是"时置为已关闭，否则恢复为草稿/进行中
-        ...(workflowFieldsReadOnly ? {} : {
-          status: values.is_closed === true ? 'closed' : values.is_closed === false && deviation!.status === 'closed' ? 'draft' : deviation!.status,
-        }),
+        // 是否关闭：选择"是"时置为已关闭（可填关闭时间），否则恢复为草稿/进行中
+        is_closed: values.is_closed === true,
+        close_time:
+          values.is_closed === true && values.close_time
+            ? values.close_time.toISOString()
+            : null,
       })
       message.success('保存成功')
       queryClient.invalidateQueries({ queryKey: ['quality-deviation', 'detail', id] })
@@ -206,7 +210,17 @@ export function DeviationDetail(props: DeviationDetailProps = {}) {
       </div>
 
       <Card title={canOperate ? '偏差台账编辑' : '偏差台账详情（只读）'} style={{ marginBottom: 16 }}>
-        <Form form={editForm} layout="vertical" disabled={!canOperate}>
+        <Form
+          form={editForm}
+          layout="vertical"
+          disabled={!canOperate}
+          onValuesChange={(changedValues) => {
+            // 取消关闭时清空关闭时间，避免遗留无效数据
+            if ('is_closed' in changedValues && changedValues.is_closed !== true) {
+              editForm.setFieldValue('close_time', null)
+            }
+          }}
+        >
           <Form.Item label="偏差编号">
             <Input value={deviation.deviation_code} disabled />
           </Form.Item>
@@ -256,14 +270,35 @@ export function DeviationDetail(props: DeviationDetailProps = {}) {
           <Form.Item name="material_disposition" label="产品/物料处理结果">
             <TextArea rows={3} placeholder="请输入产品/物料处理结果" />
           </Form.Item>
-          <Form.Item name="is_closed" label="是否关闭" extra={workflowFieldsReadOnly ? '关闭状态由业务流程维护，不能通过普通编辑修改。' : undefined}>
+          <Form.Item name="is_closed" label="是否关闭">
             <Select
-              disabled={!canOperate || workflowFieldsReadOnly}
+              disabled={!canOperate}
               placeholder="请选择是否关闭"
               options={[
                 { label: '是', value: true },
                 { label: '否', value: false },
               ]}
+            />
+          </Form.Item>
+          <Form.Item
+            name="close_time"
+            label="关闭时间"
+            rules={[
+              {
+                validator: async (_rule, value) => {
+                  if (isClosed === true && !value) {
+                    throw new Error('请选择关闭时间')
+                  }
+                },
+              },
+            ]}
+          >
+            {/* 台账口径：关闭时间只登记到日期，不精确到时刻 */}
+            <DatePicker
+              format="YYYY-MM-DD"
+              style={{ width: '100%' }}
+              placeholder="请选择关闭时间"
+              disabled={!canOperate || isClosed !== true}
             />
           </Form.Item>
         </Form>

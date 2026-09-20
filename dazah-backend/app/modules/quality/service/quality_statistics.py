@@ -34,6 +34,8 @@ async def get_deviation_statistics(
     db: AsyncSession,
     scope: DepartmentScope | None = None,
 ) -> DeviationStatistics:
+    from app.modules.quality.service import deviation_cause_analysis
+
     # 部门数据隔离（后台可配置可见部门范围），本地 department 列直接过滤
     scope_clause = department_in_clause(Deviation.department, scope) if scope else None
     scope_where = [scope_clause] if scope_clause is not None else []
@@ -47,43 +49,63 @@ async def get_deviation_statistics(
     )
     records = list(result.scalars().all())
 
+    # 懒加载补齐根因归类（AI 优先、关键词兜底），已有人工填写值不覆盖
+    await deviation_cause_analysis.fill_missing_analysis(db, records)
+
     total = len(records)
-    pending = 0
     closed_count = 0
+    major_count = 0
     dept_map: dict[str, int] = {}
-    status_map: dict[str, int] = {}
     level_map: dict[str, int] = {}
+    cause_map: dict[str, int] = {}
     monthly_counter: dict[str, int] = {}
 
     for record in records:
-        # 是否关闭：本地 status == "closed" 视为已关闭，其余为进行中
-        is_closed = record.status == "closed"
-        if is_closed:
+        if record.status == "closed":
             closed_count += 1
-            status_map["closed"] = status_map.get("closed", 0) + 1
-        else:
-            pending += 1
-            status = record.status or "draft"
-            status_map[status] = status_map.get(status, 0) + 1
+        if record.level == "major":
+            major_count += 1
 
         # 部门：本地 department 列（SQL 层已按 scope 过滤）
-        dept = record.department or "未知"
+        dept = (record.department or "").strip() or "未知"
         dept_map[dept] = dept_map.get(dept, 0) + 1
 
         # 等级：本地 level 枚举（minor/moderate/major），输出原文，前端映射中文展示
-        level = record.level or ""
-        if level:
-            level_map[level] = level_map.get(level, 0) + 1
+        level = (record.level or "").strip() or "未定级"
+        level_map[level] = level_map.get(level, 0) + 1
 
-        # 月度趋势：调查完成时间优先，为空回退创建时间
-        occurred_at = record.investigation_completed_at or record.created_at
+        # 根本原因归类：人机料法环口径，与 CAPA 原因类别一致
+        category = (record.root_cause_category or "").strip() or "其它"
+        cause_map[category] = cause_map.get(category, 0) + 1
+
+        # 月度趋势：发现日期优先，回退调查完成时间/创建时间
+        occurred_at = (
+            record.discovery_date
+            or record.investigation_completed_at
+            or record.created_at
+        )
         if occurred_at is not None:
             month_key = occurred_at.strftime("%Y-%m")
             monthly_counter[month_key] = monthly_counter.get(month_key, 0) + 1
 
-    department_distribution = [{"name": k, "count": v} for k, v in dept_map.items()]
-    status_distribution = [{"status": k, "count": v} for k, v in status_map.items()]
-    level_distribution = [{"level": k, "count": v} for k, v in level_map.items()]
+    department_distribution = sorted(
+        ({"name": k, "count": v} for k, v in dept_map.items()),
+        key=lambda row: row["count"],
+        reverse=True,
+    )
+    level_order = {"minor": 0, "moderate": 1, "major": 2, "未定级": 3}
+    level_distribution = sorted(
+        ({"name": k, "count": v} for k, v in level_map.items()),
+        key=lambda row: (level_order.get(row["name"], len(level_order)), -row["count"]),
+    )
+    cause_order = {
+        name: index
+        for index, name in enumerate(deviation_cause_analysis.REASON_CATEGORIES)
+    }
+    root_cause_distribution = sorted(
+        ({"name": k, "count": v} for k, v in cause_map.items()),
+        key=lambda row: (cause_order.get(row["name"], len(cause_order)), -row["count"]),
+    )
 
     now = datetime.now(UTC)
     monthly_trend: list[dict[str, Any]] = []
@@ -98,19 +120,13 @@ async def get_deviation_statistics(
             {"month": month_key, "count": monthly_counter.get(month_key, 0)}
         )
 
-    capa_records = await _fetch_feishu_records(db, "capa_ledger")
-    capa_total = len(capa_records)
-
     return DeviationStatistics(
         total=total,
-        pending=pending,
         closed_count=closed_count,
-        capa_total=capa_total,
-        department_distribution=department_distribution,
-        status_distribution=status_distribution,
+        major_count=major_count,
         level_distribution=level_distribution,
-        root_cause_distribution=[],
-        step_breakdown=[],
+        department_distribution=department_distribution,
+        root_cause_distribution=root_cause_distribution,
         monthly_trend=monthly_trend,
     )
 

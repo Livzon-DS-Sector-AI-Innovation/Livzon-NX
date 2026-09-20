@@ -751,6 +751,79 @@ class WarehouseRepository:
 
         await self.session.flush()
 
+    async def upsert_material_page_row_write_through(
+        self,
+        snapshot_id: Any,
+        row: MaterialPageRow,
+        *,
+        page_key: str | None = None,
+        record_meta: dict[str, dict[str, Any]] | None = None,
+    ) -> bool:
+        """单条写穿：编辑保存后按 source_record_id 精确 upsert，不等增量/全量。
+
+        与 upsert_material_page_rows_incremental 的差异：
+        - 只加载目标行，避免大表为单条更新整表载入内存；
+        - 本地软删行直接恢复——写穿以刚 GET 回的飞书记录为准，记录确认存在。
+        更新已有行保留原 row_order，维持快照行序稳定。
+        返回是否为新增行（调用方据此维护 snapshot.total_rows）。
+        """
+        result = await self.session.execute(
+            select(MaterialPageRow).where(
+                MaterialPageRow.page_snapshot_id == snapshot_id,
+                MaterialPageRow.source_record_id == row.source_record_id,
+            )
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            self._record_status_transitions(
+                snapshot_id,
+                row,
+                existing=existing,
+                page_key=page_key,
+                record_meta=record_meta,
+            )
+            existing.cells = row.cells
+            existing.search_text = row.search_text
+            existing.last_synced_at = row.last_synced_at
+            existing.is_deleted = False
+            await self.session.flush()
+            return False
+        self._record_status_transitions(
+            snapshot_id,
+            row,
+            existing=None,
+            page_key=page_key,
+            record_meta=record_meta,
+        )
+        self.session.add(row)
+        await self.session.flush()
+        return True
+
+    async def soft_delete_material_page_row(
+        self,
+        snapshot_id: Any,
+        source_record_id: str,
+    ) -> bool:
+        """删除写穿：按 source_record_id 软删镜像行，立即从本地列表消失。
+
+        增量同步只 upsert 变更行、永远追不掉飞书侧删除，全量对账要等
+        每日凌晨兜底；删除成功后同步软删本地行，页面无需再等。
+        返回是否实际删除了未删行。
+        """
+        result = await self.session.execute(
+            select(MaterialPageRow).where(
+                MaterialPageRow.page_snapshot_id == snapshot_id,
+                MaterialPageRow.source_record_id == source_record_id,
+                MaterialPageRow.is_deleted.is_(False),
+            )
+        )
+        existing = result.scalar_one_or_none()
+        if existing is None:
+            return False
+        existing.is_deleted = True
+        await self.session.flush()
+        return True
+
     def _record_status_transitions(
         self,
         snapshot_id: Any,

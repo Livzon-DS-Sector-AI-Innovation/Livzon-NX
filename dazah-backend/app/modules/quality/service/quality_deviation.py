@@ -541,7 +541,12 @@ async def get_deviation_detail(
     if not deviation:
         raise NotFoundException(resource="偏差", resource_id=str(deviation_id))
     assert_deviation_department(scope, deviation.department)
-    return DeviationDetail.model_validate(deviation)
+    detail = DeviationDetail.model_validate(deviation)
+    # 本地模型无 close_time 列：已关闭记录以状态更新时间作为关闭时间返回
+    detail.close_time = (
+        deviation.status_updated_at if deviation.status == "closed" else None
+    )
+    return detail
 
 
 async def get_related_capas_for_deviation(
@@ -787,14 +792,15 @@ async def update_deviation(
     assert_deviation_department(
         scope, update_data.get("department", deviation.department)
     )
+    # 台账口径：是否关闭/关闭时间允许在编辑中登记，其余流程字段仍走业务流程
+    is_closed = update_data.pop("is_closed", None)
+    close_time_raw = update_data.pop("close_time", None)
     if scope is not None:
         for field in (
             "status",
             "review_opinions",
             "final_code",
             "returned_step",
-            "is_closed",
-            "close_time",
             "report_versions",
             "ai_analysis",
             "investigation_records",
@@ -828,6 +834,22 @@ async def update_deviation(
     deviation.updated_at = datetime.now(UTC)
     if data.status:
         deviation.status_updated_at = datetime.now(UTC)
+
+    # 是否关闭：按台账登记维护关闭状态；关闭时间只登记到日期
+    if is_closed is not None:
+        if is_closed:
+            deviation.status = "closed"
+            close_time = (
+                datetime.fromisoformat(str(close_time_raw).replace("Z", "+00:00"))
+                if close_time_raw
+                else None
+            )
+            if close_time is not None and close_time.tzinfo is None:
+                close_time = close_time.replace(tzinfo=UTC)
+            deviation.status_updated_at = close_time or datetime.now(UTC)
+        elif deviation.status == "closed":
+            deviation.status = "draft"
+            deviation.status_updated_at = datetime.now(UTC)
 
     try:
         if scope is not None:

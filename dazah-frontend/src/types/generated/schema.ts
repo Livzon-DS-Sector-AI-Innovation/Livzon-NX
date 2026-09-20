@@ -37264,6 +37264,8 @@ export interface components {
             attachments?: string[] | null;
             /** Batch Number */
             batch_number?: string | null;
+            /** Close Time */
+            close_time?: string | null;
             /** Corrective Actions */
             corrective_actions?: string | null;
             /**
@@ -37667,6 +37669,8 @@ export interface components {
         };
         /** DeviationReporterOption */
         DeviationReporterOption: {
+            /** Avatar Url */
+            avatar_url?: string | null;
             /** Department */
             department: string;
             /** Name */
@@ -37676,34 +37680,18 @@ export interface components {
         };
         /** DeviationStatistics */
         DeviationStatistics: {
-            /** Capatotal */
-            capaTotal: number;
             /** Closedcount */
             closedCount: number;
             /** Departmentdistribution */
-            departmentDistribution: {
-                [key: string]: unknown;
-            }[];
+            departmentDistribution: components["schemas"]["StatDistributionItem"][];
             /** Leveldistribution */
-            levelDistribution: {
-                [key: string]: unknown;
-            }[];
+            levelDistribution: components["schemas"]["StatDistributionItem"][];
+            /** Majorcount */
+            majorCount: number;
             /** Monthlytrend */
-            monthlyTrend: {
-                [key: string]: unknown;
-            }[];
-            /** Pending */
-            pending: number;
+            monthlyTrend: components["schemas"]["MonthlyTrendPoint"][];
             /** Rootcausedistribution */
-            rootCauseDistribution: {
-                [key: string]: unknown;
-            }[];
-            /** Statusdistribution */
-            statusDistribution: {
-                [key: string]: unknown;
-            }[];
-            /** Stepbreakdown */
-            stepBreakdown: components["schemas"]["StepBreakdownItem"][];
+            rootCauseDistribution: components["schemas"]["StatDistributionItem"][];
             /** Total */
             total: number;
         };
@@ -46501,6 +46489,13 @@ export interface components {
              */
             planned_capacity_kg?: number | null;
         };
+        /** MonthlyTrendPoint */
+        MonthlyTrendPoint: {
+            /** Count */
+            count: number;
+            /** Month */
+            month: string;
+        };
         /** NCECreate */
         NCECreate: {
             /**
@@ -55177,16 +55172,12 @@ export interface components {
              */
             assessment_date?: string;
         };
-        /** StepBreakdownItem */
-        StepBreakdownItem: {
+        /** StatDistributionItem */
+        StatDistributionItem: {
             /** Count */
             count: number;
-            /** Label */
-            label: string;
-            /** Rolelabel */
-            roleLabel: string;
-            /** Step */
-            step: string;
+            /** Name */
+            name: string;
         };
         /**
          * StockAdjustRequest

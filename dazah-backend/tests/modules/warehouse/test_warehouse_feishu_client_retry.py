@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
+from app.modules.warehouse import feishu_client as feishu_client_module
 from app.modules.warehouse.feishu_client import WarehouseFeishuClient
 
 
@@ -59,6 +60,8 @@ class _FakeAsyncClient:
 def _reset_rate_limiter_state() -> None:
     WarehouseFeishuClient._rate_locks.clear()
     WarehouseFeishuClient._last_request_at.clear()
+    # 重置共享连接池，避免测试内 monkeypatch 的 fake 客户端泄漏到其他用例
+    feishu_client_module._shared_http_client = None
 
 
 @pytest.mark.asyncio

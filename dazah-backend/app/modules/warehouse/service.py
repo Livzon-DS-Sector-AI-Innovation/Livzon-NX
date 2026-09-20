@@ -2719,23 +2719,80 @@ class WarehouseService:
         # 以 99991672 拒绝
         client = await self._get_material_client(page_config.app_token)
         try:
+            put_url = (
+                f"/bitable/v1/apps/{page_config.app_token}"
+                f"/tables/{page_config.table_id}/records/{record_id}"
+            )
             data = await client.request(
                 "PUT",
-                (
-                    f"/bitable/v1/apps/{page_config.app_token}"
-                    f"/tables/{page_config.table_id}/records/{record_id}"
-                ),
+                put_url,
                 json_body={"fields": payload},
             )
             record = data.get("record", {}) if isinstance(data, dict) else {}
         except Exception as exc:
+            # 飞书级联单选字段（如原辅料出库总账的「规格」）在 API 元数据中
+            # 伪装为普通单选，写入却被 SingleSelectFieldConvFail 拒绝且无法
+            # 预识别。失败时逐字段定位并剔除不可写字段后重试，保证其余
+            # 字段正常保存。
+            if "ConvFail" in str(exc):
+                retried, skipped = await self._retry_put_excluding_unwritable(
+                    client, put_url, payload
+                )
+                if retried is not None:
+                    logger.warning(
+                        "warehouse update skipped feishu-restricted fields: "
+                        "page=%s skipped=%s",
+                        page_key,
+                        skipped,
+                    )
+                    record = (
+                        retried.get("record", {}) if isinstance(retried, dict) else {}
+                    )
+                    await self._write_through_updated_record(
+                        page_key, page_config, record_id
+                    )
+                    self._invalidate_page_cache(page_key)
+                    return record
             logger.exception("warehouse Feishu record update failed")
             raise HTTPException(
                 status_code=502,
                 detail="同步更新到飞书失败，请稍后重试",
             ) from exc
+        await self._write_through_updated_record(page_key, page_config, record_id)
         self._invalidate_page_cache(page_key)
         return record
+
+    async def _retry_put_excluding_unwritable(
+        self,
+        client: Any,
+        put_url: str,
+        payload: dict[str, Any],
+    ) -> tuple[dict[str, Any] | None, list[str]]:
+        """逐字段定位飞书拒绝写入的字段并剔除后重试。
+
+        返回 (重试响应, 被剔除字段名)；遇到非字段级错误（如记录不存在）
+        时原样抛出；返回 (None, []) 表示无法重试。
+        """
+        ok_fields: dict[str, Any] = {}
+        skipped: list[str] = []
+        for field_name, value in payload.items():
+            try:
+                await client.request(
+                    "PUT", put_url, json_body={"fields": {field_name: value}}
+                )
+                ok_fields[field_name] = value
+            except Exception as field_exc:
+                message = str(field_exc)
+                if "ConvFail" in message or "FieldNameNotFound" in message:
+                    skipped.append(field_name)
+                    continue
+                raise
+        if skipped and ok_fields:
+            data = await client.request(
+                "PUT", put_url, json_body={"fields": ok_fields}
+            )
+            return data, skipped
+        return None, skipped
 
     async def delete_material_page_record(
         self, page_key: str, record_id: str, *, scope: DepartmentScope | None = None
@@ -2764,7 +2821,109 @@ class WarehouseService:
                 status_code=502,
                 detail="同步删除到飞书失败，请稍后重试",
             ) from exc
+        # 删除写穿：增量同步只 upsert 变更行追不掉飞书侧删除，全量对账在
+        # 每日凌晨；这里同步软删本地镜像行，页面立即反映删除结果
+        try:
+            snapshot = await self.repo.get_material_page_snapshot(page_key)
+            if snapshot is not None:
+                deleted = await self.repo.soft_delete_material_page_row(
+                    snapshot.id, record_id
+                )
+                if deleted:
+                    snapshot.total_rows = max(snapshot.total_rows - 1, 0)
+        except Exception:
+            # 尽力回滚半途失败的写穿，避免污染会话导致请求收尾 commit 报错
+            await self._rollback_quietly()
+            logger.exception(
+                "warehouse record delete write-through failed: %s/%s",
+                page_key,
+                record_id,
+            )
         self._invalidate_page_cache(page_key)
+
+    async def _write_through_updated_record(
+        self,
+        page_key: str,
+        page_config: FeishuWarehouseMaterialPage,
+        record_id: str,
+    ) -> None:
+        """编辑保存成功后单条写穿本地镜像，页面立即反映最新值。
+
+        列表默认读本地快照，只写飞书时要等 10 分钟增量或凌晨全量才能看到；
+        这里 GET 回最新记录（含公式/lookup 列的重算值），按快照列结构归一化
+        后 upsert 对应镜像行。写穿失败只记日志不影响保存结果，增量/全量
+        同步兜底。
+        """
+        try:
+            snapshot = await self.repo.get_material_page_snapshot(page_key)
+            if snapshot is None:
+                return
+            columns = [
+                WarehouseFeishuColumn(**column)
+                for column in (snapshot.columns or [])
+                if column.get("key")
+            ]
+            if not columns:
+                return
+            fields_meta = await self._get_page_field_meta(page_config)
+            option_map = await self._build_page_option_map(page_config, fields_meta)
+            client = await self._get_feishu_client()
+            data = await client.request(
+                "GET",
+                (
+                    f"/bitable/v1/apps/{page_config.app_token}"
+                    f"/tables/{page_config.table_id}/records/{record_id}"
+                ),
+            )
+            record = data.get("record") if isinstance(data, dict) else None
+            if not isinstance(record, dict) or not record.get("record_id"):
+                return
+            normalized = self._build_normalized_rows(
+                columns, [record], option_map=option_map
+            )
+            if not normalized:
+                return
+            row = normalized[0]
+            resolved_id = str(row.get("__record_id") or record_id)
+            inserted = await self.repo.upsert_material_page_row_write_through(
+                snapshot.id,
+                MaterialPageRow(
+                    page_snapshot_id=snapshot.id,
+                    source_record_id=resolved_id,
+                    row_order=0,
+                    cells={
+                        key: value
+                        for key, value in row.items()
+                        if not key.startswith("__")
+                    },
+                    search_text=build_material_page_row_search_text(row),
+                    last_synced_at=datetime.now(UTC),
+                ),
+                page_key=page_key,
+                record_meta={
+                    resolved_id: {
+                        "created_ms": row.get("__created_time"),
+                        "modified_ms": row.get("__last_modified_time"),
+                    }
+                },
+            )
+            if inserted:
+                snapshot.total_rows += 1
+        except Exception:
+            # 尽力回滚半途失败的写穿，避免污染会话导致请求收尾 commit 报错
+            await self._rollback_quietly()
+            logger.exception(
+                "warehouse record update write-through failed: %s/%s",
+                page_key,
+                record_id,
+            )
+
+    async def _rollback_quietly(self) -> None:
+        """写穿失败后的尽力回滚；会话不可用时静默忽略，不影响原请求结果。"""
+        try:
+            await self.repo.session.rollback()
+        except Exception:
+            logger.debug("warehouse write-through rollback skipped", exc_info=True)
 
     async def update_inbound_inspection_result(
         self,
