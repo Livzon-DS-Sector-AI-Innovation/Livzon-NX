@@ -282,11 +282,24 @@ vi.mock('antd', async () => {
   ;(Checkbox as typeof Checkbox & { Group: typeof CheckboxGroup }).Group = CheckboxGroup
   const Card = ({ children, title, extra, onClick, ...props }: { children?: ReactNode; title?: ReactNode; extra?: ReactNode; onClick?: () => void } & Record<string, unknown>) =>
     createElement('section', { ...props, onClick }, title, extra, children)
-  const Table = ({ columns = [], dataSource = [], rowKey, locale, onRow, rowSelection, ...props }: { columns?: Array<{ title?: ReactNode; dataIndex?: string; render?: (value: unknown, record: Record<string, unknown>, index: number) => ReactNode }>; dataSource?: Array<Record<string, unknown>>; rowKey?: string | ((record: Record<string, unknown>) => string); locale?: { emptyText?: ReactNode }; onRow?: (record: Record<string, unknown>, index?: number) => Record<string, unknown>; rowSelection?: { onChange?: (keys: unknown[], rows?: Record<string, unknown>[]) => void } } & Record<string, unknown>) => {
+  const Table = ({ columns = [], dataSource = [], rowKey, locale, onRow, rowSelection, ...props }: { columns?: Array<{ title?: ReactNode; dataIndex?: string; render?: (value: unknown, record: Record<string, unknown>, index: number) => ReactNode }>; dataSource?: Array<Record<string, unknown>>; rowKey?: string | ((record: Record<string, unknown>) => string); locale?: { emptyText?: ReactNode }; onRow?: (record: Record<string, unknown>, index?: number) => Record<string, unknown>; rowSelection?: { selectedRowKeys?: unknown[]; onChange?: (keys: unknown[], rows?: Record<string, unknown>[]) => void; getCheckboxProps?: (record: Record<string, unknown>) => { disabled?: boolean } } } & Record<string, unknown>) => {
     const rows = dataSource.length ? dataSource.map((record, rowIndex) => {
       const key = typeof rowKey === 'function' ? rowKey(record) : rowKey ? String(record[rowKey]) : rowIndex
       const rowProps = onRow?.(record, rowIndex) ?? {}
-      return createElement('tr', { key, ...rowProps, onClick: (event: unknown) => { (rowProps.onClick as ((event: unknown) => void) | undefined)?.(event); rowSelection?.onChange?.([key], [record]) } }, columns.map((column, index) => createElement('td', { key: `${index}` }, column.render ? column.render(column.dataIndex ? record[column.dataIndex] : undefined, record, rowIndex) : column.dataIndex ? String(record[column.dataIndex] ?? '') : '')))
+      // 仅选择型表格渲染复选框：还原选中态与 getCheckboxProps.disabled，供置灰断言使用
+      const checkbox = rowSelection && (rowSelection.getCheckboxProps || rowSelection.selectedRowKeys)
+        ? createElement('input', {
+            key: 'selection-checkbox',
+            type: 'checkbox',
+            readOnly: true,
+            checked: Boolean(rowSelection.selectedRowKeys?.includes(key)),
+            disabled: rowSelection.getCheckboxProps?.(record)?.disabled ?? false,
+          })
+        : null
+      return createElement('tr', { key, ...rowProps, onClick: (event: unknown) => { (rowProps.onClick as ((event: unknown) => void) | undefined)?.(event); rowSelection?.onChange?.([key], [record]) } }, columns.map((column, index) => {
+        const content = column.render ? column.render(column.dataIndex ? record[column.dataIndex] : undefined, record, rowIndex) : column.dataIndex ? String(record[column.dataIndex] ?? '') : ''
+        return createElement('td', { key: `${index}` }, index === 0 && checkbox ? createElement(React.Fragment, { key: 'cell' }, checkbox, content) : content)
+      }))
     }) : createElement('tr', { key: 'empty' }, createElement('td', { colSpan: columns.length }, locale?.emptyText ?? ''))
     return createElement('table', { ...props }, createElement('thead', null, createElement('tr', null, columns.map((column, index) => createElement('th', { key: index }, column.title))),), createElement('tbody', null, rows))
   }
@@ -4591,10 +4604,20 @@ describe('sidebar navigation / onboarding attachment flow / validation audit she
     getMock('actions/quality', 'resolveDocumentEntryContent').mockResolvedValue([
       { name: '洁净区规程', code: 'SOP-2' },
     ])
+    // 该文件此前已培训并入台账：文件管理弹窗不得置灰，必须始终可再选（复训场景）
+    getMock('lib/api/client/hr', 'fetchUsedTrainingContent').mockResolvedValue([
+      { entry_name: '洁净区规程', entry_code: 'SOP-2', used_at: '2026-09-01T00:00:00Z' },
+    ])
     const rendered = renderClient(createElement(TrainingSignInTabsClient))
     await settle()
     findBtn(rendered, '从文件管理选择')?.click()
     await settle()
+    const pickerRowCheckbox = () =>
+      (Array.from(rendered.container.querySelectorAll('tr'))
+        .find((tr) => tr.textContent?.includes('洁净区规程'))
+        ?.querySelector('input[type="checkbox"]') ?? null) as HTMLInputElement | null
+    // 已培训文件未置灰、可正常勾选
+    expect(pickerRowCheckbox()?.disabled).toBe(false)
     // 空勾选确认：直接关闭分支
     findBtn(rendered, '确定')?.click()
     await settle()
@@ -4608,6 +4631,10 @@ describe('sidebar navigation / onboarding attachment flow / validation audit she
     await settle()
     expect(mocks.message.success).toHaveBeenCalledWith(expect.stringContaining('已从文件管理选择'))
     expect(rendered.container.textContent).toContain('《洁净区规程》')
+    // 再次打开弹窗：仅本份培训已勾选的文件置灰防重复录入
+    findBtn(rendered, '从文件管理选择')?.click()
+    await settle()
+    expect(pickerRowCheckbox()?.disabled).toBe(true)
     closeRendered(rendered)
   })
 })
