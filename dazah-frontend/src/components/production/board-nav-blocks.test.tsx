@@ -2,9 +2,14 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useProductContextStore } from '@/stores/product-context'
+
+const prodActions = vi.hoisted(() => ({
+  getProductionLineStatus: vi.fn(),
+}))
+vi.mock('@/actions/production', () => prodActions)
 
 import BoardNavBlocks from './board-nav-blocks'
 
@@ -29,11 +34,18 @@ describe('BoardNavBlocks', () => {
     document.body.append(container)
     root = createRoot(container)
     useProductContextStore.getState().setProductCode('FA')
+    prodActions.getProductionLineStatus.mockReset()
+    prodActions.getProductionLineStatus.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: { halted: [] },
+    })
   })
 
   afterEach(() => {
     act(() => root.unmount())
     container?.remove()
+    vi.clearAllMocks()
   })
 
   function render(props?: { hideCodes?: readonly string[] }) {
@@ -48,6 +60,26 @@ describe('BoardNavBlocks', () => {
     expect(tabs.map((t) => t.getAttribute('title'))).toEqual(
       EXPECTED_TAB_TITLES,
     )
+  })
+
+  it('greys out halted line tabs with a halt badge and hover hint', async () => {
+    prodActions.getProductionLineStatus.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: { halted: ['MC'] },
+    })
+    render()
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const haltedTag = container.querySelector('[data-testid="nav-halted-tag:MC"]')
+    expect(haltedTag?.textContent).toBe('停产中')
+    const haltedBlock = container.querySelector('[data-testid="nav-block:MC"]')
+    expect(haltedBlock?.getAttribute('title')).toBe('切换到 霉酚酸（停产中）')
+    // 未停产产品不带角标
+    expect(
+      container.querySelector('[data-testid="nav-halted-tag:DR"]'),
+    ).toBeNull()
   })
 
   it('shows the florfenicol short name with the full name only in the hover title', () => {

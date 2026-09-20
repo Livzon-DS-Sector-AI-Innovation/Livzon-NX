@@ -248,6 +248,9 @@ class SalesPlanDetailUpdate(BaseModel):
 class SalesPlanDetailResponse(SalesPlanDetailBase):
     id: uuid.UUID
     source: str | None = None
+    source_table_name: str | None = Field(
+        None, description="来源飞书数据表名（同步时写入）"
+    )
     created_at: datetime
     updated_at: datetime
 

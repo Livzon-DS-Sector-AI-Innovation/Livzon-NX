@@ -169,6 +169,7 @@ describe('PlanPage', () => {
           id: 'sp-1',
           product_name: 'L-色氨酸',
           unit: 'KG',
+          source_table_name: '5月份销售计划执行表',
           month_planned_delivery: 69000,
           month_delivered_qty: 0,
           delivery_completion_rate: 0,
@@ -187,9 +188,14 @@ describe('PlanPage', () => {
       await new Promise((r) => setTimeout(r, 120))
     })
     const text = container.textContent || ''
-    // 同步入口 + 销售计划执行表列头与数据
+    // 同步入口 + 数据来源表名（取同步写入的真实飞书表名）+ 列头与数据
     expect(text).toContain('同步设置')
-    expect(text).toContain('销售计划执行表 · 飞书同步数据')
+    expect(text).toContain('5月份销售计划执行表 · 飞书同步数据')
+    // 同步逻辑说明图标（悬浮/点击展示更新逻辑）
+    const tipIcon = container.querySelector(
+      '[data-testid="sales-sync-logic-tip"]',
+    ) as HTMLElement | null
+    expect(tipIcon).toBeTruthy()
     expect(text).toContain('本月计划发货量')
     expect(text).toContain('本月已发货量')
     expect(text).toContain('L-色氨酸')

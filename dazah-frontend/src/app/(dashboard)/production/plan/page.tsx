@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import dayjs from 'dayjs'
-import { BarChartOutlined } from '@ant-design/icons'
+import { BarChartOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
 import {
   Card,
   Col,
@@ -12,6 +12,7 @@ import {
   Statistic,
   Table,
   Tabs,
+  Tooltip,
   Typography,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -36,6 +37,10 @@ const SUMMARY_PLACEHOLDERS = [
 
 // 页面内模块 Tab 的本地持久化键：刷新后停留在上次所在模块
 const PLAN_PAGE_TAB_STORAGE_KEY = 'dazah.production.plan-page.tab'
+
+// 销售计划数据同步说明（悬浮/点击"飞书同步数据"旁的感叹号图标展示）
+const SALES_SYNC_LOGIC_TIP =
+  '更新逻辑：每天 8:00-20:00，系统每小时整点自动从飞书同步一次销售计划与生产计划数据；20:00 至次日 8:00 不自动同步，如有需要可在同步设置中手动同步。'
 
 // ═══════════════════════════════════════════
 // 主页面：飞书同步的生产计划台账
@@ -93,6 +98,18 @@ export default function PlanPage() {
   useEffect(() => {
     loadSales(salesPage, salesMonth) // eslint-disable-line react-hooks/set-state-in-effect
   }, [salesPage, salesMonth, loadSales])
+
+  // 来源表名：展示当前列表数据真实来源的飞书数据表名（同步时写入每行）；
+  // 跨多月或存量行无表名时无法用单一表名概括，回退通用名
+  const salesSourceTables = Array.from(
+    new Set(
+      salesPlans
+        .map((row) => row.source_table_name?.trim())
+        .filter((name): name is string => Boolean(name)),
+    ),
+  )
+  const salesSourceTableLabel =
+    salesSourceTables.length === 1 ? salesSourceTables[0] : '销售计划执行表'
 
   const changeSalesMonth = (d: dayjs.Dayjs | null) => {
     setSalesMonth(d ? d.format('YYYY-MM') : '')
@@ -289,7 +306,19 @@ export default function PlanPage() {
                     gap: 8,
                   }}
                 >
-                  <Text type="secondary">销售计划执行表 · 飞书同步数据</Text>
+                  <Text type="secondary">
+                    {salesSourceTableLabel} · 飞书同步数据
+                    <Tooltip
+                      title={SALES_SYNC_LOGIC_TIP}
+                      trigger={['hover', 'click']}
+                    >
+                      <ExclamationCircleOutlined
+                        data-testid="sales-sync-logic-tip"
+                        className="ml-1 cursor-pointer"
+                        style={{ color: 'var(--color-muted)' }}
+                      />
+                    </Tooltip>
+                  </Text>
                   <div className="flex items-center gap-2">
                     <DatePicker
                       picker="month"

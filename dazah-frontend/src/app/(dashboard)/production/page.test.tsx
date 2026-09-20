@@ -20,6 +20,8 @@ const actions = vi.hoisted(() => ({
   getPlans: vi.fn(),
   getProductionSummary: vi.fn(),
   getSalesPlanDetails: vi.fn(),
+  getProductionLineStatus: vi.fn(),
+  setProductionLineStatus: vi.fn(),
 }))
 
 vi.mock('@/actions/production', () => actions)
@@ -184,6 +186,17 @@ describe('ProductionHomePage (fermentation board)', () => {
       message: 'success',
       data: [],
       meta: { total: 0 },
+    })
+    // 产线停产状态：默认全部生产中
+    actions.getProductionLineStatus.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: { halted: [] },
+    })
+    actions.setProductionLineStatus.mockResolvedValue({
+      code: 200,
+      message: '已标记为停产中',
+      data: { product_code: 'FA', halted: true },
     })
     // 产品 Tab 复位为默认值，避免用例间状态串扰
     useProductContextStore.setState({ productCode: 'FA' })
@@ -429,6 +442,34 @@ describe('ProductionHomePage (fermentation board)', () => {
     const text = (container.textContent || '') + (document.body.textContent || '')
     expect(text).toContain('产销计划')
     expect(text).toContain('暂无销售计划数据，请先完成飞书同步设置并同步')
+  })
+
+  it('collapses the board into a halt placeholder when the line is halted', async () => {
+    actions.getProductionLineStatus.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: { halted: ['FA'] },
+    })
+    await render()
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    // 占位态：整页显示停产提示，看板卡片收起（标题卡按设计保留）
+    expect(text).toContain('该产品生产线停产中')
+    expect(text).not.toContain('本月计划批次')
+    expect(text).not.toContain('立即刷新')
+    // 状态下拉显示停产中
+    const select = container.querySelector('[data-testid="line-status-select"]')
+    expect(select?.textContent).toContain('停产中')
+  })
+
+  it('keeps the halt confirm dialog closed by default with no stray countdown', async () => {
+    await render()
+    const bodyText = document.body.textContent || ''
+    // 确认框默认关闭；未发起切换时不出现停产/恢复确认文案
+    expect(bodyText).not.toContain('确认停产')
+    expect(bodyText).not.toContain('确认恢复生产')
   })
 
   it('renders placeholder cards with plan yield when no archive covers the period', async () => {

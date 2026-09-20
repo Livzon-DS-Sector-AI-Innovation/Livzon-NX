@@ -7,9 +7,12 @@
 // 第 6 位美伐他汀（MV）——他汀复用 MC 看板管线；
 // 第 7/8 位 L-色氨酸（TY）、氟苯尼考（FL，Tab 展示短名，悬停提示全名）。
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Col, Row, Typography } from 'antd'
 import { ExperimentOutlined } from '@ant-design/icons'
+import {
+  getProductionLineStatus,
+} from '@/actions/production'
 import {
   restoreProductContext,
   useProductContextStore,
@@ -51,6 +54,25 @@ export default function BoardNavBlocks({
 } = {}) {
   const productCode = useProductContextStore((s) => s.productCode)
   const setProductCode = useProductContextStore((s) => s.setProductCode)
+  // 停产产品导航块置灰 + 角标（状态全平台共享；拉取失败不阻塞导航）
+  const [haltedLines, setHaltedLines] = useState<string[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await getProductionLineStatus()
+        if (!cancelled && res.code === 200 && res.data) {
+          setHaltedLines(res.data.halted ?? [])
+        }
+      } catch {
+        // 状态不可用时导航块按生产中展示
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // 挂载后恢复上次选择的产品 Tab（生产概览/排产计划两页共用）
   useEffect(() => {
@@ -74,12 +96,15 @@ export default function BoardNavBlocks({
 
   return (
     <Row gutter={[12, 12]}>
-      {visibleTabs.map((tab) => (
+      {visibleTabs.map((tab) => {
+        const halted = haltedLines.includes(tab.code)
+        return (
         // lg（≥992px）起 24/3=8 个一行；md 平板宽度回退 6+2 两行
         <Col xs={12} sm={8} md={4} lg={3} key={tab.code}>
           <div
-            title={`切换到 ${tab.fullName ?? tab.name}${tab.code === 'SUMMARY' ? '（五产线聚合）' : ' 生产线与排产数据'}`}
+            title={`切换到 ${tab.fullName ?? tab.name}${tab.code === 'SUMMARY' ? '（五产线聚合）' : halted ? '（停产中）' : ' 生产线与排产数据'}`}
             onClick={() => setProductCode(tab.code)}
+            data-testid={`nav-block:${tab.code}`}
             className="flex items-center justify-center gap-2 rounded-lg border bg-white cursor-pointer transition-colors"
             style={{
               height: 56,
@@ -89,15 +114,32 @@ export default function BoardNavBlocks({
                   : 'var(--color-hairline)',
               backgroundColor:
                 productCode === tab.code ? 'var(--color-primary-soft, #f0f7ff)' : undefined,
+              opacity: halted ? 0.55 : 1,
             }}
           >
             <ExperimentOutlined style={{ color: tab.color, fontSize: 18 }} />
             <Text strong style={{ fontSize: 13 }}>
               {tab.name}
             </Text>
+            {halted && (
+              <span
+                data-testid={`nav-halted-tag:${tab.code}`}
+                style={{
+                  fontSize: 10,
+                  lineHeight: '14px',
+                  padding: '0 4px',
+                  borderRadius: 3,
+                  color: '#8c8c8c',
+                  background: 'var(--color-hairline-soft, #f0f0f0)',
+                }}
+              >
+                停产中
+              </span>
+            )}
           </div>
         </Col>
-      ))}
+        )
+      })}
     </Row>
   )
 }

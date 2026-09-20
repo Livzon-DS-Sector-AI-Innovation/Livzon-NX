@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.response import success_response
 from app.modules.production import fermentation_board_service as board
+from app.platform.audit.service import record_audit_log
 from app.platform.identity.deps import CurrentUser
 from app.shared.module_api import create_module_router
 from app.shared.module_registry import MODULES_BY_CODE
@@ -31,6 +32,10 @@ BEIJING_TZ = timezone(timedelta(hours=8))
 class MaintenanceBody(BaseModel):
     tank_no: str = Field(..., min_length=1, max_length=32, description="罐号")
     reason: str = Field(..., min_length=1, max_length=255, description="检修原因")
+
+
+class ProductionLineStatusBody(BaseModel):
+    halted: bool = Field(..., description="是否停产中")
 
 
 class BatchActualBody(BaseModel):
@@ -431,4 +436,54 @@ async def set_fermentation_month_capacity(
     )
     return success_response(
         data=board.serialize_month_setting(item), message="已保存本月计划产能"
+    )
+
+
+@router.get(
+    "/production-line-status",
+    summary="产品生产线停产状态（停产品线代码列表）",
+)
+async def list_production_line_status(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    halted_map = await board.get_line_halted_map(db)
+    return success_response(
+        data={
+            "halted": sorted(
+                code for code, halted in halted_map.items() if halted
+            )
+        }
+    )
+
+
+@router.post(
+    "/production-line-status",
+    summary="设置产品生产线停产状态（停产/恢复生产）",
+)
+async def set_production_line_status(
+    body: ProductionLineStatusBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+    product: str = Query(..., description="产品代码（FA/MC/DR/LV/MV/TY/FL）"),
+) -> Any:
+    if product not in board.PRODUCTION_LINE_CODES:
+        raise HTTPException(status_code=400, detail=f"未知的产品代码：{product}")
+    item = await board.set_line_halted(
+        db,
+        product_code=product,
+        halted=body.halted,
+        updated_by=current_user.id if current_user else None,
+    )
+    await record_audit_log(
+        db,
+        action="production_line_status_set",
+        user_id=current_user.id if current_user else None,
+        resource_type="production_line_status",
+        resource_id=item.id,
+        new_value={"product_code": product, "halted": body.halted},
+    )
+    return success_response(
+        data={"product_code": product, "halted": bool(item.halted)},
+        message="已标记为停产中" if body.halted else "已恢复生产",
     )

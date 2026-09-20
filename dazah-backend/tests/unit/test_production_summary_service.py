@@ -47,6 +47,37 @@ async def test_summary_lists_five_products_in_fixed_order(monkeypatch: Any) -> N
 
 
 @pytest.mark.anyio
+async def test_summary_hides_halted_lines_for_current_month(monkeypatch: Any) -> None:
+    _patch_board_io(monkeypatch)
+    monkeypatch.setattr(
+        board, "get_line_halted_map", AsyncMock(return_value={"MC": True})
+    )
+    payload = await board.build_production_summary(
+        _empty_db(), ref_date=date(2026, 9, 16), has_ferm=True, has_extract=True
+    )
+    codes = [row["product_code"] for row in payload["rows"]]
+    assert "MC" not in codes
+    assert codes == ["DR", "FA", "LV", "MV", "TY", "FL"]
+
+
+@pytest.mark.anyio
+async def test_summary_keeps_halted_lines_for_history_months(monkeypatch: Any) -> None:
+    _patch_board_io(monkeypatch)
+    monkeypatch.setattr(
+        board, "get_line_halted_map", AsyncMock(return_value={"MC": True})
+    )
+    # ref 月（9月）≠ 当前真实月（10月）：历史回看不受停产影响
+    payload = await board.build_production_summary(
+        _empty_db(),
+        ref_date=date(2026, 9, 16),
+        has_ferm=True,
+        has_extract=True,
+        today=date(2026, 10, 5),
+    )
+    assert [row["product_code"] for row in payload["rows"]] == EXPECTED_PRODUCTS
+
+
+@pytest.mark.anyio
 async def test_summary_uncovered_new_products_keep_extract_metrics(
     monkeypatch: Any,
 ) -> None:
