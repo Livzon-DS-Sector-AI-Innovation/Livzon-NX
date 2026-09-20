@@ -61263,6 +61263,20 @@
         "title": "ProductionFeishuConfigUpsert",
         "type": "object"
       },
+      "ProductionLineStatusBody": {
+        "properties": {
+          "halted": {
+            "description": "是否停产中",
+            "title": "Halted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "halted"
+        ],
+        "title": "ProductionLineStatusBody",
+        "type": "object"
+      },
       "ProductionPlanCreate": {
         "description": "创建生产计划",
         "properties": {
@@ -153483,6 +153497,125 @@
         "summary": "获取工艺步骤列表",
         "tags": [
           "生产管理"
+        ]
+      }
+    },
+    "/api/v1/production/production-line-status": {
+      "get": {
+        "operationId": "list_production_line_status_api_v1_production_production_line_status_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response List Production Line Status Api V1 Production Production Line Status Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "产品生产线停产状态（停产品线代码列表）",
+        "tags": [
+          "生产管理",
+          "生产管理 - 发酵车间看板"
+        ]
+      },
+      "post": {
+        "operationId": "set_production_line_status_api_v1_production_production_line_status_post",
+        "parameters": [
+          {
+            "description": "产品代码（FA/MC/DR/LV/MV/TY/FL）",
+            "in": "query",
+            "name": "product",
+            "required": true,
+            "schema": {
+              "description": "产品代码（FA/MC/DR/LV/MV/TY/FL）",
+              "title": "Product",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductionLineStatusBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Set Production Line Status Api V1 Production Production Line Status Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "设置产品生产线停产状态（停产/恢复生产）",
+        "tags": [
+          "生产管理",
+          "生产管理 - 发酵车间看板"
         ]
       }
     },
