@@ -214,15 +214,46 @@ it('renders read-only details without save or delete actions', async () => {
   expect(Array.from(container.querySelectorAll('textarea')).every((input) => input.disabled)).toBe(true)
 })
 
-it('ordinary editing never submits workflow state or grants deletion', async () => {
+it('ordinary editing submits ledger close status without deletion rights', async () => {
   setGrant(['access', 'query', 'operate'])
   await renderPage(<DeviationDetail />)
-  expect(container.textContent).toContain('关闭状态由业务流程维护')
+  expect(container.textContent).not.toContain('关闭状态由业务流程维护')
+  expect(container.textContent).toContain('是否关闭')
   expect(container.textContent).not.toContain('删除')
   const save = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.replace(/\s/g, '') === '保存')
   await act(async () => save?.click())
   expect(mocks.updateDeviation).toHaveBeenCalledOnce()
-  expect(mocks.updateDeviation.mock.calls[0][1]).not.toHaveProperty('status')
+  expect(mocks.updateDeviation.mock.calls[0][1]).toMatchObject({ is_closed: false, close_time: null })
+})
+
+it('registers the close date requirement and clears close state when reopened', async () => {
+  setGrant(['access', 'query', 'operate'])
+  await renderPage(<DeviationDetail />)
+  const save = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.replace(/\s/g, '') === '保存')
+
+  const closedSelect = container.querySelector('#is_closed')!
+  await act(async () => closedSelect.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
+  const yes = Array.from(document.querySelectorAll('.ant-select-item-option')).find((item) => item.textContent === '是')
+  await act(async () => yes?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)) })
+
+  // 已选关闭但未填关闭时间：校验拦截提交
+  await act(async () => save?.click())
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)) })
+  const closeTimeErrors = Array.from(container.querySelectorAll('.ant-form-item-explain-error'))
+    .map((node) => node.textContent)
+  expect(closeTimeErrors).toContain('请选择关闭时间')
+  expect(mocks.updateDeviation).not.toHaveBeenCalled()
+
+  // 取消关闭：关闭时间联动清空后可直接提交
+  await act(async () => closedSelect.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
+  const no = Array.from(document.querySelectorAll('.ant-select-item-option')).find((item) => item.textContent === '否')
+  await act(async () => no?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)) })
+  await act(async () => save?.click())
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)) })
+  expect(mocks.updateDeviation).toHaveBeenCalledOnce()
+  expect(mocks.updateDeviation.mock.calls[0][1]).toMatchObject({ is_closed: false, close_time: null })
 })
 
 it('does not seed a new authorization version with stale server detail props', async () => {

@@ -55,6 +55,7 @@ from app.modules.quality.service import (
     quality_feishu_pages,
     quality_feishu_sync,
     quality_management,
+    quality_statistics,
     validation,
 )
 from app.platform.identity.page_policy import (
@@ -545,7 +546,9 @@ async def get_related_capas(
 async def get_deviation_statistics(
     context: ToolContext, _: BaseModel
 ) -> dict[str, Any]:
-    return _dump_object(await quality_management.get_deviation_statistics(context.db))
+    return _dump_object(
+        await quality_statistics.get_deviation_statistics(context.db)
+    )
 
 
 @agent_tool(

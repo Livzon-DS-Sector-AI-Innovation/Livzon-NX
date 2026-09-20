@@ -200,6 +200,7 @@ export interface DeviationDetail {
   corrective_actions?: string | null;
   root_cause_analysis?: string | null;
   investigation_completed_at?: string | null;
+  close_time?: string | null;
   returned_step: ApprovalStep | null;
   status_updated_at: string | null;
   report_content: string | null;
@@ -1067,29 +1068,18 @@ export interface DeviationAiWorkbenchRecord {
 // ============ Dashboard Statistics ============
 export interface DeviationDashboardStats {
   total: number
-  capaTotal: number
-  pending: number
   closedCount: number
+  majorCount: number
+  levelDistribution: Array<{
+    name: string
+    count: number
+  }>
   departmentDistribution: Array<{
     name: string
     count: number
   }>
-  statusDistribution: Array<{
-    status: string
-    count: number
-  }>
-  levelDistribution: Array<{
-    level: string
-    count: number
-  }>
   rootCauseDistribution: Array<{
-    category: string
-    count: number
-  }>
-  stepBreakdown: Array<{
-    step: string
-    label: string
-    roleLabel: string
+    name: string
     count: number
   }>
   monthlyTrend: Array<{ month: string; count: number }>

@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -54,7 +55,9 @@ class FakeAsyncClient:
     async def __aexit__(self: Any, *args: Any) -> None:
         return None
 
-    async def post(self: Any, path: str, json: dict[str, Any]) -> FakeResponse:
+    async def post(
+        self: Any, path: str, json: dict[str, Any] | None = None, **kwargs: Any
+    ) -> FakeResponse:
         FakeAsyncClient.token_calls += 1
         return FakeResponse({"code": 0, "tenant_access_token": "tenant-token"})
 
@@ -66,6 +69,7 @@ class FakeAsyncClient:
         params: dict[str, Any] | None = None,
         json: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
+        **kwargs: Any,
     ) -> FakeResponse:
         FakeAsyncClient.request_calls.append((method, path, params or json))
         FakeAsyncClient.request_bodies.append(json)
@@ -107,7 +111,7 @@ class FakeAsyncClient:
 
 
 @pytest.fixture(autouse=True)
-def patch_dependencies(monkeypatch: pytest.MonkeyPatch) -> FakeRedis:
+def patch_dependencies(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeRedis]:
     fake_redis: Any = FakeRedis()
     FakeAsyncClient.token_calls = 0
     FakeAsyncClient.request_calls = []
@@ -115,7 +119,10 @@ def patch_dependencies(monkeypatch: pytest.MonkeyPatch) -> FakeRedis:
     FakeAsyncClient.response_override = None
     monkeypatch.setattr(module, "redis_client", fake_redis)
     monkeypatch.setattr(module.httpx, "AsyncClient", FakeAsyncClient)  # type: ignore[attr-defined]
-    return fake_redis  # type: ignore[no-any-return]
+    # 共享连接池会缓存 fake 客户端实例；进出用例都清空，防止带出文件外
+    module._shared_http_client = None
+    yield fake_redis
+    module._shared_http_client = None
 
 
 @pytest.mark.asyncio

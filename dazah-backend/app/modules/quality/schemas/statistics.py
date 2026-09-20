@@ -9,26 +9,28 @@ class CamelAliasModel(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
-class StepBreakdownItem(CamelAliasModel):
-    step: str
-    label: str
-    role_label: str = Field(alias="roleLabel")
+class StatDistributionItem(CamelAliasModel):
+    name: str
+    count: int
+
+
+class MonthlyTrendPoint(CamelAliasModel):
+    month: str
     count: int
 
 
 class DeviationStatistics(CamelAliasModel):
     total: int
-    pending: int
     closed_count: int = Field(alias="closedCount")
-    capa_total: int = Field(alias="capaTotal")
-    department_distribution: list[dict[str, Any]] = Field(
+    major_count: int = Field(alias="majorCount")
+    level_distribution: list[StatDistributionItem] = Field(alias="levelDistribution")
+    department_distribution: list[StatDistributionItem] = Field(
         alias="departmentDistribution"
     )
-    status_distribution: list[dict[str, Any]] = Field(alias="statusDistribution")
-    level_distribution: list[dict[str, Any]] = Field(alias="levelDistribution")
-    root_cause_distribution: list[dict[str, Any]] = Field(alias="rootCauseDistribution")
-    step_breakdown: list[StepBreakdownItem] = Field(alias="stepBreakdown")
-    monthly_trend: list[dict[str, Any]] = Field(alias="monthlyTrend")
+    root_cause_distribution: list[StatDistributionItem] = Field(
+        alias="rootCauseDistribution"
+    )
+    monthly_trend: list[MonthlyTrendPoint] = Field(alias="monthlyTrend")
 
 
 class CapaStatistics(CamelAliasModel):

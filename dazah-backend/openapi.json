@@ -27229,6 +27229,18 @@
             ],
             "title": "Batch Number"
           },
+          "close_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close Time"
+          },
           "corrective_actions": {
             "anyOf": [
               {
@@ -29117,6 +29129,17 @@
       },
       "DeviationReporterOption": {
         "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
           "department": {
             "title": "Department",
             "type": "string"
@@ -29140,63 +29163,40 @@
       },
       "DeviationStatistics": {
         "properties": {
-          "capaTotal": {
-            "title": "Capatotal",
-            "type": "integer"
-          },
           "closedCount": {
             "title": "Closedcount",
             "type": "integer"
           },
           "departmentDistribution": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/StatDistributionItem"
             },
             "title": "Departmentdistribution",
             "type": "array"
           },
           "levelDistribution": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/StatDistributionItem"
             },
             "title": "Leveldistribution",
             "type": "array"
           },
+          "majorCount": {
+            "title": "Majorcount",
+            "type": "integer"
+          },
           "monthlyTrend": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/MonthlyTrendPoint"
             },
             "title": "Monthlytrend",
             "type": "array"
           },
-          "pending": {
-            "title": "Pending",
-            "type": "integer"
-          },
           "rootCauseDistribution": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/StatDistributionItem"
             },
             "title": "Rootcausedistribution",
-            "type": "array"
-          },
-          "statusDistribution": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Statusdistribution",
-            "type": "array"
-          },
-          "stepBreakdown": {
-            "items": {
-              "$ref": "#/components/schemas/StepBreakdownItem"
-            },
-            "title": "Stepbreakdown",
             "type": "array"
           },
           "total": {
@@ -29206,14 +29206,11 @@
         },
         "required": [
           "total",
-          "pending",
           "closedCount",
-          "capaTotal",
-          "departmentDistribution",
-          "statusDistribution",
+          "majorCount",
           "levelDistribution",
+          "departmentDistribution",
           "rootCauseDistribution",
-          "stepBreakdown",
           "monthlyTrend"
         ],
         "title": "DeviationStatistics",
@@ -50838,6 +50835,24 @@
         "title": "MonthCapacityBody",
         "type": "object"
       },
+      "MonthlyTrendPoint": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          }
+        },
+        "required": [
+          "month",
+          "count"
+        ],
+        "title": "MonthlyTrendPoint",
+        "type": "object"
+      },
       "NCECreate": {
         "properties": {
           "action_taken": {
@@ -71064,32 +71079,22 @@
         "title": "StartReturnRecallProcessingRequest",
         "type": "object"
       },
-      "StepBreakdownItem": {
+      "StatDistributionItem": {
         "properties": {
           "count": {
             "title": "Count",
             "type": "integer"
           },
-          "label": {
-            "title": "Label",
-            "type": "string"
-          },
-          "roleLabel": {
-            "title": "Rolelabel",
-            "type": "string"
-          },
-          "step": {
-            "title": "Step",
+          "name": {
+            "title": "Name",
             "type": "string"
           }
         },
         "required": [
-          "step",
-          "label",
-          "roleLabel",
+          "name",
           "count"
         ],
-        "title": "StepBreakdownItem",
+        "title": "StatDistributionItem",
         "type": "object"
       },
       "StockAdjustRequest": {

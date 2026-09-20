@@ -152,7 +152,8 @@ from app.modules.quality.schemas.statistics import (
     CapaStatistics,
     ChangeStatistics,
     DeviationStatistics,
-    StepBreakdownItem,
+    MonthlyTrendPoint,
+    StatDistributionItem,
     ValidationStatistics,
 )
 from app.modules.quality.schemas.sync import (
@@ -285,7 +286,8 @@ __all__ = [
     "AttachmentReviewOut",
     "CreateAttachmentReviewRequest",
     # Statistics
-    "StepBreakdownItem",
+    "StatDistributionItem",
+    "MonthlyTrendPoint",
     "DeviationStatistics",
     "CapaStatistics",
     "ChangeStatistics",
