@@ -246,6 +246,8 @@ async def _sync_sales_plan(
     ) or tables[0]
     table_id = str(table["table_id"])
     data_month = _sales_plan_data_month(str(table.get("name") or ""))
+    # 记录来源数据表名：随每行落库，前端据此展示真实来源（如“5月份销售计划执行表”）
+    source_table_name = str(table.get("name") or "").strip() or None
     # “<上一年>年当月发货量”为同比参照列，列名随年份滚动，按动态年份匹配
     prev_year_delivery_col = f"{date.today().year - 1}年当月发货量"
 
@@ -297,6 +299,7 @@ async def _sync_sales_plan(
             mapped["product_name"] = product_name
             mapped["source"] = "feishu"
             mapped["data_month"] = data_month
+            mapped["source_table_name"] = source_table_name
 
             if record:
                 for k, v in mapped.items():

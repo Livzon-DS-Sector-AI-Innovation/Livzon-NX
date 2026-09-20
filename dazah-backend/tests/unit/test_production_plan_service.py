@@ -338,6 +338,8 @@ def test_sync_sales_plan_creates_and_updates() -> Any:
     assert existing.month_delivered_qty == 300.0
     # 数据月份按源数据表名解析，写入行上
     assert existing.data_month == f"{date.today().year}-09"
+    # 同步时记录来源飞书数据表名，供前端展示真实来源
+    assert existing.source_table_name == "9月份销售计划执行表"
     # 同比参照列按“<上一年>年当月发货量”动态匹配
     assert existing.current_year_delivered == 12000.0
 
@@ -380,6 +382,7 @@ def test_sync_sales_plan_creates_new_without_product_field() -> Any:
     assert result["updated"] == 0
     added = session.add.call_args_list[0].args[0]
     assert added.data_month == f"{date.today().year}-09"
+    assert added.source_table_name == "9月份销售计划执行表"
 
 
 def test_sync_sales_plan_targets_first_table_when_table_id_empty() -> Any:

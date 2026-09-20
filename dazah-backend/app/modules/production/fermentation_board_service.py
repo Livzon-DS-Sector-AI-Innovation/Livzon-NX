@@ -32,7 +32,7 @@ from app.modules.production.fermentation_batch_actual_models import (
 from app.modules.production.fermentation_month_setting_models import (
     FermentationMonthSetting,
 )
-from app.modules.production.models import ProductionPlan
+from app.modules.production.models import ProductionLineStatus, ProductionPlan
 from app.modules.production.schedule_excel_models import ScheduleExcelArchive
 from app.modules.production.tank_maintenance_models import TankMaintenance
 
@@ -51,6 +51,9 @@ WAREHOUSE_INBOUND_PRODUCT_NAMES: dict[str, str] = {
     "TY": "L-色氨酸",
     "FL": "2%氟苯尼考预混剂",
 }
+
+# 支持停产状态的产品生产线（与提炼已出成品卡同一产品集合）
+PRODUCTION_LINE_CODES = frozenset(WAREHOUSE_INBOUND_PRODUCT_NAMES)
 
 # 放罐窗口：计划放罐时间起 2 小时内为「放罐中」（批次仍在罐上，不算完成）；
 # 窗口结束后批次才视为「已放罐/完成」（罐状态、recent 最近完成、完成 KPI 同口径）。
@@ -3268,6 +3271,17 @@ async def build_production_summary(
                 "alerts": board_alerts if has_ferm else [],
             }
         )
+    # 停产产线仅在查看当前月汇总时隐藏（历史月份照常显示全部产线）
+    halted_map = await get_line_halted_map(db)
+    halted_lines = {
+        code
+        for code, halted in halted_map.items()
+        if halted
+        and ref_date.year == kpi_today.year
+        and ref_date.month == kpi_today.month
+    }
+    if halted_lines:
+        rows = [row for row in rows if row["product_code"] not in halted_lines]
     return {"period": period, "rows": rows}
 
 
@@ -3284,6 +3298,45 @@ async def get_month_setting(
         )
     )
     return result.scalar_one_or_none()
+
+
+async def get_line_halted_map(session: AsyncSession) -> dict[str, bool]:
+    """全部产品生产线的停产状态映射（未记录的产品视为生产中）。"""
+    result = await session.execute(
+        select(ProductionLineStatus).where(
+            ProductionLineStatus.is_deleted.is_(False)
+        )
+    )
+    return {
+        item.product_code: bool(item.halted)
+        for item in result.scalars().all()
+    }
+
+
+async def set_line_halted(
+    session: AsyncSession,
+    *,
+    product_code: str,
+    halted: bool,
+    updated_by: Any = None,
+) -> ProductionLineStatus:
+    """设置产品生产线停产状态（upsert；人工即时状态，不自动恢复）。"""
+    result = await session.execute(
+        select(ProductionLineStatus).where(
+            ProductionLineStatus.product_code == product_code,
+            ProductionLineStatus.is_deleted.is_(False),
+        )
+    )
+    item = result.scalar_one_or_none()
+    if item is None:
+        item = ProductionLineStatus(product_code=product_code, halted=halted)
+        session.add(item)
+    else:
+        item.halted = halted
+    if updated_by is not None:
+        item.updated_by = updated_by
+    await session.flush()
+    return item
 
 
 async def upsert_month_setting(

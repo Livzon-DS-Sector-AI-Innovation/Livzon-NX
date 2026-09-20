@@ -354,6 +354,16 @@ def test_production_summary_route_bound_to_overview_page():
     assert binding.scope_adapter == "production.dashboard"
 
 
+def test_sales_plan_details_get_route_covers_overview_and_sales_plan_pages():
+    """销售计划明细读取同时授权产销计划页与生产概览页。"""
+    binding = page_policy.api_binding_for_route(
+        "GET", "/api/v1/production/sales-plan-details"
+    )
+    assert binding is not None
+    assert "production:overview" in binding.page_keys
+    assert "production:plan:sales-plan" in binding.page_keys
+
+
 def test_plans_get_route_covers_overview_and_sales_plan_pages():
     """/plans 读取同时授权产销计划页与生产概览页，写操作不受影响。"""
     binding = page_policy.api_binding_for_route("GET", "/api/v1/production/plans")

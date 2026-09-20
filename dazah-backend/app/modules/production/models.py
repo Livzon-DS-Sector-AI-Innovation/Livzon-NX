@@ -272,6 +272,34 @@ class SalesPlanDetail(BaseModel):
         nullable=True,
         comment="数据来源",
     )
+    source_table_name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="来源飞书数据表名（同步时写入，如“5月份销售计划执行表”）",
+    )
+
+
+class ProductionLineStatus(BaseModel):
+    """产品生产线停产状态 — 人工维护的即时状态，全平台可见。"""
+
+    __tablename__ = "production_line_status"
+    __table_args__ = (
+        UniqueConstraint(
+            "product_code", name="uq_production_line_status_product"
+        ),
+        {"schema": "production"},
+    )
+
+    product_code: Mapped[str] = mapped_column(
+        String(16), nullable=False, comment="产品代码（FA/MC/DR/LV/MV/TY/FL）"
+    )
+    halted: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
+        nullable=False,
+        comment="是否停产中",
+    )
 
 
 class ProductionFeishuReadSourceRoot(BaseModel):

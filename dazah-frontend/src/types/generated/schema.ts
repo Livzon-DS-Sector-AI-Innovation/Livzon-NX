@@ -13027,6 +13027,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/production/production-line-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 产品生产线停产状态（停产品线代码列表） */
+        get: operations["list_production_line_status_api_v1_production_production_line_status_get"];
+        put?: never;
+        /** 设置产品生产线停产状态（停产/恢复生产） */
+        post: operations["set_production_line_status_api_v1_production_production_line_status_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/production/production-summary": {
         parameters: {
             query?: never;
@@ -50660,6 +50678,14 @@ export interface components {
              * @default
              */
             table_id: string;
+        };
+        /** ProductionLineStatusBody */
+        ProductionLineStatusBody: {
+            /**
+             * Halted
+             * @description 是否停产中
+             */
+            halted: boolean;
         };
         /**
          * ProductionPlanCreate
@@ -94170,6 +94196,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_production_line_status_api_v1_production_production_line_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_production_line_status_api_v1_production_production_line_status_post: {
+        parameters: {
+            query: {
+                /** @description 产品代码（FA/MC/DR/LV/MV/TY/FL） */
+                product: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductionLineStatusBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

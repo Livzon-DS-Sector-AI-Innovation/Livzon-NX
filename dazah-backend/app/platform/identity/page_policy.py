@@ -1622,7 +1622,12 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
         sales_plan_page + overview,
         scope_adapter="production.plan",
     )
-    # 生产汇总：五产线发酵/提炼关键指标聚合（只读），由生产概览页调用
+    # 停产状态：GET 供概览/排产页导航块与看板渲染（读）；POST 设置/解除停产
+    # 仅概览页操作权限（前端切换时二次确认 + 5 秒倒计时）
+    add("GET", "/production-line-status", overview + scheduling_page)
+    add("POST", "/production-line-status", overview, "operate")
+    # 生产汇总：五产线发酵/提炼关键指标聚合（只读），由生产概览页调用；
+    # 当前月汇总服务端隐藏停产产线（历史月份照常显示）
     add(
         "GET",
         "/production-summary",

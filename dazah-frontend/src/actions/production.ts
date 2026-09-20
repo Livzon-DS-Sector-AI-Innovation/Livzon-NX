@@ -582,3 +582,25 @@ export async function setFermentationMonthCapacity(
   )
   return response.json()
 }
+
+// ============ Production Line Status (产线停产状态) ============
+
+export async function getProductionLineStatus() {
+  const response = await fetch(
+    `${API_BASE}/api/v1/production/production-line-status`,
+    { headers: await getAuthHeaders() },
+  )
+  return response.json()
+}
+
+export async function setProductionLineStatus(halted: boolean, product: string) {
+  const response = await fetch(
+    `${API_BASE}/api/v1/production/production-line-status?product=${encodeURIComponent(product)}`,
+    {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ halted }),
+    },
+  )
+  return response.json()
+}

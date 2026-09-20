@@ -194,6 +194,8 @@ export interface SalesPlanDetail {
   product_name: string
   /** 数据月份(YYYY-MM)，按源数据表名归属 */
   data_month?: string | null
+  /** 来源飞书数据表名（同步时写入，如“5月份销售计划执行表”） */
+  source_table_name?: string | null
   unit?: string | null
   last_month_delivered_uninvoiced?: number | null
   current_year_delivered?: number | null

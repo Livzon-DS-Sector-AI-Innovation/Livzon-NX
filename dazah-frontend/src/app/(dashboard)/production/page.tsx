@@ -41,6 +41,7 @@ import BoardNavBlocks from '@/components/production/board-nav-blocks'
 import BatchProgressBar from '@/components/production/batch-progress-bar'
 import ProductionSummary from '@/components/production/production-summary'
 import SalesPlanCard from '@/components/production/sales-plan-card'
+import LineStatusConfirmModal from '@/components/production/line-status-confirm-modal'
 import { useProductContextStore } from '@/stores/product-context'
 import { usePermission } from '@/hooks/usePermission'
 import {
@@ -56,6 +57,8 @@ import {
   deleteFermentationBatchActual,
   setFermentationMonthCapacity,
   getPlans,
+  getProductionLineStatus,
+  setProductionLineStatus,
 } from '@/actions/production'
 import type {
   FermentationBoard,
@@ -142,6 +145,10 @@ export default function ProductionDashboard() {
   const [board, setBoard] = useState<FermentationBoard | null>(null)
   const [boardMessage, setBoardMessage] = useState<string>('')
   const [loading, setLoading] = useState(true)
+  // 产线停产状态：停产产品代码集合（全平台共享，人工切换，不自动恢复）
+  const [haltedLines, setHaltedLines] = useState<string[]>([])
+  // 停产切换确认：pendingHalted 为目标状态（null=关闭）；倒计时在确认框组件内
+  const [haltPending, setHaltPending] = useState<boolean | null>(null)
   // 周期回看：空串 = 今天所在周期；否则为所选周期内任意日期
   const [viewDate, setViewDate] = useState<string>('')
   // 当前产品上下文（导航块切换），看板按此产品取数；
@@ -205,6 +212,52 @@ export default function ProductionDashboard() {
     const timer = setInterval(() => void loadBoard(), REFRESH_INTERVAL_MS)
     return () => clearInterval(timer)
   }, [loadBoard, isSummaryView])
+
+  // 产线停产状态：进入页面拉一次，切换确认后本地即时更新
+  const loadHaltedLines = useCallback(async () => {
+    try {
+      const res = await getProductionLineStatus()
+      if (res.code === 200 && res.data) {
+        setHaltedLines(res.data.halted ?? [])
+      }
+    } catch {
+      // 状态拉取失败不阻塞看板，仅无法显示停产标记
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadHaltedLines() // eslint-disable-line react-hooks/set-state-in-effect -- 页面初始加载
+  }, [loadHaltedLines])
+
+  // 当前产品是否停产中
+  const isHalted = !isSummaryView && haltedLines.includes(productCode)
+
+  const openHaltConfirm = (target: boolean) => {
+    setHaltPending(target)
+  }
+
+  const applyHaltChange = async () => {
+    if (haltPending === null) return
+    const target = haltPending
+    setHaltPending(null)
+    try {
+      const res = await setProductionLineStatus(target, productCode)
+      if (res.code === 200) {
+        setHaltedLines((prev) =>
+          target
+            ? prev.includes(productCode)
+              ? prev
+              : [...prev, productCode]
+            : prev.filter((code) => code !== productCode),
+        )
+        message.success(res.message || '状态已更新')
+      } else {
+        message.error(res.message || '状态更新失败')
+      }
+    } catch {
+      message.error('状态更新失败')
+    }
+  }
 
   // 提炼计划产量：跟随概览自然月拉生产计划；选择按月记入本地存储，
   // 页面刷新后恢复所选行，仅当该行不在当月数据时才回退第一行
@@ -821,6 +874,60 @@ export default function ProductionDashboard() {
                 ? '生产汇总'
                 : `${PRODUCT_NAMES[productCode] ?? PRODUCT_NAMES.FA}生产线`}
             </Title>
+            {/* 生产线状态：生产中(绿)/停产中(红) 二态切换（仅概览操作权限可改）。
+                选项 label 为带色点节点，选中值与下拉项同款颜色 */}
+            {!isSummaryView && (
+              <Select
+                size="small"
+                style={{ width: 104 }}
+                data-testid="line-status-select"
+                value={isHalted ? 'halted' : 'running'}
+                disabled={!canOperate}
+                onChange={(value) =>
+                  openHaltConfirm(value === 'halted')
+                }
+                options={[
+                  {
+                    value: 'running',
+                    label: (
+                      <span
+                        data-testid="line-status-label:running"
+                        className="flex items-center gap-2"
+                      >
+                        <span
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: 4,
+                            background: '#52c41a',
+                          }}
+                        />
+                        生产中
+                      </span>
+                    ),
+                  },
+                  {
+                    value: 'halted',
+                    label: (
+                      <span
+                        data-testid="line-status-label:halted"
+                        className="flex items-center gap-2"
+                      >
+                        <span
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: 4,
+                            background: '#cf1322',
+                          }}
+                        />
+                        停产中
+                      </span>
+                    ),
+                  },
+                ]}
+              />
+            )}
             <DatePicker
               size="small"
               picker="month"
@@ -851,10 +958,10 @@ export default function ProductionDashboard() {
           </Space>
           <Space size={16}>
             <Text type="secondary">系统时间：{clock}</Text>
-            {!isSummaryView && (
+            {!isSummaryView && !isHalted && (
               <Text type="secondary">数据刷新：5 分钟</Text>
             )}
-            {!isSummaryView && (
+            {!isSummaryView && !isHalted && (
               <>
                 <Button
                   size="small"
@@ -876,6 +983,20 @@ export default function ProductionDashboard() {
         </div>
       </Card>
 
+      {/* 停产占位：收起全部看板卡片，整页仅保留标题卡（含状态下拉与恢复入口） */}
+      {isHalted && (
+        <Card variant="borderless" className="shadow-sm">
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              <span style={{ fontSize: 16 }}>
+                该产品生产线停产中
+              </span>
+            }
+          />
+        </Card>
+      )}
+
       {/* 汇总视图：五产线聚合表 + 播报汇总 */}
       {isSummaryView && (
         <>
@@ -885,7 +1006,8 @@ export default function ProductionDashboard() {
         </>
       )}
 
-      {!isSummaryView && (
+      {/* 产品看板：停产中整块收起（数据保留在库，恢复生产即原样回来） */}
+      {!isSummaryView && !isHalted && (
       <>
       {/* 告警跑马灯 */}
       <Card
@@ -1427,6 +1549,13 @@ export default function ProductionDashboard() {
           按当前扎帐月保存；输入 310000 表示 310 吨。留空保存则清除设置。
         </Text>
       </Modal>
+      {/* 生产线状态切换确认：确认按钮 5 秒倒计时后才可点，取消随时可点 */}
+      <LineStatusConfirmModal
+        productName={PRODUCT_NAMES[productCode] ?? PRODUCT_NAMES.FA}
+        pendingHalted={haltPending}
+        onCancel={() => setHaltPending(null)}
+        onConfirm={() => void applyHaltChange()}
+      />
     </div>
   )
 }
