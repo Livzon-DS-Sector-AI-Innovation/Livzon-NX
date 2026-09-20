@@ -135,10 +135,10 @@ async def test_batch_import_binds_upgrades_version_and_reports_unmatched(
     results = body["data"]["results"]
     by_name = {item["file_name"]: item for item in results}
 
-    # .md 附件：编码匹配 + 版本 02 → 03 自动升级
+    # .md 附件：编码匹配 + 版本 02 → 03 自动升级（编号优先于名称）
     md_result = by_name["SOP-QA-001-03偏差处理程序.md"]
     assert md_result["matched"] is True
-    assert md_result["match_type"] == "name"
+    assert md_result["match_type"] == "code"
     assert md_result["version_updated"] is True
     assert md_result["old_code"] == "SOP-QA-001/02"
     assert md_result["new_code"] == "SOP-QA-001/03"

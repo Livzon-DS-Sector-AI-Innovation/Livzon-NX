@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
@@ -57,10 +58,13 @@ class _FakeAsyncClient:
 
 
 @pytest.fixture(autouse=True)
-def _reset_rate_limiter_state() -> None:
+def _reset_rate_limiter_state() -> Iterator[None]:
     WarehouseFeishuClient._rate_locks.clear()
     WarehouseFeishuClient._last_request_at.clear()
-    # 重置共享连接池，避免测试内 monkeypatch 的 fake 客户端泄漏到其他用例
+    # 重置共享连接池，避免测试内 monkeypatch 的 fake 客户端泄漏到其他用例；
+    # teardown 再清一次，防止本文件最后一个用例缓存的 fake 带出文件外
+    feishu_client_module._shared_http_client = None
+    yield
     feishu_client_module._shared_http_client = None
 
 
