@@ -10,14 +10,14 @@ import BoardNavBlocks from './board-nav-blocks'
 
 const EXPECTED_TAB_TITLES = [
   '切换到 汇总（五产线聚合）',
-  '切换到 霉酚酸 看板与排产数据',
-  '切换到 多拉菌素 看板与排产数据',
-  '切换到 L-苯丙氨酸 看板与排产数据',
-  '切换到 洛伐他汀 看板与排产数据',
-  '切换到 美伐他汀 看板与排产数据',
-  '切换到 L-色氨酸 看板与排产数据',
+  '切换到 霉酚酸 生产线与排产数据',
+  '切换到 多拉菌素 生产线与排产数据',
+  '切换到 L-苯丙氨酸 生产线与排产数据',
+  '切换到 洛伐他汀 生产线与排产数据',
+  '切换到 美伐他汀 生产线与排产数据',
+  '切换到 L-色氨酸 生产线与排产数据',
   // 氟苯尼考 Tab 展示短名，悬停提示完整产品名
-  '切换到 2%氟苯尼考预混剂 看板与排产数据',
+  '切换到 2%氟苯尼考预混剂 生产线与排产数据',
 ]
 
 describe('BoardNavBlocks', () => {
@@ -72,7 +72,7 @@ describe('BoardNavBlocks', () => {
   it('switches the shared product context on tab click', () => {
     render()
     const ty = container.querySelector(
-      '[title="切换到 L-色氨酸 看板与排产数据"]',
+      '[title="切换到 L-色氨酸 生产线与排产数据"]',
     )
     expect(ty).not.toBeNull()
     act(() => {
