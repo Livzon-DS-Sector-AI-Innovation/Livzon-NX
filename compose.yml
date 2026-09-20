@@ -144,7 +144,6 @@ services:
     volumes:
       - backend_uploads:/app/uploads
       - backend_storage:/app/storage
-      - app_data:/app/data
     tmpfs:
       - /tmp:mode=1777,size=1g
     networks:
@@ -244,7 +243,5 @@ volumes:
     name: dazah_backend_uploads
   backend_storage:
     name: dazah_backend_storage
-  app_data:
-    name: dazah_app_data
   hermes_data:
     name: dazah_hermes_data
