@@ -1369,15 +1369,13 @@ export default function TrainingSignInTabsClient() {
         </div>
       </Modal>
 
-      {/* 从质量管理-文件管理选择培训内容 */}
+      {/* 从质量管理-文件管理选择培训内容：已培训过的文件必须始终可再选（复训场景），
+          仅屏蔽本份培训已勾选的文件防止同一份签到表重复录入；不得传入 usedNames 置灰 */}
       <DocumentCatalogPickerModal
         open={docPickerOpen}
         onClose={() => setDocPickerOpen(false)}
         onConfirm={handleDocPickerConfirm}
-        excludeNames={[
-          ...checkedEntries.map((e) => e.name),
-          ...Array.from(usedNames),
-        ]}
+        excludeNames={checkedEntries.map((e) => e.name)}
       />
 
       <style jsx global>{`

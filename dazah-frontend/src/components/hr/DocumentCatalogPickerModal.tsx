@@ -16,7 +16,7 @@ interface Props {
   open: boolean
   onClose: () => void
   onConfirm: (items: DocumentCatalogPick[]) => void
-  /** 已培训/已勾选的文件名称（归一化后匹配），置灰不可再选 */
+  /** 本份培训已勾选的文件名称（归一化后匹配），置灰防止同一份签到表重复录入；不得传入全局已培训名单 */
   excludeNames?: string[]
 }
 
