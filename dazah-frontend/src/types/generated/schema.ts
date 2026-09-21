@@ -94243,7 +94243,7 @@ export interface operations {
     set_production_line_status_api_v1_production_production_line_status_post: {
         parameters: {
             query: {
-                /** @description 产品代码（FA/MC/DR/LV/MV/TY/FL） */
+                /** @description 产品代码（FA/MC/LN/DR/LV/MV/TY/FL） */
                 product: string;
             };
             header?: never;
