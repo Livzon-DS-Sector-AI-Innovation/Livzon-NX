@@ -68,6 +68,7 @@ ALLOWED_EXT = {
     ".md",
     ".doc",
     ".docx",
+    ".docm",
     ".wps",
     ".pdf",
     ".png",
@@ -76,7 +77,7 @@ ALLOWED_EXT = {
     ".gif",
     ".bmp",
 }
-WORD_EXT = {".doc", ".docx", ".wps"}
+WORD_EXT = {".doc", ".docx", ".docm", ".wps"}
 TEXT_MD_MIME = "text/markdown; charset=utf-8"
 
 # 转换后 md 中图片占位引用（document_catalog_docx_md 产物），如 (img_000.png)

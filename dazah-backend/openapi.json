@@ -10106,6 +10106,18 @@
             "description": "版本升级前的文件编码（未升级为空）",
             "title": "Old Code"
           },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "未更新原因，原目录及附件保持不变",
+            "title": "Reason"
+          },
           "version_updated": {
             "default": false,
             "description": "是否自动升级了条目文件编码版本",
@@ -10130,7 +10142,7 @@
           },
           "failed": {
             "default": 0,
-            "description": "未匹配文件数",
+            "description": "未更新文件数（含版本未提高、识别失败或匹配歧义）",
             "title": "Failed",
             "type": "integer"
           },
@@ -166941,7 +166953,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "统一导入附件（自动识别名称/编号绑定条目，失败时 LLM 匹配；文件名版本高于条目时自动升级文件编码）",
+        "summary": "按附件正文编号匹配目录，仅高版本同步编号、生效日期并替换附件",
         "tags": [
           "质量管理",
           "Quality-Document-Catalog"
@@ -167552,7 +167564,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "按文件名编码自动绑定上传附件",
+        "summary": "按附件正文编号匹配并更新高版本附件",
         "tags": [
           "质量管理",
           "Quality-Document-Catalog"

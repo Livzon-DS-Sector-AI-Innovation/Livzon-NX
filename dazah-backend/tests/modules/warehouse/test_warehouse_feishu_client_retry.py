@@ -68,6 +68,97 @@ def _reset_rate_limiter_state() -> Iterator[None]:
     feishu_client_module._shared_http_client = None
 
 
+class _CodedResponse(_FakeResponse):
+    """携带飞书业务码的 200 响应，用于覆盖 code != 0 的重试边界。"""
+
+    def __init__(self, code: int, msg: str):
+        super().__init__(200)
+        self._payload = {"code": code, "msg": msg, "data": {}}
+
+
+def _setup_retry_env(
+    monkeypatch: pytest.MonkeyPatch, queue: list[Any]
+) -> tuple[list[_FakeAsyncClient], AsyncMock, WarehouseFeishuClient]:
+    """与既有 Retry-After 用例相同的 mock 环境：fake HTTP + mock sleep。"""
+    sleep_mock = AsyncMock()
+    monkeypatch.setattr(
+        "app.modules.warehouse.feishu_client.asyncio",
+        SimpleNamespace(sleep=sleep_mock, Lock=asyncio.Lock),
+    )
+    monkeypatch.setattr(
+        "app.modules.warehouse.feishu_client.redis_client", SimpleNamespace()
+    )
+    created: list[_FakeAsyncClient] = []
+
+    def factory(**kwargs: Any) -> _FakeAsyncClient:
+        client = _FakeAsyncClient(queue)
+        created.append(client)
+        return client
+
+    monkeypatch.setattr(
+        "app.modules.warehouse.feishu_client.httpx.AsyncClient", factory
+    )
+    client = WarehouseFeishuClient(
+        app_id="app", app_secret="secret", app_token="base-x"
+    )
+    client.get_tenant_access_token = AsyncMock(return_value="token")
+    return created, sleep_mock, client
+
+
+def _backoff_delays(sleep_mock: AsyncMock, min_delay: float) -> list[float]:
+    return [
+        call.args[0]
+        for call in sleep_mock.await_args_list
+        if call.args and call.args[0] >= min_delay
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("code", "msg"),
+    [
+        (1254045, "Data not ready, please try again later"),
+        (1254042, "Data not ready, please try again later"),
+    ],
+)
+async def test_data_not_ready_is_retried(
+    monkeypatch: pytest.MonkeyPatch, code: int, msg: str
+) -> None:
+    """飞书 bitable "Data not ready" 为索引瞬时未就绪：码或文案命中都应重试。"""
+    queue: list[Any] = [_CodedResponse(code, msg), _FakeResponse(200)]
+    created, sleep_mock, client = _setup_retry_env(monkeypatch, queue)
+
+    result = await client.request(
+        "POST", "/bitable/v1/apps/base-x/tables/t/records/search"
+    )
+
+    assert result == {"ok": True}
+    assert sum(c.calls for c in created) == 2
+    retry_delays = _backoff_delays(sleep_mock, 1.0)
+    assert len(retry_delays) == 1
+    assert retry_delays[0] < 1.31  # 首轮指数退避 1s + 随机抖动上限
+
+
+@pytest.mark.asyncio
+async def test_other_bitable_error_not_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """其余业务码不属于可重试边界，立即失败不拖慢同步轮次。"""
+    queue: list[Any] = [
+        _CodedResponse(1254040, "Not Found"),
+        _FakeResponse(200),
+    ]
+    created, sleep_mock, client = _setup_retry_env(monkeypatch, queue)
+
+    with pytest.raises(RuntimeError, match="Not Found"):
+        await client.request(
+            "POST", "/bitable/v1/apps/base-x/tables/t/records/search"
+        )
+
+    assert sum(c.calls for c in created) == 1
+    assert _backoff_delays(sleep_mock, 1.0) == []
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("retry_after_header", "min_delay"),

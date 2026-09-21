@@ -76,3 +76,14 @@ print('conversion, admission and child lifetime passed')
         assert "child lifetime passed" in result.stdout
     finally:
         subprocess.run(["docker", "rm", "-f", name], capture_output=True, timeout=30)
+
+@pytest.mark.parametrize('name', ['Dockerfile', 'Dockerfile.dev'])
+def test_conversion_entrypoint_is_normalized_and_exercised_during_build(name):
+    recipe = (Path(__file__).resolve().parents[2] / name).read_text(encoding='utf-8')
+    copy = recipe.index('COPY scripts/cd/conversion_limit.py')
+    normalize = recipe.index("sed -i 's/\\r$//' /usr/local/bin/dazah-conversion", copy)
+    executable = recipe.index('chmod 0755 /usr/local/bin/dazah-conversion', normalize)
+    probe = recipe.index('RUN /usr/bin/soffice --headless --version', executable)
+    assert copy < normalize < executable < probe
+    # Git must also retain executable Python entrypoint LF on Windows checkouts.
+    assert 'scripts/cd/*.py text eol=lf' in (Path(__file__).resolve().parents[2] / '.gitattributes').read_text()

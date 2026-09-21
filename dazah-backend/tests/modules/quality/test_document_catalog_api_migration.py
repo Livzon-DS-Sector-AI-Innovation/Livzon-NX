@@ -229,9 +229,7 @@ async def test_resolve_content_prefers_pinned_entry_id_without_name_fallback(
     monkeypatch.setattr(api, "_require_user", Mock())
     picked = _entry(uuid4(), code="SMP-005/06")
     picked.name = "多拉菌素提炼工艺规程"
-    monkeypatch.setattr(
-        api.crud, "find_latest_entry_by_name", AsyncMock()
-    )
+    monkeypatch.setattr(api.crud, "find_latest_entry_by_name", AsyncMock())
     monkeypatch.setattr(
         api,
         "read_entry_md_contents",
@@ -261,9 +259,7 @@ async def test_resolve_content_prefers_pinned_entry_id_without_name_fallback(
     miss = await api.resolve_document_entry_content(
         DocumentEntryResolveRequest(
             entries=[
-                DocumentEntryResolveQuery(
-                    name="多拉菌素提炼工艺规程", entry_id=uuid4()
-                )
+                DocumentEntryResolveQuery(name="多拉菌素提炼工艺规程", entry_id=uuid4())
             ]
         ),
         _Db(_Result(None)),
@@ -368,8 +364,20 @@ async def test_attachment_upload_auto_bind_delete_preview_and_import_paths(
     )
     monkeypatch.setattr(api, "read_upload_with_limit", AsyncMock(return_value=b"pdf"))
     monkeypatch.setattr(api, "sniff_upload_mime", Mock(return_value="application/pdf"))
+    from app.modules.quality.service.document_catalog_attachment import (
+        VersionUpdateInfo,
+    )
+
+    monkeypatch.setattr(api, "prepare_revision", AsyncMock())
     monkeypatch.setattr(
-        api, "upload_attachment_to_entry", AsyncMock(return_value=attachment)
+        api,
+        "replace_attachment",
+        AsyncMock(
+            return_value=(
+                attachment,
+                VersionUpdateInfo("QA-001/02", "QA-001/03"),
+            )
+        ),
     )
 
     db = _Db(_Result(entry), _Result(entry))
@@ -377,11 +385,12 @@ async def test_attachment_upload_auto_bind_delete_preview_and_import_paths(
     assert uploaded.status_code == 200
     assert _response_body(uploaded)["data"]["attachment"]["storage_key"]
 
-    monkeypatch.setattr(api, "find_entry_by_file_name", AsyncMock(return_value=None))
-    not_bound = await api.auto_bind_document_entry_attachment(_upload(), _Db(), user)
-    assert not_bound.status_code == 404
+    monkeypatch.setattr(api, "find_revision_entry", AsyncMock(return_value=None))
+    with pytest.raises(AppException) as exc:
+        await api.auto_bind_document_entry_attachment(_upload(), _Db(), user)
+    assert exc.value.status_code == 404
 
-    monkeypatch.setattr(api, "find_entry_by_file_name", AsyncMock(return_value=entry))
+    monkeypatch.setattr(api, "find_revision_entry", AsyncMock(return_value=entry))
     auto = await api.auto_bind_document_entry_attachment(
         _upload(), _Db(_Result(entry)), user
     )
@@ -413,27 +422,18 @@ async def test_attachment_upload_auto_bind_delete_preview_and_import_paths(
     assert preview.status_code == 200
     assert preview.body == b"pdf"
 
-    from app.modules.quality.service import (
-        document_catalog_attachment as attachment_service,
-    )
-
     monkeypatch.setattr(
-        attachment_service,
-        "match_entry_for_attachment",
-        AsyncMock(return_value=(None, "none")),
-    )
-    monkeypatch.setattr(
-        attachment_service,
-        "upload_attachment_to_entry",
-        AsyncMock(return_value=attachment),
+        api,
+        "find_revision_entry",
+        AsyncMock(return_value=None),
     )
     batch = await api.batch_import_document_attachments([_upload()], _Db(), user)
     assert _response_body(batch)["data"]["failed"] == 1
 
     monkeypatch.setattr(
-        attachment_service,
-        "match_entry_for_attachment",
-        AsyncMock(return_value=(entry, "exact")),
+        api,
+        "find_revision_entry",
+        AsyncMock(return_value=entry),
     )
     bound = await api.batch_import_document_attachments([_upload()], _Db(), user)
     assert _response_body(bound)["data"]["bound"] == 1

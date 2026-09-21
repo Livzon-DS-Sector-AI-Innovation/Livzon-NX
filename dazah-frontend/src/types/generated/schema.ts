@@ -15182,7 +15182,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 统一导入附件（自动识别名称/编号绑定条目，失败时 LLM 匹配；文件名版本高于条目时自动升级文件编码） */
+        /** 按附件正文编号匹配目录，仅高版本同步编号、生效日期并替换附件 */
         post: operations["batch_import_document_attachments_api_v1_quality_document_catalog_attachments_import_post"];
         delete?: never;
         options?: never;
@@ -15287,7 +15287,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 按文件名编码自动绑定上传附件 */
+        /** 按附件正文编号匹配并更新高版本附件 */
         post: operations["auto_bind_document_entry_attachment_api_v1_quality_document_entries_attachments_auto_bind_post"];
         delete?: never;
         options?: never;
@@ -30601,6 +30601,11 @@ export interface components {
              */
             old_code?: string | null;
             /**
+             * Reason
+             * @description 未更新原因，原目录及附件保持不变
+             */
+            reason?: string | null;
+            /**
              * Version Updated
              * @description 是否自动升级了条目文件编码版本
              * @default false
@@ -30620,7 +30625,7 @@ export interface components {
             bound: number;
             /**
              * Failed
-             * @description 未匹配文件数
+             * @description 未更新文件数（含版本未提高、识别失败或匹配歧义）
              * @default 0
              */
             failed: number;

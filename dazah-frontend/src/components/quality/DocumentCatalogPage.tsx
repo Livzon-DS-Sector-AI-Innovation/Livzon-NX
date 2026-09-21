@@ -1,5 +1,6 @@
 'use client'
 
+import { attachmentImportFeedback, documentAttachmentAccept } from './documentAttachmentImport'
 import { useEffect, useState } from 'react'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
 import {
@@ -304,7 +305,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
     }
   }
 
-  // ---------- 统一附件导入（自动识别名称/编号，失败 LLM 匹配） ----------
+  // ---------- 正文编号匹配，仅高版本替换 ----------
 
   const handleAttachmentImport = async (fileList: File[]) => {
     if (!canImport) return
@@ -315,35 +316,11 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
       fileList.forEach((file) => formData.append('files', file))
       const result = await batchImportDocumentAttachments(formData)
       if (result) {
-        const importResults = result.results ?? []
-        const unmatched = importResults.filter((item) => !item.matched)
-        const upgraded = importResults.filter((item) => item.version_updated)
-        const baseText =
-          unmatched.length === 0
-            ? `附件导入完成：${result.bound} 个全部自动绑定`
-            : `附件导入：成功 ${result.bound} 个，未匹配 ${unmatched.length} 个（${unmatched
-                .slice(0, 3)
-                .map((item) => item.file_name)
-                .join('、')}${unmatched.length > 3 ? ' 等' : ''}）`
-        if (upgraded.length > 0) {
-          const detail = upgraded
-            .slice(0, 3)
-            .map(
-              (item) =>
-                `${item.entry_code ?? item.new_code ?? ''}（${item.old_code ?? ''} → ${item.new_code ?? ''}）`
-            )
-            .join('、')
-          message.success(
-            `${baseText}；其中 ${result.version_updated_count} 个文件编号已自动升级：${detail}${
-              upgraded.length > 3 ? ' 等' : ''
-            }`
-          )
+        const feedback = attachmentImportFeedback(result)
+        if (feedback.warning) {
+          message.warning(feedback.text)
         } else {
-          if (unmatched.length === 0) {
-            message.success(baseText)
-          } else {
-            message.warning(baseText)
-          }
+          message.success(feedback.text)
         }
       }
       refresh()
@@ -580,12 +557,18 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
             </Upload>
             <Upload
               disabled={!canImport}
-              accept=".doc,.docx,.wps,.pdf,.png,.jpg,.jpeg,.md"
+              accept={documentAttachmentAccept}
               multiple
               showUploadList={false}
               beforeUpload={(file, all) => {
                 if (file === all[0]) {
-                  handleAttachmentImport(all as unknown as File[])
+                  modal.confirm({
+                    title: '确认导入并替换高版本附件',
+                    content: `将检查 ${all.length} 个附件的正文编号及生效日期。仅主体编号一致且版本更高时更新目录并删除原附件；同版本、低版本或无法识别的文件保持不变。`,
+                    okText: '确认导入',
+                    cancelText: '取消',
+                    onOk: () => handleAttachmentImport(all),
+                  })
                 }
                 return false
               }}
