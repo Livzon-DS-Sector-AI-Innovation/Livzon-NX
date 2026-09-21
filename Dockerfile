@@ -41,13 +41,10 @@ RUN --mount=type=cache,id=dazah-backend-uv,target=/home/app/.cache/uv,sharing=lo
 
 COPY scripts/cd/conversion_limit.py /usr/local/bin/dazah-conversion
 COPY scripts/cd/readiness.py /opt/dazah-readiness.py
-RUN sed -i 's/\r$//' /usr/local/bin/dazah-conversion \
-    && chmod 0755 /usr/local/bin/dazah-conversion \
+RUN chmod 0755 /usr/local/bin/dazah-conversion \
     && rm /usr/bin/soffice /usr/bin/libreoffice \
     && ln -s /usr/local/bin/dazah-conversion /usr/bin/soffice \
     && ln -s /usr/local/bin/dazah-conversion /usr/bin/libreoffice
-RUN /usr/bin/soffice --headless --version \
-    && if [ -d /home/app/.cache/dconf ]; then chown -R app:app /home/app/.cache/dconf; fi
 
 COPY --chown=app:app dazah-backend/ ./
 RUN mkdir -p /app/uploads /app/storage \
