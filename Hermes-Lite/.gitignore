@@ -42,3 +42,6 @@ USER.md
 Thumbs.db
 .idea/
 .vscode/
+
+# Hermes 运行时数据库（HERMES_HOME 本地开发时落到仓库目录的副本，运行时自建）
+feishu-control.sqlite3
