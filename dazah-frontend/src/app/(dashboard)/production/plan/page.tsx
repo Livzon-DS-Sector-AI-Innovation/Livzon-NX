@@ -142,14 +142,14 @@ export default function PlanPage() {
         PLAN_PAGE_SALES_MONTH_STORAGE_KEY,
       )
       if (savedMonth) {
-        setMonth(savedMonth) // eslint-disable-line react-hooks/set-state-in-effect
+        setMonth(savedMonth)
       }
       // 销售月份允许清空（= 全部月份）：从未选择过则默认当月
-      setSalesMonth(savedSalesMonth ?? dayjs().format('YYYY-MM')) // eslint-disable-line react-hooks/set-state-in-effect
+      setSalesMonth(savedSalesMonth ?? dayjs().format('YYYY-MM'))
     } catch {
       // 存储不可用时保持默认当月
     }
-    setSelectionRestored(true) // eslint-disable-line react-hooks/set-state-in-effect
+    setSelectionRestored(true)
   }, [])
 
   useEffect(() => {
