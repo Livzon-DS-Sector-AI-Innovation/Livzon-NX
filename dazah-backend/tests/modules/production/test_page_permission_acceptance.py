@@ -118,6 +118,57 @@ async def test_extraction_scope_cannot_change_fermentation_actuals(monkeypatch):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
+    ("method", "path", "body"),
+    [
+        ("GET", "/api/v1/production/tank-maintenance", None),
+        (
+            "POST",
+            "/api/v1/production/tank-maintenance",
+            {"tank_no": "302A", "reason": "检修"},
+        ),
+        (
+            "DELETE",
+            f"/api/v1/production/tank-maintenance/{uuid4()}",
+            None,
+        ),
+        (
+            "DELETE",
+            f"/api/v1/production/fermentation-batch-actuals/{uuid4()}",
+            None,
+        ),
+        (
+            "POST",
+            "/api/v1/production/fermentation-month-capacity",
+            {"planned_capacity_kg": 1000},
+        ),
+    ],
+)
+async def test_extraction_scope_rejects_fermentation_only_operations(
+    monkeypatch, method, path, body
+):
+    from app.modules.production import fermentation_board_api
+
+    app, _ = acceptance_app(
+        fermentation_board_api.router,
+        monkeypatch,
+        "production:overview",
+        scope_type="production_extraction",
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.request(
+            method,
+            path,
+            json=body,
+            headers={"X-Dazah-Page-Key": "production:overview"},
+        )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
     "page_key", ["production:overview", "production:batches:workshop-201-3"]
 )
 async def test_remaining_production_pages_can_load_their_batch_selector(

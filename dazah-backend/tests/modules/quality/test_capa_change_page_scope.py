@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import pytest
 from docx import Document
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +29,7 @@ from app.modules.quality.models import (
 )
 from app.modules.quality.models.lab_instrument import LabInstrument
 from app.modules.quality.models.oos_oot import OosOotRecord
+from app.modules.quality.service import quality_ai as quality_ai_service
 from app.platform.identity.data_scope import (
     current_page_actor,
     current_page_data_scope,
@@ -63,6 +64,64 @@ def _grant(page_key: str, department_id: str) -> EffectivePageGrantOut:
         ),
         source="user",
     )
+
+
+@pytest.mark.asyncio
+async def test_bulk_operations_reject_partial_page_scopes(monkeypatch) -> None:
+    actor = SimpleNamespace(id=uuid4(), role="user")
+    partial_scope = SimpleNamespace(is_all=False)
+
+    current_page_key.set("quality:capas:capa-ledger")
+    monkeypatch.setattr(
+        quality_capa,
+        "_resolve_quality_list_scope",
+        AsyncMock(return_value=partial_scope),
+    )
+    with pytest.raises(HTTPException, match="需要全部数据范围"):
+        await quality_capa._require_full_capa_page_scope(object(), actor)
+
+    current_page_key.set(None)
+    await quality_change._require_full_change_page_scope(object(), actor)
+    current_page_key.set("quality:change:change-ledger")
+    monkeypatch.setattr(
+        quality_change,
+        "_resolve_quality_list_scope",
+        AsyncMock(return_value=partial_scope),
+    )
+    with pytest.raises(HTTPException, match="需要全部数据范围"):
+        await quality_change._require_full_change_page_scope(object(), actor)
+
+
+@pytest.mark.asyncio
+async def test_ai_log_list_builds_department_scoped_entity_query(monkeypatch) -> None:
+    actor = SimpleNamespace(id=uuid4(), role="user", department="本部")
+    current_page_key.set("quality:capas:capa-ledger")
+    current_page_actor.set(actor)
+    monkeypatch.setattr(
+        quality_ai_service,
+        "resolve_user_department_scope",
+        AsyncMock(return_value=object()),
+    )
+    monkeypatch.setattr(
+        quality_ai_service,
+        "department_in_clause",
+        lambda _column, _scope: CAPA.department == "本部",
+    )
+    db = SimpleNamespace(
+        execute=AsyncMock(
+            side_effect=[
+                SimpleNamespace(scalar=lambda: 0),
+                SimpleNamespace(
+                    scalars=lambda: SimpleNamespace(all=lambda: [])
+                ),
+            ]
+        )
+    )
+
+    result = await quality_ai_service.list_ai_logs(db)
+
+    assert result == {"items": [], "total": 0, "page": 1, "page_size": 20}
+    assert db.execute.await_count == 2
 
 
 @pytest.mark.asyncio
