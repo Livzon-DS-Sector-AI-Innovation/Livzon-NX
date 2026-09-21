@@ -188,7 +188,10 @@ def test_process_procedure_cover_metadata():
 def test_page_break_stops_metadata_and_generic_xml_does_not_crash():
     from lxml import etree
 
-    from app.modules.quality.service.document_catalog_metadata import docx_metadata_text, extract_field
+    from app.modules.quality.service.document_catalog_metadata import (
+        docx_metadata_text,
+        extract_field,
+    )
 
     doc = Document()
     doc.element.body.insert(0, etree.Element("{urn:custom-document}metadata"))
