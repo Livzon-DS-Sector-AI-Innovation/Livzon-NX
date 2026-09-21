@@ -172,3 +172,15 @@ def test_production_bake_file_builds_all_release_targets() -> None:
     for target in ("backend", "frontend", "hermes"):
         assert f'target     = "{target}"' in bake_file
         assert 'platforms  = ["linux/amd64"]' in bake_file
+
+
+def test_buildkit_cache_policy_keeps_dependency_caches_longer() -> None:
+    config = (ROOT / "docker" / "buildkitd.toml").read_text(encoding="utf-8")
+    deploy_script = (ROOT / "scripts" / "deploy-production.ps1").read_text(encoding="utf-8")
+
+    assert 'type==exec.cachemount' in config
+    assert 'keepDuration = "720h"' in config
+    assert 'maxUsedSpace = "20GB"' in config
+    assert 'keepDuration = "1440h"' in config
+    assert '--buildkitd-config' in deploy_script
+    assert '--keep-state' in deploy_script

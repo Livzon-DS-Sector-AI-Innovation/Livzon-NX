@@ -159,6 +159,10 @@ class WarehouseFeishuClient:
                         resp.status_code == 429
                         or resp.status_code >= 500
                         or code == 1254290
+                        # 1254045/Data not ready 是 bitable 检索索引瞬时未就绪，
+                        # 官方语义即"稍后重试"；不重试会让该页整轮同步误判失败
+                        or code == 1254045
+                        or "data not ready" in message.lower()
                     )
                     if retryable and attempt < 5:
                         retry_after = resp.headers.get("Retry-After")

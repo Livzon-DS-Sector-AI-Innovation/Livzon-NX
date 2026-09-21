@@ -42,8 +42,9 @@ type EditableGrant = {
 }
 
 const scopeNames: Record<string, string> = {
-  not_applicable: '不适用', department_tree: '本部门及下级',
-  departments: '指定部门及下级', all: '全部部门', self: '仅本人',
+  not_applicable: '待接入数据范围', department_tree: '本部门及下级',
+  departments: '指定部门及下级', all: '本页面全部数据', self: '仅本人',
+  production_fermentation: '发酵数据', production_extraction: '提炼数据',
 }
 const integrationNames: Record<string, { label: string; color: string }> = {
   incomplete: { label: '接入有缺口', color: 'error' },
@@ -71,7 +72,7 @@ export function initialPageEditableState(result: UserPagePermissionsOut): Record
       mode: custom.has(definition.page_key) ? 'custom' : 'inherit',
       permissions: normalizePermissions((grant?.permissions || []) as PermissionLevel[]),
       sensitiveActions: grant?.sensitive_actions || [],
-      scopeType: grant?.data_scope.scope_type || definition.supported_scope_types?.[0] || 'not_applicable',
+      scopeType: grant?.data_scope.scope_type || definition.supported_scope_types?.[0] || 'all',
       departmentIds: grant?.data_scope.department_ids || [],
       sensitiveActionsExpiresAt: Object.values(grant?.sensitive_action_expirations || {})
         .find((value) => value != null) || null,
@@ -354,7 +355,7 @@ export default function ModulePermissionsDrawer({ user, open, onClose }: {
             {roleSources.map((source) => <Text key={source.role_id} type="secondary" className="block text-xs">
               {source.role_name}：{pagePermissionTierLabel(source.permissions || [])}，{pageScopeSummary(
                 source.data_scope.scope_type, source.data_scope.department_ids || [],
-                new Map(departments.map((department) => [department.feishu_department_id, department.name])))}
+                new Map(departments.map((department) => [department.feishu_department_id, department.name])), definition.page_key)}
             </Text>)}
           </div>}
         </div>
@@ -402,13 +403,13 @@ export default function ModulePermissionsDrawer({ user, open, onClose }: {
         const state = editable[definition.page_key]
         const supported = definition.supported_scope_types || []
         if (!PAGE_DATA_SCOPE_VISIBLE) return <Tag>{pageScopeSummary(
-          state?.scopeType || 'not_applicable', state?.departmentIds || [],
-          new Map(departments.map((department) => [department.feishu_department_id, department.name])),
+          state?.scopeType || 'all', state?.departmentIds || [],
+          new Map(departments.map((department) => [department.feishu_department_id, department.name])), definition.page_key,
         )}</Tag>
         return <div className="space-y-2">
           <Select className="w-full" value={state?.scopeType}
             disabled={saving || state?.mode !== 'custom' || supported.length <= 1}
-            options={supported.map((value) => ({ value, label: scopeNames[value] || value }))}
+            options={supported.map((value) => ({ value, label: value === 'all' && definition.page_key === 'production:overview' ? '全部生产数据' : scopeNames[value] || value }))}
             onChange={(value) => updateGrant(definition.page_key, { scopeType: value, departmentIds: [] })} />
           {state?.scopeType === 'departments' && <Select mode="multiple" className="w-full"
             placeholder="选择部门" disabled={saving || state.mode !== 'custom'} value={state.departmentIds}

@@ -34,6 +34,67 @@ from app.platform.identity.schemas import (
 )
 
 
+def test_production_overview_scope_matches_real_stages() -> None:
+    definition = get_page_definition("production:overview")
+    assert definition is not None
+    assert definition.supported_scope_types == (
+        "production_fermentation", "production_extraction", "all"
+    )
+    assert PagePermissionService._merge_role_scopes(
+        {"production_fermentation", "production_extraction"}, set()
+    ) == ("all", [])
+
+
+def test_reviewed_pages_have_real_scope_and_unbound_modules_remain_pending() -> None:
+    assert all(
+        "not_applicable" not in page.supported_scope_types
+        for page in PAGES_BY_KEY.values()
+        if page.module_code not in {"equipment", "energy", "safety", "research"}
+    )
+    assert get_page_definition("equipment:assets").supported_scope_types == (
+        "not_applicable",)
+    assert get_page_definition(
+        "quality:product-quality:product-quality-mfn"
+    ).supported_scope_types == ("all",)
+    assert get_page_definition(
+        "hr:employee-management:profile"
+    ).supported_scope_types == ("department_tree", "departments", "all")
+    for page_key in (
+        "warehouse:ai-analysis",
+        "warehouse:warehouse-settings",
+        "quality:complaints:complaint-ledger",
+        "quality:oos-oot:oot-limits",
+        "quality:oos-oot:product-departments",
+        "quality:return-recalls:return-application",
+        "quality:return-recalls:return-ledger",
+    ):
+        assert get_page_definition(page_key).supported_scope_types == ("all",)
+    for page_key in (
+        "warehouse:hardware:hardware-hardware-201-3-workshop",
+        "quality:deviations:deviation-ledger",
+    ):
+        assert get_page_definition(page_key).supported_scope_types == (
+            "department_tree", "departments", "all"
+        )
+
+
+def test_departmentless_quality_records_do_not_advertise_department_grants() -> None:
+    from app.modules.quality.models.external_quality import (
+        ComplaintRecord,
+        ReturnRecallRecord,
+    )
+
+    for model in (ComplaintRecord, ReturnRecallRecord):
+        assert "department" not in model.__table__.columns
+        assert "department_id" not in model.__table__.columns
+    for page_key in (
+        "quality:complaints:complaint-ledger",
+        "quality:return-recalls:return-application",
+        "quality:return-recalls:return-ledger",
+    ):
+        assert get_page_definition(page_key).supported_scope_types == ("all",)
+
+
 class _PageRepo:
     async def active_page_keys(self, _db):
         return set(PAGES_BY_KEY)

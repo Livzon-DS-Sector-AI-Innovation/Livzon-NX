@@ -245,8 +245,8 @@ export default function DocumentEntryAttachmentModal({
       destroyOnHidden
     >
       <div className="mb-4 text-sm text-gray-500">
-        附件通过页面顶部「导入附件」统一导入，系统按文件名/编号自动识别绑定（识别失败时由
-        LLM 匹配）。此处可查看、预览或删除当前条目的附件。
+        附件通过页面顶部「导入附件」统一导入，系统从文件首页页眉或正文读取编号和生效日期，
+        按主体编号匹配目录，仅更高版本更新目录并替换原附件。此处可查看、预览或删除当前条目的附件。
       </div>
 
       <Table<DocumentEntryAttachment>

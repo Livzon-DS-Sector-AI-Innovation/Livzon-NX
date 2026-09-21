@@ -198,6 +198,9 @@ class BatchImportAttachmentResultItem(BaseModel):
     """单个附件文件的导入结果。"""
 
     file_name: str = Field(..., description="附件文件名")
+    reason: str | None = Field(
+        default=None, description="未更新原因，原目录及附件保持不变"
+    )
     matched: bool = Field(default=False, description="是否匹配到条目")
     match_type: str = Field(
         default="none", description="匹配方式：name/code/content/llm/none"
@@ -220,8 +223,8 @@ class BatchImportDocumentAttachmentsResult(BaseModel):
     """统一导入附件结果汇总。"""
 
     bound: int = Field(default=0, description="成功绑定附件数")
-    failed: int = Field(default=0, description="未匹配文件数")
-    version_updated_count: int = Field(
-        default=0, description="文件编码版本自动升级数"
+    failed: int = Field(
+        default=0, description="未更新文件数（含版本未提高、识别失败或匹配歧义）"
     )
+    version_updated_count: int = Field(default=0, description="文件编码版本自动升级数")
     results: list[BatchImportAttachmentResultItem] = Field(default_factory=list)

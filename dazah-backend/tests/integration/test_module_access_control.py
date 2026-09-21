@@ -64,7 +64,7 @@ async def test_business_module_routes_are_open_to_authenticated_users_in_all_mod
                     page_key="warehouse:materials:raw-summary",
                     permissions=["access", "query", "operate"],
                     sensitive_actions=[],
-                    scope_type="not_applicable",
+                    scope_type="all",
                     department_ids=[],
                 ),
                 UserPageGrant(
@@ -72,7 +72,7 @@ async def test_business_module_routes_are_open_to_authenticated_users_in_all_mod
                     page_key="production:overview",
                     permissions=["access", "query", "operate"],
                     sensitive_actions=[],
-                    scope_type="not_applicable",
+                    scope_type="all",
                     department_ids=[],
                 ),
             ]

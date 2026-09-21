@@ -29,6 +29,7 @@ $Root = Split-Path -Parent $PSScriptRoot
 $ComposeFile = Join-Path $Root 'compose.yml'
 $Dockerfile = Join-Path $Root 'Dockerfile'
 $BakeFile = Join-Path $Root 'docker-bake.hcl'
+$BuildKitConfig = Join-Path $Root 'docker/buildkitd.toml'
 $BuildRoot = if ($BuildContext) {
   (Resolve-Path -LiteralPath $BuildContext).Path
 }
@@ -36,6 +37,7 @@ else {
   $Root
 }
 $ReleaseBase = if ($ReleaseRoot) { $ReleaseRoot } else { Join-Path $Root 'release' }
+$BuilderConfigMarker = Join-Path $ReleaseBase '.buildkit-cache-policy.sha256'
 $RemoteRoot = '/opt/dazah'
 $RemoteRelease = "$RemoteRoot/releases"
 $RemoteCurrent = "$RemoteRoot/current"
@@ -98,13 +100,49 @@ function Get-ProxyBuildArguments {
 }
 
 function Ensure-Builder {
+  if (-not (Test-Path -LiteralPath $BuildKitConfig -PathType Leaf)) {
+    Fail "缺少 BuildKit 缓存策略配置: $BuildKitConfig"
+  }
+  $configHash = (Get-FileHash -LiteralPath $BuildKitConfig -Algorithm SHA256).Hash.ToLowerInvariant()
   $existing = docker buildx ls --format '{{.Name}}' 2>$null | Where-Object { $_ -eq $Builder }
   if (-not $existing) {
     Write-Step "创建 Buildx 缓存 Builder: $Builder"
-    docker buildx create --name $Builder --driver docker-container --use
+    & docker buildx create --name $Builder --driver docker-container --buildkitd-config $BuildKitConfig --use
+    if ($LASTEXITCODE -ne 0) {
+      Fail "创建 Buildx Builder 失败: $Builder"
+    }
+    & docker buildx inspect $Builder --bootstrap | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+      Fail "初始化 Buildx Builder 失败: $Builder"
+    }
+    New-Item -ItemType Directory -Path $ReleaseBase -Force | Out-Null
+    Set-Content -LiteralPath $BuilderConfigMarker -Value $configHash -Encoding ascii -NoNewline
   }
   else {
-    docker buildx use $Builder
+    $markerMatches = $false
+    if (Test-Path -LiteralPath $BuilderConfigMarker -PathType Leaf) {
+      $markerMatches = ((Get-Content -Raw -LiteralPath $BuilderConfigMarker).Trim() -eq $configHash)
+    }
+    if (-not $markerMatches) {
+      Write-Step "更新 Buildx 缓存策略（保留现有缓存状态）"
+      & docker buildx rm --force --keep-state $Builder
+      if ($LASTEXITCODE -ne 0) {
+        Fail "移除旧 Buildx Builder 失败: $Builder"
+      }
+      & docker buildx create --name $Builder --driver docker-container --buildkitd-config $BuildKitConfig --use
+      if ($LASTEXITCODE -ne 0) {
+        Fail "按新缓存策略创建 Buildx Builder 失败: $Builder"
+      }
+      & docker buildx inspect $Builder --bootstrap | Out-Host
+      if ($LASTEXITCODE -ne 0) {
+        Fail "初始化新 Buildx Builder 失败: $Builder"
+      }
+      New-Item -ItemType Directory -Path $ReleaseBase -Force | Out-Null
+      Set-Content -LiteralPath $BuilderConfigMarker -Value $configHash -Encoding ascii -NoNewline
+    }
+    else {
+      & docker buildx use $Builder
+    }
   }
   docker buildx inspect $Builder --bootstrap | Out-Host
 }
@@ -349,7 +387,7 @@ Dazah 生产离线部署脚本
 
 注意：
   - 生产 .env 始终只保留在服务器，不会被脚本下载或覆盖。
-  - 构建使用持久 Buildx 缓存；不要随意执行 docker builder prune。
+  - 构建使用持久 Buildx 缓存；依赖缓存保留 30 天、其他构建缓存保留 60 天；不要随意执行 docker builder prune。
   - 回滚只切换镜像和 Compose 配置，不自动回滚已经执行的数据库迁移。
 '@ | Write-Host
 }

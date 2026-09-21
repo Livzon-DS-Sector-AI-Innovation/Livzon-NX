@@ -24,6 +24,29 @@ def test_safe_upload_filename_rejects_control_characters() -> None:
         safe_upload_filename("report\x00.pdf")
 
 
+@pytest.mark.parametrize("extension", [".docx", ".doc", ".wps", ".docm"])
+def test_word_container_aliases_accept_only_word_content(extension):
+    from app.core.upload_security import validate_upload_content
+
+    buffer = BytesIO()
+    with ZipFile(buffer, "w") as archive:
+        archive.writestr("word/document.xml", "<document />")
+    mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    assert (
+        validate_upload_content(
+            "document" + extension,
+            buffer.getvalue(),
+            allowed_extensions={extension},
+            allowed_mimes={mime},
+        )
+        == mime
+    )
+    with pytest.raises(AppException, match="实际格式"):
+        validate_upload_content(
+            "document" + extension, b"not a Word file", allowed_extensions={extension}
+        )
+
+
 @pytest.mark.anyio
 async def test_read_upload_secure_checks_extension_and_size() -> None:
     upload = UploadFile(
@@ -107,19 +130,15 @@ def test_sniff_upload_mime_office_zip_and_images() -> None:
                 z.writestr(n, "x")
         return buf.getvalue()
 
-    assert sniff_upload_mime(
-        "a.docx", _zip(["word/document.xml"])
-    ) == (
+    assert sniff_upload_mime("a.docx", _zip(["word/document.xml"])) == (
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
-    assert sniff_upload_mime(
-        "a.xlsx", _zip(["xl/workbook.xml"])
-    ) == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    assert sniff_upload_mime("a.gif", b"GIF89a....") == "image/gif"
     assert (
-        sniff_upload_mime("a.webp", b"RIFF\x00\x00\x00\x00WEBPVP8 ")
-        == "image/webp"
+        sniff_upload_mime("a.xlsx", _zip(["xl/workbook.xml"]))
+        == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+    assert sniff_upload_mime("a.gif", b"GIF89a....") == "image/gif"
+    assert sniff_upload_mime("a.webp", b"RIFF\x00\x00\x00\x00WEBPVP8 ") == "image/webp"
     assert sniff_upload_mime("a.bmp", b"BM....") == "image/bmp"
     # 非 zip、非法 UTF-8 → 二进制兜底；合法 UTF-8 → text/plain
     assert sniff_upload_mime("a.bin", b"\xff\xfe\x00\x01") == "application/octet-stream"

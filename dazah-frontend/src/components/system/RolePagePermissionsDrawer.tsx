@@ -26,14 +26,15 @@ type Level = "access" | "query" | "operate"
 type Grant = {
   permissions: Level[]
   sensitiveActions: string[]
-  scopeType: "not_applicable" | "department_tree" | "departments" | "all" | "self"
+  scopeType: "not_applicable" | "department_tree" | "departments" | "all" | "self" | "production_fermentation" | "production_extraction"
   departmentIds: string[]
   sensitiveActionsExpiresAt: string | null
 }
 const order: Level[] = ["access", "query", "operate"]
 const scopeNames: Record<string, string> = {
-  not_applicable: "不适用", department_tree: "本部门及下级",
-  departments: "指定部门及下级", all: "全部部门", self: "仅本人",
+  not_applicable: "待接入数据范围", department_tree: "本部门及下级",
+  departments: "指定部门及下级", all: "本页面全部数据", self: "仅本人",
+  production_fermentation: "发酵数据", production_extraction: "提炼数据",
 }
 
 function normalize(values: Level[]): Level[] {
@@ -52,7 +53,7 @@ function editableState(result: RolePagePermissionsOut): Record<string, Grant> {
     return [definition.page_key, {
       permissions: normalize((grant?.permissions || []) as Level[]),
       sensitiveActions: grant?.sensitive_actions || [],
-      scopeType: grant?.data_scope.scope_type || definition.supported_scope_types?.[0] || "not_applicable",
+      scopeType: grant?.data_scope.scope_type || definition.supported_scope_types?.[0] || "all",
       departmentIds: grant?.data_scope.department_ids || [],
       sensitiveActionsExpiresAt: Object.values(grant?.sensitive_action_expirations || {})
         .find((value) => value != null) || null,
@@ -396,12 +397,13 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
           if (!definition) return null
           const state = editable[definition.page_key]
           if (!PAGE_DATA_SCOPE_VISIBLE) return <Tag>{pageScopeSummary(
-            state?.scopeType || "not_applicable", state?.departmentIds || [],
-            new Map(departments.map((department) => [department.feishu_department_id, department.name])),
+            state?.scopeType || "all", state?.departmentIds || [],
+            new Map(departments.map((department) => [department.feishu_department_id, department.name])), definition.page_key,
           )}</Tag>
           return <div className="flex gap-2"><Select className="min-w-40" value={state?.scopeType}
-            disabled={!state?.permissions.length && !state?.sensitiveActions.length}
-            options={(definition.supported_scope_types || []).map((value) => ({ value, label: scopeNames[value] || value }))}
+            disabled={(!state?.permissions.length && !state?.sensitiveActions.length) ||
+              definition.supported_scope_types?.[0] === "not_applicable"}
+            options={(definition.supported_scope_types || []).map((value) => ({ value, label: value === "all" && definition.page_key === "production:overview" ? "全部生产数据" : scopeNames[value] || value }))}
             onChange={(scopeType) => update(definition.page_key, { scopeType, departmentIds: [] })} />
             {state?.scopeType === "departments" && <Select mode="multiple" className="min-w-56"
               value={state.departmentIds} options={departments.map((department) => ({

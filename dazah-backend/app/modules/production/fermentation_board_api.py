@@ -19,6 +19,11 @@ from app.core.database import get_db
 from app.core.response import success_response
 from app.modules.production import fermentation_board_service as board
 from app.platform.audit.service import record_audit_log
+from app.platform.identity.data_scope import (
+    current_page_actor,
+    current_page_data_scope,
+    current_page_key,
+)
 from app.platform.identity.deps import CurrentUser
 from app.shared.module_api import create_module_router
 from app.shared.module_registry import MODULES_BY_CODE
@@ -57,6 +62,21 @@ async def _stage_permissions(
 ) -> tuple[bool, bool]:
     """解析当前用户的工段产量权限：(发酵可见, 提炼可见)。"""
     if current_user is None:
+        return (False, False)
+    scope = current_page_data_scope.get()
+    actor = current_page_actor.get()
+    if (
+        current_page_key.get() == "production:overview"
+        and actor is not None
+        and actor.role != "admin"
+    ):
+        scope_type = scope.get("scope_type") if scope else None
+        if scope_type == "all":
+            return (True, True)
+        if scope_type == "production_fermentation":
+            return (True, False)
+        if scope_type == "production_extraction":
+            return (False, True)
         return (False, False)
     from app.platform.identity.rbac import resolve_user_permissions
 
@@ -271,7 +291,11 @@ async def get_production_summary(
 @router.get("/tank-maintenance", summary="发酵罐检修标注列表（进行中）")
 async def list_tank_maintenance(
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
 ) -> Any:
+    has_ferm, _ = await _stage_permissions(db, current_user)
+    if not has_ferm:
+        raise HTTPException(status_code=403, detail="无发酵数据权限")
     items = await board.list_active_maintenance(db)
     return success_response(
         data=[board.serialize_maintenance(item) for item in items]
@@ -284,6 +308,9 @@ async def mark_tank_maintenance(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> Any:
+    has_ferm, _ = await _stage_permissions(db, current_user)
+    if not has_ferm:
+        raise HTTPException(status_code=403, detail="无发酵数据权限")
     item = await board.upsert_maintenance(
         db,
         tank_no=body.tank_no,
@@ -301,6 +328,9 @@ async def remove_tank_maintenance(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> Any:
+    has_ferm, _ = await _stage_permissions(db, current_user)
+    if not has_ferm:
+        raise HTTPException(status_code=403, detail="无发酵数据权限")
     item = await board.get_maintenance(db, item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="检修标注不存在")
@@ -394,6 +424,11 @@ async def remove_fermentation_batch_actual(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> Any:
+    has_ferm, has_extract = await _stage_permissions(db, current_user)
+    if not (has_ferm and has_extract):
+        raise HTTPException(
+            status_code=403, detail="删除完整批次产量需全部生产数据权限"
+        )
     item = await board.get_batch_actual(db, item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="批次产量记录不存在")
@@ -412,6 +447,9 @@ async def set_fermentation_month_capacity(
     current_user: CurrentUser = None,
     product: str = Query("FA", description="产品代码（如 FA/MC/DR/LV/MV）"),
 ) -> Any:
+    has_ferm, _ = await _stage_permissions(db, current_user)
+    if not has_ferm:
+        raise HTTPException(status_code=403, detail="无发酵数据权限")
     archive = await board.load_latest_archive(db, product)
     if archive is None:
         raise HTTPException(

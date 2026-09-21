@@ -14,6 +14,7 @@ from app.modules.quality import repository
 from app.modules.quality.models import (
     ChangeControl,
 )
+from app.modules.quality.page_access import assert_quality_record_department
 from app.modules.quality.schemas import (
     ChangeDetail,
     ChangeListItem,
@@ -25,7 +26,7 @@ from app.modules.quality.service.quality_common import (
     _parse_date_filter,
 )
 from app.platform.audit.service import record_audit_log
-from app.platform.identity.data_scope import DepartmentScope
+from app.platform.identity.data_scope import DepartmentScope, current_page_actor
 from app.platform.identity.models import User
 
 logger = logging.getLogger(__name__)
@@ -104,17 +105,21 @@ async def get_change_detail(db: AsyncSession, change_id: uuid.UUID) -> ChangeDet
     change = result.scalar_one_or_none()
     if not change:
         raise NotFoundException(resource="变更", resource_id=str(change_id))
+    await assert_quality_record_department(db, change.applicant_department)
     return ChangeDetail.model_validate(change)
 
 
 async def create_change(
     db: AsyncSession, data: CreateChangeRequest, user_id: str
 ) -> dict[str, str]:
+    actor = current_page_actor.get()
+    department = data.applicant_department or (actor.department if actor else None)
+    await assert_quality_record_department(db, department)
     change = ChangeControl(
         change_type=data.change_type,
         serial_number=data.serial_number,
         change_code=data.change_code,
-        applicant_department=data.applicant_department,
+        applicant_department=department,
         change_object=data.change_object,
         change_content=data.change_content,
         impact_assessment=data.impact_assessment,
@@ -148,8 +153,13 @@ async def update_change(
     change = result.scalar_one_or_none()
     if not change:
         raise NotFoundException(resource="变更", resource_id=str(change_id))
+    await assert_quality_record_department(db, change.applicant_department)
 
     update_data = data.model_dump(exclude_unset=True)
+    if "applicant_department" in update_data:
+        await assert_quality_record_department(
+            db, update_data["applicant_department"]
+        )
     for field, value in update_data.items():
         setattr(change, field, value)
 
@@ -174,6 +184,7 @@ async def delete_change(
     change = result.scalar_one_or_none()
     if not change:
         raise NotFoundException(resource="变更", resource_id=str(change_id))
+    await assert_quality_record_department(db, change.applicant_department)
 
     change.is_deleted = True
     change.deleted_by = deleted_by

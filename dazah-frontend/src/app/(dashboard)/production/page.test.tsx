@@ -37,14 +37,15 @@ vi.mock('echarts-for-react', () => ({
 }))
 
 
-// 认证 store：默认管理员（通配权限），工段矩阵用例直接改 state.user.permissions
+// 认证 store：默认管理员；工段矩阵使用页面实际数据范围。
 const authStore = vi.hoisted(() => {
   const state = {
     user: {
       id: 'u-test',
       name: '测试用户',
-      role: 'admin' as const,
+      role: 'admin' as string,
       permissions: ['*'] as string[],
+      page_permissions: [] as Array<{ page_key: string; permissions: Array<'access' | 'query' | 'operate'>; data_scope: { scope_type: string } }>,
     },
   }
   return {
@@ -161,7 +162,9 @@ describe('ProductionHomePage (fermentation board)', () => {
   let container: HTMLElement
 
   beforeEach(() => {
+    authStore.state.user.role = 'admin'
     authStore.state.user.permissions = ['*']
+    authStore.state.user.page_permissions = []
     actions.getFermentationBoard.mockResolvedValue({
       code: 200,
       message: 'success',
@@ -1237,7 +1240,9 @@ describe('ProductionHomePage (fermentation board)', () => {
   })
 
   it('hides the extraction card for fermentation-only role', async () => {
-    authStore.state.user.permissions = ['production:fermentation-yield']
+    authStore.state.user.role = 'user'
+    authStore.state.user.permissions = []
+    authStore.state.user.page_permissions = [{ page_key: 'production:overview', permissions: ['access', 'query'], data_scope: { scope_type: 'production_fermentation' } }]
     actions.getFermentationBoard.mockResolvedValue({
       code: 200,
       message: 'success',
@@ -1257,7 +1262,9 @@ describe('ProductionHomePage (fermentation board)', () => {
   })
 
   it('shows only extraction summary for extraction-only role', async () => {
-    authStore.state.user.permissions = ['production:extraction-yield']
+    authStore.state.user.role = 'user'
+    authStore.state.user.permissions = []
+    authStore.state.user.page_permissions = [{ page_key: 'production:overview', permissions: ['access', 'query'], data_scope: { scope_type: 'production_extraction' } }]
     actions.getFermentationBoard.mockResolvedValue({
       code: 200,
       message: 'success',
@@ -1302,6 +1309,17 @@ describe('ProductionHomePage (fermentation board)', () => {
     // 批次台账/成品日报卡片已下线
     expect(text).not.toContain('批次台账')
     expect(text).not.toContain('成品日报')
+  })
+
+  it('shows imported plan data with full overview scope even without legacy stage permissions', async () => {
+    authStore.state.user.role = 'user'
+    authStore.state.user.permissions = []
+    authStore.state.user.page_permissions = [{ page_key: 'production:overview', permissions: ['access', 'query', 'operate'], data_scope: { scope_type: 'all' } }]
+    await render()
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('本月计划批次')
+    expect(text).toContain('发酵罐实时状态')
+    expect(text).toContain('提炼计划产量')
   })
 
   it('shows warehouse inbound total when wired (FA product)', async () => {

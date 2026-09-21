@@ -722,13 +722,20 @@ def convert_docx_content_to_md(
 
     image_map = _extract_images(doc)
 
+    from app.modules.quality.service.document_catalog_metadata import (
+        docx_metadata_text,
+        extract_field,
+    )
+
+    metadata_text = docx_metadata_text(doc)
     md_lines: list[str] = [
-        f"# {_extract_file_title(file_name)}",
-        "",
-        f"**文件编号**: {_extract_file_number(file_name)}",
+        f"# {extract_field(metadata_text, 'name') or _extract_file_title(file_name)}",
         "",
     ]
-    effective_date = _extract_effective_date(doc)
+    content_code = extract_field(metadata_text, "code")
+    if content_code:
+        md_lines.extend([f"**文件编号**: {content_code}", ""])
+    effective_date = extract_field(metadata_text, "date")
     if effective_date:
         md_lines.append(f"**生效日期**: {effective_date}")
         md_lines.append("")

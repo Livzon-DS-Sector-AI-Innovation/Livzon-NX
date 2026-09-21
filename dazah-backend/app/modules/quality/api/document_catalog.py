@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import os
 import uuid
 from datetime import datetime
 from typing import Any
@@ -55,14 +53,16 @@ from app.modules.quality.service import document_catalog_crud as crud
 from app.modules.quality.service.document_catalog import import_document_catalog
 from app.modules.quality.service.document_catalog_attachment import (
     delete_attachment_from_entry,
-    find_entry_by_file_name,
     read_attachment_preview,
     read_entry_md_contents,
-    sync_entry_version,
-    upload_attachment_to_entry,
 )
 from app.modules.quality.service.document_catalog_export import (
     export_document_catalog_docx,
+)
+from app.modules.quality.service.document_catalog_revision import (
+    find_revision_entry,
+    prepare_revision,
+    replace_attachment,
 )
 from app.modules.quality.service.document_catalog_scope import document_entry_scope
 from app.shared.schemas import ApiResponseEnvelope
@@ -76,6 +76,7 @@ DOCUMENT_CATALOG_EXTENSIONS = {
     ".md",
     ".doc",
     ".docx",
+    ".docm",
     ".wps",
     ".pdf",
     ".png",
@@ -90,6 +91,7 @@ DOCUMENT_CATALOG_MIMES = {
     "text/plain",
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-word.document.macroenabled.12",
     "application/vnd.ms-works",
     "application/kswps",
     "application/pdf",
@@ -261,7 +263,6 @@ async def lookup_latest_document_entry(
     return success_response(
         data=DocumentEntryLookupOut.model_validate(entry).model_dump(mode="json")
     )
-
 
 
 @router.post(
@@ -521,8 +522,7 @@ async def export_document_catalog(
 
 @router.post(
     "/document-catalog/attachments/import",
-    summary="统一导入附件（自动识别名称/编号绑定条目，失败时 LLM 匹配；"
-    "文件名版本高于条目时自动升级文件编码）",
+    summary="按附件正文编号匹配目录，仅高版本同步编号、生效日期并替换附件",
     response_model=ApiResponseEnvelope[BatchImportDocumentAttachmentsResult],
 )
 async def batch_import_document_attachments(
@@ -534,15 +534,6 @@ async def batch_import_document_attachments(
 ) -> Any:
     _require_user(current_user)
     scope = await _resolve_quality_list_scope(db, current_user)
-    from app.modules.quality.service.document_catalog_attachment import (
-        WORD_EXT,
-        extract_content_identity,
-        match_entry_for_attachment,
-        upload_attachment_to_entry,
-    )
-    from app.modules.quality.service.document_catalog_md import (
-        convert_word_attachment,
-    )
 
     results: list[BatchImportAttachmentResultItem] = []
     bound = 0
@@ -566,57 +557,41 @@ async def batch_import_document_attachments(
                 allowed_extensions=DOCUMENT_CATALOG_EXTENSIONS,
                 allowed_mimes=DOCUMENT_CATALOG_MIMES,
             )
-            # word/md 先行转换：正文身份（编号/标题）参与匹配，转换结果复用避免二次转换
-            content_identity: tuple[str | None, str | None] | None = None
-            prepared = None
-            ext = os.path.splitext(file_name)[1].lower()
-            if ext in WORD_EXT:
-                try:
-                    prepared = await asyncio.to_thread(
-                        convert_word_attachment, file_name, content
+            try:
+                revision = await prepare_revision(file_name, content)
+                entry = await find_revision_entry(db, revision, scope)
+                if entry is None:
+                    raise AppException(
+                        message="正文编号未匹配到唯一可见目录条目，未更新"
                     )
-                    content_identity = extract_content_identity(prepared[0])
-                except Exception:  # noqa: BLE001 转换失败仍按文件名匹配并原样存储
-                    prepared = None
-                    content_identity = None
-            elif ext == ".md":
-                content_identity = extract_content_identity(
-                    content.decode("utf-8", errors="replace")
+                _, version_update = await replace_attachment(
+                    db,
+                    entry,
+                    file_name,
+                    content,
+                    sniff_upload_mime(file_name, content),
+                    str(_require_user(current_user)),
+                    revision=revision,
                 )
-
-            entry, match_type = await match_entry_for_attachment(
-                db, file_name, content_identity, scope=scope
-            )
-            if entry is None:
+            except AppException as exc:
+                if exc.status_code not in (400, 404, 409):
+                    raise
                 failed += 1
-                results.append(BatchImportAttachmentResultItem(file_name=file_name))
+                results.append(
+                    BatchImportAttachmentResultItem(
+                        file_name=file_name,
+                        reason=exc.message,
+                    )
+                )
                 continue
-            await upload_attachment_to_entry(
-                db,
-                entry,
-                file_name,
-                content,
-                sniff_upload_mime(file_name, content),
-                str(_require_user(current_user)),
-                prepared=prepared,
-            )
             bound += 1
-            version_update = sync_entry_version(
-                entry,
-                file_name,
-                rev_source=(
-                    content_identity[0]
-                    if match_type == "content" and content_identity
-                    else None
-                ),
-            )
             if version_update is not None:
                 version_updated_count += 1
             results.append(
                 BatchImportAttachmentResultItem(
                     file_name=file_name,
                     matched=True,
-                    match_type=match_type,
+                    match_type="content",
                     entry_id=entry.id,
                     entry_name=entry.name,
                     entry_code=entry.code,
@@ -632,18 +607,20 @@ async def batch_import_document_attachments(
                 version_updated_count=version_updated_count,
                 results=results,
             ),
-            message=f"附件导入完成：成功 {bound} 个，未匹配 {failed} 个",
+            message=f"附件导入完成：更新 {bound} 个，未更新 {failed} 个",
         )
     except AppException:
         raise
     except Exception:
         logger.exception("Failed to batch import document attachments")
-        return error_response(message="批量上传附件失败，请稍后重试", status_code=400)
+        raise AppException(
+            message="批量上传附件失败，已取消本批次更新", status_code=502
+        ) from None
 
 
 @router.post(
     "/document-entries/attachments/auto-bind",
-    summary="按文件名编码自动绑定上传附件",
+    summary="按附件正文编号匹配并更新高版本附件",
     response_model=ApiResponseEnvelope[dict[str, Any]],
 )
 async def auto_bind_document_entry_attachment(
@@ -659,12 +636,6 @@ async def auto_bind_document_entry_attachment(
             allowed_extensions=DOCUMENT_CATALOG_EXTENSIONS,
             allowed_mimes=DOCUMENT_CATALOG_MIMES,
         )
-        entry = await find_entry_by_file_name(db, file_name, scope=scope)
-        if entry is None:
-            return error_response(
-                message=f"未找到与「{file_name}」编码匹配的唯一文件条目，请选择具体条目后上传",
-                status_code=404,
-            )
         content = await read_upload_with_limit(
             file,
             IMPORT_MAX_SIZE,
@@ -672,13 +643,20 @@ async def auto_bind_document_entry_attachment(
             allowed_extensions=DOCUMENT_CATALOG_EXTENSIONS,
             allowed_mimes=DOCUMENT_CATALOG_MIMES,
         )
-        attachment = await upload_attachment_to_entry(
+        revision = await prepare_revision(file_name, content)
+        entry = await find_revision_entry(db, revision, scope)
+        if entry is None:
+            raise AppException(
+                message="正文编号未匹配到唯一可见目录条目", status_code=404
+            )
+        attachment, _ = await replace_attachment(
             db,
             entry,
             file_name,
             content,
             sniff_upload_mime(file_name, content),
             str(_require_user(current_user)),
+            revision=revision,
         )
         result = await db.execute(
             select(DocumentEntry).where(DocumentEntry.id == entry.id)
@@ -697,7 +675,7 @@ async def auto_bind_document_entry_attachment(
         raise
     except Exception:
         logger.exception("Failed to auto-bind document entry attachment")
-        return error_response(message="上传附件失败，请稍后重试", status_code=400)
+        raise AppException(message="上传附件失败，未更新", status_code=502) from None
 
 
 @router.post(
@@ -726,7 +704,7 @@ async def upload_document_entry_attachment(
             allowed_extensions=DOCUMENT_CATALOG_EXTENSIONS,
             allowed_mimes=DOCUMENT_CATALOG_MIMES,
         )
-        attachment = await upload_attachment_to_entry(
+        attachment, _ = await replace_attachment(
             db,
             entry,
             file_name,
@@ -751,7 +729,7 @@ async def upload_document_entry_attachment(
         raise
     except Exception:
         logger.exception("Failed to upload document entry attachment")
-        return error_response(message="上传附件失败，请稍后重试", status_code=400)
+        raise AppException(message="上传附件失败，未更新", status_code=502) from None
 
 
 @router.delete(

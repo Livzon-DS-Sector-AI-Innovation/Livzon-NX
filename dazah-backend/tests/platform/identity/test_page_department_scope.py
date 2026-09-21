@@ -3,7 +3,11 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from app.platform.identity.data_scope import page_department_scope
+from app.platform.identity.data_scope import (
+    current_page_data_scope,
+    page_department_scope,
+    resolve_user_department_scope,
+)
 
 
 def department(key, name, parent=None, deleted=False):
@@ -48,3 +52,16 @@ def test_same_name_is_safe_only_when_all_matching_ids_are_in_scope():
         [department("a", "采购部"), department("b", "采购部")], ["a", "b"]
     )
     assert scope.allows("采购部")
+
+
+@pytest.mark.asyncio
+async def test_full_page_grant_never_falls_back_to_legacy_department_rules():
+    token = current_page_data_scope.set({"scope_type": "all", "department_ids": []})
+    try:
+        scope = await resolve_user_department_scope(
+            None, SimpleNamespace(role="user")
+        )
+    finally:
+        current_page_data_scope.reset(token)
+    assert scope.is_all
+    assert scope.allows("其他部门")

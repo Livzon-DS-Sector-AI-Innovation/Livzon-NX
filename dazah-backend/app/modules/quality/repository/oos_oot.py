@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.quality.models.oos_oot import OosOotRecord
 from app.modules.quality.models.oot_limit import OotLimitItem, OotLimitProduct
+from app.platform.identity.data_scope import DepartmentScope, department_in_clause
 
 
 def _escape_like(value: str) -> str:
@@ -47,8 +48,13 @@ async def list_oos_oot_records(
     keyword: str | None,
     page: int,
     page_size: int,
+    scope: DepartmentScope | None = None,
 ) -> tuple[list[OosOotRecord], int]:
     conditions: list[ColumnElement[bool]] = [OosOotRecord.is_deleted.is_(False)]
+    if scope is not None:
+        clause = department_in_clause(OosOotRecord.department, scope)
+        if clause is not None:
+            conditions.append(clause)
     if record_type:
         conditions.append(OosOotRecord.record_type == record_type)
     if status:

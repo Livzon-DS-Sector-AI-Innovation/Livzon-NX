@@ -200,9 +200,9 @@ export default function UserManagementClient() {
       title: '角色',
       dataIndex: 'role',
       width: 110,
-      render: (role: string) => (
+      render: (role: string, record: UserManagementItem) => (
         <Tag color={role === 'admin' ? 'purple' : 'default'}>
-          {role === 'admin' ? '系统管理员' : '普通用户'}
+          {record.roles?.includes('ordinary_admin') ? '普通管理员' : role === 'admin' ? '系统管理员' : '普通用户'}
         </Tag>
       ),
     },
@@ -353,6 +353,9 @@ export default function UserManagementClient() {
               <Select options={statusOptions} />
             </Form.Item>
           </Space>
+          <p className="-mt-3 text-xs text-[var(--color-steel)]">
+            普通管理员请在“权限管理 → 用户角色分配”中设置。
+          </p>
           <Form.Item name="email" label="邮箱">
             <Input placeholder="name@example.com" />
           </Form.Item>

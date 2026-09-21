@@ -38,11 +38,15 @@ export function pageScopeSummary(
   scopeType: string,
   departmentIds: string[],
   departmentNames: Map<string, string> = new Map(),
+  pageKey?: string,
 ): string {
-  if (scopeType === 'all') return '全部部门'
+  if (scopeType === 'all' && pageKey === 'production:overview') return '全部生产数据'
+  if (scopeType === 'all') return '本页面全部数据'
   if (scopeType === 'self') return '仅本人'
+  if (scopeType === 'production_fermentation') return '发酵数据'
+  if (scopeType === 'production_extraction') return '提炼数据'
   if (scopeType === 'department_tree') return '本部门及下级'
-  if (scopeType === 'not_applicable') return '不适用'
+  if (scopeType === 'not_applicable') return '待接入数据范围'
   if (scopeType !== 'departments') return '未配置范围'
   const names = departmentIds.map((id) => departmentNames.get(id)).filter(Boolean) as string[]
   if (names.length === departmentIds.length && names.length <= 3) return `指定部门：${names.join('、')}`
@@ -121,7 +125,8 @@ export function pageGrantChanges(
 ): PageGrantChange[] {
   const scopes: Record<string, string> = {
     department_tree: '本部门及下级', departments: '指定部门及下级',
-    all: '全部部门', self: '仅本人', not_applicable: '不适用',
+    all: '本页面全部数据', self: '仅本人', not_applicable: '待接入数据范围',
+    production_fermentation: '发酵数据', production_extraction: '提炼数据',
   }
   const signature = (grant: PageEditorGrant) => JSON.stringify({
     ...grant, permissions: [...grant.permissions].sort(),
@@ -135,7 +140,8 @@ export function pageGrantChanges(
     const describe = (grant: PageEditorGrant) => [
       grant.mode === 'inherit' ? '角色基线' : grant.mode === 'custom' ? '用户覆盖' : '角色授权',
       pagePermissionTierLabel(grant.permissions),
-      PAGE_DATA_SCOPE_VISIBLE ? scopes[grant.scopeType] || '未配置范围' : '',
+      PAGE_DATA_SCOPE_VISIBLE ? (grant.scopeType === 'all' && definition.page_key === 'production:overview'
+        ? '全部生产数据' : scopes[grant.scopeType] || '未配置范围') : '',
       PAGE_DATA_SCOPE_VISIBLE && grant.scopeType === 'departments' ? grant.departmentIds.map((id) => departmentNames.get(id) || '已失效部门').join('、') : '',
       ...grant.sensitiveActions.map((key) => definition.sensitive_actions?.find((action) => action.key === key)?.name || '已失效业务动作'),
       grant.sensitiveActions.length && grant.sensitiveActionsExpiresAt

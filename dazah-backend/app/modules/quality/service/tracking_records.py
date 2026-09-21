@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException, NotFoundException
 from app.modules.quality import repository
+from app.modules.quality.page_access import assert_quality_record_department
 from app.modules.quality.schemas import (
     CapaPlanTrackDetail,
     CapaPlanTrackListItem,
@@ -22,6 +23,7 @@ from app.modules.quality.schemas import (
     UpdateCapaPlanTrackRequest,
     UpdateDeviationInvestigationPushRecordRequest,
 )
+from app.platform.identity.data_scope import DepartmentScope
 
 logger = logging.getLogger(__name__)
 
@@ -730,6 +732,7 @@ async def get_capa_plan_track_list(
     due_date_to: str | None = None,
     page: int = 1,
     page_size: int = 20,
+    scope: DepartmentScope | None = None,
 ) -> dict[str, Any]:
     items, total = await repository.get_capa_plan_tracks(
         db,
@@ -742,6 +745,7 @@ async def get_capa_plan_track_list(
         due_date_to=_parse_date_filter(due_date_to),
         page=page,
         page_size=page_size,
+        scope=scope,
     )
     return _build_page_result(
         _serialize_capa_plan_track_items(items),
@@ -757,7 +761,17 @@ async def get_capa_plan_track_detail(
     track = await repository.get_capa_plan_track_by_id(db, track_id)
     if not track:
         raise NotFoundException(resource="CAPA计划跟踪", resource_id=str(track_id))
+    await _assert_capa_plan_track_department(db, track.capa_id)
     return _cap_plan_track_to_detail(track)
+
+
+async def _assert_capa_plan_track_department(
+    db: AsyncSession, capa_id: uuid.UUID
+) -> None:
+    capa = await repository.get_capa_by_id(db, capa_id)
+    if not capa:
+        raise NotFoundException(resource="CAPA", resource_id=str(capa_id))
+    await assert_quality_record_department(db, capa.department)
 
 
 def _cap_plan_track_to_detail(track: Any) -> CapaPlanTrackDetail:
@@ -787,6 +801,7 @@ async def create_capa_plan_track(
     capa = await repository.get_capa_by_id(db, data.capa_id)
     if not capa:
         raise NotFoundException(resource="CAPA", resource_id=str(data.capa_id))
+    await assert_quality_record_department(db, capa.department)
 
     payload = data.model_dump()
     payload["capa_code"] = capa.capa_code
@@ -813,8 +828,11 @@ async def update_capa_plan_track(
     track = await repository.get_capa_plan_track_by_id(db, track_id)
     if not track:
         raise NotFoundException(resource="CAPA计划跟踪", resource_id=str(track_id))
+    await _assert_capa_plan_track_department(db, track.capa_id)
 
     payload = data.model_dump(exclude_unset=True)
+    if "capa_id" in payload:
+        await _assert_capa_plan_track_department(db, payload["capa_id"])
     await repository.update_capa_plan_track(db, track, payload)
     await db.commit()
     result = await repository.get_capa_plan_track_by_id(db, track.id)
@@ -830,6 +848,10 @@ async def delete_capa_plan_track(
     db: AsyncSession,
     track_id: uuid.UUID,
 ) -> None:
+    track = await repository.get_capa_plan_track_by_id(db, track_id)
+    if not track:
+        raise NotFoundException(resource="CAPA计划跟踪", resource_id=str(track_id))
+    await _assert_capa_plan_track_department(db, track.capa_id)
     await repository.delete_capa_plan_track(db, track_id)
     await db.commit()
 

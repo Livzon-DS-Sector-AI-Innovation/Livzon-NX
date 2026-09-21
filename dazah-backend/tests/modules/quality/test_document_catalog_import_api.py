@@ -32,9 +32,7 @@ async def _create_entry(db_session: AsyncSession, code: str) -> DocumentEntry:
     # 先清理历史运行 commit 遗留的同前缀行（同事务内删除即不可见），
     # 仅 flush 不 commit：路由同一会话可见，fixture 回滚即清理，不污染测试库
     await db_session.execute(
-        DocumentEntry.__table__.delete().where(
-            DocumentEntry.code.like("SOP-QA-001%")
-        )
+        DocumentEntry.__table__.delete().where(DocumentEntry.code.like("SOP-QA-001%"))
     )
     entry = DocumentEntry(
         department_id=uuid4(),
@@ -91,13 +89,18 @@ async def test_batch_import_binds_upgrades_version_and_reports_unmatched(
     from app.modules.quality.service.document_catalog_md import ExtractedImage
 
     image = ExtractedImage(name="img_000.png", data=PNG_1PX, content_type="image/png")
-    # 端点从 document_catalog_md 模块局部导入转换函数，须 patch 该模块引用
-    import app.modules.quality.service.document_catalog_md as md_conv_mod
+    from app.modules.quality.service import (
+        document_catalog_revision as revision_service,
+    )
 
     monkeypatch.setattr(
-        md_conv_mod,
+        revision_service,
         "convert_word_attachment",
-        lambda *_args: ("# 转换标准\n\n![image](img_000.png)", [image]),
+        lambda *_args: (
+            "# 转换标准\n**文件编号**: SOP-QA-001/04\n"
+            "**生效日期**: 2026-09-01\n\n![image](img_000.png)",
+            [image],
+        ),
     )
 
     response = await _post_files(
@@ -107,7 +110,8 @@ async def test_batch_import_binds_upgrades_version_and_reports_unmatched(
                 "files",
                 (
                     "SOP-QA-001-03偏差处理程序.md",
-                    "# 目录".encode(),
+                    ("# 目录\n**文件编号**: SOP-QA-001/03\n"
+                     "**生效日期**: 2026-08-01").encode(),
                     "text/markdown",
                 ),
             ),
@@ -130,7 +134,7 @@ async def test_batch_import_binds_upgrades_version_and_reports_unmatched(
     body = response.json()
     assert body["data"]["bound"] == 2
     assert body["data"]["failed"] == 1
-    assert body["data"]["version_updated_count"] == 1
+    assert body["data"]["version_updated_count"] == 2
 
     results = body["data"]["results"]
     by_name = {item["file_name"]: item for item in results}
@@ -138,15 +142,15 @@ async def test_batch_import_binds_upgrades_version_and_reports_unmatched(
     # .md 附件：编码匹配 + 版本 02 → 03 自动升级（编号优先于名称）
     md_result = by_name["SOP-QA-001-03偏差处理程序.md"]
     assert md_result["matched"] is True
-    assert md_result["match_type"] == "code"
+    assert md_result["match_type"] == "content"
     assert md_result["version_updated"] is True
     assert md_result["old_code"] == "SOP-QA-001/02"
     assert md_result["new_code"] == "SOP-QA-001/03"
 
-    # .docx 附件：同名版本相同（03），转换但不重复升级
+    # .docx 正文为 04，忽略文件名 03，替换刚导入的 03 附件
     docx_result = by_name["SOP-QA-001-03偏差处理程序.docx"]
     assert docx_result["matched"] is True
-    assert docx_result["version_updated"] is False
+    assert docx_result["version_updated"] is True
 
     # 未匹配文件仅报告失败，不影响其余绑定（部分成功）
     unmatched = by_name["完全没有编码的文件.pdf"]
@@ -154,10 +158,11 @@ async def test_batch_import_binds_upgrades_version_and_reports_unmatched(
     assert unmatched["match_type"] == "none"
 
     # NullPool 下 refresh 会用新连接读到未提交旧快照，直接断言同一会话对象
-    assert entry.code == "SOP-QA-001/03"
+    assert entry.code == "SOP-QA-001/04"
 
     # word 附件转换产物：标准 MD 与图片资产均已真实存储并绑定
     entry_attachments = list(entry.attachments or [])
+    assert len(entry_attachments) == 1
     docx_attachment = next(
         a
         for a in entry_attachments

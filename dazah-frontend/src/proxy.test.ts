@@ -74,3 +74,23 @@ it('redirects an enforced module root without an overview grant to the first aut
   const response = await proxy(new NextRequest('http://frontend.test/production'))
   expect(response.headers.get('location')).toBe('http://frontend.test/production/batches/workshop/201-2')
 })
+
+it.each([
+  { roles: ['ordinary_admin'], expectedStatus: 403 },
+  { roles: ['super_admin'], expectedStatus: 200 },
+])('checks system settings access before rendering: $roles', async ({ roles, expectedStatus }) => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    data: { role: 'admin', roles },
+  }), { status: 200 }))
+  vi.stubGlobal('fetch', fetchMock)
+  const response = await proxy(new NextRequest('http://frontend.test/settings'))
+  expect(response.status).toBe(expectedStatus)
+  expect(fetchMock).toHaveBeenCalledOnce()
+})
+
+it('blocks direct access to system permission pages for ordinary administrators', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    data: { role: 'admin', roles: ['ordinary_admin'] },
+  }))))
+  expect((await proxy(new NextRequest('http://frontend.test/system/roles'))).status).toBe(403)
+})

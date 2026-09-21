@@ -31,6 +31,7 @@ const roles: RoleItem[] = [
   { id: 'role-a', name: '物料QA', code: 'material_qa', is_system: false, permissions: [], description: '物料质量页面基线' },
   { id: 'role-b', name: '体系QA', code: 'system_qa', is_system: false, permissions: [], description: '体系质量页面基线' },
   { id: 'role-admin', name: '系统管理员', code: 'super_admin', is_system: true, permissions: [] },
+  { id: 'role-ordinary-admin', name: '普通管理员', code: 'ordinary_admin', is_system: true, permissions: [] },
 ]
 const user: AdminUserItem = {
   id: 'user-1', name: 'QA部公用账号', department: 'QA部', position: '公用账号',
@@ -104,4 +105,13 @@ it('keeps system administrator exclusive', async () => {
   expect(roleCheckbox('物料QA').checked).toBe(false)
   expect(document.body.textContent).toContain('已自动取消其他普通角色')
   expect([...document.querySelectorAll('button')].some((item) => item.textContent?.includes('查看页面权限'))).toBe(false)
+})
+
+it('keeps ordinary administrator exclusive and explains the settings limit', async () => {
+  await renderManager()
+  await act(async () => button('分配角色').click())
+  await act(async () => roleCheckbox('普通管理员').click())
+  expect(roleCheckbox('普通管理员').checked).toBe(true)
+  expect(roleCheckbox('物料QA').checked).toBe(false)
+  expect(document.body.textContent).toContain('不能进入系统设置')
 })

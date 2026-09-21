@@ -43,8 +43,9 @@ import ProductionSummary from '@/components/production/production-summary'
 import SalesPlanCard from '@/components/production/sales-plan-card'
 import LineStatusConfirmModal from '@/components/production/line-status-confirm-modal'
 import { useProductContextStore } from '@/stores/product-context'
-import { usePermission } from '@/hooks/usePermission'
+import { useAuthStore } from '@/stores/auth'
 import {
+  hasProductionOverviewStage,
   PRODUCTION_PAGE_KEYS,
   useProductionPermissions,
 } from '@/components/production/useProductionPermissions'
@@ -139,11 +140,12 @@ const STATUS_META: Record<string, { label: string; color: string }> = {
 
 export default function ProductionDashboard() {
   const { message } = App.useApp()
+  const productionUser = useAuthStore((state) => state.user)
   const { canOperate, canDelete } = useProductionPermissions(PRODUCTION_PAGE_KEYS.overview)
-  // 工段数据权限：发酵模块挂发酵权限，提炼汇总挂提炼权限，收率需双权限
-  const { has } = usePermission()
-  const canFerm = has('production:fermentation-yield')
-  const canExtract = has('production:extraction-yield')
+  // 工段数据权限：发酵模块挂发酵权限，提炼汇总挂提炼权限，收率需双权限；
+  // 概览页授权用户按页面数据范围（production_fermentation/extraction/all）解析
+  const canFerm = hasProductionOverviewStage(productionUser, 'fermentation')
+  const canExtract = hasProductionOverviewStage(productionUser, 'extraction')
   const [board, setBoard] = useState<FermentationBoard | null>(null)
   const [boardMessage, setBoardMessage] = useState<string>('')
   const [loading, setLoading] = useState(true)
