@@ -17,7 +17,7 @@ export function OverviewPageShell({
   children: ReactNode
 }) {
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+    <Space orientation="vertical" size={16} style={{ width: '100%' }}>
       <Row align="middle" justify="space-between" gutter={[16, 12]}>
         <Col>
           <Typography.Title level={3} style={{ margin: 0 }}>{title}</Typography.Title>
@@ -82,7 +82,7 @@ export function DataQualityCard({ issues, sampleSize }: { issues: string[]; samp
 export function AnalysisPanel({ facts, algorithm, ai }: { facts: ReactNode; algorithm: ReactNode; ai?: ReactNode }) {
   return (
     <Card title="分析结论" size="small">
-      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={12} style={{ width: '100%' }}>
         <Alert type="info" title="已验证事实" description={facts} />
         <Alert type="warning" title="算法检测结果" description={algorithm} />
         <Alert type="success" title="AI 辅助推断" description={ai || '尚未生成 AI 解释'} />

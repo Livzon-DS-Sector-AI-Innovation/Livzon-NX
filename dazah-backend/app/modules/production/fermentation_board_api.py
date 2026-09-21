@@ -503,7 +503,7 @@ async def set_production_line_status(
     body: ProductionLineStatusBody,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
-    product: str = Query(..., description="产品代码（FA/MC/DR/LV/MV/TY/FL）"),
+    product: str = Query(..., description="产品代码（FA/MC/LN/DR/LV/MV/TY/FL）"),
 ) -> Any:
     if product not in board.PRODUCTION_LINE_CODES:
         raise HTTPException(status_code=400, detail=f"未知的产品代码：{product}")

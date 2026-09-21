@@ -167,7 +167,7 @@ export function InstrumentProfileDrawer({
       )}
       {error && <Alert type="error" showIcon title={error.message} />}
       {data && (
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <Descriptions
             bordered
             size="small"
@@ -204,7 +204,7 @@ export function InstrumentProfileDrawer({
                 key: 'calibration',
                 label: `校验情况（${calibration ? calibration.internal_summary.length + calibration.internal_plan.length + calibration.external.length : 0}）`,
                 children: (
-                  <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                  <Space orientation="vertical" size={16} style={{ width: '100%' }}>
                     <div>
                       <Text strong>内校汇总（{calibration?.internal_summary.length ?? 0}）</Text>
                       <div style={{ marginTop: 8 }}>
@@ -230,7 +230,7 @@ export function InstrumentProfileDrawer({
                 key: 'contracts',
                 label: `维保合同（${data.contracts.length}）`,
                 children: (
-                  <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                  <Space orientation="vertical" size={8} style={{ width: '100%' }}>
                     <Text type="secondary">
                       仅展示「涉及仪器及编号」包含设备编号 {data.matched_code || '-'} 的合同；合同共
                       {data.contracts_total} 份。

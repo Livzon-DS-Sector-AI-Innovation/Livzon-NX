@@ -253,7 +253,7 @@ export function ExternalQualityManagementPage({ initialTab }: { initialTab: Exte
         title: '投诉事项',
         key: 'subject',
         render: (_, record) => (
-          <Space direction="vertical" size={0}>
+          <Space orientation="vertical" size={0}>
             <Typography.Text strong>{record.title}</Typography.Text>
             <Typography.Text type="secondary">{[record.customer_name, record.product_name, record.batch_number].filter(Boolean).join(' / ') || '-'}</Typography.Text>
           </Space>
@@ -290,7 +290,7 @@ export function ExternalQualityManagementPage({ initialTab }: { initialTab: Exte
       {
         title: '类型 / 编号',
         key: 'code',
-        render: (_, record) => <Space direction="vertical" size={0}><Tag color={record.record_type === 'recall' ? 'error' : 'warning'}>{record.record_type === 'recall' ? '召回' : '退货'}</Tag><Typography.Text strong>{record.record_code}</Typography.Text></Space>,
+        render: (_, record) => <Space orientation="vertical" size={0}><Tag color={record.record_type === 'recall' ? 'error' : 'warning'}>{record.record_type === 'recall' ? '召回' : '退货'}</Tag><Typography.Text strong>{record.record_code}</Typography.Text></Space>,
       },
       { title: '事项', dataIndex: 'title', key: 'title' },
       { title: '产品 / 批号', key: 'product', render: (_, record) => [record.product_name, record.batch_number].filter(Boolean).join(' / ') || '-' },
@@ -330,7 +330,7 @@ export function ExternalQualityManagementPage({ initialTab }: { initialTab: Exte
         onFilter: (value, record) => record.record_type === String(value),
         render: (value) => <Tag>{value === 'annual_review' ? '年度回顾' : '客户标准'}</Tag>,
       },
-      { title: '标题 / 产品', key: 'subject', render: (_, record) => <Space direction="vertical" size={0}><Typography.Text strong>{record.title}</Typography.Text><Typography.Text type="secondary">{record.product_name}</Typography.Text></Space> },
+      { title: '标题 / 产品', key: 'subject', render: (_, record) => <Space orientation="vertical" size={0}><Typography.Text strong>{record.title}</Typography.Text><Typography.Text type="secondary">{record.product_name}</Typography.Text></Space> },
       {
         title: '状态',
         dataIndex: 'status',
@@ -373,7 +373,7 @@ export function ExternalQualityManagementPage({ initialTab }: { initialTab: Exte
   }
 
   return (
-    <Space direction="vertical" size={16} style={{ display: 'flex' }}>
+    <Space orientation="vertical" size={16} style={{ display: 'flex' }}>
       <div>
         <Typography.Title level={3} style={{ marginBottom: 4 }}>外部质量管理</Typography.Title>
         <Typography.Text type="secondary">平台主数据与受控流程为唯一事实来源；飞书同步仅支持管理员按单条记录手动推送。</Typography.Text>
@@ -384,7 +384,7 @@ export function ExternalQualityManagementPage({ initialTab }: { initialTab: Exte
       <Tabs defaultActiveKey={initialTab} items={[
         {
           key: 'suppliers', label: TAB_LABELS.suppliers, children: (
-            <Space direction="vertical" size={16} style={{ display: 'flex' }}>
+            <Space orientation="vertical" size={16} style={{ display: 'flex' }}>
               <Row gutter={[16, 16]}><Col xs={24} sm={8}><Card size="small"><Statistic title="供应商" value={suppliers.length} suffix="家" /></Card></Col><Col xs={24} sm={8}><Card size="small"><Statistic title="有效资质" value={qualifications.filter((item) => item.status === 'valid').length} suffix="项" /></Card></Col><Col xs={24} sm={8}><Card size="small"><Statistic title="待处理资质" value={qualifications.filter((item) => item.status === 'pending').length} suffix="项" /></Card></Col></Row>
               <Row gutter={[16, 16]}>
                 <Col xs={24} xl={14}><Card title="供应商台账" extra={<Space><Button icon={<ReloadOutlined />} onClick={() => void refreshSuppliers()}>刷新</Button><Button type="primary" icon={<PlusOutlined />} onClick={() => setSupplierDrawerOpen(true)}>新增供应商</Button></Space>}><Table<Supplier> rowKey="id" columns={supplierColumns} dataSource={suppliers} scroll={{ x: 900 }} onRow={(record) => ({ onClick: () => setSelectedSupplierId(record.id), style: { cursor: 'pointer', background: selectedSupplierId === record.id ? '#f6f0ff' : undefined } })} locale={{ emptyText: <Empty description="暂无供应商记录" /> }} /></Card></Col>

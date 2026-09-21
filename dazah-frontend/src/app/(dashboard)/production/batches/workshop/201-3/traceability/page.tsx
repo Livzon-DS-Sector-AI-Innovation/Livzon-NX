@@ -757,7 +757,7 @@ function TraceabilityPage() {
             {/* ── 断链清单 ── */}
             {traceData.broken_links && traceData.broken_links.length > 0 && (
               <Card size="small" style={{ marginTop: 12, borderColor: '#ffccc7', background: '#fff1f0' }}>
-                <Space direction="vertical" style={{ width: '100%' }}>
+                <Space orientation="vertical" style={{ width: '100%' }}>
                   <Text strong style={{ color: '#cf1322' }}>
                     <ReloadOutlined /> 断链清单（{traceData.broken_links.length} 处）— 投料无源头 / 回收粉标签
                   </Text>

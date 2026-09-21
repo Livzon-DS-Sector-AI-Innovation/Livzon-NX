@@ -87,7 +87,7 @@ export function InspectionDashboardPage() {
         title: '检验编号 / 批号',
         key: 'identifier',
         render: (_: unknown, record: LatestRecord) => (
-          <Space direction="vertical" size={0}>
+          <Space orientation="vertical" size={0}>
             <Typography.Text strong>{record.inspection_no || '-'}</Typography.Text>
             <Typography.Text type="secondary">{record.batch_no || '-'}</Typography.Text>
           </Space>
@@ -103,7 +103,7 @@ export function InspectionDashboardPage() {
         title: '项目 / 结果',
         key: 'result',
         render: (_: unknown, record: LatestRecord) => (
-          <Space direction="vertical" size={0}>
+          <Space orientation="vertical" size={0}>
             <Typography.Text>{record.inspection_item || '-'}</Typography.Text>
             <Typography.Text type="secondary">{record.test_result || '-'}</Typography.Text>
           </Space>
@@ -197,7 +197,7 @@ export function InspectionDashboardPage() {
 
   const dashboard: InspectionDashboardResponse | undefined = dashboardQuery.data
   return (
-    <Space direction="vertical" size={16} style={{ display: 'flex' }}>
+    <Space orientation="vertical" size={16} style={{ display: 'flex' }}>
       <div>
         <Typography.Title level={3} style={{ marginBottom: 4 }}>
           检验管理
@@ -268,7 +268,7 @@ export function InspectionDashboardPage() {
             description={trendQuery.error.message}
           />
         ) : trendQuery.data ? (
-          <Space direction="vertical" size={16} style={{ display: 'flex' }}>
+          <Space orientation="vertical" size={16} style={{ display: 'flex' }}>
             <Space wrap>
               <Tag color="blue">{trendQuery.data.resource_name}</Tag>
               {trendQuery.data.subject ? <Tag>{trendQuery.data.subject}</Tag> : null}

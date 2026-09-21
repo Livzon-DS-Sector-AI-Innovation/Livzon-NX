@@ -124,7 +124,7 @@ export function OosOotManagementPage() {
         title: '类型 / 编号',
         key: 'code',
         render: (_, record) => (
-          <Space direction="vertical" size={0}>
+          <Space orientation="vertical" size={0}>
             <Tag color={record.record_type === 'OOS' ? 'error' : 'warning'}>{record.record_type}</Tag>
             <Typography.Text strong>{record.record_code}</Typography.Text>
           </Space>
@@ -134,7 +134,7 @@ export function OosOotManagementPage() {
         title: '事件与批次',
         key: 'subject',
         render: (_, record) => (
-          <Space direction="vertical" size={0}>
+          <Space orientation="vertical" size={0}>
             <Typography.Text>{record.title}</Typography.Text>
             <Typography.Text type="secondary">
               {[record.product_name, record.batch_number].filter(Boolean).join(' / ') || '-'}
@@ -260,7 +260,7 @@ export function OosOotManagementPage() {
   }
 
   return (
-    <Space direction="vertical" size={16} style={{ display: 'flex' }}>
+    <Space orientation="vertical" size={16} style={{ display: 'flex' }}>
       <div>
         <Typography.Title level={3} style={{ marginBottom: 4 }}>
           OOS/OOT 管理
@@ -278,7 +278,7 @@ export function OosOotManagementPage() {
             key: 'ledger',
             label: 'OOS/OOT 台账',
             children: (
-              <Space direction="vertical" size={16} style={{ display: 'flex' }}>
+              <Space orientation="vertical" size={16} style={{ display: 'flex' }}>
                 <Row gutter={[16, 16]}>
                   <Col xs={24} sm={8}><Card size="small"><Statistic title="当前记录" value={records.length} suffix="条" /></Card></Col>
                   <Col xs={24} sm={8}><Card size="small"><Statistic title="调查中" value={records.filter((record) => record.status === 'investigating').length} suffix="条" /></Card></Col>

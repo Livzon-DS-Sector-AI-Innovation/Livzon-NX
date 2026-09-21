@@ -82,3 +82,11 @@ async def test_set_line_halted_updates_existing() -> None:
     assert existing.halted is False
     assert existing.updated_by == "u-2"
     assert item is existing
+
+
+def test_production_line_codes_cover_all_board_products() -> None:
+    """停产状态白名单须覆盖看板全部产线代码（含 LN 盐酸林可霉素），
+    否则状态切换接口会报「未知的产品代码」。"""
+    assert board.PRODUCTION_LINE_CODES == frozenset(
+        {"FA", "MC", "LN", "DR", "LV", "MV", "TY", "FL"}
+    )

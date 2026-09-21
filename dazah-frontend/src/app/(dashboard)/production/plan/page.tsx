@@ -38,6 +38,11 @@ const SUMMARY_PLACEHOLDERS = [
 // 页面内模块 Tab 的本地持久化键：刷新后停留在上次所在模块
 const PLAN_PAGE_TAB_STORAGE_KEY = 'dazah.production.plan-page.tab'
 
+// 生产/销售计划所选月份的会话级记忆键：刷新后停留在上次所选月份；
+// 关闭标签页或重新登录（会话结束）后回到当月
+const PLAN_PAGE_MONTH_STORAGE_KEY = 'dazah.production.plan-page.month'
+const PLAN_PAGE_SALES_MONTH_STORAGE_KEY = 'dazah.production.plan-page.sales-month'
+
 // 销售计划数据同步说明（悬浮/点击"飞书同步数据"旁的感叹号图标展示）
 const SALES_SYNC_LOGIC_TIP =
   '更新逻辑：每天 8:00-20:00，系统每小时整点自动从飞书同步一次销售计划与生产计划数据；20:00 至次日 8:00 不自动同步，如有需要可在同步设置中手动同步。'
@@ -49,6 +54,8 @@ export default function PlanPage() {
   // 当前模块 Tab：持久化到本地，刷新/重开页面后停留在上次所在模块
   const [activeTab, setActiveTab] = useState('plan')
   const [month, setMonth] = useState(dayjs().format('YYYY-MM'))
+  // 月份恢复完成后再发起加载，避免先按当月请求再按记住的月份返工
+  const [selectionRestored, setSelectionRestored] = useState(false)
   const [plans, setPlans] = useState<ProductionPlan[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
@@ -68,15 +75,17 @@ export default function PlanPage() {
   }, [])
 
   useEffect(() => {
-    load(page, month) // eslint-disable-line react-hooks/set-state-in-effect
-  }, [page, month, load])
+    if (selectionRestored) {
+      load(page, month) // eslint-disable-line react-hooks/set-state-in-effect
+    }
+  }, [selectionRestored, page, month, load])
 
   const [salesPlans, setSalesPlans] = useState<SalesPlanDetail[]>([])
   const [salesLoading, setSalesLoading] = useState(true)
   const [salesPage, setSalesPage] = useState(1)
   const [salesTotal, setSalesTotal] = useState(0)
-  // 数据月份筛选：空 = 全部月份
-  const [salesMonth, setSalesMonth] = useState('')
+  // 数据月份筛选：初始当月（会话内记住所选），清空 = 全部月份
+  const [salesMonth, setSalesMonth] = useState(dayjs().format('YYYY-MM'))
 
   const loadSales = useCallback(async (p: number, m: string) => {
     setSalesLoading(true)
@@ -96,8 +105,10 @@ export default function PlanPage() {
   }, [])
 
   useEffect(() => {
-    loadSales(salesPage, salesMonth) // eslint-disable-line react-hooks/set-state-in-effect
-  }, [salesPage, salesMonth, loadSales])
+    if (selectionRestored) {
+      loadSales(salesPage, salesMonth) // eslint-disable-line react-hooks/set-state-in-effect
+    }
+  }, [selectionRestored, salesPage, salesMonth, loadSales])
 
   // 来源表名：展示当前列表数据真实来源的飞书数据表名（同步时写入每行）；
   // 跨多月或存量行无表名时无法用单一表名概括，回退通用名
@@ -112,9 +123,34 @@ export default function PlanPage() {
     salesSourceTables.length === 1 ? salesSourceTables[0] : '销售计划执行表'
 
   const changeSalesMonth = (d: dayjs.Dayjs | null) => {
-    setSalesMonth(d ? d.format('YYYY-MM') : '')
+    const m = d ? d.format('YYYY-MM') : ''
+    setSalesMonth(m)
     setSalesPage(1)
+    try {
+      window.sessionStorage.setItem(PLAN_PAGE_SALES_MONTH_STORAGE_KEY, m)
+    } catch {
+      // 存储不可用时仅当次会话生效
+    }
   }
+
+  useEffect(() => {
+    // 挂载后恢复会话内记住的月份（SSR 首帧保持默认当月，避免水合错位）；
+    // 两个月份各自独立记忆，与 Tab 恢复同模式
+    try {
+      const savedMonth = window.sessionStorage.getItem(PLAN_PAGE_MONTH_STORAGE_KEY)
+      const savedSalesMonth = window.sessionStorage.getItem(
+        PLAN_PAGE_SALES_MONTH_STORAGE_KEY,
+      )
+      if (savedMonth) {
+        setMonth(savedMonth)
+      }
+      // 销售月份允许清空（= 全部月份）：从未选择过则默认当月
+      setSalesMonth(savedSalesMonth ?? dayjs().format('YYYY-MM'))
+    } catch {
+      // 存储不可用时保持默认当月
+    }
+    setSelectionRestored(true)
+  }, [])
 
   useEffect(() => {
     // 挂载后恢复上次所在模块（SSR 首帧保持默认，避免水合错位）
@@ -141,7 +177,13 @@ export default function PlanPage() {
   const changeMonth = (d: dayjs.Dayjs | null) => {
     if (!d) return
     setPage(1)
-    setMonth(d.format('YYYY-MM'))
+    const m = d.format('YYYY-MM')
+    setMonth(m)
+    try {
+      window.sessionStorage.setItem(PLAN_PAGE_MONTH_STORAGE_KEY, m)
+    } catch {
+      // 存储不可用时仅当次会话生效
+    }
   }
 
   const columns: ColumnsType<ProductionPlan> = [
@@ -190,6 +232,8 @@ export default function PlanPage() {
     v != null ? v.toLocaleString('zh-CN') : '-'
 
   const salesColumns: ColumnsType<SalesPlanDetail> = [
+    // 数据月份：全部月份视图下区分每行归属月份（同步时按源数据表名写入）
+    { title: '数据月份', dataIndex: 'data_month', width: 90, render: (v: string | null) => v || '-' },
     { title: '产品', dataIndex: 'product_name', width: 140, render: (v: string) => v || '-' },
     { title: '单位', dataIndex: 'unit', width: 60, render: (v: string | null) => v || '-' },
     { title: '上月已发货未开票', dataIndex: 'last_month_delivered_uninvoiced', width: 130, render: fmtNum },
@@ -342,7 +386,7 @@ export default function PlanPage() {
                   rowKey="id"
                   loading={salesLoading}
                   size="small"
-                  scroll={{ x: 1700 }}
+                  scroll={{ x: 1800 }}
                   pagination={{
                     current: salesPage,
                     pageSize: 20,

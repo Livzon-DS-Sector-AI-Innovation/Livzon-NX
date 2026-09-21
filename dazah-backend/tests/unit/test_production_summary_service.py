@@ -12,7 +12,7 @@ import pytest
 from app.modules.production import fermentation_board_service as board
 from tests.unit.test_fermentation_board_service import _dr_rows, _mp_rows
 
-EXPECTED_PRODUCTS = ["MC", "DR", "FA", "LV", "MV", "TY", "FL"]
+EXPECTED_PRODUCTS = ["MC", "LN", "DR", "FA", "LV", "MV", "TY", "FL"]
 
 
 def _empty_db() -> MagicMock:
@@ -57,7 +57,7 @@ async def test_summary_hides_halted_lines_for_current_month(monkeypatch: Any) ->
     )
     codes = [row["product_code"] for row in payload["rows"]]
     assert "MC" not in codes
-    assert codes == ["DR", "FA", "LV", "MV", "TY", "FL"]
+    assert codes == ["LN", "DR", "FA", "LV", "MV", "TY", "FL"]
 
 
 @pytest.mark.anyio

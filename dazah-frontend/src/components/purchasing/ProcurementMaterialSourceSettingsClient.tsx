@@ -252,7 +252,7 @@ export function ProcurementMaterialSourceSettingsClient({
       )}
 
       <Card title="物料数据源" bordered={false}>
-        <Space direction="vertical" size="large" className="w-full">
+        <Space orientation="vertical" size="large" className="w-full">
           <div>
             <Typography.Text strong>飞书多维表格链接</Typography.Text>
             <Input

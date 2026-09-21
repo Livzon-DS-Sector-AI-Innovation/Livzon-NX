@@ -740,10 +740,12 @@ def test_build_dr_board_trend_and_collect_dump_tanks() -> None:
     ]
     payload = board.build_dr_board(rows, [], now, actuals=actuals)
     assert payload is not None
-    # 趋势按放罐日期升序，仅含周期内已放罐且有产量的批次
+    # 趋势按放罐日期升序，仅含周期内已放罐且有产量的正式批；
+    # 平均单产 = 含中试产量 ÷ 正式批批数（本例无中试，即柱子均值）
     assert payload["trend"] == {
         "batches": ["DR-2617", "DR-26035"],
         "outputs": [100.5, 88.0],
+        "avg_yield_kg": 94.25,
     }
     # 无产量录入时趋势为 None（不返回空对象）
     empty = board.build_dr_board(rows, [], now)
@@ -766,6 +768,51 @@ def test_build_dr_board_trend_and_collect_dump_tanks() -> None:
     )
     assert mp_payload is not None
     assert mp_payload["trend"] == {"batches": ["MC-26244"], "outputs": [55.0]}
+
+
+def test_build_dr_board_pilot_batch_kpi_and_trend() -> None:
+    """中试批：不占 KPI 批次名额、不进条形图，产量累积进总产量并摊入平均单产。"""
+    rows = _dr_rows()
+    sep = rows[12:]
+    # 追加中试批 ZS-007：9/1 进罐 B303、9/10 放罐（周期内、now 之前）
+    sep[5][1] = "ZS-007"
+    sep[6][1] = "B303"
+    sep[7][10] = "ZS-007"
+    sep[8][10] = "B303"
+    now = datetime(2026, 9, 25, 12, 0)
+    actuals = [
+        {"batch_no": "DR-2617", "dump_date": "2026-09-03", "yield_kg": 100.5},
+        {"batch_no": "DR-26035", "dump_date": "2026-09-20", "yield_kg": 88.0},
+        {"batch_no": "ZS-007", "dump_date": "2026-09-10", "yield_kg": 60.0},
+        {"batch_no": "DR-2619", "dump_date": "2026-09-18", "yield_kg": None},
+    ]
+    payload = board.build_dr_board(rows, [], now, actuals=actuals)
+    assert payload is not None
+
+    kpis = payload["kpis"]
+    # 中试不占批次名额：计划/已完成只数正式批（4 批正式全放罐）
+    assert kpis["month_planned"] == 4
+    assert kpis["month_done_planned"] == 4
+    # 中试产量累积进总产量：100.5 + 88.0 + 60.0
+    assert kpis["month_done_yield_kg"] == 248.5
+    # 录入口径含中试：已录 3（含 ZS-007）、待录 2（DR-2619 / DR-26036）
+    assert kpis["done_with_yield"] == 3
+    assert kpis["yield_pending"] == 2
+    # 条形图只画正式批；平均单产 = 含中试总产量 ÷ 正式批批数 = 248.5 / 2
+    assert payload["trend"]["batches"] == ["DR-2617", "DR-26035"]
+    assert payload["trend"]["outputs"] == [100.5, 88.0]
+    assert payload["trend"]["avg_yield_kg"] == 124.25
+    # 产量录入下拉仍含中试批
+    assert {"batch_no": "ZS-007", "dump_date": "2026-09-10"} in payload[
+        "dumped_batches"
+    ]
+
+    # 中试批漏录产量同样触发待录提醒
+    no_pilot_yield = [a for a in actuals if a["batch_no"] != "ZS-007"]
+    payload2 = board.build_dr_board(rows, [], now, actuals=no_pilot_yield)
+    assert payload2 is not None
+    texts = [a["text"] for a in payload2["alerts"]]
+    assert any("ZS-007" in t for t in texts)
 
 
 def _statin_rows() -> list[list]:
