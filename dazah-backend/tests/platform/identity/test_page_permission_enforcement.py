@@ -258,6 +258,10 @@ async def test_department_mapping_and_profile_cannot_self_escalate(monkeypatch):
     app.include_router(rbac_api.rbac_router, prefix="/api/v1/identity")
     app.include_router(api.user_router, prefix="/api/v1/identity")
     app.dependency_overrides[deps.get_current_user] = lambda: actor
+    # The routes under test enforce business rules beyond authentication; the
+    # system-administrator gate itself is covered by test_ordinary_administrator_access.
+    app.dependency_overrides[rbac_api.require_identity_admin] = lambda: actor
+    app.dependency_overrides[deps.require_system_admin] = lambda: actor
     app.dependency_overrides[get_db] = lambda: None
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -323,6 +327,8 @@ async def test_user_context_changes_expire_authorization_snapshots(
     app = FastAPI()
     app.include_router(api.user_router, prefix="/api/v1/identity")
     app.dependency_overrides[deps.get_current_user] = lambda: actor
+    # user_router management endpoints require a system (not ordinary) admin.
+    app.dependency_overrides[deps.require_system_admin] = lambda: actor
     app.dependency_overrides[get_db] = lambda: db
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
