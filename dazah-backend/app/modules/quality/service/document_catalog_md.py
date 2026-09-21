@@ -17,7 +17,9 @@ import os
 import shutil
 import subprocess
 import tempfile
+from io import BytesIO
 from pathlib import Path
+from zipfile import ZipFile
 
 from app.core.exceptions import AppException
 from app.modules.quality.service.document_catalog_docx_md import (
@@ -170,9 +172,7 @@ def _convert_doc_via_text_fallback(content: bytes, file_name: str) -> str | None
             if result.returncode == 0 and result.stdout:
                 text = result.stdout.decode("utf-8", errors="replace").strip()
                 if text:
-                    return (
-                        f"# 文本提取模式（无表格，来自 {tool}）\n\n{text}"
-                    )
+                    return f"# 文本提取模式（无表格，来自 {tool}）\n\n{text}"
     return None
 
 
@@ -192,9 +192,7 @@ def convert_legacy_to_docx(content: bytes, file_name: str) -> bytes:
                 "Word COM convert failed",
                 extra={"component": "quality", "error": str(exc)},
             )
-    raise AppException(
-        message="当前环境不支持该格式转换，请转换为 .docx 后上传"
-    )
+    raise AppException(message="当前环境不支持该格式转换，请转换为 .docx 后上传")
 
 
 def convert_word_attachment(
@@ -205,6 +203,7 @@ def convert_word_attachment(
     md 中图片以 `img_000.png` 等占位名引用，由调用方存储并替换为实际 URL。
     .doc/.wps：OOXML 直接解析 → soffice 管线 → catdoc/antiword 文本兜底。
     """
+    content = normalize_word_package(content)
     if os.path.splitext(file_name)[1].lower() in LEGACY_WORD_EXTS:
         direct = _try_ooxml_direct(content, file_name)
         if direct is not None:
@@ -218,6 +217,30 @@ def convert_word_attachment(
                 return text, []
             raise
     return convert_docx_content_to_md(content, file_name)
+
+
+def normalize_word_package(content: bytes) -> bytes:
+    """兼容实际为宏文档的 OOXML 包，包括扩展名仍是 .docx 的 WPS 文件。"""
+    if not content.startswith(b"PK"):
+        return content
+    with ZipFile(BytesIO(content)) as source:
+        types = source.read("[Content_Types].xml")
+        macro_type = b"application/vnd.ms-word.document.macroEnabled.main+xml"
+        if macro_type not in types:
+            return content
+        # python-docx 仅接受普通文档主部件类型；只在内存中转换类型声明。
+        # XML 正文、表格和图片字节不变，整个过程不启动 Office、不执行 VBA。
+        output = BytesIO()
+        with ZipFile(output, "w") as target:
+            for item in source.infolist():
+                data = source.read(item.filename)
+                if item.filename == "[Content_Types].xml":
+                    data = data.replace(
+                        macro_type,
+                        b"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
+                    )
+                target.writestr(item, data)
+        return output.getvalue()
 
 
 def _try_ooxml_direct(

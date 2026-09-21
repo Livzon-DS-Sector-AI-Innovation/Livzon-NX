@@ -22,12 +22,20 @@ _EXTENSION_MIMES: dict[str, set[str]] = {
     ".gif": {"image/gif"},
     ".webp": {"image/webp"},
     ".bmp": {"image/bmp"},
-    ".doc": {"application/msword"},
+    ".doc": {
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    },
     ".docx": {
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     },
+    ".docm": {
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-word.document.macroenabled.12",
+    },
     ".wps": {
         "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "application/vnd.ms-works",
         "application/kswps",
         "application/octet-stream",

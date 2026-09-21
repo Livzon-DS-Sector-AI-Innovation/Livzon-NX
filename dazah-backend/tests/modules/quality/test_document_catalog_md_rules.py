@@ -29,11 +29,13 @@ def _build_template_docx() -> bytes:
     document = Document()
 
     # 首页审批格（应整体跳过，仅生效日期进入 md 头部）
-    header_table = document.add_table(rows=2, cols=2)
+    header_table = document.add_table(rows=3, cols=2)
     header_table.cell(0, 0).text = "生效日期"
     header_table.cell(0, 1).text = "2026-08-01"
     header_table.cell(1, 0).text = "分发-1"
     header_table.cell(1, 1).text = "QA部门"
+    header_table.cell(2, 0).text = "文件编号"
+    header_table.cell(2, 1).text = "SMP-QA-001/02"
 
     # 正文段落（有序号，转标题）
     document.add_paragraph("1. 目的：建立本文件")
@@ -89,9 +91,9 @@ def test_convert_docx_content_to_md_full_template() -> None:
         content, "SMP-QA-001-02偏差处理程序.docx"
     )
 
-    # md 头部：文件名提取编号/标题，首页表格提取生效日期
+    # md 头部：编号与生效日期来自正文
     assert markdown.startswith("# 偏差处理程序")
-    assert "**文件编号**: SMP-QA-001-02" in markdown
+    assert "**文件编号**: SMP-QA-001/02" in markdown
     assert "**生效日期**: 2026-08-01" in markdown
 
     # 首页审批格整体跳过
