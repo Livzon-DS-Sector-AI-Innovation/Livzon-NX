@@ -147,6 +147,11 @@ describe('SchedulingPage archive flow', () => {
     actions.uploadScheduleExcel.mockResolvedValue(UPLOAD_RESULT)
     await render()
 
+    // 上传区展示大小限制提示
+    expect(container.textContent || '').toContain(
+      '仅支持 .xlsx / .xls，文件大小不超过 1MB',
+    )
+
     const file = new File(['fake'], '9月排产.xlsx')
     await act(async () => {
       fakeUpload.trigger?.(file)
@@ -165,6 +170,23 @@ describe('SchedulingPage archive flow', () => {
     expect(text).toContain('5')
     // 列表刷新
     expect(actions.getScheduleExcelArchives).toHaveBeenCalledTimes(2)
+  })
+
+  it('rejects files over 1MB locally without calling the backend', async () => {
+    actions.uploadScheduleExcel.mockResolvedValue(UPLOAD_RESULT)
+    await render()
+
+    const big = new File([new ArrayBuffer(1024 * 1024 + 1)], '超大排产.xlsx')
+    await act(async () => {
+      fakeUpload.trigger?.(big)
+      await new Promise((r) => setTimeout(r, 60))
+    })
+
+    expect(actions.uploadScheduleExcel).not.toHaveBeenCalled()
+    // message 提示渲染在 body portal
+    expect(document.body.textContent || '').toContain(
+      '文件大小不能超过 1MB',
+    )
   })
 
   it('shows an error message when the upload action fails', async () => {

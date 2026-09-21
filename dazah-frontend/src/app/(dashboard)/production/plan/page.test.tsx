@@ -2,6 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import dayjs from 'dayjs'
 import { App } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -42,6 +43,8 @@ describe('PlanPage', () => {
 
   beforeEach(() => {
     window.localStorage.setItem('dazah.production.plan-page.tab', 'plan')
+    // 月份记忆是会话级（sessionStorage），逐用例隔离避免相互污染
+    window.sessionStorage.clear()
     prodActions.getPlans.mockResolvedValue({
       code: 200,
       message: 'success',
@@ -168,6 +171,7 @@ describe('PlanPage', () => {
         {
           id: 'sp-1',
           product_name: 'L-色氨酸',
+          data_month: '2026-05',
           unit: 'KG',
           source_table_name: '5月份销售计划执行表',
           month_planned_delivery: 69000,
@@ -199,6 +203,9 @@ describe('PlanPage', () => {
     expect(text).toContain('本月计划发货量')
     expect(text).toContain('本月已发货量')
     expect(text).toContain('L-色氨酸')
+    // 数据月份列：全部月份视图下区分每行归属月份
+    expect(text).toContain('数据月份')
+    expect(text).toContain('2026-05')
     expect(text).toContain('69,000')
     expect(prodActions.getSalesPlanDetails).toHaveBeenCalled()
   })
@@ -257,6 +264,53 @@ describe('PlanPage', () => {
       | { month?: string }
       | undefined
     expect(lastCall?.month).toBe('2026-10')
+  })
+
+  it('defaults both plan and sales months to the current month for a fresh session', async () => {
+    await renderAndSettle()
+    const current = dayjs().format('YYYY-MM')
+    const planCall = prodActions.getPlans.mock.calls[0]?.[0] as
+      | { month?: string }
+      | undefined
+    expect(planCall?.month).toBe(current)
+    const salesCall = prodActions.getSalesPlanDetails.mock.calls[0]?.[0] as
+      | { month?: string }
+      | undefined
+    expect(salesCall?.month).toBe(current)
+  })
+
+  it('restores the remembered plan month after a reload within the session', async () => {
+    window.sessionStorage.setItem('dazah.production.plan-page.month', '2026-08')
+    await renderAndSettle()
+    const months = prodActions.getPlans.mock.calls.map(
+      (c) => (c[0] as { month?: string }).month,
+    )
+    // 恢复后按记住的月份加载，且不先按当月发起多余请求
+    expect(months.length).toBeGreaterThan(0)
+    expect(months.every((m) => m === '2026-08')).toBe(true)
+  })
+
+  it('restores the remembered sales month after a reload within the session', async () => {
+    window.sessionStorage.setItem(
+      'dazah.production.plan-page.sales-month',
+      '2026-07',
+    )
+    await renderAndSettle()
+    const months = prodActions.getSalesPlanDetails.mock.calls.map(
+      (c) => (c[0] as { month?: string }).month,
+    )
+    expect(months.length).toBeGreaterThan(0)
+    expect(months.every((m) => m === '2026-07')).toBe(true)
+  })
+
+  it('keeps the cleared sales month (= 全部月份) across a reload', async () => {
+    window.sessionStorage.setItem('dazah.production.plan-page.sales-month', '')
+    await renderAndSettle()
+    const months = prodActions.getSalesPlanDetails.mock.calls.map(
+      (c) => (c[0] as { month?: string }).month,
+    )
+    expect(months.length).toBeGreaterThan(0)
+    expect(months.every((m) => m === undefined)).toBe(true)
   })
 
   it('paginates to the second page when there are more than 20 rows', async () => {

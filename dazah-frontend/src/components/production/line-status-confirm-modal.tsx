@@ -73,13 +73,6 @@ function ConfirmDialog({
           ? `确认将「${productName}」标记为停产？停产期间该产品看板将收起，汇总视图中隐藏该产线，全平台可见。`
           : `确认将「${productName}」恢复为生产中？看板与汇总数据将恢复展示。`}
       </Text>
-      {countdown > 0 && (
-        <div className="mt-2">
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {countdown} 秒后可点击确认
-          </Text>
-        </div>
-      )}
     </Modal>
   )
 }

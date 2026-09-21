@@ -8,7 +8,8 @@ import { create } from "zustand"
 
 const PRODUCT_CONTEXT_STORAGE_KEY = "dazah.production.product-context"
 // LV 洛伐他汀 / MV 美伐他汀：复用 MP 排产解析与看板管线的他汀产品；
-// TY L-色氨酸 / FL 氟苯尼考（2%氟苯尼考预混剂）：新增产线 Tab
+// TY L-色氨酸 / FL 氟苯尼考（2%氟苯尼考预混剂）：新增产线 Tab；
+// LN 盐酸林可霉素：新增产线 Tab（展示短名「林可」）
 const KNOWN_PRODUCT_CODES = new Set([
   "FA",
   "MC",
@@ -18,6 +19,7 @@ const KNOWN_PRODUCT_CODES = new Set([
   "SUMMARY",
   "TY",
   "FL",
+  "LN",
 ])
 
 interface ProductContextState {

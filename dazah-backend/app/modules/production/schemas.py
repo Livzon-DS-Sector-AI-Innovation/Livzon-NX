@@ -251,6 +251,9 @@ class SalesPlanDetailResponse(SalesPlanDetailBase):
     source_table_name: str | None = Field(
         None, description="来源飞书数据表名（同步时写入）"
     )
+    data_month: str | None = Field(
+        None, description="数据月份（YYYY-MM），按源数据表名归属"
+    )
     created_at: datetime
     updated_at: datetime
 

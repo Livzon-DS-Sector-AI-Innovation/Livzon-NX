@@ -90,7 +90,7 @@ export function ItemsDashboard() {
   return (
     <div style={{ padding: 24 }}>
       <Title level={4} style={{ marginTop: 0 }}>物品管理</Title>
-      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={16} style={{ width: '100%' }}>
         <Row gutter={16}>
           <Col span={6}><Card><Statistic title="物资总数" value={data?.total_items ?? 0} /></Card></Col>
           <Col span={6}>
@@ -105,7 +105,7 @@ export function ItemsDashboard() {
           </Col>
           <Col span={12}>
             <Card>
-              <Space direction="vertical">
+              <Space orientation="vertical">
                 <Button type="primary" icon={<SendOutlined />} loading={pushing} onClick={handlePush}>
                   推送库存不足物料
                 </Button>

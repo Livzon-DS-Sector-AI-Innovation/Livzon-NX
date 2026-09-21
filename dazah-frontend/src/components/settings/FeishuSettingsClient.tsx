@@ -192,7 +192,7 @@ function Overview({
   onNavigate: (key: string, traceId?: string) => void
 }) {
   return (
-    <Space direction="vertical" size={16} className="w-full">
+    <Space orientation="vertical" size={16} className="w-full">
       <Row gutter={[16, 16]}>
         <Col xs={24} md={8} xl={6}>
           <Card><Statistic title="飞书网关" value={statusLabels[status?.gateway || ''] || status?.gateway || '未知'} /></Card>
@@ -353,7 +353,7 @@ function FeishuAccess({
       title: '确认重启 Hermes 飞书 Gateway',
       icon: <ExclamationCircleOutlined />,
       content: (
-        <Space direction="vertical" size={4}>
+        <Space orientation="vertical" size={4}>
           <Text>该操作只重建飞书消息连接，不会重启整个 Hermes 服务，也不会拉取或发布新镜像。</Text>
           <Text type="secondary">重连期间飞书消息可能短暂延迟；待投递记录和审计数据不会被清空。</Text>
         </Space>
@@ -607,7 +607,7 @@ function IdentityAdmission({ tenantId, appId }: { tenantId: string; appId: strin
   ]
 
   return (
-    <Space direction="vertical" size={16} className="w-full">
+    <Space orientation="vertical" size={16} className="w-full">
       <Card title="建立可信身份绑定">
         <Form
           form={form}
@@ -836,7 +836,7 @@ function ToolGovernance() {
       <Pagination className="mt-4 text-right" current={page} pageSize={20} total={total} onChange={setPage} />
       <Drawer title={selected?.operation || '能力详情'} width={680} open={!!selected} onClose={() => setSelected(null)}>
         {selected && (
-          <Space direction="vertical" className="w-full">
+          <Space orientation="vertical" className="w-full">
             <Descriptions column={1} size="small" bordered>
               <Descriptions.Item label="摘要">{selected.summary}</Descriptions.Item>
               <Descriptions.Item label="模块">{selected.module || 'platform'}</Descriptions.Item>
@@ -927,7 +927,7 @@ function AuthorizationConfirmation() {
   ]
 
   return (
-    <Space direction="vertical" size={16} className="w-full">
+    <Space orientation="vertical" size={16} className="w-full">
       <Card title="Hermes 飞书记忆授权">
         <Space className="mb-4">
           <Input value={userId} onChange={(event) => setUserId(event.target.value)} placeholder="本地用户编号（UUID）" style={{ width: 340 }} />
@@ -999,7 +999,7 @@ function TraceDelivery({
   ]
 
   return (
-    <Space direction="vertical" size={16} className="w-full">
+    <Space orientation="vertical" size={16} className="w-full">
       <Card title="调用链路查询">
         <Space.Compact className="mb-4 w-full max-w-[720px]">
           <Input value={traceId} onChange={(event) => onTraceIdChange(event.target.value)} placeholder="输入调用链路编号或运行编号" />

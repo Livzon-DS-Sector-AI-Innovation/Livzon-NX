@@ -404,7 +404,7 @@ function MappedDatasetPageContent({
         onClose={() => setDetail(null)}
       >
         {detail && activeBinding ? (
-          <Space direction="vertical" className="mb-4">
+          <Space orientation="vertical" className="mb-4">
             {attachmentItems(detail.value).map((item) => (
               <a
                 key={item.token}

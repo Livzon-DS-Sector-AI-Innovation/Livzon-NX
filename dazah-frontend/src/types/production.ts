@@ -662,8 +662,13 @@ export interface FermentationBoard {
   extract_finished_inbound_kg?: number | null
   tanks: BoardTank[]
   recent: BoardRecentBatch[]
-  /** 已录入实际产量的最近 12 批（按批次顺序升序），outputs 单位 kg */
-  trend: { batches: string[]; outputs: number[] } | null
+  /** 已录入实际产量的最近 12 批（按批次顺序升序），outputs 单位 kg；
+   * avg_yield_kg 为后端口径的平均单产（DR 含中试产量摊入正式批），缺省时前端按柱子自算 */
+  trend: {
+    batches: string[]
+    outputs: number[]
+    avg_yield_kg?: number | null
+  } | null
   /** 当前周期内已放罐（放罐窗口已结束）的批次，供产量录入下拉 */
   dumped_batches: { batch_no: string; dump_date: string }[]
   /** 提炼工段汇总；无提炼产量权限时为 null */

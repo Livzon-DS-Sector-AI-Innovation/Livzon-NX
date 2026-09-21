@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 WAREHOUSE_INBOUND_PRODUCT_NAMES: dict[str, str] = {
     "FA": "L-苯丙氨酸",
     "MC": "霉酚酸",
+    "LN": "盐酸林可霉素",
     "DR": "多拉菌素",
     "LV": "洛伐他汀",
     "MV": "美伐他汀",
@@ -323,6 +324,15 @@ def _dr_is_batch_no(value: Any) -> bool:
     """
     text = str(value).strip()
     return "-" in text and any(ch.isdigit() for ch in text)
+
+
+def _dr_is_pilot_batch(batch_no: str) -> bool:
+    """DR 中试批：批号含「中试」或 ZS- 前缀（与排产上传 product_type 同口径）。
+
+    中试批不占 KPI 批次名额、不在单批产量图展示，但产量照常录入并
+    累积进总产量（平均单产 = 含中试总产量 ÷ 正式批批数）。
+    """
+    return "中试" in batch_no or batch_no.startswith("ZS-")
 
 
 def _dr_split_batch(value: Any) -> list[str]:
@@ -804,15 +814,29 @@ def build_dr_board(
         if _in_period(b["dump"]) or _in_period(b["inoculate"])
     ]
 
-    done = sorted(
+    done_all = sorted(
         (b for b in batches if _in_period(b["dump"]) and b["dump"] <= as_of),
+        key=lambda b: (b["dump"], b["batch_no"]),
+        reverse=True,
+    )
+    # KPI 计数只数正式批：中试批不占计划/已完成/运行中/待进罐名额；
+    # 产量录入、漏录提醒、最近完成、录入下拉仍含中试（done_all）
+    formal_batches = [
+        b for b in batches if not _dr_is_pilot_batch(b["batch_no"])
+    ]
+    done = sorted(
+        (
+            b
+            for b in formal_batches
+            if _in_period(b["dump"]) and b["dump"] <= as_of
+        ),
         key=lambda b: (b["dump"], b["batch_no"]),
         reverse=True,
     )
     # 已放罐未录产量批次（供漏录提醒；DR 排产无放罐时刻，按当日零点折算）
     missing_dumps = [
         (b["batch_no"], datetime.combine(b["dump"], time(0, 0)))
-        for b in done
+        for b in done_all
         if not actual_by_batch.get(b["batch_no"], {}).get("yield_kg")
     ]
     # 运行中/未开始按「本周期计划放罐」口径（放罐日期在周期内）：
@@ -820,7 +844,7 @@ def build_dr_board(
     #（罐状态板仍完整展示在制罐）
     running = [
         b
-        for b in batches
+        for b in formal_batches
         if b["inoculate"] is not None
         and b["inoculate"] <= as_of
         and (b["dump"] is None or b["dump"] > as_of)
@@ -828,12 +852,14 @@ def build_dr_board(
     ]
     pending = [
         b
-        for b in batches
+        for b in formal_batches
         if b["inoculate"] is not None
         and b["inoculate"] > as_of
         and _in_period(b["dump"])
     ]
-    planned_dump = [b for b in batches if _in_period(b["dump"])]
+    planned_dump = [
+        b for b in formal_batches if _in_period(b["dump"])
+    ]
 
     # ── 罐状态：事件流时间线推算（复合批拆分后逐罐独立）──
     tank_nos: list[str] = []
@@ -928,16 +954,17 @@ def build_dr_board(
         )
 
     # ── KPI / 最近完成 / 录入下拉 ──
+    # 产量口径含中试批（累积进总产量）；批次计数口径见上方 formal_batches
     with_yield = [
         b
-        for b in done
+        for b in done_all
         if actual_by_batch.get(b["batch_no"], {}).get("yield_kg")
     ]
     kpis = {
         "month_planned": len(planned_dump),
         "month_done_planned": len(done),
         "done_with_yield": len(with_yield),
-        "yield_pending": len(done) - len(with_yield),
+        "yield_pending": len(done_all) - len(with_yield),
         "month_done_yield_kg": (
             sum(
                 actual_by_batch[b["batch_no"]]["yield_kg"]
@@ -964,11 +991,11 @@ def build_dr_board(
             ),
             "cycle_hours": b["cycle_hours"],
         }
-        for b in done[:12]
+        for b in done_all[:12]
     ]
     dumped_batches = [
         {"batch_no": b["batch_no"], "dump_date": b["dump"].isoformat()}
-        for b in done
+        for b in done_all
         if b["dump"]
     ]
     ledger_rows = [
@@ -1024,8 +1051,10 @@ def build_dr_board(
         )
 
     tanks.sort(key=_tank_order)
-    # 单批产量趋势：周期内已放罐且有产量的批次，按放罐日期升序取最近 31 批
+    # 单批产量趋势：周期内已放罐且有产量的批次，按放罐日期升序取最近 31 批。
+    # 中试批不画柱（正式批 only）；平均单产 = 含中试的全部已录产量 ÷ 正式批批数
     done_dump = {b["batch_no"]: b["dump"] for b in done}
+    done_dump_all = {b["batch_no"]: b["dump"] for b in done_all}
     measured = sorted(
         (
             a
@@ -1034,11 +1063,24 @@ def build_dr_board(
         ),
         key=lambda a: (done_dump[a["batch_no"]], str(a["batch_no"])),
     )
+    measured_all = [
+        a
+        for a in (actuals or [])
+        if a.get("yield_kg") is not None and a.get("batch_no") in done_dump_all
+    ]
     recent_measured = measured[-31:]
+    avg_yield_kg = (
+        round(
+            sum(float(a["yield_kg"]) for a in measured_all) / len(measured), 2
+        )
+        if measured
+        else None
+    )
     trend = (
         {
             "batches": [a["batch_no"] for a in recent_measured],
             "outputs": [round(float(a["yield_kg"]), 2) for a in recent_measured],
+            "avg_yield_kg": avg_yield_kg,
         }
         if recent_measured
         else None
@@ -3095,6 +3137,7 @@ def current_period(
 
 _SUMMARY_PRODUCTS: tuple[tuple[str, str], ...] = (
     ("MC", "霉酚酸"),
+    ("LN", "盐酸林可霉素"),
     ("DR", "多拉菌素"),
     ("FA", "L-苯丙氨酸"),
     ("LV", "洛伐他汀"),

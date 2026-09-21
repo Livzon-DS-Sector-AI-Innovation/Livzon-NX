@@ -163,7 +163,7 @@ export function InstrumentImportDrawer({
         </Space>
       }
     >
-      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={16} style={{ width: '100%' }}>
         <Alert
           type="info"
           showIcon
@@ -189,7 +189,7 @@ export function InstrumentImportDrawer({
         {resultText && <Alert type="success" showIcon title={resultText} />}
 
         {preview && (
-          <Space direction="vertical" size={8} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={8} style={{ width: '100%' }}>
             <Space wrap>
               <Tag color="green">新增 {preview.create_count}</Tag>
               <Tag color="blue">更新 {preview.update_count}</Tag>

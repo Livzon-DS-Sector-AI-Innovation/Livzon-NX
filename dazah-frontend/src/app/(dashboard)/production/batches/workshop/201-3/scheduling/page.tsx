@@ -275,7 +275,7 @@ export default function Scheduling2013Page() {
         const meta = r.task_status ? TASK_STATUS_META[r.task_status] : null
         if (!meta) return <Tag>未生成</Tag>
         return (
-          <Space size={4} direction="vertical" style={{ rowGap: 2 }}>
+          <Space size={4} orientation="vertical" style={{ rowGap: 2 }}>
             <Tag color={meta.color}>{meta.label}</Tag>
             {(r.task_status === 'confirmed' && r.actual_time) && (
               <Text type="secondary" style={{ fontSize: 12 }}>{r.actual_time.slice(5, 16)}</Text>
