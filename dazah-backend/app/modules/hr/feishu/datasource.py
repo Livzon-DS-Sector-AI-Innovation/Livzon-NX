@@ -19,7 +19,7 @@ class BitableDataSource:
     Example:
         ds = BitableDataSource(
             app_token="<从数据库配置读取>",
-            table_id="tblrcSHfS5ivun7e",
+            table_id="<从数据库配置读取>",
         )
 
         # 查询

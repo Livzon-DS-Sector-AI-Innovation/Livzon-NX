@@ -218,11 +218,17 @@ class SalesPlanDetail(BaseModel):
     __tablename__ = "sales_plan_details"
     __table_args__ = (
         Index("ix_sales_plan_product", "product_name"),
+        Index("ix_sales_plan_data_month", "data_month"),
         {"schema": "production"},
     )
 
     product_name: Mapped[str] = mapped_column(
         String(128), nullable=False, comment="产品名称"
+    )
+    data_month: Mapped[str | None] = mapped_column(
+        String(7),
+        nullable=True,
+        comment="数据月份(YYYY-MM)，按源数据表名归属",
     )
     unit: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="单位")
     last_month_delivered_uninvoiced: Mapped[float | None] = mapped_column(
@@ -265,6 +271,34 @@ class SalesPlanDetail(BaseModel):
         server_default="manual",
         nullable=True,
         comment="数据来源",
+    )
+    source_table_name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="来源飞书数据表名（同步时写入，如“5月份销售计划执行表”）",
+    )
+
+
+class ProductionLineStatus(BaseModel):
+    """产品生产线停产状态 — 人工维护的即时状态，全平台可见。"""
+
+    __tablename__ = "production_line_status"
+    __table_args__ = (
+        UniqueConstraint(
+            "product_code", name="uq_production_line_status_product"
+        ),
+        {"schema": "production"},
+    )
+
+    product_code: Mapped[str] = mapped_column(
+        String(16), nullable=False, comment="产品代码（FA/MC/DR/LV/MV/TY/FL）"
+    )
+    halted: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
+        nullable=False,
+        comment="是否停产中",
     )
 
 

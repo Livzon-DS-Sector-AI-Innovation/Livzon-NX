@@ -192,6 +192,10 @@ export interface PlanTask {
 export interface SalesPlanDetail {
   id: string
   product_name: string
+  /** 数据月份(YYYY-MM)，按源数据表名归属 */
+  data_month?: string | null
+  /** 来源飞书数据表名（同步时写入，如“5月份销售计划执行表”） */
+  source_table_name?: string | null
   unit?: string | null
   last_month_delivered_uninvoiced?: number | null
   current_year_delivered?: number | null
@@ -646,7 +650,9 @@ export interface BoardExtraction {
 export interface FermentationBoard {
   now: string
   period: { start: string; end: string; label: string }
-  /** 发酵工段 KPI；无发酵产量权限时为 null */
+  /** 无排产存档的未覆盖骨架（covered=false）：卡片以空值兜底，提炼入库按统一扎帐周期返回 */
+  covered?: boolean
+  /** 发酵工段 KPI；无发酵产量权限或未覆盖时为 null */
   kpis: BoardKpis | null
   /** 所查看周期是否为当前扎帐月（写操作仅当前月开放） */
   is_current_period: boolean

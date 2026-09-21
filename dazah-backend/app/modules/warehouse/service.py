@@ -32,7 +32,6 @@ from app.modules.warehouse.feishu_fields import (
     is_view_only_field,
 )
 from app.modules.warehouse.feishu_material_pages import (
-    FEISHU_WAREHOUSE_BASE_NAMES,
     FEISHU_WAREHOUSE_MATERIAL_PAGES,
     FINISHED_INBOUND_DATE_FIELD,
     FINISHED_INBOUND_KG_FIELD,
@@ -514,10 +513,11 @@ class WarehouseService:
     async def _get_material_page_config(
         self, page_key: str
     ) -> FeishuWarehouseMaterialPage:
-        """解析页面数据源配置：数据库（warehouse_page_feishu_configs）优先，硬编码映射回退。
+        """解析页面数据源配置：只认 DB（warehouse_page_feishu_configs）。
 
-        设置页可修改数据库配置实现更换多维表格，无需改代码；
-        查询失败（表不存在等）时静默回退硬编码，保证页面可用。
+        设置页可修改数据库配置实现更换多维表格；DB 无该页配置时返回注册表
+        占位（app_token/table_id 为空，注册表不再携带任何环境标识符），
+        调用方须以 _page_binding_missing 判定未配置。
         """
         try:
             db_config = await self.repo.get_page_feishu_config(page_key)
@@ -534,6 +534,19 @@ class WarehouseService:
         if not page_config:
             raise HTTPException(status_code=404, detail="仓储飞书模板页不存在")
         return page_config
+
+    @staticmethod
+    def _page_binding_missing(page_config: FeishuWarehouseMaterialPage) -> bool:
+        """页面未在仓储设置页绑定 Base/表（注册表占位或 DB 行缺失字段）。"""
+        return not page_config.app_token or not page_config.table_id
+
+    async def is_material_page_bound(self, page_key: str) -> bool:
+        """页面是否已绑定飞书数据源（供定时任务静默跳过未绑定页面）。"""
+        try:
+            config = await self._get_material_page_config(page_key)
+        except HTTPException:
+            return False
+        return not self._page_binding_missing(config)
 
     async def _resolve_material_page_source(self, source: str | None) -> str:
         from app.shared.config_reader import get_module_setting
@@ -760,7 +773,8 @@ class WarehouseService:
         page_config = FEISHU_WAREHOUSE_MATERIAL_PAGES.get(page_key)
         if not page_config:
             return ""
-        return FEISHU_WAREHOUSE_BASE_NAMES.get(page_config.app_token, "")
+        # 注册表不再携带 Base 标识；未绑定时回退页面标题，避免展示空串
+        return page_config.title
 
     def _build_page_stats(
         self,
@@ -1334,6 +1348,11 @@ class WarehouseService:
         dict[str, str],
     ]:
         page_config = await self._get_material_page_config(page_key)
+        if self._page_binding_missing(page_config):
+            raise HTTPException(
+                status_code=400,
+                detail="仓储页面飞书数据源未配置，请先在仓储设置-页面映射中绑定表格",
+            )
         fields_response = await self.fetch_feishu_table_fields(
             app_token=page_config.app_token,
             table_id=page_config.table_id,
@@ -1366,6 +1385,11 @@ class WarehouseService:
         无日期字段（不在 _DATE_SORT_DESC_FIELDS）的表不支持增量，回退全量。
         """
         page_config = await self._get_material_page_config(page_key)
+        if self._page_binding_missing(page_config):
+            raise HTTPException(
+                status_code=400,
+                detail="仓储页面飞书数据源未配置，请先在仓储设置-页面映射中绑定表格",
+            )
         sort_field = _DATE_SORT_DESC_FIELDS.get(page_key)
         if not sort_field or not last_synced_at:
             return await self.fetch_material_page_from_feishu(page_key)
@@ -1577,6 +1601,24 @@ class WarehouseService:
         now = datetime.now(UTC)
         cached = self._page_cache.get(cache_key)
         page_config = await self._get_material_page_config(page_key)
+        if self._page_binding_missing(page_config):
+            # 数据源未绑定（如全新环境未配置）：降级返回本地快照空数据，保证页面可打开
+            return await self.get_local_material_page(
+                page_key,
+                page=page,
+                page_size=page_size,
+                keyword=keyword,
+                start_date=start_date,
+                end_date=end_date,
+                date_field=date_field,
+                product=product,
+                area=area,
+                quality_status=quality_status,
+                warning_status=warning_status,
+                material_category=material_category,
+                advanced_filters=advanced_filters,
+                scope=scope,
+            )
         columns: list[WarehouseFeishuColumn]
         normalized_rows: list[dict[str, object | None]]
         if (
@@ -1665,7 +1707,7 @@ class WarehouseService:
             page_size=page_size,
             last_sync_time=now,
             source="feishu_bitable",
-            base_name=FEISHU_WAREHOUSE_BASE_NAMES.get(page_config.app_token, ""),
+            base_name=page_config.title,
             stats=self._build_page_stats(page_key, filtered_rows),
         )
 
@@ -1676,6 +1718,11 @@ class WarehouseService:
         incremental: bool = True,
     ) -> WarehouseFeishuMaterialPageResponse:
         page_config = await self._get_material_page_config(page_key)
+        if self._page_binding_missing(page_config):
+            raise HTTPException(
+                status_code=400,
+                detail="仓储页面飞书数据源未配置，请先在仓储设置-页面映射中绑定表格",
+            )
         prev_snapshot = await self.repo.get_material_page_snapshot(page_key)
         last_synced_at = prev_snapshot.last_synced_at if prev_snapshot else None
 
@@ -1786,7 +1833,7 @@ class WarehouseService:
             page_size=50,
             last_sync_time=now,
             source="local_snapshot",
-            base_name=FEISHU_WAREHOUSE_BASE_NAMES.get(page_config.app_token, ""),
+            base_name=page_config.title,
             stats=self._build_page_stats(page_key, normalized_rows),
         )
 
@@ -2672,23 +2719,80 @@ class WarehouseService:
         # 以 99991672 拒绝
         client = await self._get_material_client(page_config.app_token)
         try:
+            put_url = (
+                f"/bitable/v1/apps/{page_config.app_token}"
+                f"/tables/{page_config.table_id}/records/{record_id}"
+            )
             data = await client.request(
                 "PUT",
-                (
-                    f"/bitable/v1/apps/{page_config.app_token}"
-                    f"/tables/{page_config.table_id}/records/{record_id}"
-                ),
+                put_url,
                 json_body={"fields": payload},
             )
             record = data.get("record", {}) if isinstance(data, dict) else {}
         except Exception as exc:
+            # 飞书级联单选字段（如原辅料出库总账的「规格」）在 API 元数据中
+            # 伪装为普通单选，写入却被 SingleSelectFieldConvFail 拒绝且无法
+            # 预识别。失败时逐字段定位并剔除不可写字段后重试，保证其余
+            # 字段正常保存。
+            if "ConvFail" in str(exc):
+                retried, skipped = await self._retry_put_excluding_unwritable(
+                    client, put_url, payload
+                )
+                if retried is not None:
+                    logger.warning(
+                        "warehouse update skipped feishu-restricted fields: "
+                        "page=%s skipped=%s",
+                        page_key,
+                        skipped,
+                    )
+                    record = (
+                        retried.get("record", {}) if isinstance(retried, dict) else {}
+                    )
+                    await self._write_through_updated_record(
+                        page_key, page_config, record_id
+                    )
+                    self._invalidate_page_cache(page_key)
+                    return record
             logger.exception("warehouse Feishu record update failed")
             raise HTTPException(
                 status_code=502,
                 detail="同步更新到飞书失败，请稍后重试",
             ) from exc
+        await self._write_through_updated_record(page_key, page_config, record_id)
         self._invalidate_page_cache(page_key)
         return record
+
+    async def _retry_put_excluding_unwritable(
+        self,
+        client: Any,
+        put_url: str,
+        payload: dict[str, Any],
+    ) -> tuple[dict[str, Any] | None, list[str]]:
+        """逐字段定位飞书拒绝写入的字段并剔除后重试。
+
+        返回 (重试响应, 被剔除字段名)；遇到非字段级错误（如记录不存在）
+        时原样抛出；返回 (None, []) 表示无法重试。
+        """
+        ok_fields: dict[str, Any] = {}
+        skipped: list[str] = []
+        for field_name, value in payload.items():
+            try:
+                await client.request(
+                    "PUT", put_url, json_body={"fields": {field_name: value}}
+                )
+                ok_fields[field_name] = value
+            except Exception as field_exc:
+                message = str(field_exc)
+                if "ConvFail" in message or "FieldNameNotFound" in message:
+                    skipped.append(field_name)
+                    continue
+                raise
+        if skipped and ok_fields:
+            data = await client.request(
+                "PUT", put_url, json_body={"fields": ok_fields}
+            )
+            return data, skipped
+        return None, skipped
 
     async def delete_material_page_record(
         self, page_key: str, record_id: str, *, scope: DepartmentScope | None = None
@@ -2717,7 +2821,109 @@ class WarehouseService:
                 status_code=502,
                 detail="同步删除到飞书失败，请稍后重试",
             ) from exc
+        # 删除写穿：增量同步只 upsert 变更行追不掉飞书侧删除，全量对账在
+        # 每日凌晨；这里同步软删本地镜像行，页面立即反映删除结果
+        try:
+            snapshot = await self.repo.get_material_page_snapshot(page_key)
+            if snapshot is not None:
+                deleted = await self.repo.soft_delete_material_page_row(
+                    snapshot.id, record_id
+                )
+                if deleted:
+                    snapshot.total_rows = max(snapshot.total_rows - 1, 0)
+        except Exception:
+            # 尽力回滚半途失败的写穿，避免污染会话导致请求收尾 commit 报错
+            await self._rollback_quietly()
+            logger.exception(
+                "warehouse record delete write-through failed: %s/%s",
+                page_key,
+                record_id,
+            )
         self._invalidate_page_cache(page_key)
+
+    async def _write_through_updated_record(
+        self,
+        page_key: str,
+        page_config: FeishuWarehouseMaterialPage,
+        record_id: str,
+    ) -> None:
+        """编辑保存成功后单条写穿本地镜像，页面立即反映最新值。
+
+        列表默认读本地快照，只写飞书时要等 10 分钟增量或凌晨全量才能看到；
+        这里 GET 回最新记录（含公式/lookup 列的重算值），按快照列结构归一化
+        后 upsert 对应镜像行。写穿失败只记日志不影响保存结果，增量/全量
+        同步兜底。
+        """
+        try:
+            snapshot = await self.repo.get_material_page_snapshot(page_key)
+            if snapshot is None:
+                return
+            columns = [
+                WarehouseFeishuColumn(**column)
+                for column in (snapshot.columns or [])
+                if column.get("key")
+            ]
+            if not columns:
+                return
+            fields_meta = await self._get_page_field_meta(page_config)
+            option_map = await self._build_page_option_map(page_config, fields_meta)
+            client = await self._get_feishu_client()
+            data = await client.request(
+                "GET",
+                (
+                    f"/bitable/v1/apps/{page_config.app_token}"
+                    f"/tables/{page_config.table_id}/records/{record_id}"
+                ),
+            )
+            record = data.get("record") if isinstance(data, dict) else None
+            if not isinstance(record, dict) or not record.get("record_id"):
+                return
+            normalized = self._build_normalized_rows(
+                columns, [record], option_map=option_map
+            )
+            if not normalized:
+                return
+            row = normalized[0]
+            resolved_id = str(row.get("__record_id") or record_id)
+            inserted = await self.repo.upsert_material_page_row_write_through(
+                snapshot.id,
+                MaterialPageRow(
+                    page_snapshot_id=snapshot.id,
+                    source_record_id=resolved_id,
+                    row_order=0,
+                    cells={
+                        key: value
+                        for key, value in row.items()
+                        if not key.startswith("__")
+                    },
+                    search_text=build_material_page_row_search_text(row),
+                    last_synced_at=datetime.now(UTC),
+                ),
+                page_key=page_key,
+                record_meta={
+                    resolved_id: {
+                        "created_ms": row.get("__created_time"),
+                        "modified_ms": row.get("__last_modified_time"),
+                    }
+                },
+            )
+            if inserted:
+                snapshot.total_rows += 1
+        except Exception:
+            # 尽力回滚半途失败的写穿，避免污染会话导致请求收尾 commit 报错
+            await self._rollback_quietly()
+            logger.exception(
+                "warehouse record update write-through failed: %s/%s",
+                page_key,
+                record_id,
+            )
+
+    async def _rollback_quietly(self) -> None:
+        """写穿失败后的尽力回滚；会话不可用时静默忽略，不影响原请求结果。"""
+        try:
+            await self.repo.session.rollback()
+        except Exception:
+            logger.debug("warehouse write-through rollback skipped", exc_info=True)
 
     async def update_inbound_inspection_result(
         self,
@@ -3067,6 +3273,33 @@ class WarehouseService:
     async def get_page_feishu_config(self, page_key: str) -> dict[str, Any] | None:
         """获取指定页面的飞书配置"""
         return await self.repo.get_page_feishu_config(page_key)
+
+    async def get_page_form_links(self, page_key: str) -> dict[str, str | None]:
+        """台账页入库/出库登记表单链接（仓储设置-页面映射维护；未配置为 None）。"""
+        try:
+            config = await self.repo.get_page_feishu_config(page_key)
+        except Exception:
+            config = None
+        return {
+            "inbound_form_url": (config or {}).get("feishu_inbound_form_url"),
+            "outbound_form_url": (config or {}).get("feishu_outbound_form_url"),
+        }
+
+    async def get_home_quick_form_links(self) -> dict[str, dict[str, str | None]]:
+        """首页快捷表单卡所需链接：page_key → 入库/出库表单链接（仅含已配置项）。"""
+        try:
+            configs = await self.repo.list_page_feishu_configs()
+        except Exception:
+            configs = []
+        return {
+            str(item.get("page_key")): {
+                "inbound_form_url": item.get("feishu_inbound_form_url"),
+                "outbound_form_url": item.get("feishu_outbound_form_url"),
+            }
+            for item in configs
+            if item.get("feishu_inbound_form_url")
+            or item.get("feishu_outbound_form_url")
+        }
 
     async def update_page_feishu_config(
         self, page_key: str, config: dict[str, Any]
@@ -3720,21 +3953,36 @@ class WarehouseService:
         update_time: int | None,
         actions: list[dict[str, str | None]],
     ) -> dict[str, str | bool | None]:
-        """Refresh the matching migrated material page after a WS event."""
+        """Refresh the matching migrated material page after a WS event.
 
-        for page_key, page_config in FEISHU_WAREHOUSE_MATERIAL_PAGES.items():
-            if page_config.table_id == table_id and page_config.app_token == file_token:
-                try:
-                    await self.sync_material_page_to_local(page_key)
-                except Exception:
-                    logger.exception("warehouse page WS refresh failed: %s", page_key)
-                    return {
-                        "matched": True,
-                        "status": "error",
-                        "error": "仓储页面同步失败，请稍后重试",
-                    }
-                return {"matched": True, "status": "synced", "table_kind": page_key}
-        return {"matched": False, "status": "ignored"}
+        页面匹配只认仓储设置页维护的 DB 绑定（warehouse_page_feishu_configs），
+        换 Base/表后新表事件照常命中，无需改代码。
+        """
+        matched_page_key: str | None = None
+        try:
+            configs = await self.repo.list_page_feishu_configs()
+        except Exception:
+            logger.exception("warehouse WS event match failed to load page configs")
+            return {"matched": False, "status": "ignored"}
+        for item in configs:
+            if (
+                item.get("table_id") == table_id
+                and item.get("app_token") == file_token
+            ):
+                matched_page_key = str(item.get("page_key") or "")
+                break
+        if not matched_page_key:
+            return {"matched": False, "status": "ignored"}
+        try:
+            await self.sync_material_page_to_local(matched_page_key)
+        except Exception:
+            logger.exception("warehouse page WS refresh failed: %s", matched_page_key)
+            return {
+                "matched": True,
+                "status": "error",
+                "error": "仓储页面同步失败，请稍后重试",
+            }
+        return {"matched": True, "status": "synced", "table_kind": matched_page_key}
 
     # ── Former warehouse settings/page-data/analysis contract ───────────
 

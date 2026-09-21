@@ -13,11 +13,9 @@ import logging
 from datetime import date, datetime
 from typing import Any
 
-from app.core.config import get_settings
 from app.modules.hr.feishu.bitable import BitableClient, _to_ms_timestamp
 
 logger = logging.getLogger(__name__)
-_settings = get_settings()
 
 # ─── Read-only formula fields ───
 FORMULA_FIELDS = {"年龄", "工作年限", "厂龄", "司龄", "入职月份", "字段 1"}
@@ -103,18 +101,18 @@ class OnboardingBitableDataSource:
     def __init__(
         self,
         *,
+        app_token: str | None = None,
+        table_id: str | None = None,
         app_id: str | None = None,
         app_secret: str | None = None,
     ) -> None:
-        # 凭证优先用人事自有应用（app_id/secret 由调用方从
-        # get_hr_feishu_app_credentials 解析）；未提供时回退平台应用，
-        # 仅覆盖"人事应用尚未配置"的老部署，保持读数据源可用
+        # app_token/table_id 只认人事-飞书设置的 DB 配置（调用方从
+        # hr_feishu_entity_settings('onboarding') 解析后传入），不再回退环境变量；
+        # 凭证仍由调用方传人事自有应用，未配置时按"数据源未配置"处理
         self.client = BitableClient(
-            app_token=_settings.FEISHU_BITABLE_APP_TOKEN,
-            app_id=app_id or None,
-            app_secret=app_secret or None,
+            app_token=app_token, app_id=app_id or None, app_secret=app_secret or None,
         )
-        self.table_id = _settings.FEISHU_BITABLE_ONBOARDING_TABLE_ID
+        self.table_id = table_id or ""
 
     def _is_enabled(self) -> bool:
         return bool(self.client.app_token and self.table_id)

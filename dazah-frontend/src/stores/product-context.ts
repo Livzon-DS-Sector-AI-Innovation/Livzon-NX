@@ -7,8 +7,18 @@ import { create } from "zustand"
 // 选择持久化到浏览器本地：刷新/重开页面保持上次的产品 Tab。
 
 const PRODUCT_CONTEXT_STORAGE_KEY = "dazah.production.product-context"
-// LV 洛伐他汀 / MV 美伐他汀：复用 MP 排产解析与看板管线的他汀产品
-const KNOWN_PRODUCT_CODES = new Set(["FA", "MC", "DR", "LV", "MV", "SUMMARY"])
+// LV 洛伐他汀 / MV 美伐他汀：复用 MP 排产解析与看板管线的他汀产品；
+// TY L-色氨酸 / FL 氟苯尼考（2%氟苯尼考预混剂）：新增产线 Tab
+const KNOWN_PRODUCT_CODES = new Set([
+  "FA",
+  "MC",
+  "DR",
+  "LV",
+  "MV",
+  "SUMMARY",
+  "TY",
+  "FL",
+])
 
 interface ProductContextState {
   productCode: string

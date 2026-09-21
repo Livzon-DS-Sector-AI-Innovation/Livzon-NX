@@ -7,10 +7,20 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.warehouse.feishu_material_pages import FEISHU_WAREHOUSE_MATERIAL_PAGES
+from app.modules.warehouse.feishu_material_pages import (
+    FEISHU_WAREHOUSE_MATERIAL_PAGES,
+    FeishuWarehouseMaterialPage,
+)
 from app.modules.warehouse.models import MaterialPageRow
 from app.modules.warehouse.service import WarehouseService, normalize_feishu_cell_value
 from tests.modules.warehouse.test_ai_service_migration import _seed_trend_snapshots
+
+
+def _bound(page_key: str, title: str) -> FeishuWarehouseMaterialPage:
+    """DB 绑定占位：设置页配置后的页面数据源。"""
+    return FeishuWarehouseMaterialPage(
+        page_key=page_key, title=title, table_id="tblTest", app_token="app-test"
+    )
 
 
 def _suffix() -> str:
@@ -121,6 +131,11 @@ async def test_get_material_page_returns_dynamic_columns_and_rows(
     with (
         patch.object(
             WarehouseService,
+            "_get_material_page_config",
+            new=AsyncMock(return_value=_bound("raw-summary", "原辅料库存总表")),
+        ),
+        patch.object(
+            WarehouseService,
             "fetch_feishu_table_fields",
             new=AsyncMock(
                 return_value=[
@@ -190,6 +205,11 @@ async def test_get_finished_product_material_page_returns_configured_title(
     with (
         patch.object(
             WarehouseService,
+            "_get_material_page_config",
+            new=AsyncMock(return_value=_bound("product-inbound-ledger", "入库总账")),
+        ),
+        patch.object(
+            WarehouseService,
             "fetch_feishu_table_fields",
             new=AsyncMock(
                 return_value=[{"field_name": "入库日期"}, {"field_name": "产品名称"}]
@@ -247,6 +267,11 @@ async def test_get_hardware_material_page_returns_configured_title(
     client: AsyncClient,
 ) -> None:
     with (
+        patch.object(
+            WarehouseService,
+            "_get_material_page_config",
+            new=AsyncMock(return_value=_bound("hardware-summary", "五金")),
+        ),
         patch.object(
             WarehouseService,
             "fetch_feishu_table_fields",
@@ -333,10 +358,11 @@ def test_snapshot_seed_covers_finished_product_pages() -> None:
     }
 
     for page_key, page in expected_pages.items():
+        # 注册表只保留 page_key/标题；绑定字段一律留空（部署数据进 DB）
         assert page.page_key == page_key
         assert page.title
-        assert page.table_id
-        assert page.app_token
+        assert page.table_id == ""
+        assert page.app_token == ""
 
 
 @pytest.mark.anyio
@@ -346,6 +372,11 @@ async def test_get_feishu_material_page_applies_keyword_filter(
     service = WarehouseService(db_session)
 
     with (
+        patch.object(
+            WarehouseService,
+            "_get_material_page_config",
+            new=AsyncMock(return_value=_bound("raw-summary", "原辅料库存总表")),
+        ),
         patch.object(
             WarehouseService,
             "fetch_feishu_table_fields",

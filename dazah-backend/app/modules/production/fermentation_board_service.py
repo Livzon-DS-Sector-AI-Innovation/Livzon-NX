@@ -32,7 +32,7 @@ from app.modules.production.fermentation_batch_actual_models import (
 from app.modules.production.fermentation_month_setting_models import (
     FermentationMonthSetting,
 )
-from app.modules.production.models import ProductionPlan
+from app.modules.production.models import ProductionLineStatus, ProductionPlan
 from app.modules.production.schedule_excel_models import ScheduleExcelArchive
 from app.modules.production.tank_maintenance_models import TankMaintenance
 
@@ -48,7 +48,12 @@ WAREHOUSE_INBOUND_PRODUCT_NAMES: dict[str, str] = {
     "DR": "多拉菌素",
     "LV": "洛伐他汀",
     "MV": "美伐他汀",
+    "TY": "L-色氨酸",
+    "FL": "2%氟苯尼考预混剂",
 }
+
+# 支持停产状态的产品生产线（与提炼已出成品卡同一产品集合）
+PRODUCTION_LINE_CODES = frozenset(WAREHOUSE_INBOUND_PRODUCT_NAMES)
 
 # 放罐窗口：计划放罐时间起 2 小时内为「放罐中」（批次仍在罐上，不算完成）；
 # 窗口结束后批次才视为「已放罐/完成」（罐状态、recent 最近完成、完成 KPI 同口径）。
@@ -2738,6 +2743,27 @@ def apply_daily_extract_source(
     return updated
 
 
+def unified_accounting_period(today: date) -> tuple[date, date]:
+    """统一扎帐周期：每月 27 日至次月 26 日（所有产品同规则）。
+
+    新产品排产存档上传前无法从 Excel 定位周期，提炼入库合计
+    以此统一规则取统计区间；排产上传后自动切换为存档块口径。
+    """
+    if today.day >= 27:
+        start = today.replace(day=27)
+        if today.month == 12:
+            end = today.replace(year=today.year + 1, month=1, day=26)
+        else:
+            end = today.replace(month=today.month + 1, day=26)
+    else:
+        if today.month == 1:
+            start = today.replace(year=today.year - 1, month=12, day=27)
+        else:
+            start = today.replace(month=today.month - 1, day=27)
+        end = today.replace(day=26)
+    return start, end
+
+
 async def get_warehouse_finished_inbound_kg(
     session: AsyncSession,
     *,
@@ -3073,6 +3099,8 @@ _SUMMARY_PRODUCTS: tuple[tuple[str, str], ...] = (
     ("FA", "L-苯丙氨酸"),
     ("LV", "洛伐他汀"),
     ("MV", "美伐他汀"),
+    ("TY", "L-色氨酸"),
+    ("FL", "2%氟苯尼考预混剂"),
 )
 
 
@@ -3115,13 +3143,17 @@ async def build_production_summary(
     today: date | None = None,
     alert_now: datetime | None = None,
 ) -> dict[str, Any]:
-    """生产汇总：五条产线的发酵/提炼关键指标。
+    """生产汇总：七条产线的发酵/提炼关键指标。
 
     逐产品复用既有看板口径（月计划批次、月计划产能、已完成产能），
-    提炼段取产销计划提炼车间行与仓储成品入库；权限不足的段返回 None。
-    today/alert_now 为告警的真实时间基准：本函数的 now 取所选月 15 日，
-    漏录/进度/排产告警必须按真实今天门控（回看历史月不播旧账），
-    由 API 层传入；缺省时退回所选日期（直调兼容）。
+    提炼段取产销计划提炼车间行与仓储成品入库，入库与计划同按
+    扎帐周期口径：有存档用存档块周期，无存档（新产品排产未上传）
+    用统一扎帐周期（27日～26日）；权限不足的段返回 None。
+    KPI 的放罐窗口门控与告警统一按真实当前时间（alert_now，API 层传入），
+    与单产品看板口径一致：已过放罐窗口的批次即为已放罐；此前按所选月
+    15 日构建看板 now，16 日起放罐的批次在当月汇总中永久缺席。
+    所选月 15 日锚点只用于存档覆盖与周期块定位（15 日必落在该月对应的
+    扎帐周期内）；缺省时退回所选日期（直调兼容）。
     """
     kpi_today = today or ref_date
     kpi_now = alert_now or datetime.combine(ref_date, time(12, 0))
@@ -3139,7 +3171,8 @@ async def build_production_summary(
         )
     ).scalars().all()
 
-    now = datetime.combine(ref_date, time(12, 0))
+    # 周期块定位锚点：只决定"该月对应哪个扎帐周期"，不参与 KPI 门控
+    anchor_dt = datetime.combine(ref_date, time(12, 0))
     rows: list[dict[str, Any]] = []
     period: dict[str, str] | None = None
     for code, name in _SUMMARY_PRODUCTS:
@@ -3155,13 +3188,15 @@ async def build_production_summary(
             "completion_rate": None,
         }
         covered = False
+        extract_period: tuple[date, date] | None = None
         board_alerts: list[dict[str, Any]] = []
         archive = await load_archive_covering(db, ref_date, code)
         if archive is not None:
             find_block, build_board_fn = _board_functions(code)
-            block = find_block(archive.rows, now)
+            block = find_block(archive.rows, anchor_dt)
             if block is not None:
                 covered = True
+                extract_period = (block["start"], block["end"])
                 if period is None:
                     period = {
                         "start": block["start"].isoformat(),
@@ -3178,7 +3213,7 @@ async def build_production_summary(
                     payload = build_board_fn(
                         archive.rows,
                         [],
-                        now,
+                        kpi_now,
                         actuals=[
                             serialize_batch_actual(item) for item in actuals
                         ],
@@ -3207,6 +3242,10 @@ async def build_production_summary(
                         ferment["planned_capacity_kg"],
                     )
         if has_extract:
+            # 提炼口径与计划一致按扎帐周期：有存档用存档块周期，
+            # 无存档（新产品排产未上传）用统一扎帐周期（27日～26日）
+            if extract_period is None:
+                extract_period = unified_accounting_period(ref_date)
             extract["planned_yield_kg"] = _extract_planned_yield_kg(
                 plan_rows, name
             )
@@ -3214,8 +3253,8 @@ async def build_production_summary(
                 await get_warehouse_finished_inbound_kg(
                     db,
                     product_code=code,
-                    period_start=month_start,
-                    period_end=month_end,
+                    period_start=extract_period[0],
+                    period_end=extract_period[1],
                 )
             )
             extract["completion_rate"] = _summary_rate(
@@ -3232,6 +3271,17 @@ async def build_production_summary(
                 "alerts": board_alerts if has_ferm else [],
             }
         )
+    # 停产产线仅在查看当前月汇总时隐藏（历史月份照常显示全部产线）
+    halted_map = await get_line_halted_map(db)
+    halted_lines = {
+        code
+        for code, halted in halted_map.items()
+        if halted
+        and ref_date.year == kpi_today.year
+        and ref_date.month == kpi_today.month
+    }
+    if halted_lines:
+        rows = [row for row in rows if row["product_code"] not in halted_lines]
     return {"period": period, "rows": rows}
 
 
@@ -3248,6 +3298,45 @@ async def get_month_setting(
         )
     )
     return result.scalar_one_or_none()
+
+
+async def get_line_halted_map(session: AsyncSession) -> dict[str, bool]:
+    """全部产品生产线的停产状态映射（未记录的产品视为生产中）。"""
+    result = await session.execute(
+        select(ProductionLineStatus).where(
+            ProductionLineStatus.is_deleted.is_(False)
+        )
+    )
+    return {
+        item.product_code: bool(item.halted)
+        for item in result.scalars().all()
+    }
+
+
+async def set_line_halted(
+    session: AsyncSession,
+    *,
+    product_code: str,
+    halted: bool,
+    updated_by: Any = None,
+) -> ProductionLineStatus:
+    """设置产品生产线停产状态（upsert；人工即时状态，不自动恢复）。"""
+    result = await session.execute(
+        select(ProductionLineStatus).where(
+            ProductionLineStatus.product_code == product_code,
+            ProductionLineStatus.is_deleted.is_(False),
+        )
+    )
+    item = result.scalar_one_or_none()
+    if item is None:
+        item = ProductionLineStatus(product_code=product_code, halted=halted)
+        session.add(item)
+    else:
+        item.halted = halted
+    if updated_by is not None:
+        item.updated_by = updated_by
+    await session.flush()
+    return item
 
 
 async def upsert_month_setting(

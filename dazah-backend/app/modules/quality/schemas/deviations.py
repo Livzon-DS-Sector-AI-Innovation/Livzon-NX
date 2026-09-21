@@ -32,6 +32,7 @@ class DeviationReporterOption(BaseModel):
     open_id: str
     name: str
     department: str
+    avatar_url: str | None = None
 
 
 class DeviationReporterPage(BaseModel):
@@ -201,6 +202,8 @@ class DeviationDetail(BaseModel):
     investigation_completed_at: datetime | None = None
     returned_step: str | None = None
     status_updated_at: datetime | None = None
+    # 已关闭记录的关闭时间（本地模型无独立列，由服务层按 status 合成）
+    close_time: datetime | None = None
     report_content: str | None = None
     report_versions: list[Any] | None = None
     feishu_base_table_id: str | None = None

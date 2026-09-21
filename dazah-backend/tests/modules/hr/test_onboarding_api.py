@@ -71,8 +71,22 @@ def mock_bitable(monkeypatch: pytest.MonkeyPatch) -> _FakeBitable:
     async def _fake_get_client(self):
         return fake
 
+    table_ids = {
+        "job_posting": "tblJobPosting",
+        "candidate": "tblCandidate",
+        "onboarding": "tblOnboarding",
+        "employee": "tblEmployee",
+    }
+
+    async def _fake_table_id(self, entity_code: str) -> str:
+        return table_ids[entity_code]
+
     monkeypatch.setattr(
         repo_mod.RecruitmentBitableRepo, "_get_client", _fake_get_client
+    )
+    # 表 id 只认 DB 配置；测试内注入固定映射路由 fake 客户端
+    monkeypatch.setattr(
+        repo_mod.RecruitmentBitableRepo, "_table_id", _fake_table_id
     )
     return fake
 

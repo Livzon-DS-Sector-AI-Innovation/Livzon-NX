@@ -63,6 +63,17 @@ async def test_import_training_ledger_supports_all_sheets_and_reports_unknown_sh
         )
 
 
+def _fake_repo_with_tables(client: object) -> SimpleNamespace:
+    """fake repo：_get_client 返回 fake 客户端，_table_id 返回固定假表 id。"""
+
+    async def _table_id(entity_code: str) -> str:
+        return f"tbl_{entity_code}"
+
+    return SimpleNamespace(
+        _get_client=AsyncMock(return_value=client), _table_id=_table_id
+    )
+
+
 @pytest.mark.asyncio
 async def test_sync_onboarding_to_employee_resolves_numeric_feishu_number(
     monkeypatch: pytest.MonkeyPatch,
@@ -90,7 +101,7 @@ async def test_sync_onboarding_to_employee_resolves_numeric_feishu_number(
             ]
         )
     )
-    bitable_repo = SimpleNamespace(_get_client=AsyncMock(return_value=bitable_client))
+    bitable_repo = _fake_repo_with_tables(bitable_client)
     monkeypatch.setattr(
         "app.modules.hr.recruitment_repository.RecruitmentBitableRepo",
         lambda: bitable_repo,
@@ -165,7 +176,7 @@ async def test_sync_onboarding_rejects_missing_feishu_and_duplicate_local_employ
             return_value=[{"fields": {"姓名": "重复员工", "工号": "E-2"}}]
         )
     )
-    duplicate_repo = SimpleNamespace(_get_client=AsyncMock(return_value=client))
+    duplicate_repo = _fake_repo_with_tables(client)
     monkeypatch.setattr(
         "app.modules.hr.recruitment_repository.RecruitmentBitableRepo",
         lambda: duplicate_repo,
@@ -204,7 +215,7 @@ async def test_candidate_resume_file_returns_authenticated_docx_download(
             ]
         )
     )
-    repo = SimpleNamespace(_get_client=AsyncMock(return_value=client))
+    repo = _fake_repo_with_tables(client)
     monkeypatch.setattr(
         "app.modules.hr.recruitment_repository.RecruitmentBitableRepo",
         lambda: repo,
@@ -241,7 +252,7 @@ async def test_candidate_resume_file_rejects_unconfigured_or_missing_attachment(
             return_value=[{"record_id": "candidate", "fields": {"简历附件": []}}]
         )
     )
-    repo = SimpleNamespace(_get_client=AsyncMock(return_value=client))
+    repo = _fake_repo_with_tables(client)
     monkeypatch.setattr(
         "app.modules.hr.recruitment_repository.RecruitmentBitableRepo",
         lambda: repo,

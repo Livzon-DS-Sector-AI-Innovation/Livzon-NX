@@ -6,8 +6,8 @@ import { useQuery } from '@tanstack/react-query'
 import type { components } from '@/types/generated/schema'
 import { fetchDeviationReporters } from '@/lib/api/client/deviation-reporters'
 import { useRouter } from 'next/navigation'
-import { Alert, App, Button, Card, DatePicker, Form, Input, Select, Space } from 'antd'
-import { ArrowLeftOutlined } from '@ant-design/icons'
+import { Alert, App, Avatar, Button, Card, DatePicker, Form, Input, Select, Space } from 'antd'
+import { ArrowLeftOutlined, UserOutlined } from '@ant-design/icons'
 import { createDeviation } from '@/actions/quality-deviation'
 import type { DeviationLevel } from '@/types/quality'
 import { useDeviationPermissions } from './useDeviationPermissions'
@@ -43,7 +43,7 @@ export function CreateDeviation() {
   const { message } = App.useApp()
   const [form] = Form.useForm<CreateDeviationFormValues>()
   const isClosed = Form.useWatch('is_closed', form)
-  const { canOperate, workflowFieldsReadOnly, authorizationKey } = useDeviationPermissions()
+  const { canOperate, authorizationKey } = useDeviationPermissions()
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<{ authorizationKey: string; reporter: components['schemas']['DeviationReporterOption'] } | null>(null)
@@ -88,8 +88,8 @@ export function CreateDeviation() {
           : null,
         corrective_actions: values.corrective_actions?.trim() || null,
         material_disposition: values.material_disposition?.trim() || null,
-        is_closed: workflowFieldsReadOnly ? false : values.is_closed ?? false,
-        close_time: !workflowFieldsReadOnly && values.is_closed && values.close_time
+        is_closed: values.is_closed ?? false,
+        close_time: values.is_closed && values.close_time
           ? values.close_time.toISOString()
           : null,
         needs_cross_dept_review: true,
@@ -152,6 +152,23 @@ export function CreateDeviation() {
               allowClear
               notFoundContent={reporters.isFetching ? '正在加载报告人' : reporters.isError ? '报告人加载失败，请重试' : '没有匹配的可选报告人'}
               options={options.map((item) => ({ value: item.open_id, label: `${item.name}（${item.department}）` }))}
+              optionRender={(option) => {
+                const reporter = options.find((item) => item.open_id === option.value)
+                if (!reporter) return <span>{option.label}</span>
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Avatar
+                      size={24}
+                      src={reporter.avatar_url || undefined}
+                      style={{ backgroundColor: reporter.avatar_url ? 'transparent' : undefined, flexShrink: 0, fontSize: 12, fontWeight: 700 }}
+                      icon={!reporter.avatar_url ? <UserOutlined /> : undefined}
+                    >
+                      {!reporter.avatar_url ? reporter.name.charAt(0) : undefined}
+                    </Avatar>
+                    <span>{option.label}</span>
+                  </div>
+                )
+              }}
               onChange={(value: string | undefined) => {
                 const reporter = options.find((item) => item.open_id === value)
                 setSelected(reporter ? { authorizationKey, reporter } : null)
@@ -230,8 +247,8 @@ export function CreateDeviation() {
             <Input.TextArea rows={4} placeholder="请输入产品/物料处理结果" />
           </Form.Item>
 
-          <Form.Item name="is_closed" label="是否关闭" extra={workflowFieldsReadOnly ? '新记录默认为草稿，关闭状态由业务流程维护。' : undefined}>
-            <Select placeholder="请选择" options={booleanOptions} disabled={workflowFieldsReadOnly} />
+          <Form.Item name="is_closed" label="是否关闭">
+            <Select placeholder="请选择" options={booleanOptions} />
           </Form.Item>
 
           <Form.Item
@@ -247,11 +264,11 @@ export function CreateDeviation() {
               },
             ]}
           >
+            {/* 台账口径：关闭时间只登记到日期，不精确到时刻 */}
             <DatePicker
-              showTime
-              format="YYYY-MM-DD HH:mm"
+              format="YYYY-MM-DD"
               style={{ width: '100%' }}
-              disabled={workflowFieldsReadOnly || !isClosed}
+              disabled={!isClosed}
             />
           </Form.Item>
 

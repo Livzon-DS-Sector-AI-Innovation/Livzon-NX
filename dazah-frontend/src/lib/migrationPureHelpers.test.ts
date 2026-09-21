@@ -309,8 +309,14 @@ describe('migrated pure helper contracts', () => {
     expect(hasCompletedAnalysis({ ai_analysis_status: 'pending', ai_summary: ' 已有摘要 ' })).toBe(true)
     expect(buildQueryParams({ keyword: '  关键字 ', sourceSite: 'NMPA', publishDateRange: [dayjs('2026-08-01'), dayjs('2026-08-02')], captureDateRange: [dayjs('2026-08-03'), null], isNew: false })).toMatchObject({ keyword: '关键字', sourceSite: 'NMPA', publishDateFrom: '2026-08-01', publishDateTo: '2026-08-02', captureDateFrom: '2026-08-03', isNew: false })
 
-    expect(resolveInoutLinks('raw-ledger')).toMatchObject({ inbound: expect.any(String), outbound: expect.any(String) })
-    expect(resolveInoutLinks('unknown')).toBeNull()
+    expect(
+      resolveInoutLinks({
+        inbound_form_url: 'https://www.feishu.cn/share/base/form/shrcn_in',
+        outbound_form_url: 'https://www.feishu.cn/share/base/form/shrcn_out',
+      })
+    ).toMatchObject({ inbound: expect.any(String), outbound: expect.any(String) })
+    expect(resolveInoutLinks(null)).toBeNull()
+    expect(resolveInoutLinks({ inbound_form_url: null, outbound_form_url: null })).toBeNull()
     expect(isDateLikeColumn('入库日期')).toBe(true)
     expect(isDateLikeColumn('名称')).toBe(false)
     expect(formatDateValue(null)).toBeNull()

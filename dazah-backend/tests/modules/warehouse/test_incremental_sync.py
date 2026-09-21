@@ -18,9 +18,19 @@ from unittest.mock import AsyncMock, patch
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.warehouse.feishu_material_pages import FEISHU_WAREHOUSE_MATERIAL_PAGES
+from app.modules.warehouse.feishu_material_pages import (
+    FEISHU_WAREHOUSE_MATERIAL_PAGES,
+    FeishuWarehouseMaterialPage,
+)
 from app.modules.warehouse.models import MaterialPageRow
 from app.modules.warehouse.service import WarehouseService
+
+
+def _binding(page_key: str) -> FeishuWarehouseMaterialPage:
+    """DB 绑定占位：设置页配置后的页面数据源（注册表绑定字段为空）。"""
+    return FeishuWarehouseMaterialPage(
+        page_key=page_key, title=page_key, table_id="tblTest", app_token="app-test"
+    )
 
 
 async def _create_snapshot(
@@ -214,8 +224,20 @@ async def test_incremental_fetch_falls_back_without_sort_field(
     """无日期排序字段的页面（hardware-summary）增量回退全量拉取。"""
     service = WarehouseService(db_session)
     full_mock = AsyncMock()
-    with patch.object(
-        WarehouseService, "fetch_material_page_from_feishu", new=full_mock
+    with (
+        patch.object(
+            WarehouseService,
+            "_get_material_page_config",
+            new=AsyncMock(return_value=_binding("p")),
+        ),
+        patch.object(
+            WarehouseService,
+            "_get_material_page_config",
+            new=AsyncMock(return_value=_binding("hardware-summary")),
+        ),
+        patch.object(
+            WarehouseService, "fetch_material_page_from_feishu", new=full_mock
+        ),
     ):
         await service.fetch_material_page_from_feishu_incremental(
             "hardware-summary",
@@ -449,6 +471,11 @@ async def test_sync_chooses_incremental_when_snapshot_exists(
     with (
         patch.object(
             WarehouseService,
+            "_get_material_page_config",
+            new=AsyncMock(return_value=_binding("p")),
+        ),
+        patch.object(
+            WarehouseService,
             "fetch_material_page_from_feishu_incremental",
             new=incr_mock,
         ),
@@ -480,6 +507,11 @@ async def test_sync_falls_back_to_full_without_snapshot(
     )
     incr_mock = AsyncMock()
     with (
+        patch.object(
+            WarehouseService,
+            "_get_material_page_config",
+            new=AsyncMock(return_value=_binding("p")),
+        ),
         patch.object(
             WarehouseService, "fetch_material_page_from_feishu", new=full_mock
         ),
@@ -523,10 +555,17 @@ async def test_sync_incremental_updates_snapshot_total_rows(
             {},
         )
     )
-    with patch.object(
-        WarehouseService,
-        "fetch_material_page_from_feishu_incremental",
-        new=incr_mock,
+    with (
+        patch.object(
+            WarehouseService,
+            "_get_material_page_config",
+            new=AsyncMock(return_value=_binding(page_key)),
+        ),
+        patch.object(
+            WarehouseService,
+            "fetch_material_page_from_feishu_incremental",
+            new=incr_mock,
+        ),
     ):
         response = await service.sync_material_page_to_local(page_key, incremental=True)
 

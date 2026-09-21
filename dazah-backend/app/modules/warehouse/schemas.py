@@ -275,6 +275,8 @@ class WarehousePageFeishuConfig(BaseModel):
     table_id: str
     table_name: str
     view_id: str | None = None
+    feishu_inbound_form_url: str | None = None
+    feishu_outbound_form_url: str | None = None
 
 
 class WarehouseFeishuConfigBase(BaseModel):

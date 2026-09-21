@@ -1,9 +1,11 @@
 """Document catalog attachment service: 附件上传/绑定/删除/预览内容。
 
-附件导入匹配策略（三段式）：
+附件导入匹配策略（四段式，编号优先于名称——目录中同名文档普遍存在，
+编码才是文档唯一身份）：
 1. 编码匹配：文件名中的编码（含修订号，如 SMP-QA-001-02 → SMP-QA-001/02）精确/前缀匹配；
-2. 名称模糊匹配：文件名中文核心词与条目名称互含，唯一则命中；
-3. LLM 匹配：前两步失败时，调用全局 llm_client 在候选条目中识别最匹配条目。
+2. 名称匹配：文件名中文核心词与条目名称归一化完全一致，唯一则命中；
+3. 正文匹配：word/md 转换后正文提取的文件编号/标题参与匹配；
+4. LLM 匹配：以上均未命中时，调用全局 llm_client 在候选条目中识别最匹配条目。
 
 word 附件转换：.doc/.docx/.wps 转标准 MD（模板化管线，保留表格与图片），
 图片存为独立对象并在 attachment 记录 `asset_keys` 中登记。
@@ -620,17 +622,18 @@ async def match_entry_for_attachment(
     *,
     scope: DepartmentScope | None = None,
 ) -> tuple[DocumentEntry | None, str]:
-    """四段式匹配：文件名称 → 文件编号 → 正文内容 → LLM 兜底。
+    """四段式匹配：文件编号 → 文件名称 → 正文内容 → LLM 兜底。
 
     content_identity 为转换后 md 提取的 (正文文件编号, 正文标题)，
-    仅在名称与编号均未命中时参与正文匹配。
+    仅在编号与名称均未命中时参与正文匹配。目录中同名文档普遍存在，
+    编号命中必须优先于名称命中，避免同名不同编码的文档被误绑。
     """
-    entry = await match_entry_by_name(db, file_name, scope=scope)
-    if entry is not None:
-        return entry, "name"
     entry = await find_entry_by_file_name(db, file_name, scope=scope)
     if entry is not None:
         return entry, "code"
+    entry = await match_entry_by_name(db, file_name, scope=scope)
+    if entry is not None:
+        return entry, "name"
     if content_identity is not None:
         entry = await match_entry_by_content(db, *content_identity, scope=scope)
         if entry is not None:

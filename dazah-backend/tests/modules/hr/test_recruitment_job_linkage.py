@@ -17,8 +17,8 @@ import pytest
 from app.modules.hr.recruitment_repository import RecruitmentBitableRepo
 from app.modules.hr.recruitment_service import RecruitmentService
 
-TBL_JOB = "tbldWBRTNm5RrQHw"
-TBL_CAND = "tblx3KvkQoHdGjFL"
+TBL_JOB = "tblJobPosting"
+TBL_CAND = "tblCandidate"
 
 JOBS = [
     {"record_id": "rec_job_env", "fields": {
@@ -68,8 +68,15 @@ def service(monkeypatch: pytest.MonkeyPatch) -> RecruitmentService:
     async def fake_get_client(self):
         return client
 
-    async def fake_table_id(self, entity_code: str, fallback: str) -> str:
-        return fallback
+    table_ids = {
+        "job_posting": "tblJobPosting",
+        "candidate": "tblCandidate",
+        "onboarding": "tblOnboarding",
+        "employee": "tblEmployee",
+    }
+
+    async def fake_table_id(self, entity_code: str) -> str:
+        return table_ids[entity_code]
 
     monkeypatch.setattr(RecruitmentBitableRepo, "_get_client", fake_get_client)
     monkeypatch.setattr(RecruitmentBitableRepo, "_table_id", fake_table_id)

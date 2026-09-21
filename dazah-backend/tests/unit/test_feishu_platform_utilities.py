@@ -811,8 +811,12 @@ def test_feishu_reference_parsing_and_fallbacks() -> None:
 
 @pytest.mark.asyncio
 async def test_tenant_access_token_cache_and_http_failures(monkeypatch: Any) -> None:
-    with pytest.raises(RuntimeError, match="未配置"):
+    # 凭证缺失 → 503 业务提示（AppException），不再裸 RuntimeError
+    from app.core.exceptions import AppException
+
+    with pytest.raises(AppException, match="未配置") as exc_info:
         await feishu_utils.get_tenant_access_token("", "")
+    assert exc_info.value.status_code == 503
 
     monkeypatch.setattr(feishu_utils, "cache_get", AsyncMock(return_value="cached"))
     assert (

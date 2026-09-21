@@ -306,6 +306,132 @@ async def test_confirm_deviation_import_covers_all_duplicate_paths(
     ] == 1
 
 
+def test_parse_closed_text_and_discovery_date_patterns() -> None:
+    assert service._parse_closed_text("是") is True
+    assert service._parse_closed_text("是 编号：PC-2502001\n□否") is True
+    assert service._parse_closed_text("□是 编号：\n否") is False
+    assert service._parse_closed_text("进行中") is False
+    assert service._parse_closed_text("否") is False
+    assert service._parse_closed_text("") is False
+
+    assert service._parse_discovery_date_from_description(
+        "2025.04.08 17：20检验员发现异常。"
+    ) == datetime(2025, 4, 8)
+    assert service._parse_discovery_date_from_description(
+        "2026年02年09日，13:53分QA人员发现。"
+    ) == datetime(2026, 2, 9)
+    assert service._parse_discovery_date_from_description("侯玉芳") is None
+    assert service._parse_discovery_date_from_description("") is None
+
+
+@pytest.mark.asyncio
+async def test_confirm_deviation_import_parses_closed_and_stub_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db: Any = SimpleNamespace(commit=AsyncMock())
+    captured: dict[str, dict[str, Any]] = {}
+
+    async def get_by_code(_db: Any, _code: str) -> None:
+        return None
+
+    async def create(_db: Any, data: dict[str, Any]) -> Any:
+        captured[data["deviation_code"]] = data
+        return SimpleNamespace(**data)
+
+    monkeypatch.setattr(
+        service.repo,  # type: ignore[attr-defined]
+        "get_deviation_by_code_include_deleted",
+        get_by_code,
+    )
+    monkeypatch.setattr(service.repo, "create_deviation", create)  # type: ignore[attr-defined]
+    enrichment: dict[str, Any] = {}
+
+    async def fake_fill(_db: Any, records: list[Any], **kwargs: Any) -> None:
+        enrichment["count"] = len(records)
+        enrichment["include_department"] = kwargs.get("include_department")
+
+    monkeypatch.setattr(
+        service.deviation_cause_analysis,
+        "fill_missing_analysis",
+        fake_fill,
+    )
+
+    rows = [
+        [
+            "PC-CLOSED",
+            "—",
+            "2025.04.08 17：20检验员在QC液相室发现异常。",
+            "□是 编号：\n否",
+            "根本原因：文件中未规定。",
+            "次要偏差",
+            "2025.04.09",
+            "措施",
+            "—",
+            "是",
+        ],
+        [
+            "PC-OPEN",
+            "—",
+            "2025.07.04 16:37检验员发现。",
+            "□是 编号：\n否",
+            "根本原因：设备故障。",
+            "次要偏差",
+            "2025.07.07",
+            "措施",
+            "—",
+            "进行中",
+        ],
+        [
+            "PC-UNCHECKED",
+            "—",
+            "2025.05.05 17:52检验员发现。",
+            "□是 编号：\n否",
+            "根本原因：文件问题。",
+            "次要偏差",
+            "2025.05.09",
+            "措施",
+            "—",
+            "□是 编号：\n否",
+        ],
+        ["PC-STUB", "2026.06.08", "侯玉芳", "", "", "", "", "", "", ""],
+    ]
+    docx_bytes = _docx_table(
+        [
+            "偏差编号",
+            "产品名称/批号",
+            "偏差简要描述",
+            "偏差是否曾发生",
+            "根本原因",
+            "偏差等级",
+            "调查完成时间",
+            "纠正预防措施",
+            "产品/物料处理结果",
+            "是否关闭",
+        ],
+        rows,
+    )
+    result = await service.confirm_deviation_import(db, docx_bytes)
+    assert result["success_count"] == 4
+
+    closed = captured["PC-CLOSED"]
+    assert closed["status"] == "closed"
+    assert closed["discovery_date"] == datetime(2025, 4, 8)
+    assert closed["status_updated_at"] == datetime(2025, 4, 9)
+    assert closed["root_cause_analysis"].startswith("根本原因")
+
+    assert captured["PC-OPEN"]["status"] == "draft"
+    assert captured["PC-UNCHECKED"]["status"] == "draft"
+
+    stub = captured["PC-STUB"]
+    assert stub["discovery_date"] == datetime(2026, 6, 8)
+    assert stub["affected_items"] is None
+    assert stub["description"] == "侯玉芳"
+    assert stub["status"] == "draft"
+    assert stub["level"] is None
+
+    assert enrichment == {"count": 4, "include_department": True}
+
+
 def test_deviation_row_values_cover_occurrence_level_dates_and_defaults() -> None:
     base = dict(
         deviation_code="PC-1",

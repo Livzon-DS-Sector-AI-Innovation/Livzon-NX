@@ -21,8 +21,8 @@ def test_cron_covers_only_8_to_20_beijing() -> None:
     assert gen.schedule.expression.split()[0] == "0"
 
 
-async def test_find_due_returns_only_active_production_plan_configs() -> None:
-    """只同步启用中、未删除、target=production_plan 的配置。"""
+async def test_find_due_returns_only_active_plan_configs() -> None:
+    """只同步启用中、未删除、target=production_plan/sales_plan 的配置。"""
     session = MagicMock()
     ids = [uuid.uuid4(), uuid.uuid4()]
     result = MagicMock()
@@ -32,12 +32,20 @@ async def test_find_due_returns_only_active_production_plan_configs() -> None:
     due = await ProductionPlanHourlySyncGenerator().find_due(session)
 
     assert due == [str(i) for i in ids]
-    # 确认查询带了过滤条件（active / 未删除 / sync_target）
+    # 确认查询带了过滤条件（active / 未删除 / sync_target 含两类计划）
     stmt = session.execute.call_args.args[0]
-    compiled = str(stmt.compile())
-    assert "is_active" in compiled
-    assert "is_deleted" in compiled
-    assert "sync_target" in compiled
+    compiled = stmt.compile()
+    assert "is_active" in str(compiled)
+    assert "is_deleted" in str(compiled)
+    assert "sync_target IN" in str(compiled)
+    # expanding IN 的参数值为列表，展开后校验两类计划都在过滤范围内
+    param_values: set[Any] = set()
+    for value in compiled.params.values():
+        if isinstance(value, (list, tuple)):
+            param_values.update(value)
+        else:
+            param_values.add(value)
+    assert {"production_plan", "sales_plan"} <= param_values
 
 
 async def test_execute_one_dispatches_sync_by_target(monkeypatch: Any) -> None:

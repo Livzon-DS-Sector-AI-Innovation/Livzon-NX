@@ -12,10 +12,25 @@ from urllib.parse import quote
 
 import httpx
 
+from app.core.exceptions import AppException
 from app.core.redis import redis_client
 from app.platform.integrations.feishu.utils import OPEN_API_BASE_URL
 
 TOKEN_TTL_SECONDS = 90 * 60
+
+_shared_http_client: httpx.AsyncClient | None = None
+
+
+def _shared_http() -> httpx.AsyncClient:
+    """进程级共享连接池：避免每次请求重建 TCP+TLS 连接。
+
+    编辑保存/详情打开/增量同步都走这里，单次请求省去 100-500ms 的
+    连接建立开销；超时按调用点以 per-request timeout 传入。
+    """
+    global _shared_http_client
+    if _shared_http_client is None or getattr(_shared_http_client, "is_closed", False):
+        _shared_http_client = httpx.AsyncClient(base_url=OPEN_API_BASE_URL)
+    return _shared_http_client
 
 
 def _token_cache_key(app_id: str, app_secret: str) -> str:
@@ -62,7 +77,11 @@ class WarehouseFeishuClient:
 
     async def get_tenant_access_token(self, *, force_refresh: bool = False) -> str:
         if not self.app_id or not self.app_secret:
-            raise RuntimeError("App ID 或 App Secret 未配置")
+            # 业务化降级：未配置凭证时返回 503 业务提示，避免裸 RuntimeError 变 500
+            raise AppException(
+                status_code=503,
+                message="仓储飞书应用未配置，请先在仓储设置中填写 App ID 与 App Secret",
+            )
 
         cache_key = _token_cache_key(self.app_id, self.app_secret)
         if not force_refresh:
@@ -70,13 +89,13 @@ class WarehouseFeishuClient:
             if cached:
                 return str(cached)
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(
-                f"{OPEN_API_BASE_URL}/auth/v3/tenant_access_token/internal",
-                json={"app_id": self.app_id, "app_secret": self.app_secret},
-            )
-            resp.raise_for_status()
-            body = resp.json()
+        resp = await _shared_http().post(
+            f"{OPEN_API_BASE_URL}/auth/v3/tenant_access_token/internal",
+            json={"app_id": self.app_id, "app_secret": self.app_secret},
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+        body = resp.json()
 
         if body.get("code") != 0:
             raise RuntimeError(body.get("msg") or str(body))
@@ -111,20 +130,17 @@ class WarehouseFeishuClient:
                     force_refresh=force_token_refresh or attempt > 0
                 )
                 try:
-                    async with httpx.AsyncClient(
-                        base_url=OPEN_API_BASE_URL,
+                    resp = await _shared_http().request(
+                        method,
+                        path,
+                        params=params,
+                        json=json_body,
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "Content-Type": "application/json; charset=utf-8",
+                        },
                         timeout=timeout,
-                    ) as client:
-                        resp = await client.request(
-                            method,
-                            path,
-                            params=params,
-                            json=json_body,
-                            headers={
-                                "Authorization": f"Bearer {token}",
-                                "Content-Type": "application/json; charset=utf-8",
-                            },
-                        )
+                    )
                     self._last_request_at[self.app_id] = time.monotonic()
                     body = resp.json()
                     code = body.get("code")
@@ -246,15 +262,12 @@ class WarehouseFeishuClient:
     async def download_media(self, file_token: str) -> tuple[bytes, str, str | None]:
         await self._wait_for_shared_rate_slot()
         token = await self.get_tenant_access_token()
-        async with httpx.AsyncClient(
-            base_url=OPEN_API_BASE_URL,
+        response = await _shared_http().get(
+            f"/drive/v1/medias/{quote(file_token, safe='')}/download",
+            headers={"Authorization": f"Bearer {token}"},
             timeout=30.0,
             follow_redirects=True,
-        ) as client:
-            response = await client.get(
-                f"/drive/v1/medias/{quote(file_token, safe='')}/download",
-                headers={"Authorization": f"Bearer {token}"},
-            )
+        )
         response.raise_for_status()
         return (
             response.content,

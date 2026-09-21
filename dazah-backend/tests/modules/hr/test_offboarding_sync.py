@@ -818,20 +818,20 @@ async def _patch_auto_offboard_externals(
     """隔离 _auto_offboard 的飞书外呼：档案删行调用被收集，其余 mock 掉。"""
     from types import SimpleNamespace
 
-    from app.modules.hr.feishu.bitable import FeishuBitableSync
-
     deleted_calls: list[str] = []
 
-    async def fake_sync_employee_deleted(self, emp_no: str) -> None:
-        deleted_calls.append(emp_no)
+    class _FakeSync:
+        async def sync_employee_deleted(self, emp_no: str) -> None:
+            deleted_calls.append(emp_no)
 
     async def fake_pair(self):
         return None
 
+    # 员工档案删行走 service._resolve_feishu_sync_session（DB 绑定解析）；
+    # 测试库无实体配置行，直接注入 fake 同步对象
     monkeypatch.setattr(
-        FeishuBitableSync,
-        "sync_employee_deleted",
-        fake_sync_employee_deleted,
+        "app.modules.hr.service._resolve_feishu_sync_session",
+        AsyncMock(return_value=_FakeSync()),
     )
     monkeypatch.setattr(OffboardingRecordService, "_get_offboarding_bitable", fake_pair)
     monkeypatch.setattr(

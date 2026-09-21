@@ -391,19 +391,32 @@ async def test_get_deviation_report_record_list_reads_feishu_report_records(
                     "偏差报告": "https://example.com/report-1.docx",
                     "涉及产品名称/批号": "原料A/B-001",
                     "部门": "质量部",
-                    "报告人": "报告人甲",
-                    "部门负责人": {
-                        "type": 11,
-                        "value": [
-                            {
-                                "name": "部门负责人甲",
-                            }
-                        ],
-                    },
+                    "报告人": [
+                        {
+                            "name": "报告人甲",
+                            "avatar_url": "https://feishu.example/avatar-a.png",
+                            "id": "ou_reporter_a",
+                        }
+                    ],
+                    "部门负责人": [
+                        {
+                            "name": "部门负责人甲",
+                            "avatar_url": "https://feishu.example/avatar-b.png",
+                            "id": "ou_head_b",
+                        }
+                    ],
                     "部门负责人确认": "是",
-                    "QA": "QA甲",
+                    "QA": [
+                        {
+                            "name": "QA甲",
+                            "avatar_url": "https://feishu.example/avatar-c.png",
+                            "id": "ou_qa_c",
+                        }
+                    ],
                     "QA确认": "否",
-                    "QA负责人": "QA负责人甲",
+                    "QA负责人": [
+                        {"name": "QA负责人甲", "id": "ou_qa_head_d"}
+                    ],
                     "QA负责人确认": "是",
                     "报告状态": "已完成",
                 },
@@ -452,6 +465,30 @@ async def test_get_deviation_report_record_list_reads_feishu_report_records(
     assert first_item["report_document"] == "https://example.com/report-1.docx"
     assert first_item["product_batch"] == "原料A/B-001"
     assert first_item["reporter_name"] == "报告人甲"
+    assert first_item["reporters"] == [
+        {
+            "name": "报告人甲",
+            "avatar_url": "https://feishu.example/avatar-a.png",
+            "id": "ou_reporter_a",
+        }
+    ]
+    assert first_item["department_heads"] == [
+        {
+            "name": "部门负责人甲",
+            "avatar_url": "https://feishu.example/avatar-b.png",
+            "id": "ou_head_b",
+        }
+    ]
+    assert first_item["qas"] == [
+        {
+            "name": "QA甲",
+            "avatar_url": "https://feishu.example/avatar-c.png",
+            "id": "ou_qa_c",
+        }
+    ]
+    assert first_item["qa_heads"] == [
+        {"name": "QA负责人甲", "avatar_url": "", "id": "ou_qa_head_d"}
+    ]
     assert first_item["department_head"] == "部门负责人甲"
     assert first_item["qa_head_name"] == "QA负责人甲"
     assert first_item["qa_result"] == "rejected"
@@ -467,6 +504,9 @@ async def test_get_deviation_report_record_list_reads_feishu_report_records(
     assert second_item["description"] == "纯飞书记录"
     assert second_item["department"] == "生产部"
     assert second_item["department_head"] is None
+    assert second_item["department_heads"] is None
+    assert second_item["reporters"] is None
+    assert second_item["qas"] is None
     assert second_item["qa_name"] is None
     assert second_item["report_time"] == now
 
@@ -1233,12 +1273,13 @@ async def test_quality_feishu_settings_do_not_prefill_from_env(
     assert change_item.base_table_name == "变更总表"
     assert change_item.is_enabled is True
 
-    # 验证与确认实体已固定绑定验证主计划 Base（不再读取 env 回退）
+    # 验证与确认实体的写死绑定已移除：表绑定属于部署数据，实体行由 ensure
+    # 创建（未绑定、未启用），由管理员在质量设置-飞书设置中配置
     validation_item = entity_map["validation_process"]
-    assert validation_item.app_token == "FTbkbpgNUa9jUCsjK8ac1A4Wn7f"
-    assert validation_item.base_table_id == "tbl3lBei5Sv8wBVV"
+    assert validation_item.app_token is None
+    assert validation_item.base_table_id is None
     assert validation_item.base_table_name == "2026年验证台账"
-    assert validation_item.is_enabled is True
+    assert validation_item.is_enabled is False
 
 @pytest.mark.anyio
 async def test_legacy_department_contact_entity_is_soft_deleted(

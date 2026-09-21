@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.response import success_response
 from app.modules.production import fermentation_board_service as board
+from app.platform.audit.service import record_audit_log
 from app.platform.identity.data_scope import (
     current_page_actor,
     current_page_data_scope,
@@ -36,6 +37,10 @@ BEIJING_TZ = timezone(timedelta(hours=8))
 class MaintenanceBody(BaseModel):
     tank_no: str = Field(..., min_length=1, max_length=32, description="罐号")
     reason: str = Field(..., min_length=1, max_length=255, description="检修原因")
+
+
+class ProductionLineStatusBody(BaseModel):
+    halted: bool = Field(..., description="是否停产中")
 
 
 class BatchActualBody(BaseModel):
@@ -115,8 +120,44 @@ async def get_fermentation_board(
     ref_date = date or now.date()
     archive = await board.load_archive_covering(db, ref_date, product)
     if archive is None:
+        # 无存档（如新产线排产未上传）：发酵段无数据；统一扎帐周期
+        # （27日～26日）覆盖所选日期时，提炼入库合计仍按该周期返回
+        period_start, period_end = board.unified_accounting_period(now.date())
+        unified_covers = period_start <= ref_date <= period_end
+        payload: dict[str, Any] = {
+            "covered": False,
+            "period": None,
+            "kpis": None,
+            "tanks": [],
+            "recent": [],
+            "trend": None,
+            "alerts": [],
+            "is_current_period": unified_covers,
+            "maintenance": [],
+            "dumped_batches": [],
+            "extraction": None,
+            "extraction_ledger": [],
+        }
+        if unified_covers:
+            payload["period"] = {
+                "start": period_start.isoformat(),
+                "end": period_end.isoformat(),
+                "label": (
+                    f"{period_start.month}月{period_start.day}日～"
+                    f"{period_end.month}月{period_end.day}日"
+                ),
+            }
+            if has_extract:
+                payload["extract_finished_inbound_kg"] = (
+                    await board.get_warehouse_finished_inbound_kg(
+                        db,
+                        product_code=product,
+                        period_start=period_start,
+                        period_end=period_end,
+                    )
+                )
         return success_response(
-            data=None,
+            data=payload,
             message=f"尚未上传覆盖 {ref_date.isoformat()} 所在扎帐周期的排产 Excel",
         )
     # FA / DR / MP(及他汀 LV/MV，复用 MP 管线+103自然月块解析) 排产表
@@ -433,4 +474,54 @@ async def set_fermentation_month_capacity(
     )
     return success_response(
         data=board.serialize_month_setting(item), message="已保存本月计划产能"
+    )
+
+
+@router.get(
+    "/production-line-status",
+    summary="产品生产线停产状态（停产品线代码列表）",
+)
+async def list_production_line_status(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    halted_map = await board.get_line_halted_map(db)
+    return success_response(
+        data={
+            "halted": sorted(
+                code for code, halted in halted_map.items() if halted
+            )
+        }
+    )
+
+
+@router.post(
+    "/production-line-status",
+    summary="设置产品生产线停产状态（停产/恢复生产）",
+)
+async def set_production_line_status(
+    body: ProductionLineStatusBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+    product: str = Query(..., description="产品代码（FA/MC/DR/LV/MV/TY/FL）"),
+) -> Any:
+    if product not in board.PRODUCTION_LINE_CODES:
+        raise HTTPException(status_code=400, detail=f"未知的产品代码：{product}")
+    item = await board.set_line_halted(
+        db,
+        product_code=product,
+        halted=body.halted,
+        updated_by=current_user.id if current_user else None,
+    )
+    await record_audit_log(
+        db,
+        action="production_line_status_set",
+        user_id=current_user.id if current_user else None,
+        resource_type="production_line_status",
+        resource_id=item.id,
+        new_value={"product_code": product, "halted": body.halted},
+    )
+    return success_response(
+        data={"product_code": product, "halted": bool(item.halted)},
+        message="已标记为停产中" if body.halted else "已恢复生产",
     )

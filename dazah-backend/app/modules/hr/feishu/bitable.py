@@ -4,10 +4,8 @@ import logging
 from datetime import UTC, date, datetime
 from typing import Any, cast
 
-from app.core.config import get_settings
 from app.modules.hr.feishu.client import FeishuClient
 
-_settings = get_settings()
 logger = logging.getLogger(__name__)
 
 
@@ -48,7 +46,9 @@ class BitableClient:
         app_secret: str | None = None,
     ) -> None:
         self.client = FeishuClient(app_id=app_id, app_secret=app_secret)
-        self.app_token = app_token or _settings.FEISHU_BITABLE_APP_TOKEN
+        # app_token 只认调用方显式传入的 DB 配置解析值，不回退环境变量；
+        # 缺失时各方法的 _is_enabled/守卫会按"未配置"处理
+        self.app_token = app_token
 
     def _path(self, table_id: str, suffix: str = "") -> str:
         base = f"/bitable/v1/apps/{self.app_token}/tables/{table_id}"
@@ -239,87 +239,30 @@ class BitableClient:
 
 
 class FeishuBitableSync:
-    """Sync HR data to Feishu Bitable."""
+    """员工档案飞书表删除联动（只认人事 DB 配置的绑定与凭证）。
+
+    部门台账镜像推送已随通讯录方案下线，方法与 env 表 id 一并移除；
+    app_token/employee_table 由 ``service._resolve_feishu_sync_session``
+    从 DB 解析后传入，缺失时调用方直接跳过推送。
+    """
 
     def __init__(
         self,
         *,
+        app_token: str,
         app_id: str | None = None,
         app_secret: str | None = None,
+        employee_table: str,
     ) -> None:
-        self.bitable = BitableClient(app_id=app_id, app_secret=app_secret)
-        self.employee_table = _settings.FEISHU_BITABLE_EMPLOYEE_TABLE_ID
-        self.department_table = _settings.FEISHU_BITABLE_DEPARTMENT_TABLE_ID
-
-    def _is_enabled(self) -> bool:
-        return bool(self.bitable.app_token)
-
-    # ─── Department ───
-
-    async def sync_department_created(self, dept: dict[str, Any]) -> None:
-        if not self._is_enabled() or not self.department_table:
-            return
-        fields = {
-            "部门名称": dept.get("name"),
-            "部门编码": dept.get("code"),
-            "描述": dept.get("description") or "",
-        }
-        try:
-            record = await self.bitable.create_record(self.department_table, fields)
-            logger.info(
-                "Department synced to Feishu: %s, record_id=%s",
-                dept.get("name"),
-                record.get("record_id"),
-            )
-        except Exception as e:
-            logger.error("Failed to sync department to Feishu: %s", e)
-            raise
-
-    async def sync_department_updated(self, dept: dict[str, Any]) -> None:
-        if not self._is_enabled() or not self.department_table:
-            return
-        record_id = dept.get("_feishu_record_id") or await self._find_department_record(
-            dept.get("code")
+        self.bitable = BitableClient(
+            app_token=app_token, app_id=app_id, app_secret=app_secret
         )
-        if not record_id:
-            return
-        fields = {
-            "部门名称": dept.get("name"),
-            "部门编码": dept.get("code"),
-            "描述": dept.get("description") or "",
-        }
-        try:
-            await self.bitable.update_record(self.department_table, record_id, fields)
-            logger.info("Department updated in Feishu: %s", dept.get("name"))
-        except Exception as e:
-            logger.error("Failed to update department in Feishu: %s", e)
-            raise
-
-    async def sync_department_deleted(self, code: str) -> None:
-        if not self._is_enabled() or not self.department_table:
-            return
-        record_id = await self._find_department_record(code)
-        if record_id:
-            try:
-                await self.bitable.delete_record(self.department_table, record_id)
-                logger.info("Department deleted from Feishu: %s", code)
-            except Exception as e:
-                logger.error("Failed to delete department from Feishu: %s", e)
-                raise
-
-    async def _find_department_record(self, code: str | None) -> str | None:
-        if not code:
-            return None
-        items = await self.bitable.search_records(
-            self.department_table,
-            filter_str=f'CurrentValue.[部门编码] = "{code}"',
-        )
-        return items[0].get("record_id") if items else None
+        self.employee_table = employee_table
 
     # ─── Employee ───
 
     async def sync_employee_deleted(self, employee_number: str) -> None:
-        if not self._is_enabled() or not self.employee_table:
+        if not self.bitable.app_token or not self.employee_table:
             return
         record_id = await self._find_employee_record(employee_number)
         if record_id:

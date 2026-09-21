@@ -354,12 +354,33 @@ def test_production_summary_route_bound_to_overview_page():
     assert binding.scope_adapter == "production.dashboard"
 
 
+def test_sales_plan_details_get_route_covers_overview_and_sales_plan_pages():
+    """销售计划明细读取同时授权产销计划页与生产概览页。"""
+    binding = page_policy.api_binding_for_route(
+        "GET", "/api/v1/production/sales-plan-details"
+    )
+    assert binding is not None
+    assert "production:overview" in binding.page_keys
+    assert "production:plan:sales-plan" in binding.page_keys
+
+
 def test_plans_get_route_covers_overview_and_sales_plan_pages():
     """/plans 读取同时授权产销计划页与生产概览页，写操作不受影响。"""
     binding = page_policy.api_binding_for_route("GET", "/api/v1/production/plans")
     assert binding is not None
     assert "production:overview" in binding.page_keys
     assert "production:plan:sales-plan" in binding.page_keys
+
+
+def test_sales_plan_details_get_route_covers_overview_page():
+    """销售计划明细读取授权产销计划页与生产概览页（概览产销计划卡按月取数）。"""
+    binding = page_policy.api_binding_for_route(
+        "GET", "/api/v1/production/sales-plan-details"
+    )
+    assert binding is not None
+    assert "production:plan:sales-plan" in binding.page_keys
+    assert "production:overview" in binding.page_keys
+    assert binding.scope_adapter == "production.plan"
 
 
 def test_hr_feishu_apps_route_bound_to_settings_page():

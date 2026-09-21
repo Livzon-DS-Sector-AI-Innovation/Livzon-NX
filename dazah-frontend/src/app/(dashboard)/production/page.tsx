@@ -4,9 +4,9 @@
 // 数据源：最新排产 Excel 存档（当前扎帐周期块）+ 人工检修标注。
 // 实际完成/收率/合格率等指标待实际数据接入后启用（当前显示 --）。
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
+  Alert,
   Card,
   Row,
   Col,
@@ -31,8 +31,6 @@ import {
   SyncOutlined,
   ToolOutlined,
   AlertOutlined,
-  ArrowRightOutlined,
-  ShopOutlined,
   DatabaseOutlined,
   PlusOutlined,
   EditOutlined,
@@ -42,14 +40,14 @@ import ReactECharts from 'echarts-for-react'
 import BoardNavBlocks from '@/components/production/board-nav-blocks'
 import BatchProgressBar from '@/components/production/batch-progress-bar'
 import ProductionSummary from '@/components/production/production-summary'
+import SalesPlanCard from '@/components/production/sales-plan-card'
+import LineStatusConfirmModal from '@/components/production/line-status-confirm-modal'
 import { useProductContextStore } from '@/stores/product-context'
 import {
   hasProductionOverviewStage,
-  hasProductionPagePermission,
   PRODUCTION_PAGE_KEYS,
   useProductionPermissions,
 } from '@/components/production/useProductionPermissions'
-import { useAuthStore } from '@/stores/auth'
 import {
   getFermentationBoard,
   markTankMaintenance,
@@ -59,6 +57,8 @@ import {
   deleteFermentationBatchActual,
   setFermentationMonthCapacity,
   getPlans,
+  getProductionLineStatus,
+  setProductionLineStatus,
 } from '@/actions/production'
 import type {
   FermentationBoard,
@@ -70,80 +70,14 @@ import type {
 
 const { Title, Text } = Typography
 
-// 车间工段首页：与侧边菜单「批次管理 → 车间」保持一致，只列实际存在页面的车间。
-const workshopItems = [
-  {
-    key: '/production/batches/workshop/101-1',
-    pageKey: PRODUCTION_PAGE_KEYS.workshop1011,
-    title: '101一车间（菌种）',
-    description: '摇瓶种子制备全流程',
-    color: '#52c41a',
-  },
-  {
-    key: '/production/batches/workshop/101-2',
-    pageKey: PRODUCTION_PAGE_KEYS.workshop1012,
-    title: '101二车间',
-    description: '发酵数据（林可霉素/霉酚酸/他汀类）',
-    color: '#08979c',
-  },
-  {
-    key: '/production/batches/workshop/102-1',
-    pageKey: PRODUCTION_PAGE_KEYS.workshop1021,
-    title: '102一车间',
-    description: '发酵数据（多拉菌素）',
-    color: '#1d39c4',
-  },
-  {
-    key: '/production/batches/workshop/103/phenylalanine',
-    pageKey: PRODUCTION_PAGE_KEYS.workshop103Phenylalanine,
-    title: '103车间 · 苯丙氨酸',
-    description: '发酵数据（L-苯丙氨酸）',
-    color: '#531dab',
-  },
-  {
-    key: '/production/batches/workshop/103/lovastatin',
-    pageKey: PRODUCTION_PAGE_KEYS.workshop103Lovastatin,
-    title: '103车间 · 洛伐他汀/美伐他汀',
-    description: '发酵数据',
-    color: '#c41d7f',
-  },
-  {
-    key: '/production/batches/workshop/201-2',
-    pageKey: PRODUCTION_PAGE_KEYS.workshop2012,
-    title: '201二车间 · 霉酚酸（MC）',
-    description: '提炼至混粉入库',
-    color: '#d4380d',
-  },
-  {
-    key: '/production/batches/workshop/201-3',
-    pageKey: PRODUCTION_PAGE_KEYS.workshop2013,
-    title: '201三车间 · 多拉菌素（DR）',
-    description: '提炼至混粉入库',
-    color: '#fa8c16',
-  },
-  {
-    key: '/production/batches/workshop/202',
-    pageKey: PRODUCTION_PAGE_KEYS.workshop202,
-    title: '202车间',
-    description: '停产中，暂无生产数据',
-    color: '#8c8c8c',
-  },
-  {
-    key: '/production/batches/workshop/203',
-    pageKey: PRODUCTION_PAGE_KEYS.workshop203,
-    title: '203车间 · L-苯丙氨酸（FA）',
-    description: '发酵放罐至精制回收',
-    color: '#237804',
-  },
-]
-
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000
 
 // 提炼计划产量卡的下拉选择记忆（按月份存 {月份: "车间|产品"}），刷新后恢复
 const PLAN_SELECTION_STORAGE_KEY = 'dazah.production.plan-card.selection'
 
 // 产品 Tab 代码 → 展示名（导航块/看板标题）；系统代码 MC 的展示名
-// 统一为霉酚酸（计划产量行按源数据名过滤，见 PLAN_PRODUCT_NAMES）
+// 统一为霉酚酸（计划产量行按源数据名过滤，见 PLAN_PRODUCT_NAMES）。
+// 氟苯尼考导航块展示短名，看板标题等空间充足处展示全名
 const PRODUCT_NAMES: Record<string, string> = {
   SUMMARY: '汇总',
   FA: 'L-苯丙氨酸',
@@ -151,15 +85,20 @@ const PRODUCT_NAMES: Record<string, string> = {
   DR: '多拉菌素',
   LV: '洛伐他汀',
   MV: '美伐他汀',
+  TY: 'L-色氨酸',
+  FL: '2%氟苯尼考预混剂',
 }
 // 计划产量行的源数据产品名（production_plans.product_name）：
-// 霉酚酸的源数据名不是 MC，计划卡过滤须用源名，与展示名分离
+// 霉酚酸的源数据名不是 MC，计划卡过滤须用源名，与展示名分离。
+// TY/FL 的产销计划源名按产品名录入，待生产计划同步覆盖后自动匹配
 const PLAN_PRODUCT_NAMES: Record<string, string> = {
   FA: 'L-苯丙氨酸',
   MC: '霉酚酸',
   DR: '多拉菌素',
   LV: '洛伐他汀',
   MV: '美伐他汀',
+  TY: 'L-色氨酸',
+  FL: '2%氟苯尼考预混剂',
 }
 
 function fmtDateTime(value?: string | null): string {
@@ -197,18 +136,19 @@ const STATUS_META: Record<string, { label: string; color: string }> = {
 }
 
 export default function ProductionDashboard() {
-  const router = useRouter()
   const { message } = App.useApp()
-  const productionUser = useAuthStore((state) => state.user)
   const { canOperate, canDelete } = useProductionPermissions(PRODUCTION_PAGE_KEYS.overview)
+  // 工段数据权限：发酵模块挂发酵权限，提炼汇总挂提炼权限，收率需双权限；
+  // 概览页授权用户按页面数据范围（production_fermentation/extraction/all）解析
   const canFerm = hasProductionOverviewStage(productionUser, 'fermentation')
   const canExtract = hasProductionOverviewStage(productionUser, 'extraction')
-  const authorizedWorkshopItems = workshopItems.filter((item) =>
-    hasProductionPagePermission(productionUser, item.pageKey, 'access'),
-  )
   const [board, setBoard] = useState<FermentationBoard | null>(null)
   const [boardMessage, setBoardMessage] = useState<string>('')
   const [loading, setLoading] = useState(true)
+  // 产线停产状态：停产产品代码集合（全平台共享，人工切换，不自动恢复）
+  const [haltedLines, setHaltedLines] = useState<string[]>([])
+  // 停产切换确认：pendingHalted 为目标状态（null=关闭）；倒计时在确认框组件内
+  const [haltPending, setHaltPending] = useState<boolean | null>(null)
   // 周期回看：空串 = 今天所在周期；否则为所选周期内任意日期
   const [viewDate, setViewDate] = useState<string>('')
   // 当前产品上下文（导航块切换），看板按此产品取数；
@@ -248,7 +188,14 @@ export default function ProductionDashboard() {
       )
       if (res.code === 200) {
         setBoard(res.data)
-        setBoardMessage(res.data ? '' : res.message || '')
+        // 未覆盖骨架（covered=false）时保留后端提示，卡片以空值兜底渲染
+        setBoardMessage(
+          res.data && res.data.covered === false
+            ? res.message || ''
+            : res.data
+              ? ''
+              : res.message || '',
+        )
       } else {
         setBoardMessage(res.message || '看板数据加载失败')
       }
@@ -265,6 +212,52 @@ export default function ProductionDashboard() {
     const timer = setInterval(() => void loadBoard(), REFRESH_INTERVAL_MS)
     return () => clearInterval(timer)
   }, [loadBoard, isSummaryView])
+
+  // 产线停产状态：进入页面拉一次，切换确认后本地即时更新
+  const loadHaltedLines = useCallback(async () => {
+    try {
+      const res = await getProductionLineStatus()
+      if (res.code === 200 && res.data) {
+        setHaltedLines(res.data.halted ?? [])
+      }
+    } catch {
+      // 状态拉取失败不阻塞看板，仅无法显示停产标记
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadHaltedLines() // eslint-disable-line react-hooks/set-state-in-effect -- 页面初始加载
+  }, [loadHaltedLines])
+
+  // 当前产品是否停产中
+  const isHalted = !isSummaryView && haltedLines.includes(productCode)
+
+  const openHaltConfirm = (target: boolean) => {
+    setHaltPending(target)
+  }
+
+  const applyHaltChange = async () => {
+    if (haltPending === null) return
+    const target = haltPending
+    setHaltPending(null)
+    try {
+      const res = await setProductionLineStatus(target, productCode)
+      if (res.code === 200) {
+        setHaltedLines((prev) =>
+          target
+            ? prev.includes(productCode)
+              ? prev
+              : [...prev, productCode]
+            : prev.filter((code) => code !== productCode),
+        )
+        message.success(res.message || '状态已更新')
+      } else {
+        message.error(res.message || '状态更新失败')
+      }
+    } catch {
+      message.error('状态更新失败')
+    }
+  }
 
   // 提炼计划产量：跟随概览自然月拉生产计划；选择按月记入本地存储，
   // 页面刷新后恢复所选行，仅当该行不在当月数据时才回退第一行
@@ -474,6 +467,11 @@ export default function ProductionDashboard() {
   // 「提炼计划产量」当前选中行（车间+产品，仅当前产品的行）
   const selectedPlan =
     productPlanRows.find((r) => planKey(r) === selectedPlanKey) ?? null
+  // 取数间隙（切产品/切月）内 selectedPlanKey 可能仍是上一产品的行键，
+  // 仅当它属于当前产品行时才回显，避免下拉短暂显示其它产品的「车间|产品」
+  const selectedPlanKeyInProduct = productPlanRows.some(
+    (r) => planKey(r) === selectedPlanKey,
+  )
   // 完成率 = 已出成品 ÷ 当前选中行的计划产量，百分比保留两位小数
   const extractPlanRate =
     extractInboundKg != null && selectedPlan?.planned_yield
@@ -838,6 +836,24 @@ export default function ProductionDashboard() {
   const hasWarn = (board?.alerts || []).some((a) => a.level === 'warn')
   const alertText = (board?.alerts || []).map((a) => a.text).join('　　｜　　')
 
+  // 告警跑马灯恒速：按内容实测宽度换算动画时长（速度 130px/s，最短 8s）。
+  // 轨迹为 100% → -100%（两倍内容宽），故时长 = 2 × 宽度 ÷ 速度
+  const marqueeRef = useRef<HTMLDivElement | null>(null)
+  const [marqueeDuration, setMarqueeDuration] = useState(24)
+  useLayoutEffect(() => {
+    const el = marqueeRef.current
+    if (!el) return
+    const measure = () => {
+      const w = el.scrollWidth
+      if (w > 0) setMarqueeDuration(Math.max(8, (2 * w) / 130))
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [alertText])
+
   return (
     <div className="p-4 flex flex-col gap-3">
       {/* 顶部导航块：第 4 位为当前产品 L-苯丙氨酸，第 5/6 位洛伐他汀/美伐他汀
@@ -856,8 +872,62 @@ export default function ProductionDashboard() {
             <Title level={4} style={{ margin: 0 }}>
               {isSummaryView
                 ? '生产汇总'
-                : `${PRODUCT_NAMES[productCode] ?? PRODUCT_NAMES.FA}生产看板`}
+                : `${PRODUCT_NAMES[productCode] ?? PRODUCT_NAMES.FA}生产线`}
             </Title>
+            {/* 生产线状态：生产中(绿)/停产中(红) 二态切换（仅概览操作权限可改）。
+                选项 label 为带色点节点，选中值与下拉项同款颜色 */}
+            {!isSummaryView && (
+              <Select
+                size="small"
+                style={{ width: 104 }}
+                data-testid="line-status-select"
+                value={isHalted ? 'halted' : 'running'}
+                disabled={!canOperate}
+                onChange={(value) =>
+                  openHaltConfirm(value === 'halted')
+                }
+                options={[
+                  {
+                    value: 'running',
+                    label: (
+                      <span
+                        data-testid="line-status-label:running"
+                        className="flex items-center gap-2"
+                      >
+                        <span
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: 4,
+                            background: '#52c41a',
+                          }}
+                        />
+                        生产中
+                      </span>
+                    ),
+                  },
+                  {
+                    value: 'halted',
+                    label: (
+                      <span
+                        data-testid="line-status-label:halted"
+                        className="flex items-center gap-2"
+                      >
+                        <span
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: 4,
+                            background: '#cf1322',
+                          }}
+                        />
+                        停产中
+                      </span>
+                    ),
+                  },
+                ]}
+              />
+            )}
             <DatePicker
               size="small"
               picker="month"
@@ -888,10 +958,10 @@ export default function ProductionDashboard() {
           </Space>
           <Space size={16}>
             <Text type="secondary">系统时间：{clock}</Text>
-            {!isSummaryView && (
+            {!isSummaryView && !isHalted && (
               <Text type="secondary">数据刷新：5 分钟</Text>
             )}
-            {!isSummaryView && (
+            {!isSummaryView && !isHalted && (
               <>
                 <Button
                   size="small"
@@ -913,10 +983,31 @@ export default function ProductionDashboard() {
         </div>
       </Card>
 
-      {/* 汇总视图：五产线聚合表 + 播报汇总 */}
-      {isSummaryView && <ProductionSummary month={planMonth} />}
+      {/* 停产占位：收起全部看板卡片，整页仅保留标题卡（含状态下拉与恢复入口） */}
+      {isHalted && (
+        <Card variant="borderless" className="shadow-sm">
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              <span style={{ fontSize: 16 }}>
+                该产品生产线停产中
+              </span>
+            }
+          />
+        </Card>
+      )}
 
-      {!isSummaryView && (
+      {/* 汇总视图：五产线聚合表 + 播报汇总 */}
+      {isSummaryView && (
+        <>
+          <ProductionSummary month={planMonth} />
+          {/* 产销计划卡：销售计划执行表（飞书同步），跟随概览月份切换 */}
+          <SalesPlanCard month={planMonth} />
+        </>
+      )}
+
+      {/* 产品看板：停产中整块收起（数据保留在库，恢复生产即原样回来） */}
+      {!isSummaryView && !isHalted && (
       <>
       {/* 告警跑马灯 */}
       <Card
@@ -930,10 +1021,11 @@ export default function ProductionDashboard() {
           />
           <div className="overflow-hidden flex-1">
             <div
+              ref={marqueeRef}
               style={{
                 display: 'inline-block',
                 whiteSpace: 'nowrap',
-                animation: 'board-marquee 24s linear infinite',
+                animation: `board-marquee ${marqueeDuration}s linear infinite`,
                 color: hasWarn ? '#d46b08' : '#389e0d',
               }}
             >
@@ -1014,17 +1106,17 @@ export default function ProductionDashboard() {
         }
       `}</style>
 
-      {/* 主体 */}
+      {/* 主体：卡片框架对所有产品一致，数值按数据有无落位；
+          无排产存档时仅显示警示条，卡片以空值兜底渲染 */}
       {loading && !board ? (
         <Card variant="borderless" className="shadow-sm">
           <Empty description="看板加载中…" />
         </Card>
-      ) : boardMessage && !board ? (
-        <Card variant="borderless" className="shadow-sm">
-          <Empty description={boardMessage} />
-        </Card>
       ) : (
         <>
+          {boardMessage && (
+            <Alert type="warning" showIcon title={boardMessage} />
+          )}
           {canFerm && (
             <>
           {/* KPI 卡片区 */}
@@ -1069,7 +1161,10 @@ export default function ProductionDashboard() {
                           <div style={{ fontSize: 26, fontWeight: 600, lineHeight: 1.35 }}>
                             {card.extra.value}
                           </div>
-                           {card.extra.editable && isCurrent && canOperate && (
+                           {card.extra.editable &&
+                            board?.covered !== false &&
+                            isCurrent &&
+                            canOperate && (
                             <Button
                               type="text"
                               size="small"
@@ -1118,7 +1213,9 @@ export default function ProductionDashboard() {
                         size="small"
                         variant="borderless"
                         className="plan-product-select"
-                        value={selectedPlanKey || undefined}
+                        value={
+                          selectedPlanKeyInProduct ? selectedPlanKey : undefined
+                        }
                         onChange={handlePlanSelect}
                         placeholder="车间 · 产品"
                         style={{ width: 168, fontSize: 12 }}
@@ -1170,7 +1267,9 @@ export default function ProductionDashboard() {
                         <Text type="secondary" style={{ fontSize: 11 }}>
                           {extractInboundKg != null
                             ? `${PRODUCT_NAMES[productCode] ?? PRODUCT_NAMES.FA} · 本月合计(kg)`
-                            : '数据源待接入'}
+                            : board && board.covered !== false
+                              ? '数据源待接入'
+                              : '上传排产后按周期统计'}
                         </Text>
                       </div>
                       <div className="flex-1 min-w-0 pl-3 border-l border-[var(--color-hairline)]">
@@ -1236,7 +1335,7 @@ export default function ProductionDashboard() {
           >
             <div className="flex items-center justify-between flex-wrap gap-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <Text strong>{isCurrent ? '本月批次进度' : '历史批次进度'}</Text>
+                <Text strong>{isCurrent ? '本月发酵进度' : '历史发酵进度'}</Text>
                 {!isCurrent && <Tag color="orange">历史周期</Tag>}
               </div>
               {!capacityMode && isCurrent && (
@@ -1450,39 +1549,13 @@ export default function ProductionDashboard() {
           按当前扎帐月保存；输入 310000 表示 310 吨。留空保存则清除设置。
         </Text>
       </Modal>
-
-      {/* 底部：生产车间入口 */}
-      <Card title="生产车间" variant="borderless" className="shadow-sm">
-        <Row gutter={[12, 12]}>
-          {authorizedWorkshopItems.map((item) => (
-            <Col span={8} key={item.key}>
-              <div
-                data-testid={`workshop-entry:${item.key}`}
-                className="h-full p-4 rounded-lg border border-[var(--color-hairline)] hover:border-[var(--color-primary)] cursor-pointer transition-colors"
-                onClick={() => router.push(item.key)}
-              >
-                <Space align="start">
-                  <div
-                    className="w-10 h-10 rounded-lg flex items-center justify-center text-white text-lg"
-                    style={{ backgroundColor: item.color }}
-                  >
-                    <ShopOutlined />
-                  </div>
-                  <div>
-                    <Text strong className="block">
-                      {item.title}
-                    </Text>
-                    <Text type="secondary" className="text-xs">
-                      {item.description}
-                    </Text>
-                  </div>
-                  <ArrowRightOutlined className="text-[var(--color-muted)] ml-auto" />
-                </Space>
-              </div>
-            </Col>
-          ))}
-        </Row>
-      </Card>
+      {/* 生产线状态切换确认：确认按钮 5 秒倒计时后才可点，取消随时可点 */}
+      <LineStatusConfirmModal
+        productName={PRODUCT_NAMES[productCode] ?? PRODUCT_NAMES.FA}
+        pendingHalted={haltPending}
+        onCancel={() => setHaltPending(null)}
+        onConfirm={() => void applyHaltChange()}
+      />
     </div>
   )
 }

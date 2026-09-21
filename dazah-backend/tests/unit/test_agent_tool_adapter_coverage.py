@@ -151,6 +151,7 @@ async def test_quality_agent_tool_adapters_forward_validated_inputs(
         "quality_feishu_pages",
         "quality_feishu_sync",
         "quality_management",
+        "quality_statistics",
         "validation",
     ):
         double = _ServiceDouble(tuple_sizes=tuple_sizes)

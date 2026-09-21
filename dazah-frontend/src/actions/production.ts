@@ -30,6 +30,7 @@ import type {
   FermentationBatchActual,
   FermentationBatchActualFormData,
   ProductionSummary,
+  SalesPlanDetail,
 } from '@/types/production'
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000'
@@ -160,6 +161,28 @@ export async function getPlans(params: PlanQueryParams = {}) {
 export async function getPlanMonthlySummary(month: string) {
   const endpoint = `/api/v1/production/plans/monthly-summary?month=${encodeURIComponent(month)}`
   return fetchApi<PlanMonthlySummary[]>(endpoint)
+}
+
+// ============ Sales Plan (产销计划 · 销售计划执行表) ============
+
+export async function getSalesPlanDetails(
+  params: {
+    page?: number
+    page_size?: number
+    product_name?: string
+    month?: string
+  } = {},
+) {
+  const searchParams = new URLSearchParams()
+  if (params.page) searchParams.set('page', String(params.page))
+  if (params.page_size) searchParams.set('page_size', String(params.page_size))
+  if (params.product_name)
+    searchParams.set('product_name', params.product_name)
+  if (params.month) searchParams.set('month', params.month)
+  const query = searchParams.toString()
+  return fetchApi<SalesPlanDetail[]>(
+    `/api/v1/production/sales-plan-details${query ? `?${query}` : ''}`,
+  )
 }
 
 export async function getPlan(id: string) {
@@ -555,6 +578,28 @@ export async function setFermentationMonthCapacity(
       method: 'POST',
       headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
       body: JSON.stringify({ planned_capacity_kg: plannedCapacityKg }),
+    },
+  )
+  return response.json()
+}
+
+// ============ Production Line Status (产线停产状态) ============
+
+export async function getProductionLineStatus() {
+  const response = await fetch(
+    `${API_BASE}/api/v1/production/production-line-status`,
+    { headers: await getAuthHeaders() },
+  )
+  return response.json()
+}
+
+export async function setProductionLineStatus(halted: boolean, product: string) {
+  const response = await fetch(
+    `${API_BASE}/api/v1/production/production-line-status?product=${encodeURIComponent(product)}`,
+    {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ halted }),
     },
   )
   return response.json()

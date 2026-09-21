@@ -3,7 +3,7 @@
 import logging
 import re
 from copy import deepcopy
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.quality import repository as repo
 from app.modules.quality.models import Deviation
+from app.modules.quality.service import deviation_cause_analysis
 from app.platform.identity.data_scope import DepartmentScope
 
 logger = logging.getLogger(__name__)
@@ -100,6 +101,91 @@ def _parse_date_value(value: Any) -> date | None:
 
 def _is_empty_row(row_data: dict[str, str]) -> bool:
     return not any(_clean_text(value) for value in row_data.values())
+
+
+_DATE_ONLY_PATTERN = re.compile(r"^\d{4}[./年-]\d{1,2}[./月-]\d{1,2}日?$")
+_DESCRIPTION_DATE_PATTERN = re.compile(
+    r"^\s*(\d{4})[年.\s/-]+(\d{1,2})[月年.\s/-]+(\d{1,2})"
+)
+
+
+def _parse_discovery_date_from_description(description: str) -> datetime | None:
+    """从偏差描述开头的日期文本解析发现日期（登记表描述以发生日期开头）。"""
+    match = _DESCRIPTION_DATE_PATTERN.match(description or "")
+    if not match:
+        return None
+    year, month, day = (int(part) for part in match.groups())
+    if not (2000 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31):
+        return None
+    try:
+        return datetime(year, month, day)
+    except ValueError:
+        return None
+
+
+def _parse_closed_text(text: Any) -> bool:
+    """解析"是否关闭"列：是（未带□勾选框）=已关闭；进行中/否/空=未关闭。
+
+    对齐桌面模板勾选格式：选中项不带□、未选中项带□。
+    """
+    value = str(text or "").strip()
+    if not value or "进行中" in value or "□是" in value:
+        return False
+    return "是" in value
+
+
+def _build_deviation_row_fields(row_data: dict[str, str]) -> dict[str, Any]:
+    """登记表行 → 偏差模型字段（新增/更新/恢复共用）。
+
+    桌面登记表在录中的行会把发现日期误填在"产品名称/批号"列
+    （如 PC-2606001~004），识别为纯日期时归位到发现日期，
+    避免脏数据进入产品字段。
+    """
+    product_batch = row_data.get("产品名称/批号", "")
+    parts = product_batch.split("\n") if product_batch else []
+    affected_items = parts[0].strip() if parts and parts[0].strip() else None
+    batch_number = parts[1].strip() if len(parts) > 1 and parts[1].strip() else None
+
+    has_occurred_before, previous_occurrence_code = _parse_occurred_text(
+        row_data.get("偏差是否曾发生", "")
+    )
+
+    level_text = row_data.get("偏差等级", "")
+    level = {
+        "次要偏差": "minor",
+        "中等偏差": "moderate",
+        "严重偏差": "major",
+    }.get(level_text, level_text.lower() if level_text else None)
+
+    investigation_completed_at = _parse_date(row_data.get("调查完成时间", ""))
+    description = row_data.get("偏差简要描述", "")
+
+    discovery_date = None
+    if affected_items and _DATE_ONLY_PATTERN.match(affected_items):
+        discovery_date = _parse_date(affected_items)
+        affected_items = None
+    if discovery_date is None:
+        discovery_date = _parse_discovery_date_from_description(description)
+
+    is_closed = _parse_closed_text(row_data.get("是否关闭", ""))
+    now = datetime.now(UTC)
+    return {
+        "title": description[:100] or row_data.get("偏差编号", ""),
+        "department": row_data.get("事件部门", ""),
+        "description": description,
+        "discovery_date": discovery_date,
+        "batch_number": batch_number,
+        "affected_items": affected_items,
+        "has_occurred_before": has_occurred_before,
+        "previous_occurrence_code": previous_occurrence_code,
+        "root_cause_analysis": row_data.get("根本原因", ""),
+        "level": level,
+        "corrective_actions": row_data.get("纠正预防措施", ""),
+        "material_disposition": row_data.get("产品/物料处理结果", ""),
+        "investigation_completed_at": investigation_completed_at,
+        "status": "closed" if is_closed else "draft",
+        "status_updated_at": (investigation_completed_at or now) if is_closed else now,
+    }
 
 
 CHANGE_HEADERS = [
@@ -805,6 +891,7 @@ async def confirm_deviation_import(
     update_count = 0
     error_count = 0
     error_details = []
+    affected: list[Deviation] = []
 
     for row_idx, row in enumerate(table.rows[1:], start=2):
         row_data = {
@@ -827,77 +914,17 @@ async def confirm_deviation_import(
                     existing.is_deleted = False
                     existing.deleted_by = None
                     existing.deleted_at = None
-                    product_batch = row_data.get("产品名称/批号", "")
-                    parts = product_batch.split("\n") if product_batch else []
-                    affected_items = parts[0].strip() if parts else None
-                    batch_number = parts[1].strip() if len(parts) > 1 else None
-                    has_occurred_before, previous_occurrence_code = (
-                        _parse_occurred_text(row_data.get("偏差是否曾发生", ""))
+                    await repo.update_deviation(
+                        db, existing, _build_deviation_row_fields(row_data)
                     )
-                    level_text = row_data.get("偏差等级", "")
-                    level = {
-                        "次要偏差": "minor",
-                        "中等偏差": "moderate",
-                        "严重偏差": "major",
-                    }.get(level_text, level_text.lower() if level_text else None)
-                    update_data = {
-                        "title": row_data.get("偏差简要描述", "")[:100]
-                        or deviation_code,
-                        "department": row_data.get("事件部门", ""),
-                        "description": row_data.get("偏差简要描述", ""),
-                        "batch_number": batch_number,
-                        "affected_items": affected_items,
-                        "has_occurred_before": has_occurred_before,
-                        "previous_occurrence_code": previous_occurrence_code,
-                        "root_cause_analysis": row_data.get("根本原因", ""),
-                        "level": level,
-                        "corrective_actions": row_data.get("纠正预防措施", ""),
-                        "material_disposition": row_data.get("产品/物料处理结果", ""),
-                        "investigation_completed_at": _parse_date(
-                            row_data.get("调查完成时间", "")
-                        ),
-                    }
-                    await repo.update_deviation(db, existing, update_data)
+                    affected.append(existing)
                     update_count += 1
                 elif update_existing:
                     # Update existing record
-                    product_batch = row_data.get("产品名称/批号", "")
-                    parts = product_batch.split("\n") if product_batch else []
-                    affected_items = parts[0].strip() if len(parts) > 0 else None
-                    batch_number = parts[1].strip() if len(parts) > 1 else None
-
-                    has_occurred_before, previous_occurrence_code = (
-                        _parse_occurred_text(row_data.get("偏差是否曾发生", ""))
+                    await repo.update_deviation(
+                        db, existing, _build_deviation_row_fields(row_data)
                     )
-
-                    level_text = row_data.get("偏差等级", "")
-                    level_map = {
-                        "次要偏差": "minor",
-                        "中等偏差": "moderate",
-                        "严重偏差": "major",
-                    }
-                    level = level_map.get(
-                        level_text, level_text.lower() if level_text else None
-                    )
-
-                    update_data = {
-                        "title": row_data.get("偏差简要描述", "")[:100]
-                        or deviation_code,
-                        "department": row_data.get("事件部门", ""),
-                        "description": row_data.get("偏差简要描述", ""),
-                        "batch_number": batch_number,
-                        "affected_items": affected_items,
-                        "has_occurred_before": has_occurred_before,
-                        "previous_occurrence_code": previous_occurrence_code,
-                        "root_cause_analysis": row_data.get("根本原因", ""),
-                        "level": level,
-                        "corrective_actions": row_data.get("纠正预防措施", ""),
-                        "material_disposition": row_data.get("产品/物料处理结果", ""),
-                        "investigation_completed_at": _parse_date(
-                            row_data.get("调查完成时间", "")
-                        ),
-                    }
-                    await repo.update_deviation(db, existing, update_data)
+                    affected.append(existing)
                     update_count += 1
                 elif skip_duplicates:
                     skip_count += 1
@@ -908,54 +935,26 @@ async def confirm_deviation_import(
                     )
                 continue
 
-            # Parse 产品名称/批号
-            product_batch = row_data.get("产品名称/批号", "")
-            parts = product_batch.split("\n") if product_batch else []
-            affected_items = parts[0].strip() if len(parts) > 0 else None
-            batch_number = parts[1].strip() if len(parts) > 1 else None
-
-            # Parse 偏差是否曾发生 (format: "□是 编号：\n否" / "是 编号：PC-xxx\n□否")
-            has_occurred_before, previous_occurrence_code = _parse_occurred_text(
-                row_data.get("偏差是否曾发生", "")
-            )
-
-            # Parse 偏差等级
-            level_text = row_data.get("偏差等级", "")
-            level_map = {
-                "次要偏差": "minor",
-                "中等偏差": "moderate",
-                "严重偏差": "major",
-            }
-            level = level_map.get(
-                level_text, level_text.lower() if level_text else None
-            )
-
-            data = {
-                "deviation_code": deviation_code,
-                "title": row_data.get("偏差简要描述", "")[:100] or deviation_code,
-                "department": row_data.get("事件部门", ""),
-                "description": row_data.get("偏差简要描述", ""),
-                "batch_number": batch_number,
-                "affected_items": affected_items,
-                "has_occurred_before": has_occurred_before,
-                "previous_occurrence_code": previous_occurrence_code,
-                "root_cause_analysis": row_data.get("根本原因", ""),
-                "level": level,
-                "corrective_actions": row_data.get("纠正预防措施", ""),
-                "material_disposition": row_data.get("产品/物料处理结果", ""),
-                "investigation_completed_at": _parse_date(
-                    row_data.get("调查完成时间", "")
-                ),
-                "status": "draft",
-            }
-
-            await repo.create_deviation(db, data)
+            data = _build_deviation_row_fields(row_data)
+            data["deviation_code"] = deviation_code
+            deviation = await repo.create_deviation(db, data)
+            affected.append(deviation)
             success_count += 1
         except Exception as e:
             error_count += 1
             error_details.append({"row": row_idx, "error": str(e)})
 
     await db.commit()
+
+    if affected:
+        try:
+            # 归类与部门推导属于辅助增强：AI 优先、关键词兜底，失败不影响导入结果，
+            # 缺口由统计接口懒加载补齐
+            await deviation_cause_analysis.fill_missing_analysis(
+                db, affected, include_department=True
+            )
+        except Exception:
+            logger.exception("偏差导入后根因归类补充失败")
 
     return {
         "success_count": success_count,

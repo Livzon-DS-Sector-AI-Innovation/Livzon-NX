@@ -2,7 +2,13 @@ import { fetchNewOnboardingRecordsServer } from '@/lib/api/server/hr'
 import { OnboardingClient } from '@/components/hr'
 
 export default async function NewOnboardingPage() {
-  const res = await fetchNewOnboardingRecordsServer({ page: 1, page_size: 20 })
+  let res
+  try {
+    res = await fetchNewOnboardingRecordsServer({ page: 1, page_size: 20 })
+  } catch {
+    // 后端不可用时使用空数据初始化，客户端会自动重试
+    res = { data: [], meta: { total: 0 } }
+  }
 
   return (
     <div className="space-y-4">

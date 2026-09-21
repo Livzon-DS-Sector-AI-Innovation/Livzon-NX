@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { App, Form, Input, Modal, Select } from 'antd'
+import { App, Avatar, Form, Input, Modal, Select } from 'antd'
+import { UserOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { fetchQualityPersonDirectory } from '@/lib/api/client/quality'
 import { createDeviationReportRecord } from '@/actions/quality-deviation'
@@ -125,6 +126,23 @@ export function CreateDeviationReportRecordModal({
             options={contactOptions}
             showSearch
             optionFilterProp="label"
+            optionRender={(option) => {
+              const contact = contacts.find((c) => c.open_id === option.value)
+              if (!contact) return <span>{option.label}</span>
+              return (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Avatar
+                    size={24}
+                    src={contact.avatar_url || undefined}
+                    style={{ backgroundColor: contact.avatar_url ? 'transparent' : undefined, flexShrink: 0, fontSize: 12, fontWeight: 700 }}
+                    icon={!contact.avatar_url ? <UserOutlined /> : undefined}
+                  >
+                    {!contact.avatar_url ? (contact.name || '').charAt(0) : undefined}
+                  </Avatar>
+                  <span>{option.label}</span>
+                </div>
+              )
+            }}
           />
         </Form.Item>
 

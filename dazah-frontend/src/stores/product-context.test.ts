@@ -44,6 +44,19 @@ describe('product context store', () => {
     expect(useProductContextStore.getState().productCode).toBe('SUMMARY')
   })
 
+  it('accepts the new TY/FL product tabs persisted on mount', () => {
+    window.localStorage.setItem('dazah.production.product-context', 'TY')
+    restoreProductContext()
+    expect(useProductContextStore.getState().productCode).toBe('TY')
+
+    useProductContextStore.getState().setProductCode('FL')
+    expect(
+      window.localStorage.getItem('dazah.production.product-context'),
+    ).toBe('FL')
+    restoreProductContext()
+    expect(useProductContextStore.getState().productCode).toBe('FL')
+  })
+
   it('keeps the default when storage is unavailable', () => {
     const getItem = vi
       .spyOn(Storage.prototype, 'getItem')

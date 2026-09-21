@@ -209,3 +209,38 @@ def test_tool_schema_has_only_progressive_actions() -> None:
     action = dazah_platform.DAZAH_TOOL_SCHEMA["parameters"]["properties"]["action"]
     assert action["enum"] == ["search", "describe", "execute"]
     assert dazah_platform.DAZAH_TOOL_SCHEMA["parameters"]["required"] == ["action"]
+
+
+def test_backend_openapi_keeps_deviation_statistics_tool_contract() -> None:
+    """偏差统计目录契约：dazah_tool describe/execute 依赖后端 OpenAPI 形状。
+
+    人机料法环口径字段（majorCount / rootCauseDistribution 等）与旧版
+    statusDistribution/stepBreakdown 的移除都必须在此显式钉住，避免后端
+    统计口径回退时 Hermes 侧无感知。
+    """
+
+    openapi_path = Path(__file__).parents[2] / "dazah-backend" / "openapi.json"
+    document = json.loads(openapi_path.read_text(encoding="utf-8"))
+
+    operation = document["paths"]["/api/v1/quality/statistics/deviations"]["get"]
+    assert operation["operationId"].startswith("get_deviation_statistics")
+    assert "200" in operation["responses"]
+
+    schemas = document["components"]["schemas"]
+    properties = schemas["DeviationStatistics"]["properties"]
+    assert set(properties) == {
+        "total",
+        "closedCount",
+        "majorCount",
+        "levelDistribution",
+        "departmentDistribution",
+        "rootCauseDistribution",
+        "monthlyTrend",
+    }
+    assert properties["rootCauseDistribution"]["items"]["$ref"].endswith(
+        "StatDistributionItem"
+    )
+    item_properties = schemas["StatDistributionItem"]["properties"]
+    assert set(item_properties) == {"name", "count"}
+    trend_properties = schemas["MonthlyTrendPoint"]["properties"]
+    assert set(trend_properties) == {"month", "count"}

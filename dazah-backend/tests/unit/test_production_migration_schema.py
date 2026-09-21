@@ -564,3 +564,103 @@ def test_rename_and_rollout_merge_migration_chain() -> None:
     assert set(merge.down_revision) == {"c9d400000036", "c9d400000037"}
     assert merge.upgrade() is None
     assert merge.downgrade() is None
+
+
+def test_sales_plan_data_month_migration_adds_column_and_index(
+    monkeypatch: Any,
+) -> None:
+    """data_month 迁移：明细表加可空月份列与普通索引，downgrade 逆序回收。"""
+    migration = _load_migration(
+        PRODUCT_CODE_MIGRATION_PATH.parent
+        / "c9d400000047_add_sales_plan_details_data_month.py",
+        "sales_plan_data_month_migration",
+    )
+    added: list[tuple[str, str, dict[str, Any]]] = []
+    dropped: list[tuple[str, str]] = []
+    created_indexes: list[dict[str, Any]] = []
+    dropped_indexes: list[str] = []
+
+    def _add(table: str, column: sa.Column, **kwargs: Any) -> None:
+        added.append((table, column.name, kwargs))
+
+    monkeypatch.setattr(migration.op, "add_column", _add)
+    monkeypatch.setattr(
+        migration.op,
+        "drop_column",
+        lambda table, column, **kw: dropped.append((table, column)),
+    )
+    monkeypatch.setattr(
+        migration.op,
+        "create_index",
+        lambda name, table, columns, **kwargs: created_indexes.append(
+            {
+                "name": str(name),
+                "columns": list(columns),
+                "unique": bool(kwargs.get("unique")),
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        migration.op,
+        "drop_index",
+        lambda name, table_name, **kw: dropped_indexes.append(str(name)),
+    )
+
+    migration.upgrade()
+    assert added == [("sales_plan_details", "data_month", {"schema": "production"})]
+    assert created_indexes == [
+        {
+            "name": "ix_sales_plan_data_month",
+            "columns": ["data_month"],
+            "unique": False,
+        }
+    ]
+
+    migration.downgrade()
+    assert dropped_indexes == ["ix_sales_plan_data_month"]
+    assert dropped == [("sales_plan_details", "data_month")]
+
+
+def test_sales_plan_source_table_name_migration_adds_and_drops(
+    monkeypatch: Any,
+) -> None:
+    added, dropped = _run_add_column_migration(
+        monkeypatch,
+        PRODUCT_CODE_MIGRATION_PATH.parent
+        / "c9d400000052_add_sales_plan_details_source_table_name.py",
+        "sales_plan_source_table_name_migration",
+    )
+    assert added == [
+        ("sales_plan_details", "source_table_name", {"schema": "production"})
+    ]
+    assert dropped == [("sales_plan_details", "source_table_name")]
+
+
+def test_production_line_status_migration_chain_and_downgrade(
+    monkeypatch: Any,
+) -> None:
+    migration = _load_migration(
+        PRODUCT_CODE_MIGRATION_PATH.parent
+        / "c9d400000053_add_production_line_status.py",
+        "production_line_status_migration",
+    )
+    # 链路：053 接在源表名迁移之后（文件名 052 为历史命名残留）
+    assert migration.revision == "c9d400000053"
+    assert migration.down_revision == "c9d400000052"
+
+    created: list[str] = []
+    dropped: list[str] = []
+    monkeypatch.setattr(
+        migration.op,
+        "create_table",
+        lambda name, *a, **kw: created.append(str(name)),
+    )
+    monkeypatch.setattr(
+        migration.op,
+        "drop_table",
+        lambda name, *a, **kw: dropped.append(str(name)),
+    )
+    migration.upgrade()
+    assert created == ["production_line_status"]
+    migration.downgrade()
+    assert dropped == ["production_line_status"]

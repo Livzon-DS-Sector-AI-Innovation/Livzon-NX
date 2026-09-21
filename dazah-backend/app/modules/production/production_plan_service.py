@@ -1,5 +1,6 @@
 """Sync Feishu data to production tables — target router."""
 import logging
+import re
 from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -29,11 +30,12 @@ PLAN_FIELD_MAP = {
 }
 
 # ── 销售计划执行表飞书字段映射 ──
+# “<上一年>年当月发货量”为同比参照列，列名中的年份随年份滚动，
+# 不放入静态映射，同步时按动态年份匹配（见 _sync_sales_plan）。
 SALES_FIELD_MAP = {
     "产品名称": "product_name",
     "单位": "unit",
     "上月已发货未开票": "last_month_delivered_uninvoiced",
-    "2025年当月发货量": "current_year_delivered",
     "本月计划发货量": "month_planned_delivery",
     "本月已发货量": "month_delivered_qty",
     "未发货量": "undelivered_qty",
@@ -45,6 +47,22 @@ SALES_FIELD_MAP = {
     "本月底库存": "month_end_inventory",
     "备注": "remarks",
 }
+
+
+def _sales_plan_data_month(table_name: str, today: date | None = None) -> str:
+    """从源数据表名解析数据月份（YYYY-MM）。
+
+    表名仅含月份（如“5月份销售计划执行表”→ 5 月），年份取同步时
+    当前年；解析失败回退当前月。
+    """
+    now = today or date.today()
+    match = re.search(r"(\d{1,2})月", table_name or "")
+    month = (
+        int(match.group(1))
+        if match and 1 <= int(match.group(1)) <= 12
+        else now.month
+    )
+    return f"{now.year}-{month:02d}"
 
 SYNC_TARGETS = {
     "production_plan": "生产计划",
@@ -203,11 +221,35 @@ async def _sync_production_plan(
 async def _sync_sales_plan(
     config: ProductionFeishuConfig, session: AsyncSession
 ) -> dict[str, Any]:
-    """从飞书同步销售计划执行表数据"""
+    """从飞书同步销售计划执行表数据（仅同步多维表格中第一个数据表）。
+
+    数据月份从源数据表名解析（如“5月份销售计划执行表”→ 当年-05），
+    各月快照独立保留：产品 + 数据月份为更新键，不再跨月覆盖。
+    """
     app_secret = decrypt_secret(config.encrypted_app_secret)
     client = ProductionFeishuClient(
         app_id=config.app_id, app_secret=app_secret, app_token=config.bitable_app_token
     )
+
+    tables = await client.list_tables()
+    if not tables:
+        raise RuntimeError("多维表格中未找到数据表，无法同步销售计划")
+    configured_table_id = (config.table_id or "").strip()
+    # 数据表 ID 留空时取多维表格中第一个数据表（即当月执行表）
+    table = (
+        next(
+            (t for t in tables if t.get("table_id") == configured_table_id),
+            None,
+        )
+        if configured_table_id
+        else None
+    ) or tables[0]
+    table_id = str(table["table_id"])
+    data_month = _sales_plan_data_month(str(table.get("name") or ""))
+    # 记录来源数据表名：随每行落库，前端据此展示真实来源（如“5月份销售计划执行表”）
+    source_table_name = str(table.get("name") or "").strip() or None
+    # “<上一年>年当月发货量”为同比参照列，列名随年份滚动，按动态年份匹配
+    prev_year_delivery_col = f"{date.today().year - 1}年当月发货量"
 
     created = 0
     updated = 0
@@ -228,7 +270,7 @@ async def _sync_sales_plan(
     }
 
     while True:
-        result = await client.list_records(config.table_id, page_token=page_token)
+        result = await client.list_records(table_id, page_token=page_token)
         for item in result["items"]:
             fields = item.get("fields") or {}
             mapped: dict[str, Any] = {}
@@ -238,6 +280,9 @@ async def _sync_sales_plan(
                     mapped[db_name] = _extract_number(val)
                 else:
                     mapped[db_name] = _extract_text(val)
+            mapped["current_year_delivered"] = _extract_number(
+                fields.get(prev_year_delivery_col)
+            )
 
             product_name = mapped.get("product_name") or config.product_name
             if not product_name:
@@ -246,12 +291,15 @@ async def _sync_sales_plan(
             existing = await session.execute(
                 select(SalesPlanDetail).where(
                     SalesPlanDetail.product_name == product_name,
+                    SalesPlanDetail.data_month == data_month,
                     SalesPlanDetail.is_deleted.is_(False),
                 )
             )
             record = existing.scalar_one_or_none()
             mapped["product_name"] = product_name
             mapped["source"] = "feishu"
+            mapped["data_month"] = data_month
+            mapped["source_table_name"] = source_table_name
 
             if record:
                 for k, v in mapped.items():
@@ -266,8 +314,19 @@ async def _sync_sales_plan(
             break
         page_token = result.get("page_token")
 
-    logger.info("销售计划同步完成: created=%s, updated=%s", created, updated)
-    return {"created": created, "updated": updated, "product": config.product_name}
+    logger.info(
+        "销售计划同步完成: data_month=%s, table=%s, created=%s, updated=%s",
+        data_month,
+        table.get("name"),
+        created,
+        updated,
+    )
+    return {
+        "created": created,
+        "updated": updated,
+        "product": config.product_name,
+        "data_month": data_month,
+    }
 
 
 async def sync_config_by_target(

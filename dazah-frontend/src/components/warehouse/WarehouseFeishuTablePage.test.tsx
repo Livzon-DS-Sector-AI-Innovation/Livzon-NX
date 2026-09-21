@@ -17,6 +17,34 @@ const mocks = vi.hoisted(() => ({
   fetchWarehouseMaterialPage: vi.fn(),
   fetchWarehouseRecordDetail: vi.fn(),
   fetchWarehousePersonAvatarMap: vi.fn(async () => ({})),
+  fetchWarehousePageFormLinks: vi.fn(async (pageKey: string) =>
+    ({
+      'raw-ledger': {
+        inbound_form_url: 'https://www.feishu.cn/share/base/form/shrcn_inbound_raw',
+        outbound_form_url: 'https://www.feishu.cn/share/base/form/shrcn_outbound_raw',
+      },
+      'liquid-raw-inbound': {
+        inbound_form_url: 'https://www.feishu.cn/share/base/form/shrcn_liquid_raw',
+        outbound_form_url: null,
+      },
+      'liquid-sugar-inbound': {
+        inbound_form_url: 'https://www.feishu.cn/share/base/form/shrcn_liquid_sugar',
+        outbound_form_url: null,
+      },
+      'inbound-ledger': {
+        inbound_form_url: 'https://www.feishu.cn/share/base/form/shrcn_inbound_ledger',
+        outbound_form_url: null,
+      },
+      'packaging-ledger': {
+        inbound_form_url: null,
+        outbound_form_url: 'https://www.feishu.cn/share/base/form/shrcn_pkg_out',
+      },
+      'product-inbound-detail': {
+        inbound_form_url: 'https://www.feishu.cn/share/base/form/shrcn_pid',
+        outbound_form_url: null,
+      },
+    })[pageKey] ?? { inbound_form_url: null, outbound_form_url: null }
+  ),
   updateWarehouseRecordAction: vi.fn(),
   deleteWarehouseRecordAction: vi.fn(),
 }))
@@ -31,6 +59,7 @@ vi.mock('@/lib/api/client/warehouse', () => ({
   fetchWarehouseMaterialPage: mocks.fetchWarehouseMaterialPage,
   fetchWarehouseRecordDetail: mocks.fetchWarehouseRecordDetail,
   fetchWarehousePersonAvatarMap: mocks.fetchWarehousePersonAvatarMap,
+  fetchWarehousePageFormLinks: mocks.fetchWarehousePageFormLinks,
 }))
 vi.mock('@/actions/warehouse', () => ({
   deleteWarehouseRecordAction: mocks.deleteWarehouseRecordAction,
@@ -125,6 +154,7 @@ vi.mock('antd', async () => {
     Modal,
     Popconfirm,
     Select,
+    Skeleton: ({ children }: { children?: ReactNode }) => React.createElement('div', null, children),
     Space: Wrapper,
     Spin: Wrapper,
     Statistic,
@@ -353,15 +383,17 @@ describe('WarehouseFeishuTablePage', () => {
     expect(button('删除记录')).toBeDefined()
   })
 
-  it('covers warehouse filter, projection, grouping, and display helpers', () => {
-    expect(resolveInoutLinks('raw-ledger')?.inbound).toContain('feishu.cn')
-    expect(resolveInoutLinks('unknown')).toBeNull()
-    // 液体入库两页 + 原辅料/包材表单换新链接（2026-09）
-    expect(resolveInoutLinks('liquid-raw-inbound')?.inbound).toContain('shrcnfWaTJinJrjFh0hcqvYG0De')
-    expect(resolveInoutLinks('liquid-sugar-inbound')?.inbound).toContain('shrcnPdocHXYzag4Uyj0biU9bYc')
-    expect(resolveInoutLinks('inbound-ledger')?.inbound).toContain('shrcnLl9xrz5e60vRG4P8Cy85FC')
-    expect(resolveInoutLinks('raw-ledger')?.outbound).toContain('shrcnsJ8U9aoOqqEBS5b1mpG2Zd')
-    expect(resolveInoutLinks('packaging-ledger')?.outbound).toContain('shrcnOZBGw46qWth2auB1F09kNd')
+  it('covers warehouse filter, projection, grouping, and display helpers', async () => {
+    const links = await mocks.fetchWarehousePageFormLinks('raw-ledger')
+    expect(resolveInoutLinks(links)?.inbound).toContain('feishu.cn')
+    expect(resolveInoutLinks(null)).toBeNull()
+    expect(resolveInoutLinks({ inbound_form_url: null, outbound_form_url: null })).toBeNull()
+    // 表单链接来自仓储设置-页面映射（DB 配置），未配置的入口返回 null
+    expect(resolveInoutLinks(await mocks.fetchWarehousePageFormLinks('liquid-raw-inbound'))?.inbound).toContain('shrcn_liquid_raw')
+    expect(resolveInoutLinks(await mocks.fetchWarehousePageFormLinks('liquid-sugar-inbound'))?.inbound).toContain('shrcn_liquid_sugar')
+    expect(resolveInoutLinks(await mocks.fetchWarehousePageFormLinks('inbound-ledger'))?.inbound).toContain('shrcn_inbound_ledger')
+    expect(resolveInoutLinks(links)?.outbound).toContain('shrcn_outbound_raw')
+    expect(resolveInoutLinks(await mocks.fetchWarehousePageFormLinks('packaging-ledger'))?.outbound).toContain('shrcn_pkg_out')
     expect(isDateLikeColumn('入库日期')).toBe(true)
     expect(isDateLikeColumn('物料名称')).toBe(false)
     expect(formatDateValue(null as never)).toBeNull()
@@ -498,6 +530,43 @@ describe('WarehouseFeishuTablePage', () => {
     expect(mocks.fetchWarehouseMaterialPage).toHaveBeenCalled()
   })
 
+  it('refetches the local snapshot after save/delete even without sync permission', async () => {
+    // 不授予 sync_config：旧实现在保存/删除后调 incremental 刷新会被权限门控拦下，
+    // 页面停留旧数据；新实现后端已写穿本地镜像，保存/删除后直接重读快照
+    authorize('operate', ['delete'])
+    await mount(tableData, 'product-summary')
+    mocks.fetchWarehouseMaterialPage.mockClear()
+    const buttons = () => Array.from(container.querySelectorAll('button'))
+    const findButton = (text: string) => buttons().find((button) => button.textContent?.includes(text))
+    const flush = () =>
+      act(async () => {
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+    await act(async () => findButton('详情')?.click())
+    await flush()
+    await act(async () => findButton('编辑')?.click())
+    await act(async () => findButton('保存修改')?.click())
+    await flush()
+
+    expect(mocks.updateWarehouseRecordAction).toHaveBeenCalledWith('product-summary', 'row-1', expect.any(Object))
+    let lastCall = mocks.fetchWarehouseMaterialPage.mock.calls.at(-1)
+    expect(lastCall?.[1]?.force).toBeFalsy()
+    expect(lastCall?.[1]?.incremental).toBeFalsy()
+
+    await act(async () => findButton('详情')?.click())
+    await flush()
+    await act(async () => findButton('删除记录')?.click())
+    await act(async () => findButton('确认删除')?.click())
+    await flush()
+
+    expect(mocks.deleteWarehouseRecordAction).toHaveBeenCalledWith('product-summary', 'row-1')
+    lastCall = mocks.fetchWarehouseMaterialPage.mock.calls.at(-1)
+    expect(lastCall?.[1]?.force).toBeFalsy()
+    expect(lastCall?.[1]?.incremental).toBeFalsy()
+  })
+
   it('renders snapshot/no-permission and error branches without exposing write controls', async () => {
     authorize('query')
     mocks.hasAny.mockReturnValue(false)
@@ -563,7 +632,8 @@ describe('WarehouseFeishuTablePage', () => {
 
   it('renders product inbound detail with projected columns, date-desc order, and 新增 button', async () => {
     mocks.searchParams = new URLSearchParams()
-    expect(resolveInoutLinks('product-inbound-detail')?.inboundLabel).toBe('新增')
+    const inboundLinks = await mocks.fetchWarehousePageFormLinks('product-inbound-detail')
+    expect(resolveInoutLinks(inboundLinks)).toMatchObject({ inbound: expect.any(String) })
 
     const detailData = {
       page_key: 'product-inbound-detail',
@@ -648,7 +718,8 @@ describe('WarehouseFeishuTablePage', () => {
     expect(laterRow).toBeDefined()
     expect(firstRowIndex).toBeLessThan(bodyRows.indexOf(laterRow!))
 
-    // 入库登记按钮按 inboundLabel 显示为「新增」
+    // 入库登记按钮按 inboundLabel 显示为「新增」（等待表单链接配置查询就绪）
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
     const buttons = Array.from(container.querySelectorAll('button'))
     expect(buttons.some((button) => button.textContent === '新增')).toBe(true)
     expect(buttons.some((button) => button.textContent === '入库登记')).toBe(false)

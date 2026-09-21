@@ -833,9 +833,32 @@ PAGE_API_BINDINGS += tuple(
     for method, suffix, permission, action in (
         ("GET", "", "query", None),
         ("GET", "/records/{record_id}", "query", None),
+        ("GET", "/form-links", "query", None),
         ("PUT", "/records/{record_id}", "operate", None),
         ("DELETE", "/records/{record_id}", "operate", "delete"),
     )
+)
+
+# 仓储首页快捷表单卡：读取已配置表单链接的页面映射。
+# 首页自身不是注册业务页（Referer 派生不出页面 key），由前端显式携带
+# inbound-ledger 的页面上下文（快捷卡全部是这些台账的入口）。
+PAGE_API_BINDINGS += (
+    PageApiBinding(
+        route_path="/api/v1/warehouse/home-quick-form-links",
+        method="GET",
+        page_keys=(
+            "warehouse:materials:inbound-ledger",
+            "warehouse:materials:raw-ledger",
+            "warehouse:materials:packaging-ledger",
+            "warehouse:materials:liquid-raw-inbound",
+            "warehouse:materials:liquid-sugar-inbound",
+            "warehouse:product-inventory:product-inbound-ledger",
+            "warehouse:product-inventory:product-outbound-ledger",
+        ),
+        permission="query",
+        sensitive_action=None,
+        scope_adapter="warehouse.material_page_department",
+    ),
 )
 
 PAGE_API_BINDINGS += tuple(
@@ -1140,6 +1163,21 @@ PAGE_API_BINDINGS += _module_api_bindings(
 PAGE_API_BINDINGS += _module_api_bindings(
     "quality",
     [
+        # 通用拉取接口：各台账页的「从飞书拉取」按钮都会调用（entity_code 区分实体）。
+        (
+            "POST",
+            "/feishu-sync/pull",
+            (
+                "quality:quality-settings",
+                "quality:deviations:deviation-records",
+                "quality:deviations:deviation-investigations",
+            ),
+            "operate",
+            "sync_config",
+            "not_applicable",
+        ),
+    ]
+    + [
         (
             method,
             path,
@@ -1180,7 +1218,6 @@ PAGE_API_BINDINGS += _module_api_bindings(
                 "operate",
                 "sync_config",
             ),
-            ("POST", "/feishu-sync/pull", "operate", "sync_config"),
             ("GET", "/feishu-sync/conflicts", "query", None),
         )
     ],
@@ -1272,7 +1309,8 @@ def _quality_remaining_api_bindings() -> tuple[PageApiBinding, ...]:
         shared_read_pages = {
             "capas": capa_ledger + capa_plans,
             "deviation-report-records": deviation_records
-            + deviation_investigations,
+            + deviation_investigations
+            + deviation_workbench,
             "feishu/validations": validation_plans + validation_execution_pages,
         }
         shared = shared_read_pages.get(suffix) if method == "GET" else None
@@ -1365,6 +1403,18 @@ def _quality_remaining_api_bindings() -> tuple[PageApiBinding, ...]:
                 "outbound": item_outbound,
             }[second]
         if first == "oos-oot":
+            # 台账 GET 允许调查推送页跨页读取（联动下拉）；导出与写操作仍限台账页
+            # （调查推送页未登记 delete/sensitive_export，并入会未过高风险动作校验）。
+            if (
+                method == "GET"
+                and second in ("oos-ledger", "oot-ledger")
+                and not suffix.endswith("/export")
+            ):
+                return (
+                    oos_ledger + oos_push
+                    if second == "oos-ledger"
+                    else oot_ledger + oos_push
+                )
             return {
                 "investigation-push-records": oos_push,
                 "oos-ledger": oos_ledger,
@@ -1620,13 +1670,26 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
     # 计划列表 GET：概览页（production:overview）提炼计划产量卡按自然月
     # 读取产销计划，与排产计划页共用同一接口；写操作仅限排产计划页
     add("GET", "/plans", sales_plan_page + overview, scope_adapter="production.plan")
-    add_many(
+    add(
         "GET",
-        ("/plans/{plan_id}", "/sales-plan-details"),
+        "/plans/{plan_id}",
         sales_plan_page,
         scope_adapter="production.plan",
     )
-    # 生产汇总：五产线发酵/提炼关键指标聚合（只读），由生产概览页调用
+    # 销售计划明细 GET：概览页（production:overview）产销计划卡按概览月份
+    # 读取销售计划执行表，与产销计划页共用同一接口；写操作仍仅限产销计划页
+    add(
+        "GET",
+        "/sales-plan-details",
+        sales_plan_page + overview,
+        scope_adapter="production.plan",
+    )
+    # 停产状态：GET 供概览/排产页导航块与看板渲染（读）；POST 设置/解除停产
+    # 仅概览页操作权限（前端切换时二次确认 + 5 秒倒计时）
+    add("GET", "/production-line-status", overview + scheduling_page)
+    add("POST", "/production-line-status", overview, "operate")
+    # 生产汇总：五产线发酵/提炼关键指标聚合（只读），由生产概览页调用；
+    # 当前月汇总服务端隐藏停产产线（历史月份照常显示）
     add(
         "GET",
         "/production-summary",
@@ -4111,6 +4174,7 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
         (
             "/onboarding",
             "/onboarding-records",
+            "/onboarding-records/form-url",
             "/onboarding-records/sync-status",
             "/onboarding-records/{record_id}",
             "/onboarding/names",

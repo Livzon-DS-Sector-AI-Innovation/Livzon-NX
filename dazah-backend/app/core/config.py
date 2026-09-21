@@ -129,13 +129,13 @@ class Settings(BaseSettings):
     BOOTSTRAP_USER_EMAIL: str = ""
     SSO_ADMIN_IDENTIFIERS: str = ""
 
-    # Feishu Bitable — HR 模块多维表格同步
+    # Feishu Bitable — HR 模块多维表格同步（表绑定现以各模块设置页 DB 配置
+    # 为准，以下 env 仅作为设置页预填/老厂离职等历史通道保留）
     FEISHU_BOT_NAME: str = ""
     FEISHU_BITABLE_APP_TOKEN: str = ""
     FEISHU_BITABLE_EMPLOYEE_TABLE_ID: str = ""
     FEISHU_BITABLE_DEPARTMENT_TABLE_ID: str = ""
     FEISHU_BITABLE_OFFBOARDING_TABLE_ID: str = ""
-    FEISHU_BITABLE_ONBOARDING_TABLE_ID: str = ""
     FEISHU_BITABLE_DEPARTURE_TABLE_ID: str = ""
     FEISHU_BITABLE_APPROVAL_TABLE_ID: str = ""
     FEISHU_BITABLE_CONTRACT_MANAGEMENT_TABLE_ID: str = ""
