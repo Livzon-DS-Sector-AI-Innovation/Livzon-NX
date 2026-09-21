@@ -61,7 +61,7 @@ def test_reviewed_department_pages_use_record_ownership_families() -> None:
 def test_only_previously_global_pages_are_converted() -> None:
     migration_path = (
         Path(__file__).resolve().parents[3]
-        / "alembic/versions/c9d400000047_page_data_scopes.py"
+        / "alembic/versions/c9d400000048_page_data_scopes.py"
     )
     spec = spec_from_file_location("page_scope_migration", migration_path)
     assert spec is not None and spec.loader is not None
