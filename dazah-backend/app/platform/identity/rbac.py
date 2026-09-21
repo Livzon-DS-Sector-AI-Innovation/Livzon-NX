@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 # 保留历史角色编码兼容旧绑定；统一身份是 User.role == "admin"。
 SUPER_ADMIN_ROLE_CODE = "super_admin"
+ORDINARY_ADMIN_ROLE_CODE = "ordinary_admin"
 
 # 本地开发用户（DEV_BYPASS_AUTH 模式由 get_current_user 创建）：
 # 视为管理员，拥有全部权限（通配），不受部门级数据隔离限制
@@ -46,10 +47,35 @@ async def active_system_admin_count(db: AsyncSession) -> int:
 
     result = await db.execute(
         select(func.count(User.id)).where(
-            User.role == "admin", User.status == "active", User.is_deleted.is_(False)
+            User.role == "admin",
+            User.status == "active",
+            User.is_deleted.is_(False),
+            ~User.id.in_(
+                select(UserRole.user_id)
+                .join(Role, Role.id == UserRole.role_id)
+                .where(
+                    Role.code == ORDINARY_ADMIN_ROLE_CODE,
+                    Role.is_deleted.is_(False),
+                    UserRole.is_deleted.is_(False),
+                )
+            ),
         )
     )
     return int(result.scalar_one())
+
+
+async def is_ordinary_admin(db: AsyncSession, user_id: Any) -> bool:
+    result = await db.execute(
+        select(UserRole.user_id)
+        .join(Role, Role.id == UserRole.role_id)
+        .where(
+            UserRole.user_id == user_id,
+            UserRole.is_deleted.is_(False),
+            Role.code == ORDINARY_ADMIN_ROLE_CODE,
+            Role.is_deleted.is_(False),
+        )
+    )
+    return result.scalar_one_or_none() is not None
 
 # ─── 质量 QA 系统角色种子 ────────────────────────────────────────────
 # 六个子域角色：质量管理全部可见，编辑范围限定各自子域（端点内精校验）
@@ -327,7 +353,7 @@ async def resolve_users_roles(
         dept_result = await db.execute(
             select(Role).where(
                 Role.id.in_(all_department_role_ids),
-                Role.code != SUPER_ADMIN_ROLE_CODE,
+                Role.code.not_in((SUPER_ADMIN_ROLE_CODE, ORDINARY_ADMIN_ROLE_CODE)),
                 Role.is_deleted == False,  # noqa: E712
             )
         )
@@ -551,6 +577,23 @@ async def seed_permissions(db: AsyncSession) -> None:
         db.add(role)
         await db.flush()
         logger.info("Seeded super_admin role")
+
+    ordinary_role = await db.scalar(
+        select(Role).where(
+            Role.code == ORDINARY_ADMIN_ROLE_CODE, Role.is_deleted.is_(False)
+        )
+    )
+    if ordinary_role is None:
+        db.add(Role(
+            name="普通管理员",
+            code=ORDINARY_ADMIN_ROLE_CODE,
+            description="拥有业务管理员权限，不能进入系统设置",
+            is_system=True,
+        ))
+        await db.flush()
+    else:
+        ordinary_role.name = "普通管理员"
+        ordinary_role.is_system = True
 
     # super_admin 绑定全部权限点（幂等）
     all_perms_stmt = select(Permission).where(

@@ -7,6 +7,7 @@ import type { MenuProps } from "antd"
 import type { ModuleMenu, SubMenuItem } from "@/lib/menu-config"
 import { LoadingOutlined, SettingOutlined } from "@ant-design/icons"
 import type { User } from "@/types/user"
+import { isSystemAdministrator } from "@/lib/administrator-role"
 
 type MenuItem = Required<MenuProps>['items'][number]
 
@@ -51,6 +52,7 @@ function buildMenuItems(
   items: SubMenuItem[],
   prefetchPath?: (path: string) => void,
   onParentNavigate?: (path: string) => void,
+  onParentTitleClick?: (key: string) => void,
 ): MenuItem[] {
   return items.map((item) => {
     if (item.children && item.children.length > 0) {
@@ -73,7 +75,9 @@ function buildMenuItems(
       return {
         key: item.key,
         label,
-        children: buildMenuItems(item.children, prefetchPath, onParentNavigate),
+        popupClassName: "sidebar-submenu-popup",
+        onTitleClick: () => onParentTitleClick?.(item.key),
+        children: buildMenuItems(item.children, prefetchPath, onParentNavigate, onParentTitleClick),
       }
     }
     const leaf: MenuItem = {
@@ -133,37 +137,6 @@ function findSelectedKey(
   return match?.key
 }
 
-// ── 收集选中路径的所有祖先 key（用于 auto-open）──
-function collectAncestorKeys(
-  items: SubMenuItem[],
-  pathname: string,
-  query: URLSearchParams,
-): string[] {
-  for (const item of items) {
-    if (item.children && item.children.length > 0) {
-      if (containsPath(item.children, pathname, query)) {
-        return [item.key, ...collectAncestorKeys(item.children, pathname, query)]
-      }
-    }
-  }
-  return []
-}
-
-function containsPath(
-  items: SubMenuItem[],
-  pathname: string,
-  query: URLSearchParams,
-): boolean {
-  for (const item of items) {
-    if (item.children && item.children.length > 0) {
-      if (containsPath(item.children, pathname, query)) return true
-    } else if (!item.disabled && item.path && matchesMenuPath(item.path, pathname, query)) {
-      return true
-    }
-  }
-  return false
-}
-
 function splitMenuItemsByPlacement(items: SubMenuItem[]): {
   mainItems: SubMenuItem[]
   bottomItems: SubMenuItem[]
@@ -214,9 +187,20 @@ export function Sidebar({ user, modules }: SidebarProps) {
   const pendingHref = pendingNavigation?.fromHref === currentHref
     ? pendingNavigation.targetHref
     : null
-  const [openKeys, setOpenKeys] = useState<string[]>(() =>
-    currentModule ? collectAncestorKeys(currentModule.children, pathname, query) : []
-  )
+  const [menuOpenState, setMenuOpenState] = useState<{ href: string; keys: string[] }>({
+    href: currentHref,
+    keys: [],
+  })
+  const openKeys = menuOpenState.href === currentHref ? menuOpenState.keys : []
+  const setOpenKeys = (nextKeys: string[] | ((keys: string[]) => string[])) => {
+    setMenuOpenState((state) => {
+      const keys = state.href === currentHref ? state.keys : []
+      return {
+        href: currentHref,
+        keys: typeof nextKeys === "function" ? nextKeys(keys) : nextKeys,
+      }
+    })
+  }
 
   useEffect(() => {
     if (!pendingNavigation) return
@@ -252,10 +236,14 @@ export function Sidebar({ user, modules }: SidebarProps) {
     return `${pathname}${nextQuery ? `?${nextQuery}` : ""}`
   }
   const navigateParent = (path: string) => {
+    setOpenKeys([])
     router.push(withAuthToken(path))
   }
-  const menuItems = buildMenuItems(mainItems, prefetchPath, navigateParent)
-  const bottomMenuItems = buildMenuItems(bottomItems, prefetchPath, navigateParent)
+  const handleParentTitleClick = (key: string) => {
+    setOpenKeys((keys) => keys.includes(key) ? keys.filter((openKey) => openKey !== key) : [...keys, key])
+  }
+  const menuItems = buildMenuItems(mainItems, prefetchPath, navigateParent, handleParentTitleClick)
+  const bottomMenuItems = buildMenuItems(bottomItems, prefetchPath, navigateParent, handleParentTitleClick)
   const keyPathMap = buildKeyPathMap(moduleChildren)
   const selectedKey = currentModule
     ? findSelectedKey(moduleChildren, pathname, query)
@@ -267,6 +255,7 @@ export function Sidebar({ user, modules }: SidebarProps) {
   const navigateTo = (path: string) => {
     const href = withAuthToken(path)
     if (href === currentHref) return
+    setOpenKeys([])
     setPendingNavigation({ fromHref: currentHref, targetHref: href })
     router.push(href)
   }
@@ -279,6 +268,7 @@ export function Sidebar({ user, modules }: SidebarProps) {
   if (!currentModule) return null
 
   return (
+    <>
     <aside className="w-56 bg-[var(--color-canvas)] border-r border-[var(--color-hairline)] flex flex-col shrink-0 overflow-y-auto">
       <div
         className={`px-4 pt-5 pb-3${moduleKey === "safety" ? " cursor-pointer group" : ""}`}
@@ -293,19 +283,9 @@ export function Sidebar({ user, modules }: SidebarProps) {
         </h2>
       </div>
 
-      {pendingHref && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="mx-3 mb-2 flex min-h-8 items-center gap-2 rounded-[var(--rounded-sm)] bg-[var(--color-surface)] px-3 text-[12px] text-[var(--color-steel)]"
-        >
-          <LoadingOutlined spin aria-hidden />
-          <span>正在打开页面…</span>
-        </div>
-      )}
-
       <Menu
-        mode="inline"
+        mode="vertical"
+        triggerSubMenuAction="hover"
         selectedKeys={selectedKey ? [selectedKey] : []}
         openKeys={openKeys}
         onOpenChange={handleOpenChange}
@@ -318,7 +298,8 @@ export function Sidebar({ user, modules }: SidebarProps) {
       {bottomMenuItems.length > 0 && (
         <div className="mt-auto border-t border-[var(--color-hairline-soft)] py-2">
           <Menu
-            mode="inline"
+            mode="vertical"
+            triggerSubMenuAction="hover"
             selectedKeys={selectedKey ? [selectedKey] : []}
             openKeys={openKeys}
             onOpenChange={handleOpenChange}
@@ -334,7 +315,7 @@ export function Sidebar({ user, modules }: SidebarProps) {
         <p className="text-[12px] text-[var(--color-stone)]">
           v0.1.1
         </p>
-        {user?.role === "admin" && (
+        {user && isSystemAdministrator(user) && (
           <button
             onClick={() => navigateTo("/settings")}
             className="inline-flex min-h-8 items-center gap-1.5 rounded-[var(--rounded-sm)] px-2 text-[12px] font-medium text-[var(--color-stone)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-primary)]"
@@ -346,5 +327,17 @@ export function Sidebar({ user, modules }: SidebarProps) {
         )}
       </div>
     </aside>
+    {pendingHref && (
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="pointer-events-none fixed right-4 top-20 z-50 flex min-h-9 max-w-[calc(100vw-2rem)] items-center gap-2 rounded-[var(--rounded-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas)] px-3 py-2 text-[12px] text-[var(--color-steel)] shadow-[0_8px_24px_rgba(18,25,38,0.12)] sm:right-6"
+      >
+        <LoadingOutlined spin aria-hidden />
+        <span>正在打开页面…</span>
+      </div>
+    )}
+    </>
   )
 }

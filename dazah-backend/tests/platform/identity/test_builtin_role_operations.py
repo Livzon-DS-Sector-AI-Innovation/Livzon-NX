@@ -31,6 +31,7 @@ async def test_role_operations(
     )
     db = AsyncMock()
     actor = User(id=uuid4(), role="admin", status="active", is_deleted=False)
+    monkeypatch.setattr(rbac_api, "is_ordinary_admin", AsyncMock(return_value=False))
     monkeypatch.setattr(
         rbac_api, "lock_authorization_actor", AsyncMock(return_value=actor)
     )

@@ -20,9 +20,63 @@ from app.platform.identity.quality_api_contract import QUALITY_REVIEWED_API_ROUT
 PAGE_PERMISSION_ORDER = ("access", "query", "operate")
 PAGE_PERMISSION_SET = frozenset(PAGE_PERMISSION_ORDER)
 PAGE_SCOPE_TYPES = frozenset(
-    {"not_applicable", "department_tree", "departments", "all", "self"}
+    {"not_applicable", "department_tree", "departments", "all", "self",
+     "production_fermentation", "production_extraction"}
 )
 FIRST_BATCH_MODULES = frozenset({"hr", "warehouse", "quality", "procurement"})
+PENDING_SCOPE_MODULES = frozenset({"equipment", "energy", "safety", "research"})
+QUALITY_INSPECTION_GLOBAL_PAGES = frozenset(
+    f"quality:inspection:inspection-items:inspection-items-{suffix}"
+    for suffix in ("inventory", "inbound", "outbound")
+) | frozenset(
+    f"quality:inspection:inspection-instruments:inspection-instruments-{suffix}"
+    for suffix in (
+        "equipment", "maintenance", "repair", "contracts", "plans",
+        "calibration", "cal-plan", "cal-external",
+    )
+) | frozenset(
+    f"quality:inspection:inspection-finished:inspection-finished-{suffix}"
+    for suffix in (
+        "mpa", "mvt", "lft", "dls", "lkms", "bbas", "formulations",
+        "tryptophan", "water", "pf",
+    )
+) | frozenset({
+    "quality:inspection:inspection-solid",
+    "quality:inspection:inspection-liquid",
+})
+QUALITY_VALIDATION_GLOBAL_PAGES = frozenset({
+    "quality:validation:validation-plans",
+    "quality:validation:equipment-qualification",
+    "quality:validation:process-validation",
+    "quality:validation:cleaning-validation",
+    "quality:validation:other-validations",
+    "quality:validation:qc-validation",
+    "quality:validation:validation-ai-review",
+})
+GLOBAL_RESOURCE_PAGES = frozenset({
+    "warehouse:ai-analysis",
+    "warehouse:warehouse-settings",
+    "hr:employee-management:feishu-contacts",
+    "hr:hr-settings:hr-settings-feishu",
+    "hr:hr-settings:hr-settings-reminder",
+    "hr:hr-settings:hr-settings-approval",
+    "hr:hr-settings:hr-settings-dept-mapping",
+    "hr:hr-settings:hr-settings-dept-scopes",
+    "quality:complaints:complaint-ledger",
+    "quality:deviations:deviation-records",
+    "quality:deviations:deviation-investigations",
+    "quality:deviations:deviation-history",
+    "quality:deviations:deviation-workbench",
+    "quality:oos-oot:oot-limits",
+    "quality:oos-oot:product-departments",
+    "quality:oos-oot:oos-ledger",
+    "quality:oos-oot:oot-ledger",
+    "quality:oos-oot:oos-oot-report-records",
+    "quality:oos-oot:oos-oot-investigation-push",
+    "quality:anomaly-report:anomaly-report-ledger",
+    "quality:return-recalls:return-application",
+    "quality:return-recalls:return-ledger",
+}) | QUALITY_INSPECTION_GLOBAL_PAGES | QUALITY_VALIDATION_GLOBAL_PAGES
 QUALITY_PRODUCT_PAGES = tuple(
     f"quality:product-quality:product-quality-{code}"
     for code in ("mfn", "dljs", "lftt", "mftt", "yslkms", "bbas", "sas")
@@ -574,14 +628,22 @@ def _walk_pages(
             scopes: tuple[str, ...]
             if module_code in FIRST_BATCH_MODULES:
                 scopes = ("department_tree", "departments", "all")
-            else:
+            elif module_code in PENDING_SCOPE_MODULES:
                 scopes = ("not_applicable",)
+            else:
+                scopes = ("all",)
+            if page_key == "production:overview":
+                # The overview exposes fermentation and extraction data, not
+                # department-owned rows.
+                scopes = ("production_fermentation", "production_extraction", "all")
             if (
                 page_key in QUALITY_SHARED_LEDGER_PAGES
+                or page_key in GLOBAL_RESOURCE_PAGES
                 or page_key == "quality:quality-settings"
             ):
-                # These ledgers are factory-wide; product identity remains enforced.
-                scopes = ("not_applicable",)
+                # These pages have no consistent department owner across their
+                # bound APIs. Product and resource identities remain enforced.
+                scopes = ("all",)
             if (
                 module_code == "procurement"
                 and route_path != "/purchasing/order"
@@ -590,13 +652,13 @@ def _walk_pages(
                     for prefix in ("/purchasing/request/", "/purchasing/approval/")
                 )
             ):
-                scopes = ("not_applicable",)
+                scopes = ("all",)
             if (
                 page_key in WAREHOUSE_MATERIAL_PAGE_ALIASES
                 and WAREHOUSE_MATERIAL_PAGE_ALIASES[page_key]
                 not in WAREHOUSE_DEPARTMENT_DATA_PAGES
             ):
-                scopes = ("not_applicable",)
+                scopes = ("all",)
             definitions.append(
                 PageDefinition(
                     page_key=page_key,

@@ -64,7 +64,8 @@ async function handleResponse(res: Response): Promise<unknown> {
     let detail = `请求失败 (${res.status})`
     try {
       const json = await res.json()
-      if (json?.message) detail = json.message
+      if (typeof json?.message === "string") detail = json.message
+      else if (typeof json?.detail === "string") detail = json.detail
     } catch {
       // ignore parse error
     }

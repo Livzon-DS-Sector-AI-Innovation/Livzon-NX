@@ -70,6 +70,20 @@ it('presents high risk actions as add-ons to ordinary operation', async () => {
   await act(async () => document.querySelector<HTMLInputElement>('[aria-label="权限档位"] input[value="query"]')!.click())
   expect(action.checked).toBe(false)
 })
+
+it('shows production overview stages instead of a department or inapplicable scope', async () => {
+  const data = result('A')
+  data.definitions = [{ page_key: 'production:overview', module_code: 'production',
+    page_name: '生产管理概览', route_path: '/production',
+    supported_scope_types: ['production_fermentation', 'production_extraction', 'all'] }]
+  data.grants = [{ page_key: 'production:overview', module_code: 'production', source: 'role',
+    permissions: ['access', 'query'], sensitive_actions: [], data_scope: { scope_type: 'all', department_ids: [] } }]
+  mocks.get.mockResolvedValue(data)
+  await show('A')
+  await act(async () => button('展开全部菜单').click())
+  expect(document.body.textContent).toContain('全部生产数据')
+  expect(document.body.textContent).not.toContain('不适用')
+})
 let root: Root
 let host: HTMLDivElement
 beforeEach(() => {

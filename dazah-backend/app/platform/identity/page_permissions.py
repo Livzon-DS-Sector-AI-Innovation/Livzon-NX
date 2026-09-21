@@ -153,10 +153,13 @@ class PagePermissionService:
         return changes
 
     async def is_super_admin(self, db: AsyncSession, *, user_id: UUID) -> bool:
-        # Compatibility method name; both former administrator identities are
-        # normalized to User.role by the identity merge migration.
+        from app.platform.identity.rbac import is_ordinary_admin
+
         user = await db.get(User, user_id)
-        return bool(user and not user.is_deleted and user.role == "admin")
+        return bool(
+            user and not user.is_deleted and user.role == "admin"
+            and not await is_ordinary_admin(db, user_id)
+        )
 
     async def effective_grants(
         self,
@@ -185,6 +188,11 @@ class PagePermissionService:
         if getattr(user, "role", None) == "admin" or any(
             role.code == "super_admin" for role in roles
         ):
+            administrator_name = (
+                "普通管理员"
+                if any(role.code == "ordinary_admin" for role in roles)
+                else "系统管理员"
+            )
             return [
                 EffectivePageGrantOut(
                     page_key=item.page_key,
@@ -197,8 +205,8 @@ class PagePermissionService:
                         else "not_applicable"
                     ),
                     source="super_admin",
-                    source_role_names=["系统管理员"],
-                    resolution=["系统管理员身份直接授予全部页面权限"],
+                    source_role_names=[administrator_name],
+                    resolution=[f"{administrator_name}身份直接授予全部页面权限"],
                 )
                 for item in PAGE_DEFINITIONS
                 if item.page_key in active_keys
@@ -1329,6 +1337,12 @@ class PagePermissionService:
     ) -> tuple[str, list[str]]:
         if "all" in scope_types:
             return "all", []
+        if {"production_fermentation", "production_extraction"} <= scope_types:
+            return "all", []
+        if "production_fermentation" in scope_types:
+            return "production_fermentation", []
+        if "production_extraction" in scope_types:
+            return "production_extraction", []
         if "departments" in scope_types and department_ids:
             own_ids = own_department_ids or set()
             return "departments", sorted(

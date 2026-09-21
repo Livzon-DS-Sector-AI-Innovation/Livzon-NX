@@ -20837,6 +20837,17 @@
             ],
             "title": "Category"
           },
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
           "deviation_id": {
             "anyOf": [
               {
@@ -55405,7 +55416,9 @@
               "department_tree",
               "departments",
               "all",
-              "self"
+              "self",
+              "production_fermentation",
+              "production_extraction"
             ],
             "title": "Scope Type",
             "type": "string"
@@ -55508,7 +55521,9 @@
                 "department_tree",
                 "departments",
                 "all",
-                "self"
+                "self",
+                "production_fermentation",
+                "production_extraction"
               ],
               "type": "string"
             },

@@ -14,7 +14,7 @@ from typing import Any, cast
 
 import pytesseract  # type: ignore[import-untyped]
 from docx import Document
-from fastapi import UploadFile
+from fastapi import HTTPException, UploadFile
 from openpyxl import load_workbook  # type: ignore[import-untyped]
 from PIL import Image
 from sqlalchemy import func, select
@@ -47,6 +47,7 @@ from app.modules.quality.models import (
     DeviationAiSessionAttachment,
     QualityAiAnalysisLog,
 )
+from app.modules.quality.page_access import assert_quality_record_department
 from app.modules.quality.schemas.deviation_ai_session import (
     DeviationAiSessionAttachmentOut,
     DeviationAiSessionOut,
@@ -56,9 +57,42 @@ from app.modules.quality.schemas.quality_ai import (
     QualityAiAnalysisLogOut,
     QualityAiApplicableField,
 )
+from app.platform.identity.data_scope import (
+    current_page_actor,
+    current_page_key,
+    department_in_clause,
+    resolve_user_department_scope,
+)
 from app.platform.identity.models import User
 
 logger = logging.getLogger(__name__)
+
+_AI_PAGE_ENTITY_TYPES = {
+    "quality:deviations:deviation-ledger": "deviation",
+    "quality:capas:capa-ledger": "capa",
+    "quality:change:change-ledger": "change",
+    "quality:change:file-change-ledger": "change",
+}
+_AI_ENTITY_MODELS = {
+    "deviation": (Deviation, Deviation.department),
+    "capa": (CAPA, CAPA.department),
+    "change": (ChangeControl, ChangeControl.applicant_department),
+}
+
+
+async def _assert_ai_entity_scope(
+    db: AsyncSession, entity_type: str, entity_id: uuid.UUID
+) -> None:
+    page_key = current_page_key.get()
+    if page_key is None:
+        return
+    if _AI_PAGE_ENTITY_TYPES.get(page_key) != entity_type:
+        raise HTTPException(403, "当前页面不能访问此类 AI 分析记录")
+    model, department_column = _AI_ENTITY_MODELS[entity_type]
+    entity = await db.get(model, entity_id)
+    if not entity or entity.is_deleted:
+        raise NotFoundException(resource="分析对象", resource_id=str(entity_id))
+    await assert_quality_record_department(db, getattr(entity, department_column.key))
 
 QUALITY_AI_RESPONSE_KEYS = [
     "summary",
@@ -575,6 +609,7 @@ async def analyze_deviation_record(
     deviation = await db.get(Deviation, deviation_id)
     if not deviation or deviation.is_deleted:
         raise NotFoundException(resource="偏差")
+    await _assert_ai_entity_scope(db, "deviation", deviation_id)
 
     snapshot = _build_deviation_snapshot(deviation)
     prompt = _deviation_prompt(snapshot, analysis_type)
@@ -684,6 +719,7 @@ async def analyze_capa_record(
     capa = await db.get(CAPA, capa_id)
     if not capa or capa.is_deleted:
         raise NotFoundException(resource="CAPA")
+    await _assert_ai_entity_scope(db, "capa", capa_id)
 
     snapshot = await _build_capa_analysis_snapshot(db, capa)
     prompt = _capa_prompt(snapshot)
@@ -775,6 +811,7 @@ async def analyze_change_record(
     change = await db.get(ChangeControl, change_id)
     if not change or change.is_deleted:
         raise NotFoundException(resource="变更")
+    await _assert_ai_entity_scope(db, "change", change_id)
 
     snapshot = _build_change_snapshot(change)
     prompt = _change_prompt(snapshot)
@@ -869,6 +906,20 @@ async def list_ai_logs(
     page_size: int = 20,
 ) -> dict[str, Any]:
     filters: list[ColumnElement[bool]] = [QualityAiAnalysisLog.is_deleted.is_(False)]
+    page_key = current_page_key.get()
+    if page_key is not None:
+        page_entity_type = _AI_PAGE_ENTITY_TYPES.get(page_key)
+        actor = current_page_actor.get()
+        if page_entity_type is None or actor is None:
+            raise HTTPException(403, "当前页面不能访问 AI 分析记录")
+        filters.append(QualityAiAnalysisLog.entity_type == page_entity_type)
+        scope = await resolve_user_department_scope(db, actor)
+        model, department_column = _AI_ENTITY_MODELS[page_entity_type]
+        entity_query = select(model.id).where(model.is_deleted.is_(False))
+        department_filter = department_in_clause(department_column, scope)
+        if department_filter is not None:
+            entity_query = entity_query.where(department_filter)
+        filters.append(QualityAiAnalysisLog.entity_id.in_(entity_query))
     if entity_type:
         filters.append(QualityAiAnalysisLog.entity_type == entity_type)
     if entity_id:
@@ -898,6 +949,7 @@ async def get_ai_log_detail(
     log = await db.get(QualityAiAnalysisLog, log_id)
     if not log or log.is_deleted:
         raise NotFoundException(resource="AI分析记录")
+    await _assert_ai_entity_scope(db, log.entity_type, log.entity_id)
     return _log_to_schema(log)
 
 
@@ -910,6 +962,7 @@ async def apply_ai_log(
     log = await db.get(QualityAiAnalysisLog, log_id)
     if not log or log.is_deleted:
         raise NotFoundException(resource="AI分析记录")
+    await _assert_ai_entity_scope(db, log.entity_type, log.entity_id)
     if log.status != "completed" or not log.output_payload:
         raise AppException(message="只有成功的 AI 分析记录才可以应用")
 
@@ -1059,6 +1112,7 @@ async def _get_deviation_or_raise(
     deviation = await db.get(Deviation, deviation_id)
     if not deviation or deviation.is_deleted:
         raise NotFoundException(resource="偏差")
+    await _assert_ai_entity_scope(db, "deviation", deviation_id)
     return deviation
 
 

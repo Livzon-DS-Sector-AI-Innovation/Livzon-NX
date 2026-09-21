@@ -139,14 +139,15 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
   }
 
   const toggleRole = (role: RoleItem, checked: boolean) => {
-    const systemAdmin = initialRoles.find((item) => item.code === "super_admin")
-    if (checked && role.code === "super_admin") {
+    const administratorIds = initialRoles.filter((item) =>
+      item.code === "super_admin" || item.code === "ordinary_admin").map((item) => item.id)
+    if (checked && administratorIds.includes(role.id)) {
       setSelectedRoleIds([role.id])
       setDataScope(originalDataScope)
       return
     }
     setSelectedRoleIds((current) => {
-      const withoutSystemAdmin = systemAdmin ? current.filter((id) => id !== systemAdmin.id) : current
+      const withoutSystemAdmin = current.filter((id) => !administratorIds.includes(id))
       return checked
         ? [...new Set([...withoutSystemAdmin, role.id])]
         : current.filter((id) => id !== role.id)
@@ -284,7 +285,7 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
             <div className="ml-6 mt-1">
               <Typography.Text type="secondary" className="text-xs">{role.code}</Typography.Text>
               <Typography.Paragraph type="secondary" className="mb-0 mt-1 text-xs">
-                {role.code === "super_admin" ? "拥有全部模块、页面、普通操作和高风险操作权限。" : role.description || "页面权限基线请在角色管理中查看和维护。"}
+                {role.code === "super_admin" ? "拥有全部模块、页面、普通操作和高风险操作权限。" : role.code === "ordinary_admin" ? "拥有业务管理员权限，但不能进入系统设置。" : role.description || "页面权限基线请在角色管理中查看和维护。"}
               </Typography.Paragraph>
             </div>
           </label>)}

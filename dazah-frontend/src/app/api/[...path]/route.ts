@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { getBackendFallbackUrls } from '@/lib/server-api'
+import { getUserErrorMessage } from '@/lib/user-error'
 
 export async function GET(request: NextRequest) {
   return proxyRequest(request)
@@ -84,6 +85,24 @@ async function proxyRequest(request: NextRequest) {
       }
 
       const data = await response.json()
+      // Keep the API shape and error code while translating user-facing error fields.
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        const errorStatus = !response.ok ? response.status :
+          typeof data.code === 'number' && data.code >= 400 ? data.code : undefined
+        if (errorStatus) {
+          for (const key of ['message', 'error', 'detail'] as const) {
+            if (typeof data[key] === 'string') {
+              data[key] = getUserErrorMessage(data[key], '请求未完成，请稍后重试', errorStatus)
+            }
+          }
+          if (errorStatus === 422 && Array.isArray(data.detail)) {
+            data.detail = data.detail.map((item: unknown) => {
+              if (!item || typeof item !== 'object' || !('msg' in item) || typeof item.msg !== 'string') return item
+              return { ...item, msg: getUserErrorMessage(item.msg, '填写内容有误，请检查后重试', 422) }
+            })
+          }
+        }
+      }
       const nextResponse = NextResponse.json(data, {
         status: response.status,
         statusText: response.statusText,
@@ -111,5 +130,5 @@ async function proxyRequest(request: NextRequest) {
   }
 
   console.error('Proxy error:', lastError)
-  return NextResponse.json({ error: 'Proxy error' }, { status: 500 })
+  return NextResponse.json({ error: '服务暂时不可用，请稍后重试', message: '服务暂时不可用，请稍后重试' }, { status: 502 })
 }

@@ -1,0 +1,31 @@
+# Keep dependency cache mounts long enough for the single-host release cadence.
+# The first policy covers uv, pnpm, Next.js and apt cache mounts used by the
+# production Dockerfile. Later policies protect reusable image layers while
+# still leaving disk-space thresholds for BuildKit garbage collection.
+
+[worker.oci]
+  gc = true
+
+[[worker.oci.gcpolicy]]
+  filters = ["type==source.local", "type==exec.cachemount", "type==source.git.checkout"]
+  keepDuration = "720h"
+  reservedSpace = "5GB"
+  maxUsedSpace = "20GB"
+  minFreeSpace = "20GB"
+
+[[worker.oci.gcpolicy]]
+  keepDuration = "1440h"
+  reservedSpace = "10GB"
+  maxUsedSpace = "60GB"
+  minFreeSpace = "20GB"
+
+[[worker.oci.gcpolicy]]
+  reservedSpace = "10GB"
+  maxUsedSpace = "60GB"
+  minFreeSpace = "20GB"
+
+[[worker.oci.gcpolicy]]
+  all = true
+  reservedSpace = "10GB"
+  maxUsedSpace = "60GB"
+  minFreeSpace = "20GB"

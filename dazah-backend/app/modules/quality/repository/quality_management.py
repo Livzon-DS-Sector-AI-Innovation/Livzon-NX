@@ -608,6 +608,7 @@ async def get_change_action_plans(
     deadline_date_to: date | None = None,
     page: int = 1,
     page_size: int = 20,
+    scope: DepartmentScope | None = None,
 ) -> tuple[list[ChangeActionPlan], int]:
     query = select(ChangeActionPlan).where(ChangeActionPlan.is_deleted.is_(False))
     count_query = (
@@ -615,6 +616,20 @@ async def get_change_action_plans(
         .select_from(ChangeActionPlan)
         .where(ChangeActionPlan.is_deleted.is_(False))
     )
+    if scope is not None and not scope.is_all:
+        query = query.join(
+            ChangeControl, ChangeActionPlan.change_code == ChangeControl.change_code
+        )
+        count_query = count_query.join(
+            ChangeControl, ChangeActionPlan.change_code == ChangeControl.change_code
+        )
+        department_filter = department_in_clause(
+            ChangeControl.applicant_department, scope
+        )
+        query = query.where(ChangeControl.is_deleted.is_(False), department_filter)
+        count_query = count_query.where(
+            ChangeControl.is_deleted.is_(False), department_filter
+        )
 
     filters = []
     if change_id:
@@ -887,6 +902,7 @@ async def get_capa_plan_tracks(
     due_date_to: date | None = None,
     page: int = 1,
     page_size: int = 20,
+    scope: DepartmentScope | None = None,
 ) -> tuple[list[CapaPlanTrack], int]:
     query = select(CapaPlanTrack).where(CapaPlanTrack.is_deleted.is_(False))
     count_query = (
@@ -894,6 +910,12 @@ async def get_capa_plan_tracks(
         .select_from(CapaPlanTrack)
         .where(CapaPlanTrack.is_deleted.is_(False))
     )
+    if scope is not None and not scope.is_all:
+        query = query.join(CAPA, CapaPlanTrack.capa_id == CAPA.id)
+        count_query = count_query.join(CAPA, CapaPlanTrack.capa_id == CAPA.id)
+        department_filter = department_in_clause(CAPA.department, scope)
+        query = query.where(CAPA.is_deleted.is_(False), department_filter)
+        count_query = count_query.where(CAPA.is_deleted.is_(False), department_filter)
 
     filters = []
     if capa_id:
