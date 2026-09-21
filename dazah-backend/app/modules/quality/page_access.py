@@ -40,3 +40,21 @@ def assert_deviation_department(
 ) -> None:
     if scope is not None and not scope.allows(department):
         raise HTTPException(403, "偏差记录不在当前页面授权的部门范围内")
+
+
+async def assert_quality_record_department(
+    db: AsyncSession, department: str | None
+) -> None:
+    """Enforce the recorded owner on detail and mutation paths.
+
+    List filters alone cannot protect lookups by ID. Legacy internal calls
+    without a page context retain their existing module policy.
+    """
+    if current_page_key.get() is None:
+        return
+    actor = current_page_actor.get()
+    if actor is None:
+        raise HTTPException(403, "页面授权缺少可信用户身份")
+    scope = await resolve_user_department_scope(db, actor)
+    if not scope.allows(department):
+        raise HTTPException(403, "记录不在当前页面授权的部门范围内")

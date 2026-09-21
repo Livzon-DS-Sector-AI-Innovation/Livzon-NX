@@ -41,6 +41,7 @@ def route_app(db: AsyncMock) -> FastAPI:
     )
     db.scalar.return_value = actor
     application.dependency_overrides[get_current_user] = lambda: actor
+    application.dependency_overrides[rbac_api.require_identity_admin] = lambda: actor
     return application
 
 
@@ -155,6 +156,8 @@ async def test_rules_require_admin(
     user_role: str | None,
     expected_status: int,
 ) -> None:
+    # Remove the fixture-level admin override so the real dependency chain runs.
+    route_app.dependency_overrides.pop(rbac_api.require_identity_admin, None)
     route_app.dependency_overrides[get_current_user] = lambda: (
         User(id=uuid4(), name="测试用户", role=user_role) if user_role else None
     )

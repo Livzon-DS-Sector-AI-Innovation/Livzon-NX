@@ -14,6 +14,8 @@ describe('role operation availability', () => {
     ['custom_role', false, false],
     ['super_admin', true, true],
     ['super_admin', false, true],
+    ['ordinary_admin', true, true],
+    ['ordinary_admin', false, true],
   ])('protects operations by role code: %s, built-in: %s', (code, isSystem, disabled) => {
     const html = renderToStaticMarkup(<App><RoleManager initialDepartments={[]} initialRoles={[
       { id: 'role-1', code, name: '测试角色', is_system: isSystem, permissions: [] },

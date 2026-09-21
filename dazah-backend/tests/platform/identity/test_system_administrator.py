@@ -89,6 +89,86 @@ async def test_admin_keeps_business_context_for_registered_routes():
 
 
 @pytest.mark.asyncio
+async def test_ordinary_admin_keeps_business_access_but_cannot_open_system_settings(
+    db_session, monkeypatch
+):
+    connection = await db_session.connection()
+    async with AsyncSession(
+        bind=connection,
+        join_transaction_mode="create_savepoint",
+        expire_on_commit=False,
+    ) as db:
+        actor = User(name="系统管理员", role="admin")
+        target = User(name="普通管理员", role="user")
+        ordinary_role = await db.scalar(
+            select(Role).where(Role.code == "ordinary_admin")
+        )
+        if ordinary_role is None:
+            ordinary_role = Role(
+                name="普通管理员", code="ordinary_admin", is_system=True
+            )
+            db.add(ordinary_role)
+        db.add_all([actor, target])
+        await db.flush()
+
+        app = FastAPI()
+        app.include_router(api.user_router, prefix="/identity")
+        app.include_router(rbac_api.rbac_router, prefix="/identity")
+        app.dependency_overrides[get_db] = lambda: db
+        app.dependency_overrides[deps.get_current_user] = lambda: actor
+        for module in (api, rbac_api):
+            monkeypatch.setattr(module, "publish_permissions_changed", AsyncMock())
+            monkeypatch.setattr(module, "publish_data_scope_changed", AsyncMock())
+
+        @app.get("/business", dependencies=[Depends(deps.require_module_view("hr"))])
+        async def business():
+            return {"ok": True}
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            assigned = await client.post(
+                f"/identity/admin/users/{target.id}/roles",
+                json={"role_ids": [str(ordinary_role.id)]},
+            )
+            assert assigned.status_code == 200, assigned.text
+            assert target.role == "admin"
+            assert not await PagePermissionService().is_super_admin(
+                db, user_id=target.id
+            )
+            assert await resolve_user_permissions(db, target.id) == ["*"]
+
+            listed = await client.get("/identity/users")
+            assert listed.status_code == 200
+            listed_target = next(
+                item for item in listed.json()["data"]["items"]
+                if item["id"] == str(target.id)
+            )
+            assert "ordinary_admin" in listed_target["roles"]
+
+            app.dependency_overrides[deps.get_current_user] = lambda: target
+            assert (await client.get("/business")).status_code == 200
+            assert (await client.get("/identity/admin/roles")).status_code == 403
+            assert (await client.get("/identity/users")).status_code == 403
+
+            app.dependency_overrides[deps.get_current_user] = lambda: actor
+            assert (await client.get("/identity/admin/roles")).status_code == 200
+            assert (
+                await client.put(
+                    f"/identity/users/{target.id}", json={"role": "user"}
+                )
+            ).status_code == 200
+            assert target.role == "user"
+            assert not await db.scalar(
+                select(UserRole).where(
+                    UserRole.user_id == target.id,
+                    UserRole.role_id == ordinary_role.id,
+                    UserRole.is_deleted.is_(False),
+                )
+            )
+
+
+@pytest.mark.asyncio
 async def test_role_and_identity_promotion_demotion_are_consistent(
     db_session, monkeypatch
 ):

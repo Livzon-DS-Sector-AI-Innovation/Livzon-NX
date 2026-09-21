@@ -64,4 +64,25 @@ describe('UserManagementClient permission entry', () => {
 
     await act(async () => root.unmount())
   })
+
+  it('labels an assigned ordinary administrator accurately', async () => {
+    mocks.getUsers.mockResolvedValue({
+      items: [{
+        id: 'ordinary-1', name: '普通管理员甲', username: 'ordinary',
+        role: 'admin', roles: ['ordinary_admin'], status: 'active', auth_source: 'local',
+      }],
+      total: 1,
+    })
+    const root = createRoot(host)
+    await act(async () => {
+      root.render(createElement(AntdApp, null, createElement(UserManagementClient)))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(host.textContent).toContain('普通管理员甲')
+    expect(host.textContent).toContain('普通管理员')
+    await act(async () => root.unmount())
+  })
 })

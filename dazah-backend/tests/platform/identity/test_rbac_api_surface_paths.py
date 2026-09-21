@@ -32,6 +32,9 @@ class _Result:
     def all(self) -> list[object]:
         return self.values
 
+    def scalar_one_or_none(self) -> object | None:
+        return self.values[0] if self.values else None
+
 
 class _Db:
     def __init__(self, values: list[object] | None = None) -> None:

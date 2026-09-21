@@ -7,7 +7,7 @@ import uuid
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +28,7 @@ from app.modules.quality.api.deps import (
 from app.modules.quality.models.oos_oot import (
     OosOotRecord,
 )
+from app.modules.quality.page_access import assert_quality_record_department
 from app.modules.quality.schemas.oos_oot import (
     CreateOosOotRequest,
     OosOotRecordOut,
@@ -36,6 +37,7 @@ from app.modules.quality.schemas.oos_oot import (
 from app.modules.quality.schemas.oot_limit import OotLimitItemOut, OotLimitProductOut
 from app.modules.quality.service import oos_oot as oos_oot_service
 from app.modules.quality.service import oos_oot_feishu
+from app.platform.identity.data_scope import current_page_actor
 from app.shared.schemas import ApiResponseEnvelope
 
 logger = logging.getLogger(__name__)
@@ -337,9 +339,12 @@ async def get_oos_oot(
         item = result.scalar_one_or_none()
         if item is None:
             return error_response(message="记录不存在", status_code=404)
+        await assert_quality_record_department(db, item.department)
         return success_response(
             data=OosOotRecordOut.model_validate(item).model_dump(mode="json")
         )
+    except HTTPException:
+        raise
     except Exception:
         logger.exception("Failed to get OOS/OOT record")
         return error_response(message="获取详情失败，请稍后重试", status_code=500)
@@ -357,7 +362,13 @@ async def create_oos_oot(
 ) -> Any:
     _require_user(current_user)
     try:
-        record = OosOotRecord(**data.model_dump())
+        values = data.model_dump()
+        actor = current_page_actor.get()
+        values["department"] = values.get("department") or (
+            actor.department if actor else None
+        )
+        await assert_quality_record_department(db, values["department"])
+        record = OosOotRecord(**values)
         db.add(record)
         await db.flush()
         result = await db.execute(
@@ -368,6 +379,8 @@ async def create_oos_oot(
             data=OosOotRecordOut.model_validate(record).model_dump(mode="json"),
             message="创建成功",
         )
+    except HTTPException:
+        raise
     except Exception:
         logger.exception("Failed to create OOS/OOT record")
         return error_response(message="创建失败，请稍后重试", status_code=400)
@@ -400,8 +413,11 @@ async def update_oos_oot(
         item = result.scalar_one_or_none()
         if item is None:
             return error_response(message="记录不存在", status_code=404)
+        await assert_quality_record_department(db, item.department)
 
         update_data = data.model_dump(exclude_unset=True)
+        if "department" in update_data:
+            await assert_quality_record_department(db, update_data["department"])
         for key, value in update_data.items():
             setattr(item, key, value)
 
@@ -414,6 +430,8 @@ async def update_oos_oot(
             data=OosOotRecordOut.model_validate(item).model_dump(mode="json"),
             message="更新成功",
         )
+    except HTTPException:
+        raise
     except Exception:
         logger.exception("Failed to update OOS/OOT record")
         return error_response(message="更新失败，请稍后重试", status_code=400)
@@ -445,10 +463,13 @@ async def delete_oos_oot(
         item = result.scalar_one_or_none()
         if item is None:
             return error_response(message="记录不存在", status_code=404)
+        await assert_quality_record_department(db, item.department)
 
         item.is_deleted = True
         await db.flush()
         return success_response(message="已删除")
+    except HTTPException:
+        raise
     except Exception:
         logger.exception("Failed to delete OOS/OOT record")
         return error_response(message="删除失败，请稍后重试", status_code=500)
