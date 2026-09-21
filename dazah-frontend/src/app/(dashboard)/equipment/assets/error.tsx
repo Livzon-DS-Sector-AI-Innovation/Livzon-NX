@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { Alert, Button, Space } from 'antd'
+import { getUserErrorMessage } from '@/lib/user-error'
 
 export default function AssetsErrorPage({
   error,
@@ -23,7 +24,7 @@ export default function AssetsErrorPage({
         title="设备台账加载失败"
         description={
           <div>
-            <p style={{ margin: '4px 0' }}>{error.message}</p>
+            <p style={{ margin: '4px 0' }}>{getUserErrorMessage(error, '设备台账加载失败，请重试或刷新页面')}</p>
             {error.digest && (
               <p style={{ margin: '4px 0', fontSize: 12, color: '#787671' }}>
                 错误标识: <code>{error.digest}</code>（在服务端日志中搜索此标识查看完整堆栈）

@@ -40,4 +40,15 @@ describe('(dashboard) 全局错误边界', () => {
     expect(markup).toContain('重试')
     expect(markup).toContain('刷新页面')
   })
+
+  it('不向用户展示英文运行时错误', async () => {
+    const { default: DashboardErrorPage } = await import('./error')
+    const markup = renderToStaticMarkup(React.createElement(DashboardErrorPage, {
+      error: new Error('Failed to fetch'),
+      unstable_retry: () => undefined,
+    }))
+
+    expect(markup).toContain('网络连接失败，请检查网络后重试')
+    expect(markup).not.toContain('Failed to fetch')
+  })
 })

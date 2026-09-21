@@ -28,21 +28,41 @@ vi.mock('@ant-design/icons', () => ({
 }))
 
 vi.mock('antd', () => ({
-  Menu: ({ items = [], onClick }: {
-    items?: Array<{ key?: string | number; label?: ReactNode } | null>
+  Menu: ({ items = [], onClick, onOpenChange, openKeys = [], mode, triggerSubMenuAction }: {
+    items?: Array<{
+      key?: string | number
+      label?: ReactNode
+      children?: Array<{ key: string; label: ReactNode }>
+      popupClassName?: string
+      onTitleClick?: () => void
+    } | null>
     onClick?: (info: { key: string }) => void
+    onOpenChange?: (keys: string[]) => void
+    openKeys?: string[]
+    mode?: string
+    triggerSubMenuAction?: string
   }) => createElement(
     'div',
-    null,
-    items.filter((item) => item?.key).map((item) => createElement(
-      'button',
-      {
-        key: String(item?.key),
-        'data-menu-key': String(item?.key),
-        onClick: () => onClick?.({ key: String(item?.key) }),
-      },
-      item?.label,
-    )),
+    { 'data-menu-mode': mode, 'data-menu-trigger': triggerSubMenuAction },
+    items.filter((item) => item?.key).flatMap((item) => {
+      const key = String(item?.key)
+      const isOpen = openKeys.includes(key)
+      return [
+        createElement('button', {
+          key,
+          'data-menu-key': key,
+          'data-popup-class': item?.popupClassName,
+          'aria-expanded': item?.children ? isOpen : undefined,
+          onMouseEnter: () => item?.children && onOpenChange?.([...openKeys, key]),
+          onClick: () => item?.children ? item.onTitleClick?.() : onClick?.({ key }),
+        }, item?.label),
+        ...(isOpen ? item?.children?.map((child) => createElement('button', {
+          key: child.key,
+          'data-menu-key': child.key,
+          onClick: () => onClick?.({ key: child.key }),
+        }, child.label)) ?? [] : []),
+      ]
+    }),
   ),
 }))
 
@@ -140,7 +160,10 @@ describe('Sidebar navigation feedback', () => {
       await act(async () => requestMenu?.click())
 
       expect(navigation.push).toHaveBeenCalledWith('/purchasing/request')
-      expect(host.querySelector('[role="status"]')?.textContent).toContain('正在打开页面')
+      const status = host.querySelector<HTMLElement>('[role="status"]')
+      expect(status?.textContent).toContain('正在打开页面')
+      expect(status?.closest('aside')).toBeNull()
+      expect(status?.classList.contains('fixed')).toBe(true)
       expect(host.querySelector('[data-testid="loading-icon"]')).not.toBeNull()
 
       navigation.pathname = '/purchasing/request'
@@ -148,6 +171,50 @@ describe('Sidebar navigation feedback', () => {
         root.render(createElement(Sidebar, { user, modules }))
       })
       expect(host.querySelector('[role="status"]')).toBeNull()
+    } finally {
+      await act(async () => root.unmount())
+    }
+  })
+})
+
+describe('Sidebar flyout menu', () => {
+  const modules: ModuleMenu[] = [{
+    key: 'purchasing', moduleCode: 'procurement', label: '采购管理',
+    icon: 'shopping', path: '/purchasing', children: [{
+      key: 'orders', label: '订单管理', path: '/purchasing/orders', children: [
+        { key: 'order-list', label: '订单列表', path: '/purchasing/orders' },
+      ],
+    }],
+  }]
+
+  it('opens to the right on hover or click and closes after navigation', async () => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    try {
+      await act(async () => root.render(createElement(Sidebar, { user, modules })))
+      expect(host.querySelector('[data-menu-mode="vertical"][data-menu-trigger="hover"]')).not.toBeNull()
+      const parent = host.querySelector<HTMLButtonElement>('[data-menu-key="orders"]')
+      expect(parent?.dataset.popupClass).toBe('sidebar-submenu-popup')
+      expect(parent?.getAttribute('aria-expanded')).toBe('false')
+
+      await act(async () => parent?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })))
+      expect(parent?.getAttribute('aria-expanded')).toBe('true')
+      await act(async () => parent?.click())
+      expect(parent?.getAttribute('aria-expanded')).toBe('false')
+      await act(async () => parent?.click())
+      expect(parent?.getAttribute('aria-expanded')).toBe('true')
+
+      await act(async () => host.querySelector<HTMLButtonElement>('[data-menu-key="order-list"]')?.click())
+      expect(navigation.push).toHaveBeenCalledWith('/purchasing/orders')
+      expect(parent?.getAttribute('aria-expanded')).toBe('false')
+
+      await act(async () => parent?.click())
+      expect(parent?.getAttribute('aria-expanded')).toBe('true')
+      navigation.pathname = '/purchasing/orders'
+      await act(async () => root.render(createElement(Sidebar, { user, modules })))
+      expect(parent?.getAttribute('aria-expanded')).toBe('false')
     } finally {
       await act(async () => root.unmount())
     }
