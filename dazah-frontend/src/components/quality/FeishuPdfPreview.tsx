@@ -83,7 +83,8 @@ export function FeishuPdfPreview({ src, fileName }: { src: string; fileName: str
         pdfjs.GlobalWorkerOptions.workerSrc = new URL(
           'pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url,
         ).toString()
-        task = pdfjs.getDocument({ data: new Uint8Array(data), isEvalSupported: false })
+        // pdfjs-dist 6.x 已移除 isEvalSupported 选项（eval 支持路径随 CVE-2026-16633 修复整体移除）。
+        task = pdfjs.getDocument({ data: new Uint8Array(data) })
         const document = await task.promise
         if (!controller.signal.aborted) setPdf(document)
       } catch (cause) {
