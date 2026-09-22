@@ -1,8 +1,7 @@
 "use client"
 
 import dynamic from "next/dynamic"
-import { MessageOutlined, RobotOutlined } from "@ant-design/icons"
-import { Button } from "antd"
+import { AgentEntryButton } from "@/components/agent/AgentEntryButton"
 import { useAgentStore } from "@/stores/agent"
 
 const LazyAgentFloatingAssistant = dynamic(
@@ -12,16 +11,7 @@ const LazyAgentFloatingAssistant = dynamic(
     ),
   {
     ssr: false,
-    loading: () => (
-      <Button
-        aria-label="正在加载中枢助手"
-        title="Livzon助手"
-        type="primary"
-        shape="circle"
-        loading
-        className="agent-floating-entry-button !fixed !bottom-6 !right-6 !z-50 !h-14 !w-14 !shadow-lg"
-      />
-    ),
+    loading: () => <AgentEntryButton loading />,
   },
 )
 
@@ -36,17 +26,12 @@ export function AgentFloatingEntry() {
   }
 
   return (
-    <Button
-      aria-label={minimized ? "展开中枢助手" : "打开中枢助手"}
-      title="Livzon助手"
-      type="primary"
-      shape="circle"
-      icon={minimized ? <MessageOutlined /> : <RobotOutlined />}
+    <AgentEntryButton
+      minimized={minimized}
       onClick={() => {
         setOpen(true)
         setMinimized(false)
       }}
-      className="agent-floating-entry-button !fixed !bottom-6 !right-6 !z-50 !h-14 !w-14 !shadow-lg"
     />
   )
 }

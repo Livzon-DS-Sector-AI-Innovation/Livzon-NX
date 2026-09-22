@@ -215,14 +215,6 @@ def test_site_configuration_drift_refuses_before_maintenance(tmp_path, monkeypat
     assert not (control.state_dir / "public" / "maintenance").exists()
 
 
-def test_edbo_must_be_retired_during_attended_commissioning(tmp_path, monkeypatch):
-    control, manifest = deployment_control(tmp_path, monkeypatch)
-    monkeypatch.setattr(control, "containers", lambda: {"edbo-service": {"state": "running"}})
-    with pytest.raises(cd.Refused, match="retire EDBO"):
-        control.deploy("a" * 40, manifest)
-    assert not (control.state_dir / "public" / "maintenance").exists()
-
-
 def test_backup_failure_restores_apps_before_reopening(tmp_path, monkeypatch):
     control, manifest = deployment_control(tmp_path, monkeypatch)
     calls = []

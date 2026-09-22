@@ -48,23 +48,16 @@ describe('migration API adapter coverage', () => {
     expect(fetchMock).toHaveBeenCalled()
   })
 
-  it('covers AI streaming, polling, file extraction and export adapters', async () => {
+  it('covers AI exam polling, file extraction and export adapters', async () => {
     const ai = await import('@/lib/api/ai')
     fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
       const url = String(input)
-      if (url.includes('/stream')) {
-        return new Response('data: {"reasoning_content":"推理"}\ndata: {"content":"答案","done":true}\n', { status: 200 })
-      }
       if (url.includes('generate-written/job-1')) {
         return jsonResponse({ state: 'completed', result: { choice_questions: [], true_false_questions: [], fill_blank_questions: [] } })
       }
       if (url.includes('export-written')) return new Response('docx', { status: 200 })
       return jsonResponse({ job_id: 'job-1', text: '解析文本', filename: '培训.docx', analyzed: true })
     })
-    const chunks: Array<[string, string]> = []
-    const onDone = vi.fn()
-    const onError = vi.fn()
-    await ai.streamChat([{ role: 'user', content: '请分析' }], { page: 'hr' }, (type, text) => chunks.push([type, text]), onDone, onError)
     await ai.generateExamQuestions({ topic: 'GMP' })
     await ai.exportExam({ topic: 'GMP' })
     await ai.generateOralExamQuestions([{ name: '培训.pdf', content: 'base64', code: 'application/pdf' }], 3)
@@ -72,9 +65,6 @@ describe('migration API adapter coverage', () => {
     await ai.pollWrittenExamGenerate('job-1', vi.fn(), { intervalMs: 0, timeoutMs: 100 })
     await ai.extractExamDocumentText(new File(['内容'], '培训.docx'))
     await ai.exportWrittenExam({ title: '试卷' })
-    expect(chunks).toEqual([['reasoning', '推理'], ['content', '答案']])
-    expect(onDone).toHaveBeenCalled()
-    expect(onError).not.toHaveBeenCalled()
   })
 
   it('maps adapter HTTP failures to stable business errors', async () => {

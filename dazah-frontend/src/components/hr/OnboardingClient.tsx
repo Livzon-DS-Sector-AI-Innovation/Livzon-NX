@@ -13,7 +13,6 @@ import {
 } from '@/lib/api/hr'
 import { syncOnboardingFromFeishuAction } from '@/actions/hr'
 import OnboardingDetailModal from './OnboardingDetailModal'
-import HrChatbot from './HrChatbot'
 
 interface OnboardingClientProps {
   initialRecords: OnboardingRecord[]
@@ -254,7 +253,6 @@ export default function OnboardingClient({
         onClose={() => setDetailOpen(false)}
       />
 
-      <HrChatbot />
     </div>
   )
 }

@@ -95,18 +95,72 @@ describe('LoginPanel', () => {
       expect(feishuButton).toBeDefined()
       expect(localLoginButton).toBeDefined()
 
-      act(() => feishuButton?.click())
-      expect(feishuButton?.disabled).toBe(true)
-      expect(feishuButton?.textContent).toContain('正在打开飞书认证')
-
       act(() => localLoginButton?.click())
       expect(localLoginButton?.getAttribute('aria-expanded')).toBe('true')
       expect(container.querySelector('input[name="username"]')).not.toBeNull()
+
+      act(() => feishuButton?.click())
+      expect(feishuButton?.disabled).toBe(true)
+      expect(localLoginButton?.disabled).toBe(true)
+      expect(feishuButton?.textContent).toContain('正在打开飞书认证')
+      expect(container.querySelector('[role="status"]')?.textContent).toContain('正在前往飞书')
+
+      act(() => window.dispatchEvent(new Event('pageshow')))
+      expect(feishuButton?.disabled).toBe(false)
+      expect(vi.getTimerCount()).toBe(0)
     } finally {
       act(() => root.unmount())
       container.remove()
       vi.clearAllTimers()
       vi.useRealTimers()
+    }
+  })
+
+  it('navigates once, recovers after timeout and allows retry', () => {
+    vi.useFakeTimers()
+    const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {})
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    try {
+      act(() => root.render(<LoginPanel nextPath="/quality" localLoginMode="disabled" error="access_denied" />))
+      const button = container.querySelector('button')!
+      act(() => { button.click(); button.click() })
+      expect(container.querySelector('[role="alert"]')).toBeNull()
+      act(() => vi.advanceTimersByTime(240))
+      expect(assign).toHaveBeenCalledExactlyOnceWith(buildFeishuLoginHref('/quality'))
+      act(() => vi.advanceTimersByTime(12000))
+      expect(button.disabled).toBe(false)
+      expect(container.querySelector('[role="alert"]')?.textContent).toContain('检查网络后重试')
+      act(() => button.click())
+      expect(container.querySelector('[role="alert"]')).toBeNull()
+      act(() => root.unmount())
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      assign.mockRestore()
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the local POST and fields intact while preventing duplicate submissions', () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    try {
+      act(() => root.render(<LoginPanel nextPath="/quality" localLoginMode="enabled" error="local_login_failed" />))
+      const form = container.querySelector('form')!
+      expect(form.getAttribute('action')).toBe('/auth/local-login')
+      expect(form.getAttribute('method')).toBe('post')
+      const first = new Event('submit', { bubbles: true, cancelable: true })
+      const second = new Event('submit', { bubbles: true, cancelable: true })
+      act(() => { form.dispatchEvent(first); form.dispatchEvent(second) })
+      expect(first.defaultPrevented).toBe(false)
+      expect(second.defaultPrevented).toBe(true)
+      expect(container.querySelector('button[type="submit"]')?.textContent).toContain('正在验证账号')
+      expect(container.querySelector<HTMLInputElement>('input[name="username"]')?.disabled).toBe(false)
+      act(() => window.dispatchEvent(new Event('pageshow')))
+      expect(container.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false)
+    } finally {
+      act(() => root.unmount())
     }
   })
 })
