@@ -93,18 +93,15 @@ test.describe('页面最小授权', () => {
     expect(response?.status()).toBe(403)
   })
 
-  test('新增偏差选择中文报告人并提交关联部门', async ({ context, page, request }) => {
+  test('新增偏差提交台账（报告人改为可选）', async ({ context, page, request }) => {
     await context.addCookies([{ name: 'auth_token', value: 'ledger-create', url: 'http://127.0.0.1:3200' }])
     await page.goto('/quality/deviations/new')
-    await page.getByLabel('报告人', { exact: true }).click()
-    await page.getByText('王报告（质量部）', { exact: true }).click()
-    await expect(page.getByLabel('部门', { exact: true })).toHaveValue('质量部')
     await page.getByLabel('产品名称/批号', { exact: true }).fill('产品A / 批次1')
     await page.getByLabel('偏差简要描述', { exact: true }).fill('浏览器新增偏差')
     await page.getByRole('button', { name: '保存台账' }).click()
     await expect(page).toHaveURL(/\/quality\/deviations\/ledger$/)
     const recorded = await request.get('http://127.0.0.1:4100/__test/ledger-write?token=ledger-create')
-    expect(await recorded.json()).toMatchObject({ reporter_open_id: 'test-reporter', department: '质量部', description: '浏览器新增偏差', is_closed: false })
+    expect(await recorded.json()).toMatchObject({ description: '浏览器新增偏差', affected_items: '产品A / 批次1', is_closed: false })
   })
 
   test('批量删除确认前不写入，成功后更新台账', async ({ context, page, request }) => {
