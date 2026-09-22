@@ -97,7 +97,7 @@ it('OOS report changes reporter without sending attachment fields', async () => 
 })
 
 it('CAPA ledger renders every Feishu column in order and keeps local-only columns out of the list', async () => {
-  await renderPage(<CapaTable />)
+  await renderPage(<CapaTable capas={[]} total={0} />)
   expect(Array.from(container.querySelectorAll('th')).map(node => node.textContent).filter(Boolean)).toEqual([
     ...feishuColumnLayouts.capaLedger, '操作',
   ])

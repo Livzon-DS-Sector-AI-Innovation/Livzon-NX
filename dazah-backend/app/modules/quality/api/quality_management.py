@@ -790,6 +790,18 @@ async def update_capa_plan_track(
         raise HTTPException(status_code=400, detail=detail)
 
 
+@router.post("/feishu-sync/deviations/{deviation_id}", summary="同步偏差到飞书Base")
+async def sync_deviation_record_to_feishu(
+    deviation_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    try:
+        result = await service.sync_deviation_to_feishu(db, deviation_id)
+        return {"data": result}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @router.post("/feishu-sync/capas/{capa_id}", summary="同步CAPA到飞书Base")
 async def sync_capa_record_to_feishu(
     capa_id: uuid.UUID,

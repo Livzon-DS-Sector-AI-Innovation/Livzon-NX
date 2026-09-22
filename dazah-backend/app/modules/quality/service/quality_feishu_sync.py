@@ -10,7 +10,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from sqlalchemy import false, select
-from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings

@@ -28,7 +28,6 @@ from app.modules.quality.schemas import (
     ChangeStatistics,
     CreateCapaRequest,
     CreateChangeRequest,
-    CreateDeviationRequest,
     DepartmentWeeklyConfirmationOut,
     DeviationDetail,
     DeviationListItem,
@@ -37,9 +36,7 @@ from app.modules.quality.schemas import (
     SubmitReviewRequest,
     UpdateCapaRequest,
     UpdateChangeRequest,
-    UpdateDeviationRequest,
 )
-from app.platform.identity.models import User
 
 MONTHLY_DEVIATION_CODE_PATTERN = re.compile(r"^PC-(\d{4})(\d{3})$")
 

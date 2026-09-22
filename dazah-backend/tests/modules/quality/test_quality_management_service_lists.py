@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm.encryption import decrypt_api_key
@@ -26,13 +25,12 @@ from app.modules.quality.schemas.feishu_settings import (
     UpdateQualityFeishuEntitySettingRequest,
 )
 from app.modules.quality.service import person_directory, quality_feishu_pages
+from app.modules.quality.service import quality_deviation as deviation_service
 from app.modules.quality.service import (
     quality_feishu_settings as feishu_settings_service,
 )
 from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
 from app.modules.quality.service import quality_management as service
-from app.modules.quality.service import quality_deviation as deviation_service
-from app.platform.identity.models import User
 from app.platform.integrations.feishu import bitable as feishu_bitable
 from tests.modules.quality.ddl_lock_guard import execute_ddl_with_lock_timeout
 

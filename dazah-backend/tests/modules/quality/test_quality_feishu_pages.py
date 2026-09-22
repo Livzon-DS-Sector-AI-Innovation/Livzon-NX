@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import io
 from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from docx import Document
 from httpx import AsyncClient
 
 from app.modules.quality.api import quality_management as quality_api

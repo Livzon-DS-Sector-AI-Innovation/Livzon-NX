@@ -286,6 +286,7 @@ QUALITY_REVIEWED_API_ROUTES: tuple[tuple[str, str], ...] = (
     ("POST", "/api/v1/quality/feishu-sync/capa-plan-tracks/{track_id}"),
     ("POST", "/api/v1/quality/feishu-sync/capas/{capa_id}"),
     ("POST", "/api/v1/quality/feishu-sync/deviation-investigation-push-records/{record_id}"),
+    ("POST", "/api/v1/quality/feishu-sync/deviations/{deviation_id}"),
     ("POST", "/api/v1/quality/feishu-sync/validations/pull"),
     ("POST", "/api/v1/quality/feishu/capa-plan-tracks"),
     ("POST", "/api/v1/quality/feishu/capas"),

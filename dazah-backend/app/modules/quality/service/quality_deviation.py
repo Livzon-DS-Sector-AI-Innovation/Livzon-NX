@@ -791,8 +791,11 @@ async def update_deviation(
         new_code = (update_data.get("deviation_code") or "").strip()
         if not new_code:
             raise AppException(message="偏差编号不能为空")
-        if new_code != deviation.deviation_code and await repository.exists_by_deviation_code(
-            db, new_code, exclude_id=deviation.id
+        if (
+            new_code != deviation.deviation_code
+            and await repository.exists_by_deviation_code(
+                db, new_code, exclude_id=deviation.id
+            )
         ):
             raise AppException(message="偏差编号已存在")
         update_data["deviation_code"] = new_code

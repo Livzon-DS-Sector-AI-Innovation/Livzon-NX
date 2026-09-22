@@ -15682,6 +15682,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quality/feishu-sync/deviations/{deviation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 同步偏差到飞书Base */
+        post: operations["sync_deviation_record_to_feishu_api_v1_quality_feishu_sync_deviations__deviation_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quality/feishu-sync/pull": {
         parameters: {
             query?: never;
@@ -101455,6 +101472,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_deviation_record_to_feishu_api_v1_quality_feishu_sync_deviations__deviation_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deviation_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

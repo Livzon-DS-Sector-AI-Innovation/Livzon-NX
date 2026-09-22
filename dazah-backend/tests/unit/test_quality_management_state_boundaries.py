@@ -18,9 +18,9 @@ from app.modules.quality.schemas import (
     UpdateChangeRequest,
     UpdateDeviationRequest,
 )
+from app.modules.quality.service import quality_deviation as deviation_service
 from app.modules.quality.service import quality_feishu_pages, quality_feishu_sync
 from app.modules.quality.service import quality_management as service
-from app.modules.quality.service import quality_deviation as deviation_service
 
 SimpleNamespace: Any = _SimpleNamespace
 
@@ -59,6 +59,9 @@ async def test_deviation_update_close_reopen_delete_and_rollback(
         returned_step=None,
     )
     db = _db(deviation)
+    monkeypatch.setattr(
+        quality_feishu_sync, "auto_sync_deviation_after_write", AsyncMock()
+    )
 
     closed = UpdateDeviationRequest.model_construct(
         title="更新后的偏差",
@@ -86,7 +89,9 @@ async def test_deviation_update_close_reopen_delete_and_rollback(
     assert deviation.status == "draft"
     assert deviation.investigation_completed_at is None
 
-    assert await deviation_service.delete_deviation(db, deviation_id) == {"success": True}
+    assert await deviation_service.delete_deviation(db, deviation_id) == {
+        "success": True
+    }
     assert deviation.is_deleted is True
 
     db.commit.side_effect = RuntimeError("commit failed")

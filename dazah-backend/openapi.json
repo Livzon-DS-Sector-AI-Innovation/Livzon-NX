@@ -168851,6 +168851,66 @@
         ]
       }
     },
+    "/api/v1/quality/feishu-sync/deviations/{deviation_id}": {
+      "post": {
+        "operationId": "sync_deviation_record_to_feishu_api_v1_quality_feishu_sync_deviations__deviation_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "deviation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Deviation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Sync Deviation Record To Feishu Api V1 Quality Feishu Sync Deviations  Deviation Id  Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "同步偏差到飞书Base",
+        "tags": [
+          "质量管理",
+          "Quality-Management-Compatibility"
+        ]
+      }
+    },
     "/api/v1/quality/feishu-sync/pull": {
       "post": {
         "operationId": "pull_quality_records_from_feishu_api_v1_quality_feishu_sync_pull_post",
