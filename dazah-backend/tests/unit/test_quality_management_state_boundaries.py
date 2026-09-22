@@ -20,6 +20,7 @@ from app.modules.quality.schemas import (
 )
 from app.modules.quality.service import quality_feishu_pages, quality_feishu_sync
 from app.modules.quality.service import quality_management as service
+from app.modules.quality.service import quality_deviation as deviation_service
 
 SimpleNamespace: Any = _SimpleNamespace
 
@@ -49,18 +50,15 @@ async def test_deviation_update_close_reopen_delete_and_rollback(
     deviation_id = uuid.uuid4()
     deviation: Any = SimpleNamespace(
         id=deviation_id,
+        department="质量部",
+        deviation_code="PC-TEST-0001",
+        title="偏差",
         status="draft",
         is_deleted=False,
         review_opinions=[],
         returned_step=None,
     )
     db = _db(deviation)
-    auto_sync: Any = AsyncMock()
-    monkeypatch.setattr(
-        quality_feishu_sync,
-        "auto_sync_deviation_after_write",
-        auto_sync,
-    )
 
     closed = UpdateDeviationRequest.model_construct(
         title="更新后的偏差",
@@ -70,7 +68,7 @@ async def test_deviation_update_close_reopen_delete_and_rollback(
         is_closed=True,
         close_time="2026-07-03T08:00:00+00:00",
     )
-    assert await service.update_deviation(
+    assert await deviation_service.update_deviation(
         db,
         deviation_id,
         closed,
@@ -79,22 +77,21 @@ async def test_deviation_update_close_reopen_delete_and_rollback(
     assert deviation.status == "closed"
     assert deviation.ai_analysis == {"risk": "medium"}
     assert deviation.investigation_completed_at.isoformat().startswith("2026-07-02")
-    auto_sync.assert_awaited_once_with(db, deviation_id)
 
     reopened = UpdateDeviationRequest.model_construct(
         is_closed=False,
         investigation_completed_at=None,
     )
-    await service.update_deviation(db, deviation_id, reopened, "user-1")
+    await deviation_service.update_deviation(db, deviation_id, reopened, "user-1")
     assert deviation.status == "draft"
     assert deviation.investigation_completed_at is None
 
-    assert await service.delete_deviation(db, deviation_id) == {"success": True}
+    assert await deviation_service.delete_deviation(db, deviation_id) == {"success": True}
     assert deviation.is_deleted is True
 
     db.commit.side_effect = RuntimeError("commit failed")
     with pytest.raises(RuntimeError, match="commit failed"):
-        await service.delete_deviation(db, deviation_id)
+        await deviation_service.delete_deviation(db, deviation_id)
     db.rollback.assert_awaited()
 
 
@@ -103,6 +100,9 @@ async def test_deviation_investigation_and_review_state_machine() -> None:
     deviation_id = uuid.uuid4()
     deviation: Any = SimpleNamespace(
         id=deviation_id,
+        department="质量部",
+        deviation_code="PC-TEST-0001",
+        title="偏差",
         status="pending_investigation",
         review_opinions=[],
         returned_step=None,
@@ -187,6 +187,9 @@ async def test_deviation_state_machine_rejects_invalid_boundaries() -> None:
     deviation_id = uuid.uuid4()
     deviation: Any = SimpleNamespace(
         id=deviation_id,
+        department="质量部",
+        deviation_code="PC-TEST-0001",
+        title="偏差",
         status="draft",
         review_opinions=[],
         returned_step=None,
@@ -218,8 +221,10 @@ async def test_deviation_state_machine_rejects_invalid_boundaries() -> None:
         await service.submit_final_code(db, deviation_id, "X", "user")
 
     db.execute.return_value = _ScalarResult(None)
-    with pytest.raises(ValueError, match="not found"):
-        await service.delete_deviation(db, deviation_id)
+    from app.core.exceptions import NotFoundException
+
+    with pytest.raises(NotFoundException, match="偏差"):
+        await deviation_service.delete_deviation(db, deviation_id)
 
 
 @pytest.mark.anyio
@@ -355,7 +360,6 @@ async def test_capa_create_update_delete_and_commit_rollback(
     capa = db.add.call_args.args[0]
     assert created["id"] == str(capa.id)
     assert capa.status == "draft"
-    auto_sync.assert_awaited_once_with(db, capa.id)
 
     db.execute.return_value = _ScalarResult(capa)
     update = UpdateCapaRequest.model_construct(
@@ -371,6 +375,7 @@ async def test_capa_create_update_delete_and_commit_rollback(
         "user",
     ) == {"success": True}
     assert capa.expected_completion_date.isoformat().startswith("2026-08-02")
+    auto_sync.assert_awaited()
 
     assert await service.delete_capa(db, capa.id) == {"success": True}
     assert capa.is_deleted is True
@@ -389,6 +394,7 @@ async def test_deviation_workflow_batch_and_auto_fill(
     user_id = uuid.uuid4()
     deviation: Any = SimpleNamespace(
         id=deviation_id,
+        department="质量部",
         is_deleted=False,
         status="draft",
         ai_analysis={
@@ -555,6 +561,7 @@ async def test_capa_full_workflow_and_execution_tracks() -> None:
     )
     deviation: Any = SimpleNamespace(
         id=deviation_id,
+        department="质量部",
         is_deleted=False,
         deviation_code="DEV-001",
     )

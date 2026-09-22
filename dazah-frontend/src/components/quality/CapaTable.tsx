@@ -1,5 +1,7 @@
 'use client'
 
+import { alignFeishuColumns, feishuColumnLayouts } from './feishuColumnLayout'
+
 import { TableEmptyState } from './TableEmptyState'
 import { qualityTokens } from './themeTokens'
 
@@ -73,7 +75,6 @@ const COLUMN_WIDTHS = {
   action: 120,
 } as const
 
-const TABLE_SCROLL_X = 32 + Object.values(COLUMN_WIDTHS).reduce((sum, width) => sum + width, 0)
 
 interface CapaTableProps {
   capas: CapaListItem[]
@@ -230,6 +231,12 @@ export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
   }, [closureDateFrom, closureDateTo])
 
   const columns = useMemo(() => [
+    { title: 'CAPA效果评估', dataIndex: 'evaluation_result', key: 'evaluation_result', width: 180, render: (value: string | null) => value || '-' },
+    { title: '关闭日期', dataIndex: 'closure_date', key: 'closure_date', width: 150, render: (value: string | null) => formatDate(value) },
+    { title: 'QA质量员', dataIndex: 'qa_confirmer', key: 'qa_confirmer', width: 140, render: (value: string | null) => value || '-' },
+    { title: 'QA质量员确认日期', dataIndex: 'qa_confirm_date', key: 'qa_confirm_date', width: 180, render: (value: string | null) => formatDate(value) },
+    { title: 'CAPA状态', dataIndex: 'status', key: 'status', width: 150, render: (value: CapaWorkflowStatus) => statusConfig[value]?.label || value || '-' },
+    { title: '关联CAPA计划', key: 'linked_plan_tracks', width: 200, render: (_: unknown, record: CapaListItem) => <Button type="link" style={{ padding: 0 }} onClick={() => goToPlan(record)}>{record.linked_plan_contents?.join('；') || `${record.linked_plan_tracks?.length ?? 0} 条计划`}</Button> },
     {
       title: 'CAPA编号',
       dataIndex: 'capa_code',
@@ -442,7 +449,7 @@ export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
         </div>
       ) : null}
       <Table
-        columns={columns}
+        columns={alignFeishuColumns(columns, feishuColumnLayouts.capaLedger)}
         dataSource={capas}
         locale={{
           emptyText: <TableEmptyState hasFilters={Boolean(keyword || statusFilter || categoryFilter)} />,
@@ -454,7 +461,7 @@ export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
         }}
         size="small"
         loading={loading}
-        scroll={{ x: TABLE_SCROLL_X }}
+        scroll={{ x: columns.reduce((sum, column) => sum + Number(column.width || 160), 32) }}
         pagination={{
           current: page,
           pageSize: pageSize,

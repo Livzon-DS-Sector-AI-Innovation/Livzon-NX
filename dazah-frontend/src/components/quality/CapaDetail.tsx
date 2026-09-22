@@ -157,14 +157,19 @@ export function CapaDetail() {
   const handleSaveEdit = async () => {
     try {
       const values = await editForm.validateFields()
-      await updateCapa(capa!.id, {
+      const result = await updateCapa(capa!.id, {
         ...values,
         expected_completion_date: values.expected_completion_date ? new Date(values.expected_completion_date).toISOString() : undefined,
       })
-      message.success('保存成功')
+      if (result?.feishu_sync_status === 'failed') {
+        message.warning('CAPA已保存，但飞书同步失败，请重试保存')
+      } else {
+        message.success('保存成功')
+      }
       setEditMode(false)
       queryClient.invalidateQueries({ queryKey: ['quality-capa', 'detail', id] })
     } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'errorFields' in error) return
       message.error(getErrorMessage(error, '保存失败'))
     }
   }
@@ -481,6 +486,11 @@ export function CapaDetail() {
                 {capa.source ? SOURCE_OPTIONS.find(o => o.value === capa.source)?.label || capa.source : '-'}
               </Descriptions.Item>
               <Descriptions.Item label="来源编号">{capa.source_code || '-'}</Descriptions.Item>
+              <Descriptions.Item label="计划数">
+                <Button type="link" style={{ padding: 0 }} onClick={() => router.push(`/quality/capas/plans?${new URLSearchParams({ capa_code: capa.capa_code })}`)}>
+                  {capa.linked_plan_contents?.length ?? 0}
+                </Button>
+              </Descriptions.Item>
               <Descriptions.Item label="类别">
                 {capa.category ? CATEGORY_OPTIONS.find(o => o.value === capa.category)?.label || capa.category : '-'}
               </Descriptions.Item>

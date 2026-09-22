@@ -106,6 +106,7 @@ export function DeviationDetail(props: DeviationDetailProps = {}) {
   useEffect(() => {
     if (canQuery && deviation) {
       editForm.setFieldsValue({
+        deviation_code: deviation.deviation_code,
         affected_items: deviation.affected_items,
         batch_number: deviation.batch_number,
         description: deviation.description,
@@ -130,6 +131,7 @@ export function DeviationDetail(props: DeviationDetailProps = {}) {
       const values = await editForm.validateFields()
       // 组装更新数据：可编辑列对齐桌面台账，关闭状态按台账实际登记维护
       await updateDeviation(deviation!.id, {
+        deviation_code: (values.deviation_code || '').trim(),
         description: values.description,
         affected_items: values.affected_items || null,
         batch_number: values.batch_number || null,
@@ -221,8 +223,13 @@ export function DeviationDetail(props: DeviationDetailProps = {}) {
             }
           }}
         >
-          <Form.Item label="偏差编号">
-            <Input value={deviation.deviation_code} disabled />
+          <Form.Item
+            name="deviation_code"
+            label="偏差编号"
+            rules={[{ required: true, message: '偏差编号不能为空' }]}
+            extra="编号可修改，不能与现有编号重复。"
+          >
+            <Input placeholder="请输入偏差编号" maxLength={255} />
           </Form.Item>
           <Form.Item name="affected_items" label="产品名称">
             <Input placeholder="请输入产品名称" />

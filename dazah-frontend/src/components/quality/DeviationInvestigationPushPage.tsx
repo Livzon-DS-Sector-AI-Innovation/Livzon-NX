@@ -1,5 +1,7 @@
 'use client'
 
+import { alignFeishuColumns, feishuColumnLayouts } from './feishuColumnLayout'
+
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import dayjs, { type Dayjs } from 'dayjs'
@@ -60,6 +62,15 @@ function renderPerson(
 const baseColumns: ColumnsType<DeviationInvestigationPushRecordItem> = [
   { title: '偏差编号', dataIndex: 'deviation_code', key: 'deviation_code', width: 160 },
   { title: '第N次推送', dataIndex: 'push_round', key: 'push_round', width: 110 },
+  { title: '部门', dataIndex: 'department', key: 'department', width: 140, render: value => value || '-' },
+  { title: '流程状态', dataIndex: 'process_status', key: 'process_status', width: 150, render: value => value || '-' },
+  { title: '已退回待重新提交', dataIndex: 'need_resubmit', key: 'need_resubmit', width: 160, render: value => value == null ? '-' : value ? '是' : '否' },
+  { title: 'QA', key: 'qas', width: 140, render: (_, record) => renderPerson(record.qas, record.qa_name) },
+  { title: 'QA审核结果', dataIndex: 'qa_result', key: 'qa_result', width: 140, render: renderReviewResult },
+  { title: 'QA审核时间', dataIndex: 'qa_reviewed_at', key: 'qa_reviewed_at', width: 170, render: formatDateTime },
+  { title: 'QA负责人', key: 'qa_heads', width: 140, render: (_, record) => renderPerson(record.qa_heads, record.qa_head_name) },
+  { title: 'QA负责人审核结果', dataIndex: 'qa_head_result', key: 'qa_head_result', width: 170, render: renderReviewResult },
+  { title: 'QA负责人审核时间', dataIndex: 'qa_head_reviewed_at', key: 'qa_head_reviewed_at', width: 170, render: formatDateTime },
   {
     title: '偏差调查报告',
     dataIndex: 'investigation_report_url',
@@ -299,8 +310,8 @@ export function DeviationInvestigationPushPage({
   }, [appSettings, message])
 
   const handleSubmit = useCallback(async () => {
-    const values = await form.validateFields()
     try {
+      const values = await form.validateFields()
       setSaving(true)
       const payload = {
         deviation_code: values.deviation_code.trim(),
@@ -317,6 +328,7 @@ export function DeviationInvestigationPushPage({
       queryClient.invalidateQueries({ queryKey: ['quality-deviation', 'investigation-push'] })
       queryClient.invalidateQueries({ queryKey: ['quality-deviation', 'report-records-options'] })
     } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'errorFields' in error) return
       message.error(getErrorMessage(error, '保存调查推送记录失败'))
     } finally {
       setSaving(false)
@@ -399,10 +411,10 @@ export function DeviationInvestigationPushPage({
       <Table<DeviationInvestigationPushRecordItem>
         rowKey="record_id"
         loading={loading}
-        columns={columns}
+        columns={alignFeishuColumns(columns, feishuColumnLayouts.deviationInvestigation)}
         dataSource={items}
         pagination={false}
-        scroll={{ x: 1440 }}
+        scroll={{ x: columns.reduce((sum, column) => sum + Number(column.width || 160), 0) }}
       />
       <Modal
         title="修改推送记录"

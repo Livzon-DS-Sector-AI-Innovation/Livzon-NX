@@ -258,7 +258,7 @@ async def test_deviation_investigation_push_record_service_roundtrip(
     assert str(detail.id) == record_id
     assert detail.deviation_code == "DEV-TRACK-001"
     assert detail.submitter == "张起智"
-    assert detail.department_head == "车间主任"
+    assert detail.department_head is None  # 创建时不再写部门负责人，改由确认流程维护
 
     update_result = await tracking_service.update_deviation_investigation_push_record(
         db_session,
@@ -471,7 +471,7 @@ async def test_update_deviation_investigation_push_record_by_feishu_record_ref(
         "text": "https://example.com/new.pdf",
         "type": "url",
     }
-    assert upsert_mock.await_args.args[4]["提交人"] == [{"id": "on_submitter_001"}]
+    assert "提交人" not in upsert_mock.await_args.args[4]
     assert upsert_mock.await_args.args[4]["QA审核结果"] == "通过"
 
 
@@ -551,11 +551,7 @@ async def test_update_push_record_by_feishu_ref_preserves_url_link(
     )
 
     assert result["investigation_report_url"] == "https://example.com/docx/abc"
-    assert upsert_mock.await_args.args[4]["偏差调查报告"] == {
-        "link": "https://example.com/docx/abc",
-        "text": "https://example.com/docx/abc",
-        "type": "url",
-    }
+    assert "偏差调查报告" not in upsert_mock.await_args.args[4]
 
 
 @pytest.mark.anyio
@@ -619,7 +615,9 @@ async def test_update_push_record_by_feishu_ref_rejects_invalid_url(
         await tracking_service.update_deviation_investigation_push_record_by_ref(
             db_session,
             "rec_push_remote_003",
-            UpdateDeviationInvestigationPushRecordRequest(qa_result="approved"),
+            UpdateDeviationInvestigationPushRecordRequest(
+                investigation_report_url="报告标题不是链接"
+            ),
             "system",
         )
 
@@ -651,6 +649,7 @@ async def test_capa_plan_track_api_roundtrip(
             "plan_content": "完成偏差复盘并关闭CAPA",
             "due_date": "2026-07-15",
             "owner_name": "李四",
+            "department": "QC",
             "progress": "in_progress",
             "reminder_status": "pending",
         },
@@ -658,6 +657,7 @@ async def test_capa_plan_track_api_roundtrip(
     assert create_response.status_code == 200
     track_id = create_response.json()["data"]["id"]
     assert create_response.json()["data"]["capa_code"] == "CAPA-TRACK-001"
+    assert create_response.json()["data"]["department"] == "QC"
 
     list_response = await client.get(
         "/api/v1/quality/capa-plan-tracks",
@@ -671,14 +671,17 @@ async def test_capa_plan_track_api_roundtrip(
         f"/api/v1/quality/capa-plan-tracks/{track_id}",
         json={
             "owner_confirmed": True,
+            "department": "QA",
             "department_head_confirmed": True,
             "progress": "completed",
             "reminder_status": "confirmed",
         },
     )
     assert update_response.status_code == 200
-    assert update_response.json()["data"]["owner_confirmed"] is True
-    assert update_response.json()["data"]["department_head_confirmed"] is True
+    assert update_response.json()["data"]["department"] == "QA"
+    # These flags belong to Feishu automation and cannot be overwritten by editing.
+    assert update_response.json()["data"]["owner_confirmed"] is False
+    assert update_response.json()["data"]["department_head_confirmed"] is False
     assert update_response.json()["data"]["progress"] == "completed"
 
 

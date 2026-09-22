@@ -7,6 +7,7 @@ import uuid
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,7 +31,10 @@ from app.modules.quality.service import (
     validation_classification as validation_classification_service,
 )
 from app.platform.audit.service import record_audit_log
-from app.platform.integrations.feishu.bitable import BitableClient
+from app.platform.integrations.feishu.bitable import (
+    BitableClient,
+    fields_need_union_user_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -200,277 +204,6 @@ async def _delete_entity_record(
     await client.delete_record(entity.table_id, record_id)
 
 
-def _normalize_closed_status(value: Any) -> str:
-    normalized = feishu_sync_service._normalize_bool_from_yes_no(value)
-    return "closed" if normalized else "draft"
-
-
-def _normalize_yes_no(value: bool | None) -> str:
-    if value is None:
-        return ""
-    return "是" if value else "否"
-
-
-def _split_related_capa_codes(value: Any) -> list[str] | None:
-    normalized = feishu_sync_service._normalize_text(value)
-    if not normalized:
-        return None
-    codes = [code.strip() for code in re.split(r"[,，/、\s]+", normalized)]
-    return [code for code in codes if code] or None
-
-
-def _map_deviation_ledger_base_item(
-    record: dict[str, Any],
-    entity: feishu_sync_service.QualityFeishuEntityRuntimeConfig,
-) -> dict[str, Any]:
-    fields = record.get("fields") or {}
-    field_value = feishu_sync_service._get_mapped_field_value
-    normalize_text = feishu_sync_service._normalize_text
-    parse_datetime = feishu_sync_service._parse_feishu_datetime
-    modified_at = feishu_sync_service._get_record_modified_at(record)
-    created_at = (
-        parse_datetime(record.get("created_time")) or modified_at or datetime.now(UTC)
-    )
-    return {
-        "id": str(record.get("record_id") or ""),
-        "record_id": str(record.get("record_id") or ""),
-        "deviation_code": normalize_text(field_value(entity, fields, "偏差编号")) or "",
-        "final_code": None,
-        "title": normalize_text(field_value(entity, fields, "偏差简要描述")) or "",
-        "department": None,
-        "discovery_date": None,
-        "discovery_time": None,
-        "status": _normalize_closed_status(field_value(entity, fields, "是否关闭")),
-        "level": normalize_text(field_value(entity, fields, "偏差等级")),
-        "root_cause_category": None,
-        "reporter_id": None,
-        "handler": None,
-        "batch_number": None,
-        "affected_items": normalize_text(field_value(entity, fields, "产品名称/批号")),
-        "description": normalize_text(field_value(entity, fields, "偏差简要描述")),
-        "has_occurred_before": feishu_sync_service._normalize_bool_from_yes_no(
-            field_value(entity, fields, "偏差是否曾发生")
-        ),
-        "material_disposition": normalize_text(
-            field_value(entity, fields, "产品/物料处理结果")
-        ),
-        "corrective_actions": normalize_text(
-            field_value(entity, fields, "纠正预防措施")
-        ),
-        "root_cause_analysis": normalize_text(field_value(entity, fields, "根本原因")),
-        "investigation_completed_at": parse_datetime(
-            field_value(entity, fields, "调查完成时间")
-        ),
-        "close_time": parse_datetime(field_value(entity, fields, "关闭时间")),
-        "related_capa_codes": _split_related_capa_codes(
-            field_value(entity, fields, "关联capa")
-        ),
-        "related_capas": None,
-        "feishu_base_table_id": entity.table_id,
-        "feishu_base_record_id": str(record.get("record_id") or ""),
-        "feishu_sync_status": "synced",
-        "feishu_last_sync_error": None,
-        "feishu_last_sync_direction": "base_to_system",
-        "feishu_synced_at": modified_at,
-        "feishu_source_updated_at": modified_at,
-        "status_updated_at": parse_datetime(field_value(entity, fields, "关闭时间")),
-        "returned_step": None,
-        "created_at": created_at,
-    }
-
-
-def _map_deviation_ledger_detail_item(
-    record: dict[str, Any],
-    entity: feishu_sync_service.QualityFeishuEntityRuntimeConfig,
-) -> dict[str, Any]:
-    item = _map_deviation_ledger_base_item(record, entity)
-    item.update(
-        {
-            "discovery_location": None,
-            "immediate_actions": None,
-            "discoverer": None,
-            "ai_analysis": None,
-            "investigation_records": None,
-            "review_opinions": None,
-            "attachments": None,
-            "needs_cross_dept_review": None,
-            "cross_dept_reviewers": None,
-            "report_content": None,
-            "report_versions": None,
-            "updated_at": item["feishu_source_updated_at"] or item["created_at"],
-        }
-    )
-    return item
-
-
-def _build_deviation_ledger_fields(
-    payload: dict[str, Any],
-    *,
-    deviation_code: str,
-) -> dict[str, Any]:
-    affected_items = str(payload.get("affected_items") or "").strip()
-    batch_number = str(payload.get("batch_number") or "").strip()
-    product_batch = str(payload.get("product_batch") or "").strip()
-    combined_product_batch = product_batch or feishu_sync_service._join_non_empty(
-        [affected_items or None, batch_number or None]
-    )
-    is_closed = payload.get("is_closed")
-    if is_closed is None and payload.get("status") is not None:
-        is_closed = str(payload.get("status")).strip().lower() == "closed"
-    return {
-        "偏差编号": deviation_code,
-        "产品名称/批号": combined_product_batch or "",
-        "偏差简要描述": str(
-            payload.get("description") or payload.get("title") or ""
-        ).strip(),
-        "偏差是否曾发生": "是"
-        if payload.get("has_occurred_before") is True
-        else "否"
-        if payload.get("has_occurred_before") is False
-        else "",
-        "根本原因": str(payload.get("root_cause_analysis") or "").strip(),
-        "偏差等级": str(payload.get("level") or "").strip(),
-        "调查完成时间": feishu_sync_service._to_ms_timestamp(
-            _parse_datetime_like(payload.get("investigation_completed_at"))
-        ),
-        "纠正预防措施": str(payload.get("corrective_actions") or "").strip(),
-        "产品/物料处理结果": str(payload.get("material_disposition") or "").strip(),
-        "是否关闭": "是" if is_closed is True else "否" if is_closed is False else "",
-        "关闭时间": feishu_sync_service._to_ms_timestamp(
-            _parse_datetime_like(payload.get("close_time"))
-        ),
-        "关联capa": "、".join(payload.get("related_capa_codes") or []),
-    }
-
-
-async def list_deviation_ledger_records(
-    db: AsyncSession,
-    *,
-    record_ids: list[str] | None = None,
-    keyword: str | None = None,
-    deviation_code: str | None = None,
-    product_keyword: str | None = None,
-    has_occurred_before: bool | None = None,
-    is_closed: bool | None = None,
-    investigation_completed_from: str | None = None,
-    investigation_completed_to: str | None = None,
-    root_cause_keyword: str | None = None,
-    corrective_actions_keyword: str | None = None,
-    page: int,
-    page_size: int,
-) -> dict[str, Any]:
-    _, entity = await _resolve_runtime_entity(db, "deviation_ledger", direction="pull")
-    records = await _search_entity_records(db, "deviation_ledger")
-    items = [_map_deviation_ledger_base_item(record, entity) for record in records]
-    selected_ids = {value.strip() for value in (record_ids or []) if value.strip()}
-    filtered = []
-    for item in items:
-        if selected_ids and item["record_id"] not in selected_ids:
-            continue
-        searchable = " ".join(
-            str(item.get(key) or "")
-            for key in ("deviation_code", "title", "description")
-        )
-        if keyword and keyword.lower() not in searchable.lower():
-            continue
-        if (
-            deviation_code
-            and deviation_code.lower()
-            not in str(item.get("deviation_code") or "").lower()
-        ):
-            continue
-        if (
-            product_keyword
-            and product_keyword.lower()
-            not in str(item.get("affected_items") or "").lower()
-        ):
-            continue
-        if (
-            has_occurred_before is not None
-            and item.get("has_occurred_before") != has_occurred_before
-        ):
-            continue
-        if is_closed is not None and (item.get("status") == "closed") != is_closed:
-            continue
-        if (
-            root_cause_keyword
-            and root_cause_keyword.lower()
-            not in str(item.get("root_cause_analysis") or "").lower()
-        ):
-            continue
-        if (
-            corrective_actions_keyword
-            and corrective_actions_keyword.lower()
-            not in str(item.get("corrective_actions") or "").lower()
-        ):
-            continue
-        filtered.append(item)
-    filtered.sort(
-        key=lambda item: str(
-            item.get("feishu_source_updated_at") or item.get("created_at") or ""
-        ),
-        reverse=True,
-    )
-    start = (page - 1) * page_size
-    return _build_page_result(
-        filtered[start : start + page_size], len(filtered), page, page_size
-    )
-
-
-async def get_deviation_ledger_record(
-    db: AsyncSession, record_id: str
-) -> dict[str, Any]:
-    _, entity = await _resolve_runtime_entity(db, "deviation_ledger", direction="pull")
-    for record in await _search_entity_records(db, "deviation_ledger"):
-        if str(record.get("record_id") or "") == record_id:
-            return _map_deviation_ledger_detail_item(record, entity)
-    raise NotFoundException(resource="飞书偏差台账记录", resource_id=record_id)
-
-
-async def create_deviation_ledger_record(
-    db: AsyncSession,
-    payload: dict[str, Any],
-) -> dict[str, Any]:
-    deviation_code = str(payload.get("deviation_code") or "").strip()
-    if not deviation_code:
-        deviation_code = (
-            await quality_management_service._generate_monthly_deviation_code(
-                db, datetime.now(UTC)
-            )
-        )
-    created = await _create_entity_record(
-        db,
-        "deviation_ledger",
-        _build_deviation_ledger_fields(payload, deviation_code=deviation_code),
-        search_conditions=[("偏差编号", deviation_code)],
-    )
-    return await get_deviation_ledger_record(db, created["record_id"])
-
-
-async def update_deviation_ledger_record(
-    db: AsyncSession,
-    record_id: str,
-    payload: dict[str, Any],
-) -> dict[str, Any]:
-    current = await get_deviation_ledger_record(db, record_id)
-    merged = {**current, **payload}
-    deviation_code = str(merged.get("deviation_code") or "").strip()
-    if not deviation_code:
-        raise AppException(message="飞书偏差台账记录缺少偏差编号")
-    await _update_entity_record(
-        db,
-        "deviation_ledger",
-        record_id,
-        _build_deviation_ledger_fields(merged, deviation_code=deviation_code),
-        search_conditions=[("偏差编号", deviation_code)],
-    )
-    return await get_deviation_ledger_record(db, record_id)
-
-
-async def delete_deviation_ledger_record(db: AsyncSession, record_id: str) -> None:
-    await _delete_entity_record(db, "deviation_ledger", record_id)
-
-
 async def _get_investigation_push_record(
     db: AsyncSession,
     record_id: str,
@@ -582,8 +315,6 @@ async def create_deviation_report_record(
 async def _build_report_record_fields(
     db: AsyncSession,
     payload: dict[str, Any],
-    *,
-    deviation_code: str,
 ) -> dict[str, Any]:
     """构建偏差报告记录的飞书可编辑字段（偏差内容、涉及产品名称/批号、报告人、附件）。
 
@@ -599,7 +330,6 @@ async def _build_report_record_fields(
     reporter_name = str(payload.get("reporter_name") or "").strip()
 
     fields: dict[str, Any] = {
-        "偏差编号": deviation_code,
         "偏差内容": description,
         "涉及产品名称/批号": product_batch,
     }
@@ -610,9 +340,7 @@ async def _build_report_record_fields(
         reporter_person = await resolve_person_by_open_id(db, reporter_open_id)
         if reporter_person is None:
             raise AppException(message="所选报告人不在人事飞书联系人目录中")
-        department = (
-            str(reporter_person.get("department") or "").strip() or department
-        )
+        department = str(reporter_person.get("department") or "").strip() or department
         reporter_user_value = (
             await feishu_sync_service._resolve_contact_bitable_user_value(
                 db,
@@ -643,22 +371,39 @@ async def update_deviation_report_record(
     payload: dict[str, Any],
 ) -> dict[str, Any]:
     """更新偏差报告记录到飞书多维表格（仅用户可编辑字段）。"""
-    current = await get_deviation_report_record(db, record_id)
-    merged = {**current, **payload}
-    deviation_code = str(merged.get("deviation_code") or "").strip()
-    if not deviation_code:
-        raise AppException(message="飞书偏差报告记录缺少偏差编号")
-    fields = await _build_report_record_fields(
-        db, merged, deviation_code=deviation_code
-    )
-    await _update_entity_record(
-        db,
-        "deviation_report_record",
-        record_id,
-        fields,
-        search_conditions=[("偏差编号", deviation_code)],
-    )
-    return await get_deviation_report_record(db, record_id)
+    try:
+        # 编辑弹窗提交了全部可编辑字段，直接按 record_id 更新即可。旧实现写入前后各
+        # 查询一次整张飞书表，不但延迟高，飞书短暂断连还会让本可执行的保存冒成 500。
+        # 人员目录解析也可能访问飞书，因此和实际写入一起做外部服务异常映射。
+        fields = await _build_report_record_fields(db, payload)
+        await _update_entity_record(
+            db,
+            "deviation_report_record",
+            record_id,
+            fields,
+            user_id_type="union_id" if fields_need_union_user_id(fields) else "open_id",
+        )
+    except httpx.RequestError as exc:
+        raise AppException(
+            message="飞书服务暂时无法连接，请稍后重试",
+            status_code=503,
+        ) from exc
+    except RuntimeError as exc:
+        raise AppException(
+            message="飞书未能保存偏差报告记录，请稍后重试",
+            status_code=502,
+        ) from exc
+
+    return {
+        "id": record_id,
+        "record_id": record_id,
+        "description": str(payload.get("description") or "").strip() or None,
+        "product_batch": str(payload.get("product_batch") or "").strip() or None,
+        "department": fields.get("部门"),
+        "reporters": fields.get("报告人"),
+        "feishu_sync_status": "synced",
+        "feishu_last_sync_direction": "system_to_base",
+    }
 
 
 async def delete_deviation_report_record(
@@ -744,7 +489,6 @@ async def _build_investigation_push_fields(
         raise AppException(message="第N次推送不能为空")
 
     submitter_name = str(payload.get("submitter") or "").strip() or None
-    department_head = str(payload.get("department_head") or "").strip() or None
     department = str(payload.get("department") or "").strip() or None
     submitter_open_id = str(payload.get("submitter_open_id") or "").strip() or None
     if submitter_open_id:
@@ -752,10 +496,7 @@ async def _build_investigation_push_fields(
             db,
             submitter_open_id,
         )
-        submitter_name = submitter_name or submitter_contact.get("name") or None
-        department_head = (
-            department_head or submitter_contact.get("department_head_name") or None
-        )
+        submitter_name = submitter_contact.get("name") or None
         department = submitter_contact.get("department") or None
 
     if not department:
@@ -774,11 +515,6 @@ async def _build_investigation_push_fields(
         "提交人": await feishu_sync_service._resolve_contact_bitable_user_value(
             db,
             submitter_name,
-            department=department,
-        ),
-        "部门负责人": await feishu_sync_service._resolve_contact_bitable_user_value(
-            db,
-            department_head,
             department=department,
         ),
         "部门负责人审核结果": feishu_sync_service._to_feishu_review_option(
@@ -816,20 +552,81 @@ async def update_investigation_push_record(
     record_id: str,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
-    current = await _get_investigation_push_record(db, record_id)
-    merged = {**current, **payload}
-    fields, deviation_code, push_round = await _build_investigation_push_fields(
-        db,
-        merged,
-    )
-    updated = await _update_entity_record(
-        db,
-        "deviation_investigation_push_record",
-        record_id,
-        fields,
-        search_conditions=[("偏差编号", deviation_code), ("第N次推送", push_round)],
-    )
-    return await _get_investigation_push_record(db, updated["record_id"])
+    from app.modules.quality.service.person_directory import resolve_person_write_id
+
+    # The table owns lookup and approval fields; update only submitted fields.
+    fields: dict[str, Any] = {}
+    merged: dict[str, Any] = {"id": record_id, "record_id": record_id, **payload}
+    try:
+        if not payload.get("deviation_code") or not payload.get("push_round"):
+            current = await _get_investigation_push_record(db, record_id)
+            merged = {**current, **merged}
+        for key, label in (
+            ("deviation_code", "偏差编号"),
+            ("push_round", "第N次推送"),
+            ("department_head_result", "部门负责人审核结果"),
+            ("qa_result", "QA审核结果"),
+            ("qa_head_result", "QA负责人审核结果"),
+        ):
+            if key in payload:
+                fields[label] = (
+                    feishu_sync_service._to_feishu_review_option(payload[key])
+                    if key.endswith("_result")
+                    else payload[key]
+                )
+        if "investigation_report_url" in payload:
+            fields["偏差调查报告"] = feishu_sync_service._to_feishu_url_field_value(
+                payload["investigation_report_url"]
+            )
+        for key, label in (
+            ("submitted_at", "提交日期"),
+            ("department_head_reviewed_at", "部门负责人审核时间"),
+            ("qa_reviewed_at", "QA审核时间"),
+            ("qa_head_reviewed_at", "QA负责人审核时间"),
+        ):
+            if key in payload:
+                fields[label] = feishu_sync_service._to_ms_timestamp(
+                    _parse_datetime_like(payload[key])
+                )
+        for key, label in (
+            ("submitter", "提交人"),
+            ("qa_name", "QA"),
+            ("qa_head_name", "QA负责人"),
+        ):
+            value = payload.get("submitter_open_id") if key == "submitter" else None
+            value = value or payload.get(key)
+            if key not in payload and not (
+                key == "submitter" and payload.get("submitter_open_id")
+            ):
+                continue
+            person_id = await resolve_person_write_id(db, value)
+            if value and not person_id:
+                raise AppException(
+                    message="所选人员无法唯一匹配，请重新选择人员", status_code=400
+                )
+            fields[label] = [{"id": person_id}] if person_id else []
+        if payload.get("submitter_open_id"):
+            contact = await tracking_service._resolve_selected_submitter_contact(
+                db, payload["submitter_open_id"]
+            )
+            fields["部门"] = contact.get("department") or ""
+            merged["submitter"] = contact.get("name")
+        await _update_entity_record(
+            db,
+            "deviation_investigation_push_record",
+            record_id,
+            fields,
+            user_id_type="union_id" if fields_need_union_user_id(fields) else "open_id",
+        )
+    except httpx.RequestError as exc:
+        raise AppException(
+            message="飞书服务暂时无法连接，请稍后重试", status_code=503
+        ) from exc
+    except RuntimeError as exc:
+        raise AppException(
+            message="飞书未能保存调查记录，请稍后重试", status_code=502
+        ) from exc
+    return {**merged, "feishu_sync_status": "synced"}
 
 
 async def delete_investigation_push_record(
@@ -2401,6 +2198,7 @@ async def sync_capa_plan_tracks_from_feishu(db: AsyncSession) -> dict[str, int]:
                 continue
 
             owner_name = normalize_text(fields.get("责任人"))
+            department = normalize_text(fields.get("部门"))
             department_head = normalize_text(fields.get("部门负责人"))
             progress = normalize_text(fields.get("进度"))
             reminder_status = normalize_text(fields.get("提醒状态"))
@@ -2410,7 +2208,9 @@ async def sync_capa_plan_tracks_from_feishu(db: AsyncSession) -> dict[str, int]:
                 normalize_bool(fields.get("部门负责人确认"))
             )
 
-            due_datetime = parse_datetime(fields.get("完成时间"))
+            due_datetime = parse_datetime(
+                fields.get("预计完成时间") or fields.get("完成时间")
+            )
             due_date = due_datetime.date() if due_datetime else None
 
             feishu_record_id = str(record.get("record_id") or "")
@@ -2434,6 +2234,7 @@ async def sync_capa_plan_tracks_from_feishu(db: AsyncSession) -> dict[str, int]:
                 existing.capa_id = capa.id
                 existing.due_date = due_date
                 existing.owner_name = owner_name
+                existing.department = department
                 existing.owner_confirmed = owner_confirmed
                 existing.department_head = department_head
                 existing.department_head_confirmed = department_head_confirmed
@@ -2452,6 +2253,7 @@ async def sync_capa_plan_tracks_from_feishu(db: AsyncSession) -> dict[str, int]:
                     plan_content=plan_content,
                     due_date=due_date,
                     owner_name=owner_name,
+                    department=department,
                     owner_confirmed=owner_confirmed,
                     department_head=department_head,
                     department_head_confirmed=department_head_confirmed,

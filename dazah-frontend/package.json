@@ -29,7 +29,9 @@
     "echarts-gl": "^2.1.0",
     "html-to-image": "^1.11.13",
     "jszip": "^3.10.1",
+    "mammoth": "^1.12.0",
     "next": "16.3.3",
+    "pdfjs-dist": "5.6.205",
     "pinyin-pro": "^3.28.2",
     "qrcode.react": "^4.2.0",
     "react": "19.2.4",
@@ -40,8 +42,7 @@
     "remark-gfm": "^4.0.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^4.4.3",
-    "zustand": "^5.0.13",
-    "mammoth": "^1.12.0"
+    "zustand": "^5.0.13"
   },
   "packageManager": "pnpm@10.33.0",
   "pnpm": {

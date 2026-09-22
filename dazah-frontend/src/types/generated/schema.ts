@@ -14633,77 +14633,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/quality/deviation-ledger-records": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 获取偏差台账飞书列表 */
-        get: operations["list_deviation_ledger_records_api_v1_quality_deviation_ledger_records_get"];
-        put?: never;
-        /** 创建偏差台账飞书记录 */
-        post: operations["create_deviation_ledger_record_api_v1_quality_deviation_ledger_records_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/deviation-ledger-records/export": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 导出偏差台账飞书数据 */
-        get: operations["export_deviation_ledger_records_api_v1_quality_deviation_ledger_records_export_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/deviation-ledger-records/{record_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 获取偏差台账飞书详情 */
-        get: operations["get_deviation_ledger_record_api_v1_quality_deviation_ledger_records__record_id__get"];
-        /** 更新偏差台账飞书记录 */
-        put: operations["update_deviation_ledger_record_api_v1_quality_deviation_ledger_records__record_id__put"];
-        post?: never;
-        /** 删除偏差台账飞书记录 */
-        delete: operations["delete_deviation_ledger_record_api_v1_quality_deviation_ledger_records__record_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/deviation-ledger-records/{record_id}/export": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 导出单条偏差台账飞书数据 */
-        get: operations["export_deviation_ledger_record_api_v1_quality_deviation_ledger_records__record_id__export_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/quality/deviation-report-records": {
         parameters: {
             query?: never;
@@ -14736,6 +14665,57 @@ export interface paths {
         post?: never;
         /** 删除偏差报告记录 */
         delete: operations["delete_deviation_report_record_api_api_v1_quality_deviation_report_records__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/deviation-report-records/{record_id}/attachments/{file_token}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 下载偏差报告记录附件（后端代理，携带飞书 token） */
+        get: operations["get_deviation_report_attachment_content_api_v1_quality_deviation_report_records__record_id__attachments__file_token__content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/deviation-report-records/{record_id}/attachments/{file_token}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 在线预览偏差报告记录附件（图片/PDF 原样，office 转 PDF） */
+        get: operations["get_deviation_report_attachment_preview_api_v1_quality_deviation_report_records__record_id__attachments__file_token__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/deviation-report-records/{record_id}/attachments/{file_token}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 偏差报告记录图片附件缩略图 */
+        get: operations["get_deviation_report_attachment_thumbnail_api_v1_quality_deviation_report_records__record_id__attachments__file_token__thumbnail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -15696,23 +15676,6 @@ export interface paths {
         put?: never;
         /** 同步偏差报告记录到飞书Base */
         post: operations["sync_deviation_investigation_push_record_to_feishu_api_v1_quality_feishu_sync_deviation_investigation_push_records__record_id__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/feishu-sync/deviations/{deviation_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** 同步偏差到飞书Base */
-        post: operations["sync_deviation_record_to_feishu_api_v1_quality_feishu_sync_deviations__deviation_id__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -18376,6 +18339,57 @@ export interface paths {
         post?: never;
         /** 删除OOSOOT报告记录 */
         delete: operations["api_delete_report_record_api_v1_quality_oos_oot_report_records__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/oos-oot/report-records/{record_id}/attachments/{file_token}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 下载OOS/OOT报告记录附件（后端代理，携带飞书 token） */
+        get: operations["get_oos_oot_report_attachment_content_api_v1_quality_oos_oot_report_records__record_id__attachments__file_token__content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/oos-oot/report-records/{record_id}/attachments/{file_token}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 在线预览OOS/OOT报告记录附件（图片/PDF 原样，office 转 PDF） */
+        get: operations["get_oos_oot_report_attachment_preview_api_v1_quality_oos_oot_report_records__record_id__attachments__file_token__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/oos-oot/report-records/{record_id}/attachments/{file_token}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** OOS/OOT报告记录图片附件缩略图 */
+        get: operations["get_oos_oot_report_attachment_thumbnail_api_v1_quality_oos_oot_report_records__record_id__attachments__file_token__thumbnail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -32273,6 +32287,8 @@ export interface components {
             created_at: string;
             /** Created By */
             created_by?: string | null;
+            /** Department */
+            department?: string | null;
             /** Department Head */
             department_head?: string | null;
             /** Department Head Confirmed */
@@ -32335,6 +32351,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Department */
+            department?: string | null;
             /** Department Head */
             department_head?: string | null;
             /** Department Head Confirmed */
@@ -34794,6 +34812,8 @@ export interface components {
              * Format: uuid
              */
             capa_id: string;
+            /** Department */
+            department?: string | null;
             /** Department Head */
             department_head?: string | null;
             /**
@@ -35048,6 +35068,8 @@ export interface components {
             department?: string | null;
             /** Description */
             description?: string | null;
+            /** Deviation Code */
+            deviation_code?: string | null;
             /** Discovery Date */
             discovery_date?: string | null;
             /** Discovery Location */
@@ -37391,6 +37413,8 @@ export interface components {
             created_at?: string | null;
             /** Created By */
             created_by?: string | null;
+            /** Department */
+            department?: string | null;
             /** Department Head */
             department_head?: string | null;
             /** Department Head Result */
@@ -37428,6 +37452,10 @@ export interface components {
             investigation_report_url?: string | null;
             /** Local Record Id */
             local_record_id?: string | null;
+            /** Need Resubmit */
+            need_resubmit?: boolean | null;
+            /** Process Status */
+            process_status?: string | null;
             /** Push Round */
             push_round: string;
             /** Qa Head Name */
@@ -37467,6 +37495,8 @@ export interface components {
         DeviationInvestigationPushRecordListItem: {
             /** Created At */
             created_at?: string | null;
+            /** Department */
+            department?: string | null;
             /** Department Head */
             department_head?: string | null;
             /** Department Head Result */
@@ -37504,6 +37534,10 @@ export interface components {
             investigation_report_url?: string | null;
             /** Local Record Id */
             local_record_id?: string | null;
+            /** Need Resubmit */
+            need_resubmit?: boolean | null;
+            /** Process Status */
+            process_status?: string | null;
             /** Push Round */
             push_round: string;
             /** Qa Head Name */
@@ -57476,6 +57510,8 @@ export interface components {
         };
         /** UpdateCapaPlanTrackRequest */
         UpdateCapaPlanTrackRequest: {
+            /** Department */
+            department?: string | null;
             /** Department Head */
             department_head?: string | null;
             /** Department Head Confirmed */
@@ -57670,6 +57706,8 @@ export interface components {
             department_head_result?: string | null;
             /** Department Head Reviewed At */
             department_head_reviewed_at?: string | null;
+            /** Deviation Code */
+            deviation_code?: string | null;
             /** Investigation Report Url */
             investigation_report_url?: string | null;
             /** Push Round */
@@ -57690,6 +57728,8 @@ export interface components {
             submitted_at?: string | null;
             /** Submitter */
             submitter?: string | null;
+            /** Submitter Open Id */
+            submitter_open_id?: string | null;
         };
         /** UpdateDeviationRequest */
         UpdateDeviationRequest: {
@@ -57713,6 +57753,8 @@ export interface components {
             department?: string | null;
             /** Description */
             description?: string | null;
+            /** Deviation Code */
+            deviation_code?: string | null;
             /** Discoverer */
             discoverer?: string | null;
             /** Discovery Date */
@@ -98781,266 +98823,6 @@ export interface operations {
             };
         };
     };
-    list_deviation_ledger_records_api_v1_quality_deviation_ledger_records_get: {
-        parameters: {
-            query?: {
-                keyword?: string | null;
-                deviation_code?: string | null;
-                product_keyword?: string | null;
-                has_occurred_before?: boolean | null;
-                is_closed?: boolean | null;
-                investigation_completed_from?: string | null;
-                investigation_completed_to?: string | null;
-                root_cause_keyword?: string | null;
-                corrective_actions_keyword?: string | null;
-                page?: number;
-                page_size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_deviation_ledger_record_api_v1_quality_deviation_ledger_records_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    export_deviation_ledger_records_api_v1_quality_deviation_ledger_records_export_get: {
-        parameters: {
-            query?: {
-                record_ids?: string[] | null;
-                keyword?: string | null;
-                deviation_code?: string | null;
-                product_keyword?: string | null;
-                has_occurred_before?: boolean | null;
-                is_closed?: boolean | null;
-                investigation_completed_from?: string | null;
-                investigation_completed_to?: string | null;
-                root_cause_keyword?: string | null;
-                corrective_actions_keyword?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_deviation_ledger_record_api_v1_quality_deviation_ledger_records__record_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                record_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_deviation_ledger_record_api_v1_quality_deviation_ledger_records__record_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                record_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_deviation_ledger_record_api_v1_quality_deviation_ledger_records__record_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                record_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    export_deviation_ledger_record_api_v1_quality_deviation_ledger_records__record_id__export_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                record_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_deviation_report_records_static_api_v1_quality_deviation_report_records_get: {
         parameters: {
             query?: {
@@ -99204,6 +98986,111 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_deviation_report_attachment_content_api_v1_quality_deviation_report_records__record_id__attachments__file_token__content_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_deviation_report_attachment_preview_api_v1_quality_deviation_report_records__record_id__attachments__file_token__preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_deviation_report_attachment_thumbnail_api_v1_quality_deviation_report_records__record_id__attachments__file_token__thumbnail_get: {
+        parameters: {
+            query?: {
+                max_width?: number;
+                max_height?: number;
+            };
+            header?: never;
+            path: {
+                record_id: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -101568,39 +101455,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    sync_deviation_record_to_feishu_api_v1_quality_feishu_sync_deviations__deviation_id__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                deviation_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -108846,6 +108700,111 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_oos_oot_report_attachment_content_api_v1_quality_oos_oot_report_records__record_id__attachments__file_token__content_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_oos_oot_report_attachment_preview_api_v1_quality_oos_oot_report_records__record_id__attachments__file_token__preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_oos_oot_report_attachment_thumbnail_api_v1_quality_oos_oot_report_records__record_id__attachments__file_token__thumbnail_get: {
+        parameters: {
+            query?: {
+                max_width?: number;
+                max_height?: number;
+            };
+            header?: never;
+            path: {
+                record_id: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

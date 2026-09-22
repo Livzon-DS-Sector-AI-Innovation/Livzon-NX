@@ -24,21 +24,17 @@ async def sync_oos_oot_record_to_feishu(
     if not runtime.get_entity_config(entity_code, direction="push"):
         raise ValueError("请先在质量飞书设置中启用并配置该 OOS/OOT 台账的推送表")
 
+    # 目标台账表的实际列：序号/日期/物料名称/批号/调查编号/问题描述/产生原因/
+    # 纠正预防措施/最终处理结果/登记人/备注。旧实现按本地记录字段名直写，
+    # 未匹配的列会被 _upsert_record 静默丢弃，导致台账行几乎为空。
+    description = _as_text(record.description) or _as_text(record.title)
     fields = {
-        "记录编号": record.record_code,
-        "事件标题": record.title,
-        "责任部门": record.department or "",
-        "产品名称": record.product_name or "",
-        "批号": record.batch_number or "",
-        "检验项目": record.test_item or "",
-        "标准规定": record.specification or "",
-        "检验结果": record.test_result or "",
-        "发现日期": record.discovery_date.isoformat() if record.discovery_date else "",
-        "事件描述": record.description or "",
-        "调查结论": record.investigation_result or "",
-        "纠正预防措施": record.corrective_actions or "",
-        "状态": record.status,
-        "关闭时间": record.closed_at.isoformat() if record.closed_at else "",
+        "调查编号": _as_text(record.record_code),
+        "物料名称": _as_text(record.product_name),
+        "批号": _as_text(record.batch_number),
+        "日期": record.discovery_date.isoformat() if record.discovery_date else "",
+        "问题描述": description,
+        "纠正预防措施": _as_text(record.corrective_actions),
     }
     remote_record_id, table_id = await feishu_sync._upsert_record(
         db,
@@ -46,7 +42,7 @@ async def sync_oos_oot_record_to_feishu(
         None,
         None,
         fields,
-        search_conditions=[("记录编号", _as_text(record.record_code))],
+        search_conditions=[("调查编号", _as_text(record.record_code))],
     )
     return {
         "resource_code": "oos_oot_records",

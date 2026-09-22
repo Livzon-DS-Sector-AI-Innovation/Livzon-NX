@@ -13,7 +13,6 @@ import type {
   DeviationListItem,
   FeishuCapaLedgerItem,
   FeishuCapaPlanTrackItem,
-  FeishuDeviationLedgerRecordItem,
   FeishuDeviationReportRecordItem,
   DeviationInvestigationPushRecordItem,
   ChangeListItem,
@@ -142,11 +141,6 @@ export async function fetchFeishuCapaPlanTracks(params?: QueryParams): Promise<L
   return Array.isArray(result) ? { items: result, total: result.length } : result
 }
 
-export async function fetchFeishuDeviationLedgerRecords(params?: QueryParams): Promise<ListResult<FeishuDeviationLedgerRecordItem>> {
-  const result = await apiFetch<ListResult<FeishuDeviationLedgerRecordItem> | FeishuDeviationLedgerRecordItem[]>(withQuery('/api/v1/quality/deviation-ledger-records', params))
-  return Array.isArray(result) ? { items: result, total: result.length } : result
-}
-
 export async function fetchFeishuDeviationReportRecords(params?: QueryParams): Promise<ListResult<FeishuDeviationReportRecordItem>> {
   const result = await apiFetch<ListResult<FeishuDeviationReportRecordItem> | FeishuDeviationReportRecordItem[]>(withQuery('/api/v1/quality/deviation-report-records', params))
   return Array.isArray(result) ? { items: result, total: result.length } : result
@@ -244,14 +238,6 @@ export async function fetchChangeDashboardStats(): Promise<ChangeDashboardStats>
 
 export async function fetchValidationDashboardStats(): Promise<ValidationDashboardStats> {
   return apiFetch<ValidationDashboardStats>('/api/v1/quality/statistics/validations')
-}
-
-export async function exportFeishuDeviationLedgerRecords(params?: QueryParams): Promise<{ blob: Blob; filename: string }> {
-  return downloadBlob('/api/v1/quality/deviation-ledger-records/export', params)
-}
-
-export async function exportFeishuDeviationLedgerRecord(recordId: string): Promise<{ blob: Blob; filename: string }> {
-  return downloadBlob(`/api/v1/quality/deviation-ledger-records/${recordId}/export`)
 }
 
 export async function exportChangeLedger(params?: QueryParams): Promise<{ blob: Blob; filename: string }> {

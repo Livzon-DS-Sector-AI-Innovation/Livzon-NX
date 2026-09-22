@@ -50,7 +50,6 @@ from app.modules.quality.schemas import (
 )
 from app.modules.quality.service import (
     change_ledger_export,
-    deviation_ledger_export,
     quality_feishu_pages,
 )
 from app.modules.quality.service import quality_import_export as ie_service
@@ -725,167 +724,6 @@ async def delete_deviation_investigation_push_record(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.get("/deviation-ledger-records", summary="获取偏差台账飞书列表")
-async def list_deviation_ledger_records(
-    keyword: str | None = None,
-    deviation_code: str | None = None,
-    product_keyword: str | None = None,
-    has_occurred_before: bool | None = None,
-    is_closed: bool | None = None,
-    investigation_completed_from: str | None = None,
-    investigation_completed_to: str | None = None,
-    root_cause_keyword: str | None = None,
-    corrective_actions_keyword: str | None = None,
-    page: int = 1,
-    page_size: int = 20,
-    db: AsyncSession = Depends(get_db),
-) -> Any:
-    result = await quality_feishu_pages.list_deviation_ledger_records(
-        db,
-        keyword=keyword,
-        deviation_code=deviation_code,
-        product_keyword=product_keyword,
-        has_occurred_before=has_occurred_before,
-        is_closed=is_closed,
-        investigation_completed_from=investigation_completed_from,
-        investigation_completed_to=investigation_completed_to,
-        root_cause_keyword=root_cause_keyword,
-        corrective_actions_keyword=corrective_actions_keyword,
-        page=page,
-        page_size=page_size,
-    )
-    return {
-        "data": result["items"],
-        "meta": {
-            "total": result["total"],
-            "page": result["page"],
-            "page_size": result["page_size"],
-        },
-    }
-
-
-@router.get("/deviation-ledger-records/export", summary="导出偏差台账飞书数据")
-async def export_deviation_ledger_records(
-    record_ids: list[str] | None = Query(default=None),
-    keyword: str | None = None,
-    deviation_code: str | None = None,
-    product_keyword: str | None = None,
-    has_occurred_before: bool | None = None,
-    is_closed: bool | None = None,
-    investigation_completed_from: str | None = None,
-    investigation_completed_to: str | None = None,
-    root_cause_keyword: str | None = None,
-    corrective_actions_keyword: str | None = None,
-    db: AsyncSession = Depends(get_db),
-) -> Any:
-    result = await quality_feishu_pages.list_deviation_ledger_records(
-        db,
-        record_ids=record_ids,
-        keyword=keyword,
-        deviation_code=deviation_code,
-        product_keyword=product_keyword,
-        has_occurred_before=has_occurred_before,
-        is_closed=is_closed,
-        investigation_completed_from=investigation_completed_from,
-        investigation_completed_to=investigation_completed_to,
-        root_cause_keyword=root_cause_keyword,
-        corrective_actions_keyword=corrective_actions_keyword,
-        page=1,
-        page_size=10000,
-    )
-    data = deviation_ledger_export.generate_deviation_ledger_export_docx(
-        result["items"]
-    )
-    return StreamingResponse(
-        BytesIO(data),
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers=_build_docx_download_headers(
-            "偏差台账.docx",
-            "deviation-ledger.docx",
-        ),
-    )
-
-
-@router.get(
-    "/deviation-ledger-records/{record_id}/export",
-    summary="导出单条偏差台账飞书数据",
-)
-async def export_deviation_ledger_record(
-    record_id: str,
-    db: AsyncSession = Depends(get_db),
-) -> Any:
-    try:
-        item = await quality_feishu_pages.get_deviation_ledger_record(db, record_id)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-    filename = (item.get("deviation_code") or record_id or "deviation-ledger").strip()
-    data = deviation_ledger_export.generate_deviation_ledger_export_docx([item])
-    return StreamingResponse(
-        BytesIO(data),
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers=_build_docx_download_headers(
-            f"{filename}.docx",
-            f"{filename}.docx",
-        ),
-    )
-
-
-@router.get("/deviation-ledger-records/{record_id}", summary="获取偏差台账飞书详情")
-async def get_deviation_ledger_record(
-    record_id: str,
-    db: AsyncSession = Depends(get_db),
-) -> Any:
-    try:
-        result = await quality_feishu_pages.get_deviation_ledger_record(db, record_id)
-        return {"data": result}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-
-@router.post("/deviation-ledger-records", summary="创建偏差台账飞书记录")
-async def create_deviation_ledger_record(
-    data: dict[str, Any],
-    db: AsyncSession = Depends(get_db),
-) -> Any:
-    try:
-        result = await quality_feishu_pages.create_deviation_ledger_record(db, data)
-        return {"data": result}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.put("/deviation-ledger-records/{record_id}", summary="更新偏差台账飞书记录")
-async def update_deviation_ledger_record(
-    record_id: str,
-    data: dict[str, Any],
-    db: AsyncSession = Depends(get_db),
-) -> Any:
-    try:
-        result = await quality_feishu_pages.update_deviation_ledger_record(
-            db,
-            record_id,
-            data,
-        )
-        return {"data": result}
-    except ValueError as e:
-        detail = str(e)
-        status_code = 404 if "不存在" in detail else 400
-        raise HTTPException(status_code=status_code, detail=detail)
-
-
-@router.delete("/deviation-ledger-records/{record_id}", summary="删除偏差台账飞书记录")
-async def delete_deviation_ledger_record(
-    record_id: str,
-    db: AsyncSession = Depends(get_db),
-) -> Any:
-    try:
-        await quality_feishu_pages.delete_deviation_ledger_record(db, record_id)
-        return {"data": {"success": True}}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-
 @router.get("/capa-plan-tracks", summary="获取CAPA计划跟踪列表")
 async def list_capa_plan_tracks(
     capa_id: uuid.UUID | None = None,
@@ -950,18 +788,6 @@ async def update_capa_plan_track(
         if "not found" in detail:
             raise HTTPException(status_code=404, detail=detail)
         raise HTTPException(status_code=400, detail=detail)
-
-
-@router.post("/feishu-sync/deviations/{deviation_id}", summary="同步偏差到飞书Base")
-async def sync_deviation_record_to_feishu(
-    deviation_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-) -> Any:
-    try:
-        result = await service.sync_deviation_to_feishu(db, deviation_id)
-        return {"data": result}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.post("/feishu-sync/capas/{capa_id}", summary="同步CAPA到飞书Base")

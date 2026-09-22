@@ -19,6 +19,7 @@ class CapaPlanTrack(BaseModel):
     plan_content: Mapped[str] = mapped_column(Text, nullable=False)
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     owner_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    department: Mapped[str | None] = mapped_column(String(255), nullable=True)
     owner_confirmed: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )

@@ -46,7 +46,19 @@ def _record(fields: dict[str, object], record_id: str = "rec-1") -> dict[str, ob
     }
 
 
-def test_checkbox_and_report_field_builders_cover_user_date_and_flags() -> None:
+@pytest.mark.anyio
+async def test_checkbox_and_report_field_builders_cover_user_date_and_flags(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        person_directory,
+        "resolve_person_write_id",
+        AsyncMock(
+            side_effect=lambda db, value, **kw: (
+                "on_reporter" if value == "姓名" else value
+            )
+        ),
+    )
     assert service._map_checkbox(True) is True
     assert service._map_checkbox("是") is True
     assert service._map_checkbox("已确认") is True
@@ -70,10 +82,10 @@ def test_checkbox_and_report_field_builders_cover_user_date_and_flags() -> None:
     assert fields["内容"] == "内容"
     assert fields["报告人"] == [{"id": "ou-reporter"}]
     assert fields["QA"] == [{"id": "ou-qa"}]
-    assert fields["部门负责人确认"] is True
+    assert "部门负责人确认" not in fields
     assert fields["报告时间"]
 
-    api_fields = service._build_oos_oot_report_feishu_fields_async(
+    api_fields = await service._build_oos_oot_report_feishu_fields_async(
         SimpleNamespace(),
         {
             **payload,
@@ -82,13 +94,21 @@ def test_checkbox_and_report_field_builders_cover_user_date_and_flags() -> None:
             "qa_head": {"id": "ou_head"},
         },
     )
-    assert "报告人" not in api_fields
+    assert api_fields["报告人"] == [{"id": "on_reporter"}]
     assert api_fields["QA"] == [{"id": "ou_qa"}]
     assert api_fields["QA负责人"] == [{"id": "ou_head"}]
-    assert api_fields["部门负责人确认"] is True
+    assert "部门负责人确认" not in api_fields
 
 
-def test_report_and_investigation_mappers_normalize_nested_feishu_values() -> None:
+@pytest.mark.anyio
+async def test_report_and_investigation_mappers_normalize_nested_feishu_values(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        person_directory,
+        "resolve_person_write_id",
+        AsyncMock(side_effect=lambda db, value, **kw: value),
+    )
     report = service._map_oos_oot_report_record(
         _record(
             {
@@ -148,7 +168,8 @@ def test_report_and_investigation_mappers_normalize_nested_feishu_values() -> No
     assert investigation["department_head_result"] == "通过"
     assert investigation["need_resubmit"] is True
 
-    push_fields = service._build_oos_oot_investigation_push_feishu_fields(
+    push_fields = await service._build_oos_oot_investigation_push_feishu_fields(
+        SimpleNamespace(),
         {
             "oos_oot_code": "OOS-001",
             "push_round": "2",
@@ -162,7 +183,7 @@ def test_report_and_investigation_mappers_normalize_nested_feishu_values() -> No
             "submitter": "ou_s",
             "qa": {"id": "ou_q"},
             "need_resubmit": True,
-        }
+        },
     )
     assert push_fields["调查报告"]["link"] == "https://report"
     assert push_fields["提交人"] == [{"id": "ou_s"}]
@@ -170,8 +191,17 @@ def test_report_and_investigation_mappers_normalize_nested_feishu_values() -> No
     assert push_fields["已退回待重新提交"] is True
 
 
-def test_ledger_and_product_department_field_builders_cover_numeric_fallbacks() -> None:
-    numeric = service._build_ledger_feishu_fields(
+@pytest.mark.anyio
+async def test_ledger_and_product_department_field_builders_cover_numeric_fallbacks(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        person_directory,
+        "resolve_person_write_id",
+        AsyncMock(side_effect=lambda db, value, **kw: value),
+    )
+    numeric = await service._build_ledger_feishu_fields(
+        SimpleNamespace(),
         {
             "serial_number": "12",
             "material_name": "物料A",
@@ -184,12 +214,14 @@ def test_ledger_and_product_department_field_builders_cover_numeric_fallbacks() 
             "remark": "备注",
             "registrant": "ou_user",
             "date": "2026-08-20",
-        }
+        },
     )
     assert numeric["序号"] == 12
     assert numeric["登记人"] == [{"id": "ou_user"}]
     assert numeric["日期"]
-    non_numeric = service._build_ledger_feishu_fields({"serial_number": "序号A"})
+    non_numeric = await service._build_ledger_feishu_fields(
+        SimpleNamespace(), {"serial_number": "序号A"}
+    )
     assert non_numeric["序号"] == "序号A"
 
     ledger = service._map_oos_ledger(
@@ -221,7 +253,8 @@ def test_ledger_and_product_department_field_builders_cover_numeric_fallbacks() 
     )
     assert product["product_code"] == "P-1"
     assert product["fermentation_head"] == "发酵负责人"
-    product_fields = service._build_product_department_feishu_fields(
+    product_fields = await service._build_product_department_feishu_fields(
+        SimpleNamespace(),
         {
             "serial_number": "1",
             "product_code": "P-1",
@@ -229,7 +262,7 @@ def test_ledger_and_product_department_field_builders_cover_numeric_fallbacks() 
             "fermentation_head": {"id": "ou-f"},
             "extraction_department": "提炼一部",
             "extraction_head": "ou-e",
-        }
+        },
     )
     assert product_fields["涉及发酵部门负责人"] == [{"id": "ou-f"}]
     assert product_fields["涉及提炼部门负责人"] == [{"id": "ou-e"}]
@@ -343,12 +376,12 @@ async def test_lookup_create_delete_and_pull_failure_paths(
 
 
 @pytest.mark.anyio
-async def test_contact_resolution_prefers_direct_id_then_contact_and_fallback(
+async def test_contact_resolution_prefers_direct_id_and_rejects_unresolved_names(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     db = SimpleNamespace()
-    assert await service._resolve_user_from_contacts(db, "ou-direct") == {
-        "id": "ou-direct"
+    assert await service._resolve_user_from_contacts(db, "on_direct") == {
+        "id": "on_direct"
     }
     monkeypatch.setattr(
         person_directory,
@@ -367,13 +400,15 @@ async def test_contact_resolution_prefers_direct_id_then_contact_and_fallback(
         "get_person_options",
         AsyncMock(return_value=[]),
     )
-    assert await service._resolve_user_from_contacts(db, "未知") == {"id": "未知"}
+    with pytest.raises(AppException):
+        await service._resolve_user_from_contacts(db, "未知")
     monkeypatch.setattr(
         person_directory,
         "get_person_options",
         AsyncMock(side_effect=RuntimeError("unavailable")),
     )
-    assert await service._resolve_user_from_contacts(db, "回退") == {"id": "回退"}
+    with pytest.raises(RuntimeError):
+        await service._resolve_user_from_contacts(db, "回退")
     assert await service._resolve_user_from_contacts(db, None) is None
 
 
@@ -384,7 +419,6 @@ async def test_legacy_entity_create_update_delete_and_pull_success_paths(
     db = SimpleNamespace()
     entity = _entity()
     runtime = SimpleNamespace(app_id="app-id", app_secret="secret")
-    client = SimpleNamespace(update_record=AsyncMock())
     monkeypatch.setattr(
         service,
         "_resolve_runtime_entity",
@@ -393,9 +427,10 @@ async def test_legacy_entity_create_update_delete_and_pull_success_paths(
     monkeypatch.setattr(
         service,
         "_create_entity_record",
-        AsyncMock(side_effect=lambda _db, _code, _fields: {"record_id": "created"}),
+        AsyncMock(
+            side_effect=lambda _db, _code, _fields, **kwargs: {"record_id": "created"}
+        ),
     )
-    monkeypatch.setattr(service, "BitableClient", lambda **_kwargs: client)
     monkeypatch.setattr(service, "_delete_entity_record", AsyncMock())
     update_entity = AsyncMock()
     monkeypatch.setattr(service, "_update_entity_record", update_entity)
@@ -453,8 +488,7 @@ async def test_legacy_entity_create_update_delete_and_pull_success_paths(
         "get_product_department_record",
         {"extraction_department": "提炼部"},
     )
-    assert client.update_record.await_count == 2
-    assert update_entity.await_count == 3
+    assert update_entity.await_count == 5
     assert service._delete_entity_record.await_count == 5
 
     monkeypatch.setattr(

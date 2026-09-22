@@ -28,7 +28,7 @@ export function ResizableHeaderCell({
     ...style,
     width,
     minWidth,
-    position: 'relative',
+    // 单元格定位由 Ant Design 样式负责，固定列的 sticky 可能来自 CSS 类。
   }
 
   return (

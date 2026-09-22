@@ -276,6 +276,9 @@ async def _build_deviation_report_record_items_from_feishu(
         item["reporters"] = feishu_sync_service._parse_person_field(
             field_value(report_entity, fields, "报告人")
         )
+        item["attachments"] = feishu_sync_service._parse_attachment_field(
+            field_value(report_entity, fields, "附件")
+        )
         item["department_heads"] = feishu_sync_service._parse_person_field(
             field_value(report_entity, fields, "部门负责人")
         )
@@ -409,37 +412,6 @@ async def ensure_deviation_from_report_record(
         "deviation_code": deviation.deviation_code,
         "created": created,
     }
-
-
-async def sync_deviation_report_record_to_feishu_by_ref(
-    db: AsyncSession,
-    record_ref: str,
-) -> dict[str, Any]:
-    from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
-
-    deviation_id: uuid.UUID | None = None
-    try:
-        candidate = uuid.UUID(record_ref)
-    except ValueError:
-        candidate = None
-    if candidate:
-        deviation = await repository.get_deviation_by_id(db, candidate)
-        if deviation:
-            deviation_id = candidate
-
-    if deviation_id is None:
-        ensured = await ensure_deviation_from_report_record(db, record_ref)
-        deviation_id = uuid.UUID(ensured["deviation_id"])
-        return await feishu_sync_service.sync_deviation_report_record_to_feishu(
-            db,
-            deviation_id,
-            target_record_id=record_ref,
-        )
-
-    return await feishu_sync_service.sync_deviation_report_record_to_feishu(
-        db,
-        deviation_id,
-    )
 
 
 async def _search_deviation_report_record_codes_from_feishu(
@@ -701,153 +673,6 @@ def _parse_optional_datetime(value: str | None) -> datetime | None:
     if not normalized:
         return None
     return datetime.fromisoformat(normalized)
-
-
-async def create_deviation(
-    db: AsyncSession,
-    data: CreateDeviationRequest,
-    user_id: str,
-    current_user: User | None = None,
-) -> dict[str, str]:
-    reporter_contact: SelectedReporterContact | None = None
-    if (data.reporter_open_id or "").strip():
-        reporter_contact = await _resolve_selected_reporter_contact(
-            db, data.reporter_open_id
-        )
-    description = (data.description or "").strip()
-    product_batch = (data.affected_items or "").strip()
-    department = (data.department or "").strip()
-    if not department and reporter_contact and reporter_contact.department:
-        department = str(reporter_contact.department).strip()
-
-    if not description:
-        raise ValueError("偏差内容不能为空")
-    if not product_batch:
-        raise ValueError("涉及产品名称/批号不能为空")
-
-    now = datetime.now(UTC)
-    investigation_completed_at = _parse_optional_datetime(
-        data.investigation_completed_at
-    )
-    is_closed = bool(data.is_closed)
-    close_time = _parse_optional_datetime(data.close_time)
-    status = "closed" if is_closed else "draft"
-    status_updated_at = (close_time or now) if is_closed else now
-    deviation = Deviation(
-        deviation_code=await _generate_monthly_deviation_code(db, now),
-        title=(data.title or description)[:255],
-        department=department,
-        discovery_date=(
-            datetime.fromisoformat(data.discovery_date) if data.discovery_date else now
-        ),
-        discovery_time=data.discovery_time,
-        discovery_location=data.discovery_location,
-        level=data.level,
-        root_cause_category=data.root_cause_category,
-        description=description,
-        immediate_actions=data.immediate_actions,
-        attachments=data.attachments,
-        affected_items=product_batch,
-        batch_number=data.batch_number,
-        handler=data.handler,
-        needs_cross_dept_review=data.needs_cross_dept_review,
-        cross_dept_reviewers=[r.model_dump() for r in data.cross_dept_reviewers]
-        if data.cross_dept_reviewers
-        else [],
-        reporter_id=None,
-        discoverer=(
-            reporter_contact.name
-            if reporter_contact and reporter_contact.name
-            else (current_user.name if current_user else "")
-        ),
-        has_occurred_before=data.has_occurred_before,
-        material_disposition=data.material_disposition,
-        corrective_actions=data.corrective_actions,
-        root_cause_analysis=data.root_cause_analysis,
-        investigation_completed_at=investigation_completed_at,
-        status=status,
-        status_updated_at=status_updated_at,
-    )
-    db.add(deviation)
-    try:
-        await db.commit()
-
-    except Exception:
-        await db.rollback()
-
-        raise
-    await db.flush()
-    from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
-
-    await feishu_sync_service.auto_sync_deviation_after_write(db, deviation.id)
-    return {"id": str(deviation.id), "code": deviation.deviation_code}
-
-
-async def update_deviation(
-    db: AsyncSession,
-    deviation_id: uuid.UUID,
-    data: UpdateDeviationRequest,
-    user_id: str,
-) -> dict[str, bool]:
-    result = await db.execute(
-        select(Deviation).where(
-            Deviation.id == deviation_id, Deviation.is_deleted.is_(False)
-        )
-    )
-    deviation = result.scalar_one_or_none()
-    if not deviation:
-        raise ValueError(f"Deviation {deviation_id} not found")
-
-    update_data = data.model_dump(exclude_unset=True)
-    is_closed = update_data.pop("is_closed", None)
-    close_time = update_data.pop("close_time", None)
-
-    for field, value in update_data.items():
-        if field in [
-            "ai_analysis",
-            "investigation_records",
-            "review_opinions",
-            "cross_dept_reviewers",
-            "report_versions",
-        ]:
-            setattr(deviation, field, value)
-        elif field == "discovery_date" and value:
-            setattr(deviation, field, datetime.fromisoformat(value))
-        elif field == "investigation_completed_at" and value:
-            setattr(deviation, field, datetime.fromisoformat(value))
-        else:
-            setattr(deviation, field, value)
-
-    if "investigation_completed_at" in update_data and not update_data.get(
-        "investigation_completed_at"
-    ):
-        deviation.investigation_completed_at = None
-
-    if is_closed is not None:
-        if is_closed:
-            deviation.status = "closed"
-            deviation.status_updated_at = _parse_optional_datetime(
-                close_time
-            ) or datetime.now(UTC)
-        elif deviation.status == "closed":
-            deviation.status = "draft"
-            deviation.status_updated_at = datetime.now(UTC)
-
-    deviation.updated_at = datetime.now(UTC)
-    if data.status:
-        deviation.status_updated_at = datetime.now(UTC)
-
-    try:
-        await db.commit()
-
-    except Exception:
-        await db.rollback()
-
-        raise
-    from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
-
-    await feishu_sync_service.auto_sync_deviation_after_write(db, deviation.id)
-    return {"success": True}
 
 
 async def delete_deviation(
@@ -1282,7 +1107,10 @@ async def get_capa_detail(db: AsyncSession, capa_id: uuid.UUID) -> CapaDetail:
     capa = result.scalar_one_or_none()
     if not capa:
         raise ValueError(f"CAPA {capa_id} not found")
-    return CapaDetail.model_validate(capa)
+    detail = CapaDetail.model_validate(capa)
+    tracks = await repository.get_capa_plan_tracks_by_capa_ids(db, [capa.id])
+    detail.linked_plan_contents = [track.plan_content for track in tracks]
+    return detail
 
 
 async def create_capa(

@@ -1,5 +1,7 @@
 'use client'
 
+import { alignFeishuColumns, feishuColumnLayouts } from './feishuColumnLayout'
+
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
@@ -13,27 +15,33 @@ import { deleteDeviationReportRecord, updateDeviationReportRecord } from '@/acti
 import { fetchQualityPersonDirectory, fetchFeishuDeviationReportRecords, fetchQualityFeishuAppSettings, formatQualitySyncSummary } from '@/lib/api/client/quality'
 
 import type { FeishuDeviationReportRecordItem } from '@/types/quality'
+import { FeishuAttachmentPreviewModal } from './FeishuAttachmentPreviewModal'
+import {
+  renderFeishuValue,
+  type FeishuAttachmentPreviewContext,
+  type FeishuAttachmentUrlBuilder,
+} from './inspection/renderFeishuValue'
 import { buildResizableColumns, ResizableHeaderCell } from './ResizableTableHeader'
 
-const COLUMN_WIDTH_STORAGE_KEY = 'quality-deviation-report-record-table-column-widths-v1'
+const COLUMN_WIDTH_STORAGE_KEY = 'quality-deviation-report-record-table-column-widths-v2'
 
 const defaultColumnWidths: Record<string, number> = {
-  deviation_code: 160,
+  deviation_code: 107,
   report_time: 180,
   description: 280,
   product_batch: 220,
-  department: 140,
-  reporters: 160,
+  department: 93,
+  reporters: 107,
   attachments: 200,
   actions: 220,
 }
 
 const minColumnWidths: Record<string, number> = {
-  deviation_code: 120,
+  deviation_code: 100,
   report_time: 150,
   description: 220,
   product_batch: 160,
-  department: 100,
+  department: 80,
   reporters: 100,
   attachments: 140,
   actions: 160,
@@ -67,7 +75,14 @@ interface EditFormValues {
 }
 
 type ReportPersonItem = { name?: string; avatar_url?: string; id?: string }
-type ReportAttachmentItem = { name?: string; url?: string; type?: string; size?: number }
+type AttachmentPreviewState = { recordId: string; fileName: string; fileToken: string }
+
+const deviationReportAttachmentUrlBuilder: FeishuAttachmentUrlBuilder = (
+  _entityCode,
+  recordId,
+  fileToken,
+) =>
+  `/api/v1/quality/deviation-report-records/${encodeURIComponent(recordId)}/attachments/${encodeURIComponent(fileToken)}/content`
 
 /** 编辑偏差弹窗：独立子组件，仅在打开时挂载，避免 useForm 未连接与 SSR hydration 问题 */
 function EditDeviationRecordModal({
@@ -198,21 +213,6 @@ function renderPersons(
   )
 }
 
-/** 附件列渲染：附件链接列表，无附件显示 - */
-function renderAttachments(attachments: ReportAttachmentItem[] | null | undefined): ReactNode {
-  const list = attachments || []
-  if (list.length === 0) return <span>-</span>
-  return (
-    <Space orientation="vertical" size={2}>
-      {list.map((attachment, index) => (
-        <a key={index} href={attachment.url} target="_blank" rel="noopener noreferrer">
-          {attachment.name || attachment.url || '附件'}
-        </a>
-      ))}
-    </Space>
-  )
-}
-
 export function DeviationReportRecordPage({
   initialItems = [],
   initialLoadError = null,
@@ -228,6 +228,7 @@ export function DeviationReportRecordPage({
   const [pageSize, setPageSize] = useState(20)
   const [detailRecord, setDetailRecord] = useState<FeishuDeviationReportRecordItem | null>(null)
   const [editRecord, setEditRecord] = useState<FeishuDeviationReportRecordItem | null>(null)
+  const [previewFile, setPreviewFile] = useState<AttachmentPreviewState | null>(null)
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(defaultColumnWidths)
 
   const { data, isLoading: loading, error, refetch } = useQuery({
@@ -365,12 +366,59 @@ export function DeviationReportRecordPage({
     [modal, message, queryClient],
   )
 
+  const handleAttachmentPreview = useCallback(
+    ({ record, attachment }: FeishuAttachmentPreviewContext) => {
+      const recordId = String(record.record_id || record.id || '')
+      const fileToken = attachment.file_token || ''
+      if (!fileToken && attachment.url && /^https?:\/\//i.test(attachment.url)) {
+        window.open(attachment.url, '_blank', 'noopener,noreferrer')
+        return
+      }
+      if (!recordId || !fileToken) {
+        message.warning('该附件缺少文件标识，无法预览')
+        return
+      }
+      setPreviewFile({
+        recordId,
+        fileName: attachment.name || '附件',
+        fileToken,
+      })
+    },
+    [message],
+  )
+
+  const renderRecordAttachments = useCallback(
+    (record: FeishuDeviationReportRecordItem) =>
+      renderFeishuValue(
+        record.attachments,
+        record as unknown as Record<string, unknown>,
+        'deviation_report_record',
+        message,
+        {
+          uiType: 'Attachment',
+          attachmentUrlBuilder: deviationReportAttachmentUrlBuilder,
+          onAttachmentPreview: handleAttachmentPreview,
+        },
+      ),
+    [handleAttachmentPreview, message],
+  )
+
   const baseColumns: ColumnsType<FeishuDeviationReportRecordItem> = [
+    { title: '部门负责人', key: 'department_heads', width: 150, render: (_, record) => renderPersons(record.department_heads, record.department_head) },
+    { title: '部门负责人确认', key: 'department_head_result', dataIndex: 'department_head_result', width: 150, render: formatBaseText },
+    { title: '部门负责人确认时间', key: 'department_head_reviewed_at', dataIndex: 'department_head_reviewed_at', width: 180, render: formatDateTime },
+    { title: 'QA', key: 'qas', width: 140, render: (_, record) => renderPersons(record.qas, record.qa_name) },
+    { title: 'QA确认', key: 'qa_result', dataIndex: 'qa_result', width: 120, render: formatBaseText },
+    { title: 'QA确认时间', key: 'qa_reviewed_at', dataIndex: 'qa_reviewed_at', width: 180, render: formatDateTime },
+    { title: 'QA负责人', key: 'qa_heads', width: 150, render: (_, record) => renderPersons(record.qa_heads, record.qa_head_name) },
+    { title: 'QA负责人确认', key: 'qa_head_result', dataIndex: 'qa_head_result', width: 150, render: formatBaseText },
+    { title: 'QA负责人确认时间', key: 'qa_head_reviewed_at', dataIndex: 'qa_head_reviewed_at', width: 180, render: formatDateTime },
+    { title: '报告状态', key: 'report_status', dataIndex: 'report_status', width: 140, render: formatReportStatus },
     {
       title: '偏差编号',
       dataIndex: 'deviation_code',
       key: 'deviation_code',
-      width: 160,
+      width: defaultColumnWidths.deviation_code,
       render: (value: string | null | undefined) => formatBaseText(value),
     },
     {
@@ -398,13 +446,13 @@ export function DeviationReportRecordPage({
       title: '部门',
       dataIndex: 'department',
       key: 'department',
-      width: 140,
+      width: defaultColumnWidths.department,
       render: (value: string | null | undefined) => formatBaseText(value),
     },
     {
       title: '报告人',
       key: 'reporters',
-      width: 160,
+      width: defaultColumnWidths.reporters,
       render: (_: unknown, record: FeishuDeviationReportRecordItem) =>
         renderPersons(record.reporters, record.reporter_name),
     },
@@ -413,7 +461,7 @@ export function DeviationReportRecordPage({
       key: 'attachments',
       width: 200,
       render: (_: unknown, record: FeishuDeviationReportRecordItem) =>
-        renderAttachments(record.attachments),
+        renderRecordAttachments(record),
     },
     {
       title: '操作',
@@ -442,7 +490,7 @@ export function DeviationReportRecordPage({
 
   const columns = useMemo(
     () =>
-      buildResizableColumns(baseColumns, {
+      buildResizableColumns(alignFeishuColumns(baseColumns, feishuColumnLayouts.deviationReport), {
         widths: columnWidths,
         minWidths: minColumnWidths,
         onResizeStart: handleResizeStart,
@@ -461,7 +509,7 @@ export function DeviationReportRecordPage({
         <p className="mb-2 text-[13px] text-[var(--color-stone)]">质量管理 / 偏差管理 / 报告记录</p>
         <Typography.Title level={3} style={{ margin: 0 }}>报告记录</Typography.Title>
       </div>
-      <Space style={{ marginBottom: 16 }}>
+      <Space wrap style={{ marginBottom: 16 }}>
         <Button type="primary" onClick={() => void handleCreateNew()}>新建偏差</Button>
         <Button icon={<ReloadOutlined />} loading={pulling} onClick={() => void handlePullFromFeishu()}>
           从飞书拉取
@@ -542,7 +590,7 @@ export function DeviationReportRecordPage({
               {renderPersons(detailRecord.reporters, detailRecord.reporter_name)}
             </Descriptions.Item>
             <Descriptions.Item label="附件">
-              {renderAttachments(detailRecord.attachments)}
+              {renderRecordAttachments(detailRecord)}
             </Descriptions.Item>
             <Descriptions.Item label="部门负责人">
               <Space orientation="vertical" size={2}>
@@ -579,6 +627,26 @@ export function DeviationReportRecordPage({
           onSuccess={() => void queryClient.invalidateQueries({ queryKey: ['quality-deviation-report'] })}
         />
       ) : null}
+
+      <FeishuAttachmentPreviewModal
+        open={previewFile !== null}
+        fileName={previewFile?.fileName ?? ''}
+        previewSrc={
+          previewFile
+            ? `/api/v1/quality/deviation-report-records/${encodeURIComponent(previewFile.recordId)}/attachments/${encodeURIComponent(previewFile.fileToken)}/preview`
+            : ''
+        }
+        downloadSrc={
+          previewFile
+            ? deviationReportAttachmentUrlBuilder(
+                'deviation_report_record',
+                previewFile.recordId,
+                previewFile.fileToken,
+              )
+            : ''
+        }
+        onClose={() => setPreviewFile(null)}
+      />
     </div>
   )
 }

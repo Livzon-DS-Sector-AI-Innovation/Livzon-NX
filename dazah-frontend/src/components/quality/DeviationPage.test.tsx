@@ -74,6 +74,22 @@ it('keeps import restricted to administrators even with operate permission', asy
   expect(container.textContent).not.toContain('导入')
 })
 
+it('keeps the local ledger columns and detail links independent of Feishu layouts', async () => {
+  setGrant(['access', 'query'])
+  mocks.fetchDeviations.mockResolvedValue({ items: [{
+    id: 'local-record', deviation_code: 'PC-LOCAL', description: '本地调查记录',
+    status: 'draft', corrective_actions: '详情中的措施',
+  }], total: 1 })
+  await renderPage()
+  expect(Array.from(container.querySelectorAll('th')).map(node => node.textContent).filter(Boolean)).toEqual([
+    '序号', '偏差编号', '产品名称/批号', '偏差简要描述', '偏差是否曾发生',
+    '根本原因', '偏差等级', '调查完成时间', '操作',
+  ])
+  expect(container.textContent).toContain('PC-LOCAL')
+  expect(container.textContent).not.toContain('详情中的措施')
+  expect(container.querySelector('a[href="/quality/deviations/local-record"]')).not.toBeNull()
+})
+
 it('sends all visible filters and keeps read-only operations hidden', async () => {
   setGrant(['access', 'query'])
   useDeviationStore.getState().setStatusFilter('draft')
@@ -152,40 +168,24 @@ function setInput(element: HTMLInputElement | HTMLTextAreaElement, value: string
   element.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
-it('selects a reporter, derives department and retains input after failed creation', async () => {
+it('submits ledger fields without reporter and retains input after failed creation', async () => {
   setGrant(['access', 'query', 'operate'])
   await renderPage(<CreateDeviation />)
-  const selector = container.querySelector('#reporter_open_id')!
-  await act(async () => selector.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
-  const option = Array.from(document.querySelectorAll('.ant-select-item-option')).find((item) => item.textContent?.includes('王报告'))
-  expect(option).toBeDefined()
-  await act(async () => option?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
-  expect((container.querySelector('#department') as HTMLInputElement).value).toBe('质量部')
   await act(async () => {
     setInput(container.querySelector('#affected_items')!, '产品批次')
     setInput(container.querySelector('#description')!, '偏差描述')
   })
-  mocks.createDeviation.mockRejectedValueOnce(new Error('报告人部门已变化，请重新选择'))
+  mocks.createDeviation.mockRejectedValueOnce(new Error('偏差内容不能为空'))
   const save = container.querySelector('button[type="submit"]') as HTMLButtonElement
   await act(async () => save.click())
-  expect(mocks.createDeviation).toHaveBeenCalledWith(expect.objectContaining({ reporter_open_id: 'reporter-id', department: '质量部', description: '偏差描述', is_closed: false }))
+  const payload = mocks.createDeviation.mock.calls[0][0]
+  expect(payload).toMatchObject({ description: '偏差描述', affected_items: '产品批次', is_closed: false })
+  expect(payload.reporter_open_id ?? null).toBeNull()
+  expect(payload.department ?? null).toBeNull()
   expect((container.querySelector('#description') as HTMLTextAreaElement).value).toBe('偏差描述')
   expect(save.disabled).toBe(false)
   await act(async () => save.click())
   expect(mocks.createDeviation).toHaveBeenCalledTimes(2)
-})
-
-it('shows reporter load failures and supports retry', async () => {
-  setGrant(['access', 'query', 'operate'])
-  mocks.fetchReporters.mockRejectedValueOnce(new Error('报告人目录暂不可用'))
-  await renderPage(<CreateDeviation />)
-  expect(container.textContent).toContain('报告人目录暂不可用')
-  expect((container.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(true)
-  const retry = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.replace(/\s/g, '') === '重试')
-  await act(async () => retry?.click())
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)) })
-  expect(mocks.fetchReporters).toHaveBeenCalledTimes(2)
-  expect(container.textContent).not.toContain('报告人目录暂不可用')
 })
 
 it('allows batch deletion only after explicit confirmation and retains selection on failure', async () => {
@@ -266,4 +266,39 @@ it('does not seed a new authorization version with stale server detail props', a
   await act(async () => useAuthStore.getState().setUser({ ...useAuthStore.getState().user!, grant_version: 3 }))
   expect(container.textContent).not.toContain('旧范围详情')
   expect(container.textContent).toContain('加载中')
+})
+
+it('submits a manually filled deviation code on create', async () => {
+  setGrant(['access', 'query', 'operate'])
+  await renderPage(<CreateDeviation />)
+  await act(async () => {
+    setInput(container.querySelector('#deviation_code')!, ' CS-TEST-01 ')
+    setInput(container.querySelector('#affected_items')!, '产品批次')
+    setInput(container.querySelector('#description')!, '偏差描述')
+  })
+  const save = container.querySelector('button[type="submit"]') as HTMLButtonElement
+  await act(async () => save.click())
+  expect(mocks.createDeviation).toHaveBeenCalledWith(expect.objectContaining({ deviation_code: 'CS-TEST-01' }))
+})
+
+it('submits a null deviation code when left blank on create', async () => {
+  setGrant(['access', 'query', 'operate'])
+  await renderPage(<CreateDeviation />)
+  await act(async () => {
+    setInput(container.querySelector('#affected_items')!, '产品批次')
+    setInput(container.querySelector('#description')!, '偏差描述')
+  })
+  const save = container.querySelector('button[type="submit"]') as HTMLButtonElement
+  await act(async () => save.click())
+  expect(mocks.createDeviation).toHaveBeenCalledWith(expect.objectContaining({ deviation_code: null }))
+})
+
+it('submits the edited deviation code from the detail form', async () => {
+  setGrant(['access', 'query', 'operate'])
+  await renderPage(<DeviationDetail />)
+  await act(async () => setInput(container.querySelector('#deviation_code')!, 'PC-DETAIL-EDIT'))
+  const save = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.replace(/\s/g, '') === '保存')
+  expect(save).toBeDefined()
+  await act(async () => save?.click())
+  expect(mocks.updateDeviation).toHaveBeenCalledWith('record', expect.objectContaining({ deviation_code: 'PC-DETAIL-EDIT' }))
 })
