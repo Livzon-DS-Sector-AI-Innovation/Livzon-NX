@@ -36,6 +36,9 @@ interface MergedCell {
 /** 长提示（格式错误/冻结告警等）的停留秒数,antd 默认 3s 读不完 */
 const TIP_SECONDS = 8
 
+/** 排产 Excel 上传大小上限（与后端 schedule_excel_api 同步：1MB） */
+const SCHEDULE_UPLOAD_MAX_BYTES = 1024 * 1024
+
 /** 单元格渲染值：后端子端统一为 string */
 type CellValue = string
 
@@ -129,6 +132,13 @@ export default function SchedulingPage() {
 
   const handleUpload = async (file: File) => {
     if (!canBulkImport) return false
+    if (file.size > SCHEDULE_UPLOAD_MAX_BYTES) {
+      message.error(
+        `文件大小不能超过 1MB（当前 ${(file.size / 1024 / 1024).toFixed(1)}MB）`,
+        TIP_SECONDS,
+      )
+      return false
+    }
     setUploading(true)
     try {
       const formData = new FormData()
@@ -484,6 +494,9 @@ export default function SchedulingPage() {
             </p>
             <p className="text-sm text-gray-400">
               保持原始格式展示，不转换字段；上传后自动存入系统
+            </p>
+            <p className="text-sm text-gray-400">
+              仅支持 .xlsx / .xls，文件大小不超过 1MB
             </p>
           </Dragger>
         </Col>

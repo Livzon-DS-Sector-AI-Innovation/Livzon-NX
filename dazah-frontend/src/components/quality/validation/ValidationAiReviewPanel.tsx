@@ -320,7 +320,7 @@ export function ValidationAiReviewPanel() {
   const running = pollerJobId != null || record?.status === 'processing'
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+    <Space orientation="vertical" size={16} style={{ width: '100%' }}>
       <Card
         title="验证方案与报告 AI 审核"
         extra={
@@ -543,7 +543,7 @@ export function ValidationAiReviewPanel() {
             <Spin />
           </div>
         ) : record ? (
-          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={16} style={{ width: '100%' }}>
             <Card size="small">
               <Descriptions column={3} size="small">
                 <Descriptions.Item label="来源">

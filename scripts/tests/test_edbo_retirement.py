@@ -25,6 +25,7 @@ def test_application_can_start_without_optimization_service(filename: str) -> No
     [
         "Dockerfile", "Dockerfile.dev", "scripts/deploy-production.ps1",
         "scripts/deploy-production-remote.sh",
+        "scripts/cd/controller.py",
         ".env.example", ".env.local.example",
         ".github/workflows/ci.yml",
     ],

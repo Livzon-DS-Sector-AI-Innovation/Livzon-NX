@@ -337,7 +337,7 @@ export default function OosOotReportRecordPage() {
         width={600}
       >
         {drawerRecord && (
-          <Space direction="vertical" size={16} style={{ display: 'flex' }}>
+          <Space orientation="vertical" size={16} style={{ display: 'flex' }}>
             <div>
               <Typography.Text strong>报告时间：</Typography.Text>
               <div>{formatDateTime(drawerRecord.report_time)}</div>

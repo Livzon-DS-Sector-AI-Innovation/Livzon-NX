@@ -30,7 +30,7 @@ _ALLOWED_MIMES = {
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "application/vnd.ms-excel",
 }
-_MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10MB
+_MAX_UPLOAD_BYTES = 1024 * 1024  # 1MB（排产表通常几十 KB，与前端上传提示同步）
 _UPLOAD_SUB_DIR = "schedule_excel"
 # 以新文件修正历史列（覆盖冻结规则）所需的细粒度权限
 SCHEDULE_ARCHIVE_PERMISSION = "production:schedule-archive"
@@ -98,7 +98,7 @@ async def upload_schedule_excel(
             break
         total += len(chunk)
         if total > _MAX_UPLOAD_BYTES:
-            raise HTTPException(status_code=413, detail="排产 Excel 不能超过 10MB")
+            raise HTTPException(status_code=413, detail="排产 Excel 不能超过 1MB")
         chunks.append(chunk)
     data = b"".join(chunks)
     if not data:

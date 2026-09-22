@@ -153734,12 +153734,12 @@
         "operationId": "set_production_line_status_api_v1_production_production_line_status_post",
         "parameters": [
           {
-            "description": "产品代码（FA/MC/DR/LV/MV/TY/FL）",
+            "description": "产品代码（FA/MC/LN/DR/LV/MV/TY/FL）",
             "in": "query",
             "name": "product",
             "required": true,
             "schema": {
-              "description": "产品代码（FA/MC/DR/LV/MV/TY/FL）",
+              "description": "产品代码（FA/MC/LN/DR/LV/MV/TY/FL）",
               "title": "Product",
               "type": "string"
             }

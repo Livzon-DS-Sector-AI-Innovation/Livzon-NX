@@ -309,7 +309,7 @@ async def delete_attachment(
 
 @agent_tool(
     name="agent.get_my_access_scope",
-    summary="查询当前用户的 Livzon 有效模块与工具范围",
+    summary="查询当前用户可访问的平台模块、工具与权限范围",
     method="GET",
     path="/agent/access-scope",
     workflow_allowed=False,

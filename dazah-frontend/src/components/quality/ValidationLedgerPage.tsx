@@ -325,7 +325,7 @@ export function ValidationLedgerPage({
           onChange={(event) => setFormLinkYear(event.target.value)}
           style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
         >
-          <Space direction="vertical" size={8}>
+          <Space orientation="vertical" size={8}>
             {formLinks.map((item) => (
               <Radio key={item.year} value={item.year}>
                 {item.year}年验证台账

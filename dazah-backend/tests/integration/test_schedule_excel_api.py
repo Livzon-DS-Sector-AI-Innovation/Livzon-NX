@@ -268,6 +268,28 @@ async def test_upload_rejects_bad_extension_and_corrupted_file(
     assert "解析失败" in corrupted.json()["message"]
 
 
+@pytest.mark.anyio
+async def test_upload_rejects_file_over_1mb(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    isolated_uploads: None,
+) -> None:
+    # 大小校验先于解析：超限内容无需是真实 xlsx
+    oversized = b"x" * (1024 * 1024 + 1)
+    response = await auth_client.post(
+        API_PREFIX,
+        files={
+            "file": (
+                "big.xlsx",
+                oversized,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert response.status_code == 413
+    assert "1MB" in response.json()["message"]
+
+
 def _upload_files() -> dict[str, tuple[str, bytes, str]]:
     return {
         "file": (

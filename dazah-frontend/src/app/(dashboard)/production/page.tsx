@@ -83,6 +83,7 @@ const PRODUCT_NAMES: Record<string, string> = {
   SUMMARY: '汇总',
   FA: 'L-苯丙氨酸',
   MC: '霉酚酸',
+  LN: '盐酸林可霉素',
   DR: '多拉菌素',
   LV: '洛伐他汀',
   MV: '美伐他汀',
@@ -91,10 +92,11 @@ const PRODUCT_NAMES: Record<string, string> = {
 }
 // 计划产量行的源数据产品名（production_plans.product_name）：
 // 霉酚酸的源数据名不是 MC，计划卡过滤须用源名，与展示名分离。
-// TY/FL 的产销计划源名按产品名录入，待生产计划同步覆盖后自动匹配
+// TY/FL/LN 的产销计划源名按产品名录入，待生产计划同步覆盖后自动匹配
 const PLAN_PRODUCT_NAMES: Record<string, string> = {
   FA: 'L-苯丙氨酸',
   MC: '霉酚酸',
+  LN: '盐酸林可霉素',
   DR: '多拉菌素',
   LV: '洛伐他汀',
   MV: '美伐他汀',
@@ -785,10 +787,13 @@ export default function ProductionDashboard() {
   ]
 
   // 单批产量柱状图 + 平均产量标线
+  // 平均线优先用后端口径（DR：含中试产量 ÷ 正式批批数），无后端值时按柱子自算
   const trendOutputs = board?.trend?.outputs ?? []
-  const trendAvg = trendOutputs.length
-    ? trendOutputs.reduce((sum, value) => sum + value, 0) / trendOutputs.length
-    : null
+  const trendAvg =
+    board?.trend?.avg_yield_kg ??
+    (trendOutputs.length
+      ? trendOutputs.reduce((sum, value) => sum + value, 0) / trendOutputs.length
+      : null)
 
   const trendOption = board?.trend
     ? {
@@ -1447,7 +1452,7 @@ export default function ProductionDashboard() {
       {/* 历史数据抽屉：批次实际产量 */}
       <Drawer
         title="批次产量历史数据"
-        size={560}
+        size={640}
         open={actualsOpen}
         onClose={() => setActualsOpen(false)}
         extra={canOperate ? <Button
@@ -1482,7 +1487,7 @@ export default function ProductionDashboard() {
         okText="保存"
         cancelText="取消"
       >
-        <Space direction="vertical" style={{ width: '100%' }} size={12}>
+        <Space orientation="vertical" style={{ width: '100%' }} size={12}>
           <Select
             showSearch
             placeholder="选择已放罐批次"

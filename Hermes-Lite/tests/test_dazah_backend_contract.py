@@ -125,6 +125,51 @@ def test_describe_uses_operation_and_trusted_subject(monkeypatch) -> None:
     }
 
 
+def test_search_forwards_natural_language_and_preserves_backend_ranking(monkeypatch) -> None:
+    recorded: dict[str, object] = {}
+    entries = [
+        {"operation": "agent.get_my_access_scope"},
+        {"operation": "quality.list_deviations"},
+    ]
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self) -> dict[str, object]:
+            return {"data": entries}
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args) -> None:
+            pass
+
+        async def post(self, url, json, headers):
+            recorded.update(url=url, json=json)
+            return FakeResponse()
+
+    monkeypatch.setenv("DAZAH_AGENT_TOOL_TOKEN", "contract-token")
+    monkeypatch.setattr(dazah_platform.httpx, "AsyncClient", FakeAsyncClient)
+    token = _bind_context()
+    try:
+        payload = asyncio.run(
+            dazah_platform.dazah_tool("search", query="平台有哪些模块", limit=2)
+        )
+    finally:
+        dazah_platform.dazah_request_context.reset(token)
+
+    assert str(recorded["url"]).endswith("/agent/tools/search")
+    request_json = recorded["json"]
+    assert request_json["query"] == "平台有哪些模块"
+    assert request_json["limit"] == 2
+    assert request_json["subject"]["user_id"] == "00000000-0000-0000-0000-000000000001"
+    assert json.loads(payload)["data"] == entries
+
+
 def test_quality_operation_is_forwarded_to_backend_catalog(monkeypatch) -> None:
     recorded: dict[str, object] = {}
 

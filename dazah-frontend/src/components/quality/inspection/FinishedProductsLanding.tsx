@@ -34,7 +34,7 @@ const PRODUCTS: ProductEntry[] = [
 export function FinishedProductsLanding() {
   return (
     <div className="mx-auto max-w-[1440px]">
-      <Space direction="vertical" size={8} className="mb-6">
+      <Space orientation="vertical" size={8} className="mb-6">
         <Title level={3} className="!mb-0">
           成品检验
         </Title>

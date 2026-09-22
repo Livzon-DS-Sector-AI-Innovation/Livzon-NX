@@ -357,7 +357,7 @@ export default function OnboardingManagementPage() {
 
           {ATTACHMENT_FIELDS.map((field) => (
             <Form.Item key={field.key} label={field.label}>
-              <Space direction="vertical" style={{ width: '100%' }} size={4}>
+              <Space orientation="vertical" style={{ width: '100%' }} size={4}>
                 {(draftAttachments[field.key] || []).map((att, idx) => (
                   <Space key={att.file_token || idx}>
                     <Typography.Link onClick={() => editing && openAttachment(editing.id, att)}>

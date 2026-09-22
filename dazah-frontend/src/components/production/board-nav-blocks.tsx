@@ -1,11 +1,12 @@
 'use client'
 
-// 生产/排产页顶部共用的 8 个导航块：同位置同目标，一一对应。
+// 生产/排产页顶部共用的 9 个导航块：同位置同目标，一一对应。
 // 产品 Tab 按业务约定位置摆放（点击切换产品上下文，不跳转页面）：
 // 首位汇总（SUMMARY，五产线聚合视图）、第 2 位霉酚酸（系统代码 MC）、
-// 第 3 位多拉菌素、第 4 位 L-苯丙氨酸、第 5 位洛伐他汀（LV）、
-// 第 6 位美伐他汀（MV）——他汀复用 MC 看板管线；
-// 第 7/8 位 L-色氨酸（TY）、氟苯尼考（FL，Tab 展示短名，悬停提示全名）。
+// 第 3 位盐酸林可霉素（LN，Tab 展示短名「林可」，悬停提示全名）、
+// 第 4 位多拉菌素、第 5 位 L-苯丙氨酸、第 6 位洛伐他汀（LV）、
+// 第 7 位美伐他汀（MV）——他汀复用 MC 看板管线；
+// 第 8/9 位 L-色氨酸（TY）、氟苯尼考（FL，Tab 展示短名，悬停提示全名）。
 
 import { useEffect, useState } from 'react'
 import { Col, Row, Typography } from 'antd'
@@ -21,8 +22,8 @@ import {
 const { Text } = Typography
 
 // 产品 Tab 位置表：代码与后端排产存档 product_code 一致
-// （FA/MC/DR/LV/MV/TY/FL）；SUMMARY 为汇总视图（五产线聚合），非单一产品。
-// 2%氟苯尼考预混剂全名过长，Tab 展示短名，fullName 用于悬停提示
+// （FA/MC/DR/LV/MV/TY/FL/LN）；SUMMARY 为汇总视图（五产线聚合），非单一产品。
+// 全名过长的产品（盐酸林可霉素/2%氟苯尼考预混剂）Tab 展示短名，fullName 用于悬停提示
 interface ProductTab {
   code: string
   name: string
@@ -33,6 +34,12 @@ interface ProductTab {
 const PRODUCT_TAB_SLOTS: readonly ProductTab[] = [
   { code: 'SUMMARY', name: '汇总', color: '#5645d4' },
   { code: 'MC', name: '霉酚酸', color: '#1677ff' },
+  {
+    code: 'LN',
+    name: '林可',
+    color: '#13c2c2',
+    fullName: '盐酸林可霉素',
+  },
   { code: 'DR', name: '多拉菌素', color: '#d46b08' },
   { code: 'FA', name: 'L-苯丙氨酸', color: '#389e0d' },
   { code: 'LV', name: '洛伐他汀', color: '#c41d7f' },
@@ -99,8 +106,9 @@ export default function BoardNavBlocks({
       {visibleTabs.map((tab) => {
         const halted = haltedLines.includes(tab.code)
         return (
-        // lg（≥992px）起 24/3=8 个一行；md 平板宽度回退 6+2 两行
-        <Col xs={12} sm={8} md={4} lg={3} key={tab.code}>
+        // 弹性等宽：宽屏 9 块一行铺满（24 栅格 3/块放不下第 9 块），
+        // 窄屏按 144px 基准自然换行
+        <Col key={tab.code} flex="1 1 144px">
           <div
             title={`切换到 ${tab.fullName ?? tab.name}${tab.code === 'SUMMARY' ? '（五产线聚合）' : halted ? '（停产中）' : ' 生产线与排产数据'}`}
             onClick={() => setProductCode(tab.code)}

@@ -377,7 +377,7 @@ export default function OosOotInvestigationPushPage() {
         width={600}
       >
         {drawerRecord && (
-          <Space direction="vertical" size={16} style={{ display: 'flex' }}>
+          <Space orientation="vertical" size={16} style={{ display: 'flex' }}>
             <div>
               <Typography.Text strong>OOS/OOT编号：</Typography.Text>
               <div>{drawerRecord.oos_oot_code || '-'}</div>

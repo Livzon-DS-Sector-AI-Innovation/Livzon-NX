@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -1016,8 +1016,11 @@ async def test_production_summary_endpoint_returns_payload(
     assert kwargs["has_ferm"] is True
     assert kwargs["has_extract"] is True
     assert str(kwargs["ref_date"]) == "2026-09-15"
-    # 漏录/进度/排产告警按真实今天门控（回看历史月不播旧账）
-    assert kwargs["today"] == datetime.now().date()
+    # 漏录/进度/排产告警按真实今天门控（回看历史月不播旧账）。
+    # 端点口径为北京时间：CI（UTC）在 16:00～24:00 窗口与北京日期相差一天，
+    # 期望值必须同用北京时区，否则跨日窗口必挂。
+    beijing = timezone(timedelta(hours=8))
+    assert kwargs["today"] == datetime.now(beijing).date()
 
 
 @pytest.mark.anyio
