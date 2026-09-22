@@ -89,6 +89,8 @@ EXPECTED_QUALITY_OPERATIONS = {
     "quality.sync_capa_to_feishu",
     "quality.sync_change_action_plan",
     "quality.sync_change_action_plans_from_feishu",
+    "quality.sync_deviation_report_record_to_feishu",
+    "quality.sync_deviation_to_feishu",
     "quality.update_capa",
     "quality.update_change",
     "quality.update_change_action_plan",

@@ -390,6 +390,9 @@ _QUALITY_TOOL_PAGE_KEYS: dict[str, tuple[str, ...]] = {
     "quality.list_feishu_capa_ledger": ("quality:capas:capa-ledger",),
     "quality.get_feishu_capa_plan_track": ("quality:capas:capa-plans",),
     "quality.list_feishu_capa_plan_tracks": ("quality:capas:capa-plans",),
+    "quality.sync_deviation_report_record_to_feishu": (
+        "quality:deviations:deviation-records",
+    ),
 }
 
 _QUALITY_TOOL_SENSITIVE_ACTIONS = {
@@ -399,6 +402,8 @@ _QUALITY_TOOL_SENSITIVE_ACTIONS = {
     "quality.sync_capa_to_feishu": "sync_config",
     "quality.sync_change_action_plan": "sync_config",
     "quality.sync_change_action_plans_from_feishu": "sync_config",
+    "quality.sync_deviation_report_record_to_feishu": "sync_config",
+    "quality.sync_deviation_to_feishu": "sync_config",
 }
 
 _P = ParamSpec("_P")
@@ -1506,6 +1511,46 @@ async def pull_quality_records_from_feishu(
     return _dump_object(
         await quality_feishu_sync.pull_quality_records_from_feishu(
             context.db, data.entity_code
+        )
+    )
+
+
+@agent_tool(
+    name="quality.sync_deviation_to_feishu",
+    summary="同步偏差到飞书Base",
+    input_model=DeviationIdInput,
+    write=True,
+    risk_level="medium",
+    method="POST",
+    path="/quality/feishu-sync/deviations/{deviation_id}",
+)
+async def sync_deviation_to_feishu(
+    context: ToolContext, data: DeviationIdInput
+) -> dict[str, Any]:
+    return _dump_object(
+        await quality_feishu_sync.sync_deviation_to_feishu(
+            context.db, data.deviation_id
+        )
+    )
+
+
+@agent_tool(
+    name="quality.sync_deviation_report_record_to_feishu",
+    summary="同步偏差报告记录到飞书Base",
+    input_model=DeviationReportSyncInput,
+    write=True,
+    risk_level="medium",
+    method="POST",
+    path="/quality/feishu-sync/deviation-report-records/{deviation_id}",
+)
+async def sync_deviation_report_record_to_feishu(
+    context: ToolContext, data: DeviationReportSyncInput
+) -> dict[str, Any]:
+    return _dump_object(
+        await quality_feishu_sync.sync_deviation_report_record_to_feishu(
+            context.db,
+            data.deviation_id,
+            target_record_id=data.target_record_id,
         )
     )
 

@@ -755,6 +755,9 @@ async def create_deviation(
         raise
     result = await db.execute(select(Deviation).where(Deviation.id == deviation.id))
     deviation = result.scalar_one()
+    from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
+
+    await feishu_sync_service.auto_sync_deviation_after_write(db, deviation.id)
     return {"id": str(deviation.id), "code": deviation.deviation_code}
 
 
@@ -866,6 +869,9 @@ async def update_deviation(
     except Exception:
         await db.rollback()
         raise
+    from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
+
+    await feishu_sync_service.auto_sync_deviation_after_write(db, deviation.id)
     return {"success": True}
 
 

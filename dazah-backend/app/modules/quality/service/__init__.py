@@ -209,6 +209,8 @@ from app.modules.quality.service.quality_feishu_sync import (
     sync_capa_plan_track_to_feishu,
     sync_capa_to_feishu,
     sync_deviation_investigation_push_record_to_feishu,
+    sync_deviation_report_record_to_feishu,
+    sync_deviation_to_feishu,
 )
 from app.modules.quality.service.quality_notification_settings import (
     ensure_quality_notification_settings,
@@ -307,7 +309,9 @@ __all__ = [
     "create_capa_plan_track",
     "update_capa_plan_track",
     "delete_capa_plan_track",
+    "sync_deviation_report_record_to_feishu",
     "sync_capa_to_feishu",
+    "sync_deviation_to_feishu",
     "sync_deviation_investigation_push_record_to_feishu",
     "sync_capa_plan_track_to_feishu",
     "pull_quality_records_from_feishu",

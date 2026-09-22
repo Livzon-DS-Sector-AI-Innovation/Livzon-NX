@@ -923,6 +923,18 @@ async def _run_best_effort_sync(
         )
 
 
+async def _resolve_deviation_reporter_name(
+    db: AsyncSession, deviation: Deviation
+) -> str:
+    if deviation.discoverer:
+        return deviation.discoverer
+    if deviation.reporter_id:
+        reporter = await db.get(User, deviation.reporter_id)
+        if reporter and reporter.name:
+            return reporter.name
+    return ""
+
+
 async def _resolve_contact_bitable_user_value(
     db: AsyncSession,
     name: str | None,
@@ -941,6 +953,70 @@ async def _resolve_contact_bitable_user_value(
     if not person_id:
         return None
     return [{"id": person_id}]
+
+
+async def sync_deviation_report_record_to_feishu(
+    db: AsyncSession,
+    deviation_id: uuid.UUID,
+    target_record_id: str | None = None,
+) -> dict[str, Any]:
+    deviation = await repository.get_deviation_by_id(db, deviation_id)
+    if not deviation:
+        raise NotFoundException(resource="偏差")
+    runtime = await feishu_sync._resolve_runtime(db)
+    entity = runtime.get_entity_config("deviation_report_record", direction="push")
+    current_record_id = target_record_id or (
+        deviation.feishu_base_record_id
+        if entity
+        and deviation.feishu_base_table_id
+        and deviation.feishu_base_table_id == entity.table_id
+        else None
+    )
+
+    reporter_name = (await _resolve_deviation_reporter_name(db, deviation)).strip()
+    reporter_user_value = None
+    if reporter_name:
+        from app.modules.quality.service.person_directory import (
+            resolve_person_write_id,
+        )
+
+        reporter_write_id = await resolve_person_write_id(
+            db, reporter_name, department=deviation.department
+        )
+        if reporter_write_id:
+            reporter_user_value = [{"id": reporter_write_id}]
+    report_time = deviation.discovery_date or deviation.created_at
+    fields = {
+        "偏差编号": deviation.deviation_code,
+        "报告时间": _to_ms_timestamp(report_time),
+        "偏差内容": deviation.description or deviation.title or "",
+        "偏差报告": deviation.report_content or "",
+        "涉及产品名称/批号": deviation.affected_items or "",
+        "部门": deviation.department or "",
+        "报告人": reporter_user_value,
+        "报告状态": deviation.status or "",
+    }
+    record_id, table_id = await feishu_sync._upsert_record(
+        db,
+        "deviation_report_record",
+        None,
+        current_record_id,
+        fields,
+        search_conditions=[("偏差编号", deviation.deviation_code)],
+    )
+    return {"record_id": record_id, "table_id": table_id}
+
+
+async def auto_sync_deviation_after_write(
+    db: AsyncSession, deviation_id: uuid.UUID
+) -> None:
+    await _run_best_effort_sync(
+        db,
+        entity_code="deviation_report_record",
+        entity_label="deviation_report_record",
+        entity_id=deviation_id,
+        sync_coro=sync_deviation_report_record_to_feishu(db, deviation_id),
+    )
 
 
 async def sync_capa_to_feishu(db: AsyncSession, capa_id: uuid.UUID) -> dict[str, Any]:
@@ -1202,6 +1278,65 @@ async def auto_sync_capa_plan_track_after_write(
         entity_id=track_id,
         sync_coro=sync_capa_plan_track_to_feishu(db, track_id),
     )
+
+
+async def sync_deviation_to_feishu(
+    db: AsyncSession,
+    deviation_id: uuid.UUID,
+) -> dict[str, Any]:
+    """Push one local deviation to the configured deviation ledger.
+
+    This compatibility entry point retains the old record-id rule: a remote
+    record may only be updated when its saved table id still matches the
+    current runtime table, otherwise the upsert starts a new remote record.
+    """
+    deviation = await repository.get_deviation_by_id(db, deviation_id)
+    if not deviation:
+        raise ValueError("偏差不存在")
+    runtime = await feishu_sync._resolve_runtime(db)
+    entity = runtime.get_entity_config("deviation_ledger", direction="push")
+    current_record_id = (
+        deviation.feishu_base_record_id
+        if entity and deviation.feishu_base_table_id == entity.table_id
+        else None
+    )
+    related_capas = await repository.get_related_capas_for_deviation(
+        db, deviation.id, deviation.deviation_code
+    )
+    fields = {
+        "偏差编号": deviation.deviation_code,
+        "产品名称/批号": _join_non_empty(
+            [deviation.affected_items, deviation.batch_number]
+        ),
+        "偏差简要描述": deviation.description or deviation.title,
+        "偏差是否曾发生": "是" if deviation.has_occurred_before else "否",
+        "根本原因": deviation.root_cause_analysis or "",
+        "偏差等级": deviation.level or "",
+        "调查完成时间": _to_ms_timestamp(deviation.investigation_completed_at),
+        "纠正预防措施": deviation.corrective_actions or "",
+        "产品/物料处理结果": deviation.material_disposition or "",
+        "是否关闭": "是" if deviation.status == "closed" else "否",
+        "关闭时间": _to_ms_timestamp(
+            deviation.status_updated_at if deviation.status == "closed" else None
+        ),
+        "关联capa": "、".join(related_capa.capa_code for related_capa in related_capas),
+    }
+    record_id, table_id = await feishu_sync._upsert_record(
+        db,
+        "deviation_ledger",
+        None,
+        current_record_id,
+        fields,
+        search_conditions=[("偏差编号", deviation.deviation_code)],
+    )
+    await _mark_sync_success(
+        db,
+        deviation,
+        table_id=table_id,
+        record_id=record_id,
+        direction="system_to_base",
+    )
+    return {"record_id": record_id, "table_id": table_id}
 
 
 async def _sync_deviation_investigation_push_records_from_feishu(
