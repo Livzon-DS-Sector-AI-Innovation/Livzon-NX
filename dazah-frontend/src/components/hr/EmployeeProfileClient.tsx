@@ -11,7 +11,6 @@ import { usePagePermissions } from '@/hooks/usePagePermissions'
 import EmployeeTable from './EmployeeTable'
 import EmployeeForm from './EmployeeForm'
 import EmployeeDetailDrawer from './EmployeeDetailDrawer'
-import HrChatbot from './HrChatbot'
 import ContractAlertBanner from './ContractAlertBanner'
 
 interface EmployeeProfileClientProps {
@@ -277,7 +276,6 @@ export default function EmployeeProfileClient({
         }}
       />
 
-      <HrChatbot />
     </div>
   )
 }

@@ -14,7 +14,6 @@ export { default as OffboardingDetailDrawer } from './OffboardingDetailDrawer'
 export { default as PositionTransferClient } from './PositionTransferClient'
 export { default as PositionTransferForm } from './PositionTransferForm'
 export { default as PositionTransferDetailDrawer } from './PositionTransferDetailDrawer'
-export { default as HrChatbot } from './HrChatbot'
 export { default as OnboardingEvaluationClient } from './OnboardingEvaluationClient'
 export { default as ContractAlertBanner } from './ContractAlertBanner'
 

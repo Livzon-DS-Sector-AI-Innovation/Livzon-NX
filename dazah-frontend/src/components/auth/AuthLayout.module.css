@@ -190,6 +190,123 @@
   line-height: 1.7;
 }
 
+.loginPanel {
+  animation: auth-reveal 280ms ease-out both;
+}
+
+.loginPanel .panelHeader {
+  margin-bottom: 1.75rem;
+}
+
+.panelHeader .panelEyebrow {
+  margin: 0 0 0.875rem;
+  color: var(--color-primary);
+  font-size: 0.75rem;
+}
+
+.loginMethod {
+  border: 1px solid var(--color-hairline-soft);
+  border-radius: var(--rounded-lg);
+  background: var(--color-surface-soft);
+  padding: 1.5rem;
+}
+
+.methodHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.methodIcon {
+  display: grid;
+  flex: 0 0 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  border: 1px solid var(--color-hairline-soft);
+  border-radius: var(--rounded-md);
+  background: var(--color-canvas);
+  color: var(--color-primary);
+  font-size: 1.375rem;
+}
+
+.methodHeader strong {
+  color: var(--color-ink);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.methodHeader p {
+  margin: 0.25rem 0 0;
+  color: var(--color-slate);
+  font-size: 0.75rem;
+}
+
+.methodBadge {
+  margin-left: auto;
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.buttonArrow {
+  margin-left: 0.75rem;
+  transition: transform 180ms ease;
+}
+
+.primaryButton:hover:not(:disabled) .buttonArrow {
+  transform: translateX(3px);
+}
+
+.loginStatus {
+  min-height: 2.75rem;
+  margin: 0.875rem 0 0;
+  color: var(--color-slate);
+  font-size: 0.75rem;
+  line-height: 1.7;
+  text-align: center;
+}
+
+.loginSteps {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.loginSteps li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-slate);
+  font-size: 0.75rem;
+}
+
+.loginSteps span {
+  display: grid;
+  width: 1.5rem;
+  height: 1.5rem;
+  place-items: center;
+  border: 1px solid var(--color-hairline-strong);
+  border-radius: 50%;
+  transition: color 180ms ease, background-color 180ms ease;
+}
+
+.loginSteps li[data-active] span {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.loginHelp {
+  margin: 1.75rem 0 0;
+  color: var(--color-steel);
+  font-size: 0.75rem;
+  line-height: 1.8;
+}
+
 .errorNotice {
   display: flex;
   gap: 0.625rem;
@@ -260,7 +377,13 @@
 
 .primaryButton:disabled {
   cursor: wait;
-  opacity: 0.72;
+  opacity: 0.88;
+}
+
+.localSubmit:disabled,
+.emergencyToggle:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }
 
 .primaryButton:focus-visible,
@@ -339,6 +462,7 @@
   border-radius: var(--rounded-lg);
   background: var(--color-surface-soft);
   padding: 1rem;
+  animation: auth-reveal 200ms ease-out both;
 }
 
 .localHint {
@@ -484,6 +608,11 @@
   }
 }
 
+@keyframes auth-reveal {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 @media (max-width: 768px) {
   .authPage {
     display: block;
@@ -533,6 +662,9 @@
 }
 
 @media (max-width: 420px) {
+  .loginMethod {
+    padding: 1rem;
+  }
   .accessPane {
     padding: 1.25rem;
   }
@@ -551,8 +683,15 @@
   .primaryButton,
   .secondaryButton,
   .localSubmit,
-  .toggleChevron {
+  .toggleChevron,
+  .buttonArrow,
+  .loginSteps span {
     transition: none;
+  }
+
+  .loginPanel,
+  .localForm {
+    animation: none;
   }
 
   .buttonSpinner,

@@ -13,7 +13,6 @@ import { syncDepartureFromFeishuAction } from '@/actions/hr'
 import {
   fetchDepartureRecords,
 } from '@/lib/api/hr'
-import HrChatbot from './HrChatbot'
 
 interface DepartureClientProps {
   initialRecords: DepartureRecord[]
@@ -250,7 +249,6 @@ export default function DepartureClient({
         size="small"
       />
 
-      <HrChatbot />
     </div>
   )
 }

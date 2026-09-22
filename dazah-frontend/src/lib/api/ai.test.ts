@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { exportExam, generateExamQuestions } from './ai'
+import * as aiApi from './ai'
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -13,6 +14,10 @@ describe('ai lib api', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.clearAllMocks()
+  })
+
+  it('does not expose the retired HR chat stream adapter', () => {
+    expect(aiApi).not.toHaveProperty('streamChat')
   })
 
   it('generates exam questions and returns data payload', async () => {

@@ -142,3 +142,40 @@ it('requires an audit reason before saving access changes', async () => {
   expect(mocks.confirm).not.toHaveBeenCalled()
   expect(mocks.replace).not.toHaveBeenCalled()
 })
+
+it('shows only top navigation modules and preserves hidden grants when closing all visible access', async () => {
+  const initial = result()
+  mocks.get.mockResolvedValue({
+    ...initial,
+    available_modules: [
+      ...(initial.available_modules || []),
+      { module_code: 'environment', module_name: '环保管理', description: '环保业务' },
+    ],
+    grants: [
+      ...(initial.grants || []),
+      { ...initial.grants![0], module_code: 'environment', module_name: '环保管理' },
+    ],
+  })
+  await show()
+
+  expect(document.body.textContent).toContain('生产管理')
+  expect(document.body.textContent).toContain('质量管理')
+  expect(document.body.textContent).not.toContain('环保管理')
+  await act(async () => button('全部关闭').click())
+  expect(document.body.textContent).toContain('已允许 0 个模块')
+  const reason = document.querySelector<HTMLInputElement>('input[placeholder="填写模块访问调整原因"]')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(reason, '导航模块调整')
+    reason.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => button('预览并保存').click())
+  const confirmation = mocks.confirm.mock.lastCall![0] as { onOk: () => Promise<void> }
+  await act(async () => confirmation.onOk())
+
+  expect(mocks.replace).toHaveBeenCalledWith(
+    '00000000-0000-0000-0000-000000000001',
+    expect.objectContaining({
+      grants: [expect.objectContaining({ module_code: 'environment' })],
+    }),
+  )
+})
