@@ -93,6 +93,7 @@ async def test_capa_crud_listing_and_workflow_paths(
     db.execute.return_value = _Result(capa)
     detail = await service.get_capa_detail(db, capa.id)
     assert detail.capa_code == capa.capa_code
+    assert detail.linked_plan_contents == ["验证措施"]
 
     from app.modules.quality.service import quality_feishu_sync as sync
 
@@ -124,7 +125,7 @@ async def test_capa_crud_listing_and_workflow_paths(
         ),
         "system",
     )
-    assert updated == {"success": True}
+    assert updated == {"success": True, "feishu_sync_status": None}
     assert capa.title == "更新 CAPA"
     assert capa.status == "submitted"
 
@@ -144,6 +145,26 @@ async def test_capa_crud_listing_and_workflow_paths(
         ),
     )
     assert await service.get_capa_departments(db) == ["生产部", "质量部"]
+
+
+@pytest.mark.anyio
+async def test_capa_save_exposes_failed_feishu_sync(monkeypatch):
+    from app.modules.quality.service import quality_feishu_sync as sync
+
+    capa = _capa()
+    db = _Db()
+    db.execute.return_value = _Result(capa)
+
+    async def failed_sync(*args):
+        capa.feishu_sync_status = "failed"
+
+    monkeypatch.setattr(sync, "auto_sync_capa_after_write", failed_sync)
+    result = await service.update_capa(
+        db, capa.id, UpdateCapaRequest(capa_content="已修改措施"), "system"
+    )
+    assert capa.capa_content == "已修改措施"
+    db.commit.assert_awaited_once()
+    assert result == {"success": True, "feishu_sync_status": "failed"}
 
 
 @pytest.mark.anyio

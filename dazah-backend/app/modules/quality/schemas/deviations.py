@@ -218,6 +218,7 @@ class DeviationDetail(BaseModel):
 
 
 class CreateDeviationRequest(BaseModel):
+    deviation_code: str | None = None
     title: str | None = None
     department: str | None = None
     reporter_open_id: str | None = None
@@ -245,6 +246,7 @@ class CreateDeviationRequest(BaseModel):
 
 
 class UpdateDeviationRequest(BaseModel):
+    deviation_code: str | None = None
     title: str | None = None
     status: str | None = None
     level: str | None = None

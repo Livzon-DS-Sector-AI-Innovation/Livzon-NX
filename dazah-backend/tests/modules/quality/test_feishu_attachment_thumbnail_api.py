@@ -168,3 +168,72 @@ async def test_anomaly_thumbnail_inline_jpeg(
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("image/jpeg")
     assert resp.headers["content-disposition"].startswith("inline")
+
+
+# ─── 偏差报告记录附件端点 ──────────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_deviation_report_attachment_content_download(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.modules.quality.api.quality_deviation as deviation_api
+
+    async def _fake_content(db, entity_code, record_id, file_token):
+        assert entity_code == "deviation_report_record"
+        assert record_id == "rec_1"
+        assert file_token == "ft"
+        return (
+            b"document",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "报告.docx",
+        )
+
+    monkeypatch.setattr(
+        deviation_api, "get_inspection_feishu_attachment_content", _fake_content
+    )
+    resp = await client.get(
+        "/api/v1/quality/deviation-report-records/rec_1/attachments/ft/content"
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-disposition"].startswith("attachment")
+
+
+@pytest.mark.anyio
+async def test_deviation_report_attachment_preview_inline_pdf(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.modules.quality.api.quality_deviation as deviation_api
+
+    async def _fake_preview(db, entity_code, record_id, file_token):
+        assert entity_code == "deviation_report_record"
+        return b"%PDF-1.4 report", "application/pdf", "报告.pdf"
+
+    monkeypatch.setattr(
+        deviation_api, "get_inspection_feishu_attachment_preview", _fake_preview
+    )
+    resp = await client.get(
+        "/api/v1/quality/deviation-report-records/rec_1/attachments/ft/preview"
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/pdf")
+    assert resp.headers["content-disposition"].startswith("inline")
+
+
+@pytest.mark.anyio
+async def test_deviation_report_attachment_thumbnail_inline_jpeg(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.modules.quality.api.quality_deviation as deviation_api
+
+    async def _fake_thumbnail(db, entity_code, record_id, file_token, *args, **kwargs):
+        assert entity_code == "deviation_report_record"
+        return b"\xff\xd8\xff\xe0thumb", "image/jpeg", "照片.jpg"
+
+    monkeypatch.setattr(deviation_api, "get_attachment_thumbnail", _fake_thumbnail)
+    resp = await client.get(
+        "/api/v1/quality/deviation-report-records/rec_1/attachments/ft/thumbnail"
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("image/jpeg")
+    assert resp.headers["content-disposition"].startswith("inline")

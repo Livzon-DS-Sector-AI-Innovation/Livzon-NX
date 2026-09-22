@@ -1,5 +1,9 @@
 'use client'
 
+import { personSelectValue } from './qualityPersonSelection'
+
+import { alignFeishuColumns, feishuColumnLayouts } from './feishuColumnLayout'
+
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import { App, Avatar, Button, Card, Drawer, Form, Input as AntInput, Modal, Popconfirm, Select, Space, Table, Typography } from 'antd'
@@ -150,23 +154,10 @@ export default function OosOotInvestigationPushPage() {
     return vals.map(v => ({ label: v!, value: v! })).sort((a, b) => a.label.localeCompare(b.label))
   }, [items])
 
-  // 部门负责人由表单手选（人员目录已无"部门负责人"推导语义）
-  const getDeptHead = useCallback((_dept: string | undefined, _personId: string | undefined) => {
-    return undefined
-  }, [])
-
   const handleDepartmentChange = useCallback((value: string) => {
     setStepDept(value || undefined)
     form.setFieldValue('submitter', undefined)
-    // 自动填充部门负责人
-    const headId = getDeptHead(value || undefined, undefined)
-    form.setFieldValue('department_head_direct', headId || undefined)
-  }, [form, getDeptHead])
-
-  const handleSubmitterChange = useCallback((value: string) => {
-    const headId = getDeptHead(stepDept, value || undefined)
-    if (headId) form.setFieldValue('department_head_direct', headId)
-  }, [form, getDeptHead, stepDept])
+  }, [form])
 
   const handlePullFromFeishu = useCallback(async () => {
     try {
@@ -196,7 +187,7 @@ export default function OosOotInvestigationPushPage() {
       oos_oot_code: record.oos_oot_code ?? '',
       push_round: record.push_round ?? '',
       department: record.department ?? '',
-      submitter: record.submitter ?? '',
+      submitter: personSelectValue(contacts, record.submitter, record.department),
       department_head_direct: record.department_head_direct ?? '',
       department_head_result: record.department_head_result ?? '',
       qa_result: record.qa_result ?? '',
@@ -204,7 +195,7 @@ export default function OosOotInvestigationPushPage() {
       process_status: record.process_status ?? '',
     })
     setModalVisible(true)
-  }, [form])
+  }, [form, contacts])
 
   const openDetail = useCallback((record: OosOotInvestigationPushRecordItem) => {
     setDrawerRecord(record)
@@ -219,19 +210,21 @@ export default function OosOotInvestigationPushPage() {
   }, [form])
 
   const handleSubmit = useCallback(async () => {
-    const values = await form.validateFields()
     try {
+      const values = await form.validateFields()
       setSaving(true)
       const payload: Record<string, unknown> = {
         oos_oot_code: values.oos_oot_code.trim(),
         push_round: values.push_round?.trim() || '',
         department: values.department?.trim() || '',
         submitter: values.submitter?.trim() || '',
-        department_head_direct: values.department_head_direct?.trim() || '',
         department_head_result: values.department_head_result?.trim() || '',
         qa_result: values.qa_result?.trim() || '',
         qa_head_result: values.qa_head_result?.trim() || '',
         process_status: values.process_status?.trim() || '',
+      }
+      if (editingRecord && values.submitter === personSelectValue(contacts, editingRecord.submitter, editingRecord.department)) {
+        delete payload.submitter
       }
       if (editingRecord) {
         await updateOosOotInvestigationPushRecord(editingRecord.record_id, payload)
@@ -240,9 +233,10 @@ export default function OosOotInvestigationPushPage() {
       closeModal()
       queryClient.invalidateQueries({ queryKey: ['quality-oos-oot', 'investigation-push'] })
     } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'errorFields' in error) return
       message.error(getErrorMessage(error, '保存调查推送记录失败'))
     } finally { setSaving(false) }
-  }, [closeModal, editingRecord, form, queryClient, message])
+  }, [closeModal, editingRecord, form, queryClient, message, contacts])
 
   const handleDelete = useCallback(async (recordId: string) => {
     try {
@@ -279,6 +273,16 @@ export default function OosOotInvestigationPushPage() {
 
   const columns: ColumnsType<OosOotInvestigationPushRecordItem> = [
     { title: 'OOS/OOT编号', dataIndex: 'oos_oot_code', key: 'oos_oot_code', width: 160, render: (v: string) => v || '-' },
+    { title: '部门', dataIndex: 'department', key: 'department', width: 140, render: value => value || '-' },
+    { title: 'QA', key: 'qas', width: 140, render: (_, record) => renderPerson(record.qas, null) },
+    { title: 'QA审核结果', dataIndex: 'qa_result', key: 'qa_result', width: 140, render: value => value || '-' },
+    { title: 'QA审核时间', dataIndex: 'qa_reviewed_at', key: 'qa_reviewed_at', width: 170, render: formatDateTime },
+    { title: 'QA负责人', key: 'qa_heads', width: 140, render: (_, record) => renderPerson(record.qa_heads, null) },
+    { title: 'QA负责人审核结果', dataIndex: 'qa_head_result', key: 'qa_head_result', width: 170, render: value => value || '-' },
+    { title: 'QA负责人审核时间', dataIndex: 'qa_head_reviewed_at', key: 'qa_head_reviewed_at', width: 170, render: formatDateTime },
+    { title: '流程状态', dataIndex: 'process_status', key: 'process_status', width: 150, render: value => value || '-' },
+    { title: '已退回待重新提交', dataIndex: 'need_resubmit', key: 'need_resubmit', width: 160, render: value => value == null ? '-' : value ? '是' : '否' },
+    { title: '部门负责人(直接)', dataIndex: 'department_head_direct', key: 'department_head_direct', width: 170, render: value => value || '-' },
     { title: '第N次推送', dataIndex: 'push_round', key: 'push_round', width: 120, render: (v: string | null) => v || '-' },
     {
       title: '调查报告', key: 'investigation_report_url', width: 140,
@@ -333,7 +337,7 @@ export default function OosOotInvestigationPushPage() {
           <Select allowClear placeholder="部门负责人审核结果" style={{ width: 170 }} value={filterDeptHeadResult} onChange={setFilterDeptHeadResult} options={deptHeadResultOptions} />
           <Button size="small" onClick={clearFilters} disabled={!hasFilters}>清除筛选</Button>
         </div>
-        <Table<OosOotInvestigationPushRecordItem> rowKey="record_id" loading={loading} columns={columns} dataSource={filteredItems} pagination={false} scroll={{ x: 1500 }} />
+        <Table<OosOotInvestigationPushRecordItem> rowKey="record_id" loading={loading} columns={alignFeishuColumns(columns, feishuColumnLayouts.oosInvestigation)} dataSource={filteredItems} pagination={false} scroll={{ x: columns.reduce((sum, column) => sum + Number(column.width || 160), 0) }} />
       </Card>
       <Modal title="修改调查推送记录" open={modalVisible} onOk={() => void handleSubmit()} onCancel={closeModal} confirmLoading={saving} destroyOnHidden width={600}>
         <Form form={form} layout="vertical">
@@ -347,10 +351,10 @@ export default function OosOotInvestigationPushPage() {
             <Select showSearch allowClear placeholder="选择部门" options={departmentOptions} onChange={handleDepartmentChange} />
           </Form.Item>
           <Form.Item name="submitter" label="提交人">
-            <Select showSearch allowClear placeholder={stepDept ? `选择${stepDept}的人员` : '请先选择部门'} filterOption={(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase())} options={submitterOptions} disabled={!stepDept} onChange={handleSubmitterChange} />
+            <Select showSearch allowClear placeholder={stepDept ? `选择${stepDept}的人员` : '请先选择部门'} filterOption={(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase())} options={submitterOptions} disabled={!stepDept} />
           </Form.Item>
-          <Form.Item name="department_head_direct" label="部门负责人">
-            <Select showSearch allowClear placeholder="选择部门后自动填充" filterOption={(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase())} options={submitterOptions} disabled />
+          <Form.Item label="部门负责人">
+            <AntInput aria-label="部门负责人" readOnly value={stepDept === editingRecord?.department ? editingRecord?.department_head || '' : ''} placeholder="由飞书按部门自动生成" />
           </Form.Item>
           <Form.Item name="department_head_result" label="部门负责人审核结果">
             <Select allowClear placeholder="请选择" options={[{ label: '待审核', value: '待审核' }, { label: '通过', value: '通过' }, { label: '不通过', value: '不通过' }]} />

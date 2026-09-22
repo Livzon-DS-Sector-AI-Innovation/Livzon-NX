@@ -10,6 +10,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException, NotFoundException
@@ -24,7 +25,9 @@ from app.modules.quality.service.quality_feishu_pages import (
     _search_entity_records,
     _update_entity_record,
 )
-from app.platform.integrations.feishu.bitable import BitableClient
+from app.platform.integrations.feishu.bitable import (
+    fields_need_union_user_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -197,7 +200,6 @@ def _build_oos_oot_report_fields(payload: dict[str, Any]) -> dict[str, Any]:
 
     # Boolean checkbox fields
     for feishu_key, payload_key in (
-        ("部门负责人确认", "department_head_confirmed"),
         ("涉及发酵负责人确认", "fermentation_head_confirmed"),
         ("涉及提炼负责人确认", "extraction_head_confirmed"),
         ("QA确认", "qa_confirmed"),
@@ -209,32 +211,43 @@ def _build_oos_oot_report_fields(payload: dict[str, Any]) -> dict[str, Any]:
     return fields
 
 
+async def _save_oos_oot_fields(
+    db: AsyncSession, entity_code: str, record_id: str, fields: dict[str, Any]
+) -> None:
+    try:
+        await _update_entity_record(
+            db, entity_code, record_id, fields,
+            user_id_type="union_id" if fields_need_union_user_id(fields) else "open_id",
+        )
+    except httpx.RequestError as exc:
+        raise AppException(
+            message="飞书服务暂时无法连接，请稍后重试", status_code=503
+        ) from exc
+    except RuntimeError as exc:
+        raise AppException(
+            message="飞书未能保存记录，请稍后重试", status_code=502
+        ) from exc
+
+
 async def _resolve_user_from_contacts(
     db: AsyncSession,
     name_or_id: str | None,
     department: str | None = None,
 ) -> dict[str, str] | None:
-    """把人员字段值归一为可写成员 id（union_id 优先，失败回退原值）。"""
+    """解析选择的人员；不能把姓名直接当作飞书成员 ID。"""
     if not name_or_id:
         return None
-    try:
-        from app.modules.quality.service.person_directory import (
-            resolve_person_write_id,
-        )
+    from app.modules.quality.service.person_directory import resolve_person_write_id
 
-        person_id = await resolve_person_write_id(
-            db, name_or_id, department=department
+    person_id = await resolve_person_write_id(db, name_or_id, department=department)
+    if not person_id:
+        raise AppException(
+            message="所选人员无法唯一匹配，请重新选择人员", status_code=400
         )
-        if person_id:
-            return {"id": person_id}
-    except Exception:
-        logger.warning(
-            "解析用户ID失败，回退使用原始值 name_or_id=%s", name_or_id, exc_info=True
-        )
-    return {"id": name_or_id.strip()}
+    return {"id": person_id}
 
 
-def _build_oos_oot_report_feishu_fields_async(
+async def _build_oos_oot_report_feishu_fields_async(
     db: AsyncSession,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
@@ -259,24 +272,25 @@ def _build_oos_oot_report_feishu_fields_async(
         if val:
             fields[feishu_key] = val
 
-    # User fields - only send if value looks like a valid user ID
+    # Resolve HR open_id to a cross-application member ID before writing.
     for feishu_key, payload_key in (
         ("报告人", "reporter"),
         ("QA", "qa"),
         ("QA负责人", "qa_head"),
     ):
+        if payload_key not in payload:
+            continue
         val = payload.get(payload_key)
-        if val:
-            if isinstance(val, dict) and val.get("id"):
-                fields[feishu_key] = [val]
-            elif isinstance(val, str) and val.strip():
-                # Only send if it looks like an open_id/bitable_user_id
-                if val.strip().startswith("ou_"):
-                    fields[feishu_key] = [{"id": val.strip()}]
+        raw = val.get("id") if isinstance(val, dict) else val
+        person = await _resolve_user_from_contacts(
+            db,
+            raw,
+            department=payload.get("report_department") or payload.get("department"),
+        )
+        fields[feishu_key] = [person] if person else []
 
     # Checkbox fields
     for feishu_key, payload_key in (
-        ("部门负责人确认", "department_head_confirmed"),
         ("QA确认", "qa_confirmed"),
         ("QA负责人确认", "qa_head_confirmed"),
     ):
@@ -293,8 +307,13 @@ async def create_oos_oot_report_record(
     content = str(payload.get("content") or "").strip()
     if not content:
         raise AppException(message="内容不能为空")
-    fields = _build_oos_oot_report_feishu_fields_async(db, payload)
-    created = await _create_entity_record(db, ENTITY_OOS_OOT_REPORT_RECORD, fields)
+    fields = await _build_oos_oot_report_feishu_fields_async(db, payload)
+    created = await _create_entity_record(
+        db,
+        ENTITY_OOS_OOT_REPORT_RECORD,
+        fields,
+        user_id_type="union_id" if fields_need_union_user_id(fields) else "open_id",
+    )
     return await get_oos_oot_report_record(db, created["record_id"])
 
 
@@ -303,23 +322,25 @@ async def update_oos_oot_report_record(
     record_id: str,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
-    current = await get_oos_oot_report_record(db, record_id)
-    merged = {**current, **payload}
-    fields = _build_oos_oot_report_feishu_fields_async(db, merged)
-    # Exclude auto-generated fields from update
-    fields.pop("报告时间", None)
-    runtime, entity = await _resolve_runtime_entity(
-        db, ENTITY_OOS_OOT_REPORT_RECORD, direction="push"
-    )
-    client = BitableClient(
-        app_token=entity.app_token,
-        app_id=runtime.app_id,
-        app_secret=runtime.app_secret,
-    )
-    if not entity.table_id:
-        raise AppException(message="飞书表未配置", status_code=503)
-    await client.update_record(entity.table_id, record_id, fields)
-    return await get_oos_oot_report_record(db, record_id)
+    try:
+        fields = await _build_oos_oot_report_feishu_fields_async(db, payload)
+        fields.pop("报告时间", None)
+        await _update_entity_record(
+            db,
+            ENTITY_OOS_OOT_REPORT_RECORD,
+            record_id,
+            fields,
+            user_id_type="union_id" if fields_need_union_user_id(fields) else "open_id",
+        )
+    except httpx.RequestError as exc:
+        raise AppException(
+            message="飞书服务暂时无法连接，请稍后重试", status_code=503
+        ) from exc
+    except RuntimeError as exc:
+        raise AppException(
+            message="飞书未能保存记录，请稍后重试", status_code=502
+        ) from exc
+    return {"record_id": record_id, **payload}
 
 
 async def delete_oos_oot_report_record(
@@ -486,7 +507,8 @@ async def get_oos_oot_investigation_push_record(
     raise NotFoundException(resource="OOSOOT调查推送记录")
 
 
-def _build_oos_oot_investigation_push_feishu_fields(
+async def _build_oos_oot_investigation_push_feishu_fields(
+    db: AsyncSession,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
     fields: dict[str, Any] = {}
@@ -522,20 +544,23 @@ def _build_oos_oot_investigation_push_feishu_fields(
                 feishu_sync_service._parse_feishu_datetime(val)
             )
 
-    # User fields - only send if value looks like a valid user ID
+    # Resolve HR open_id to a cross-application member ID before writing.
     for feishu_key, payload_key in (
         ("提交人", "submitter"),
         ("QA", "qa"),
         ("QA负责人", "qa_head"),
         ("部门负责人(直接)", "department_head_direct"),
     ):
+        if payload_key not in payload:
+            continue
         val = payload.get(payload_key)
-        if val:
-            if isinstance(val, dict) and val.get("id"):
-                fields[feishu_key] = [val]
-            elif isinstance(val, str) and val.strip():
-                if val.strip().startswith("ou_"):
-                    fields[feishu_key] = [{"id": val.strip()}]
+        raw = val.get("id") if isinstance(val, dict) else val
+        person = await _resolve_user_from_contacts(
+            db,
+            raw,
+            department=payload.get("report_department") or payload.get("department"),
+        )
+        fields[feishu_key] = [person] if person else []
 
     # Checkbox
     if payload.get("need_resubmit") is not None:
@@ -551,8 +576,13 @@ async def create_oos_oot_investigation_push_record(
     oos_oot_code = str(payload.get("oos_oot_code") or "").strip()
     if not oos_oot_code:
         raise AppException(message="OOS/OOT编号不能为空")
-    fields = _build_oos_oot_investigation_push_feishu_fields(payload)
-    created = await _create_entity_record(db, ENTITY_OOS_OOT_INVESTIGATION_PUSH, fields)
+    fields = await _build_oos_oot_investigation_push_feishu_fields(db, payload)
+    created = await _create_entity_record(
+        db,
+        ENTITY_OOS_OOT_INVESTIGATION_PUSH,
+        fields,
+        user_id_type="union_id" if fields_need_union_user_id(fields) else "open_id",
+    )
     return await get_oos_oot_investigation_push_record(db, created["record_id"])
 
 
@@ -561,21 +591,25 @@ async def update_oos_oot_investigation_push_record(
     record_id: str,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
-    current = await get_oos_oot_investigation_push_record(db, record_id)
-    merged = {**current, **payload}
-    fields = _build_oos_oot_investigation_push_feishu_fields(merged)
-    runtime, entity = await _resolve_runtime_entity(
-        db, ENTITY_OOS_OOT_INVESTIGATION_PUSH, direction="push"
-    )
-    client = BitableClient(
-        app_token=entity.app_token,
-        app_id=runtime.app_id,
-        app_secret=runtime.app_secret,
-    )
-    if not entity.table_id:
-        raise AppException(message="飞书表未配置", status_code=503)
-    await client.update_record(entity.table_id, record_id, fields)
-    return await get_oos_oot_investigation_push_record(db, record_id)
+    try:
+        fields = await _build_oos_oot_investigation_push_feishu_fields(db, payload)
+        # Preserve fields not included in this edit, especially approvals and URLs.
+        await _update_entity_record(
+            db,
+            ENTITY_OOS_OOT_INVESTIGATION_PUSH,
+            record_id,
+            fields,
+            user_id_type="union_id" if fields_need_union_user_id(fields) else "open_id",
+        )
+    except httpx.RequestError as exc:
+        raise AppException(
+            message="飞书服务暂时无法连接，请稍后重试", status_code=503
+        ) from exc
+    except RuntimeError as exc:
+        raise AppException(
+            message="飞书未能保存记录，请稍后重试", status_code=502
+        ) from exc
+    return {"record_id": record_id, **payload}
 
 
 async def delete_oos_oot_investigation_push_record(
@@ -691,7 +725,9 @@ async def get_oos_ledger_record(
     raise NotFoundException(resource="OOS台账记录")
 
 
-def _build_ledger_feishu_fields(payload: dict[str, Any]) -> dict[str, Any]:
+async def _build_ledger_feishu_fields(
+    db: AsyncSession, payload: dict[str, Any]
+) -> dict[str, Any]:
     fields: dict[str, Any] = {}
     serial_val = (payload.get("serial_number") or "").strip()
     if serial_val:
@@ -712,10 +748,9 @@ def _build_ledger_feishu_fields(payload: dict[str, Any]) -> dict[str, Any]:
         val = (payload.get(payload_key) or "").strip()
         if val:
             fields[feishu_key] = val
-    # 登记人：人员字段，传 open_id（前端 Select 直接传 open_id）
-    registrant_val = (payload.get("registrant") or "").strip()
-    if registrant_val and registrant_val.startswith("ou_"):
-        fields["登记人"] = [{"id": registrant_val}]
+    if "registrant" in payload:
+        person = await _resolve_user_from_contacts(db, payload.get("registrant"))
+        fields["登记人"] = [person] if person else []
     date_val = payload.get("date")
     if date_val is not None:
         fields["日期"] = feishu_sync_service._to_ms_timestamp(
@@ -766,8 +801,11 @@ async def create_oos_ledger_record(
     if not serial:
         serial = str(await _auto_serial_number(db, ENTITY_OOS_LEDGER))
         payload["serial_number"] = serial
-    fields = _build_ledger_feishu_fields(payload)
-    created = await _create_entity_record(db, ENTITY_OOS_LEDGER, fields)
+    fields = await _build_ledger_feishu_fields(db, payload)
+    created = await _create_entity_record(
+        db, ENTITY_OOS_LEDGER, fields,
+        user_id_type="union_id" if fields_need_union_user_id(fields) else "open_id",
+    )
     return await get_oos_ledger_record(db, created["record_id"])
 
 
@@ -776,11 +814,9 @@ async def update_oos_ledger_record(
     record_id: str,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
-    current = await get_oos_ledger_record(db, record_id)
-    merged = {**current, **payload}
-    fields = _build_ledger_feishu_fields(merged)
-    await _update_entity_record(db, ENTITY_OOS_LEDGER, record_id, fields)
-    return await get_oos_ledger_record(db, record_id)
+    fields = await _build_ledger_feishu_fields(db, payload)
+    await _save_oos_oot_fields(db, ENTITY_OOS_LEDGER, record_id, fields)
+    return {"record_id": record_id, **payload}
 
 
 async def delete_oos_ledger_record(
@@ -902,8 +938,11 @@ async def create_oot_ledger_record(
     if not serial:
         serial = str(await _auto_serial_number(db, ENTITY_OOT_LEDGER))
         payload["serial_number"] = serial
-    fields = _build_ledger_feishu_fields(payload)
-    created = await _create_entity_record(db, ENTITY_OOT_LEDGER, fields)
+    fields = await _build_ledger_feishu_fields(db, payload)
+    created = await _create_entity_record(
+        db, ENTITY_OOT_LEDGER, fields,
+        user_id_type="union_id" if fields_need_union_user_id(fields) else "open_id",
+    )
     return await get_oot_ledger_record(db, created["record_id"])
 
 
@@ -912,11 +951,9 @@ async def update_oot_ledger_record(
     record_id: str,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
-    current = await get_oot_ledger_record(db, record_id)
-    merged = {**current, **payload}
-    fields = _build_ledger_feishu_fields(merged)
-    await _update_entity_record(db, ENTITY_OOT_LEDGER, record_id, fields)
-    return await get_oot_ledger_record(db, record_id)
+    fields = await _build_ledger_feishu_fields(db, payload)
+    await _save_oos_oot_fields(db, ENTITY_OOT_LEDGER, record_id, fields)
+    return {"record_id": record_id, **payload}
 
 
 async def delete_oot_ledger_record(
@@ -1024,7 +1061,9 @@ async def get_product_department_record(
     raise NotFoundException(resource="产品涉及部门记录")
 
 
-def _build_product_department_feishu_fields(payload: dict[str, Any]) -> dict[str, Any]:
+async def _build_product_department_feishu_fields(
+    db: AsyncSession, payload: dict[str, Any]
+) -> dict[str, Any]:
     fields: dict[str, Any] = {}
     for feishu_key, payload_key in (
         ("序号", "serial_number"),
@@ -1041,12 +1080,15 @@ def _build_product_department_feishu_fields(payload: dict[str, Any]) -> dict[str
         ("涉及发酵部门负责人", "fermentation_head"),
         ("涉及提炼部门负责人", "extraction_head"),
     ):
+        if payload_key not in payload:
+            continue
         val = payload.get(payload_key)
-        if val:
-            if isinstance(val, dict) and val.get("id"):
-                fields[feishu_key] = [val]
-            elif isinstance(val, str) and val.strip():
-                fields[feishu_key] = [{"id": val.strip()}]
+        raw = val.get("id") if isinstance(val, dict) else val
+        department_key = payload_key.replace("_head", "_department")
+        person = await _resolve_user_from_contacts(
+            db, raw, department=payload.get(department_key)
+        )
+        fields[feishu_key] = [person] if person else []
     return fields
 
 
@@ -1054,8 +1096,11 @@ async def create_product_department_record(
     db: AsyncSession,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
-    fields = _build_product_department_feishu_fields(payload)
-    created = await _create_entity_record(db, ENTITY_OOS_OOT_PRODUCT_DEPARTMENT, fields)
+    fields = await _build_product_department_feishu_fields(db, payload)
+    created = await _create_entity_record(
+        db, ENTITY_OOS_OOT_PRODUCT_DEPARTMENT, fields,
+        user_id_type="union_id" if fields_need_union_user_id(fields) else "open_id",
+    )
     return await get_product_department_record(db, created["record_id"])
 
 
@@ -1064,13 +1109,11 @@ async def update_product_department_record(
     record_id: str,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
-    current = await get_product_department_record(db, record_id)
-    merged = {**current, **payload}
-    fields = _build_product_department_feishu_fields(merged)
-    await _update_entity_record(
+    fields = await _build_product_department_feishu_fields(db, payload)
+    await _save_oos_oot_fields(
         db, ENTITY_OOS_OOT_PRODUCT_DEPARTMENT, record_id, fields
     )
-    return await get_product_department_record(db, record_id)
+    return {"record_id": record_id, **payload}
 
 
 async def delete_product_department_record(

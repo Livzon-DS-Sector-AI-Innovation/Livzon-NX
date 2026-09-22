@@ -1,5 +1,9 @@
 'use client'
 
+import { personSelectValue } from './qualityPersonSelection'
+
+import { alignFeishuColumns, feishuColumnLayouts } from './feishuColumnLayout'
+
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { App, Button, Card, Form, Input, Input as AntInput, Modal, Popconfirm, Select, Space, Table, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -116,12 +120,12 @@ export default function OosOotProductDepartmentPage() {
       serial_number: record.serial_number ?? '',
       product_code: record.product_code ?? '',
       fermentation_department: record.fermentation_department ?? '',
-      fermentation_head: record.fermentation_head ?? '',
+      fermentation_head: personSelectValue(contacts, record.fermentation_head),
       extraction_department: record.extraction_department ?? '',
-      extraction_head: record.extraction_head ?? '',
+      extraction_head: personSelectValue(contacts, record.extraction_head),
     })
     setModalVisible(true)
-  }, [form])
+  }, [form, contacts])
 
   const closeModal = useCallback(() => {
     setModalVisible(false)
@@ -130,8 +134,8 @@ export default function OosOotProductDepartmentPage() {
   }, [form])
 
   const handleSubmit = useCallback(async () => {
-    const values = await form.validateFields()
     try {
+      const values = await form.validateFields()
       setSaving(true)
       const payload: Record<string, unknown> = {
         serial_number: values.serial_number?.trim() || '',
@@ -140,6 +144,12 @@ export default function OosOotProductDepartmentPage() {
         fermentation_head: values.fermentation_head?.trim() || '',
         extraction_department: values.extraction_department?.trim() || '',
         extraction_head: values.extraction_head?.trim() || '',
+      }
+      if (editingRecord && values.fermentation_head === personSelectValue(contacts, editingRecord.fermentation_head)) {
+        delete payload.fermentation_head
+      }
+      if (editingRecord && values.extraction_head === personSelectValue(contacts, editingRecord.extraction_head)) {
+        delete payload.extraction_head
       }
       if (editingRecord) {
         await updateProductDepartmentRecord(editingRecord.record_id, payload)
@@ -151,11 +161,12 @@ export default function OosOotProductDepartmentPage() {
       closeModal()
       queryClient.invalidateQueries({ queryKey: ['quality-oos-oot', 'product-department'] })
     } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'errorFields' in error) return
       message.error(getErrorMessage(error, '保存产品对应部门记录失败'))
     } finally {
       setSaving(false)
     }
-  }, [closeModal, editingRecord, form, queryClient, message])
+  }, [closeModal, editingRecord, form, queryClient, message, contacts])
 
   const handleDelete = useCallback(async (recordId: string) => {
     try {
@@ -289,7 +300,7 @@ export default function OosOotProductDepartmentPage() {
         <Table<ProductDepartmentItem>
           rowKey="record_id"
           loading={loading}
-          columns={columns}
+          columns={alignFeishuColumns(columns, feishuColumnLayouts.productDepartment)}
           dataSource={filteredItems}
           pagination={false}
           scroll={{ x: 1000 }}

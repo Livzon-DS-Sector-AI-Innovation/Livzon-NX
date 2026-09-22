@@ -379,37 +379,6 @@ async def ensure_deviation_from_report_record(
     }
 
 
-async def sync_deviation_report_record_to_feishu_by_ref(
-    db: AsyncSession,
-    record_ref: str,
-) -> dict[str, Any]:
-    from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
-
-    deviation_id: uuid.UUID | None = None
-    try:
-        candidate = uuid.UUID(record_ref)
-    except ValueError:
-        candidate = None
-    if candidate:
-        deviation = await repository.get_deviation_by_id(db, candidate)
-        if deviation:
-            deviation_id = candidate
-
-    if deviation_id is None:
-        ensured = await ensure_deviation_from_report_record(db, record_ref)
-        deviation_id = uuid.UUID(ensured["deviation_id"])
-        return await feishu_sync_service.sync_deviation_report_record_to_feishu(
-            db,
-            deviation_id,
-            target_record_id=record_ref,
-        )
-
-    return await feishu_sync_service.sync_deviation_report_record_to_feishu(
-        db,
-        deviation_id,
-    )
-
-
 async def _search_deviation_report_record_codes_from_feishu(
     db: AsyncSession,
 ) -> list[str]:
@@ -689,18 +658,26 @@ async def create_deviation(
     assert_deviation_department(scope, (data.department or "").strip())
     if scope is not None and (data.is_closed or data.close_time):
         raise ForbiddenException("偏差关闭请通过对应业务流程执行")
-    reporter_contact = await _resolve_selected_reporter_contact(
-        db, data.reporter_open_id
-    )
-    if scope is not None:
-        assert_deviation_department(scope, reporter_contact.department)
-        if reporter_contact.department != (data.department or "").strip():
-            raise AppException(message="报告人部门已变化，请重新选择报告人后提交")
+    # 台账口径：报告人/部门不再强制（与台账表格列保持一致）。
+    # 仍提供报告人时沿用原校验；未提供时报告人留空。
+    if (data.reporter_open_id or "").strip():
+        reporter_contact = await _resolve_selected_reporter_contact(
+            db, data.reporter_open_id
+        )
+        if scope is not None:
+            assert_deviation_department(scope, reporter_contact.department)
+            if reporter_contact.department != (data.department or "").strip():
+                raise AppException(message="报告人部门已变化，请重新选择报告人后提交")
+    else:
+        reporter_contact = SelectedReporterContact(name="", open_id=None, department="")
     description = (data.description or "").strip()
     product_batch = (data.affected_items or "").strip()
+    # 部门缺省回落到创建人所属部门；部门范围受限且仍无法归属时报错，
+    # 避免产生当前用户不可见的记录（管理员全范围允许空部门，与导入路径一致）
     department = (data.department or "").strip()
-
-    if not department:
+    if not department and current_user is not None:
+        department = (getattr(current_user, "department", "") or "").strip()
+    if scope is not None and not scope.is_all and not department:
         raise AppException(message="部门不能为空")
     if not description:
         raise AppException(message="偏差内容不能为空")
@@ -708,8 +685,22 @@ async def create_deviation(
         raise AppException(message="涉及产品名称/批号不能为空")
 
     now = datetime.now(UTC)
+    # 偏差编号：允许手动指定（仅查重），留空则按月自动生成
+    manual_code = (data.deviation_code or "").strip()
+    if manual_code and await repository.exists_by_deviation_code(db, manual_code):
+        raise AppException(message="偏差编号已存在")
+    # 台账口径：允许创建时直接登记关闭状态（页面上下文已在上方禁止）
+    create_is_closed = bool(data.is_closed)
+    create_close_time = (
+        datetime.fromisoformat(str(data.close_time).replace("Z", "+00:00"))
+        if data.close_time
+        else None
+    )
+    create_status = "closed" if create_is_closed else "draft"
+    create_status_updated_at = (create_close_time or now) if create_is_closed else now
     deviation = Deviation(
-        deviation_code=await _generate_monthly_deviation_code(db, now),
+        deviation_code=manual_code
+        or await _generate_monthly_deviation_code(db, now),
         title=(data.title or description)[:255],
         department=department,
         discovery_date=(
@@ -741,8 +732,8 @@ async def create_deviation(
         else [],
         reporter_id=None,
         discoverer=reporter_contact.name or "",
-        status="draft",
-        status_updated_at=now,
+        status=create_status,
+        status_updated_at=create_status_updated_at,
     )
     db.add(deviation)
     try:
@@ -795,6 +786,19 @@ async def update_deviation(
     # 台账口径：是否关闭/关闭时间允许在编辑中登记，其余流程字段仍走业务流程
     is_closed = update_data.pop("is_closed", None)
     close_time_raw = update_data.pop("close_time", None)
+    if "deviation_code" in update_data:
+        # 偏差编号允许编辑，但必须非空且不与其他记录重复
+        new_code = (update_data.get("deviation_code") or "").strip()
+        if not new_code:
+            raise AppException(message="偏差编号不能为空")
+        if (
+            new_code != deviation.deviation_code
+            and await repository.exists_by_deviation_code(
+                db, new_code, exclude_id=deviation.id
+            )
+        ):
+            raise AppException(message="偏差编号已存在")
+        update_data["deviation_code"] = new_code
     if scope is not None:
         for field in (
             "status",

@@ -464,6 +464,21 @@ def test_quality_shared_read_routes_cover_sibling_pages():
     assert delete_binding.page_keys == ("quality:validation:validation-plans",)
 
 
+def test_deviation_report_attachment_routes_require_report_page_query():
+    from app.platform.identity.quality_api_contract import QUALITY_REVIEWED_API_ROUTES
+
+    for action in ("content", "preview", "thumbnail"):
+        path = (
+            "/api/v1/quality/deviation-report-records/"
+            f"{{record_id}}/attachments/{{file_token}}/{action}"
+        )
+        assert ("GET", path) in QUALITY_REVIEWED_API_ROUTES
+        binding = page_policy.api_binding_for_route("GET", path)
+        assert binding is not None
+        assert binding.permission == "query"
+        assert "quality:deviations:deviation-records" in binding.page_keys
+
+
 def test_quality_feishu_settings_read_covers_push_ledger_pages():
     """飞书应用配置读取授权四个业务推送页（响应仅含掩码密钥），写入仍仅设置页。"""
     binding = page_policy.api_binding_for_route(
@@ -521,3 +536,18 @@ def test_quality_module_landing_routes_resolve_reviewed_alias():
     )
     assert stats is not None
     assert "quality:change:change-ledger" in stats.page_keys
+
+
+def test_oos_report_attachment_routes_require_report_page_query():
+    from app.platform.identity.quality_api_contract import QUALITY_REVIEWED_API_ROUTES
+
+    for action in ("content", "preview", "thumbnail"):
+        path = (
+            "/api/v1/quality/oos-oot/report-records/"
+            f"{{record_id}}/attachments/{{file_token}}/{action}"
+        )
+        assert ("GET", path) in QUALITY_REVIEWED_API_ROUTES
+        binding = page_policy.api_binding_for_route("GET", path)
+        assert binding is not None
+        assert binding.permission == "query"
+        assert binding.page_keys == ("quality:oos-oot:oos-oot-report-records",)

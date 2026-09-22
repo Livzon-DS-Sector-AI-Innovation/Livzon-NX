@@ -162,62 +162,6 @@ async def test_deviation_report_create_update_delete_uses_shared_entity_pipeline
 
 
 @pytest.mark.asyncio
-async def test_deviation_ledger_listing_filters_and_maps_records(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        pages,
-        "_resolve_runtime_entity",
-        AsyncMock(
-            return_value=(
-                SimpleNamespace(),
-                SimpleNamespace(id="tbl", table_id="tbl", field_mappings={}),
-            )
-        ),
-    )
-    monkeypatch.setattr(
-        pages,
-        "_search_entity_records",
-        AsyncMock(
-            return_value=[
-                {
-                    "record_id": "r-1",
-                    "fields": {
-                        "偏差编号": "D-1",
-                        "偏差简要描述": "包装偏差",
-                        "是否关闭": "是",
-                        "产品名称/批号": "产品A",
-                        "根本原因": "温度异常",
-                        "纠正预防措施": "复核",
-                    },
-                },
-                {
-                    "record_id": "r-2",
-                    "fields": {
-                        "偏差编号": "D-2",
-                        "偏差简要描述": "其他问题",
-                        "是否关闭": "否",
-                        "产品名称/批号": "产品B",
-                    },
-                },
-            ]
-        ),
-    )
-    result = await pages.list_deviation_ledger_records(
-        SimpleNamespace(),
-        keyword="包装",
-        product_keyword="产品A",
-        is_closed=True,
-        root_cause_keyword="温度",
-        corrective_actions_keyword="复核",
-        page=1,
-        page_size=20,
-    )
-    assert result["total"] == 1
-    assert result["items"][0]["record_id"] == "r-1"
-
-
-@pytest.mark.asyncio
 async def test_validation_listing_handles_missing_base_and_filters_dates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

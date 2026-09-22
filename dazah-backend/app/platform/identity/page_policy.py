@@ -1330,7 +1330,6 @@ def _quality_remaining_api_bindings() -> tuple[PageApiBinding, ...]:
             "complaint-ledger": complaint_ledger,
             "complaints": complaint_ledger,
             "deviation-investigation-push-records": deviation_investigations,
-            "deviation-ledger-records": deviation_ledger,
             "deviation-report-records": deviation_records,
             "deviation-workbench": deviation_workbench,
             "deviations": deviation_ledger,
