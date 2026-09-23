@@ -1,20 +1,16 @@
 'use client'
 
 import type { Dayjs } from 'dayjs'
-import { useEffect, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import type { components } from '@/types/generated/schema'
-import { fetchDeviationReporters } from '@/lib/api/client/deviation-reporters'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Alert, App, Avatar, Button, Card, DatePicker, Form, Input, Select, Space } from 'antd'
-import { ArrowLeftOutlined, UserOutlined } from '@ant-design/icons'
+import { Alert, App, Button, Card, DatePicker, Form, Input, Select, Space } from 'antd'
+import { ArrowLeftOutlined } from '@ant-design/icons'
 import { createDeviation } from '@/actions/quality-deviation'
 import type { DeviationLevel } from '@/types/quality'
 import { useDeviationPermissions } from './useDeviationPermissions'
 
 interface CreateDeviationFormValues {
-  reporter_open_id: string
-  department: string
+  deviation_code?: string
   level?: DeviationLevel
   description: string
   affected_items: string
@@ -43,41 +39,18 @@ export function CreateDeviation() {
   const { message } = App.useApp()
   const [form] = Form.useForm<CreateDeviationFormValues>()
   const isClosed = Form.useWatch('is_closed', form)
-  const { canOperate, authorizationKey } = useDeviationPermissions()
-  const [keyword, setKeyword] = useState('')
-  const [search, setSearch] = useState('')
-  const [selected, setSelected] = useState<{ authorizationKey: string; reporter: components['schemas']['DeviationReporterOption'] } | null>(null)
+  const { canOperate } = useDeviationPermissions()
   const [submitting, setSubmitting] = useState(false)
   const submitLock = useRef(false)
-  const reporters = useQuery({
-    queryKey: ['quality-deviation', 'reporter-options', authorizationKey, search],
-    queryFn: ({ signal }) => fetchDeviationReporters(search, signal),
-    enabled: canOperate,
-    retry: false,
-  })
-  useEffect(() => {
-    const timer = setTimeout(() => setSearch(keyword), 250)
-    return () => clearTimeout(timer)
-  }, [keyword])
-  useEffect(() => { form.resetFields(['reporter_open_id', 'department']) }, [authorizationKey, form])
-  const selectedReporter = selected?.authorizationKey === authorizationKey ? selected.reporter : undefined
-  const candidates = reporters.data?.data ?? []
-  const options = selectedReporter && !candidates.some((item) => item.open_id === selectedReporter.open_id)
-    ? [selectedReporter, ...candidates] : candidates
 
   const handleSubmit = async (values: CreateDeviationFormValues) => {
     if (!canOperate || submitLock.current) return
-    if (!selectedReporter || selectedReporter.open_id !== values.reporter_open_id) {
-      message.error('请重新选择有效的报告人')
-      return
-    }
     submitLock.current = true
     setSubmitting(true)
     try {
       await createDeviation({
+        deviation_code: values.deviation_code?.trim() || null,
         title: values.description.trim(),
-        reporter_open_id: selectedReporter.open_id,
-        department: selectedReporter.department,
         description: values.description.trim(),
         affected_items: values.affected_items.trim(),
         level: values.level ?? null,
@@ -118,7 +91,6 @@ export function CreateDeviation() {
       </div>
 
       <Card>
-        {reporters.isError && <Alert type="error" showIcon title={reporters.error.message} action={<Button onClick={() => reporters.refetch()}>重试</Button>} />}
         <Form
           form={form}
           layout="vertical"
@@ -132,61 +104,11 @@ export function CreateDeviation() {
           style={{ maxWidth: 800 }}
         >
           <Form.Item
+            name="deviation_code"
             label="偏差编号"
+            extra="留空则保存后自动生成（PC-年月+序号）；手动填写时不能与现有编号重复。"
           >
-            <Input value="保存后自动生成" disabled />
-          </Form.Item>
-
-          <Form.Item
-            name="reporter_open_id"
-            label="报告人"
-            rules={[{ required: true, message: '请选择报告人' }]}
-            extra="选择报告人后自动关联部门；最多显示50人，可输入姓名或部门缩小范围。"
-          >
-            <Select
-              placeholder="输入姓名或部门搜索报告人"
-              showSearch
-              filterOption={false}
-              onSearch={setKeyword}
-              loading={reporters.isFetching}
-              allowClear
-              notFoundContent={reporters.isFetching ? '正在加载报告人' : reporters.isError ? '报告人加载失败，请重试' : '没有匹配的可选报告人'}
-              options={options.map((item) => ({ value: item.open_id, label: `${item.name}（${item.department}）` }))}
-              optionRender={(option) => {
-                const reporter = options.find((item) => item.open_id === option.value)
-                if (!reporter) return <span>{option.label}</span>
-                return (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Avatar
-                      size={24}
-                      src={reporter.avatar_url || undefined}
-                      style={{ backgroundColor: reporter.avatar_url ? 'transparent' : undefined, flexShrink: 0, fontSize: 12, fontWeight: 700 }}
-                      icon={!reporter.avatar_url ? <UserOutlined /> : undefined}
-                    >
-                      {!reporter.avatar_url ? reporter.name.charAt(0) : undefined}
-                    </Avatar>
-                    <span>{option.label}</span>
-                  </div>
-                )
-              }}
-              onChange={(value: string | undefined) => {
-                const reporter = options.find((item) => item.open_id === value)
-                setSelected(reporter ? { authorizationKey, reporter } : null)
-                form.setFieldValue('department', reporter?.department)
-              }}
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="department"
-            label="部门"
-            rules={[{ required: true, message: '请输入部门' }]}
-          >
-            <Input
-              placeholder="选择报告人后自动关联"
-              readOnly
-              maxLength={255}
-            />
+            <Input placeholder="请输入偏差编号，留空则自动生成" maxLength={255} />
           </Form.Item>
 
           <Form.Item
@@ -274,7 +196,7 @@ export function CreateDeviation() {
 
           <Form.Item>
             <Space>
-              <Button type="primary" htmlType="submit" loading={submitting} disabled={reporters.isError || !selectedReporter}>
+              <Button type="primary" htmlType="submit" loading={submitting}>
                 保存台账
               </Button>
               <Button onClick={() => router.push('/quality/deviations/ledger')}>

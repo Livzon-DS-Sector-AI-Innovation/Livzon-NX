@@ -3,12 +3,14 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { App } from 'antd'
+import { feishuColumnLayouts } from './feishuColumnLayout'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   fetchPushRecords: vi.fn(),
   fetchReportRecords: vi.fn(),
   fetchAppSettings: vi.fn(),
+  update: vi.fn(),
 }))
 vi.mock('@/lib/api/client/quality', () => ({
   fetchDeviationInvestigationPushRecords: mocks.fetchPushRecords,
@@ -18,7 +20,7 @@ vi.mock('@/lib/api/client/quality', () => ({
 }))
 vi.mock('@/actions/quality-deviation', () => ({
   deleteDeviationInvestigationPushRecord: vi.fn(),
-  updateDeviationInvestigationPushRecord: vi.fn(),
+  updateDeviationInvestigationPushRecord: mocks.update,
 }))
 vi.mock('@/actions/quality', () => ({ pullQualityRecordsFromFeishu: vi.fn() }))
 vi.mock('next/link', () => ({
@@ -58,6 +60,7 @@ const pushRecord = {
 }
 
 beforeEach(() => {
+  mocks.update.mockReset().mockResolvedValue({})
   mocks.fetchPushRecords.mockReset().mockResolvedValue({ items: [pushRecord], total: 1 })
   mocks.fetchReportRecords.mockReset().mockResolvedValue({
     items: [{ id: 'r1', deviation_code: 'PC-PUSH-1', report_status: 'investigating' }],
@@ -85,6 +88,7 @@ async function renderPage() {
       <QueryClientProvider client={client}>
         <DeviationInvestigationPushPage
           submitterContacts={[
+            { open_id: 'ou_new', name: '新提交人', department: 'QC', job_title: null, enterprise_email: null, avatar_url: null },
             { open_id: 'ou-push', name: '王推送', department: 'QC', job_title: null, enterprise_email: null, avatar_url: 'https://example.test/p.png' },
           ]}
         />
@@ -115,4 +119,24 @@ it('renders submitter options with avatars when editing an existing push record'
   )
   expect(submitterOption).toBeDefined()
   expect(submitterOption?.querySelector('img')).not.toBeNull()
+})
+
+it('saves the selected submitter ID for a remote record and retains its report URL', async () => {
+  await renderPage()
+  const edit = Array.from(container.querySelectorAll('button')).find(button => button.textContent === '修改')!
+  await act(async () => edit.click())
+  await act(async () => document.querySelector('#submitter_open_id')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
+  const option = Array.from(document.querySelectorAll('.ant-select-item-option')).find(item => item.textContent?.includes('新提交人'))!
+  await act(async () => option.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+  const save = document.querySelector<HTMLButtonElement>('.ant-modal-footer .ant-btn-primary')!
+  await act(async () => save.click())
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)) })
+  expect(mocks.update).toHaveBeenCalledWith('rec-1', expect.objectContaining({ submitter_open_id: 'ou_new', investigation_report_url: 'https://example.test/report' }))
+})
+
+
+it('shows every Feishu investigation column in source order', async () => {
+  await act(async () => root.render(<App><QueryClientProvider client={client}><DeviationInvestigationPushPage /></QueryClientProvider></App>))
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)) })
+  expect(Array.from(container.querySelectorAll('th')).map(el => el.textContent)).toEqual([...feishuColumnLayouts.deviationInvestigation, '操作'])
 })

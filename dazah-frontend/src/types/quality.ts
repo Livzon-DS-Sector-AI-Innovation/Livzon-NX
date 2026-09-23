@@ -157,7 +157,13 @@ export interface FeishuDeviationReportRecordItem extends FeishuPageRecordBase {
   department_heads?: Array<{ name?: string; avatar_url?: string; id?: string }> | null;
   qas?: Array<{ name?: string; avatar_url?: string; id?: string }> | null;
   qa_heads?: Array<{ name?: string; avatar_url?: string; id?: string }> | null;
-  attachments?: Array<{ name?: string; url?: string; type?: string; size?: number }> | null;
+  attachments?: Array<{
+    name?: string;
+    url?: string;
+    file_token?: string;
+    type?: string;
+    size?: number;
+  }> | null;
   feishu_base_table_id?: string | null;
   feishu_base_record_id?: string | null;
   feishu_sync_status?: string | null;
@@ -329,6 +335,7 @@ export interface CapaListItem {
 export type RelatedCapaListItem = CapaListItem;
 
 export interface CapaDetail {
+  linked_plan_contents?: string[] | null;
   id: string;
   capa_code: string;
   final_code: string | null;
@@ -337,6 +344,8 @@ export interface CapaDetail {
   deviation_id: string | null;
   source: string | null;
   source_code: string | null;
+  department: string | null;
+  affected_product: string | null;
   category: CapaCategory | null;
   root_cause_category: ReasonCategory | null;
   non_conformity_description: string | null;
@@ -366,6 +375,8 @@ export interface CapaDetail {
   returned_step: string | null;
   status_updated_at: string | null;
   reporter: string | null;
+  qa_confirmer: string | null;
+  qa_confirm_date: string | null;
   reason_category: string | null;
   feishu_base_table_id?: string | null;
   feishu_base_record_id?: string | null;
@@ -448,6 +459,9 @@ export interface ChangeActionPlanPersonOption {
 }
 
 export interface FeishuDeviationInvestigationPushRecordItem extends FeishuPageRecordBase {
+  department?: string | null;
+  process_status?: string | null;
+  need_resubmit?: boolean | null;
   id: string;
   record_id: string;
   local_record_id?: string | null;
@@ -483,77 +497,6 @@ export interface FeishuDeviationInvestigationPushRecordItem extends FeishuPageRe
 
 export type DeviationInvestigationPushRecordItem = FeishuDeviationInvestigationPushRecordItem;
 
-export interface FeishuDeviationLedgerRecordItem extends FeishuPageRecordBase {
-  deviation_code: string;
-  final_code: string | null;
-  title: string;
-  department: string | null;
-  discovery_date: string | null;
-  discovery_time: string | null;
-  discovery_location?: string | null;
-  status: DeviationStatus;
-  level: string | null;
-  root_cause_category: ReasonCategory | null;
-  description: string | null;
-  immediate_actions?: string | null;
-  reporter_id: string | null;
-  handler: string | null;
-  discoverer?: string | null;
-  ai_analysis?: AiAnalysis | null;
-  investigation_records?: InvestigationRecord[] | null;
-  review_opinions?: ReviewOpinion[] | null;
-  attachments?: string[] | null;
-  needs_cross_dept_review?: boolean | null;
-  cross_dept_reviewers?: CrossDeptReviewer[] | null;
-  affected_items: string | null;
-  batch_number: string | null;
-  has_occurred_before?: boolean | null;
-  material_disposition?: string | null;
-  corrective_actions?: string | null;
-  root_cause_analysis?: string | null;
-  investigation_completed_at?: string | null;
-  close_time?: string | null;
-  related_capa_codes?: string[] | null;
-  related_capas?: Array<{
-    id: string;
-    capa_code: string;
-  }> | null;
-  returned_step: ApprovalStep | null;
-  status_updated_at: string | null;
-  report_content?: string | null;
-  report_versions?: ReportVersion[] | null;
-  feishu_base_table_id?: string | null;
-  feishu_base_record_id?: string | null;
-  feishu_sync_status?: string | null;
-  feishu_last_sync_error?: string | null;
-  feishu_last_sync_direction?: 'system_to_base' | 'base_to_system' | string | null;
-  feishu_synced_at?: string | null;
-  feishu_source_updated_at?: string | null;
-  created_at: string;
-  updated_at?: string;
-}
-
-export interface CreateFeishuDeviationLedgerRecordRequest {
-  deviation_code?: string | null;
-  title?: string | null;
-  description?: string | null;
-  affected_items?: string | null;
-  batch_number?: string | null;
-  product_batch?: string | null;
-  level?: string | null;
-  has_occurred_before?: boolean | null;
-  root_cause_analysis?: string | null;
-  investigation_completed_at?: string | null;
-  corrective_actions?: string | null;
-  material_disposition?: string | null;
-  status?: DeviationStatus | null;
-  is_closed?: boolean | null;
-  close_time?: string | null;
-}
-
-export type UpdateFeishuDeviationLedgerRecordRequest =
-  Partial<CreateFeishuDeviationLedgerRecordRequest>;
-
 export interface CreateDeviationInvestigationPushRecordRequest {
   deviation_id?: string | null;
   deviation_code?: string | null;
@@ -582,6 +525,7 @@ export interface CapaPlanTrackItem {
   plan_content: string;
   due_date: string | null;
   owner_name: string | null;
+  department?: string | null;
   owner_confirmed: boolean;
   department_head: string | null;
   department_head_confirmed: boolean;
@@ -728,6 +672,7 @@ export interface CreateCapaPlanTrackRequest {
   plan_content: string;
   due_date?: string | null;
   owner_name?: string | null;
+  department?: string | null;
   owner_confirmed?: boolean;
   department_head?: string | null;
   department_head_confirmed?: boolean;
@@ -1410,6 +1355,7 @@ export interface ChangeListResponse {
 
 // ============ Create/Update Request Types ============
 export interface CreateDeviationRequest {
+  deviation_code?: string | null;
   title?: string | null;
   department?: string | null;
   reporter_open_id?: string | null;
@@ -1437,6 +1383,7 @@ export interface CreateDeviationRequest {
 }
 
 export interface UpdateDeviationRequest {
+  deviation_code?: string | null;
   title?: string;
   status?: DeviationStatus;
   level?: DeviationLevel | null;

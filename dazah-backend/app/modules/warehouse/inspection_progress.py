@@ -78,6 +78,7 @@ INBOUND_DATE_FIELD = "入库日期"
 INSPECTION_REQUEST_FIELD = "是否请检"
 MATERIAL_CATEGORY_FIELD = "物料类别"
 MATERIAL_NAME_FIELD = "物料名称"
+FACTORY_CODE_FIELD = "厂内代码"
 FACTORY_BATCH_FIELD = "厂内批号"
 SPEC_FIELD = "规格"
 PRODUCT_NAME_FIELD = "产品名称"
@@ -790,6 +791,7 @@ async def _build_raw_overview(
             pending.append(
                 {
                     "name": inspection_status_text(cells.get(MATERIAL_NAME_FIELD))
+                    or inspection_status_text(cells.get(FACTORY_CODE_FIELD))
                     or "未命名物料",
                     "batch": inspection_status_text(cells.get(FACTORY_BATCH_FIELD)),
                     "category": category,

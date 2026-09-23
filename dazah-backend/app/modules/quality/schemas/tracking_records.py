@@ -18,6 +18,9 @@ class DeviationInvestigationPushRecordListItem(BaseModel):
     investigation_report_url: str | None = None
     submitted_at: datetime | None = None
     submitter: str | None = None
+    department: str | None = None
+    process_status: str | None = None
+    need_resubmit: bool | None = None
     department_head: str | None = None
     department_head_result: str | None = None
     department_head_reviewed_at: datetime | None = None
@@ -77,6 +80,8 @@ class CreateDeviationInvestigationPushRecordRequest(BaseModel):
 
 
 class UpdateDeviationInvestigationPushRecordRequest(BaseModel):
+    deviation_code: str | None = None
+    submitter_open_id: str | None = None
     push_round: str | None = None
     investigation_report_url: str | None = None
     submitted_at: datetime | None = None
@@ -99,6 +104,7 @@ class CapaPlanTrackListItem(BaseModel):
     plan_content: str
     due_date: date | None = None
     owner_name: str | None = None
+    department: str | None = None
     owner_confirmed: bool
     department_head: str | None = None
     department_head_confirmed: bool
@@ -128,6 +134,7 @@ class CreateCapaPlanTrackRequest(BaseModel):
     plan_content: str
     due_date: date | None = None
     owner_name: str | None = None
+    department: str | None = None
     owner_confirmed: bool = False
     department_head: str | None = None
     department_head_confirmed: bool = False
@@ -139,6 +146,7 @@ class UpdateCapaPlanTrackRequest(BaseModel):
     plan_content: str | None = None
     due_date: date | None = None
     owner_name: str | None = None
+    department: str | None = None
     owner_confirmed: bool | None = None
     department_head: str | None = None
     department_head_confirmed: bool | None = None

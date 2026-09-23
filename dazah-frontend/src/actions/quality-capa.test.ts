@@ -11,10 +11,21 @@ vi.mock('./quality-shared', () => ({
   actionFetch: mocks.actionFetch,
 }))
 
-import { addExecutionTrack, deleteExecutionTrack, submitEvaluation } from './quality-capa'
+import { addExecutionTrack, deleteExecutionTrack, submitEvaluation, updateCapa } from './quality-capa'
 
 describe('quality CAPA server actions', () => {
   afterEach(() => vi.clearAllMocks())
+
+  it('returns the backend sync result without starting a second Feishu write', async () => {
+    const saved = { success: true, feishu_sync_status: 'failed' }
+    mocks.actionFetch.mockResolvedValueOnce(saved)
+    expect(await updateCapa('capa-1', { capa_content: '更新措施' })).toEqual(saved)
+    expect(mocks.actionFetch).toHaveBeenCalledTimes(1)
+    expect(mocks.actionFetch).toHaveBeenCalledWith(
+      'http://backend.test/api/v1/quality/capas/capa-1',
+      { method: 'PUT', body: JSON.stringify({ capa_content: '更新措施' }) },
+    )
+  })
 
   it('uses the migrated execution and evaluation endpoints', async () => {
     await addExecutionTrack('capa-1', { result: '完成' })

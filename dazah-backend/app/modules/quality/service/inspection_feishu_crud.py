@@ -86,6 +86,12 @@ BITABLE_CRUD_ENTITY_CODES: set[str] = (
     | FINISHED_PRODUCT_ANOMALY_ENTITY_CODES
 )
 
+# 只复用安全的附件归属校验、下载和预览能力，不开放通用记录 CRUD。
+BITABLE_ATTACHMENT_ENTITY_CODES: set[str] = BITABLE_CRUD_ENTITY_CODES | {
+    "deviation_report_record",
+    "oos_oot_report_record",
+}
+
 # 只读字段类型：通用表单不写入
 # （附件需上传文件、Lookup/公式由飞书派生；Button 是自动化按钮，
 #   写入/点击会触发飞书工作流，平台一律只读；AutoNumber 为飞书自动编号）
@@ -110,6 +116,12 @@ _NUMERIC_UI_TYPES = {"Number", "Currency", "Percent", "Progress", "Rating"}
 def validate_bitable_crud_entity(entity_code: str) -> None:
     """仅允许对白名单实体执行通用写操作（防御任意实体写入）。"""
     if entity_code not in BITABLE_CRUD_ENTITY_CODES:
+        raise AppException(message=f"不支持的飞书实体: {entity_code}", status_code=400)
+
+
+def validate_bitable_attachment_entity(entity_code: str) -> None:
+    """仅允许白名单实体使用飞书附件代理。"""
+    if entity_code not in BITABLE_ATTACHMENT_ENTITY_CODES:
         raise AppException(message=f"不支持的飞书实体: {entity_code}", status_code=400)
 
 
@@ -918,7 +930,7 @@ async def get_inspection_feishu_attachment_content(
     下载成功后按 (entity_code, record_id, file_token) 写入两级缓存，
     后续同附件请求直接命中缓存，不再回源飞书。
     """
-    validate_bitable_crud_entity(entity_code)
+    validate_bitable_attachment_entity(entity_code)
 
     async def _fetch() -> tuple[bytes, str, str]:
         runtime, entity = await _resolve_runtime_entity(

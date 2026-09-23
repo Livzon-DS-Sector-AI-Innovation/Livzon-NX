@@ -10,7 +10,7 @@ from typing import Any
 from urllib.parse import quote
 
 from fastapi import APIRouter, Body, Depends, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -24,6 +24,13 @@ from app.modules.quality.api.deps import (
     assert_quality_edit_scope as _assert_quality_edit_scope,
 )
 from app.modules.quality.api.deps import require_user as _require_user
+from app.modules.quality.service.feishu_attachment_thumbnail import (
+    get_attachment_thumbnail,
+)
+from app.modules.quality.service.inspection_feishu_crud import (
+    get_inspection_feishu_attachment_content,
+    get_inspection_feishu_attachment_preview,
+)
 from app.modules.quality.service.oos_oot_export import (
     export_oos_ledger,
     export_oot_ledger,
@@ -763,3 +770,94 @@ async def api_pull_product_departments(
     except Exception:
         logger.exception("Failed to pull product department records")
         return error_response(message="操作失败，请稍后重试", status_code=500)
+
+
+@router.get(
+    "/report-records/{record_id}/attachments/{file_token}/content",
+    summary="下载OOS/OOT报告记录附件（后端代理，携带飞书 token）",
+)
+async def get_oos_oot_report_attachment_content(
+    record_id: str,
+    file_token: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Response:
+    _require_user(current_user)
+    content, content_type, filename = await get_inspection_feishu_attachment_content(
+        db, "oos_oot_report_record", record_id, file_token
+    )
+    encoded = quote(filename)
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=attachment; filename*=UTF-8''{encoded}"
+            )
+        },
+    )
+
+
+@router.get(
+    "/report-records/{record_id}/attachments/{file_token}/preview",
+    summary="在线预览OOS/OOT报告记录附件（图片/PDF 原样，office 转 PDF）",
+)
+async def get_oos_oot_report_attachment_preview(
+    record_id: str,
+    file_token: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Response:
+    _require_user(current_user)
+    content, content_type, filename = await get_inspection_feishu_attachment_preview(
+        db, "oos_oot_report_record", record_id, file_token
+    )
+    encoded = quote(filename)
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": (
+                f"inline; filename=preview; filename*=UTF-8''{encoded}"
+            )
+        },
+    )
+
+
+@router.get(
+    "/report-records/{record_id}/attachments/{file_token}/thumbnail",
+    summary="OOS/OOT报告记录图片附件缩略图",
+)
+async def get_oos_oot_report_attachment_thumbnail(
+    record_id: str,
+    file_token: str,
+    max_width: int = Query(200, ge=16, le=512),
+    max_height: int = Query(200, ge=16, le=512),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Response:
+    _require_user(current_user)
+    result = await get_attachment_thumbnail(
+        db,
+        "oos_oot_report_record",
+        record_id,
+        file_token,
+        max_width,
+        max_height,
+    )
+    if result is None:
+        raise AppException(
+            message="该附件暂不支持生成缩略图，请下载后查看",
+            status_code=400,
+        )
+    content, content_type, filename = result
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": (
+                f"inline; filename=thumbnail; filename*=UTF-8''{quote(filename)}"
+            ),
+            "Cache-Control": "private, max-age=86400",
+        },
+    )

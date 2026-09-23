@@ -1,5 +1,11 @@
 'use client'
 
+import { personSelectValue } from './qualityPersonSelection'
+import { ConfirmFlag } from './ConfirmFlag'
+
+import { QualityRecordAttachments } from './QualityRecordAttachments'
+import { alignFeishuColumns, feishuColumnLayouts } from './feishuColumnLayout'
+
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import { App, Avatar, Button, Card, Drawer, Form, Input, Input as AntInput, Modal, Popconfirm, Select, Space, Table, Typography } from 'antd'
@@ -21,11 +27,6 @@ function formatDateTime(value: string | null | undefined): string {
   if (!value) return '-'
   const parsed = dayjs(value)
   return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm:ss') : value
-}
-
-function formatBoolean(value: boolean | null | undefined): string {
-  if (value === null || value === undefined) return '-'
-  return value ? '是' : '否'
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -161,10 +162,10 @@ export default function OosOotReportRecordPage() {
       product_name: record.product_name ?? '',
       batch_number: record.batch_number ?? '',
       report_department: record.report_department ?? '',
-      reporter: record.reporter ?? '',
+      reporter: personSelectValue(contacts, record.reporter, record.report_department),
     })
     setModalVisible(true)
-  }, [form])
+  }, [form, contacts])
 
   const openDetail = useCallback((record: OosOotReportRecordItem) => {
     setDrawerRecord(record)
@@ -184,8 +185,8 @@ export default function OosOotReportRecordPage() {
   }, [form])
 
   const handleSubmit = useCallback(async () => {
-    const values = await form.validateFields()
     try {
+      const values = await form.validateFields()
       setSaving(true)
       const payload: Record<string, unknown> = {
         content: values.content.trim(),
@@ -194,6 +195,9 @@ export default function OosOotReportRecordPage() {
         report_department: values.report_department?.trim() || '',
         reporter: values.reporter?.trim() || '',
       }
+      if (editingRecord && values.reporter === personSelectValue(contacts, editingRecord.reporter, editingRecord.report_department)) {
+        delete payload.reporter
+      }
       if (editingRecord) {
         await updateOosOotReportRecord(editingRecord.record_id, payload)
         message.success('报告记录已更新')
@@ -201,11 +205,12 @@ export default function OosOotReportRecordPage() {
       closeModal()
       queryClient.invalidateQueries({ queryKey: ['quality-oos-oot', 'report-records'] })
     } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'errorFields' in error) return
       message.error(getErrorMessage(error, '保存报告记录失败'))
     } finally {
       setSaving(false)
     }
-  }, [closeModal, editingRecord, form, queryClient, message])
+  }, [closeModal, editingRecord, form, queryClient, message, contacts])
 
   const handleDelete = useCallback(async (recordId: string) => {
     try {
@@ -243,6 +248,11 @@ export default function OosOotReportRecordPage() {
   })()
 
   const columns: ColumnsType<OosOotReportRecordItem> = [
+    { title: '部门负责人', key: 'department_heads', width: 150, render: (_, record) => renderPerson(record.department_heads, String(record.department_head || '')) },
+    { title: '涉及发酵负责人', key: 'fermentation_head', dataIndex: 'fermentation_head', width: 160, render: value => value || '-' },
+    { title: '涉及提炼负责人', key: 'extraction_head', dataIndex: 'extraction_head', width: 160, render: value => value || '-' },
+    { title: 'QA', key: 'qas', width: 140, render: (_, record) => renderPerson(record.qas, null) },
+    { title: 'QA负责人', key: 'qa_heads', width: 150, render: (_, record) => renderPerson(record.qa_heads, null) },
     { title: '报告时间', dataIndex: 'report_time', key: 'report_time', width: 180, render: (v: string | null) => formatDateTime(v) },
     { title: '内容', dataIndex: 'content', key: 'content', width: 280, ellipsis: true, render: (v: string | null) => v || '-' },
     { title: '涉及产品名称', dataIndex: 'product_name', key: 'product_name', width: 160, render: (v: string | null) => v || '-' },
@@ -254,23 +264,7 @@ export default function OosOotReportRecordPage() {
     },
     {
       title: '附件', key: 'attachments', width: 180,
-      render: (_, record) => {
-        const attachments = record.attachments
-        if (!attachments?.length) return <span>-</span>
-        return (
-          <Space size={4} wrap>
-            {attachments.map((att, idx) => (
-              att.url ? (
-                <a key={idx} href={att.url} target="_blank" rel="noopener noreferrer">
-                  {att.name || `附件${idx + 1}`}
-                </a>
-              ) : (
-                <span key={idx}>{att.name || `附件${idx + 1}`}</span>
-              )
-            ))}
-          </Space>
-        )
-      },
+      render: (_, record) => <QualityRecordAttachments recordId={record.record_id} attachments={record.attachments} basePath="/api/v1/quality/oos-oot/report-records" />,
     },
     {
       title: '操作', key: 'action', width: 180, fixed: 'right',
@@ -306,7 +300,7 @@ export default function OosOotReportRecordPage() {
           <Select allowClear placeholder="涉及产品名称" style={{ width: 160 }} value={filterProductName} onChange={setFilterProductName} options={productNameOptions} />
           <Button size="small" onClick={clearFilters} disabled={!hasFilters}>清除筛选</Button>
         </div>
-        <Table<OosOotReportRecordItem> rowKey="record_id" loading={loading} columns={columns} dataSource={filteredItems} pagination={false} scroll={{ x: 1400 }} />
+        <Table<OosOotReportRecordItem> rowKey="record_id" loading={loading} columns={alignFeishuColumns(columns, feishuColumnLayouts.oosReport)} dataSource={filteredItems} pagination={false} scroll={{ x: columns.reduce((sum, column) => sum + Number(column.width || 160), 0) }} />
       </Card>
       <Modal title="修改报告记录" open={modalVisible} onOk={() => void handleSubmit()} onCancel={closeModal} confirmLoading={saving} destroyOnHidden>
         <Form form={form} layout="vertical">
@@ -361,7 +355,7 @@ export default function OosOotReportRecordPage() {
             </div>
             <div>
               <Typography.Text strong>部门负责人确认：</Typography.Text>
-              <div>{formatBoolean(drawerRecord.department_head_confirmed)}</div>
+              <div><ConfirmFlag confirmed={drawerRecord.department_head_confirmed} /></div>
             </div>
             {drawerRecord.department_heads && drawerRecord.department_heads.length > 0 && (
               <div>
@@ -371,15 +365,15 @@ export default function OosOotReportRecordPage() {
             )}
             <div>
               <Typography.Text strong>涉及发酵负责人确认：</Typography.Text>
-              <div>{formatBoolean((drawerRecord as any).fermentation_head_confirmed)}</div>
+              <div><ConfirmFlag confirmed={(drawerRecord as any).fermentation_head_confirmed} /></div>
             </div>
             <div>
               <Typography.Text strong>涉及提炼负责人确认：</Typography.Text>
-              <div>{formatBoolean((drawerRecord as any).refinement_head_confirmed)}</div>
+              <div><ConfirmFlag confirmed={(drawerRecord as any).refinement_head_confirmed} /></div>
             </div>
             <div>
               <Typography.Text strong>QA确认：</Typography.Text>
-              <div>{formatBoolean(drawerRecord.qa_confirmed)}</div>
+              <div><ConfirmFlag confirmed={drawerRecord.qa_confirmed} /></div>
             </div>
             {drawerRecord.qas && drawerRecord.qas.length > 0 && (
               <div>
@@ -389,7 +383,7 @@ export default function OosOotReportRecordPage() {
             )}
             <div>
               <Typography.Text strong>QA负责人确认：</Typography.Text>
-              <div>{formatBoolean(drawerRecord.qa_head_confirmed)}</div>
+              <div><ConfirmFlag confirmed={drawerRecord.qa_head_confirmed} /></div>
             </div>
             {drawerRecord.qa_heads && drawerRecord.qa_heads.length > 0 && (
               <div>
@@ -400,19 +394,7 @@ export default function OosOotReportRecordPage() {
             <div>
               <Typography.Text strong>附件：</Typography.Text>
               <div>
-                {drawerRecord.attachments?.length ? (
-                  <Space size={4} wrap>
-                    {drawerRecord.attachments.map((att, idx) => (
-                      att.url ? (
-                        <a key={idx} href={att.url} target="_blank" rel="noopener noreferrer">
-                          {att.name || `附件${idx + 1}`}
-                        </a>
-                      ) : (
-                        <span key={idx}>{att.name || `附件${idx + 1}`}</span>
-                      )
-                    ))}
-                  </Space>
-                ) : '-'}
+                <QualityRecordAttachments recordId={drawerRecord.record_id} attachments={drawerRecord.attachments} basePath="/api/v1/quality/oos-oot/report-records" />
               </div>
             </div>
           </Space>

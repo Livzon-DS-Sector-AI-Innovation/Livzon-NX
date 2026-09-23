@@ -28,6 +28,16 @@ const anomalyActions = vi.hoisted(() => ({
 
 vi.mock('@/lib/api/client/quality', () => apiClient)
 vi.mock('@/actions/finished-product-anomaly', () => anomalyActions)
+vi.mock('pdfjs-dist/build/pdf.min.mjs', () => ({
+  GlobalWorkerOptions: {},
+  getDocument: () => ({
+    promise: Promise.resolve({ numPages: 1, getPage: async () => ({
+      getViewport: () => ({ width: 600, height: 800 }),
+      render: () => ({ promise: Promise.resolve(), cancel: () => {} }),
+    }) }),
+    destroy: async () => {},
+  }),
+}))
 
 import { FinishedProductAnomalyTablePage } from './FinishedProductAnomalyTablePage'
 
@@ -122,6 +132,7 @@ describe('FinishedProductAnomalyTablePage', () => {
     container.remove()
     document.body.querySelectorAll('.ant-modal-root, .ant-select-dropdown, .ant-message, .ant-drawer').forEach((node) => node.remove())
     vi.clearAllMocks()
+    vi.unstubAllGlobals()
   })
 
   async function renderPage() {
@@ -213,6 +224,8 @@ describe('FinishedProductAnomalyTablePage', () => {
   })
 
   it('opens the attachment preview modal when clicking a file link', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, arrayBuffer: async () => new ArrayBuffer(4) })
+    vi.stubGlobal('fetch', fetchMock)
     await renderPage()
     const fileButton = Array.from(container.querySelectorAll('button')).find(
       (btn) => (btn.textContent || '') === 'report.pdf',
@@ -222,12 +235,12 @@ describe('FinishedProductAnomalyTablePage', () => {
       fileButton?.click()
       await new Promise((resolve) => setTimeout(resolve, 30))
     })
-    // antd Modal portal 到 body，弹窗内 iframe 指向预览端点并携带年份
-    const iframe = document.body.querySelector('.ant-modal iframe')
-    expect(iframe).toBeTruthy()
-    expect(iframe?.getAttribute('src')).toContain(
+    // 同一个预览组件加载带年份的站内端点，正文不依赖浏览器 PDF 插件。
+    expect(fetchMock).toHaveBeenCalledWith(
       '/api/v1/quality/finished-product-anomaly/records/rec-1/attachments/ft-2/preview?year=2026',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     )
+    expect(document.body.querySelector('.ant-modal canvas')?.getAttribute('aria-label')).toBe('report.pdf 第 1 页')
   })
 
   it('only offers configured years in the selector and switches via selection', async () => {

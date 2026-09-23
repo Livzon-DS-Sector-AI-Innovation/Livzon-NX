@@ -326,6 +326,56 @@ async def test_raw_overview_statistics(db_session: AsyncSession) -> None:
     assert daily["2026-09-14"]["unqualified"] == 1
 
 
+async def test_raw_overview_name_fallback_to_factory_code(
+    db_session: AsyncSession,
+) -> None:
+    """物料名称为空时，名称应回退到厂内代码而非直接显示'未命名物料'。"""
+    service = WarehouseService(db_session)
+    snapshot_id = await _seed_page(db_session, service, INBOUND_LEDGER_PAGE_KEY)
+    seeder = _PageSeeder(service, snapshot_id, INBOUND_LEDGER_PAGE_KEY)
+
+    # 物料名称为空、但有厂内代码的待验记录
+    await seeder.sync(
+        "rec-no-name",
+        {
+            "入库日期": _cst_ms(2026, 9, 18),
+            "物料名称": None,
+            "物料类别": "原辅料类",
+            "是否请检": "是",
+            "检测结果": None,
+            "厂内代码": "YS606",
+            "厂内批号": "2609019",
+        },
+        _meta("rec-no-name", _cst_ms(2026, 9, 18)),
+    )
+
+    # 名称和厂内代码都为空的兜底情况
+    await seeder.sync(
+        "rec-no-name-no-code",
+        {
+            "入库日期": _cst_ms(2026, 9, 19),
+            "物料名称": "",
+            "物料类别": "原辅料类",
+            "是否请检": "是",
+            "检测结果": None,
+            "厂内代码": "",
+            "厂内批号": "2609099",
+        },
+        _meta("rec-no-name-no-code", _cst_ms(2026, 9, 19)),
+    )
+
+    clear_inspection_overview_cache()
+    payload = await build_inspection_overview(
+        db_session, "raw", days=30, now=_NOW
+    )
+
+    pending = {item.get("batch"): item for item in payload["oldest_pending"]}
+    # 厂内代码兜底：YS606
+    assert pending.get("2609019", {}).get("name") == "YS606"
+    # 全部为空时仍回退到"未命名物料"
+    assert pending.get("2609099", {}).get("name") == "未命名物料"
+
+
 async def test_product_overview_statistics(db_session: AsyncSession) -> None:
     await _seed_product(db_session)
     clear_inspection_overview_cache()

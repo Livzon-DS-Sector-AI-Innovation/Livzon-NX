@@ -13813,6 +13813,17 @@
       },
       "CapaDetail": {
         "properties": {
+          "affected_product": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Affected Product"
+          },
           "capa_code": {
             "title": "Capa Code",
             "type": "string"
@@ -13878,6 +13889,17 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
           },
           "dept_head_confirmations": {
             "anyOf": [
@@ -14165,6 +14187,29 @@
               }
             ],
             "title": "Q Head Approver Id"
+          },
+          "qa_confirm_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qa Confirm Date"
+          },
+          "qa_confirmer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qa Confirmer"
           },
           "qa_review_opinion": {
             "anyOf": [
@@ -14747,6 +14792,17 @@
             ],
             "title": "Created By"
           },
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
           "department_head": {
             "anyOf": [
               {
@@ -14951,6 +15007,17 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
           },
           "department_head": {
             "anyOf": [
@@ -20727,6 +20794,17 @@
             "title": "Capa Id",
             "type": "string"
           },
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
           "department_head": {
             "anyOf": [
               {
@@ -21689,6 +21767,17 @@
               }
             ],
             "title": "Description"
+          },
+          "deviation_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deviation Code"
           },
           "discovery_date": {
             "anyOf": [
@@ -27704,6 +27793,17 @@
             ],
             "title": "Created By"
           },
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
           "department_head": {
             "anyOf": [
               {
@@ -27883,6 +27983,28 @@
               }
             ],
             "title": "Local Record Id"
+          },
+          "need_resubmit": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Need Resubmit"
+          },
+          "process_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Process Status"
           },
           "push_round": {
             "title": "Push Round",
@@ -28071,6 +28193,17 @@
             ],
             "title": "Created At"
           },
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
           "department_head": {
             "anyOf": [
               {
@@ -28250,6 +28383,28 @@
               }
             ],
             "title": "Local Record Id"
+          },
+          "need_resubmit": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Need Resubmit"
+          },
+          "process_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Process Status"
           },
           "push_round": {
             "title": "Push Round",
@@ -76730,6 +76885,17 @@
       },
       "UpdateCapaPlanTrackRequest": {
         "properties": {
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
           "department_head": {
             "anyOf": [
               {
@@ -76835,6 +77001,17 @@
               }
             ],
             "title": "Affected Product"
+          },
+          "capa_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capa Code"
           },
           "capa_content": {
             "anyOf": [
@@ -77069,6 +77246,28 @@
               }
             ],
             "title": "Q Head Approver Id"
+          },
+          "qa_confirm_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qa Confirm Date"
+          },
+          "qa_confirmer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qa Confirmer"
           },
           "qa_review_opinion": {
             "anyOf": [
@@ -77723,6 +77922,17 @@
             ],
             "title": "Department Head Reviewed At"
           },
+          "deviation_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deviation Code"
+          },
           "investigation_report_url": {
             "anyOf": [
               {
@@ -77835,6 +78045,17 @@
               }
             ],
             "title": "Submitter"
+          },
+          "submitter_open_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitter Open Id"
           }
         },
         "title": "UpdateDeviationInvestigationPushRecordRequest",
@@ -77947,6 +78168,17 @@
               }
             ],
             "title": "Description"
+          },
+          "deviation_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deviation Code"
           },
           "discoverer": {
             "anyOf": [
@@ -163438,737 +163670,6 @@
         ]
       }
     },
-    "/api/v1/quality/deviation-ledger-records": {
-      "get": {
-        "operationId": "list_deviation_ledger_records_api_v1_quality_deviation_ledger_records_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "keyword",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Keyword"
-            }
-          },
-          {
-            "in": "query",
-            "name": "deviation_code",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Deviation Code"
-            }
-          },
-          {
-            "in": "query",
-            "name": "product_keyword",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Product Keyword"
-            }
-          },
-          {
-            "in": "query",
-            "name": "has_occurred_before",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Has Occurred Before"
-            }
-          },
-          {
-            "in": "query",
-            "name": "is_closed",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Is Closed"
-            }
-          },
-          {
-            "in": "query",
-            "name": "investigation_completed_from",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Investigation Completed From"
-            }
-          },
-          {
-            "in": "query",
-            "name": "investigation_completed_to",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Investigation Completed To"
-            }
-          },
-          {
-            "in": "query",
-            "name": "root_cause_keyword",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Root Cause Keyword"
-            }
-          },
-          {
-            "in": "query",
-            "name": "corrective_actions_keyword",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Corrective Actions Keyword"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response List Deviation Ledger Records Api V1 Quality Deviation Ledger Records Get"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "获取偏差台账飞书列表",
-        "tags": [
-          "质量管理",
-          "Quality-Management-Compatibility"
-        ]
-      },
-      "post": {
-        "operationId": "create_deviation_ledger_record_api_v1_quality_deviation_ledger_records_post",
-        "parameters": [
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Data",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Create Deviation Ledger Record Api V1 Quality Deviation Ledger Records Post"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "创建偏差台账飞书记录",
-        "tags": [
-          "质量管理",
-          "Quality-Management-Compatibility"
-        ]
-      }
-    },
-    "/api/v1/quality/deviation-ledger-records/export": {
-      "get": {
-        "operationId": "export_deviation_ledger_records_api_v1_quality_deviation_ledger_records_export_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "record_ids",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Record Ids"
-            }
-          },
-          {
-            "in": "query",
-            "name": "keyword",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Keyword"
-            }
-          },
-          {
-            "in": "query",
-            "name": "deviation_code",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Deviation Code"
-            }
-          },
-          {
-            "in": "query",
-            "name": "product_keyword",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Product Keyword"
-            }
-          },
-          {
-            "in": "query",
-            "name": "has_occurred_before",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Has Occurred Before"
-            }
-          },
-          {
-            "in": "query",
-            "name": "is_closed",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Is Closed"
-            }
-          },
-          {
-            "in": "query",
-            "name": "investigation_completed_from",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Investigation Completed From"
-            }
-          },
-          {
-            "in": "query",
-            "name": "investigation_completed_to",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Investigation Completed To"
-            }
-          },
-          {
-            "in": "query",
-            "name": "root_cause_keyword",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Root Cause Keyword"
-            }
-          },
-          {
-            "in": "query",
-            "name": "corrective_actions_keyword",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Corrective Actions Keyword"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Export Deviation Ledger Records Api V1 Quality Deviation Ledger Records Export Get"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "导出偏差台账飞书数据",
-        "tags": [
-          "质量管理",
-          "Quality-Management-Compatibility"
-        ]
-      }
-    },
-    "/api/v1/quality/deviation-ledger-records/{record_id}": {
-      "delete": {
-        "operationId": "delete_deviation_ledger_record_api_v1_quality_deviation_ledger_records__record_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "record_id",
-            "required": true,
-            "schema": {
-              "title": "Record Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Delete Deviation Ledger Record Api V1 Quality Deviation Ledger Records  Record Id  Delete"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "删除偏差台账飞书记录",
-        "tags": [
-          "质量管理",
-          "Quality-Management-Compatibility"
-        ]
-      },
-      "get": {
-        "operationId": "get_deviation_ledger_record_api_v1_quality_deviation_ledger_records__record_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "record_id",
-            "required": true,
-            "schema": {
-              "title": "Record Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Get Deviation Ledger Record Api V1 Quality Deviation Ledger Records  Record Id  Get"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "获取偏差台账飞书详情",
-        "tags": [
-          "质量管理",
-          "Quality-Management-Compatibility"
-        ]
-      },
-      "put": {
-        "operationId": "update_deviation_ledger_record_api_v1_quality_deviation_ledger_records__record_id__put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "record_id",
-            "required": true,
-            "schema": {
-              "title": "Record Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Data",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Update Deviation Ledger Record Api V1 Quality Deviation Ledger Records  Record Id  Put"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "更新偏差台账飞书记录",
-        "tags": [
-          "质量管理",
-          "Quality-Management-Compatibility"
-        ]
-      }
-    },
-    "/api/v1/quality/deviation-ledger-records/{record_id}/export": {
-      "get": {
-        "operationId": "export_deviation_ledger_record_api_v1_quality_deviation_ledger_records__record_id__export_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "record_id",
-            "required": true,
-            "schema": {
-              "title": "Record Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Export Deviation Ledger Record Api V1 Quality Deviation Ledger Records  Record Id  Export Get"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "导出单条偏差台账飞书数据",
-        "tags": [
-          "质量管理",
-          "Quality-Management-Compatibility"
-        ]
-      }
-    },
     "/api/v1/quality/deviation-report-records": {
       "get": {
         "operationId": "list_deviation_report_records_static_api_v1_quality_deviation_report_records_get",
@@ -164478,6 +163979,228 @@
           }
         },
         "summary": "更新偏差报告记录",
+        "tags": [
+          "质量管理",
+          "Quality-Management"
+        ]
+      }
+    },
+    "/api/v1/quality/deviation-report-records/{record_id}/attachments/{file_token}/content": {
+      "get": {
+        "operationId": "get_deviation_report_attachment_content_api_v1_quality_deviation_report_records__record_id__attachments__file_token__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_token",
+            "required": true,
+            "schema": {
+              "title": "File Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "下载偏差报告记录附件（后端代理，携带飞书 token）",
+        "tags": [
+          "质量管理",
+          "Quality-Management"
+        ]
+      }
+    },
+    "/api/v1/quality/deviation-report-records/{record_id}/attachments/{file_token}/preview": {
+      "get": {
+        "operationId": "get_deviation_report_attachment_preview_api_v1_quality_deviation_report_records__record_id__attachments__file_token__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_token",
+            "required": true,
+            "schema": {
+              "title": "File Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "在线预览偏差报告记录附件（图片/PDF 原样，office 转 PDF）",
+        "tags": [
+          "质量管理",
+          "Quality-Management"
+        ]
+      }
+    },
+    "/api/v1/quality/deviation-report-records/{record_id}/attachments/{file_token}/thumbnail": {
+      "get": {
+        "operationId": "get_deviation_report_attachment_thumbnail_api_v1_quality_deviation_report_records__record_id__attachments__file_token__thumbnail_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_token",
+            "required": true,
+            "schema": {
+              "title": "File Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_width",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 512,
+              "minimum": 16,
+              "title": "Max Width",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_height",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 512,
+              "minimum": 16,
+              "title": "Max Height",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "偏差报告记录图片附件缩略图",
         "tags": [
           "质量管理",
           "Quality-Management"
@@ -183886,6 +183609,228 @@
           }
         },
         "summary": "更新OOSOOT报告记录",
+        "tags": [
+          "质量管理",
+          "Quality-OOS/OOT-Feishu"
+        ]
+      }
+    },
+    "/api/v1/quality/oos-oot/report-records/{record_id}/attachments/{file_token}/content": {
+      "get": {
+        "operationId": "get_oos_oot_report_attachment_content_api_v1_quality_oos_oot_report_records__record_id__attachments__file_token__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_token",
+            "required": true,
+            "schema": {
+              "title": "File Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "下载OOS/OOT报告记录附件（后端代理，携带飞书 token）",
+        "tags": [
+          "质量管理",
+          "Quality-OOS/OOT-Feishu"
+        ]
+      }
+    },
+    "/api/v1/quality/oos-oot/report-records/{record_id}/attachments/{file_token}/preview": {
+      "get": {
+        "operationId": "get_oos_oot_report_attachment_preview_api_v1_quality_oos_oot_report_records__record_id__attachments__file_token__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_token",
+            "required": true,
+            "schema": {
+              "title": "File Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "在线预览OOS/OOT报告记录附件（图片/PDF 原样，office 转 PDF）",
+        "tags": [
+          "质量管理",
+          "Quality-OOS/OOT-Feishu"
+        ]
+      }
+    },
+    "/api/v1/quality/oos-oot/report-records/{record_id}/attachments/{file_token}/thumbnail": {
+      "get": {
+        "operationId": "get_oos_oot_report_attachment_thumbnail_api_v1_quality_oos_oot_report_records__record_id__attachments__file_token__thumbnail_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_token",
+            "required": true,
+            "schema": {
+              "title": "File Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_width",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 512,
+              "minimum": 16,
+              "title": "Max Width",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_height",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 512,
+              "minimum": 16,
+              "title": "Max Height",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "OOS/OOT报告记录图片附件缩略图",
         "tags": [
           "质量管理",
           "Quality-OOS/OOT-Feishu"

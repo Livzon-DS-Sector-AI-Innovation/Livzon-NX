@@ -42,6 +42,46 @@ function triggerFileUpload(files: File[]) {
   input.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
+/** 抽屉里的上传入口（页面上还有批量导入的 input，需要限定在抽屉内） */
+function triggerDrawerUpload(files: File[]) {
+  const input = document.body.querySelector(
+    '.ant-drawer input[type="file"]'
+  ) as HTMLInputElement | null
+  expect(input).toBeTruthy()
+  if (!input) return
+  Object.defineProperty(input, 'files', { value: files, configurable: true })
+  input.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
+function clickButton(label: string) {
+  const normalize = (value: string) => value.replace(/\s+/g, '')
+  const button = Array.from(document.body.querySelectorAll('button')).find(
+    (node) => normalize(node.textContent || '') === normalize(label)
+  )
+  expect(button).toBeTruthy()
+  button?.click()
+}
+
+function makeItem(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'rec1',
+    code: 'PC-2501001',
+    deviation_event: null,
+    deviation_content: null,
+    direct_cause: null,
+    root_cause: null,
+    investigation_conclusion: null,
+    attachment_count: 0,
+    created_at: '2026-09-23T00:00:00Z',
+    updated_at: '2026-09-23T00:00:00Z',
+    ...overrides,
+  }
+}
+
+function makeDetail(overrides: Record<string, unknown> = {}) {
+  return { ...makeItem(), attachments: [], ai_extract_payload: null, remark: null, ...overrides }
+}
+
 describe('DeviationHistoryPage', () => {
   let root: Root
   let container: HTMLElement
@@ -158,5 +198,156 @@ describe('DeviationHistoryPage', () => {
       await new Promise((resolve) => setTimeout(resolve, 100))
     })
     expect(document.body.textContent).toContain('导入服务不可用')
+  })
+
+  it('reveals why AI extraction failed on a successful batch import', async () => {
+    workbenchActions.batchImportHistoricalDeviations.mockResolvedValue({
+      total: 2,
+      succeeded: 2,
+      failed: 0,
+      results: [
+        {
+          file_name: 'a.docx',
+          status: 'succeeded',
+          message: 'AI 提取失败：AI 输出格式错误，请重试',
+        },
+        { file_name: 'b.docx', status: 'succeeded', message: '' },
+      ],
+    })
+    await renderPage()
+    await act(async () => {
+      triggerFileUpload([makeFile('a.docx'), makeFile('b.docx')])
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    })
+    expect(document.body.textContent).toContain('其中 1 个 AI 提取失败')
+    expect(document.body.textContent).toContain('AI 输出格式错误')
+  })
+
+  it('auto-extracts after uploading an attachment when fields are empty', async () => {
+    apiClient.fetchHistoricalDeviations.mockResolvedValue({
+      items: [makeItem()],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    })
+    apiClient.fetchHistoricalDeviation.mockResolvedValue(makeDetail())
+    workbenchActions.uploadHistoricalDeviationAttachment.mockResolvedValue({
+      id: 'att1',
+      file_name: 'a.docx',
+    })
+    workbenchActions.aiExtractHistoricalDeviation.mockResolvedValue(
+      makeDetail({
+        deviation_event: '事件',
+        deviation_content: '内容',
+        direct_cause: '直接',
+        root_cause: '根本',
+      }),
+    )
+    await renderPage()
+    await act(async () => {
+      clickButton('编辑')
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+    await act(async () => {
+      triggerDrawerUpload([makeFile('a.docx')])
+      await new Promise((resolve) => setTimeout(resolve, 120))
+    })
+    expect(workbenchActions.aiExtractHistoricalDeviation).toHaveBeenCalledWith('rec1')
+    expect(document.body.textContent).toContain('AI 已从附件提取并保存')
+  })
+
+  it('skips auto-extract when the record already has content', async () => {
+    apiClient.fetchHistoricalDeviations.mockResolvedValue({
+      items: [makeItem({ deviation_event: '已填写', deviation_content: '已填写' })],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    })
+    apiClient.fetchHistoricalDeviation.mockResolvedValue(
+      makeDetail({ deviation_event: '已填写', deviation_content: '已填写' }),
+    )
+    workbenchActions.uploadHistoricalDeviationAttachment.mockResolvedValue({
+      id: 'att1',
+      file_name: 'a.docx',
+    })
+    await renderPage()
+    await act(async () => {
+      clickButton('编辑')
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+    await act(async () => {
+      triggerDrawerUpload([makeFile('a.docx')])
+      await new Promise((resolve) => setTimeout(resolve, 120))
+    })
+    expect(workbenchActions.aiExtractHistoricalDeviation).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('已有内容，未自动提取')
+  })
+
+  it('auto-extracts after creating a record with pending attachments', async () => {
+    workbenchActions.createHistoricalDeviation.mockResolvedValue({
+      ...makeDetail({ id: 'new1', code: 'HD-202609003' }),
+    })
+    workbenchActions.uploadHistoricalDeviationAttachment.mockResolvedValue({
+      id: 'att1',
+      file_name: 'a.docx',
+    })
+    workbenchActions.aiExtractHistoricalDeviation.mockResolvedValue(
+      makeDetail({ id: 'new1', deviation_event: '事件' }),
+    )
+    await renderPage()
+    await act(async () => {
+      clickButton('新建历史偏差')
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+    await act(async () => {
+      triggerDrawerUpload([makeFile('a.docx')])
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+    await act(async () => {
+      clickButton('保存')
+      await new Promise((resolve) => setTimeout(resolve, 150))
+    })
+    expect(workbenchActions.uploadHistoricalDeviationAttachment).toHaveBeenCalledWith(
+      'new1',
+      expect.any(FormData),
+    )
+    expect(workbenchActions.aiExtractHistoricalDeviation).toHaveBeenCalledWith('new1')
+  })
+
+  it('re-extracts selected records in batch and lists per-record results', async () => {
+    apiClient.fetchHistoricalDeviations.mockResolvedValue({
+      items: [
+        makeItem({ id: 'rec1', code: 'PC-2501001' }),
+        makeItem({ id: 'rec2', code: 'PC-2501002' }),
+      ],
+      total: 2,
+      page: 1,
+      page_size: 20,
+    })
+    workbenchActions.aiExtractHistoricalDeviation.mockResolvedValueOnce(
+      makeDetail({ deviation_event: '事件' }),
+    )
+    workbenchActions.aiExtractHistoricalDeviation.mockRejectedValueOnce(
+      new Error('AI 提取失败：AI 服务调用失败，请稍后重试'),
+    )
+    await renderPage()
+    await act(async () => {
+      const checkboxes = document.body.querySelectorAll<HTMLInputElement>(
+        '.ant-table-tbody tr.ant-table-row .ant-checkbox-input'
+      )
+      expect(checkboxes.length).toBe(2)
+      checkboxes.forEach((node) => node.click())
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+    await act(async () => {
+      clickButton('批量重新提取（2）')
+      await new Promise((resolve) => setTimeout(resolve, 150))
+    })
+    expect(workbenchActions.aiExtractHistoricalDeviation).toHaveBeenCalledWith('rec1')
+    expect(workbenchActions.aiExtractHistoricalDeviation).toHaveBeenCalledWith('rec2')
+    const text = document.body.textContent || ''
+    expect(text).toContain('批量重新提取完成：成功 1 条，失败 1 条')
+    expect(text).toContain('批量重新提取结果')
+    expect(text).toContain('AI 服务调用失败')
   })
 })
