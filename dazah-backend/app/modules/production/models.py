@@ -302,6 +302,37 @@ class ProductionLineStatus(BaseModel):
     )
 
 
+class LineHaltEvent(BaseModel):
+    """产品生产线停产/复产事件 — 追加式时间线，仅用于历史查看。
+
+    当前状态以 ProductionLineStatus 为准；本表只增不改，切换一次记一条。
+    """
+
+    __tablename__ = "line_halt_events"
+    __table_args__ = ({"schema": "production"},)
+
+    product_code: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        comment="产品代码（FA/MC/LN/DR/LV/MV/TY/FL）",
+    )
+    halted: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        comment="true=停产 false=复产",
+    )
+    reason: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="原因备注（选填：转产/检修/季节性停产/误操作等）",
+    )
+    operator_name: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="操作人姓名",
+    )
+
+
 class ProductionFeishuReadSourceRoot(BaseModel):
     """兼容生产模块原有的只读飞书镜像数据模型。"""
 

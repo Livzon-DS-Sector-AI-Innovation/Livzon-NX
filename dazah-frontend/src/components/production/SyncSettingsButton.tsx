@@ -91,9 +91,11 @@ interface Props {
   pageKey?: ProductionPageKey
   /** 数据表 ID 选填（留空自动同步多维表格中第一个数据表） */
   tableIdOptional?: boolean
+  /** tableIdOptional 时自定义数据表 ID 帮助文案（如按月分表自动发现） */
+  tableIdHelp?: string
 }
 
-export default function SyncSettingsButton({ productName, syncTarget = 'seed_culture', onSync, autoSync = false, pageKey, tableIdOptional = false }: Props) {
+export default function SyncSettingsButton({ productName, syncTarget = 'seed_culture', onSync, autoSync = false, pageKey, tableIdOptional = false, tableIdHelp }: Props) {
   const { message } = App.useApp()
   const permissions = useProductionPermissions(pageKey || 'production:overview')
   const canSync = !pageKey || permissions.canSync
@@ -304,7 +306,7 @@ export default function SyncSettingsButton({ productName, syncTarget = 'seed_cul
             rules={tableIdOptional ? [] : [{ required: true, message: '请输入' }]}
             help={
               tableIdOptional
-                ? '留空自动同步多维表格中的第一个数据表'
+                ? tableIdHelp ?? '留空自动同步多维表格中的第一个数据表'
                 : parsedUrl?.type === 'spreadsheet'
                   ? '电子表格模式下即为子表 sheet_id'
                   : undefined

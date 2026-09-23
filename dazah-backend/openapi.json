@@ -61451,10 +61451,18 @@
             "description": "是否停产中",
             "title": "Halted",
             "type": "boolean"
+          },
+          "reason": {
+            "description": "原因（必填：转产/检修/季节性停产/误操作等），写入停产时间线",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
           }
         },
         "required": [
-          "halted"
+          "halted",
+          "reason"
         ],
         "title": "ProductionLineStatusBody",
         "type": "object"
@@ -144275,6 +144283,75 @@
         ]
       }
     },
+    "/api/v1/production/fl-board": {
+      "get": {
+        "operationId": "get_fl_board_api_v1_production_fl_board_get",
+        "parameters": [
+          {
+            "description": "查看月份 YYYY-MM；缺省为当月（北京时间）",
+            "in": "query",
+            "name": "month",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "查看月份 YYYY-MM；缺省为当月（北京时间）",
+              "title": "Month"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Fl Board Api V1 Production Fl Board Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "氟苯尼考预混剂生产看板（批次工序流转）",
+        "tags": [
+          "生产管理",
+          "生产管理 - 氟苯尼考看板"
+        ]
+      }
+    },
     "/api/v1/production/label-verifications": {
       "get": {
         "operationId": "list_label_verifications_api_v1_production_label_verifications_get",
@@ -153802,7 +153879,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "产品生产线停产状态（停产品线代码列表）",
+        "summary": "产品生产线停产状态（停产品线代码 + 各自最近一次事件）",
         "tags": [
           "生产管理",
           "生产管理 - 发酵车间看板"
@@ -153872,6 +153949,88 @@
           }
         },
         "summary": "设置产品生产线停产状态（停产/恢复生产）",
+        "tags": [
+          "生产管理",
+          "生产管理 - 发酵车间看板"
+        ]
+      }
+    },
+    "/api/v1/production/production-line-status/events": {
+      "get": {
+        "operationId": "list_production_line_halt_events_api_v1_production_production_line_status_events_get",
+        "parameters": [
+          {
+            "description": "按产品代码过滤",
+            "in": "query",
+            "name": "product",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按产品代码过滤",
+              "title": "Product"
+            }
+          },
+          {
+            "description": "返回条数",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "description": "返回条数",
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response List Production Line Halt Events Api V1 Production Production Line Status Events Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "产品生产线停产/复产事件时间线（新→旧）",
         "tags": [
           "生产管理",
           "生产管理 - 发酵车间看板"

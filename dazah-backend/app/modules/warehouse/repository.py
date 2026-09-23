@@ -584,6 +584,68 @@ class WarehouseRepository:
         )
         return float(result.scalar_one())
 
+    async def aggregate_finished_inbound(
+        self,
+        snapshot: MaterialPageSnapshot,
+        *,
+        product_field: str,
+        product_name: str,
+        date_field: str,
+        kg_field: str,
+        start_ms: int,
+        end_ms: int,
+    ) -> tuple[int, float]:
+        """按产品名与日期区间（飞书毫秒时间戳，闭区间）统计入库行数与 KG 合计。
+
+        成品入库总账一行即一次入库（预混剂等一批一行），行数即入库批次；
+        KG 列以文本兜底解析（空值/非数值按 0 计），与 sum_finished_inbound_kg 同口径。
+        """
+        date_ms = cast(MaterialPageRow.cells[date_field].as_string(), BigInteger)
+        kg_text = MaterialPageRow.cells[kg_field].as_string()
+        kg_value = cast(
+            case(
+                (kg_text.regexp_match(r"^-?\d+(\.\d+)?$"), kg_text),
+                else_="0",
+            ),
+            Numeric,
+        )
+        result = await self.session.execute(
+            select(
+                func.count(),
+                func.coalesce(func.sum(kg_value), 0.0),
+            ).where(
+                MaterialPageRow.page_snapshot_id == snapshot.id,
+                MaterialPageRow.is_deleted.is_(False),
+                func.btrim(MaterialPageRow.cells[product_field].as_string())
+                == product_name,
+                date_ms.between(start_ms, end_ms),
+            )
+        )
+        row = result.one()
+        return int(row[0]), float(row[1])
+
+    async def list_finished_inbound_cells(
+        self,
+        snapshot: MaterialPageSnapshot,
+        *,
+        product_field: str,
+        product_name: str,
+    ) -> list[dict[str, Any]]:
+        """成品入库明细中指定产品的全部行 cells（批次级实际入库源数据）。
+
+        行量级为数百，取回 cells 后由调用方解析批号/日期/数量/确认位；
+        不在 SQL 内做日期过滤（调用方需要全量批次做状态判定）。
+        """
+        result = await self.session.execute(
+            select(MaterialPageRow.cells).where(
+                MaterialPageRow.page_snapshot_id == snapshot.id,
+                MaterialPageRow.is_deleted.is_(False),
+                func.btrim(MaterialPageRow.cells[product_field].as_string())
+                == product_name,
+            )
+        )
+        return [row[0] for row in result.all()]
+
     async def upsert_material_page_snapshot(
         self,
         *,

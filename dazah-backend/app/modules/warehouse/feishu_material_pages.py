@@ -147,3 +147,10 @@ FINISHED_INBOUND_LEDGER_PAGE_KEY = "product-inbound-ledger"
 FINISHED_INBOUND_PRODUCT_FIELD = "产品名称"
 FINISHED_INBOUND_DATE_FIELD = "入库日期"
 FINISHED_INBOUND_KG_FIELD = "入库数量（KG）"
+
+# 成品入库明细（飞书实际表名「入库台账（明细）」；批次级实际入库口径，
+# 供 public_api 使用；字段名与飞书表头保持一致）
+FINISHED_INBOUND_DETAIL_PAGE_KEY = "product-inbound-detail"
+FINISHED_INBOUND_DETAIL_BATCH_FIELD = "入库标签批号"
+FINISHED_INBOUND_DETAIL_QTY_FIELD = "入库量"
+FINISHED_INBOUND_DETAIL_CONFIRM_FIELD = "入库确认"

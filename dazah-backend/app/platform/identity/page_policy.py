@@ -525,7 +525,7 @@ def _sensitive_actions(
         "registration:fees:inspection-contacts": ("delete",),
         "registration:knowledge": ("delete", "sensitive_export"),
         "registration:registration-settings": ("delete",),
-        "production:overview": ("delete",),
+        "production:overview": ("delete", "sync_config"),
         "production:plan:sales-plan": ("delete", "sync_config"),
         "production:plan:scheduling": (
             "delete",
@@ -596,14 +596,30 @@ def _sensitive_actions(
         "bulk_import": "批量导入偏差记录",
         "sensitive_export": "导出偏差台账",
     }
+    # 概览页的 delete 动作只对应批次产量记录删除与检修标注解除，
+    # 用具体文案替代通用"删除或作废{页面名}"，避免误读为删除整个页面
+    overview_action_names = {
+        "delete": "删除产量记录 / 解除检修标注",
+        "sync_config": "FL 批次同步设置（飞书月表）",
+    }
+
+    def _action_name(action_key: str) -> str:
+        if page_key == "hr:employee-management:profile":
+            return employee_action_names[action_key]
+        if page_key == "quality:deviations:deviation-ledger":
+            return deviation_action_names.get(
+                action_key, f"{action_verbs[action_key]}{page_name}"
+            )
+        if page_key == "production:overview":
+            return overview_action_names.get(
+                action_key, f"{action_verbs[action_key]}{page_name}"
+            )
+        return f"{action_verbs[action_key]}{page_name}"
+
     return tuple(
         SensitiveActionDefinition(
             key=key,
-            name=employee_action_names[key]
-            if page_key == "hr:employee-management:profile"
-            else deviation_action_names.get(key, f"{action_verbs[key]}{page_name}")
-            if page_key == "quality:deviations:deviation-ledger"
-            else f"{action_verbs[key]}{page_name}",
+            name=_action_name(key),
             category=_ACTION_DEFINITIONS[key].category,
             description=_ACTION_DEFINITIONS[key].description,
         )
@@ -1509,7 +1525,10 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
     mc_page = ("production:batches:workshop-201-2",)
     dr_page = ("production:batches:workshop-201-3",)
     fa_page = ("production:batches:workshop-203",)
-    sync_config_pages = workshop_pages + sales_plan_page + scheduling_page
+    # 概览页承载 FL 氟苯尼考看板的同步设置入口（无独立车间页）
+    sync_config_pages = (
+        workshop_pages + sales_plan_page + scheduling_page + overview
+    )
 
     rules: list[tuple[str, str, tuple[str, ...], str, str | None, str]] = []
 
@@ -1686,6 +1705,8 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
     # 停产状态：GET 供概览/排产页导航块与看板渲染（读）；POST 设置/解除停产
     # 仅概览页操作权限（前端切换时二次确认 + 5 秒倒计时）
     add("GET", "/production-line-status", overview + scheduling_page)
+    # 停产/复产事件时间线（只读）：概览停产确认弹窗与停产历史查看
+    add("GET", "/production-line-status/events", overview + scheduling_page)
     add("POST", "/production-line-status", overview, "operate")
     # 生产汇总：五产线发酵/提炼关键指标聚合（只读），由生产概览页调用；
     # 当前月汇总服务端隐藏停产产线（历史月份照常显示）
@@ -1937,7 +1958,7 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
     )
     add_many(
         "GET",
-        ("/fermentation-board",),
+        ("/fermentation-board", "/fl-board"),
         overview,
         scope_adapter="production.dashboard",
     )

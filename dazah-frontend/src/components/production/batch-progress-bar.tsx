@@ -53,9 +53,26 @@ export interface BatchProgressBarProps {
   plannedCapacityKg: number | null
   /** 历史周期隐藏口径切换等写操作入口 */
   historical?: boolean
+  /** 段图例自定义文案（如 FL：已入库/在制/未投料）；缺省用发酵看板文案 */
+  labels?: {
+    done?: string
+    pending?: string
+    running?: string
+    idle?: string
+  }
+  /** 隐藏计数为 0 的图例段（已完成段始终保留）；复用到非发酵看板时避免
+   * 出现「待出产量 0 批」这类无意义图例 */
+  hideZeroLegend?: boolean
 }
 
 type Basis = 'batches' | 'capacity'
+
+const DEFAULT_LABELS = {
+  done: '已完成',
+  pending: '待出产量',
+  running: '运行中',
+  idle: '未开始',
+} as const
 
 export default function BatchProgressBar({
   doneCount,
@@ -65,7 +82,10 @@ export default function BatchProgressBar({
   doneYieldKg,
   plannedCapacityKg,
   historical = false,
+  labels = {},
+  hideZeroLegend = false,
 }: BatchProgressBarProps) {
+  const segLabels = { ...DEFAULT_LABELS, ...labels }
   const capacityAvailable =
     plannedCapacityKg != null && plannedCapacityKg > 0 && doneYieldKg != null
   const [basis, setBasis] = useState<Basis>(
@@ -106,50 +126,54 @@ export default function BatchProgressBar({
   const segments = [
     {
       key: 'done',
-      label: '已完成',
+      label: segLabels.done,
       count: doneCount,
       color: SEG_COLORS.done,
       detail:
         basis === 'capacity' && capacityAvailable
-          ? `已完成 ${doneCount} 批｜${fmtKg(doneYieldKg)}`
-          : `已完成 ${doneCount} 批`,
+          ? `${segLabels.done} ${doneCount} 批｜${fmtKg(doneYieldKg)}`
+          : `${segLabels.done} ${doneCount} 批`,
       pct: donePct,
     },
     {
       key: 'pending',
-      label: '待出产量',
+      label: segLabels.pending,
       count: pendingCount,
       color: SEG_COLORS.pending,
-      detail: `待出产量 ${pendingCount} 批`,
+      detail: `${segLabels.pending} ${pendingCount} 批`,
       pct: pctOfTotal(pendingCount),
       share: shareOfRest(pendingCount),
     },
     {
       key: 'running',
-      label: '运行中',
+      label: segLabels.running,
       count: runningCount,
       color: SEG_COLORS.running,
-      detail: `运行中 ${runningCount} 批`,
+      detail: `${segLabels.running} ${runningCount} 批`,
       pct: pctOfTotal(runningCount),
       share: shareOfRest(runningCount),
     },
     {
       key: 'idle',
-      label: '未开始',
+      label: segLabels.idle,
       count: idleCount,
       color: SEG_COLORS.idle,
-      detail: `未开始 ${idleCount} 批`,
+      detail: `${segLabels.idle} ${idleCount} 批`,
       pct: pctOfTotal(idleCount),
       share: shareOfRest(idleCount),
     },
   ] as const
+
+  const legendSegments = hideZeroLegend
+    ? segments.filter(seg => seg.key === 'done' || seg.count > 0)
+    : segments
 
   return (
     <div>
       {/* 图例 + 口径切换 */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-4 flex-wrap">
-          {segments.map(seg => (
+          {legendSegments.map(seg => (
             <span key={seg.key} className="flex items-center gap-1">
               <span
                 className="inline-block w-2.5 h-2.5 rounded-sm"
