@@ -26,7 +26,7 @@ from app.core.response import success_response
 from app.platform.audit.service import record_audit_log
 from app.platform.identity.authorization_guard import lock_authorization_actor
 from app.platform.identity.data_scope import publish_data_scope_changed
-from app.platform.identity.deps import CurrentUser
+from app.platform.identity.deps import CurrentUser, RequiredUser
 from app.platform.identity.deps import SystemAdminUser as AdminUser
 from app.platform.identity.models import Department, Role, UserRole
 from app.platform.identity.permission_cache import publish_permissions_changed
@@ -152,6 +152,9 @@ async def local_login(
     settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
     """Login with local username/password and return the same JWT used by SSO."""
+    from app.platform.identity.permission_middleware import (
+        check_local_account_rate_limit,
+    )
     from app.platform.identity.service import authenticate_local_user
 
     local_login_mode = getattr(
@@ -165,6 +168,12 @@ async def local_login(
             "本地账号登录已禁用，请使用飞书授权登录",
         )
 
+    account_allowed = await check_local_account_rate_limit(payload.username)
+    if account_allowed is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "登录服务暂时不可用")
+    if not account_allowed:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "登录尝试过于频繁")
+
     user, token = await authenticate_local_user(
         db, username=payload.username, password=payload.password
     )
@@ -173,6 +182,7 @@ async def local_login(
             status.HTTP_403_FORBIDDEN,
             "应急登录仅允许管理员账号",
         )
+    request.state.audit_user_id = user.id
     response = TokenResponse(
         access_token=token,
         user=UserResponse.model_validate(user),
@@ -228,7 +238,7 @@ async def auth_callback(
         return response
 
     try:
-        _, token = await handle_oauth_callback(db, code)
+        user, token = await handle_oauth_callback(db, code)
     except PermissionError:
         logger.warning("OAuth callback rejected disabled user")
         response = _login_error_redirect(settings, "account_disabled")
@@ -236,6 +246,7 @@ async def auth_callback(
         logger.exception("OAuth callback failed")
         response = _login_error_redirect(settings, "callback_failed")
     else:
+        request.state.audit_user_id = user.id
         next_path = payload.get("next") if isinstance(payload, dict) else None
         response = RedirectResponse(
             url=f"{settings.FRONTEND_URL}{next_path or '/production'}",
@@ -263,6 +274,19 @@ async def logout(
         url=f"{settings.FRONTEND_URL}/auth/logout",
         status_code=302,
     )
+
+
+@auth_router.post("/session/logout", summary="撤销当前用户会话")
+async def revoke_session(
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+) -> JSONResponse:
+    from app.platform.identity.service import revoke_user_sessions
+
+    await revoke_user_sessions(db, current_user.id)
+    response = success_response(data={"message": "已退出登录"})
+    response.delete_cookie(AUTH_TOKEN_COOKIE, path="/")
+    return response
 
 
 # ── Current User ────────────────────────────────────────────────────
@@ -514,13 +538,14 @@ async def reset_user_password(
     db: AsyncSession = Depends(get_db),
     current_user: AdminUser = None,
 ) -> JSONResponse:
-    from app.platform.identity.service import hash_password
+    from app.platform.identity.service import hash_password, revoke_user_sessions
 
     repo = UserRepository()
     user = await repo.get_by_id(db, user_id)
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "用户不存在")
     user.password_hash = hash_password(payload.password)
+    await revoke_user_sessions(db, user.id)
     user.auth_source = user.auth_source or "local"
     user.updated_by = current_user.id
     await db.flush()

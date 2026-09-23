@@ -2,6 +2,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -57,6 +58,7 @@ class Settings(BaseSettings):
 
     # Audit
     AUDIT_RETENTION_DAYS: int = 7
+    USER_OPERATION_AUDIT_RETENTION_DAYS: int = Field(default=30, ge=1)
 
     # Feishu / Lark — platform app shared by SSO, org sync, IM and common Bitable.
     FEISHU_APP_ID: str = ""
@@ -264,6 +266,20 @@ class Settings(BaseSettings):
         """Secure cookies require HTTPS; browsers silently drop them on
         HTTP deployments (e.g. bare-IP environments without TLS)."""
         return self.FRONTEND_URL.startswith("https")
+
+    @property
+    def browser_origins(self) -> list[str]:
+        """Origins permitted to use browser credentials with the API."""
+        parsed = urlsplit(self.FRONTEND_URL)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            return []
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+        origins = [origin]
+        if not self.is_production and parsed.hostname in {"localhost", "127.0.0.1"}:
+            other = "127.0.0.1" if parsed.hostname == "localhost" else "localhost"
+            port = f":{parsed.port}" if parsed.port else ""
+            origins.append(f"{parsed.scheme}://{other}{port}")
+        return origins
 
     @property
     def effective_local_login_mode(

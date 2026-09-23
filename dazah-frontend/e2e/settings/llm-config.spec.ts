@@ -38,19 +38,13 @@ test.describe('LLM 模型配置', () => {
     await expect(createDialog).toBeVisible()
 
     const temperatureSwitch = createDialog.locator('.ant-switch').nth(0)
-    const activeSwitch = createDialog.locator('.ant-switch').nth(1)
     await expect(temperatureSwitch).toHaveAttribute('aria-checked', 'false')
-    await expect(activeSwitch).toHaveAttribute('aria-checked', 'true')
+    await expect(createDialog.getByText('激活状态')).toHaveCount(0)
     await expect(createDialog.getByLabel('Temperature')).toHaveCount(0)
     await expect(createDialog.getByLabel('API 密钥')).toHaveAttribute('type', 'password')
     await createDialog.getByRole('button', { name: '显示' }).click()
     await expect(createDialog.getByLabel('API 密钥')).toHaveAttribute('type', 'text')
     await createDialog.getByRole('button', { name: '隐藏' }).click()
-    await activeSwitch.click()
-    await expect(activeSwitch).toHaveAttribute('aria-checked', 'false')
-    await activeSwitch.click()
-    await expect(activeSwitch).toHaveAttribute('aria-checked', 'true')
-
     await createDialog.locator('.ant-modal-footer .ant-btn-default').click()
     await expect(createDialog).toBeHidden()
     await page.getByRole('button', { name: '新建配置' }).click()
@@ -84,15 +78,24 @@ test.describe('LLM 模型配置', () => {
 
     const createdRow = rowFor(page, '新建端到端配置')
     await expect(createdRow).toBeVisible()
-    await expect(createdRow).toContainText('当前使用')
+    await expect(createdRow).not.toContainText('当前使用')
+    await expect(createdRow).toContainText('待检测')
     await expect(createdRow).toContainText('0.7')
 
+    await createdRow.getByRole('button').nth(1).click()
+    await expect(createdRow).toContainText('文本')
+    await expect(createdRow).not.toContainText('待检测')
+
+    await createdRow.getByRole('button').nth(0).click()
+    await expect(page.getByText('已激活此配置')).toBeVisible()
+    await expect(createdRow).toContainText('当前使用')
+
     await page.getByRole('button', { name: '测试连接' }).click()
-    await expect(page.getByText('当前激活模型连接正常')).toBeVisible()
+    await expect(page.getByText('模型连接正常', { exact: true })).toBeVisible()
 
     const existingRow = rowFor(page, '现有测试配置')
     await existingRow.getByRole('button').nth(0).click()
-    await expect(page.getByText('能力检测通过并已激活')).toBeVisible()
+    await expect(page.getByText('已激活此配置')).toBeVisible()
     await expect(existingRow).toContainText('当前使用')
 
     await existingRow.getByRole('button').nth(0).click()

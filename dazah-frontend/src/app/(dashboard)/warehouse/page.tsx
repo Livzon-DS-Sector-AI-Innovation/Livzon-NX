@@ -1,6 +1,5 @@
 'use client'
-import Link from 'next/link'
-import { Card, Row, Col, Tag, Typography } from 'antd'
+import { Tag, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import {
   CloudServerOutlined,
@@ -11,6 +10,7 @@ import {
   SettingOutlined,
 } from '@ant-design/icons'
 import { InboundOutboundIcon, DIRECTION_STYLE, WarehouseQueryProvider } from '@/components/warehouse'
+import { ModuleLandingCards, type ModuleLandingEntry } from '@/components/shared/ModuleLandingCards'
 import { fetchWarehouseHomeQuickFormLinks } from '@/lib/api/client/warehouse'
 
 const { Text } = Typography
@@ -76,46 +76,39 @@ const quickActions = [
   },
 ]
 
-const modules = [
+const modules: ModuleLandingEntry[] = [
   {
-    key: 'raw-materials',
     title: '原辅料及包材',
-    desc: '原辅料/包材库存总表、明细表、出入库总账、供应商及物料对照表',
-    icon: <DatabaseOutlined style={{ fontSize: 24, color: '#fff' }} />,
-    path: '/warehouse/materials/raw-summary',
-    color: '#5645d4',
+    description: '库存状态、明细与出入库台账',
+    icon: <DatabaseOutlined />,
+    href: '/warehouse/materials/dashboard',
+    dashboard: true,
   },
   {
-    key: 'hardware',
     title: '五金',
-    desc: '各车间五金库存管理、费用统计与分析',
-    icon: <ToolOutlined style={{ fontSize: 24, color: '#fff' }} />,
-    path: '/warehouse/hardware/dashboard',
-    color: '#2a9d99',
+    description: '五金库存、费用统计与分析',
+    icon: <ToolOutlined />,
+    href: '/warehouse/hardware/dashboard',
+    dashboard: true,
   },
   {
-    key: 'product',
     title: '成品库存',
-    desc: '成品汇总、发货情况、入库总账、各产品库存明细',
-    icon: <ShoppingOutlined style={{ fontSize: 24, color: '#fff' }} />,
-    path: '/warehouse/product/summary',
-    color: '#1aae39',
+    description: '成品库存、发货情况与产品明细',
+    icon: <ShoppingOutlined />,
+    href: '/warehouse/product/dashboard',
+    dashboard: true,
   },
   {
-    key: 'ai-analysis',
     title: 'AI 分析',
-    desc: '库存异常检测、趋势分析、智能问答、分析报告',
-    icon: <RobotOutlined style={{ fontSize: 24, color: '#fff' }} />,
-    path: '/warehouse/ai-analysis',
-    color: '#7b3ff2',
+    description: '库存异常检测、趋势分析与报告',
+    icon: <RobotOutlined />,
+    href: '/warehouse/ai-analysis',
   },
   {
-    key: 'settings',
     title: '仓储设置',
-    desc: '飞书数据源配置、页面映射管理',
-    icon: <SettingOutlined style={{ fontSize: 24, color: '#fff' }} />,
-    path: '/warehouse/settings',
-    color: '#0075de',
+    description: '飞书数据源与页面映射配置',
+    icon: <SettingOutlined />,
+    href: '/warehouse/settings',
   },
 ]
 
@@ -133,14 +126,7 @@ export default function WarehousePage() {
   return (
     <WarehouseQueryProvider>
       <div className="space-y-6">
-      <div>
-        <h1 className="text-[22px] font-semibold text-[var(--color-charcoal)] mb-2">
-          仓储管理
-        </h1>
-        <p className="text-[14px] text-[var(--color-steel)]">
-          原辅料、包材、成品、五金等仓储业务数据管理
-        </p>
-      </div>
+      <ModuleLandingCards title="仓储管理" description="查看库存状态、出入库业务与仓储配置" entries={modules} />
 
       {visibleQuickActions.length > 0 && (
         <div>
@@ -203,41 +189,6 @@ export default function WarehousePage() {
         </div>
       )}
 
-      {/* 子模块导航区 */}
-      <div>
-        <h2 className="text-[16px] font-semibold text-[var(--color-charcoal)] mb-3">
-          功能模块
-        </h2>
-        <Row gutter={[16, 16]}>
-          {modules.map((mod) => (
-            <Col xs={24} sm={12} lg={8} key={mod.key}>
-              <Link href={mod.path}>
-                <Card
-                  hoverable
-                  className="h-full cursor-pointer transition-shadow hover:shadow-md"
-                >
-                  <div className="flex items-start gap-4">
-                    <div
-                      className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0"
-                      style={{ backgroundColor: mod.color }}
-                    >
-                      {mod.icon}
-                    </div>
-                    <div>
-                      <h3 className="text-[16px] font-semibold text-[var(--color-charcoal)] mb-1">
-                        {mod.title}
-                      </h3>
-                      <p className="text-[14px] text-[var(--color-steel)] leading-relaxed">
-                        {mod.desc}
-                      </p>
-                    </div>
-                  </div>
-                </Card>
-              </Link>
-            </Col>
-          ))}
-        </Row>
-      </div>
     </div>
     </WarehouseQueryProvider>
   )

@@ -28,6 +28,10 @@ def isolate_login_rate_limit(monkeypatch: Any) -> None:
         "app.platform.identity.permission_middleware._check_login_rate_limit",
         AsyncMock(return_value=True),
     )
+    monkeypatch.setattr(
+        "app.platform.identity.permission_middleware.check_local_account_rate_limit",
+        AsyncMock(return_value=True),
+    )
 
 
 def make_request(authorization: str | None = None) -> Request:
@@ -67,6 +71,179 @@ def test_local_login_mode_defaults_are_environment_safe() -> None:
 
     assert development.effective_local_login_mode == "enabled"
     assert production.effective_local_login_mode == "disabled"
+
+
+def test_browser_origins_allow_only_configured_frontend() -> None:
+    production = Settings.model_construct(
+        APP_ENV="production", FRONTEND_URL="https://factory.example.com/app"
+    )
+    development = Settings.model_construct(
+        APP_ENV="development", FRONTEND_URL="http://localhost:3000"
+    )
+
+    assert production.browser_origins == ["https://factory.example.com"]
+    assert development.browser_origins == [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+
+
+@pytest.mark.anyio
+async def test_bootstrap_does_not_restore_existing_account(monkeypatch: Any) -> None:
+    from app.platform.identity import service
+
+    existing = SimpleNamespace(
+        password_hash="existing-hash",
+        name="Existing name",
+        email="existing@example.com",
+        role="user",
+        status="disabled",
+        auth_source="local",
+        is_deleted=True,
+    )
+    snapshot = vars(existing).copy()
+    fake_repo = SimpleNamespace(
+        get_by_username_including_deleted=AsyncMock(return_value=existing),
+        create=AsyncMock(),
+    )
+
+    class FakeSession:
+        def __init__(self: Any) -> None:
+            self.commit = AsyncMock()
+
+        async def __aenter__(self: Any) -> Any:
+            return self
+
+        async def __aexit__(self: Any, *_args: Any) -> None:
+            return None
+
+    session = FakeSession()
+    settings = SimpleNamespace(
+        BOOTSTRAP_ADMIN_USERNAME="admin",
+        BOOTSTRAP_ADMIN_PASSWORD="bootstrap-password",
+        BOOTSTRAP_ADMIN_NAME="Bootstrap admin",
+        BOOTSTRAP_ADMIN_EMAIL="admin@example.com",
+        BOOTSTRAP_USER_USERNAME="",
+        BOOTSTRAP_USER_PASSWORD="",
+        BOOTSTRAP_USER_NAME="",
+        BOOTSTRAP_USER_EMAIL="",
+    )
+    monkeypatch.setattr(service, "get_settings", lambda: settings)
+    monkeypatch.setattr(service, "_repo", fake_repo)
+    monkeypatch.setattr(service, "async_session_factory", lambda: session)
+    default_admin = AsyncMock()
+    monkeypatch.setattr(service, "get_or_create_system_admin", default_admin)
+
+    await service.bootstrap_local_users()
+
+    assert vars(existing) == snapshot
+    fake_repo.create.assert_not_awaited()
+    default_admin.assert_awaited_once_with(session)
+    session.commit.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_system_admin_bootstrap_preserves_disabled_account(
+    monkeypatch: Any,
+) -> None:
+    from app.platform.identity import service
+
+    existing = SimpleNamespace(
+        role="user", status="disabled", is_deleted=True, password_hash="existing-hash"
+    )
+    snapshot = vars(existing).copy()
+    fake_repo = SimpleNamespace(
+        get_by_username_including_deleted=AsyncMock(return_value=existing),
+        create=AsyncMock(),
+    )
+    monkeypatch.setattr(service, "_repo", fake_repo)
+
+    result = await service.get_or_create_system_admin(object())  # type: ignore[arg-type]
+
+    assert result is existing
+    assert vars(existing) == snapshot
+    fake_repo.create.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_cors_preflight_accepts_only_frontend_origin() -> None:
+    allowed_origin = get_settings().browser_origins[0]
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        allowed = await client.options(
+            "/api/v1/identity/auth/local/login",
+            headers={
+                "origin": allowed_origin,
+                "access-control-request-method": "POST",
+            },
+        )
+        rejected = await client.options(
+            "/api/v1/identity/auth/local/login",
+            headers={
+                "origin": "https://untrusted.example.com",
+                "access-control-request-method": "POST",
+            },
+        )
+
+    assert allowed.status_code == 200
+    assert allowed.headers["access-control-allow-origin"] == allowed_origin
+    assert allowed.headers["access-control-allow-credentials"] == "true"
+    assert rejected.status_code == 400
+    assert "access-control-allow-origin" not in rejected.headers
+
+
+@pytest.mark.anyio
+async def test_cookie_authenticated_write_requires_trusted_origin() -> None:
+    allowed_origin = get_settings().browser_origins[0]
+    app.dependency_overrides[get_db] = fake_get_db
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            blocked = await client.post(
+                "/api/v1/identity/auth/local/login",
+                cookies={"auth_token": "dummy"},
+                headers={"origin": "https://untrusted.example.com"},
+                json={"username": "unknown", "password": "invalid"},
+            )
+            blocked_login_csrf = await client.post(
+                "/api/v1/identity/auth/local/login",
+                headers={"origin": "https://untrusted.example.com"},
+                json={"username": "unknown", "password": "invalid"},
+            )
+            blocked_fetch_metadata = await client.post(
+                "/api/v1/identity/auth/local/login",
+                headers={"sec-fetch-site": "cross-site"},
+                json={"username": "unknown", "password": "invalid"},
+            )
+            missing = await client.post(
+                "/api/v1/identity/auth/local/login",
+                cookies={"auth_token": "dummy"},
+                json={"username": "unknown", "password": "invalid"},
+            )
+            allowed = await client.post(
+                "/api/v1/identity/auth/local/login",
+                cookies={"auth_token": "dummy"},
+                headers={"origin": allowed_origin},
+                json={"username": "unknown"},
+            )
+            referer = await client.post(
+                "/api/v1/identity/auth/local/login",
+                cookies={"auth_token": "dummy"},
+                headers={"referer": f"{allowed_origin}/login"},
+                json={"username": "unknown"},
+            )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+    assert blocked.status_code == 403
+    assert blocked.json()["message"] == "请求来源未经授权"
+    assert blocked_login_csrf.status_code == 403
+    assert blocked_fetch_metadata.status_code == 403
+    assert missing.status_code == 403
+    assert allowed.status_code == 422
+    assert referer.status_code == 422
 
 
 def test_production_requires_an_accessible_administrator_path() -> None:
@@ -356,6 +533,54 @@ async def test_local_login_still_returns_token(monkeypatch: Any) -> None:
 
 
 @pytest.mark.anyio
+async def test_local_login_rejects_account_rate_limit(monkeypatch: Any) -> None:
+    from app.platform.identity import permission_middleware
+
+    monkeypatch.setattr(
+        permission_middleware,
+        "check_local_account_rate_limit",
+        AsyncMock(return_value=False),
+    )
+    app.dependency_overrides[get_db] = fake_get_db
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/api/v1/identity/auth/local/login",
+                json={"username": "unknown", "password": "incorrect"},
+            )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+    assert response.status_code == 429
+    assert "登录尝试过于频繁" in response.text
+
+
+@pytest.mark.anyio
+async def test_login_fails_closed_when_ip_limit_is_unavailable(
+    monkeypatch: Any,
+) -> None:
+    from app.platform.identity import permission_middleware
+
+    monkeypatch.setattr(
+        permission_middleware,
+        "_check_login_rate_limit",
+        AsyncMock(return_value=None),
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/identity/auth/local/login",
+            json={"username": "unknown", "password": "incorrect"},
+        )
+
+    assert response.status_code == 503
+    assert "登录服务暂时不可用" in response.text
+
+
+@pytest.mark.anyio
 async def test_local_login_is_rejected_when_disabled(monkeypatch: Any) -> None:
     async def unexpected_authenticate(*args: Any, **kwargs: Any) -> Any:
         pytest.fail("disabled local login must not verify credentials")
@@ -452,6 +677,7 @@ async def test_oauth_callback_saves_encrypted_feishu_user_tokens(
             self.created_kwargs = kwargs
             return SimpleNamespace(
                 id=user_id,
+                session_version=0,
                 name=kwargs["name"],
                 role=kwargs["role"],
                 status=kwargs["status"],

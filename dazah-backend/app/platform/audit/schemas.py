@@ -5,6 +5,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 AuditCategory = Literal[
+    "operations",
     "permissions",
     "agent_tools",
     "automations",
@@ -20,6 +21,7 @@ class GeneralAuditLogItem(BaseModel):
     actor_name: str | None = None
     actor_username: str | None = None
     action: str
+    operation: str | None = None
     method: str | None = None
     path: str | None = None
     status_code: int | None = None

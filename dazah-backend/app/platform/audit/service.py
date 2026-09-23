@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.redaction import redact_sensitive
+from app.platform.audit.middleware import OPERATION_ACTION
 from app.platform.audit.models import AuditLog
 from app.platform.audit.schemas import (
     AuditCategory,
@@ -33,6 +34,7 @@ _PERMISSION_RESOURCE_TYPES = frozenset(
     }
 )
 _CATEGORY_SUMMARY_KEYS: dict[AuditCategory, tuple[str, ...]] = {
+    "operations": (),
     "permissions": (
         "grant_version",
         "reason",
@@ -60,6 +62,8 @@ _CATEGORY_SUMMARY_KEYS: dict[AuditCategory, tuple[str, ...]] = {
 
 
 def audit_category_of(log: AuditLog) -> AuditCategory | None:
+    if log.action == OPERATION_ACTION:
+        return "operations"
     if log.action in _CONVERSATION_ACTIONS:
         return None
     if log.resource_type in _PERMISSION_RESOURCE_TYPES:
@@ -74,6 +78,8 @@ def audit_category_of(log: AuditLog) -> AuditCategory | None:
 
 
 def _category_filter(category: AuditCategory) -> ColumnElement[bool]:
+    if category == "operations":
+        return AuditLog.action == OPERATION_ACTION
     permissions = func.coalesce(
         AuditLog.resource_type.in_(_PERMISSION_RESOURCE_TYPES), false()
     )
@@ -94,7 +100,9 @@ def _category_filter(category: AuditCategory) -> ColumnElement[bool]:
         return automations
     if category == "feishu":
         return feishu
-    return ~(permissions | agent_tools | automations | feishu)
+    return ~(permissions | agent_tools | automations | feishu) & (
+        AuditLog.action != OPERATION_ACTION
+    )
 
 
 class GeneralAuditLogService:
@@ -108,6 +116,7 @@ class GeneralAuditLogService:
         keyword: str | None = None,
         started_at: datetime | None = None,
         ended_at: datetime | None = None,
+        module: str | None = None,
     ) -> GeneralAuditLogPage:
         filters = [
             AuditLog.action.not_in(_CONVERSATION_ACTIONS),
@@ -120,6 +129,7 @@ class GeneralAuditLogService:
                     AuditLog.action.ilike(pattern),
                     AuditLog.resource_type.ilike(pattern),
                     AuditLog.path.ilike(pattern),
+                    AuditLog.extra["operation"].as_string().ilike(pattern),
                     User.name.ilike(pattern),
                     User.username.ilike(pattern),
                 )
@@ -128,6 +138,8 @@ class GeneralAuditLogService:
             filters.append(AuditLog.created_at >= started_at)
         if ended_at:
             filters.append(AuditLog.created_at <= ended_at)
+        if module and category == "operations":
+            filters.append(AuditLog.resource_type == module)
 
         total = await db.scalar(
             select(func.count(AuditLog.id))
@@ -210,6 +222,7 @@ class GeneralAuditLogService:
             actor_name=actor_name,
             actor_username=actor_username,
             action=log.action,
+            operation=extra.get("operation") if category == "operations" else None,
             method=log.method,
             path=log.path,
             status_code=log.status_code,

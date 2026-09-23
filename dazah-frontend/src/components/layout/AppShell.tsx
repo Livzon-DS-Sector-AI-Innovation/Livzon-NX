@@ -14,6 +14,7 @@ import {
 } from "@/lib/menu-config"
 import { TopNav } from "./TopNav"
 import { Sidebar } from "./Sidebar"
+import { PageNavigation } from "./PageNavigation"
 import type { User } from "@/types/user"
 import { useAuthStore } from "@/stores/auth"
 
@@ -123,9 +124,14 @@ export function AppShell({ children, user }: AppShellProps) {
               </div>
             </section>
           ) : (
-            <MappedMenuPageGate moduleCode={currentModule?.moduleCode}>
-              {children}
-            </MappedMenuPageGate>
+            <>
+              <Suspense fallback={null}>
+                <PageNavigation modules={authorizedModules} />
+              </Suspense>
+              <MappedMenuPageGate moduleCode={currentModule?.moduleCode}>
+                {children}
+              </MappedMenuPageGate>
+            </>
           )}
         </main>
       </div>

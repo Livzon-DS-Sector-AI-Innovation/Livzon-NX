@@ -27,6 +27,10 @@
 
 跨模块调用优先通过目标模块 `public_api.py`、模块注册表或既有扩展点。禁止直接复用其他模块的 repository、内部 service、handler、配置表或私有模型实现。
 
+新增业务流程先按 `../docs/business-module-boundaries.md` 确认记录归属、写入责任和
+跨模块读取入口。模块清单以 `app/shared/module_registry.py` 为准；页面所在的前端
+菜单或调用者所在模块，不决定后端数据归属。
+
 修改 `app/core/`、`app/shared/`、`app/platform/`、`app/api/router.py` 或 `alembic/` 前，确认当前需求确实需要，并检查受影响调用链；公共契约变化或影响范围不明确时扩大调用方检查。
 
 业务模块的推荐结构见 `examples/module-structure.md`。
@@ -106,6 +110,9 @@ HTTP 500 只用于未预期的服务端故障，不得把可预期的业务分�
 - 业务配置、凭证来源、同步规则和状态处理必须留在所属模块。
 - 平台层不得反向依赖 `app.modules.*`，业务模块不得直接复用另一个模块的集成实现。
 - 凭证由所属模块读取、解密和校验后显式传给平台 helper；平台 helper 不决定配置来源。
+
+现有飞书只读镜像和调度代码仍有平台层导入业务模块的历史耦合；修改这些路径时
+遵守更近的飞书规范，不把它们作为新增集成的模板。
 
 飞书开发还必须遵守 `app/platform/integrations/feishu/AGENTS.md`。
 

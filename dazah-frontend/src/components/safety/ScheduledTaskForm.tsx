@@ -15,6 +15,7 @@ import { App,
 } from 'antd'
 import { SaveOutlined, ArrowLeftOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
+import { getSafeListReturnHref } from '@/lib/list-url-state'
 import type {
   ScheduledTask,
   ScheduledTaskFormData,
@@ -43,6 +44,11 @@ interface ScheduledTaskFormProps {
 export default function ScheduledTaskForm({ editData }: ScheduledTaskFormProps) {
   const { message } = App.useApp()
   const router = useRouter()
+  const returnToList = () => getSafeListReturnHref(
+    new URLSearchParams(window.location.search).get('returnTo'),
+    window.location.pathname,
+    '/safety/scheduled-tasks',
+  ) || '/safety/scheduled-tasks'
   const [form] = Form.useForm<ScheduledTaskFormData>()
   const [loading, setLoading] = useState(false)
   const [dataSourceOptions, setDataSourceOptions] = useState<DataSourceOption[]>([])
@@ -164,7 +170,7 @@ export default function ScheduledTaskForm({ editData }: ScheduledTaskFormProps) 
 
       if (res.code === 200) {
         message.success(isEdit ? '已更新' : '已创建')
-        router.push('/safety/scheduled-tasks')
+        router.push(returnToList())
       } else {
         message.error(res.message || '操作失败')
       }
@@ -178,7 +184,7 @@ export default function ScheduledTaskForm({ editData }: ScheduledTaskFormProps) 
   return (
     <Form form={form} layout="vertical" style={{ maxWidth: 800 }}>
       <Space style={{ marginBottom: 16 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => router.back()}>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => router.push(returnToList())}>
           返回
         </Button>
         <Button type="primary" icon={<SaveOutlined />} loading={loading} onClick={handleSubmit}>

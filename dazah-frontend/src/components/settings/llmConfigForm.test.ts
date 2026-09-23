@@ -23,12 +23,12 @@ const baseValues: LLMConfigFormValues = {
 }
 
 describe('LLM config form values', () => {
-  it('defaults new configurations to active with provider temperature', () => {
+  it('defaults new configurations to inactive with provider temperature', () => {
     expect(getNewLLMConfigFormValues()).toEqual({
       temperature: 0.1,
       use_temperature: false,
       timeout_seconds: 120,
-      is_active: true,
+      is_active: false,
     })
   })
 

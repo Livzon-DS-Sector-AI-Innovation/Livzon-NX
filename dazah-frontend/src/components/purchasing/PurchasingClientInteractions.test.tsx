@@ -256,6 +256,8 @@ vi.mock('antd', async () => {
     Alert,
     AutoComplete,
     Button,
+    Card: ({ children }: AnyProps) => <div>{children}</div>,
+    Col: ({ children }: AnyProps) => <div>{children}</div>,
     DatePicker,
     Descriptions,
     Form,
@@ -263,6 +265,7 @@ vi.mock('antd', async () => {
     InputNumber,
     Modal,
     Popconfirm,
+    Row: ({ children }: AnyProps) => <div>{children}</div>,
     Select,
     Segmented,
     Space,
@@ -276,6 +279,7 @@ import { PurchaseApprovalClient } from './PurchaseApprovalClient'
 import { PurchaseOrderClient } from './PurchaseOrderClient'
 import { PurchaseRequestFormClient } from './PurchaseRequestFormClient'
 import { PurchasingWorkspaceClient } from './PurchasingWorkspaceClient'
+import { purchaseCategories } from './purchaseRequestConstants'
 import {
   UrgentPurchaseRequestFormClient,
   buildUrgentPurchasePayload,
@@ -394,12 +398,21 @@ afterEach(() => {
 })
 
 describe('purchasing workspace and request forms', () => {
-  it('renders the workflow workspace and all request entry categories', () => {
+  it('renders the shared landing entries, request categories, and workflow guidance', () => {
     const markup = renderToStaticMarkup(<PurchasingWorkspaceClient />)
-    expect(markup).toContain('采购管理工作台')
+    expect(markup).toContain('<h1')
+    expect(markup).toContain('采购管理</h1>')
+    expect(markup).toContain('href="#request-categories"')
+    expect(markup).toContain('href="/purchasing/material-library"')
+    expect(markup).toContain('href="/purchasing/supplier"')
+    expect(markup).toContain('href="/purchasing/contract-generation/fixed-assets"')
+    for (const category of purchaseCategories) {
+      expect(markup).toContain(`href="/purchasing/request/${category}"`)
+    }
     expect(markup).toContain('加急采购申请')
     expect(markup).toContain('加急单')
     expect(markup).toContain('部门负责人')
+    expect(markup).not.toContain('仪表盘')
   })
 
   it('normalizes urgent groups and trims payload fields', () => {

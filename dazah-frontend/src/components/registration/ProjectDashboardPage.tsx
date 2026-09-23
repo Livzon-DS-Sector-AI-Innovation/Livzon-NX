@@ -10,9 +10,7 @@ interface ProjectDashboardPageProps {
 export default function ProjectDashboardPage({ overview }: ProjectDashboardPageProps) {
   return (
     <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-      <Typography.Title level={3} style={{ marginBottom: 0 }}>
-        {overview.module_name}
-      </Typography.Title>
+      <h1 className="text-[22px] font-semibold text-[var(--color-charcoal)]">申报项目仪表盘</h1>
 
       <Row gutter={[16, 16]}>
         {overview.modules.map((module) => (

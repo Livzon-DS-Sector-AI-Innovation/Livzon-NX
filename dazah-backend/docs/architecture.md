@@ -1,6 +1,8 @@
 # dazah-backend 项目架构
 
-本项目采用模块化单体架构。业务模块按“纵向包”组织，每个模块拥有自己的 API、Schema、Service、Repository 和 ORM Model，适合不同技术人员分别维护生产、设备、安全、质量等模块。
+本项目采用模块化单体架构。模块清单和 schema 注册以
+`app/shared/module_registry.py` 为准；记录归属、平台与业务边界见
+`../../docs/business-module-boundaries.md`，开发约束见 `../AGENTS.md`。
 
 ## 目录结构
 
@@ -27,7 +29,9 @@ app/
 │   ├── integrations/             # 飞书、ERP、LIMS 等外部系统适配
 │   └── system/                   # 系统元数据接口
 └── modules/                      # 业务模块，按负责人边界维护
+    ├── agent/                     # 后端 Agent 工具网关和确认链路
     ├── production/
+    ├── product/
     ├── equipment/
     ├── safety/
     ├── environment/
@@ -38,12 +42,15 @@ app/
     ├── hr/
     ├── research/
     ├── registration/
+    ├── regulatory_tracker/
+    ├── dossier_writer/
     └── quality/
 ```
 
 ## 模块约定
 
-每个 `app/modules/{module}` 包内固定保留：
+业务模块按需要组织以下职责；复杂模块可以拆为同名目录，不要求每个模块都
+保留同样的单文件布局：
 
 - `api.py`：HTTP 路由和请求参数处理
 - `schemas.py`：Pydantic 请求/响应模型
@@ -51,18 +58,20 @@ app/
 - `repository.py`：数据库查询与持久化
 - `models.py`：本模块 SQLAlchemy ORM 模型
 
-跨模块调用优先通过对方模块的 `public_api.py`，不要直接跨模块 import 对方 `service.py`、`repository.py` 或内部拆分文件。飞书、ERP、LIMS 等外部系统只从 `platform/integrations` 接入，业务模块不直接散落第三方 API 调用。
+跨模块调用优先通过对方模块的 `public_api.py`，不要直接导入其内部
+Service、Repository 或 Model。外部系统的通用客户端和协议解析在
+`platform/integrations/`；凭证、同步规则与状态处理在所属业务模块。
 
 ## 数据库边界
 
-- `identity` schema：本地轻量用户档案，用于后续关联飞书 SSO。
-- `audit` schema：审计日志和操作追踪，默认保留策略为 7 天。
-- 每个业务模块一个 PostgreSQL schema，例如 `production`、`quality`、`equipment`。
+- `identity` schema：用户、可信身份和权限数据。
+- `audit` schema：操作审计；实际保留策略以当前配置及迁移为准。
+- 业务 schema 以模块注册表和当前 migration 为准，例如 `production`、
+  `quality`、`equipment`。
 
-首版迁移文件：`alembic/versions/20260529_0001_initial_platform.py`。
-
-## 当前可用接口
+## 接口入口
 
 - `GET /health`
 - `GET /api/v1/system/modules`
-- `GET /api/v1/{module}/`
+- 各模块路由由 `app/api/router.py` 装配；具体端点和 Schema 以生成的
+  `openapi.json` 为准，不在本文件复制接口清单。
