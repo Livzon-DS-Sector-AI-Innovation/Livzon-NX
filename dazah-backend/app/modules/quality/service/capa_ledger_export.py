@@ -52,7 +52,7 @@ def _format_date(value: Any) -> str:
     if isinstance(value, datetime):
         if value.tzinfo is not None:
             value = value.astimezone(_LEDGER_TIMEZONE)
-        return value.strftime("%Y.%m.%d")
+        return str(value.strftime("%Y.%m.%d"))
     if isinstance(value, date):
         return value.strftime("%Y.%m.%d")
 
