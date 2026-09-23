@@ -85,7 +85,7 @@ async def test_department_saved_but_derived_fields_preserved(
 
 async def test_invalid_plan_request_is_validation_error(client):
     response = await client.post(
-        "/api/v1/quality/capa-plan-tracks", json={"department": "QA"}
+        "/api/v1/quality/capa-plan-tracks", json={"due_date": "不是日期"}
     )
     assert response.status_code == 422
 

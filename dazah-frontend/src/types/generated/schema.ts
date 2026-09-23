@@ -34708,11 +34708,10 @@ export interface components {
         };
         /** CreateCapaPlanTrackRequest */
         CreateCapaPlanTrackRequest: {
-            /**
-             * Capa Id
-             * Format: uuid
-             */
-            capa_id: string;
+            /** Capa Code */
+            capa_code?: string | null;
+            /** Capa Id */
+            capa_id?: string | null;
             /** Department */
             department?: string | null;
             /** Department Head */
@@ -34732,7 +34731,7 @@ export interface components {
             /** Owner Name */
             owner_name?: string | null;
             /** Plan Content */
-            plan_content: string;
+            plan_content?: string | null;
             /** Progress */
             progress?: string | null;
             /**
@@ -57359,6 +57358,8 @@ export interface components {
         };
         /** UpdateCapaPlanTrackRequest */
         UpdateCapaPlanTrackRequest: {
+            /** Capa Code */
+            capa_code?: string | null;
             /** Department */
             department?: string | null;
             /** Department Head */

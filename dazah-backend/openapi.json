@@ -20781,10 +20781,28 @@
       },
       "CreateCapaPlanTrackRequest": {
         "properties": {
+          "capa_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capa Code"
+          },
           "capa_id": {
-            "format": "uuid",
-            "title": "Capa Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capa Id"
           },
           "department": {
             "anyOf": [
@@ -20842,8 +20860,15 @@
             "title": "Owner Name"
           },
           "plan_content": {
-            "title": "Plan Content",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Content"
           },
           "progress": {
             "anyOf": [
@@ -20862,10 +20887,6 @@
             "type": "string"
           }
         },
-        "required": [
-          "capa_id",
-          "plan_content"
-        ],
         "title": "CreateCapaPlanTrackRequest",
         "type": "object"
       },
@@ -76619,6 +76640,17 @@
       },
       "UpdateCapaPlanTrackRequest": {
         "properties": {
+          "capa_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capa Code"
+          },
           "department": {
             "anyOf": [
               {

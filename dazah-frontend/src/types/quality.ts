@@ -654,8 +654,9 @@ export interface QualityFeishuEntityFieldMappingBundle {
 }
 
 export interface CreateCapaPlanTrackRequest {
-  capa_id: string;
-  plan_content: string;
+  capa_id?: string | null;
+  capa_code?: string | null;
+  plan_content?: string | null;
   due_date?: string | null;
   owner_name?: string | null;
   department?: string | null;
