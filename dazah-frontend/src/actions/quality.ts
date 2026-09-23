@@ -21,8 +21,6 @@ import {
   UpdateChangeRequest,
   CreateDeviationInvestigationPushRecordRequest,
   UpdateDeviationInvestigationPushRecordRequest,
-  CreateFeishuDeviationLedgerRecordRequest,
-  UpdateFeishuDeviationLedgerRecordRequest,
   QualityAiAnalysisLog,
   CreateSupplierQualificationRequest,
   UpdateSupplierQualificationRequest,
@@ -408,32 +406,6 @@ export async function deleteFeishuCapaPlanTrack(recordId: string) {
     method: 'DELETE',
   })
   revalidatePath('/quality/capas/plans')
-}
-
-export async function createFeishuDeviationLedgerRecord(data: CreateFeishuDeviationLedgerRecordRequest) {
-  const result = await actionFetch(`${API_BASE_URL}/api/v1/quality/deviation-ledger-records`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-  revalidatePath('/quality/deviations')
-  return result
-}
-
-export async function updateFeishuDeviationLedgerRecord(recordId: string, data: UpdateFeishuDeviationLedgerRecordRequest) {
-  const result = await actionFetch(
-    `${API_BASE_URL}/api/v1/quality/deviation-ledger-records/${recordId}`,
-    { method: 'PUT', body: JSON.stringify(data) }
-  )
-  revalidatePath('/quality/deviations')
-  revalidatePath(`/quality/deviations/${recordId}`)
-  return result
-}
-
-export async function deleteFeishuDeviationLedgerRecord(recordId: string) {
-  await actionFetch(`${API_BASE_URL}/api/v1/quality/deviation-ledger-records/${recordId}`, {
-    method: 'DELETE',
-  })
-  revalidatePath('/quality/deviations')
 }
 
 export async function createDeviationInvestigationPushRecord(data: CreateDeviationInvestigationPushRecordRequest) {

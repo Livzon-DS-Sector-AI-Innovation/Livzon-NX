@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.agent.access_scope import AgentAccessScopeService
@@ -67,6 +68,20 @@ class ConfigurableAccessScope:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "denied")
         return None
 
+    async def get_current_scope(
+        self: Any, db: Any, *, user: Any, rebuild_if_stale: bool
+    ) -> Any:
+        assert rebuild_if_stale is True
+        if self.error_status is not None:
+            raise HTTPException(self.error_status, "scope unavailable")
+        return SimpleNamespace(
+            tool_names=[
+                spec.name
+                for spec in tool_registry.list()
+                if spec.name not in self.denied
+            ]
+        )
+
 
 @pytest.mark.anyio
 async def test_access_scope_selects_workflow_tool_allowlist() -> None:
@@ -115,6 +130,14 @@ async def test_synchronize_creates_updates_and_disables_stale_rows(
     service = ToolCatalogService()
 
     await service.synchronize(db_session)
+    assert (
+        await db_session.scalar(
+            select(AgentToolCatalog.status).where(
+                AgentToolCatalog.operation == tool_registry.list()[0].name
+            )
+        )
+        == "active"
+    )
     await service.synchronize(db_session)
     entries = await service.list_all(db_session)
 
@@ -243,6 +266,21 @@ async def test_search_filters_module_query_scope_and_limit(
     )
     assert [entry.operation for entry in limited] == [searchable.name]
 
+    module_question = await service.search(
+        db_session,
+        _request(user.id, query="平台有哪些模块"),
+    )
+    assert any(
+        entry.operation == "agent.get_my_access_scope" for entry in module_question
+    )
+    permission_question = await service.search(
+        db_session,
+        _request(user.id, query="我有哪些权限"),
+    )
+    assert any(
+        entry.operation == "agent.get_my_access_scope" for entry in permission_question
+    )
+
     assert (
         await service.search(
             db_session,
@@ -273,6 +311,30 @@ async def test_search_filters_module_query_scope_and_limit(
     with pytest.raises(HTTPException) as exc:
         await service.search(db_session, _request(user.id))
     assert exc.value.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+
+    service.access_scope = ConfigurableAccessScope(  # type: ignore[assignment]
+        error_status=status.HTTP_403_FORBIDDEN
+    )
+    with pytest.raises(HTTPException) as exc:
+        await service.search(db_session, _request(user.id))
+    assert exc.value.status_code == status.HTTP_403_FORBIDDEN
+    assert exc.value.detail == "scope unavailable"
+
+
+@pytest.mark.anyio
+async def test_search_uses_current_scope_without_exposing_business_tools(
+    db_session: AsyncSession,
+) -> None:
+    user = _user()
+    db_session.add(user)
+    await db_session.flush()
+
+    entries = await ToolCatalogService().search(
+        db_session,
+        _request(user.id, query="平台有哪些模块", limit=1),
+    )
+
+    assert [entry.operation for entry in entries] == ["agent.get_my_access_scope"]
 
 
 @pytest.mark.anyio

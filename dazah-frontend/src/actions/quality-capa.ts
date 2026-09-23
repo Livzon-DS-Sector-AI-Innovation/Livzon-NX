@@ -20,15 +20,13 @@ export async function createCapa(data: CreateCapaRequest) {
 }
 
 export async function updateCapa(capaId: string, data: Record<string, unknown>) {
-  const result = await actionFetch(`${API_BASE_URL}/api/v1/quality/capas/${capaId}`, {
+  const result = await actionFetch<{ success: boolean; feishu_sync_status?: string | null }>(`${API_BASE_URL}/api/v1/quality/capas/${capaId}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   })
   revalidatePath('/quality')
   revalidatePath('/quality/capas')
   revalidatePath(`/quality/capas/${capaId}`)
-  // 自动同步到飞书
-  await syncCapaToFeishu(capaId).catch((e) => console.warn('飞书同步失败（非阻塞）:', e))
   return result
 }
 

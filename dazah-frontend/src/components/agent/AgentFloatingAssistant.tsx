@@ -6,21 +6,24 @@ import {
   CloseOutlined,
   DeleteOutlined,
   FileImageOutlined,
+  FileSearchOutlined,
   FileTextOutlined,
   FullscreenExitOutlined,
   FullscreenOutlined,
   HistoryOutlined,
   LoadingOutlined,
-  MessageOutlined,
   MinusOutlined,
   PaperClipOutlined,
   PlusOutlined,
-  RobotOutlined,
+  DatabaseOutlined,
+  SafetyCertificateOutlined,
   SendOutlined,
   StopOutlined,
+  SyncOutlined,
 } from "@ant-design/icons"
-import { Alert, App, Badge, Button, Drawer, Empty, Input, List, Skeleton, Tag, Tooltip } from "antd"
+import { Alert, App, Button, Drawer, Empty, Input, List, Skeleton, Tag, Tooltip } from "antd"
 import { BusinessMessageContent } from "@/components/agent/BusinessMessageContent"
+import { AgentEntryButton, AgentMark } from "@/components/agent/AgentEntryButton"
 import type { AgentArtifact } from "@/components/agent/AutomationArtifacts"
 import {
   archiveAgentSession,
@@ -39,10 +42,10 @@ import {
 import { useAgentStore } from "@/stores/agent"
 
 const suggestions = [
-  "查询质量偏差报告记录",
-  "查看飞书同步状态",
-  "查询原辅料库存",
-  "查看待审批采购申请",
+  { label: "质量偏差", prompt: "查询质量偏差报告记录", icon: <FileSearchOutlined /> },
+  { label: "同步状态", prompt: "查看飞书同步状态", icon: <SyncOutlined /> },
+  { label: "原辅料库存", prompt: "查询原辅料库存", icon: <DatabaseOutlined /> },
+  { label: "采购审批", prompt: "查看待审批采购申请", icon: <SafetyCertificateOutlined /> },
 ]
 
 const ASSISTANT_EXIT_ANIMATION_MS = 180
@@ -278,13 +281,14 @@ function MessageBubble({
   const isUser = message.role === "user"
   const attachments = attachmentDescriptors(message.metadata)
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+    <div className={`agent-message-row flex ${isUser ? "justify-end" : "justify-start"}`}>
+      {!isUser && <span className="agent-message-avatar" aria-hidden="true"><AgentMark /></span>}
       <div
         className={[
-          "rounded-xl px-3 py-2 text-sm leading-6 shadow-sm",
+          "agent-message-content rounded-xl px-3 py-2 text-sm leading-6 shadow-sm",
           isUser
-            ? "max-w-[86%] bg-[var(--color-primary)] text-white"
-            : "agent-assistant-bubble max-w-[min(94%,720px)] border border-[var(--color-border)] bg-white text-[var(--color-text-primary)]",
+            ? "agent-user-bubble max-w-[86%] bg-[var(--color-primary)] text-white"
+            : "agent-assistant-bubble max-w-[min(94%,720px)] border border-[var(--color-hairline)] bg-white text-[var(--color-ink)]",
         ].join(" ")}
       >
         {isUser ? (
@@ -536,6 +540,7 @@ export function AgentFloatingAssistant() {
   }, [clearStreamTimer])
 
   useEffect(() => {
+    if (messages.length === 0 && pendingConfirmations.length === 0 && !loading) return
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })
   }, [messages, pendingConfirmations.length, loading])
 
@@ -870,14 +875,8 @@ export function AgentFloatingAssistant() {
 
   if (!open) {
     return (
-      <Button
-        aria-label="打开中枢助手"
-        title="Livzon助手"
-        type="primary"
-        shape="circle"
-        icon={<RobotOutlined />}
+      <AgentEntryButton
         onClick={() => setOpen(true)}
-        className="agent-floating-entry-button !fixed !bottom-6 !right-6 !z-50 !h-14 !w-14 !shadow-lg"
       />
     )
   }
@@ -929,14 +928,9 @@ export function AgentFloatingAssistant() {
 
   if (minimized) {
     return (
-      <Button
-        aria-label="展开中枢助手"
-        title="Livzon助手"
-        type="primary"
-        shape="circle"
-        icon={<MessageOutlined />}
+      <AgentEntryButton
+        minimized
         onClick={() => setMinimized(false)}
-        className="agent-floating-entry-button !fixed !bottom-6 !right-6 !z-50 !h-14 !w-14 !shadow-lg"
       />
     )
   }
@@ -949,16 +943,18 @@ export function AgentFloatingAssistant() {
         closing ? "agent-floating-assistant-closing" : "",
       ].join(" ")}
     >
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-border)] px-4">
-        <div className="flex items-center gap-3">
-          <Badge status="success" />
-          <div>
-            <div className="text-sm font-semibold text-[var(--color-text-primary)]">Livzon助手</div>
+      <header className="agent-assistant-header">
+        <div className="agent-assistant-identity">
+          <span className="agent-assistant-mark" aria-hidden="true"><AgentMark /></span>
+          <div className="agent-assistant-identity-copy">
+            <span className="agent-assistant-brand">LIVZON <span aria-hidden="true">·</span> AGENT</span>
+            <span className="agent-assistant-title">Livzon助手</span>
           </div>
         </div>
-        <div className="flex gap-1">
+        <div className="agent-assistant-actions">
           <Tooltip title="历史会话">
             <Button
+              className="agent-header-action"
               aria-label="查看历史会话"
               type="text"
               icon={<HistoryOutlined />}
@@ -967,6 +963,7 @@ export function AgentFloatingAssistant() {
           </Tooltip>
           <Tooltip title="新对话">
             <Button
+              className="agent-header-action"
               aria-label="开启新对话"
               title="新对话"
               type="text"
@@ -977,27 +974,36 @@ export function AgentFloatingAssistant() {
           </Tooltip>
           <Tooltip title={expanded ? "还原" : "放大"}>
             <Button
+              className="agent-header-action"
               aria-label={expanded ? "还原 Livzon助手" : "放大 Livzon助手"}
               type="text"
               icon={expanded ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
               onClick={() => setExpanded(!expanded)}
             />
           </Tooltip>
-          <Button aria-label="最小化中枢助手" type="text" icon={<MinusOutlined />} onClick={() => hideAssistant("minimized")} />
-          <Button aria-label="关闭中枢助手" type="text" icon={<CloseOutlined />} onClick={() => hideAssistant("closed")} />
+          <Button className="agent-header-action" aria-label="最小化中枢助手" type="text" icon={<MinusOutlined />} onClick={() => hideAssistant("minimized")} />
+          <Button className="agent-header-action" aria-label="关闭中枢助手" type="text" icon={<CloseOutlined />} onClick={() => hideAssistant("closed")} />
         </div>
       </header>
 
-      <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+      <div ref={scrollRef} className="agent-conversation-body flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {messages.length === 0 && (
-          <div className="space-y-3">
-            <div className="rounded-xl border border-[var(--color-border)] bg-white p-3 text-sm text-[var(--color-text-secondary)] shadow-sm">
-              Livzon 助手可查询业务数据、同步状态与流程进展；创建、同步、发送等写操作会先生成确认卡。
+          <div className="agent-welcome">
+            <div className="agent-welcome-card">
+              <div className="agent-welcome-mark" aria-hidden="true"><AgentMark /></div>
+              <h2>你好，我是 Livzon 助手</h2>
+              <p>查询业务数据、同步状态与流程进展，或直接告诉我你想完成的工作。</p>
+              <div className="agent-welcome-safety">
+                <SafetyCertificateOutlined aria-hidden="true" />
+                <span>创建、同步、发送等写操作会先请你确认</span>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="agent-suggestion-heading">试试这样提问</div>
+            <div className="agent-suggestion-grid">
               {suggestions.map((item) => (
-                <Button key={item} size="small" onClick={() => submit(item)}>
-                  {item}
+                <Button key={item.prompt} className="agent-suggestion" onClick={() => submit(item.prompt)}>
+                  <span className="agent-suggestion-icon" aria-hidden="true">{item.icon}</span>
+                  <span className="agent-suggestion-text"><span>{item.label}</span><small>{item.prompt}</small></span>
                 </Button>
               ))}
             </div>
@@ -1036,7 +1042,7 @@ export function AgentFloatingAssistant() {
         {error && <Alert type="error" showIcon title={error} />}
       </div>
 
-      <footer className="shrink-0 border-t border-[var(--color-border)] bg-white p-3">
+      <footer className="agent-composer-footer">
         <input
           ref={fileInputRef}
           className="hidden"
@@ -1071,49 +1077,55 @@ export function AgentFloatingAssistant() {
             ))}
           </div>
         )}
-        <Input.TextArea
-          aria-label="中枢助手输入框"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          autoSize={{ minRows: 2, maxRows: 5 }}
-          placeholder="请输入您的需求，Shift + Enter 换行"
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault()
-              submit()
-            }
-          }}
-        />
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <Tooltip title="支持 PDF、DOCX、XLSX、TXT、Markdown、CSV 和图片；单个 10 MB，合计 20 MB">
-            <Button
-              icon={attachmentReading ? <LoadingOutlined /> : <PaperClipOutlined />}
-              disabled={loading || attachmentReading || attachments.length >= MAX_ATTACHMENT_COUNT}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              添加文件
-            </Button>
-          </Tooltip>
-          <div className="flex gap-2">
-            {loading && (
+        <div className="agent-composer">
+          <Input.TextArea
+            className="agent-composer-input"
+            aria-label="中枢助手输入框"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            autoSize={{ minRows: 2, maxRows: 5 }}
+            placeholder="向 Livzon 提问，或描述你想完成的工作…"
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault()
+                submit()
+              }
+            }}
+          />
+          <div className="agent-composer-toolbar">
+            <Tooltip title="支持 PDF、DOCX、XLSX、TXT、Markdown、CSV 和图片；单个 10 MB，合计 20 MB">
               <Button
-                danger
-                icon={<StopOutlined />}
-                onClick={stopStreaming}
+                className="agent-attach-button"
+                icon={attachmentReading ? <LoadingOutlined /> : <PaperClipOutlined />}
+                disabled={loading || attachmentReading || attachments.length >= MAX_ATTACHMENT_COUNT}
+                onClick={() => fileInputRef.current?.click()}
               >
-                停止
+                添加文件
               </Button>
-            )}
-            <Button
-              type="primary"
-              icon={loading || attachmentReading ? <LoadingOutlined /> : <SendOutlined />}
-              disabled={(!draft.trim() && attachments.length === 0) || loading || attachmentReading}
-              onClick={() => submit()}
-            >
-              发送
-            </Button>
+            </Tooltip>
+            <div className="flex gap-2">
+              {loading && (
+                <Button
+                  danger
+                  icon={<StopOutlined />}
+                  onClick={stopStreaming}
+                >
+                  停止
+                </Button>
+              )}
+              <Button
+                className="agent-send-button"
+                type="primary"
+                icon={loading || attachmentReading ? <LoadingOutlined /> : <SendOutlined />}
+                disabled={(!draft.trim() && attachments.length === 0) || loading || attachmentReading}
+                onClick={() => submit()}
+              >
+                发送
+              </Button>
+            </div>
           </div>
         </div>
+        <div className="agent-composer-hint">Enter 发送 · Shift + Enter 换行</div>
       </footer>
       <Drawer
         title="历史会话"

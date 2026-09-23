@@ -29,76 +29,11 @@ def _entity() -> quality_feishu_sync.QualityFeishuEntityRuntimeConfig:
     )
 
 
-def test_deviation_ledger_mapping_and_field_building() -> None:
-    now = datetime(2026, 7, 1, 8, 0, tzinfo=UTC)
-    record = {
-        "record_id": "rec_dev_001",
-        "created_time": int(now.timestamp() * 1000),
-        "last_modified_time": int(now.timestamp() * 1000),
-        "fields": {
-            "偏差编号": "DEV-001",
-            "偏差简要描述": "洁净区压差异常",
-            "偏差是否曾发生": "是",
-            "调查完成时间": int(now.timestamp() * 1000),
-            "关闭时间": int(now.timestamp() * 1000),
-            "关联capa": "CAPA-1，CAPA-2/CAPA-3",
-            "是否关闭": "是",
-            "偏差等级": "major",
-            "产品名称/批号": "产品A/B001",
-            "产品/物料处理结果": "放行",
-            "纠正预防措施": "更换过滤器",
-            "根本原因": "过滤器破损",
-        },
-    }
-    item = pages._map_deviation_ledger_base_item(record, _entity())
-    assert item["deviation_code"] == "DEV-001"
-    assert item["status"] == "closed"
-    assert item["has_occurred_before"] is True
-    assert item["related_capa_codes"] == ["CAPA-1", "CAPA-2", "CAPA-3"]
-    assert item["feishu_base_table_id"] == "tbl_quality"
-
-    detail = pages._map_deviation_ledger_detail_item(record, _entity())
-    assert detail["updated_at"] == item["feishu_source_updated_at"]
-    assert detail["attachments"] is None
-
-    fields = pages._build_deviation_ledger_fields(
-        {
-            "affected_items": "产品A",
-            "batch_number": "B001",
-            "description": "偏差描述",
-            "has_occurred_before": False,
-            "root_cause_analysis": "根因",
-            "level": "minor",
-            "investigation_completed_at": now.isoformat(),
-            "corrective_actions": "纠正措施",
-            "material_disposition": "隔离",
-            "status": "closed",
-            "close_time": now.isoformat(),
-        },
-        deviation_code="DEV-002",
-    )
-    assert fields["产品名称/批号"] == "产品A/B001"
-    assert fields["偏差是否曾发生"] == "否"
-    assert fields["是否关闭"] == "是"
-    assert fields["关闭时间"] == int(now.timestamp() * 1000)
-
-
 def test_page_helpers_cover_text_dates_aliases_and_validation_mapping() -> None:
     assert pages._build_page_result([{"id": 1}], 1, 2, 20)["page"] == 2
     assert pages._contains_text("CAPA Record", "record")
     assert pages._contains_text(None, None)
     assert not pages._contains_text(None, "record")
-    assert pages._normalize_yes_no(True) == "是"
-    assert pages._normalize_yes_no(False) == "否"
-    assert pages._normalize_yes_no(None) == ""
-    assert pages._split_related_capa_codes(" A, B，C/D ") == [
-        "A",
-        "B",
-        "C",
-        "D",
-    ]
-    assert pages._split_related_capa_codes("") is None
-    assert pages._normalize_closed_status("否") == "draft"
     assert (
         pages._serialize_report_record_alias({"feishu_base_record_id": "rec-1"})[
             "record_id"

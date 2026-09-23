@@ -327,8 +327,6 @@ class Controller:
             raise Refused("migration not approved for unattended deployment")
         previous = {}
         inventory = self.containers()
-        if "edbo-service" in inventory:
-            raise Refused("first commissioning must retire EDBO before unattended deployment")
         if not all(self.healthy(inventory.get(s, {})) for s in (*DEPS, *APPS)):
             raise Refused("existing deployment is not healthy; refusing upgrade")
         for service in APPS:

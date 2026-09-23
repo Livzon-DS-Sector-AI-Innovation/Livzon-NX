@@ -8,7 +8,6 @@ import { OffboardingRecord } from '@/types/hr'
 import { fetchOffboardingRecordsAction, deleteOffboardingRecord, syncOffboardingFromFeishuAction, updateOffboardingRecord, generateOffboardingCertificateAction } from '@/actions/hr'
 import OffboardingForm from './OffboardingForm'
 import OffboardingDetailDrawer from './OffboardingDetailDrawer'
-import HrChatbot from './HrChatbot'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
 
 interface OffboardingClientProps {
@@ -465,7 +464,6 @@ export default function OffboardingClient({
         onClose={() => setDetailOpen(false)}
       />
 
-      <HrChatbot />
     </div>
   )
 }

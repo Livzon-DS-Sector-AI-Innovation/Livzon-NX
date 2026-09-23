@@ -51,7 +51,7 @@ def _app_model() -> QualityFeishuAppSettings:
 
 
 def _entity_model(
-    entity_code: str = "deviation_ledger",
+    entity_code: str = "capa_ledger",
 ) -> QualityFeishuEntitySetting:
     name, group, order = service.DEFAULT_QUALITY_FEISHU_ENTITY_MAP[entity_code]
     return QualityFeishuEntitySetting(
@@ -60,15 +60,15 @@ def _entity_model(
         entity_group=group,
         sort_order=order,
         app_token="bascn123456789",
-        base_table_name="偏差台账",
+        base_table_name="CAPA台账",
         base_table_id="tbl123456789",
         is_enabled=True,
         enable_push_to_feishu=True,
         enable_pull_from_feishu=True,
         field_mappings=[
             {
-                "system_field": "偏差编号",
-                "feishu_field": "偏差编号",
+                "system_field": "CAPA编号",
+                "feishu_field": "CAPA编号",
             }
         ],
     )
@@ -79,7 +79,7 @@ def test_quality_feishu_setting_helpers_cover_defaults_and_redaction(
 ) -> None:
     defaults = service._build_default_entity_items()
     assert len(defaults) == len(service.DEFAULT_QUALITY_FEISHU_ENTITIES)
-    assert any(item.entity_code == "deviation_ledger" for item in defaults)
+    assert not any(item.entity_code == "deviation_ledger" for item in defaults)
 
     assert service._get_default_sync_directions("inspection_records") == (
         True,
@@ -89,7 +89,7 @@ def test_quality_feishu_setting_helpers_cover_defaults_and_redaction(
         True,
         False,
     )
-    assert service._get_default_sync_directions("deviation_ledger") == (
+    assert service._get_default_sync_directions("capa_ledger") == (
         True,
         True,
     )
@@ -121,7 +121,7 @@ def test_quality_feishu_setting_helpers_cover_defaults_and_redaction(
         )
     assert exc_info.value.__cause__ is not None
 
-    fields = service._build_system_fields("deviation_ledger")
+    fields = service._build_system_fields("capa_ledger")
     assert fields
     assert all(field.field_key for field in fields)
     assert service._build_system_fields("missing") == []
@@ -288,9 +288,9 @@ async def test_list_tables_and_field_mapping_bundle(
     assert bundle.entity_code == entity.entity_code
     assert bundle.feishu_fields[0].field_name == "偏差编号"
     mapping = next(
-        item for item in bundle.field_mappings if item.system_field == "偏差编号"
+        item for item in bundle.field_mappings if item.system_field == "CAPA编号"
     )
-    assert mapping.feishu_field == "偏差编号"
+    assert mapping.feishu_field == "CAPA编号"
 
     with pytest.raises(ValueError, match="实体配置不存在"):
         await service.list_quality_feishu_tables(db, "unknown")
@@ -400,6 +400,30 @@ async def test_ensure_soft_deletes_legacy_supplier_ledger_setting() -> None:
 
     assert legacy.is_deleted is True
     assert "supplier_ledger" not in service.DEFAULT_QUALITY_FEISHU_ENTITY_MAP
+
+
+async def test_ensure_soft_deletes_legacy_deviation_ledger_setting() -> None:
+    """偏差台账已与飞书多维表格解耦：ensure 应软删存量配置行且不再出现在默认集中。"""
+    legacy = QualityFeishuEntitySetting(
+        entity_code="deviation_ledger",
+        entity_name="偏差台账",
+        entity_group="偏差管理",
+        sort_order=30,
+        app_token="bascn123456789",
+        base_table_name="偏差台账",
+        base_table_id="tbl123456789",
+        is_enabled=True,
+        enable_push_to_feishu=True,
+        enable_pull_from_feishu=True,
+        field_mappings=None,
+    )
+    db = _db()
+    db.execute.return_value = _Result(values=[legacy])
+
+    await service.ensure_quality_feishu_entity_settings(db)
+
+    assert legacy.is_deleted is True
+    assert "deviation_ledger" not in service.DEFAULT_QUALITY_FEISHU_ENTITY_MAP
 
 
 def test_finished_product_anomaly_entities_seeded_unbound() -> None:

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import {
   Alert,
   App,
@@ -54,6 +54,24 @@ import type {
 } from '@/types/quality'
 import { TableEmptyState } from './TableEmptyState'
 import { qualityTokens } from './themeTokens'
+
+const EXTRACT_FIELD_NAMES = [
+  'deviation_event',
+  'deviation_content',
+  'direct_cause',
+  'root_cause',
+] as const
+
+interface BatchExtractItem {
+  code: string
+  ok: boolean
+  message: string
+}
+
+/** AI 提取只在四个字段全空时自动触发，避免覆盖人工填写的内容。 */
+function isExtractFieldsEmpty(values: Record<string, unknown>): boolean {
+  return EXTRACT_FIELD_NAMES.every((name) => !String(values[name] ?? '').trim())
+}
 
 const markdownPreviewComponents: Components = {
   img: (props) => (
@@ -198,6 +216,10 @@ export function DeviationHistoryPage() {
   })
   const [preview, setPreview] = useState<PreviewState | null>(null)
   const [batchImporting, setBatchImporting] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [batchExtracting, setBatchExtracting] = useState(false)
+  const [batchExtractResult, setBatchExtractResult] = useState<BatchExtractItem[] | null>(null)
+  const autoExtractInFlight = useRef(false)
 
   const { data, isLoading, isError, error: loadError, refetch } = useQuery({
     queryKey: ['quality-deviation-history', page, pageSize, searchText],
@@ -254,59 +276,13 @@ export function DeviationHistoryPage() {
     }))
   }
 
-  const handleSave = async () => {
-    const values = await form.validateFields()
-    const payload = {
-      deviation_event: values.deviation_event || null,
-      deviation_content: values.deviation_content || null,
-      direct_cause: values.direct_cause || null,
-      root_cause: values.root_cause || null,
-      investigation_conclusion: values.investigation_conclusion || null,
-      remark: values.remark || null,
-    }
-    const record = drawer.record
-    try {
-      if (!record) {
-        const created = await createHistoricalDeviation(payload)
-        if (!created) throw new Error('创建失败')
-        // 新建时把本地暂存的附件一并上传；单个失败不影响记录与其余附件
-        let uploadFailed = 0
-        for (const file of drawer.pendingFiles) {
-          try {
-            const formData = new FormData()
-            formData.append('file', file)
-            await uploadHistoricalDeviationAttachment(created.id, formData)
-          } catch {
-            uploadFailed += 1
-          }
-        }
-        if (uploadFailed > 0) {
-          message.warning(
-            `记录已创建，但 ${uploadFailed} 个附件上传失败；可在列表"编辑"中重新上传`
-          )
-        } else {
-          message.success('已创建')
-        }
-      } else {
-        await updateHistoricalDeviation(record.id, payload)
-        message.success('已保存')
-      }
-      invalidate()
-      closeDrawer()
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '保存失败')
-    }
-  }
+  const extractFieldsEmpty = () => isExtractFieldsEmpty(form.getFieldsValue([...EXTRACT_FIELD_NAMES]))
 
-  const handleAiExtract = async () => {
-    const record = drawer.record
-    if (!record) {
-      message.warning('请先点"确定"保存记录，上传附件后再用 AI 提取')
-      return
-    }
+  const runExtract = async (recordId: string) => {
+    autoExtractInFlight.current = true
     setDrawer((prev) => ({ ...prev, aiExtracting: true }))
     try {
-      const detail = await aiExtractHistoricalDeviation(record.id)
+      const detail = await aiExtractHistoricalDeviation(recordId)
       if (!detail) throw new Error('AI 未返回结果')
       setDrawer((prev) => ({
         ...prev,
@@ -320,12 +296,93 @@ export function DeviationHistoryPage() {
         root_cause: detail.root_cause || '',
         investigation_conclusion: detail.investigation_conclusion || '',
       })
-      message.success('AI 提取完成，请核对后保存')
+      message.success('AI 已从附件提取并保存')
       invalidate()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : 'AI 提取失败')
+      message.warning(error instanceof Error ? error.message : 'AI 提取失败')
     } finally {
+      autoExtractInFlight.current = false
       setDrawer((prev) => ({ ...prev, aiExtracting: false }))
+    }
+  }
+
+  /** 上传/保存后自动提取：仅在四个字段全空时触发，不覆盖人工内容。 */
+  const maybeAutoExtract = (recordId: string) => {
+    if (autoExtractInFlight.current) return
+    if (!extractFieldsEmpty()) {
+      message.info('已有内容，未自动提取；如需按附件重新提取请点"重新提取"')
+      return
+    }
+    void runExtract(recordId)
+  }
+
+  const handleReExtract = () => {
+    const record = drawer.record
+    if (!record) {
+      message.warning('请先点"保存"创建记录并上传附件，再进行 AI 提取')
+      return
+    }
+    if (extractFieldsEmpty()) {
+      void runExtract(record.id)
+      return
+    }
+    modal.confirm({
+      title: '重新提取',
+      content: '当前四个字段已有内容，AI 提取会覆盖它们。是否继续？',
+      okText: '覆盖并提取',
+      cancelText: '取消',
+      onOk: () => runExtract(record.id),
+    })
+  }
+
+  const handleSave = async () => {
+    const values = await form.validateFields()
+    const payload = {
+      deviation_event: values.deviation_event || null,
+      deviation_content: values.deviation_content || null,
+      direct_cause: values.direct_cause || null,
+      root_cause: values.root_cause || null,
+      investigation_conclusion: values.investigation_conclusion || null,
+      remark: values.remark || null,
+    }
+    const record = drawer.record
+    const fieldsEmpty = extractFieldsEmpty()
+    try {
+      if (!record) {
+        const created = await createHistoricalDeviation(payload)
+        if (!created) throw new Error('创建失败')
+        // 新建时把本地暂存的附件一并上传；单个失败不影响记录与其余附件
+        let uploadFailed = 0
+        let uploaded = 0
+        for (const file of drawer.pendingFiles) {
+          try {
+            const formData = new FormData()
+            formData.append('file', file)
+            await uploadHistoricalDeviationAttachment(created.id, formData)
+            uploaded += 1
+          } catch {
+            uploadFailed += 1
+          }
+        }
+        if (uploadFailed > 0) {
+          message.warning(
+            `记录已创建，但 ${uploadFailed} 个附件上传失败；可在列表"编辑"中重新上传`
+          )
+        } else {
+          message.success('已创建')
+        }
+        if (fieldsEmpty && uploaded > 0) {
+          message.info('已创建，正在从附件提取内容…')
+          void runExtract(created.id)
+        }
+      } else {
+        await updateHistoricalDeviation(record.id, payload)
+        message.success('已保存')
+      }
+      invalidate()
+      closeDrawer()
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '保存失败')
     }
   }
 
@@ -344,6 +401,7 @@ export function DeviationHistoryPage() {
       setDrawer((prev) => ({ ...prev, attachments: [...prev.attachments, attachment] }))
       message.success('上传成功（Word 附件已自动转标准 MD）')
       invalidate()
+      maybeAutoExtract(record.id)
     } catch (error) {
       message.error(error instanceof Error ? error.message : '上传失败')
     }
@@ -404,8 +462,19 @@ export function DeviationHistoryPage() {
       if (!result) throw new Error('批量导入失败')
       const failed = (result.results || []).filter((r) => r.status !== 'succeeded')
       const failedNames = failed.slice(0, 3).map((r) => r.file_name).join('、')
+      // AI 提取失败不算导入失败，但必须把原因显示出来，否则用户以为字段已提取
+      const aiFailures = (result.results || []).filter(
+        (r) => r.status === 'succeeded' && (r.message || '').trim()
+      )
+      const aiReasons = Array.from(
+        new Set(aiFailures.map((r) => (r.message || '').trim()))
+      ).slice(0, 2)
       if (result.failed > 0) {
         message.warning(`共 ${result.total} 个，成功 ${result.succeeded}，失败 ${result.failed}${failedNames ? `（如：${failedNames}）` : ''}`)
+      } else if (aiFailures.length > 0) {
+        message.warning(
+          `导入 ${result.succeeded} 个，其中 ${aiFailures.length} 个 AI 提取失败：${aiReasons.join('；')}`
+        )
       } else {
         message.success(`批量导入完成：成功 ${result.succeeded} 个`)
       }
@@ -414,6 +483,45 @@ export function DeviationHistoryPage() {
       message.error(error instanceof Error ? error.message : '批量导入失败')
     } finally {
       setBatchImporting(false)
+    }
+  }
+
+  const handleBatchReExtract = async () => {
+    if (selectedIds.length === 0) {
+      message.warning('请先勾选需要重新提取的记录')
+      return
+    }
+    const codeById = new Map((data?.items || []).map((item) => [item.id, item.code]))
+    setBatchExtracting(true)
+    const results: BatchExtractItem[] = []
+    try {
+      for (const id of selectedIds) {
+        try {
+          const detail = await aiExtractHistoricalDeviation(id)
+          results.push({
+            code: codeById.get(id) || id,
+            ok: Boolean(detail),
+            message: detail ? '提取成功' : 'AI 未返回结果',
+          })
+        } catch (error) {
+          results.push({
+            code: codeById.get(id) || id,
+            ok: false,
+            message: error instanceof Error ? error.message : 'AI 提取失败',
+          })
+        }
+      }
+      setBatchExtractResult(results)
+      const okCount = results.filter((item) => item.ok).length
+      if (okCount === results.length) {
+        message.success(`批量重新提取完成：成功 ${okCount} 条`)
+      } else {
+        message.warning(`批量重新提取完成：成功 ${okCount} 条，失败 ${results.length - okCount} 条`)
+      }
+      invalidate()
+    } finally {
+      setBatchExtracting(false)
+      setSelectedIds([])
     }
   }
 
@@ -543,6 +651,14 @@ export function DeviationHistoryPage() {
               批量导入附件
             </Button>
           </Upload>
+          <Button
+            icon={<RobotOutlined />}
+            loading={batchExtracting}
+            disabled={selectedIds.length === 0}
+            onClick={() => void handleBatchReExtract()}
+          >
+            批量重新提取{selectedIds.length > 0 ? `（${selectedIds.length}）` : ''}
+          </Button>
           <Button icon={<ReloadOutlined />} onClick={() => void refetch()}>
             刷新
           </Button>
@@ -566,6 +682,10 @@ export function DeviationHistoryPage() {
             loading={isLoading}
             columns={columns}
             dataSource={data?.items || []}
+            rowSelection={{
+              selectedRowKeys: selectedIds,
+              onChange: (keys) => setSelectedIds(keys.map(String)),
+            }}
             locale={{ emptyText: <TableEmptyState /> }}
             pagination={{
               current: page,
@@ -595,9 +715,9 @@ export function DeviationHistoryPage() {
             <Button
               icon={<RobotOutlined />}
               loading={drawer.aiExtracting}
-              onClick={() => void handleAiExtract()}
+              onClick={handleReExtract}
             >
-              AI 提取
+              重新提取
             </Button>
             <Button type="primary" onClick={() => void handleSave()}>
               保存
@@ -730,6 +850,33 @@ export function DeviationHistoryPage() {
         preview={preview}
         onClose={() => setPreview(null)}
       />
+
+      <Modal
+        title="批量重新提取结果"
+        open={batchExtractResult !== null}
+        onCancel={() => setBatchExtractResult(null)}
+        footer={
+          <Button onClick={() => setBatchExtractResult(null)}>关闭</Button>
+        }
+      >
+        <Table<BatchExtractItem>
+          rowKey={(item) => `${item.code}-${item.message}`}
+          size="small"
+          pagination={false}
+          dataSource={batchExtractResult || []}
+          columns={[
+            { title: '编号', dataIndex: 'code', width: 150 },
+            {
+              title: '结果',
+              dataIndex: 'ok',
+              width: 90,
+              render: (ok: boolean) =>
+                ok ? <Tag color="green">成功</Tag> : <Tag color="red">失败</Tag>,
+            },
+            { title: '原因', dataIndex: 'message' },
+          ]}
+        />
+      </Modal>
     </div>
   )
 }

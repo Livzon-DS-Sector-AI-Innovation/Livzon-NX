@@ -1,5 +1,9 @@
 'use client'
 
+import { personSelectValue } from './qualityPersonSelection'
+
+import { alignFeishuColumns, feishuColumnLayouts } from './feishuColumnLayout'
+
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
 import { App, Button, Card, DatePicker, Drawer, Form, Input, Input as AntInput, Popconfirm, Select, Space, Table, Typography } from 'antd'
@@ -164,11 +168,11 @@ export function OosOotLedgerPageBase({ config }: { config: OosOotLedgerConfig })
       root_cause: record.root_cause ?? '',
       corrective_actions: record.corrective_actions ?? '',
       final_disposition: record.final_disposition ?? '',
-      registrant: record.registrant ?? '',
+      registrant: personSelectValue(contacts, record.registrant),
       remark: record.remark ?? '',
     })
     setModalVisible(true)
-  }, [form])
+  }, [form, contacts])
 
   const closeModal = useCallback(() => {
     setModalVisible(false)
@@ -177,8 +181,8 @@ export function OosOotLedgerPageBase({ config }: { config: OosOotLedgerConfig })
   }, [form])
 
   const handleSubmit = useCallback(async () => {
-    const values = await form.validateFields()
     try {
+      const values = await form.validateFields()
       setSaving(true)
       const payload: Record<string, unknown> = {
         serial_number: values.serial_number?.trim() || '',
@@ -193,6 +197,9 @@ export function OosOotLedgerPageBase({ config }: { config: OosOotLedgerConfig })
         registrant: values.registrant?.trim() || '',
         remark: values.remark?.trim() || '',
       }
+      if (editingRecord && values.registrant === personSelectValue(contacts, editingRecord.registrant)) {
+        delete payload.registrant
+      }
       if (editingRecord) {
         await updateRecord(editingRecord.record_id, payload)
         message.success(`${label}台账记录已更新`)
@@ -203,11 +210,12 @@ export function OosOotLedgerPageBase({ config }: { config: OosOotLedgerConfig })
       closeModal()
       queryClient.invalidateQueries({ queryKey: [queryKeyPrefix, 'list'] })
     } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'errorFields' in error) return
       message.error(getErrorMessage(error, `保存${label}台账记录失败`))
     } finally {
       setSaving(false)
     }
-  }, [closeModal, editingRecord, form, queryClient, message, label, queryKeyPrefix, createRecord, updateRecord])
+  }, [closeModal, editingRecord, form, queryClient, message, contacts, label, queryKeyPrefix, createRecord, updateRecord])
 
   const handleDelete = useCallback(async (recordId: string) => {
     try {
@@ -301,6 +309,12 @@ export function OosOotLedgerPageBase({ config }: { config: OosOotLedgerConfig })
       render: (value: string | null) => value || '-',
     },
     {
+      title: '产生原因', dataIndex: 'root_cause', key: 'root_cause', width: 230, render: (value: string | null) => value || '-',
+    },
+    { title: '纠正预防措施', dataIndex: 'corrective_actions', key: 'corrective_actions', width: 230, render: (value: string | null) => value || '-' },
+    { title: '最终处理结果', dataIndex: 'final_disposition', key: 'final_disposition', width: 200, render: (value: string | null) => value || '-' },
+    { title: '备注', dataIndex: 'remark', key: 'remark', width: 180, render: (value: string | null) => value || '-' },
+    {
       title: '操作',
       key: 'action',
       width: 140,
@@ -355,9 +369,9 @@ export function OosOotLedgerPageBase({ config }: { config: OosOotLedgerConfig })
         <Table<OosOotLedgerRecord>
           rowKey="record_id"
           loading={loading}
-          columns={columns}
+          columns={alignFeishuColumns(columns, feishuColumnLayouts.oosLedger)}
           dataSource={pagedItems}
-          scroll={{ x: 1100 }}
+          scroll={{ x: columns.reduce((sum, column) => sum + Number(column.width || 160), 0) }}
           locale={{
             emptyText: (
               <TableEmptyState

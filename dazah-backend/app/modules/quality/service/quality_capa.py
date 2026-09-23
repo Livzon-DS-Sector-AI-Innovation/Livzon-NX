@@ -113,7 +113,10 @@ async def get_capa_detail(db: AsyncSession, capa_id: uuid.UUID) -> CapaDetail:
     if not capa:
         raise NotFoundException(resource="CAPA", resource_id=str(capa_id))
     await assert_quality_record_department(db, capa.department)
-    return CapaDetail.model_validate(capa)
+    detail = CapaDetail.model_validate(capa)
+    tracks = await repository.get_capa_plan_tracks_by_capa_ids(db, [capa.id])
+    detail.linked_plan_contents = [track.plan_content for track in tracks]
+    return detail
 
 
 async def create_capa(
@@ -171,7 +174,7 @@ async def create_capa(
 
 async def update_capa(
     db: AsyncSession, capa_id: uuid.UUID, data: UpdateCapaRequest, user_id: str
-) -> dict[str, bool]:
+) -> dict[str, Any]:
     result = await db.execute(
         select(CAPA).where(CAPA.id == capa_id, CAPA.is_deleted.is_(False))
     )
@@ -183,6 +186,11 @@ async def update_capa(
     update_data = data.model_dump(exclude_unset=True)
     if "department" in update_data:
         await assert_quality_record_department(db, update_data["department"])
+    new_code = update_data.get("capa_code")
+    if new_code and new_code != capa.capa_code:
+        existing = await repository.get_capa_by_code(db, new_code)
+        if existing is not None and existing.id != capa.id:
+            raise AppException(message=f"CAPA编号已存在: {new_code}")
     for field, value in update_data.items():
         if field in [
             "capa_items",
@@ -198,6 +206,7 @@ async def update_capa(
                 "evaluation_deadline",
                 "evaluation_confirm_date",
                 "closure_date",
+                "qa_confirm_date",
                 "qa_review_time",
                 "q_head_approval_time",
             ]
@@ -221,7 +230,7 @@ async def update_capa(
     from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
 
     await feishu_sync_service.auto_sync_capa_after_write(db, capa.id)
-    return {"success": True}
+    return {"success": True, "feishu_sync_status": capa.feishu_sync_status}
 
 
 async def delete_capa(

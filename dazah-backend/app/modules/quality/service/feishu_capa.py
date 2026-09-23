@@ -77,6 +77,8 @@ _CAPA_PLAN_USER_FIELDS = {
 _CAPA_PLAN_READONLY_FIELDS = {
     CapaPlanTrackFields.DEPT_OWNER,
     CapaPlanTrackFields.RELATED_CAPA_CODE,
+    CapaPlanTrackFields.OWNER_CONFIRMED,
+    CapaPlanTrackFields.DEPT_OWNER_CONFIRMED,
 }
 _CAPA_PLAN_CHECKBOX_FIELDS = {
     CapaPlanTrackFields.OWNER_CONFIRMED,

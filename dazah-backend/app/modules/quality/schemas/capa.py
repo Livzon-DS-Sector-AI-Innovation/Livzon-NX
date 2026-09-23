@@ -84,6 +84,8 @@ class CapaDetail(BaseModel):
     deviation_id: uuid.UUID | None = None
     source: str | None = None
     source_code: str | None = None
+    department: str | None = None
+    affected_product: str | None = None
     category: str | None = None
     root_cause_category: str | None = None
     non_conformity_description: str | None = None
@@ -114,6 +116,8 @@ class CapaDetail(BaseModel):
     returned_step: str | None = None
     status_updated_at: datetime | None = None
     reporter: str | None = None
+    qa_confirmer: str | None = None
+    qa_confirm_date: datetime | None = None
     reason_category: str | None = None
     linked_plan_contents: list[str] | None = None
     feishu_base_table_id: str | None = None
@@ -145,6 +149,7 @@ class CreateCapaRequest(BaseModel):
 
 
 class UpdateCapaRequest(BaseModel):
+    capa_code: str | None = None
     title: str | None = None
     status: str | None = None
     source: str | None = None
@@ -176,6 +181,8 @@ class UpdateCapaRequest(BaseModel):
     report_versions: list[Any] | None = None
     returned_step: str | None = None
     reporter: str | None = None
+    qa_confirmer: str | None = None
+    qa_confirm_date: str | None = None
     reason_category: str | None = None
     department: str | None = None
     affected_product: str | None = None

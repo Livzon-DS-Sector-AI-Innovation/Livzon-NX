@@ -2,7 +2,8 @@
 
 import { Alert, Button, Modal, Space, Spin } from 'antd'
 import { DownloadOutlined, FileTextOutlined } from '@ant-design/icons'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { FeishuPdfPreview } from './FeishuPdfPreview'
 
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'])
 const PDF_EXTS = new Set(['.pdf'])
@@ -30,14 +31,71 @@ interface FeishuAttachmentPreviewModalProps {
   onClose: () => void
 }
 
-type PreviewKind = 'image' | 'pdf' | 'text' | 'unknown'
+type PreviewKind = 'image' | 'pdf' | 'docx' | 'text' | 'unknown'
 
 function resolveKind(fileName: string): PreviewKind {
   const ext = (fileName.match(/\.[a-z0-9]+$/i)?.[0] || '').toLowerCase()
   if (IMAGE_EXTS.has(ext)) return 'image'
+  if (ext === '.docx') return 'docx'
   if (PDF_EXTS.has(ext) || OFFICE_EXTS.has(ext)) return 'pdf'
   if (TEXT_EXTS.has(ext)) return 'text'
   return 'unknown'
+}
+
+/** DOCX 使用本地渲染库展示正文，兼容未内置 PDF 阅读器的浏览器。 */
+function DocxPreview({ src, fileName }: { src: string; fileName: string }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    const controller = new AbortController()
+    const render = async () => {
+      try {
+        const response = await fetch(src, { signal: controller.signal })
+        if (!response.ok) {
+          const body = await response.json().catch(() => null)
+          throw new Error(body?.message || `文档加载失败（${response.status}）`)
+        }
+        const buffer = await response.arrayBuffer()
+        const { renderAsync } = await import('docx-preview')
+        if (controller.signal.aborted) return
+        // 在独立容器中渲染，关闭或切换附件时不把旧文档挂载到新预览。
+        const rendered = document.createElement('div')
+        await renderAsync(buffer, rendered, undefined, {
+          inWrapper: true,
+          ignoreWidth: false,
+          ignoreHeight: false,
+          breakPages: true,
+          useBase64URL: true,
+        })
+        if (!controller.signal.aborted) container.replaceChildren(rendered)
+      } catch (cause) {
+        if (!controller.signal.aborted) {
+          setError(cause instanceof Error ? cause.message : '文档加载失败')
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    void render()
+    return () => controller.abort()
+  }, [src])
+
+  return (
+    <div>
+      {loading && <div style={{ textAlign: 'center', padding: 48 }}><Spin /></div>}
+      {error && <Alert type="warning" showIcon title={error} description="请重试或下载原文件查看。" />}
+      <div
+        ref={containerRef}
+        role="document"
+        aria-label={fileName}
+        style={{ maxHeight: '72vh', overflow: 'auto' }}
+      />
+    </div>
+  )
 }
 
 /** 文本附件：fetch /preview 的 text/plain 内容并以等宽文本展示。 */
@@ -104,7 +162,7 @@ function TextPreview({ src, fileName }: { src: string; fileName: string }) {
   )
 }
 
-/** 飞书附件弹窗预览：图片直接显示；PDF（含 office 转换结果）内嵌渲染；
+/** 飞书附件弹窗预览：图片直接显示；DOCX 页内渲染；PDF（含其他 office 转换结果）内嵌渲染；
  * 文本类展示纯文本；其余提示下载。 */
 export function FeishuAttachmentPreviewModal({
   open,
@@ -148,12 +206,10 @@ export function FeishuAttachmentPreviewModal({
           alt={fileName || '附件预览'}
           style={{ maxWidth: '100%', maxHeight: '70vh', display: 'block', margin: '0 auto' }}
         />
-      ) : kind === 'pdf' ? (
-        <iframe
-          src={previewSrc}
-          title={fileName || '附件预览'}
-          style={{ width: '100%', height: '72vh', border: 'none' }}
-        />
+      ) : kind === 'docx' && open ? (
+        <DocxPreview key={downloadSrc} src={downloadSrc} fileName={fileName} />
+      ) : kind === 'pdf' && open ? (
+        <FeishuPdfPreview key={previewSrc} src={previewSrc} fileName={fileName} />
       ) : kind === 'text' && open ? (
         <TextPreview src={previewSrc} fileName={fileName} />
       ) : (

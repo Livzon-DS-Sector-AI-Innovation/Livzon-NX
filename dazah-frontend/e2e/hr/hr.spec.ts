@@ -71,6 +71,25 @@ test.describe('员工档案', () => {
   })
 })
 
+test.describe('人事页面智能助手入口', () => {
+  for (const path of [
+    '/hr/profile',
+    '/hr/offboarding',
+    '/hr/departure',
+    '/hr/new/profile',
+    '/hr/new/onboarding',
+    '/hr/new/offboarding',
+    '/hr/new/departure',
+  ]) {
+    test(`${path} 不显示 HR 智能助手`, async ({ page }) => {
+      await page.goto(path)
+      await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible()
+      await expect(page.getByRole('button', { name: 'HR 智能助手' })).toHaveCount(0)
+      await expect(page.getByText('HR 智能助手 · 小H')).toHaveCount(0)
+    })
+  }
+})
+
 test.describe('部门管理', () => {
   test('页面加载并显示数据表格', async ({ page }) => {
     await page.goto('/hr/departments')

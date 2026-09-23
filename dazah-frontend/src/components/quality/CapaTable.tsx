@@ -1,5 +1,7 @@
 'use client'
 
+import { alignFeishuColumns, feishuColumnLayouts } from './feishuColumnLayout'
+
 import { TableEmptyState } from './TableEmptyState'
 import { qualityTokens } from './themeTokens'
 
@@ -73,7 +75,6 @@ const COLUMN_WIDTHS = {
   action: 120,
 } as const
 
-const TABLE_SCROLL_X = 32 + Object.values(COLUMN_WIDTHS).reduce((sum, width) => sum + width, 0)
 
 interface CapaTableProps {
   capas: CapaListItem[]
@@ -230,6 +231,8 @@ export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
   }, [closureDateFrom, closureDateTo])
 
   const columns = useMemo(() => [
+    { title: 'CAPA效果评估', dataIndex: 'evaluation_result', key: 'evaluation_result', width: 180, render: (value: string | null) => value || '-' },
+    { title: '关闭日期', dataIndex: 'closure_date', key: 'closure_date', width: 150, render: (value: string | null) => formatDate(value) },
     {
       title: 'CAPA编号',
       dataIndex: 'capa_code',
@@ -442,7 +445,7 @@ export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
         </div>
       ) : null}
       <Table
-        columns={columns}
+        columns={alignFeishuColumns(columns, feishuColumnLayouts.capaLedger)}
         dataSource={capas}
         locale={{
           emptyText: <TableEmptyState hasFilters={Boolean(keyword || statusFilter || categoryFilter)} />,
@@ -454,7 +457,7 @@ export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
         }}
         size="small"
         loading={loading}
-        scroll={{ x: TABLE_SCROLL_X }}
+        scroll={{ x: columns.reduce((sum, column) => sum + Number(column.width || 160), 32) }}
         pagination={{
           current: page,
           pageSize: pageSize,

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, App, Button, Checkbox, Drawer, Empty, Input, Skeleton, Space, Table, Tag, Typography } from 'antd'
 import { ReloadOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
 import { getUserModulePermissions, replaceUserModulePermissions } from '@/actions/users'
+import { moduleMenus } from '@/lib/menu-config'
 import type {
   ModulePermissionDefinitionOut,
   ModulePermissionGrantInput,
@@ -12,6 +13,7 @@ import type {
 } from '@/actions/users'
 
 const { Text, Title } = Typography
+const navigationModuleCodes = new Set(moduleMenus.map((module) => module.moduleCode))
 
 export interface ModuleAccessUser {
   id: string
@@ -81,8 +83,17 @@ export default function UserModuleAccessDrawer({
   }, [load, open])
 
   const originalCodes = useMemo(() => result ? selectedModuleCodes(result) : [], [result])
+  const availableModules = useMemo(
+    () => (result?.available_modules || []).filter((module) => navigationModuleCodes.has(module.module_code)),
+    [result],
+  )
+  const availableModuleCodes = useMemo(
+    () => new Set(availableModules.map((module) => module.module_code)),
+    [availableModules],
+  )
   const changed = !sameSelection(originalCodes, selectedCodes)
   const selected = useMemo(() => new Set(selectedCodes), [selectedCodes])
+  const visibleSelectedCount = availableModules.filter((module) => selected.has(module.module_code)).length
 
   const setModuleAccess = (moduleCode: string, allowed: boolean) => {
     setSelectedCodes((current) => {
@@ -156,8 +167,8 @@ export default function UserModuleAccessDrawer({
       message.warning('请填写本次模块访问调整原因')
       return
     }
-    const added = selectedCodes.filter((code) => !originalCodes.includes(code)).length
-    const removed = originalCodes.filter((code) => !selected.has(code)).length
+    const added = selectedCodes.filter((code) => availableModuleCodes.has(code) && !originalCodes.includes(code)).length
+    const removed = originalCodes.filter((code) => availableModuleCodes.has(code) && !selected.has(code)).length
     const version = sessionVersion.current
     modal.confirm({
       title: `确认调整${user?.name || '用户'}的模块访问权限`,
@@ -245,7 +256,7 @@ export default function UserModuleAccessDrawer({
         {result && (
           <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
             <Text type="secondary">授权版本 {result.grant_version}</Text>
-            <Tag color="blue">已允许 {selectedCodes.length} 个模块</Tag>
+            <Tag color="blue">已允许 {visibleSelectedCount} 个模块</Tag>
           </div>
         )}
       </div>
@@ -279,13 +290,16 @@ export default function UserModuleAccessDrawer({
 
       {loading && !result ? (
         <Skeleton active paragraph={{ rows: 8 }} />
-      ) : result?.available_modules?.length ? (
+      ) : availableModules.length ? (
         <>
           <div className="mb-3 flex flex-wrap justify-end gap-2">
             <Button
               size="small"
               disabled={user?.isSystemAdmin || saving}
-              onClick={() => setSelectedCodes((result.available_modules || []).map((module) => module.module_code).sort())}
+              onClick={() => setSelectedCodes((current) => [...new Set([
+                ...current,
+                ...availableModules.map((module) => module.module_code),
+              ])].sort())}
             >
               全部允许
             </Button>
@@ -293,7 +307,7 @@ export default function UserModuleAccessDrawer({
               size="small"
               danger
               disabled={user?.isSystemAdmin || saving}
-              onClick={() => setSelectedCodes([])}
+              onClick={() => setSelectedCodes((current) => current.filter((code) => !availableModuleCodes.has(code)))}
             >
               全部关闭
             </Button>
@@ -301,7 +315,7 @@ export default function UserModuleAccessDrawer({
           <Table
             rowKey="module_code"
             columns={columns}
-            dataSource={result.available_modules}
+            dataSource={availableModules}
             pagination={false}
             size="middle"
             scroll={{ x: 620 }}

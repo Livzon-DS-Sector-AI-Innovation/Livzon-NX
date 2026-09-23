@@ -1345,7 +1345,6 @@ def _quality_remaining_api_bindings() -> tuple[PageApiBinding, ...]:
             "complaint-ledger": complaint_ledger,
             "complaints": complaint_ledger,
             "deviation-investigation-push-records": deviation_investigations,
-            "deviation-ledger-records": deviation_ledger,
             "deviation-report-records": deviation_records,
             "deviation-workbench": deviation_workbench,
             "deviations": deviation_ledger,
@@ -3426,7 +3425,7 @@ def _registration_api_bindings() -> tuple[PageApiBinding, ...]:
         (
             "GET",
             "/certificate-management/reminder-settings",
-            settings_page,
+            settings_page + certificate_pages,
             "query",
             None,
             "registration.settings",

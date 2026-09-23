@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 import uuid
 
 from fastapi import HTTPException, status
@@ -44,6 +45,29 @@ def _catalog_entry(row: AgentToolCatalog) -> AgentToolCatalogEntry:
     )
 
 
+_GENERIC_SEARCH_BIGRAMS = frozenset(
+    {
+        "平台", "哪些", "怎么", "如何", "可以", "能够", "当前", "用户",
+        "查询", "查看", "请问", "什么",
+    }
+)
+
+
+def _search_score(query: str, haystack: str, *, fuzzy: bool) -> int:
+    if not query:
+        return 1
+    if query in haystack:
+        return 100 + len(query)
+    if not fuzzy:
+        return 0
+    bigrams = {
+        word[index : index + 2]
+        for word in re.findall(r"[\u4e00-\u9fff]{4,}", query)
+        for index in range(len(word) - 1)
+    } - _GENERIC_SEARCH_BIGRAMS
+    return sum(bigram in haystack for bigram in bigrams)
+
+
 class ToolCatalogService:
     def __init__(self) -> None:
         self.access_scope = AgentAccessScopeService()
@@ -57,7 +81,7 @@ class ToolCatalogService:
             active_operations.add(spec.name)
             row = by_operation.get(spec.name)
             if row is None:
-                row = AgentToolCatalog(operation=spec.name)
+                row = AgentToolCatalog(operation=spec.name, admin_enabled=True)
                 db.add(row)
             row.module = spec.module
             row.capability_version = spec.capability_version
@@ -227,6 +251,11 @@ class ToolCatalogService:
             request.subject.user_id,
             tenant_id=request.subject.tenant_id,
         )
+        # A stale or failed scope is a request error, not an empty directory.
+        scope = await self.access_scope.get_current_scope(
+            db, user=user, rebuild_if_stale=True
+        )
+        allowed_tools = set(scope.tool_names or [])
         query = request.query.strip().casefold()
         rows = list(
             (
@@ -239,24 +268,33 @@ class ToolCatalogService:
             .scalars()
             .all()
         )
-        result: list[AgentToolCatalogEntry] = []
+        candidates: list[tuple[AgentToolCatalog, str]] = []
         for row in rows:
             if request.module and row.module != request.module:
                 continue
-            haystack = f"{row.operation} {row.module or ''} {row.summary}".casefold()
-            if query and query not in haystack:
+            spec = tool_registry.get(row.operation)
+            if row.operation not in allowed_tools or spec is None or (
+                user.role != "admin"
+                and spec.required_roles
+                and user.role not in spec.required_roles
+            ):
                 continue
-            try:
-                await self.access_scope.require_tool_access(
-                    db,
-                    user=user,
-                    tool_name=row.operation,
-                    module=row.module,
-                )
-            except HTTPException as exc:
-                if exc.status_code == status.HTTP_403_FORBIDDEN:
-                    continue
-                raise
+            haystack = f"{row.operation} {row.module or ''} {row.summary}".casefold()
+            candidates.append((row, haystack))
+        fuzzy = bool(query) and not any(
+            query in haystack for _, haystack in candidates
+        )
+        ranked = sorted(
+            (
+                (_search_score(query, haystack, fuzzy=fuzzy), row)
+                for row, haystack in candidates
+            ),
+            key=lambda item: (-item[0], item[1].operation),
+        )
+        result: list[AgentToolCatalogEntry] = []
+        for score, row in ranked:
+            if score == 0:
+                continue
             result.append(_catalog_entry(row))
             if len(result) >= request.limit:
                 break

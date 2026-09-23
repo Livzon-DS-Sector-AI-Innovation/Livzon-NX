@@ -94,7 +94,6 @@ OOS_OOT_INVESTIGATION_PUSH_TABLE_ID = ""
 DEFAULT_QUALITY_FEISHU_ENTITIES: list[tuple[str, str, str, int]] = [
     ("deviation_report_record", "报告记录", "偏差管理", 10),
     ("deviation_investigation_push_record", "调查推送", "偏差管理", 20),
-    ("deviation_ledger", "偏差台账", "偏差管理", 30),
     ("capa_ledger", "CAPA台账", "CAPA管理", 40),
     ("capa_plan_track", "计划跟踪", "CAPA管理", 50),
     ("validation_master_plan", "验证主计划", "验证与确认", 70),
@@ -284,11 +283,6 @@ QUALITY_FEISHU_ENTITY_ENV_PREFILLS: dict[str, dict[str, str]] = {
         "app_token_setting": "QUALITY_FEISHU_APP_TOKEN",
         "table_id_setting": "QUALITY_FEISHU_DEVIATION_INVESTIGATION_PUSH_TABLE_ID",
         "table_name": "偏差调查推送记录",
-    },
-    "deviation_ledger": {
-        "app_token_setting": "QUALITY_FEISHU_APP_TOKEN",
-        "table_id_setting": "QUALITY_FEISHU_DEVIATION_TABLE_ID",
-        "table_name": "偏差台账",
     },
     "capa_ledger": {
         "app_token_setting": "QUALITY_FEISHU_APP_TOKEN",
@@ -717,20 +711,6 @@ QUALITY_FEISHU_ENTITY_ENV_PREFILLS: dict[str, dict[str, str]] = {
 }
 
 QUALITY_FEISHU_SYSTEM_FIELDS: dict[str, list[tuple[str, str, str]]] = {
-    "deviation_ledger": [
-        ("偏差编号", "偏差编号", "both"),
-        ("产品名称/批号", "产品名称/批号", "both"),
-        ("偏差简要描述", "偏差简要描述", "both"),
-        ("偏差是否曾发生", "偏差是否曾发生", "both"),
-        ("根本原因", "根本原因", "both"),
-        ("偏差等级", "偏差等级", "both"),
-        ("调查完成时间", "调查完成时间", "both"),
-        ("纠正预防措施", "纠正预防措施", "both"),
-        ("产品/物料处理结果", "产品/物料处理结果", "both"),
-        ("是否关闭", "是否关闭", "both"),
-        ("关闭时间", "关闭时间", "both"),
-        ("关联capa", "关联capa", "push"),
-    ],
     "capa_ledger": [
         ("CAPA编号", "CAPA编号", "both"),
         ("启动日期", "启动日期", "push"),
@@ -767,6 +747,9 @@ QUALITY_FEISHU_SYSTEM_FIELDS: dict[str, list[tuple[str, str, str]]] = {
         ("偏差编号", "偏差编号", "both"),
         ("第N次推送", "第N次推送", "both"),
         ("偏差调查报告", "偏差调查报告", "both"),
+        ("部门", "部门", "pull"),
+        ("流程状态", "流程状态", "pull"),
+        ("已退回待重新提交", "已退回待重新提交", "pull"),
         ("提交日期", "提交日期", "both"),
         ("提交人", "提交人", "both"),
         ("部门负责人", "部门负责人", "pull"),
@@ -782,7 +765,8 @@ QUALITY_FEISHU_SYSTEM_FIELDS: dict[str, list[tuple[str, str, str]]] = {
     "capa_plan_track": [
         ("CAPA编号", "CAPA编号", "both"),
         ("计划内容", "计划内容", "both"),
-        ("完成时间", "完成时间", "both"),
+        ("预计完成时间", "预计完成时间", "both"),
+        ("部门", "部门", "pull"),
         ("责任人", "责任人", "push"),
         ("责任人确认", "责任人确认", "push"),
         ("部门负责人", "部门负责人", "push"),
@@ -799,7 +783,14 @@ QUALITY_FEISHU_SYSTEM_FIELDS: dict[str, list[tuple[str, str, str]]] = {
         ("涉及批号", "涉及批号", "both"),
         ("报告部门", "报告部门", "both"),
         ("报告人", "报告人", "both"),
+        ("部门负责人", "部门负责人", "push"),
         ("部门负责人确认", "部门负责人确认", "both"),
+        ("QA", "QA", "push"),
+        ("QA负责人", "QA负责人", "push"),
+        ("涉及发酵负责人", "涉及发酵负责人", "push"),
+        ("涉及发酵负责人确认", "涉及发酵负责人确认", "both"),
+        ("涉及提炼负责人", "涉及提炼负责人", "push"),
+        ("涉及提炼负责人确认", "涉及提炼负责人确认", "both"),
         ("QA确认", "QA确认", "both"),
         ("QA负责人确认", "QA负责人确认", "both"),
         ("附件", "附件", "both"),
@@ -811,10 +802,12 @@ QUALITY_FEISHU_SYSTEM_FIELDS: dict[str, list[tuple[str, str, str]]] = {
         ("提交日期", "提交日期", "both"),
         ("部门", "部门", "both"),
         ("提交人", "提交人", "both"),
+        ("部门负责人", "部门负责人", "pull"),
+        ("部门负责人(直接)", "部门负责人(直接)", "pull"),
         ("部门负责人审核结果", "部门负责人审核结果", "both"),
         ("部门负责人审核时间", "部门负责人审核时间", "both"),
-        ("QA审核结果", "QA审核结果", "both"),
-        ("QA审核时间", "QA审核时间", "both"),
+        ("QA", "QA", "pull"),
+        ("QA负责人", "QA负责人", "pull"),
         ("QA负责人审核结果", "QA负责人审核结果", "both"),
         ("QA负责人审核时间", "QA负责人审核时间", "both"),
         ("流程状态", "流程状态", "both"),
@@ -1215,6 +1208,8 @@ async def ensure_quality_feishu_entity_settings(
             "qc_solid_inspection",
             "qc_liquid_inspection",
             "supplier_ledger",
+            # 偏差台账已与飞书多维表格解耦（本地台账页不受影响）
+            "deviation_ledger",
             # 部门联系人功能已下线（人员目录统一为共享人员服务）
             "department_contact",
         }

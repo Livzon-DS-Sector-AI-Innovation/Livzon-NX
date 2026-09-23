@@ -4,9 +4,10 @@ import logging
 import uuid
 from io import BytesIO
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, Body, Depends, File, Query, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -65,6 +66,13 @@ from app.modules.quality.service import quality_deviation as deviation_service
 from app.modules.quality.service import quality_import_export as ie_service
 from app.modules.quality.service.deviation_ledger_export import (
     generate_deviation_ledger_export_docx,
+)
+from app.modules.quality.service.feishu_attachment_thumbnail import (
+    get_attachment_thumbnail,
+)
+from app.modules.quality.service.inspection_feishu_crud import (
+    get_inspection_feishu_attachment_content,
+    get_inspection_feishu_attachment_preview,
 )
 from app.platform.audit.service import record_audit_log
 from app.platform.identity.data_scope import (
@@ -185,8 +193,8 @@ async def export_deviations(
         BytesIO(data),
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers=_build_docx_download_headers(
-            "偏差登记表.docx",
-            "deviation-register.docx",
+            "偏差台账.docx",
+            "deviation-ledger.docx",
         ),
     )
 
@@ -233,6 +241,97 @@ async def get_deviation_report_record(
         db, record_id
     )
     return success_response(data=result)
+
+
+@router.get(
+    "/deviation-report-records/{record_id}/attachments/{file_token}/content",
+    summary="下载偏差报告记录附件（后端代理，携带飞书 token）",
+)
+async def get_deviation_report_attachment_content(
+    record_id: str,
+    file_token: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Response:
+    _require_user(current_user)
+    content, content_type, filename = await get_inspection_feishu_attachment_content(
+        db, "deviation_report_record", record_id, file_token
+    )
+    encoded = quote(filename)
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=attachment; filename*=UTF-8''{encoded}"
+            )
+        },
+    )
+
+
+@router.get(
+    "/deviation-report-records/{record_id}/attachments/{file_token}/preview",
+    summary="在线预览偏差报告记录附件（图片/PDF 原样，office 转 PDF）",
+)
+async def get_deviation_report_attachment_preview(
+    record_id: str,
+    file_token: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Response:
+    _require_user(current_user)
+    content, content_type, filename = await get_inspection_feishu_attachment_preview(
+        db, "deviation_report_record", record_id, file_token
+    )
+    encoded = quote(filename)
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": (
+                f"inline; filename=preview; filename*=UTF-8''{encoded}"
+            )
+        },
+    )
+
+
+@router.get(
+    "/deviation-report-records/{record_id}/attachments/{file_token}/thumbnail",
+    summary="偏差报告记录图片附件缩略图",
+)
+async def get_deviation_report_attachment_thumbnail(
+    record_id: str,
+    file_token: str,
+    max_width: int = Query(200, ge=16, le=512),
+    max_height: int = Query(200, ge=16, le=512),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Response:
+    _require_user(current_user)
+    result = await get_attachment_thumbnail(
+        db,
+        "deviation_report_record",
+        record_id,
+        file_token,
+        max_width,
+        max_height,
+    )
+    if result is None:
+        raise AppException(
+            message="该附件暂不支持生成缩略图，请下载后查看",
+            status_code=400,
+        )
+    content, content_type, filename = result
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": (
+                f"inline; filename=thumbnail; filename*=UTF-8''{quote(filename)}"
+            ),
+            "Cache-Control": "private, max-age=86400",
+        },
+    )
 
 
 @router.post(
@@ -436,7 +535,7 @@ async def create_deviation(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     user_id = _current_user_id(_require_user(current_user))
-    result = await service.create_deviation(db, data, user_id)
+    result = await service.create_deviation(db, data, user_id, current_user)
     return success_response(data=result)
 
 

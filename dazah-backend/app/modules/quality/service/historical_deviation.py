@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import io
+import json
 import logging
+import re
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -555,32 +557,74 @@ async def _extract_image_text(content: bytes, content_type: str) -> str:
         return ""
 
 
-async def _build_ai_context_text(record: HistoricalDeviation) -> str:
-    """汇总附件内容供 AI 提取：正文用纯文本提取（模板化转换可能丢弃无标题正文）。
+_MD_IMAGE_LINK_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
 
-    预览仍使用转换后标准 MD（保留表格与图片）；AI 上下文以原文全文为准。
+
+def _md_to_plain_text(md_text: str) -> str:
+    """标准 MD → AI 上下文纯文本：去掉图片引用，保留表格与段落正文。"""
+    return _MD_IMAGE_LINK_RE.sub("", md_text or "").strip()
+
+
+async def _attachment_context_text(
+    attachment: dict[str, Any], content: bytes
+) -> str:
+    """单个附件 → AI 上下文文本；原文解析失败时回退标准 MD 或现场转换。
+
+    旧版 .doc/.wps 无法被 Python 解析器读取，但上传时已生成标准 MD；
+    转换失败的附件再按 word 转换一次，仍无正文则返回空串由调用方判定。
     """
     from app.platform.ai.document_text_extractor import extract_document_text
 
+    file_name = attachment.get("file_name") or ""
+    ext = Path(file_name).suffix.lower()
+    if ext in IMAGE_EXT:
+        content_type = attachment.get("content_type") or ""
+        text = await _extract_image_text(content, content_type)
+    else:
+        try:
+            text = extract_document_text(file_name, content)
+        except Exception:  # noqa: BLE001
+            text = ""
+    if text.strip():
+        return text.strip()
+
+    md_key = attachment.get("converted_md_key")
+    if md_key:
+        stored = read_file(_STORAGE_SUBDIR, str(md_key))
+        if stored is not None:
+            text = _md_to_plain_text(stored[0].decode("utf-8", errors="replace"))
+            if text:
+                return text
+
+    if ext in WORD_EXT:
+        try:
+            md_text, _images = await asyncio.to_thread(
+                render_word_to_md, file_name, content
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning("历史偏差附件解析失败: %s", file_name)
+        else:
+            text = _md_to_plain_text(md_text)
+            if text:
+                return text
+    return ""
+
+
+async def _build_ai_context_text(record: HistoricalDeviation) -> str:
+    """汇总附件内容供 AI 提取：正文用纯文本提取（模板化转换可能丢弃无标题正文）。
+
+    预览仍使用转换后标准 MD（保留表格与图片）；AI 上下文以原文全文为准，
+    原文不可解析时回退该附件的标准 MD 或现场 word 转换。
+    """
     parts: list[str] = []
     for attachment in record.attachments or []:
         file_name = attachment.get("file_name") or ""
         stored = read_file(_STORAGE_SUBDIR, attachment.get("storage_key") or "")
         if stored is None:
             continue
-        content, _ = stored
-        ext = Path(file_name).suffix.lower()
-        try:
-            if ext in IMAGE_EXT:
-                content_type = attachment.get("content_type") or ""
-                text = await _extract_image_text(content, content_type)
-            else:
-                text = extract_document_text(file_name, content)
-        except Exception:  # noqa: BLE001
-            logger.warning("历史偏差附件解析失败: %s", file_name)
-            continue
-        if text.strip():
-            parts.append(f"【附件：{file_name}】\n{text.strip()}")
+        text = await _attachment_context_text(attachment, stored[0])
+        if text:
+            parts.append(f"【附件：{file_name}】\n{text}")
     joined = "\n\n".join(parts).strip()
     if len(joined) > AI_CONTEXT_TEXT_LIMIT:
         joined = joined[:AI_CONTEXT_TEXT_LIMIT]
@@ -605,6 +649,58 @@ def _ai_extract_prompt(attachment_text: str) -> str:
 """.strip()
 
 
+async def _chat_json_with_plain_fallback(prompt: str) -> dict[str, Any]:
+    """结构化提取：json_object 不可用时降级为普通文本再自行解析。
+
+    部分供应商（如 DashScope 兼容端点上的通义模型）在 json_object 模式下会提前
+    收尾，只返回第一个字段；去掉该参数后同一提示词能返回完整结构。降级结果仍按
+    AI_EXTRACT_KEYS 校验，不通过时按原逻辑报格式错误。
+    """
+    messages = [{"role": "user", "content": prompt}]
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            raw = await llm_client.chat_json(
+                messages,
+                expected_keys=AI_EXTRACT_KEYS,
+                temperature=0.2,
+            )
+            return dict(raw)
+        except LLMRateLimitError:
+            if attempt == max_retries - 1:
+                raise
+            await asyncio.sleep(2**attempt)
+        except LLMOutputError:
+            break
+    text = await llm_client.chat(
+        messages, response_format=None, temperature=0.2
+    )
+    return _parse_extract_json(text)
+
+
+def _parse_extract_json(raw: str) -> dict[str, Any]:
+    """解析降级路径返回的文本（与 chat_json 相同的围栏剥离与四键校验）。"""
+    cleaned = (raw or "").strip()
+    if cleaned.startswith("```"):
+        lines = cleaned.split("\n")
+        for index, line in enumerate(lines):
+            if not line.strip().startswith("```"):
+                cleaned = "\n".join(lines[index:])
+                break
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3].strip()
+    try:
+        parsed: Any = json.loads(cleaned)
+    except json.JSONDecodeError as exc:
+        raise LLMOutputError("LLM response is not valid JSON", cleaned) from exc
+    if not isinstance(parsed, dict):
+        raise LLMOutputError("LLM response is not a JSON object", cleaned)
+    missing = [key for key in AI_EXTRACT_KEYS if key not in parsed]
+    if missing:
+        raise LLMOutputError(f"LLM response missing keys: {missing}", cleaned)
+    return parsed
+
+
 async def ai_extract_historical_deviation(
     db: AsyncSession,
     record_id: uuid.UUID,
@@ -620,20 +716,7 @@ async def ai_extract_historical_deviation(
     config = await _require_quality_ai_config()
     prompt = _ai_extract_prompt(context_text)
     try:
-        raw: dict[str, Any] = {}
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                raw = await llm_client.chat_json(
-                    [{"role": "user", "content": prompt}],
-                    expected_keys=AI_EXTRACT_KEYS,
-                    temperature=0.2,
-                )
-                break
-            except LLMRateLimitError:
-                if attempt == max_retries - 1:
-                    raise
-                await asyncio.sleep(2**attempt)
+        raw = await _chat_json_with_plain_fallback(prompt)
     except LLMRateLimitError:
         raise AppException(status_code=502, message="AI 限流，请稍后重试") from None
     except LLMOutputError:
