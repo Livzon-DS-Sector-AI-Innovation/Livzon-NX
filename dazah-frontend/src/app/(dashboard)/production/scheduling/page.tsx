@@ -26,7 +26,8 @@ const { Dragger } = Upload
 const { TextArea } = Input
 
 // 排产按产品存档,汇总(五产线聚合)没有排产数据,本页隐藏该入口
-const SCHEDULING_HIDE_CODES: readonly string[] = ['SUMMARY']
+// 汇总无排产存档；FL 氟苯尼考为合成预混工艺，无发酵排产表（批次数据走飞书月表同步）
+const SCHEDULING_HIDE_CODES: readonly string[] = ['SUMMARY', 'FL']
 
 interface MergedCell {
   s: { r: number; c: number }

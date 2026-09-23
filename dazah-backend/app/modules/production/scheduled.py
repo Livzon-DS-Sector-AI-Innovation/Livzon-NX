@@ -37,9 +37,10 @@ class ProductionPlanHourlySyncGenerator(TaskGenerator):
             select(ProductionFeishuConfig.id).where(
                 ProductionFeishuConfig.is_active.is_(True),
                 ProductionFeishuConfig.is_deleted.is_(False),
-                # 销售计划无独立定时器，与生产计划同时段每小时对齐飞书
+                # 销售计划无独立定时器，与生产计划同时段每小时对齐飞书；
+                # FL 批次月表与生产计划同时段自动同步
                 ProductionFeishuConfig.sync_target.in_(
-                    ("production_plan", "sales_plan")
+                    ("production_plan", "sales_plan", "fl_batch")
                 ),
             )
         )

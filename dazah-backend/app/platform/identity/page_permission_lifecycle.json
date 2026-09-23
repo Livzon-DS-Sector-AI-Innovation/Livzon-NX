@@ -9,6 +9,10 @@
         "delete": {
           "status": "active",
           "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
         }
       }
     },

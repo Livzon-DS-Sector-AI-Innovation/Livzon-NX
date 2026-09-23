@@ -33,11 +33,11 @@ test('bounded build configures the standard CLI and does not swallow failures', 
   const uvThreads = process.env.UV_THREADPOOL_SIZE;
   try {
     const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-    assert.ok(pkg.scripts['build:single-host'].startsWith('node --max-old-space-size=1280 '));
+    assert.ok(pkg.scripts['build:single-host'].startsWith('node --max-old-space-size=2048 '));
     await assert.rejects(buildSingleHost(async () => {
       assert.deepEqual(process.argv.slice(-2), ['build', '--webpack']);
       assert.equal(process.env.DAZAH_SINGLE_HOST_BUILD, '1');
-      assert.equal(process.env.NODE_OPTIONS, '--max-old-space-size=1280');
+      assert.equal(process.env.NODE_OPTIONS, '--max-old-space-size=2048');
       assert.equal(process.env.RAYON_NUM_THREADS, '1');
       assert.equal(process.env.UV_THREADPOOL_SIZE, '1');
       throw new Error('build failed');

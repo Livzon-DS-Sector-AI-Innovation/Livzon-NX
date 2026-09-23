@@ -35,7 +35,7 @@ class ProductionFeishuConfig(BaseModel):
         nullable=False,
         default="production_plan",
         server_default="production_plan",
-        comment="同步目标: production_plan / fermentation_record / batch / production_record / material_balance",  # noqa: E501
+        comment="同步目标: production_plan / fermentation_record / batch / production_record / material_balance / fl_batch",  # noqa: E501
     )
     field_mapping: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,

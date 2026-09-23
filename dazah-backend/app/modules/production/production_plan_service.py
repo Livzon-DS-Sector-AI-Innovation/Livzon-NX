@@ -451,6 +451,11 @@ async def sync_config_by_target(
         )
 
         return await sync_dr_fourth_refinement(config, session)
+    elif target == "fl_batch":
+        # FL 氟苯尼考预混剂批次工序流转（多维表按月分表自动发现）
+        from app.modules.production.fl_batch_sync import sync_fl_batches
+
+        return await sync_fl_batches(config, session)
     # ── 环保模块同步目标 ──
     elif target in ("wastewater", "exhaust_gas", "solid_waste"):
         raise ValueError(f"环境同步目标暂未实现: {target}")

@@ -32,7 +32,11 @@ from app.modules.production.fermentation_batch_actual_models import (
 from app.modules.production.fermentation_month_setting_models import (
     FermentationMonthSetting,
 )
-from app.modules.production.models import ProductionLineStatus, ProductionPlan
+from app.modules.production.models import (
+    LineHaltEvent,
+    ProductionLineStatus,
+    ProductionPlan,
+)
 from app.modules.production.schedule_excel_models import ScheduleExcelArchive
 from app.modules.production.tank_maintenance_models import TankMaintenance
 
@@ -327,12 +331,26 @@ def _dr_is_batch_no(value: Any) -> bool:
 
 
 def _dr_is_pilot_batch(batch_no: str) -> bool:
-    """DR 中试批：批号含「中试」或 ZS- 前缀（与排产上传 product_type 同口径）。
-
-    中试批不占 KPI 批次名额、不在单批产量图展示，但产量照常录入并
-    累积进总产量（平均单产 = 含中试总产量 ÷ 正式批批数）。
+    """DR 中试批文字规则（罐号缺失时的回退）：批号含「中试」或 ZS- 前缀。
+    主判定按罐线见 _dr_is_pilot_line。
     """
     return "中试" in batch_no or batch_no.startswith("ZS-")
+
+
+def _dr_is_pilot_line(tank: str | None, batch_no: str) -> bool:
+    """DR 中试线判定（按罐线口径，与排产表底色一致：红=小罐、绿=大罐）：
+    25kL 小罐（B30x）= 中试线——含正式编号的小罐批；150T 大罐（B40x）=
+    正式线。罐号缺失或非 B3/B4 前缀时回退批号文字规则。
+
+    中试线不占 KPI 批次名额、不在单批产量图展示、不计入平均单产，
+    但产量照常录入并累积进总产量。
+    """
+    if tank:
+        if tank.startswith("B3"):
+            return True
+        if tank.startswith("B4"):
+            return False
+    return _dr_is_pilot_batch(batch_no)
 
 
 def _dr_split_batch(value: Any) -> list[str]:
@@ -819,10 +837,15 @@ def build_dr_board(
         key=lambda b: (b["dump"], b["batch_no"]),
         reverse=True,
     )
-    # KPI 计数只数正式批：中试批不占计划/已完成/运行中/待进罐名额；
-    # 产量录入、漏录提醒、最近完成、录入下拉仍含中试（done_all）
+    # KPI 计数只数大罐正式批（按罐线）：小罐 B30x（中试线，含正式编号的
+    # 小罐批）不占计划/已完成/运行中/待进罐名额；产量录入、漏录提醒、
+    # 最近完成、录入下拉仍含中试线（done_all）
     formal_batches = [
-        b for b in batches if not _dr_is_pilot_batch(b["batch_no"])
+        b
+        for b in batches
+        if not _dr_is_pilot_line(
+            b.get("dump_tank") or b.get("ferm_tank"), b["batch_no"]
+        )
     ]
     done = sorted(
         (
@@ -1052,9 +1075,9 @@ def build_dr_board(
 
     tanks.sort(key=_tank_order)
     # 单批产量趋势：周期内已放罐且有产量的批次，按放罐日期升序取最近 31 批。
-    # 中试批不画柱（正式批 only）；平均单产 = 含中试的全部已录产量 ÷ 正式批批数
+    # 中试线小罐批不画柱（大罐正式批 only）；平均单产 = 大罐批已录产量
+    # 的均值（中试线产量不计入，与柱状图口径一致）
     done_dump = {b["batch_no"]: b["dump"] for b in done}
-    done_dump_all = {b["batch_no"]: b["dump"] for b in done_all}
     measured = sorted(
         (
             a
@@ -1063,16 +1086,9 @@ def build_dr_board(
         ),
         key=lambda a: (done_dump[a["batch_no"]], str(a["batch_no"])),
     )
-    measured_all = [
-        a
-        for a in (actuals or [])
-        if a.get("yield_kg") is not None and a.get("batch_no") in done_dump_all
-    ]
     recent_measured = measured[-31:]
     avg_yield_kg = (
-        round(
-            sum(float(a["yield_kg"]) for a in measured_all) / len(measured), 2
-        )
+        round(sum(float(a["yield_kg"]) for a in measured) / len(measured), 2)
         if measured
         else None
     )
@@ -1128,8 +1144,9 @@ _STATIN_TITLE_RE = re.compile(
 _STATIN_KEYWORD = {"LV": "洛伐", "MV": "美伐"}
 _STATIN_TURN_TANK = "301A"  # 倒罐目的罐（450kl），倒罐后批号跟随此罐
 # 批次折算基数（标准接种量）：洛伐单批 100；美伐复合批每子批 200
-#（复合接种量 400 ÷ 2）。接种量不足标准的批按比例折算小数批，
-# 如洛伐接种量 65 → 0.65 批（对齐排产表备注"9月份洛伐放罐9.65批"口径）
+#（复合接种量 400 ÷ 2）。折算小数批仅用于洛伐 KPI 计数（如接种量 65
+# → 0.65 批，对齐排产表备注"9月份洛伐放罐9.65批"口径）；美伐计数
+# 不折算——复合批号拆分后的子批一批就是一批（见 build_mp_board）
 _STATIN_SEED_BASE = {"LV": 100.0, "MV": 200.0}
 
 
@@ -1680,15 +1697,6 @@ def build_mp_board(
                 }
             )
             continue
-        if batch in active:
-            status, note = "running", "运行中"
-        else:
-            status, note = "dumped", "已放罐"
-        cultured = (
-            round((now - batch["inoculate"]).total_seconds() / 3600, 1)
-            if batch["inoculate"] and batch["inoculate"] <= now
-            else None
-        )
         cycle = (
             round(
                 (batch["dump"] - batch["inoculate"]).total_seconds() / 3600, 1
@@ -1696,6 +1704,18 @@ def build_mp_board(
             if batch["dump"] and batch["inoculate"]
             else None
         )
+        if batch in active:
+            status, note = "running", "运行中"
+            cultured = (
+                round((now - batch["inoculate"]).total_seconds() / 3600, 1)
+                if batch["inoculate"] and batch["inoculate"] <= now
+                else None
+            )
+        else:
+            # 已放罐：培养时长冻结在放罐时刻（= 计划总周期），
+            # 不再随当前时间累计
+            status, note = "dumped", "已放罐"
+            cultured = cycle
         tanks.append(
             {
                 "tank_no": tank_no,
@@ -1727,10 +1747,17 @@ def build_mp_board(
         if actual_by_batch.get(b["batch_no"], {}).get("yield_kg")
     ]
     if product in _STATIN_KEYWORD:
-        # 他汀：批次按种子接种量折算（标准 LV 100/批、MV 每子批 200/批），
-        # 支持小数批（如接种量 65 → 0.65 批，对齐排产表备注口径）
-        month_planned = round(sum(b["units"] for b in planned), 2)
-        month_done_planned = round(sum(b["units"] for b in done), 2)
+        # 他汀批次计数（对齐排产表备注口径）：洛伐按种子接种量折算小数批
+        # （标准 100/批，接种量 65 → 0.65 批）；美伐一批就是一批——复合批号
+        # 拆分后每个子批记 1，不按接种量折算。转产月块内两种批号混排，
+        # 逐批按各自产品规则计数
+        def _count(b: dict[str, Any]) -> float:
+            if b["batch_no"].split("-")[0] == "MV":
+                return 1.0
+            return float(b.get("units", 1.0))
+
+        month_planned = round(sum(_count(b) for b in planned), 2)
+        month_done_planned = round(sum(_count(b) for b in done), 2)
     else:
         month_planned = len(planned)
         month_done_planned = len(done)
@@ -3362,8 +3389,13 @@ async def set_line_halted(
     product_code: str,
     halted: bool,
     updated_by: Any = None,
+    reason: str | None = None,
+    operator_name: str | None = None,
 ) -> ProductionLineStatus:
-    """设置产品生产线停产状态（upsert；人工即时状态，不自动恢复）。"""
+    """设置产品生产线停产状态（upsert；人工即时状态，不自动恢复）。
+
+    同时向 line_halt_events 追加一条停产/复产事件（时间线只增不改）。
+    """
     result = await session.execute(
         select(ProductionLineStatus).where(
             ProductionLineStatus.product_code == product_code,
@@ -3378,8 +3410,67 @@ async def set_line_halted(
         item.halted = halted
     if updated_by is not None:
         item.updated_by = updated_by
+    session.add(
+        LineHaltEvent(
+            product_code=product_code,
+            halted=halted,
+            reason=(reason or "").strip() or None,
+            operator_name=(operator_name or "").strip() or None,
+            created_by=updated_by,
+        )
+    )
     await session.flush()
     return item
+
+
+def serialize_line_halt_event(item: LineHaltEvent) -> dict[str, Any]:
+    """停产/复产事件 → API 响应。"""
+    return {
+        "product_code": item.product_code,
+        "halted": bool(item.halted),
+        "reason": item.reason,
+        "operator_name": item.operator_name,
+        "created_at": item.created_at.isoformat() if item.created_at else None,
+    }
+
+
+async def list_line_halt_events(
+    session: AsyncSession,
+    *,
+    product_code: str | None = None,
+    limit: int = 100,
+) -> list[LineHaltEvent]:
+    """停产/复产事件时间线（新→旧）。"""
+    stmt = (
+        select(LineHaltEvent)
+        .where(LineHaltEvent.is_deleted.is_(False))
+        .order_by(LineHaltEvent.created_at.desc())
+        .limit(max(1, min(limit, 500)))
+    )
+    if product_code:
+        stmt = stmt.where(LineHaltEvent.product_code == product_code)
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def latest_line_halt_events(
+    session: AsyncSession, product_codes: list[str]
+) -> dict[str, LineHaltEvent]:
+    """给定产线各自的最近一次事件（无事件的不出现在结果里）。"""
+    if not product_codes:
+        return {}
+    result = await session.execute(
+        select(LineHaltEvent)
+        .where(
+            LineHaltEvent.is_deleted.is_(False),
+            LineHaltEvent.product_code.in_(product_codes),
+        )
+        .order_by(LineHaltEvent.created_at.desc())
+    )
+    latest: dict[str, LineHaltEvent] = {}
+    for item in result.scalars().all():
+        latest.setdefault(item.product_code, item)
+    return latest
 
 
 async def upsert_month_setting(

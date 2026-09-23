@@ -11147,6 +11147,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/production/fl-board": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 氟苯尼考预混剂生产看板（批次工序流转） */
+        get: operations["get_fl_board_api_v1_production_fl_board_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/production/label-verifications": {
         parameters: {
             query?: never;
@@ -13034,11 +13051,28 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 产品生产线停产状态（停产品线代码列表） */
+        /** 产品生产线停产状态（停产品线代码 + 各自最近一次事件） */
         get: operations["list_production_line_status_api_v1_production_production_line_status_get"];
         put?: never;
         /** 设置产品生产线停产状态（停产/恢复生产） */
         post: operations["set_production_line_status_api_v1_production_production_line_status_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/production-line-status/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 产品生产线停产/复产事件时间线（新→旧） */
+        get: operations["list_production_line_halt_events_api_v1_production_production_line_status_events_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -50575,6 +50609,11 @@ export interface components {
              * @description 是否停产中
              */
             halted: boolean;
+            /**
+             * Reason
+             * @description 原因（必填：转产/检修/季节性停产/误操作等），写入停产时间线
+             */
+            reason: string;
         };
         /**
          * ProductionPlanCreate
@@ -89312,6 +89351,40 @@ export interface operations {
             };
         };
     };
+    get_fl_board_api_v1_production_fl_board_get: {
+        parameters: {
+            query?: {
+                /** @description 查看月份 YYYY-MM；缺省为当月（北京时间） */
+                month?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_label_verifications_api_v1_production_label_verifications_get: {
         parameters: {
             query?: {
@@ -94162,6 +94235,42 @@ export interface operations {
                 "application/json": components["schemas"]["ProductionLineStatusBody"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_production_line_halt_events_api_v1_production_production_line_status_events_get: {
+        parameters: {
+            query?: {
+                /** @description 按产品代码过滤 */
+                product?: string | null;
+                /** @description 返回条数 */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
