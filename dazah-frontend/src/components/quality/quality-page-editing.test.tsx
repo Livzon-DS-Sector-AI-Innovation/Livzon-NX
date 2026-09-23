@@ -17,7 +17,7 @@ vi.mock('@/actions/quality', () => ({
   updateProductDepartmentRecord: mocks.product, createProductDepartmentRecord: vi.fn(),
   pullProductDepartmentRecords: vi.fn(), deleteProductDepartmentRecord: vi.fn(),
 }))
-vi.mock('@/actions/quality-capa', () => ({ updateCapaPlanTrack: mocks.capa, createCapaPlanTrack: mocks.createPlan, updateCapa: mocks.saveDetail, deleteCapaPlanTrack: vi.fn(), syncCapaPlanTracksFromFeishu: vi.fn() }))
+vi.mock('@/actions/quality-capa', () => ({ updateCapaPlanTrack: mocks.capa, createCapaPlanTrack: mocks.createPlan, updateCapa: mocks.saveDetail, deleteCapa: vi.fn(), deleteCapaPlanTrack: vi.fn(), syncCapaPlanTracksFromFeishu: vi.fn() }))
 vi.mock('@/lib/api/client/quality', () => ({
   fetchQualityFeishuAppSettings: async () => ({}),
   fetchQualityPersonDirectory: async () => [
@@ -30,7 +30,13 @@ vi.mock('@/lib/api/client/quality', () => ({
   fetchOosLedgerRecords: async () => ({ data: [{ investigation_code: 'OOS-1' }] }),
   fetchOotLedgerRecords: async () => ({ data: [] }),
   fetchCapaPlanTracks: async () => ({ items: [{ id: 'plan', capa_id: 'capa', capa_code: 'CA-1', plan_content: '计划内容', owner_name: '原人员', department: 'QC', department_head: '主管', owner_confirmed: false, department_head_confirmed: false, reminder_status: 'pending' }] }),
-  fetchCapa: async () => ({ id: 'capa', title: '措施', capa_code: 'CA-1', status: 'draft' }),
+  fetchCapa: async () => ({
+    id: 'capa', title: '措施', capa_code: 'CA-1', status: '进行中',
+    department: 'QC', affected_product: '产品A', source_code: 'PC-1',
+    evaluation_result: '进行中', created_at: '2026-07-03T00:00:00Z',
+    qa_confirmer: '杨小芹', qa_confirm_date: '2026-07-03T00:00:00Z',
+    linked_plan_contents: ['变更LN成品检验文件（涉及残留溶剂项下GC循环时间）'],
+  }),
   fetchCapas: async () => ({ items: [{ id: 'capa', capa_code: 'CA-1', title: '措施' }] }),
   fetchProductDepartmentRecords: async () => ({ data: [{ record_id: 'rec_product', product_code: 'MV', fermentation_department: 'QC', fermentation_head: '原人员', extraction_department: 'QC', extraction_head: '主管' }] }),
 }))
@@ -85,6 +91,17 @@ async function choose(field: string, text: string) {
   await act(async () => option!.dispatchEvent(new MouseEvent('click', { bubbles: true })))
 }
 
+async function setInput(field: string, value: string) {
+  const element = document.querySelector(`#${field}`) as HTMLInputElement | HTMLTextAreaElement
+  expect(element).toBeTruthy()
+  const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(prototype, 'value')!.set!.call(element, value)
+    element.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)) })
+}
+
 it('OOS report changes reporter without sending attachment fields', async () => {
   await renderPage(<OosOotReportRecordPage />)
   const headers = Array.from(container.querySelectorAll('th')).map(el => el.textContent)
@@ -98,9 +115,12 @@ it('OOS report changes reporter without sending attachment fields', async () => 
 
 it('CAPA ledger renders every Feishu column in order and keeps local-only columns out of the list', async () => {
   await renderPage(<CapaTable capas={[]} total={0} />)
-  expect(Array.from(container.querySelectorAll('th')).map(node => node.textContent).filter(Boolean)).toEqual([
-    ...feishuColumnLayouts.capaLedger, '操作',
-  ])
+  const headers = Array.from(container.querySelectorAll('th')).map(node => node.textContent).filter(Boolean)
+  expect(headers).toEqual([...feishuColumnLayouts.capaLedger, '操作'])
+  // QA 确认信息与关联计划只在详情展示，列表不再占用列宽
+  for (const removed of ['QA质量员', 'QA质量员确认日期', 'CAPA状态', '关联CAPA计划']) {
+    expect(headers).not.toContain(removed)
+  }
 })
 
 it('OOS report keeps existing reporter if only text was edited', async () => {
@@ -234,5 +254,59 @@ it('CAPA plan creation includes department but never writes automation confirmat
   expect(mocks.createPlan.mock.calls[0][0]).not.toHaveProperty('department_head')
   expect(mocks.createPlan.mock.calls[0][0]).not.toHaveProperty('owner_confirmed')
   expect(mocks.createPlan.mock.calls[0][0]).not.toHaveProperty('department_head_confirmed')
-  expect(document.body.textContent).toContain('计划已创建，但飞书同步失败')
+  // 提示在异步保存完成后渲染，轮询等待，避免整文件运行时的时序抖动
+  await vi.waitFor(() => {
+    expect(document.body.textContent).toContain('计划已创建，但飞书同步失败')
+  })
+})
+
+it('CAPA detail shows ledger columns, stays editable and hides platform workflow sections', async () => {
+  await renderPage(<CapaDetail />)
+  // 台账列齐全
+  for (const label of [
+    'CAPA编号', '启动日期', '事件部门', '涉及产品', '来源编号', 'CAPA简述',
+    'CAPA效果评估', '关闭日期', 'QA质量员', 'QA质量员确认日期', '关联CAPA计划',
+  ]) {
+    expect(container.textContent).toContain(label)
+  }
+  expect(container.textContent).toContain('QC')
+  expect(container.textContent).toContain('产品A')
+  expect(container.textContent).toContain('杨小芹')
+  expect(container.textContent).toContain('2026-07-03')
+  // 台账不承载平台流程：流程卡片不出现
+  for (const removed of ['效果评价', '评价目标', 'CAPA项目', '部门主管确认', '执行记录', 'QA审核意见', '质量主管审批意见']) {
+    expect(container.textContent).not.toContain(removed)
+  }
+  // 列表里不显示的计划内容在详情中换行展示
+  const planText = '变更LN成品检验文件（涉及残留溶剂项下GC循环时间）'
+  const matches = Array.from(container.querySelectorAll('div')).filter(
+    node => node.textContent === planText,
+  )
+  const plan = matches[matches.length - 1]
+  expect(plan).toBeDefined()
+  expect(plan!.style.whiteSpace).toBe('pre-wrap')
+  expect(plan!.style.wordBreak).toBe('break-word')
+})
+
+it('CAPA detail edits every ledger column and saves them together', async () => {
+  mocks.saveDetail.mockResolvedValue({ success: true })
+  await renderPage(<CapaDetail />)
+  await button('编辑')
+  for (const field of ['capa_code', 'expected_completion_date', 'department', 'affected_product', 'source_code', 'title', 'closure_date', 'qa_confirmer', 'qa_confirm_date']) {
+    expect(container.querySelector(`#${field}`)).not.toBeNull()
+  }
+  setInput('department', 'QA')
+  setInput('qa_confirmer', '李四')
+  setInput('closure_date', '2026-07-20')
+  await button('保存')
+  expect(mocks.saveDetail).toHaveBeenCalledWith('capa', expect.objectContaining({
+    capa_code: 'CA-1',
+    department: 'QA',
+    qa_confirmer: '李四',
+    evaluation_result: '进行中',
+  }))
+  const payload = mocks.saveDetail.mock.calls[0][1]
+  expect(payload.closure_date).toBe(new Date('2026-07-20').toISOString())
+  // 保存后的详情刷新是异步的，等它落地再结束本用例
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)) })
 })

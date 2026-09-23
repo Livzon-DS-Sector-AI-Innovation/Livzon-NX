@@ -102,7 +102,7 @@ export function DeviationPage() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>偏差登记表</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>偏差台账</h1>
         {canOperate && <Link href="/quality/deviations/new">
           <Button type="primary" icon={<PlusOutlined />}>
             新建偏差

@@ -54,6 +54,9 @@ from app.modules.quality.schemas import (
     UpdateCapaRequest,
 )
 from app.modules.quality.service import quality_import_export as ie_service
+from app.modules.quality.service.capa_ledger_export import (
+    generate_capa_ledger_export_docx,
+)
 from app.platform.identity.data_scope import current_page_key
 from app.shared.schemas import ApiResponseEnvelope
 
@@ -275,9 +278,8 @@ async def export_capas(
     _require_user(current_user)
     assert current_user is not None
     scope = await _resolve_quality_list_scope(db, current_user)
-    data = await ie_service.export_capas(
+    result = await service.get_capa_list(
         db,
-        None,
         status,
         source,
         category,
@@ -290,8 +292,13 @@ async def export_capas(
         closure_date_to,
         department,
         qa_confirmer,
+        1,
+        10000,
         scope=scope,
     )
+    if result["total"] > 10000:
+        raise AppException(message="导出超过一万条，请缩小筛选范围后重试")
+    data = generate_capa_ledger_export_docx(result["items"])
     return StreamingResponse(
         BytesIO(data),
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",

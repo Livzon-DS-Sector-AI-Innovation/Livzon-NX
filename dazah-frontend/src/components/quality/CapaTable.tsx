@@ -233,10 +233,6 @@ export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
   const columns = useMemo(() => [
     { title: 'CAPA效果评估', dataIndex: 'evaluation_result', key: 'evaluation_result', width: 180, render: (value: string | null) => value || '-' },
     { title: '关闭日期', dataIndex: 'closure_date', key: 'closure_date', width: 150, render: (value: string | null) => formatDate(value) },
-    { title: 'QA质量员', dataIndex: 'qa_confirmer', key: 'qa_confirmer', width: 140, render: (value: string | null) => value || '-' },
-    { title: 'QA质量员确认日期', dataIndex: 'qa_confirm_date', key: 'qa_confirm_date', width: 180, render: (value: string | null) => formatDate(value) },
-    { title: 'CAPA状态', dataIndex: 'status', key: 'status', width: 150, render: (value: CapaWorkflowStatus) => statusConfig[value]?.label || value || '-' },
-    { title: '关联CAPA计划', key: 'linked_plan_tracks', width: 200, render: (_: unknown, record: CapaListItem) => <Button type="link" style={{ padding: 0 }} onClick={() => goToPlan(record)}>{record.linked_plan_contents?.join('；') || `${record.linked_plan_tracks?.length ?? 0} 条计划`}</Button> },
     {
       title: 'CAPA编号',
       dataIndex: 'capa_code',

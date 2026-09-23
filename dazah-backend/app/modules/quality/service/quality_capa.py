@@ -186,6 +186,11 @@ async def update_capa(
     update_data = data.model_dump(exclude_unset=True)
     if "department" in update_data:
         await assert_quality_record_department(db, update_data["department"])
+    new_code = update_data.get("capa_code")
+    if new_code and new_code != capa.capa_code:
+        existing = await repository.get_capa_by_code(db, new_code)
+        if existing is not None and existing.id != capa.id:
+            raise AppException(message=f"CAPA编号已存在: {new_code}")
     for field, value in update_data.items():
         if field in [
             "capa_items",
@@ -201,6 +206,7 @@ async def update_capa(
                 "evaluation_deadline",
                 "evaluation_confirm_date",
                 "closure_date",
+                "qa_confirm_date",
                 "qa_review_time",
                 "q_head_approval_time",
             ]

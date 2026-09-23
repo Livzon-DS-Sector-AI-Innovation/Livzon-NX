@@ -160,7 +160,7 @@ export function DeviationTable({ loading = false }: DeviationTableProps) {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `偏差登记表_${new Date().toISOString().slice(0, 10)}.docx`
+      a.download = `偏差台账_${new Date().toISOString().slice(0, 10)}.docx`
       a.click()
       URL.revokeObjectURL(url)
       message.success('导出成功')

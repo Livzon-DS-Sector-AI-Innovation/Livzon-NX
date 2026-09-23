@@ -17,6 +17,7 @@ import { fetchQualityPersonDirectory } from '@/lib/api/client/quality'
 import { PersonCell } from './PersonCell'
 import { qualityTokens } from './themeTokens'
 import { progressMeta, reminderMeta, PROGRESS_OPTIONS, REMINDER_OPTIONS } from './capaPlanTrackLabels'
+import { ConfirmFlag } from './ConfirmFlag'
 import type { CapaPlanTrackItem, CreateCapaPlanTrackRequest } from '@/types/quality'
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -114,7 +115,6 @@ export function CapaPlanTrackPage() {
       width: 140,
       render: (value: string | null | undefined) => renderPersons(value),
     },
-    { title: '责任人确认', dataIndex: 'owner_confirmed', key: 'owner_confirmed', width: 90, render: (value: boolean) => (value ? '是' : '否') },
     { title: '部门', dataIndex: 'department', key: 'department', width: 140, render: (value: string | null) => value || '-' },
     {
       title: '部门负责人',
@@ -123,7 +123,6 @@ export function CapaPlanTrackPage() {
       width: 140,
       render: (value: string | null | undefined) => renderPersons(value),
     },
-    { title: '负责人确认', dataIndex: 'department_head_confirmed', key: 'department_head_confirmed', width: 90, render: (value: boolean) => (value ? '是' : '否') },
     {
       title: '进度',
       dataIndex: 'progress',
@@ -269,10 +268,10 @@ export function CapaPlanTrackPage() {
           { key: 'plan_content', label: '计划内容', children: <div style={{ whiteSpace: 'pre-line' }}>{detailRecord.plan_content}</div> },
           { key: 'due_date', label: '预计完成时间', children: detailRecord.due_date || '-' },
           { key: 'owner_name', label: '责任人', children: renderPersons(detailRecord.owner_name) },
-          { key: 'owner_confirmed', label: '责任人确认', children: detailRecord.owner_confirmed ? '是' : '否' },
+          { key: 'owner_confirmed', label: '责任人确认', children: <ConfirmFlag confirmed={detailRecord.owner_confirmed} /> },
           { key: 'department_head', label: '部门负责人', children: renderPersons(detailRecord.department_head) },
           { key: 'department', label: '部门', children: detailRecord.department || '-' },
-          { key: 'department_head_confirmed', label: '部门负责人确认', children: detailRecord.department_head_confirmed ? '是' : '否' },
+          { key: 'department_head_confirmed', label: '部门负责人确认', children: <ConfirmFlag confirmed={detailRecord.department_head_confirmed} /> },
           { key: 'progress', label: '进度', children: progressMeta(detailRecord.progress).label },
           { key: 'reminder_status', label: '提醒状态', children: reminderMeta(detailRecord.reminder_status).label },
           { key: 'linked_capa', label: '关联CAPA编号', children: <Link href={`/quality/capas/${detailRecord.capa_id}`}>{detailRecord.linked_capa_code || detailRecord.capa_code}</Link> },

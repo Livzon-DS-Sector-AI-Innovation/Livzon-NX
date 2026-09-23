@@ -116,6 +116,37 @@ it('requires an independent export grant and sends the ledger context', async ()
   expect(container.textContent).not.toContain('导入')
 })
 
+it('titles the ledger page as 偏差台账', async () => {
+  setGrant(['access', 'query'])
+  await renderPage()
+  expect(container.querySelector('h1')?.textContent).toBe('偏差台账')
+})
+
+it('downloads the ledger export under the ledger filename', async () => {
+  setGrant(['access', 'query', 'operate'], ['sensitive_export'])
+  await renderPage()
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(['ledger']) }))
+  const originalCreate = Object.getOwnPropertyDescriptor(URL, 'createObjectURL')
+  const originalRevoke = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL')
+  Object.defineProperty(URL, 'createObjectURL', { value: vi.fn(() => 'blob:ledger'), configurable: true, writable: true })
+  Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), configurable: true, writable: true })
+  const downloads: string[] = []
+  const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click')
+  clickSpy.mockImplementation(function (this: HTMLAnchorElement) { downloads.push(this.download) })
+  try {
+    const button = Array.from(container.querySelectorAll('button')).find((item) => item.textContent?.includes('导出'))
+    await act(async () => button?.click())
+  } finally {
+    clickSpy.mockRestore()
+    if (originalCreate) Object.defineProperty(URL, 'createObjectURL', originalCreate)
+    else Reflect.deleteProperty(URL, 'createObjectURL')
+    if (originalRevoke) Object.defineProperty(URL, 'revokeObjectURL', originalRevoke)
+    else Reflect.deleteProperty(URL, 'revokeObjectURL')
+  }
+  expect(downloads).toHaveLength(1)
+  expect(downloads[0]).toMatch(/^偏差台账_\d{4}-\d{2}-\d{2}\.docx$/)
+})
+
 it('clears cached rows after query permission is revoked', async () => {
   setGrant(['access', 'query'])
   mocks.fetchDeviations.mockResolvedValue({ items: [{ id: 'record', deviation_code: '撤销后不可见', title: '记录', status: 'draft' }], total: 1 })

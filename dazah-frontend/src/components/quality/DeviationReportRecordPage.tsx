@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation'
 import { Alert, App, Avatar, Button, Card, Descriptions, Drawer, Form, Input, Modal, Select, Space, Table, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { ReloadOutlined } from '@ant-design/icons'
+import { ConfirmFlagFromResult } from './ConfirmFlag'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { pullQualityRecordsFromFeishu } from '@/actions/quality'
 import { deleteDeviationReportRecord, updateDeviationReportRecord } from '@/actions/quality-deviation'
@@ -62,6 +63,7 @@ function formatDateTime(value: string | null | undefined): string {
 function formatBaseText(value: string | null | undefined): string {
   return value?.trim() || '-'
 }
+
 
 function formatReportStatus(value: string | null | undefined): string {
   if (!value) return '-'
@@ -404,15 +406,6 @@ export function DeviationReportRecordPage({
   )
 
   const baseColumns: ColumnsType<FeishuDeviationReportRecordItem> = [
-    { title: '部门负责人', key: 'department_heads', width: 150, render: (_, record) => renderPersons(record.department_heads, record.department_head) },
-    { title: '部门负责人确认', key: 'department_head_result', dataIndex: 'department_head_result', width: 150, render: formatBaseText },
-    { title: '部门负责人确认时间', key: 'department_head_reviewed_at', dataIndex: 'department_head_reviewed_at', width: 180, render: formatDateTime },
-    { title: 'QA', key: 'qas', width: 140, render: (_, record) => renderPersons(record.qas, record.qa_name) },
-    { title: 'QA确认', key: 'qa_result', dataIndex: 'qa_result', width: 120, render: formatBaseText },
-    { title: 'QA确认时间', key: 'qa_reviewed_at', dataIndex: 'qa_reviewed_at', width: 180, render: formatDateTime },
-    { title: 'QA负责人', key: 'qa_heads', width: 150, render: (_, record) => renderPersons(record.qa_heads, record.qa_head_name) },
-    { title: 'QA负责人确认', key: 'qa_head_result', dataIndex: 'qa_head_result', width: 150, render: formatBaseText },
-    { title: 'QA负责人确认时间', key: 'qa_head_reviewed_at', dataIndex: 'qa_head_reviewed_at', width: 180, render: formatDateTime },
     { title: '报告状态', key: 'report_status', dataIndex: 'report_status', width: 140, render: formatReportStatus },
     {
       title: '偏差编号',
@@ -595,21 +588,21 @@ export function DeviationReportRecordPage({
             <Descriptions.Item label="部门负责人">
               <Space orientation="vertical" size={2}>
                 {renderPersons(detailRecord.department_heads, detailRecord.department_head)}
-                <span>确认结果：{formatBaseText(detailRecord.department_head_result)}</span>
+                <span>确认结果：<ConfirmFlagFromResult value={detailRecord.department_head_result} /></span>
                 <span>确认时间：{formatDateTime(detailRecord.department_head_reviewed_at)}</span>
               </Space>
             </Descriptions.Item>
             <Descriptions.Item label="QA">
               <Space orientation="vertical" size={2}>
                 {renderPersons(detailRecord.qas, detailRecord.qa_name)}
-                <span>确认结果：{formatBaseText(detailRecord.qa_result)}</span>
+                <span>确认结果：<ConfirmFlagFromResult value={detailRecord.qa_result} /></span>
                 <span>确认时间：{formatDateTime(detailRecord.qa_reviewed_at)}</span>
               </Space>
             </Descriptions.Item>
             <Descriptions.Item label="QA负责人">
               <Space orientation="vertical" size={2}>
                 {renderPersons(detailRecord.qa_heads, detailRecord.qa_head_name)}
-                <span>确认结果：{formatBaseText(detailRecord.qa_head_result)}</span>
+                <span>确认结果：<ConfirmFlagFromResult value={detailRecord.qa_head_result} /></span>
                 <span>确认时间：{formatDateTime(detailRecord.qa_head_reviewed_at)}</span>
               </Space>
             </Descriptions.Item>

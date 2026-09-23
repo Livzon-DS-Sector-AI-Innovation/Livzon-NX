@@ -404,9 +404,6 @@ async def test_quality_capa_api_compatibility_success_paths(
     monkeypatch.setattr(
         capa_api.ie_service, "export_capas_template", Mock(return_value=b"template")
     )
-    monkeypatch.setattr(
-        capa_api.ie_service, "export_capas", AsyncMock(return_value=b"export")
-    )
 
     assert (
         await capa_api.list_capa_plan_tracks(db=db, current_user=user)

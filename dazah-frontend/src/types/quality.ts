@@ -344,6 +344,8 @@ export interface CapaDetail {
   deviation_id: string | null;
   source: string | null;
   source_code: string | null;
+  department: string | null;
+  affected_product: string | null;
   category: CapaCategory | null;
   root_cause_category: ReasonCategory | null;
   non_conformity_description: string | null;
@@ -373,6 +375,8 @@ export interface CapaDetail {
   returned_step: string | null;
   status_updated_at: string | null;
   reporter: string | null;
+  qa_confirmer: string | null;
+  qa_confirm_date: string | null;
   reason_category: string | null;
   feishu_base_table_id?: string | null;
   feishu_base_record_id?: string | null;

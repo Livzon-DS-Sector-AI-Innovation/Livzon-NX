@@ -13813,6 +13813,17 @@
       },
       "CapaDetail": {
         "properties": {
+          "affected_product": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Affected Product"
+          },
           "capa_code": {
             "title": "Capa Code",
             "type": "string"
@@ -13878,6 +13889,17 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
           },
           "dept_head_confirmations": {
             "anyOf": [
@@ -14165,6 +14187,29 @@
               }
             ],
             "title": "Q Head Approver Id"
+          },
+          "qa_confirm_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qa Confirm Date"
+          },
+          "qa_confirmer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qa Confirmer"
           },
           "qa_review_opinion": {
             "anyOf": [
@@ -76933,6 +76978,17 @@
             ],
             "title": "Affected Product"
           },
+          "capa_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capa Code"
+          },
           "capa_content": {
             "anyOf": [
               {
@@ -77166,6 +77222,28 @@
               }
             ],
             "title": "Q Head Approver Id"
+          },
+          "qa_confirm_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qa Confirm Date"
+          },
+          "qa_confirmer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qa Confirmer"
           },
           "qa_review_opinion": {
             "anyOf": [

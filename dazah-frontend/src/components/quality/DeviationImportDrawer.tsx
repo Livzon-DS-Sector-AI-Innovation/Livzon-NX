@@ -25,7 +25,7 @@ export function DeviationImportDrawer({ isOpen, onClose, onSuccess }: DeviationI
       headers={deviationHeaders}
       fileInputId="deviation-file-input"
       templateDownloadUrl="/api/v1/quality/deviations/export"
-      templateFilename="偏差登记表_模板.docx"
+      templateFilename="偏差台账_模板.docx"
       previewAction={previewDeviationImport}
       confirmAction={confirmDeviationImport}
     />
