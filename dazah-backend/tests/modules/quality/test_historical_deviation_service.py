@@ -406,7 +406,11 @@ async def test_ai_extract_error_paths(
         session = SimpleNamespace(get=AsyncMock(return_value=_record(attachments=[_attach()])))  # noqa: E501
         monkeypatch.setattr(
             svc, "llm_client",
-            SimpleNamespace(chat_json=AsyncMock(side_effect=exc)),
+            SimpleNamespace(
+                chat_json=AsyncMock(side_effect=exc),
+                # 缺键/解析失败会降级重试：返回不可解析文本，仍应报格式错误
+                chat=AsyncMock(return_value="这里不是 JSON"),
+            ),
         )
         with patch.object(svc.asyncio, "sleep", new=AsyncMock()):
             with pytest.raises(  # noqa: E501
@@ -421,3 +425,184 @@ async def test_ai_extract_error_paths(
     )
     with pytest.raises(AppException, match="未提取到有效内容"):
         await svc.ai_extract_historical_deviation(session, "r1", "u1")  # type: ignore[arg-type]  # noqa: E501
+
+
+@pytest.mark.asyncio
+async def test_ai_extract_falls_back_without_response_format(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """json_object 只回部分字段时，降级为普通文本重试并补齐四个字段。"""
+    record = _record(attachments=[_attach(storage_key="s1")])
+    session = SimpleNamespace(
+        get=AsyncMock(return_value=record),
+        commit=AsyncMock(),
+        execute=AsyncMock(return_value=SimpleNamespace(scalar_one=lambda: record)),
+    )
+    monkeypatch.setattr(
+        svc, "_build_ai_context_text", AsyncMock(return_value="附件正文")
+    )
+    monkeypatch.setattr(
+        svc, "_require_quality_ai_config", AsyncMock(return_value=SimpleNamespace(model_name="qwen3.7-plus"))  # noqa: E501
+    )
+    chat_json = AsyncMock(
+        side_effect=LLMOutputError("LLM response missing keys: ['root_cause']")
+    )
+    chat = AsyncMock(
+        return_value=(
+            "```json\n"
+            '{"deviation_event": "事件", "deviation_content": "内容",'
+            ' "direct_cause": "直接", "root_cause": "根本"}\n```'
+        )
+    )
+    monkeypatch.setattr(
+        svc, "llm_client", SimpleNamespace(chat_json=chat_json, chat=chat)
+    )
+
+    detail = await svc.ai_extract_historical_deviation(session, record.id, "u1")  # type: ignore[arg-type]  # noqa: E501
+
+    chat_json.assert_awaited_once()
+    assert chat.await_args.kwargs["response_format"] is None
+    assert record.deviation_event == "事件"
+    assert record.root_cause == "根本"
+    assert detail.ai_extract_payload["raw"]["root_cause"] == "根本"
+
+
+@pytest.mark.asyncio
+async def test_ai_extract_fallback_invalid_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """降级重试仍拿不到四键 → 仍报 AI 输出格式错误。"""
+    monkeypatch.setattr(
+        svc, "_build_ai_context_text", AsyncMock(return_value="正文")
+    )
+    monkeypatch.setattr(
+        svc, "_require_quality_ai_config", AsyncMock(return_value=SimpleNamespace(model_name="m"))  # noqa: E501
+    )
+    session = SimpleNamespace(get=AsyncMock(return_value=_record(attachments=[_attach()])))  # noqa: E501
+    monkeypatch.setattr(
+        svc, "llm_client",
+        SimpleNamespace(
+            chat_json=AsyncMock(side_effect=LLMOutputError("missing keys")),
+            chat=AsyncMock(return_value="模型说了些别的"),
+        ),
+    )
+    with pytest.raises(AppException, match="AI 输出格式错误"):
+        await svc.ai_extract_historical_deviation(session, "r1", "u1")  # type: ignore[arg-type]  # noqa: E501
+
+
+@pytest.mark.asyncio
+async def test_parse_extract_json_rejects_incomplete_object() -> None:
+    """降级路径的本地解析：缺键与非对象按同一规则拒绝。"""
+    with pytest.raises(LLMOutputError, match="not valid JSON"):
+        svc._parse_extract_json("模型返回了自然语言")
+    with pytest.raises(LLMOutputError, match="not a JSON object"):
+        svc._parse_extract_json("[1, 2]")
+    with pytest.raises(LLMOutputError, match="missing keys"):
+        svc._parse_extract_json('{"deviation_event": "只有第一个字段"}')
+    parsed = svc._parse_extract_json(
+        '{"deviation_event": "事件", "deviation_content": "内容",'
+        ' "direct_cause": "直接", "root_cause": "根本"}'
+    )
+    assert parsed["direct_cause"] == "直接"
+
+
+# ── 附件正文兜底（旧版 .doc） ──────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_attachment_context_text_prefers_original_parse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.platform.ai.document_text_extractor.extract_document_text",
+        lambda name, content: "原文正文",
+    )
+    text = await svc._attachment_context_text(_attach(file_name="a.docx"), b"x")
+    assert text == "原文正文"
+
+
+@pytest.mark.asyncio
+async def test_attachment_context_text_uses_stored_md_for_legacy_doc(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """旧版 .doc：原文解析失败时用上传时生成的标准 MD，并去掉图片引用。"""
+
+    def _raise(name: str, content: bytes) -> str:
+        raise ValueError("not a docx")
+
+    monkeypatch.setattr(
+        "app.platform.ai.document_text_extractor.extract_document_text", _raise
+    )
+    md = "# 报告\n\n![image](/api/v1/x/content)\n\n电容瓶用错导致峰面积异常"
+    monkeypatch.setattr(
+        svc,
+        "read_file",
+        MagicMock(return_value=(md.encode("utf-8"), "text/markdown")),
+    )
+    text = await svc._attachment_context_text(
+        _attach(file_name="偏差.doc", converted_md_key="m1"), b"legacy"
+    )
+    assert "电容瓶用错导致峰面积异常" in text
+    assert "![image]" not in text
+
+
+@pytest.mark.asyncio
+async def test_attachment_context_text_converts_legacy_without_stored_md(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """.doc 连标准 MD 都没有时现场转换；转换失败返回空串（由调用方判定）。"""
+
+    def _raise(name: str, content: bytes) -> str:
+        raise ValueError("not a docx")
+
+    monkeypatch.setattr(
+        "app.platform.ai.document_text_extractor.extract_document_text", _raise
+    )
+    monkeypatch.setattr(svc, "read_file", MagicMock(return_value=None))
+    calls: list[str] = []
+
+    def _render(file_name: str, content: bytes) -> Any:
+        calls.append(file_name)
+        return "# 报告\n\n正文内容", []
+
+    monkeypatch.setattr(svc, "render_word_to_md", _render)
+    text = await svc._attachment_context_text(_attach(file_name="偏差.doc"), b"legacy")
+    assert text == "# 报告\n\n正文内容"
+    assert calls == ["偏差.doc"]
+
+    def _boom(file_name: str, content: bytes) -> Any:
+        raise RuntimeError("转换失败")
+
+    monkeypatch.setattr(svc, "render_word_to_md", _boom)
+    assert (
+        await svc._attachment_context_text(_attach(file_name="偏差.doc"), b"legacy")
+        == ""
+    )
+
+
+@pytest.mark.asyncio
+async def test_build_ai_context_text_includes_legacy_doc(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """汇总上下文：.doc 经兜底后仍能进入 AI 上下文。"""
+
+    def _raise(name: str, content: bytes) -> str:
+        raise ValueError("not a docx")
+
+    monkeypatch.setattr(
+        "app.platform.ai.document_text_extractor.extract_document_text", _raise
+    )
+    md = "偏差正文（来自标准 MD）"
+
+    def _read(subdir: str, key: str) -> Any:
+        if key == "s1":
+            return b"legacy-bytes", "application/msword"
+        return md.encode("utf-8"), "text/markdown"
+
+    monkeypatch.setattr(svc, "read_file", _read)
+    record = _record(
+        attachments=[_attach(file_name="PC-2502001 偏差.doc", converted_md_key="m1")]
+    )
+    text = await svc._build_ai_context_text(record)
+    assert "PC-2502001 偏差.doc" in text
+    assert "偏差正文（来自标准 MD）" in text

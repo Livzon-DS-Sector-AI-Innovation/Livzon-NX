@@ -193,8 +193,8 @@ async def export_deviations(
         BytesIO(data),
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers=_build_docx_download_headers(
-            "偏差登记表.docx",
-            "deviation-register.docx",
+            "偏差台账.docx",
+            "deviation-ledger.docx",
         ),
     )
 

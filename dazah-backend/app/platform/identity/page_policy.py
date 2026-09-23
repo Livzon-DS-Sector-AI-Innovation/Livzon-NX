@@ -3407,7 +3407,7 @@ def _registration_api_bindings() -> tuple[PageApiBinding, ...]:
         (
             "GET",
             "/certificate-management/reminder-settings",
-            settings_page,
+            settings_page + certificate_pages,
             "query",
             None,
             "registration.settings",

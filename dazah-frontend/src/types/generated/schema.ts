@@ -32084,6 +32084,8 @@ export interface components {
         };
         /** CapaDetail */
         CapaDetail: {
+            /** Affected Product */
+            affected_product?: string | null;
             /** Capa Code */
             capa_code: string;
             /** Capa Content */
@@ -32101,6 +32103,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Department */
+            department?: string | null;
             /** Dept Head Confirmations */
             dept_head_confirmations?: unknown[] | null;
             /** Deviation Id */
@@ -32157,6 +32161,10 @@ export interface components {
             q_head_approval_time?: string | null;
             /** Q Head Approver Id */
             q_head_approver_id?: string | null;
+            /** Qa Confirm Date */
+            qa_confirm_date?: string | null;
+            /** Qa Confirmer */
+            qa_confirmer?: string | null;
             /** Qa Review Opinion */
             qa_review_opinion?: string | null;
             /** Qa Review Time */
@@ -57550,6 +57558,8 @@ export interface components {
         UpdateCapaRequest: {
             /** Affected Product */
             affected_product?: string | null;
+            /** Capa Code */
+            capa_code?: string | null;
             /** Capa Content */
             capa_content?: string | null;
             /** Capa Items */
@@ -57590,6 +57600,10 @@ export interface components {
             q_head_approval_opinion?: string | null;
             /** Q Head Approver Id */
             q_head_approver_id?: string | null;
+            /** Qa Confirm Date */
+            qa_confirm_date?: string | null;
+            /** Qa Confirmer */
+            qa_confirmer?: string | null;
             /** Qa Review Opinion */
             qa_review_opinion?: string | null;
             /** Qa Reviewer Id */

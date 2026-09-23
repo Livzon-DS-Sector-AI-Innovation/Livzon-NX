@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import json
 from collections.abc import AsyncIterator
 from types import SimpleNamespace as _SimpleNamespace
 from typing import Any
@@ -376,9 +377,17 @@ async def test_ai_extract_output_error(
     ) -> dict[str, Any]:
         raise LLMOutputError("输出格式错误")
 
+    async def _plain_chat(
+        self: Any,  # noqa: ANN001
+        *args: Any,  # noqa: ANN002
+        **kwargs: Any,  # noqa: ANN003
+    ) -> str:
+        return "降级也没给出 JSON"
+
     monkeypatch.setattr(
         "app.core.llm.client.LLMClient.chat_json", _raise_output
     )
+    monkeypatch.setattr("app.core.llm.client.LLMClient.chat", _plain_chat)
 
     async def _async_config(*_args: Any, **_kwargs: Any) -> SimpleNamespace:
         return _async_config_stub()
@@ -392,3 +401,66 @@ async def test_ai_extract_output_error(
         f"/api/v1/quality/historical-deviations/{record_id}/ai-extract"
     )
     assert response.status_code == 502
+
+
+@pytest.mark.anyio
+async def test_ai_extract_falls_back_to_plain_text(
+    client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """json_object 缺键时降级为普通文本，接口仍能提取成功并落库。"""
+    created = await _create_record(client)
+    record_id = created["id"]
+    await client.post(
+        f"/api/v1/quality/historical-deviations/{record_id}/attachments",
+        files={
+            "file": (
+                "report.docx",
+                _build_docx_bytes("灌装压塞压力超上限。"),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+
+    async def _missing_keys(
+        self: Any,  # noqa: ANN001
+        *args: Any,  # noqa: ANN002
+        **kwargs: Any,  # noqa: ANN003
+    ) -> dict[str, Any]:
+        raise LLMOutputError("LLM response missing keys: ['root_cause']")
+
+    async def _plain_chat(
+        self: Any,  # noqa: ANN001
+        *args: Any,  # noqa: ANN002
+        **kwargs: Any,  # noqa: ANN003
+    ) -> str:
+        return json.dumps(
+            {
+                "deviation_event": "灌装压塞压力超上限",
+                "deviation_content": "人：操作未复核；机：传感器漂移",
+                "direct_cause": "传感器漂移",
+                "root_cause": "未建立传感器定期校准机制",
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr(
+        "app.core.llm.client.LLMClient.chat_json", _missing_keys
+    )
+    monkeypatch.setattr("app.core.llm.client.LLMClient.chat", _plain_chat)
+
+    async def _async_config(*_args: Any, **_kwargs: Any) -> SimpleNamespace:
+        return _async_config_stub()
+
+    monkeypatch.setattr(
+        "app.modules.quality.service.historical_deviation.get_config",
+        _async_config,
+    )
+
+    response = await client.post(
+        f"/api/v1/quality/historical-deviations/{record_id}/ai-extract"
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["deviation_event"] == "灌装压塞压力超上限"
+    assert data["root_cause"] == "未建立传感器定期校准机制"
+    assert data["ai_extract_payload"]["raw"]["direct_cause"] == "传感器漂移"

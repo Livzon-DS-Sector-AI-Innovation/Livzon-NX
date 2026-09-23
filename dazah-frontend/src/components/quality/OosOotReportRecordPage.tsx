@@ -1,6 +1,7 @@
 'use client'
 
 import { personSelectValue } from './qualityPersonSelection'
+import { ConfirmFlag } from './ConfirmFlag'
 
 import { QualityRecordAttachments } from './QualityRecordAttachments'
 import { alignFeishuColumns, feishuColumnLayouts } from './feishuColumnLayout'
@@ -26,11 +27,6 @@ function formatDateTime(value: string | null | undefined): string {
   if (!value) return '-'
   const parsed = dayjs(value)
   return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm:ss') : value
-}
-
-function formatBoolean(value: boolean | null | undefined): string {
-  if (value === null || value === undefined) return '-'
-  return value ? '是' : '否'
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -253,15 +249,10 @@ export default function OosOotReportRecordPage() {
 
   const columns: ColumnsType<OosOotReportRecordItem> = [
     { title: '部门负责人', key: 'department_heads', width: 150, render: (_, record) => renderPerson(record.department_heads, String(record.department_head || '')) },
-    { title: '部门负责人确认', key: 'department_head_confirmed', dataIndex: 'department_head_confirmed', width: 150, render: formatBoolean },
     { title: '涉及发酵负责人', key: 'fermentation_head', dataIndex: 'fermentation_head', width: 160, render: value => value || '-' },
-    { title: '涉及发酵负责人确认', key: 'fermentation_head_confirmed', dataIndex: 'fermentation_head_confirmed', width: 170, render: formatBoolean },
     { title: '涉及提炼负责人', key: 'extraction_head', dataIndex: 'extraction_head', width: 160, render: value => value || '-' },
-    { title: '涉及提炼负责人确认', key: 'extraction_head_confirmed', dataIndex: 'extraction_head_confirmed', width: 170, render: formatBoolean },
     { title: 'QA', key: 'qas', width: 140, render: (_, record) => renderPerson(record.qas, null) },
-    { title: 'QA确认', key: 'qa_confirmed', dataIndex: 'qa_confirmed', width: 120, render: formatBoolean },
     { title: 'QA负责人', key: 'qa_heads', width: 150, render: (_, record) => renderPerson(record.qa_heads, null) },
-    { title: 'QA负责人确认', key: 'qa_head_confirmed', dataIndex: 'qa_head_confirmed', width: 150, render: formatBoolean },
     { title: '报告时间', dataIndex: 'report_time', key: 'report_time', width: 180, render: (v: string | null) => formatDateTime(v) },
     { title: '内容', dataIndex: 'content', key: 'content', width: 280, ellipsis: true, render: (v: string | null) => v || '-' },
     { title: '涉及产品名称', dataIndex: 'product_name', key: 'product_name', width: 160, render: (v: string | null) => v || '-' },
@@ -364,7 +355,7 @@ export default function OosOotReportRecordPage() {
             </div>
             <div>
               <Typography.Text strong>部门负责人确认：</Typography.Text>
-              <div>{formatBoolean(drawerRecord.department_head_confirmed)}</div>
+              <div><ConfirmFlag confirmed={drawerRecord.department_head_confirmed} /></div>
             </div>
             {drawerRecord.department_heads && drawerRecord.department_heads.length > 0 && (
               <div>
@@ -374,15 +365,15 @@ export default function OosOotReportRecordPage() {
             )}
             <div>
               <Typography.Text strong>涉及发酵负责人确认：</Typography.Text>
-              <div>{formatBoolean((drawerRecord as any).fermentation_head_confirmed)}</div>
+              <div><ConfirmFlag confirmed={(drawerRecord as any).fermentation_head_confirmed} /></div>
             </div>
             <div>
               <Typography.Text strong>涉及提炼负责人确认：</Typography.Text>
-              <div>{formatBoolean((drawerRecord as any).refinement_head_confirmed)}</div>
+              <div><ConfirmFlag confirmed={(drawerRecord as any).refinement_head_confirmed} /></div>
             </div>
             <div>
               <Typography.Text strong>QA确认：</Typography.Text>
-              <div>{formatBoolean(drawerRecord.qa_confirmed)}</div>
+              <div><ConfirmFlag confirmed={drawerRecord.qa_confirmed} /></div>
             </div>
             {drawerRecord.qas && drawerRecord.qas.length > 0 && (
               <div>
@@ -392,7 +383,7 @@ export default function OosOotReportRecordPage() {
             )}
             <div>
               <Typography.Text strong>QA负责人确认：</Typography.Text>
-              <div>{formatBoolean(drawerRecord.qa_head_confirmed)}</div>
+              <div><ConfirmFlag confirmed={drawerRecord.qa_head_confirmed} /></div>
             </div>
             {drawerRecord.qa_heads && drawerRecord.qa_heads.length > 0 && (
               <div>

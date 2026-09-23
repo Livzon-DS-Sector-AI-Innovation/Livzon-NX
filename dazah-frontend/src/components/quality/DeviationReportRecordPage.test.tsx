@@ -55,6 +55,7 @@ beforeEach(() => {
   mocks.list.mockReset().mockResolvedValue({ items: [{
     id: 'record', record_id: 'record', deviation_code: null, description: '测试', product_batch: '产品',
     reporters: [{ name: '原报告人', id: 'ou_old' }],
+    department_head_result: 'approved', qa_result: null, qa_head_result: 'approved',
     attachments: [
       { name: '照片.png', url: 'https://example.test/image.png', file_token: 'ft_image' },
       { name: '报告.docx', file_token: 'ft_doc' },
@@ -85,7 +86,7 @@ it('shows attachments in both the list and details with the narrower columns', a
   await renderPage()
   expect(Array.from(container.querySelectorAll('th')).map(el => el.textContent)).toEqual([...feishuColumnLayouts.deviationReport, '操作'])
   const widths = Array.from(container.querySelectorAll('col')).map(col => col.style.width)
-  expect(widths.slice(0, 7)).toEqual(['107px', '180px', '280px', '220px', '200px', '93px', '107px'])
+  expect(widths.slice(0, 8)).toEqual(['107px', '180px', '280px', '220px', '200px', '93px', '107px', '140px'])
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 40)) })
   expect(container.querySelector('img[alt="照片.png"]')).toBeTruthy()
   expect(mocks.fetch).toHaveBeenCalledWith(
@@ -129,4 +130,16 @@ it('retains the edit dialog and entered values after save failure', async () => 
   expect(document.querySelector('[role="dialog"]')).toBeTruthy()
   expect(document.querySelector('textarea')?.value).toBe('测试')
   expect(document.body.textContent).toContain('保存失败，请重试')
+})
+
+it('renders confirm results as flags in details only after removing them from the list', async () => {
+  await renderPage()
+  const headers = Array.from(container.querySelectorAll('th')).map(el => el.textContent)
+  expect(headers).not.toContain('部门负责人确认')
+  expect(headers).not.toContain('QA确认')
+  expect(headers).not.toContain('QA负责人确认')
+  await clickButton('详情')
+  const detail = document.querySelector('[role="dialog"]')!
+  expect(detail.querySelectorAll('[aria-label="已确认"]').length).toBe(2)
+  expect(detail.querySelectorAll('[aria-label="未确认"]').length).toBe(1)
 })
