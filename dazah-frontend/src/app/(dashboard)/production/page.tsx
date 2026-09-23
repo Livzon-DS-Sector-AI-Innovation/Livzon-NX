@@ -480,14 +480,15 @@ export default function ProductionDashboard() {
   }
 
   const kpi = board?.kpis
+  const periodEnd = board?.period?.end
   // 月份选择器取值 memo 化：每次渲染新造 dayjs 对象会让 rc-picker 在
   // value 引用变化时把打开的面板拉回当月，导致跨年导航选错年
   const monthPickerValue = useMemo(() => {
     if (viewDate) return dayjs(viewDate)
     if (isSummaryView) return dayjs()
-    if (board?.period?.end) return dayjs(board.period.end)
+    if (periodEnd) return dayjs(periodEnd)
     return null
-  }, [viewDate, isSummaryView, board?.period?.end])
+  }, [viewDate, isSummaryView, periodEnd])
   // 周期回看：写操作（检修、产能设置）仅当前扎帐月开放
   // FL 视图无扎帐周期概念：所选月即当月（viewDate 空）视为当前
   const isCurrent = isFlView ? !viewDate : (board?.is_current_period ?? true)

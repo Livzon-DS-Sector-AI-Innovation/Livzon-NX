@@ -9,8 +9,8 @@ from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
-revision: str = "c9d400000054"
-down_revision: str | None = "c9d400000053"
+revision: str = "c9d400000055"
+down_revision: str | None = "c9d400000054"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

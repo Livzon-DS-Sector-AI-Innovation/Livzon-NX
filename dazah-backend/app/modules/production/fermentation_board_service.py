@@ -1754,7 +1754,7 @@ def build_mp_board(
         def _count(b: dict[str, Any]) -> float:
             if b["batch_no"].split("-")[0] == "MV":
                 return 1.0
-            return b.get("units", 1.0)
+            return float(b.get("units", 1.0))
 
         month_planned = round(sum(_count(b) for b in planned), 2)
         month_done_planned = round(sum(_count(b) for b in done), 2)

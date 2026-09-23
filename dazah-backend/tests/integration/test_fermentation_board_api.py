@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -1067,7 +1067,7 @@ async def test_line_status_events_endpoint_returns_timeline(
             halted=True,
             reason="转产",
             operator_name="张三",
-            created_at=datetime(2026, 9, 21, 10, 0, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 9, 21, 10, 0, 0, tzinfo=UTC),
         )
     ]
     list_mock = AsyncMock(return_value=events)
