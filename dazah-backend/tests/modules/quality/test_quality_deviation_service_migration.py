@@ -449,7 +449,6 @@ async def test_deviation_manual_code_create_skips_generator_and_checks_duplicate
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from app.modules.quality.schemas.deviations import CreateDeviationRequest
-    from app.modules.quality.service import quality_feishu_sync as sync
 
     reporter = service.SelectedReporterContact(
         name="报告人", open_id="ou-1", department="生产部"
@@ -490,7 +489,6 @@ async def test_deviation_manual_code_duplicate_rejected_blank_falls_back_to_auto
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from app.modules.quality.schemas.deviations import CreateDeviationRequest
-    from app.modules.quality.service import quality_feishu_sync as sync
 
     reporter = service.SelectedReporterContact(
         name="报告人", open_id="ou-1", department="生产部"
@@ -545,7 +543,6 @@ async def test_deviation_update_code_change_unique_and_blank_rules(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from app.modules.quality.schemas.deviations import UpdateDeviationRequest
-    from app.modules.quality.service import quality_feishu_sync as sync
 
     deviation = _deviation(status="draft")
     db = _Db(deviation)
@@ -589,7 +586,6 @@ async def test_deviation_create_allows_missing_reporter_and_department(
 ) -> None:
     """台账口径：新增表单与台账列一致，报告人/部门不再强制。"""
     from app.modules.quality.schemas.deviations import CreateDeviationRequest
-    from app.modules.quality.service import quality_feishu_sync as sync
 
     resolve = AsyncMock()
     monkeypatch.setattr(service, "_resolve_selected_reporter_contact", resolve)

@@ -15,7 +15,7 @@ from app.modules.agent.tools import tool_registry
 from app.modules.quality.api import quality_deviation as api
 from app.modules.quality.models import CAPA, Deviation
 from app.modules.quality.page_access import DEVIATION_LEDGER_PAGE, deviation_page_scope
-from app.modules.quality.service import person_directory, quality_feishu_sync
+from app.modules.quality.service import person_directory
 from app.modules.quality.service import quality_deviation as service
 from app.platform.audit.models import AuditLog
 from app.platform.identity.data_scope import (
