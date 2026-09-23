@@ -12,7 +12,7 @@ test.describe('页面最小授权', () => {
     }
     await page.goto('/quality/deviations/ledger')
     await expect(page.getByRole('heading', { name: '偏差台账' })).toBeVisible()
-    await expect(page.getByRole('button', { name: /新建偏差$/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /新增台账$/ })).toBeVisible()
   })
 
   test('角色矩阵模块全部显示中文，保存先预览且冲突保留本地修改', async ({ context, page }) => {
