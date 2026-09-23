@@ -98,8 +98,6 @@ from app.modules.quality.schemas.deviations import (
     UpdateDeviationRequest,
 )
 from app.modules.quality.schemas.feishu_capa import (
-    FeishuCapaLedgerCreateRequest,
-    FeishuCapaLedgerUpdateRequest,
     FeishuCapaPlanTrackCreateRequest,
     FeishuCapaPlanTrackUpdateRequest,
 )
@@ -312,8 +310,6 @@ __all__ = [
     "QualityFeishuSettingsTestResult",
     "QualityFeishuTableOption",
     # Feishu CAPA
-    "FeishuCapaLedgerCreateRequest",
-    "FeishuCapaLedgerUpdateRequest",
     "FeishuCapaPlanTrackCreateRequest",
     "FeishuCapaPlanTrackUpdateRequest",
     # Inspection Dashboard

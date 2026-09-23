@@ -358,31 +358,6 @@ async function actionFetchForm<T>(url: string, formData: FormData): Promise<T | 
   return unwrapActionResponse<T>(result)
 }
 
-export async function createFeishuCapa(data: UntypedFeishuPayload) {
-  const result = await actionFetch(`${API_BASE_URL}/api/v1/quality/feishu/capas`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-  revalidatePath('/quality/capas')
-  return result
-}
-
-export async function updateFeishuCapa(recordId: string, data: UntypedFeishuPayload) {
-  const result = await actionFetch(`${API_BASE_URL}/api/v1/quality/feishu/capas/${recordId}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  })
-  revalidatePath('/quality/capas')
-  return result
-}
-
-export async function deleteFeishuCapa(recordId: string) {
-  await actionFetch(`${API_BASE_URL}/api/v1/quality/feishu/capas/${recordId}`, {
-    method: 'DELETE',
-  })
-  revalidatePath('/quality/capas')
-}
-
 export async function createFeishuCapaPlanTrack(data: UntypedFeishuPayload) {
   const result = await actionFetch(`${API_BASE_URL}/api/v1/quality/feishu/capa-plan-tracks`, {
     method: 'POST',

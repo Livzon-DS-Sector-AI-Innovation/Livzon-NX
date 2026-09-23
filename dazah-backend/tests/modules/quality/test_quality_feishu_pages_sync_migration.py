@@ -43,64 +43,6 @@ def _record(record_id: str, fields: dict[str, object]) -> dict[str, object]:
 
 
 @pytest.mark.asyncio
-async def test_sync_capas_from_feishu_updates_creates_and_counts_failures(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runtime = object()
-    records = [
-        _record("missing-code", {}),
-        _record(
-            "existing",
-            {
-                "CAPA编号": "CAPA-EXISTING",
-                "CAPA状态": "closed",
-                "CAPA简述": "更新标题",
-                "事件部门": "质量部",
-                "涉及产品": "产品A",
-                "CAPA效果评估": "有效",
-                "QA质量员": "张三",
-                "关闭日期": "2026-08-20T08:00:00Z",
-                "QA质量员确认日期": "2026-08-21",
-                "启动日期": "2026-08-01",
-            },
-        ),
-        _record(
-            "new",
-            {
-                "CAPA编号": "CAPA-NEW",
-                "CAPA简述": "新 CAPA",
-                "事件部门": "生产部",
-                "涉及产品": "产品B",
-            },
-        ),
-        _record("broken", {"CAPA编号": "CAPA-BROKEN"}),
-    ]
-    existing = SimpleNamespace(status="draft", is_deleted=False)
-    monkeypatch.setattr(
-        service,
-        "_resolve_runtime_entity",
-        AsyncMock(return_value=(runtime, object())),
-    )
-    monkeypatch.setattr(
-        service, "_search_entity_records", AsyncMock(return_value=records)
-    )
-    monkeypatch.setattr(
-        service.repository,
-        "get_capa_by_code",
-        AsyncMock(side_effect=[existing, None, RuntimeError("db failure")]),
-    )
-    db = _Db()
-
-    result = await service.sync_capas_from_feishu(db)
-
-    assert result == {"synced": 2, "failed": 2}
-    assert existing.title == "更新标题"
-    assert existing.status == "closed"
-    assert len(db.added) == 1
-    assert db.commits == 2
-    assert db.rollbacks == 1
-
-
 @pytest.mark.asyncio
 async def test_sync_capa_plan_tracks_matches_existing_and_creates_new_tracks(
     monkeypatch: pytest.MonkeyPatch,
@@ -171,7 +113,6 @@ async def test_sync_functions_return_zero_when_runtime_or_search_is_unavailable(
         "_resolve_runtime_entity",
         AsyncMock(side_effect=AppException(message="disabled")),
     )
-    assert await service.sync_capas_from_feishu(db) == {"synced": 0, "failed": 0}
     assert await service.sync_capa_plan_tracks_from_feishu(db) == {
         "synced": 0,
         "failed": 0,
@@ -187,7 +128,6 @@ async def test_sync_functions_return_zero_when_runtime_or_search_is_unavailable(
         "_search_entity_records",
         AsyncMock(side_effect=RuntimeError("unavailable")),
     )
-    assert await service.sync_capas_from_feishu(db) == {"synced": 0, "failed": 0}
     assert await service.sync_capa_plan_tracks_from_feishu(db) == {
         "synced": 0,
         "failed": 0,

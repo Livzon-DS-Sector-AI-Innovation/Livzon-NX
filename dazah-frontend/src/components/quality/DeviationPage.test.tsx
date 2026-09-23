@@ -64,7 +64,7 @@ it('does not request or retain data with access-only permission', async () => {
   await renderPage()
   expect(container.textContent).toContain('尚未获得查询数据权限')
   expect(mocks.fetchDeviations).not.toHaveBeenCalled()
-  expect(container.textContent).not.toContain('新建偏差')
+  expect(container.textContent).not.toContain('新增台账')
   expect(useDeviationStore.getState().deviations).toEqual([])
 })
 
@@ -97,13 +97,13 @@ it('sends all visible filters and keeps read-only operations hidden', async () =
   useDeviationStore.getState().setDepartmentFilter('质量部')
   await renderPage()
   expect(mocks.fetchDeviations).toHaveBeenCalledWith(expect.objectContaining({ status: 'draft', level: 'minor', department: '质量部' }))
-  for (const label of ['新建偏差', '批量删除', '导入', '导出']) expect(container.textContent).not.toContain(label)
+  for (const label of ['新增台账', '批量删除', '导入', '导出']) expect(container.textContent).not.toContain(label)
 })
 
 it('requires an independent export grant and sends the ledger context', async () => {
   setGrant(['access', 'query', 'operate'])
   await renderPage()
-  expect(container.textContent).toContain('新建偏差')
+  expect(container.textContent).toContain('新增台账')
   expect(container.textContent).not.toContain('导出')
   await act(async () => setGrant(['access', 'query', 'operate'], ['sensitive_export']))
   const fetch = vi.fn().mockResolvedValue({ ok: false })
@@ -160,7 +160,7 @@ it('clears cached rows after query permission is revoked', async () => {
 it('system administrators retain every operation', async () => {
   setGrant([], [], 'admin')
   await renderPage()
-  for (const label of ['新建偏差', '批量删除', '导入', '导出']) expect(container.textContent).toContain(label)
+  for (const label of ['新增台账', '批量删除', '导入', '导出']) expect(container.textContent).toContain(label)
 })
 
 it('refetches when the authorization version changes without different grant content', async () => {

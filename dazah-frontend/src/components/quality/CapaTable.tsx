@@ -11,7 +11,7 @@ import { EditOutlined, DeleteOutlined, SearchOutlined, ImportOutlined, ExportOut
 import { useQueryClient } from '@tanstack/react-query'
 import { CapaListItem, CapaWorkflowStatus, CapaSource } from '@/types/quality'
 import { useCapaStore } from '@/stores/quality'
-import { deleteCapa, batchDeleteFeishuCapas } from '@/actions/quality-capa'
+import { deleteCapa, batchDeleteCapas } from '@/actions/quality-capa'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { CapaImportDrawer } from './CapaImportDrawer'
@@ -209,8 +209,12 @@ export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
       okButtonProps: { danger: true },
       onOk: async () => {
         try {
-          const result = await batchDeleteFeishuCapas(selectedRowKeys)
-          message.success(result.message)
+          const result = await batchDeleteCapas(selectedRowKeys)
+          if (result.failed.length > 0) {
+            message.warning(`已删除 ${result.deleted} 条，失败 ${result.failed.length} 条`)
+          } else {
+            message.success(`已删除 ${result.deleted} 条记录`)
+          }
           setSelectedRowKeys([])
           queryClient.invalidateQueries({ queryKey: ['quality-capa'] })
         } catch (error: unknown) {

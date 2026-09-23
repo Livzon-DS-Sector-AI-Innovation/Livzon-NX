@@ -16,11 +16,7 @@ export function CreateCapa() {
         ...values,
         expected_completion_date: values.expected_completion_date?.toISOString(),
       })
-      if (result && typeof result === 'object' && 'feishu_sync_status' in result && result.feishu_sync_status === 'failed') {
-        message.warning('CAPA已创建，但飞书同步失败，请进入详情重试保存')
-      } else {
-        message.success('创建成功')
-      }
+      message.success('创建成功')
       router.push('/quality/capas')
     } catch (error) {
       message.error((error instanceof Error ? error.message : '') || '创建失败')

@@ -18,7 +18,6 @@ from app.modules.quality.models.deviation_investigation_push_record import (
     DeviationInvestigationPushRecord,
 )
 from app.modules.quality.models.deviations import Deviation
-from app.modules.quality.schemas.capa import UpdateCapaRequest
 from app.modules.quality.schemas.deviations import CreateDeviationRequest
 from app.modules.quality.schemas.feishu_settings import (
     UpdateQualityFeishuAppSettingsRequest,
@@ -1396,7 +1395,7 @@ async def test_list_quality_feishu_tables_uses_platform_bitable_client(
 
     tables = await feishu_settings_service.list_quality_feishu_tables(
         db_session,
-        "capa_ledger",
+        "capa_plan_track",
         app_token="basc_override",
     )
 
@@ -1438,7 +1437,7 @@ async def test_list_quality_feishu_tables_filters_by_base_table_id(
 
     tables = await feishu_settings_service.list_quality_feishu_tables(
         db_session,
-        "capa_ledger",
+        "capa_plan_track",
         app_token="basc_override",
         table_id="tbl_target",
     )
@@ -1487,7 +1486,7 @@ async def test_list_quality_feishu_tables_wraps_feishu_errors(
     with pytest.raises(ValueError, match="读取飞书表列表失败：invalid app_token"):
         await feishu_settings_service.list_quality_feishu_tables(
             db_session,
-            "capa_ledger",
+            "capa_plan_track",
             app_token="basc_override",
         )
 
@@ -1502,7 +1501,7 @@ async def test_update_quality_feishu_entity_setting_resolves_bitable_url(
 
     item = await feishu_settings_service.update_quality_feishu_entity_setting(
         db_session,
-        "capa_ledger",
+        "capa_plan_track",
         UpdateQualityFeishuEntitySettingRequest(
             app_token="https://example.feishu.cn/base/basc_from_url?table=tbl_from_url",
             base_table_name="偏差台账",
@@ -2111,42 +2110,6 @@ async def test_sync_investigation_push_uses_actual_table_fields(
 
 
 @pytest.mark.anyio
-async def test_update_capa_triggers_auto_feishu_sync(
-    db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    now = datetime(2026, 7, 3, 8, 0, tzinfo=UTC)
-    capa = CAPA(
-        id=uuid.uuid4(),
-        capa_code="CAPA-AUTO-001",
-        title="自动同步CAPA",
-        status="draft",
-        created_at=now,
-        updated_at=now,
-    )
-    db_session.add(capa)
-    await db_session.commit()
-
-    auto_sync_mock: Any = AsyncMock()
-    monkeypatch.setattr(
-        feishu_sync_service,
-        "auto_sync_capa_after_write",
-        auto_sync_mock,
-    )
-
-    result = await service.update_capa(
-        db_session,
-        capa.id,
-        UpdateCapaRequest(title="自动同步CAPA-已更新"),
-        "system",
-    )
-
-    assert result == {"success": True}
-    assert auto_sync_mock.await_count == 1
-    assert auto_sync_mock.await_args.args[0] is db_session
-    assert auto_sync_mock.await_args.args[1] == capa.id
-
-
 @pytest.mark.anyio
 async def test_change_statistics_prefers_ledger_then_legacy_fields(
     db_session: AsyncSession,

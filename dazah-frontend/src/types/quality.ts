@@ -223,20 +223,6 @@ export interface DeviationDetail {
 }
 
 // ============ Feishu Native Types ============
-export interface FeishuCapaLedgerItem {
-  record_id: string
-  启动日期: string | null
-  事件部门: string | null
-  涉及产品: string | null
-  CAPA简述: string | null
-  CAPA效果评估: string | null
-  关闭日期: string | null
-  QA质量员: string | null
-  QA质量员确认日期: string | null
-  CAPA状态: string | null
-  CAPA编号: string
-}
-
 export interface FeishuCapaPlanTrackItem {
   record_id: string
   CAPA编号: string
@@ -1033,23 +1019,16 @@ export interface DeviationDashboardStats {
 export interface CapaDashboardStats {
   total: number
   closedCount: number
-  overdueCount: number
-  statusDistribution: Array<{
-    status: string
-    count: number
-  }>
-  sourceDistribution: Array<{
-    source: string
-    count: number
-  }>
-  categoryDistribution: Array<{
-    category: string
+  inProgressCount: number
+  resultDistribution: Array<{
+    name: string
     count: number
   }>
   departmentDistribution: Array<{
     name: string
     count: number
   }>
+  monthlyTrend: Array<{ month: string; count: number }>
 }
 
 export interface ChangeDashboardStats {

@@ -123,6 +123,14 @@ it('CAPA ledger renders every Feishu column in order and keeps local-only column
   }
 })
 
+it('CAPA ledger page no longer offers a pull-from-Feishu action', async () => {
+  // 台账已本地化：页面文案与操作都不再出现飞书拉取入口
+  await renderPage(<CapaTable capas={[]} total={0} />)
+  for (const text of ['拉取飞书', '从飞书拉取']) {
+    expect(document.body.textContent).not.toContain(text)
+  }
+})
+
 it('OOS report keeps existing reporter if only text was edited', async () => {
   await renderPage(<OosOotReportRecordPage />)
   await button('修改')
@@ -229,13 +237,14 @@ it('CAPA save reports Feishu sync failure instead of reporting full success', as
 })
 
 
-it('CAPA detail shows a warning when the saved update did not sync to Feishu', async () => {
-  mocks.saveDetail.mockResolvedValue({ success: true, feishu_sync_status: 'failed' })
+it('CAPA detail saves locally without any Feishu sync messaging', async () => {
+  mocks.saveDetail.mockResolvedValue({ success: true })
   await renderPage(<CapaDetail />)
   await button('编辑')
   await button('保存')
   expect(mocks.saveDetail).toHaveBeenCalled()
-  expect(document.body.textContent).toContain('CAPA已保存，但飞书同步失败')
+  expect(document.body.textContent).toContain('保存成功')
+  expect(document.body.textContent).not.toContain('飞书同步失败')
 })
 
 it('CAPA plan creation includes department but never writes automation confirmations', async () => {

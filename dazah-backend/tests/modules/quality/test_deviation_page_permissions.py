@@ -139,14 +139,10 @@ async def test_ledger_http_scope_crud_export_and_audit(db_session, monkeypatch):
         ]
         db.add_all(capas)
         await db.flush()
-        sync = AsyncMock()
         contact = AsyncMock(
             return_value=service.SelectedReporterContact(
                 name="报告人", open_id="test-contact", department=child_name
             )
-        )
-        monkeypatch.setattr(
-            quality_feishu_sync, "auto_sync_deviation_after_write", sync
         )
         monkeypatch.setattr(service, "_resolve_selected_reporter_contact", contact)
         monkeypatch.setattr(
@@ -216,7 +212,6 @@ async def test_ledger_http_scope_crud_export_and_audit(db_session, monkeypatch):
                 )
             ).status_code == 403
             contact.assert_not_awaited()
-            sync.assert_not_awaited()
             render.assert_not_called()
             assert (
                 await client.put(
@@ -505,10 +500,6 @@ async def test_reporter_options_are_scoped_minimal_and_create_revalidates(
             _reporter_record("moved", "已调部门", second_dept.name),
         ]
         external = _fake_reporters(monkeypatch, records)
-        sync = AsyncMock()
-        monkeypatch.setattr(
-            quality_feishu_sync, "auto_sync_deviation_after_write", sync
-        )
         monkeypatch.setattr(
             service,
             "_generate_monthly_deviation_code",
@@ -558,7 +549,6 @@ async def test_reporter_options_are_scoped_minimal_and_create_revalidates(
                     base, json={**body, "reporter_open_id": reporter}
                 )
                 assert response.status_code == status, response.text
-            sync.assert_not_awaited()
             result = await client.post(base, json={**body, "reporter_open_id": "own"})
             assert result.status_code == 200, result.text
             from uuid import UUID

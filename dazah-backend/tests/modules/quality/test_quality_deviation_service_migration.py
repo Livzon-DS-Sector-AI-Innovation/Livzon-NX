@@ -357,7 +357,6 @@ async def test_deviation_crud_and_report_record_upsert_paths(
         "_generate_monthly_deviation_code",
         AsyncMock(return_value="PC-2608004"),
     )
-    monkeypatch.setattr(sync, "auto_sync_deviation_after_write", AsyncMock())
     created = SimpleNamespace(id=uuid4(), deviation_code="PC-2608004")
     db = _Db()
     db.execute.return_value = _Result(created)
@@ -464,7 +463,6 @@ async def test_deviation_manual_code_create_skips_generator_and_checks_duplicate
     monkeypatch.setattr(service, "_generate_monthly_deviation_code", generator)
     exists = AsyncMock(return_value=False)
     monkeypatch.setattr(service.repository, "exists_by_deviation_code", exists)
-    monkeypatch.setattr(sync, "auto_sync_deviation_after_write", AsyncMock())
 
     created = SimpleNamespace(id=uuid4(), deviation_code="CS-2609-TEST01")
     db = _Db()
@@ -509,7 +507,6 @@ async def test_deviation_manual_code_duplicate_rejected_blank_falls_back_to_auto
     )
     exists = AsyncMock(return_value=True)
     monkeypatch.setattr(service.repository, "exists_by_deviation_code", exists)
-    monkeypatch.setattr(sync, "auto_sync_deviation_after_write", AsyncMock())
     db = _Db()
     with pytest.raises(AppException, match="偏差编号已存在"):
         await service.create_deviation(
@@ -554,7 +551,6 @@ async def test_deviation_update_code_change_unique_and_blank_rules(
     db = _Db(deviation)
     exists = AsyncMock(return_value=False)
     monkeypatch.setattr(service.repository, "exists_by_deviation_code", exists)
-    monkeypatch.setattr(sync, "auto_sync_deviation_after_write", AsyncMock())
 
     db.execute.return_value = _Result(deviation)
     updated = await service.update_deviation(
@@ -602,7 +598,6 @@ async def test_deviation_create_allows_missing_reporter_and_department(
         "_generate_monthly_deviation_code",
         AsyncMock(return_value="PC-2609007"),
     )
-    monkeypatch.setattr(sync, "auto_sync_deviation_after_write", AsyncMock())
 
     created = SimpleNamespace(id=uuid4(), deviation_code="PC-2609007")
     db = _Db()

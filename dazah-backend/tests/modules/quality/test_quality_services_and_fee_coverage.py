@@ -97,58 +97,38 @@ async def test_quality_statistics_cover_local_and_feishu_branches(
     }
     assert len(deviation_stats.monthly_trend) == 6
 
-    import app.modules.quality.service.quality_feishu_sync as sync_module
-
-    runtime = SimpleNamespace(
-        is_enabled=lambda: True,
-        get_entity_config=lambda *_args, **_kwargs: {},
-    )
-    monkeypatch.setattr(
-        sync_module.feishu_sync,
-        "_resolve_runtime",
-        AsyncMock(return_value=runtime),
-    )
-    monkeypatch.setattr(
-        sync_module,
-        "_get_mapped_field_value",
-        lambda _entity, fields, key: fields.get(key),
-    )
-    monkeypatch.setattr(
-        sync_module,
-        "_normalize_text",
-        lambda value: str(value or "").strip(),
-    )
-    monkeypatch.setattr(
-        quality_statistics,
-        "_fetch_feishu_records",
-        AsyncMock(
-            return_value=[
-                {
-                    "fields": {
-                        "状态": "已关闭",
-                        "来源": "偏差",
-                        "CAPA类型": "纠正",
-                        "责任部门": "质量部",
-                    }
-                },
-                {
-                    "fields": {
-                        "状态": "进行中",
-                        "来源": "投诉",
-                        "类型": "预防",
-                        "部门": "生产部",
-                    }
-                },
-            ]
+    # CAPA 台账已本地化：统计直接读本地 CAPA 记录（与台账列表同源）
+    capas = [
+        SimpleNamespace(
+            closure_date=date.today(),
+            evaluation_result="有效",
+            department="QC",
+            expected_completion_date=date.today(),
+            created_at=now,
         ),
-    )
-    capa_stats = await quality_statistics.get_capa_statistics(db)
+        SimpleNamespace(
+            closure_date=None,
+            evaluation_result="进行中",
+            department=None,
+            expected_completion_date=None,
+            created_at=now,
+        ),
+    ]
+    capa_db = SimpleNamespace(execute=AsyncMock(return_value=_Result(scalars=capas)))
+    capa_stats = await quality_statistics.get_capa_statistics(capa_db)
     assert capa_stats.total == 2
     assert capa_stats.closed_count == 1
+    assert capa_stats.in_progress_count == 1
+    assert [item["name"] for item in capa_stats.result_distribution] == [
+        "有效",
+        "进行中",
+    ]
     assert {item["name"] for item in capa_stats.department_distribution} == {
-        "质量部",
-        "生产部",
+        "QC",
+        "未填",
     }
+    assert len(capa_stats.monthly_trend) == 6
+    assert capa_stats.monthly_trend[-1]["count"] == 2
 
     change_db = SimpleNamespace(
         execute=AsyncMock(
