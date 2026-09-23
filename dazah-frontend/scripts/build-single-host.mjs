@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 export async function buildSingleHost(run = () => import('next/dist/bin/next')) {
-  process.env.NODE_OPTIONS = '--max-old-space-size=1280';
+  process.env.NODE_OPTIONS = '--max-old-space-size=2048';
   process.env.DAZAH_SINGLE_HOST_BUILD = '1';
   process.env.RAYON_NUM_THREADS = '1';
   process.env.UV_THREADPOOL_SIZE = '1';
