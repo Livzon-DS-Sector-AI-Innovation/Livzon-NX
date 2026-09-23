@@ -1111,3 +1111,10 @@ from app.modules.production.extraction_report_api import (  # noqa: E402
 )
 
 router.include_router(extraction_report_router, tags=["生产管理 - 提炼工段"])
+
+
+from app.modules.production.fl_board_api import (  # noqa: E402
+    router as fl_board_router,
+)
+
+router.include_router(fl_board_router, tags=["生产管理 - 氟苯尼考看板"])

@@ -34,6 +34,10 @@ from app.modules.warehouse.feishu_fields import (
 from app.modules.warehouse.feishu_material_pages import (
     FEISHU_WAREHOUSE_MATERIAL_PAGES,
     FINISHED_INBOUND_DATE_FIELD,
+    FINISHED_INBOUND_DETAIL_BATCH_FIELD,
+    FINISHED_INBOUND_DETAIL_CONFIRM_FIELD,
+    FINISHED_INBOUND_DETAIL_PAGE_KEY,
+    FINISHED_INBOUND_DETAIL_QTY_FIELD,
     FINISHED_INBOUND_KG_FIELD,
     FINISHED_INBOUND_LEDGER_PAGE_KEY,
     FINISHED_INBOUND_PRODUCT_FIELD,
@@ -1540,6 +1544,100 @@ class WarehouseService:
             start_ms=start_ms,
             end_ms=end_ms,
         )
+
+    async def get_finished_inbound_summary(
+        self,
+        *,
+        product_name: str,
+        start_date: date,
+        end_date: date,
+    ) -> tuple[int, float] | None:
+        """成品入库总账中指定产品在闭区间日期内的 (入库行数, KG 合计)。
+
+        一行即一次入库（预混剂等一批一行），行数即入库批次数；返回 None
+        表示快照尚未建立（从未同步成功），调用方按无数据处理。
+        """
+        snapshot = await self.repo.get_material_page_snapshot(
+            FINISHED_INBOUND_LEDGER_PAGE_KEY
+        )
+        if snapshot is None:
+            return None
+        tz = ZoneInfo("Asia/Shanghai")
+        start_ms = int(
+            datetime.combine(start_date, dt_time.min, tzinfo=tz).timestamp() * 1000
+        )
+        end_ms = int(
+            datetime.combine(end_date, dt_time.min, tzinfo=tz).timestamp() * 1000
+        )
+        return await self.repo.aggregate_finished_inbound(
+            snapshot,
+            product_field=FINISHED_INBOUND_PRODUCT_FIELD,
+            product_name=product_name,
+            date_field=FINISHED_INBOUND_DATE_FIELD,
+            kg_field=FINISHED_INBOUND_KG_FIELD,
+            start_ms=start_ms,
+            end_ms=end_ms,
+        )
+
+    async def get_finished_inbound_batches(
+        self,
+        *,
+        product_name: str,
+    ) -> list[dict[str, Any]] | None:
+        """成品入库明细（飞书「入库台账（明细）」）中该产品的批次级行。
+
+        一行即一次入库登记；「入库确认」为仓库收货记账判定，未确认不算
+        实际入库（调用方自行按确认位过滤）。返回 None 表示快照未建立。
+        """
+        snapshot = await self.repo.get_material_page_snapshot(
+            FINISHED_INBOUND_DETAIL_PAGE_KEY
+        )
+        if snapshot is None:
+            return None
+        tz = ZoneInfo("Asia/Shanghai")
+        batches: list[dict[str, Any]] = []
+        for cells in await self.repo.list_finished_inbound_cells(
+            snapshot,
+            product_field=FINISHED_INBOUND_PRODUCT_FIELD,
+            product_name=product_name,
+        ):
+            raw_batch = cells.get(FINISHED_INBOUND_DETAIL_BATCH_FIELD)
+            batch_no = (
+                str(raw_batch).strip().upper().replace("－", "-")
+                if raw_batch is not None
+                else ""
+            )
+            if not batch_no:
+                continue
+            raw_date = cells.get(FINISHED_INBOUND_DATE_FIELD)
+            try:
+                inbound_date = (
+                    datetime.fromtimestamp(float(raw_date) / 1000, tz=tz).date()
+                    if raw_date is not None
+                    else None
+                )
+            except (OverflowError, OSError, TypeError, ValueError):
+                inbound_date = None
+            raw_qty = cells.get(FINISHED_INBOUND_DETAIL_QTY_FIELD)
+            try:
+                qty = round(float(raw_qty), 2) if raw_qty is not None else None
+            except (TypeError, ValueError):
+                qty = None
+            confirm_raw = cells.get(FINISHED_INBOUND_DETAIL_CONFIRM_FIELD)
+            confirmed = (
+                confirm_raw
+                if isinstance(confirm_raw, bool)
+                else str(confirm_raw).strip().lower() == "true"
+            )
+            batches.append(
+                {
+                    "batch_no": batch_no,
+                    "inbound_date": inbound_date,
+                    "qty": qty,
+                    "confirmed": confirmed,
+                }
+            )
+        return batches
 
     async def get_feishu_material_page(
         self,

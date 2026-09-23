@@ -63,6 +63,10 @@ export default function BoardNavBlocks({
   const setProductCode = useProductContextStore((s) => s.setProductCode)
   // 停产产品导航块置灰 + 角标（状态全平台共享；拉取失败不阻塞导航）
   const [haltedLines, setHaltedLines] = useState<string[]>([])
+  // 各停产产线最近一次事件（悬停提示"自何日起停产"）
+  const [latestEvents, setLatestEvents] = useState<
+    Record<string, { created_at: string | null; reason: string | null }>
+  >({})
 
   useEffect(() => {
     let cancelled = false
@@ -71,6 +75,7 @@ export default function BoardNavBlocks({
         const res = await getProductionLineStatus()
         if (!cancelled && res.code === 200 && res.data) {
           setHaltedLines(res.data.halted ?? [])
+          setLatestEvents(res.data.latest_events ?? {})
         }
       } catch {
         // 状态不可用时导航块按生产中展示
@@ -105,12 +110,17 @@ export default function BoardNavBlocks({
     <Row gutter={[12, 12]}>
       {visibleTabs.map((tab) => {
         const halted = haltedLines.includes(tab.code)
+        const latest = latestEvents[tab.code]
+        const haltedSince = latest?.created_at?.slice(5, 10).replace('-', '月')
+        const haltedSuffix = halted
+          ? `（停产中${haltedSince ? `，自 ${haltedSince}日 起` : ''}${latest?.reason ? ` · ${latest.reason}` : ''}）`
+          : ''
         return (
         // 弹性等宽：宽屏 9 块一行铺满（24 栅格 3/块放不下第 9 块），
         // 窄屏按 144px 基准自然换行
         <Col key={tab.code} flex="1 1 144px">
           <div
-            title={`切换到 ${tab.fullName ?? tab.name}${tab.code === 'SUMMARY' ? '（五产线聚合）' : halted ? '（停产中）' : ' 生产线与排产数据'}`}
+            title={`切换到 ${tab.fullName ?? tab.name}${tab.code === 'SUMMARY' ? '（五产线聚合）' : haltedSuffix || ' 生产线与排产数据'}`}
             onClick={() => setProductCode(tab.code)}
             data-testid={`nav-block:${tab.code}`}
             className="flex items-center justify-center gap-2 rounded-lg border bg-white cursor-pointer transition-colors"

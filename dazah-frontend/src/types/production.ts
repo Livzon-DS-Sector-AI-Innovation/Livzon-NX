@@ -676,3 +676,67 @@ export interface FermentationBoard {
   alerts: BoardAlert[]
   maintenance: BoardMaintenance[]
 }
+
+/** FL 氟苯尼考批次（工序流转口径）；产量类字段无提炼权限时不下发 */
+export interface FlBoardBatch {
+  batch_no: string
+  /** 月内流水序号（批号尾部） */
+  seq: number | null
+  order_date: string | null
+  pick_date: string | null
+  charge_date: string | null
+  charge_time: string | null
+  mix_date: string | null
+  mix_time: string | null
+  spec: string | null
+  pack_date: string | null
+  pack_time: string | null
+  inspection_date: string | null
+  /** 排产计划入库日期 */
+  planned_inbound_date: string | null
+  /** 实际入库日期（仓储台账已确认） */
+  actual_inbound_date: string | null
+  /** 当前工序：order/pick/charge/mix/pack/inspection/inbound（按计划时间推导） */
+  stage_key: string
+  stage_label: string
+  /** 批次状态：upcoming待投料 / running在制 / confirm_pending待入库确认 / stalled滞留 / inbound已入库 */
+  state: string
+  state_label: string
+  source_table: string | null
+  /** 规格重量(kg)：排产表包装重量列（名目值，如 1980） */
+  pack_weight_kg?: number | null
+  /** 在制口径批次附带：距投料开始时刻天数 */
+  elapsed_days?: number | null
+}
+
+/** FL 氟苯尼考生产看板聚合（批次工序流转，入库确认为准，替代发酵视图） */
+export interface FlBoard {
+  month: string
+  batch_prefix: string
+  /** 所选月是否为当前自然月（锚点=现在；历史月锚点=月末） */
+  is_current_month: boolean
+  /** 扎帐月周期（仓储实际入库的统计区间：上月 27 日～本月 26 日） */
+  period: { start: string; end: string; label: string }
+  /** 计划产量(kg)：产销计划；无提炼权限或当月无计划行时为 null */
+  planned_kg: number | null
+  /** 计划批次：当月排产表批次总数（批号 YYMM 归组，含未投料） */
+  planned_batches: number
+  /** 实际入库批次：仓储入库台账（明细）已确认行去重批号数（扎帐月口径） */
+  inbound_batches: number
+  /** 实际入库产量(kg)：仓储入库台账（明细）已确认行合计（扎帐月口径） */
+  inbound_kg: number | null
+  completion_rate: number | null
+  /** 在制口径批次：所选月已投料开始且未确认入库（在制+待确认+滞留） */
+  in_progress_count: number
+  progress: {
+    by_batches: { inbound: number; in_progress: number; not_started: number }
+    by_kg: { completed_kg: number | null; planned_kg: number | null }
+  }
+  /** 工序流转滚动窗口：锚点前后各 2 天 */
+  flow: FlBoardBatch[]
+  /** 当月批次明细：仅已确认入库批次，按实际入库日期倒序 */
+  month_batches: FlBoardBatch[]
+  /** 最近完成批次：全产线已确认，按实际入库日期倒序前 10 */
+  recent_completed: FlBoardBatch[]
+  generated_at: string
+}

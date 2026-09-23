@@ -596,14 +596,29 @@ def _sensitive_actions(
         "bulk_import": "批量导入偏差记录",
         "sensitive_export": "导出偏差台账",
     }
+    # 概览页的 delete 动作只对应批次产量记录删除与检修标注解除，
+    # 用具体文案替代通用"删除或作废{页面名}"，避免误读为删除整个页面
+    overview_action_names = {
+        "delete": "删除产量记录 / 解除检修标注",
+    }
+
+    def _action_name(action_key: str) -> str:
+        if page_key == "hr:employee-management:profile":
+            return employee_action_names[action_key]
+        if page_key == "quality:deviations:deviation-ledger":
+            return deviation_action_names.get(
+                action_key, f"{action_verbs[action_key]}{page_name}"
+            )
+        if page_key == "production:overview":
+            return overview_action_names.get(
+                action_key, f"{action_verbs[action_key]}{page_name}"
+            )
+        return f"{action_verbs[action_key]}{page_name}"
+
     return tuple(
         SensitiveActionDefinition(
             key=key,
-            name=employee_action_names[key]
-            if page_key == "hr:employee-management:profile"
-            else deviation_action_names.get(key, f"{action_verbs[key]}{page_name}")
-            if page_key == "quality:deviations:deviation-ledger"
-            else f"{action_verbs[key]}{page_name}",
+            name=_action_name(key),
             category=_ACTION_DEFINITIONS[key].category,
             description=_ACTION_DEFINITIONS[key].description,
         )
@@ -1510,7 +1525,10 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
     mc_page = ("production:batches:workshop-201-2",)
     dr_page = ("production:batches:workshop-201-3",)
     fa_page = ("production:batches:workshop-203",)
-    sync_config_pages = workshop_pages + sales_plan_page + scheduling_page
+    # 概览页承载 FL 氟苯尼考看板的同步设置入口（无独立车间页）
+    sync_config_pages = (
+        workshop_pages + sales_plan_page + scheduling_page + overview
+    )
 
     rules: list[tuple[str, str, tuple[str, ...], str, str | None, str]] = []
 
@@ -1938,7 +1956,7 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
     )
     add_many(
         "GET",
-        ("/fermentation-board",),
+        ("/fermentation-board", "/fl-board"),
         overview,
         scope_adapter="production.dashboard",
     )

@@ -39,9 +39,12 @@ import dayjs from 'dayjs'
 import ReactECharts from 'echarts-for-react'
 import BoardNavBlocks from '@/components/production/board-nav-blocks'
 import BatchProgressBar from '@/components/production/batch-progress-bar'
+import FlBoardView from '@/components/production/FlBoardView'
 import ProductionSummary from '@/components/production/production-summary'
 import SalesPlanCard from '@/components/production/sales-plan-card'
-import LineStatusConfirmModal from '@/components/production/line-status-confirm-modal'
+import LineStatusConfirmModal, {
+  LineHaltHistoryModal,
+} from '@/components/production/line-status-confirm-modal'
 import { useProductContextStore } from '@/stores/product-context'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -112,9 +115,26 @@ function fmtDateTime(value?: string | null): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
 }
 
+/** 每秒时钟独立成小组件：定时器只重渲染自身，
+ *  不触发整页重渲染（否则月份面板会被每秒新造的 value 对象拉回当月） */
+function SystemClock() {
+  const [clock, setClock] = useState('')
+  useEffect(() => {
+    const update = () => setClock(fmtDateTime(new Date().toISOString()))
+    // rAF 异步回调补首帧时间，避免 effect 内同步 setState
+    const raf = requestAnimationFrame(update)
+    const timer = setInterval(update, 1000)
+    return () => {
+      cancelAnimationFrame(raf)
+      clearInterval(timer)
+    }
+  }, [])
+  return <Text type="secondary">系统时间：{clock}</Text>
+}
+
 function fmtShort(value?: string | null): string {
-  if (!value) return '-'
   // 纯日期字符串（如计划放罐日期）直接截取，避免 Date 按 UTC 解析产生时区偏移
+  if (!value) return '-'
   const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
   if (dateOnly) return `${dateOnly[2]}-${dateOnly[3]}`
   const d = new Date(value)
@@ -153,14 +173,22 @@ export default function ProductionDashboard() {
   const [haltedLines, setHaltedLines] = useState<string[]>([])
   // 停产切换确认：pendingHalted 为目标状态（null=关闭）；倒计时在确认框组件内
   const [haltPending, setHaltPending] = useState<boolean | null>(null)
+  const [haltHistoryOpen, setHaltHistoryOpen] = useState(false)
   // 周期回看：空串 = 今天所在周期；否则为所选周期内任意日期
-  const [viewDate, setViewDate] = useState<string>('')
   // 当前产品上下文（导航块切换），看板按此产品取数；
   // SUMMARY 为汇总视图（五产线聚合），非单一产品
   const productCode = useProductContextStore((s) => s.productCode)
+  // 查看月份按视图（产品 Tab / 汇总）各自独立，互不联动；
+  // 会话内记住各自的月份，刷新后回到当月（'' = 当月）
+  const [viewDateMap, setViewDateMap] = useState<Record<string, string>>({})
+  const viewDate = viewDateMap[productCode] ?? ''
+  const setViewDate = (value: string) =>
+    setViewDateMap((prev) => ({ ...prev, [productCode]: value }))
   const isSummaryView = productCode === 'SUMMARY'
-  // 首帧不渲染时间（服务端与客户端时区不一致会导致 hydration 不匹配），挂载后再计时
-  const [clock, setClock] = useState('')
+  // FL 氟苯尼考为合成预混工艺：无发酵工段，概览渲染独立批次工序看板
+  const isFlView = productCode === 'FL'
+  // FL 视图刷新信号：页面「立即刷新」按钮驱动（发酵视图走 loadBoard）
+  const [flRefreshKey, setFlRefreshKey] = useState(0)
   const [maintModalOpen, setMaintModalOpen] = useState(false)
   const [maintTank, setMaintTank] = useState<BoardTank | null>(null)
   const [maintReason, setMaintReason] = useState('')
@@ -211,11 +239,11 @@ export default function ProductionDashboard() {
   }, [viewDate, productCode])
 
   useEffect(() => {
-    if (isSummaryView) return // 汇总视图无单产品看板可拉
-    void loadBoard() // eslint-disable-line react-hooks/set-state-in-effect -- 看板初始加载，与 201-2 页面既有模式一致
+    if (isSummaryView || isFlView) return // 汇总无单产品看板；FL 走独立视图自取数
+    void loadBoard() // eslint-disable-line react-hooks/set-state-in-effect -- 看板初始加载，与 201-1 页面既有模式一致
     const timer = setInterval(() => void loadBoard(), REFRESH_INTERVAL_MS)
     return () => clearInterval(timer)
-  }, [loadBoard, isSummaryView])
+  }, [loadBoard, isSummaryView, isFlView])
 
   // 产线停产状态：进入页面拉一次，切换确认后本地即时更新
   const loadHaltedLines = useCallback(async () => {
@@ -240,12 +268,12 @@ export default function ProductionDashboard() {
     setHaltPending(target)
   }
 
-  const applyHaltChange = async () => {
+  const applyHaltChange = async (reason = '') => {
     if (haltPending === null) return
     const target = haltPending
     setHaltPending(null)
     try {
-      const res = await setProductionLineStatus(target, productCode)
+      const res = await setProductionLineStatus(target, productCode, reason)
       if (res.code === 200) {
         setHaltedLines((prev) =>
           target
@@ -332,17 +360,6 @@ export default function ProductionDashboard() {
     [planMemoryKey],
   )
 
-  useEffect(() => {
-    const update = () => setClock(fmtDateTime(new Date().toISOString()))
-    // rAF 异步回调补首帧时间，避免 effect 内同步 setState
-    const raf = requestAnimationFrame(update)
-    const timer = setInterval(update, 1000)
-    return () => {
-      cancelAnimationFrame(raf)
-      clearInterval(timer)
-    }
-  }, [])
-
   const submitMaintenance = async () => {
     if (!canOperate) return
     if (!maintTank || !maintReason.trim()) {
@@ -378,8 +395,8 @@ export default function ProductionDashboard() {
     setActualsLoading(true)
     try {
       const res = await getFermentationBatchActuals(
-        board?.period.start,
-        board?.period.end,
+        board?.period?.start,
+        board?.period?.end,
         productCode,
       )
       if (res.code === 200) {
@@ -463,8 +480,17 @@ export default function ProductionDashboard() {
   }
 
   const kpi = board?.kpis
+  // 月份选择器取值 memo 化：每次渲染新造 dayjs 对象会让 rc-picker 在
+  // value 引用变化时把打开的面板拉回当月，导致跨年导航选错年
+  const monthPickerValue = useMemo(() => {
+    if (viewDate) return dayjs(viewDate)
+    if (isSummaryView) return dayjs()
+    if (board?.period?.end) return dayjs(board.period.end)
+    return null
+  }, [viewDate, isSummaryView, board?.period?.end])
   // 周期回看：写操作（检修、产能设置）仅当前扎帐月开放
-  const isCurrent = board?.is_current_period ?? true
+  // FL 视图无扎帐周期概念：所选月即当月（viewDate 空）视为当前
+  const isCurrent = isFlView ? !viewDate : (board?.is_current_period ?? true)
   const dash = '--'
   // 「提炼已出成品（仓储成品入库）」：当期仓储入库合计；仅接入产品有值
   const extractInboundKg = board?.extract_finished_inbound_kg ?? null
@@ -556,7 +582,7 @@ export default function ProductionDashboard() {
   // ÷ 理论应放罐，封顶 100%
   const asOfLabel = isCurrent
     ? dayjs().format('MM-DD')
-    : (board?.period.end ?? '').slice(5).replace('-', '-')
+    : (board?.period?.end ?? '').slice(5).replace('-', '-')
   const theoryBatches = kpi?.month_done_planned ?? null
   const utilizationRate =
     theoryBatches && kpi?.done_with_yield != null
@@ -573,7 +599,7 @@ export default function ProductionDashboard() {
     {
       title: '发酵本月计划批次',
       value: kpi?.month_planned ?? dash,
-      sub: board?.period.label,
+      sub: board?.period?.label,
       span: 8,
       extra: {
         label: '发酵本月计划产能',
@@ -787,7 +813,8 @@ export default function ProductionDashboard() {
   ]
 
   // 单批产量柱状图 + 平均产量标线
-  // 平均线优先用后端口径（DR：含中试产量 ÷ 正式批批数），无后端值时按柱子自算
+  // 平均线优先用后端口径（DR：大罐批均值，中试线小罐批不计入），
+  // 无后端值时按柱子自算
   const trendOutputs = board?.trend?.outputs ?? []
   const trendAvg =
     board?.trend?.avg_yield_kg ??
@@ -884,6 +911,16 @@ export default function ProductionDashboard() {
             {/* 生产线状态：生产中(绿)/停产中(红) 二态切换（仅概览操作权限可改）。
                 选项 label 为带色点节点，选中值与下拉项同款颜色 */}
             {!isSummaryView && (
+              <Button
+                size="small"
+                type="text"
+                data-testid="halt-history-entry"
+                onClick={() => setHaltHistoryOpen(true)}
+              >
+                停产历史
+              </Button>
+            )}
+            {!isSummaryView && (
               <Select
                 size="small"
                 style={{ width: 104 }}
@@ -940,21 +977,13 @@ export default function ProductionDashboard() {
               picker="month"
               allowClear={false}
               style={{ width: 96 }}
-              value={
-                viewDate
-                  ? dayjs(viewDate)
-                  : isSummaryView
-                    ? dayjs()
-                    : board?.period.end
-                      ? dayjs(board.period.end)
-                      : null
-              }
+              value={monthPickerValue}
               onChange={(d) => {
                 // 选自然月 → 定位到主要落在该月的扎帐周期（该月 15 日必在其中）
                 if (d) setViewDate(d.date(15).format('YYYY-MM-DD'))
               }}
             />
-            {board?.period && !isSummaryView && (
+            {board?.period && !isSummaryView && !isFlView && (
               <Tag color="blue">生产周期 {board.period.label}</Tag>
             )}
             {!isCurrent && !isSummaryView && (
@@ -964,23 +993,33 @@ export default function ProductionDashboard() {
             )}
           </Space>
           <Space size={16}>
-            <Text type="secondary">系统时间：{clock}</Text>
+            <SystemClock />
             {!isSummaryView && !isHalted && (
               <Text type="secondary">数据刷新：5 分钟</Text>
             )}
             {!isSummaryView && !isHalted && (
               <>
+                {!isFlView && (
+                  <Button
+                    size="small"
+                    icon={<DatabaseOutlined />}
+                    onClick={() => void openActuals()}
+                  >
+                    历史数据
+                  </Button>
+                )}
                 <Button
                   size="small"
-                  icon={<DatabaseOutlined />}
-                  onClick={() => void openActuals()}
-                >
-                  历史数据
-                </Button>
-                <Button
-                  size="small"
-                  icon={<SyncOutlined spin={loading} />}
-                  onClick={() => void loadBoard()}
+                  icon={
+                    <SyncOutlined
+                      spin={loading && !isFlView}
+                    />
+                  }
+                  onClick={() => {
+                    // FL 视图无发酵看板可拉，刷新信号交给独立视图
+                    if (isFlView) setFlRefreshKey((k) => k + 1)
+                    else void loadBoard()
+                  }}
                 >
                   立即刷新
                 </Button>
@@ -1013,8 +1052,13 @@ export default function ProductionDashboard() {
         </>
       )}
 
+      {/* FL 氟苯尼考看板：独立批次工序流转视图（无发酵模块，不拉排产存档） */}
+      {!isSummaryView && !isHalted && isFlView && (
+        <FlBoardView month={planMonth} refreshKey={flRefreshKey} />
+      )}
+
       {/* 产品看板：停产中整块收起（数据保留在库，恢复生产即原样回来） */}
-      {!isSummaryView && !isHalted && (
+      {!isSummaryView && !isHalted && !isFlView && (
       <>
       {/* 告警跑马灯 */}
       <Card
@@ -1122,7 +1166,16 @@ export default function ProductionDashboard() {
       ) : (
         <>
           {boardMessage && (
-            <Alert type="warning" showIcon title={boardMessage} />
+            <Alert
+              type="warning"
+              showIcon
+              data-testid="board-message"
+              title={
+                board?.covered === false && !isHalted
+                  ? `${boardMessage}；如该产线实际已停产，可将产线状态标记为停产。`
+                  : boardMessage
+              }
+            />
           )}
           {canFerm && (
             <>
@@ -1537,7 +1590,7 @@ export default function ProductionDashboard() {
       </Modal>
       {/* 本月计划产能设置弹窗 */}
       <Modal
-        title={`设置本月计划产能：${board?.period.label ?? ''}`}
+        title={`设置本月计划产能：${board?.period?.label ?? ''}`}
         open={capacityModalOpen && canOperate}
         onOk={canOperate ? () => void submitCapacity() : undefined}
         onCancel={() => setCapacityModalOpen(false)}
@@ -1559,9 +1612,18 @@ export default function ProductionDashboard() {
       {/* 生产线状态切换确认：确认按钮 5 秒倒计时后才可点，取消随时可点 */}
       <LineStatusConfirmModal
         productName={PRODUCT_NAMES[productCode] ?? PRODUCT_NAMES.FA}
+        productCode={productCode}
         pendingHalted={haltPending}
         onCancel={() => setHaltPending(null)}
-        onConfirm={() => void applyHaltChange()}
+        onConfirm={(reason) => void applyHaltChange(reason)}
+        onOpenHistory={() => setHaltHistoryOpen(true)}
+      />
+      {/* 停产历史独立查看入口：完整时间线，只读，不触发状态切换 */}
+      <LineHaltHistoryModal
+        productCode={productCode}
+        productName={PRODUCT_NAMES[productCode] ?? PRODUCT_NAMES.FA}
+        open={haltHistoryOpen}
+        onClose={() => setHaltHistoryOpen(false)}
       />
     </div>
   )
