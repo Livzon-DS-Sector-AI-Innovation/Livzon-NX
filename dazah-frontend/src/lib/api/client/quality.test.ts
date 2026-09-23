@@ -456,3 +456,12 @@ describe('quality client - person options', () => {
     expect(url).toBe('/api/v1/quality/person-options?limit=1000')
   })
 })
+
+describe('飞书 CAPA 台账客户端退休', () => {
+  it('不再导出 fetchFeishuCapas', async () => {
+    const qualityClient = await import('./quality')
+    expect(
+      (qualityClient as Record<string, unknown>).fetchFeishuCapas,
+    ).toBeUndefined()
+  })
+})
