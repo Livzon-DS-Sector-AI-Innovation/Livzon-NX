@@ -67,6 +67,7 @@ QUALITY_REVIEWED_API_ROUTES: tuple[tuple[str, str], ...] = (
     ("GET", "/api/v1/quality/capas/export/template"),
     ("GET", "/api/v1/quality/capas/{capa_id}"),
     ("GET", "/api/v1/quality/change-action-plans"),
+    ("GET", "/api/v1/quality/change-action-plans/due-status"),
     ("GET", "/api/v1/quality/change-action-plans/person-options"),
     ("GET", "/api/v1/quality/change-action-plans/{plan_id}/reminders/confirm-page"),
     ("GET", "/api/v1/quality/changes"),

@@ -9,7 +9,8 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c9d400000057"
-down_revision: str | None = "c9d400000056"
+# 合并 main 后 parent 收敛到当前唯一 head（身份审计与生产链的合并迁移）
+down_revision: str | None = "17964cec908c"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
