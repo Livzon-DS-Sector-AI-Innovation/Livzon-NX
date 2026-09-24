@@ -98064,7 +98064,10 @@ export interface operations {
     };
     sync_changes_from_feishu_api_v1_quality_changes_sync_from_feishu_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 台账类型: technical=技术变更, file=文件变更 */
+                change_type?: "technical" | "file";
+            };
             header?: never;
             path?: never;
             cookie?: {

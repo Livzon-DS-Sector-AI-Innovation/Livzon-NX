@@ -4,6 +4,7 @@ import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
@@ -555,6 +556,57 @@ async def test_sync_from_feishu_creates_plan_from_production_shaped_record(
 
 
 @pytest.mark.anyio
+async def test_sync_from_feishu_isolates_per_record_failures(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """单条记录落库失败只回滚自身：不污染 session，后续记录继续同步。
+
+    回归背景：同步循环曾缺少逐条 rollback，一条 flush 报错后 session 中毒，
+    其余记录全部以 PendingRollbackError 连带失败。
+    """
+
+    async def _fake_search_records(_db: Any, change_code: Any = None) -> Any:  # noqa: ANN001
+        return [
+            {
+                "record_id": "rec_too_long",
+                "fields": {
+                    "变更控制号": [{"text": "BG-TOO-LONG", "type": "text"}],
+                    # 项目名称列 String(255)，超长触发真实数据库错误
+                    "项目名称": [{"text": "长" * 300, "type": "text"}],
+                },
+            },
+            {
+                "record_id": "rec_ok_after_failure",
+                "fields": {
+                    "变更控制号": [{"text": "BG-AFTER-FAIL", "type": "text"}],
+                    "项目名称": [{"text": "回滚后的正常记录", "type": "text"}],
+                },
+            },
+        ]
+
+    monkeypatch.setattr(
+        "app.modules.quality.service.change_action_plan.feishu_sync.search_records",
+        _fake_search_records,
+    )
+
+    sync_response = await client.post(
+        "/api/v1/quality/change-action-plans/sync-from-feishu"
+    )
+    assert sync_response.status_code == 200
+    assert sync_response.json()["data"] == {"synced": 1, "failed": 1}
+
+    list_response = await client.get(
+        "/api/v1/quality/change-action-plans",
+        params={"change_code": "BG-AFTER-FAIL"},
+    )
+    assert list_response.status_code == 200
+    items = list_response.json()["data"]
+    assert len(items) == 1
+    assert items[0]["project_name"] == "回滚后的正常记录"
+
+
+@pytest.mark.anyio
 async def test_change_action_plan_due_status_buckets(
     client: AsyncClient,
     db_session: AsyncSession,
@@ -750,3 +802,61 @@ async def test_change_action_plan_due_status_partitions(
     assert [entry["days_offset"] for entry in data["overdue"]] == [-3]
     assert sorted(entry["days_offset"] for entry in data["due_soon"]) == [1, 2]
     assert data["confirmed_count"] == 1
+
+
+@pytest.mark.anyio
+async def test_sync_changes_from_feishu_endpoint_returns_summary(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.modules.quality.service import quality_feishu_pages
+    from app.platform.identity.data_scope import current_page_key
+
+    current_page_key.set(None)
+    monkeypatch.setattr(
+        quality_feishu_pages,
+        "sync_changes_from_feishu",
+        AsyncMock(return_value={"synced": 2, "failed": 0}),
+    )
+
+    response = await client.post(
+        "/api/v1/quality/changes/sync-from-feishu",
+        params={"change_type": "technical"},
+    )
+    assert response.status_code == 200
+    assert response.json()["data"] == {"synced": 2, "failed": 0}
+    quality_feishu_pages.sync_changes_from_feishu.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_sync_change_action_plans_rollback_failure_is_swallowed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """单条入库失败且回滚也失败时，整体同步不被中断（failed 计数）。"""
+    from types import SimpleNamespace
+
+    from app.modules.quality.service import change_action_plan as caps
+
+    session = SimpleNamespace(
+        rollback=AsyncMock(side_effect=RuntimeError("rollback boom")),
+        commit=AsyncMock(),
+    )
+
+    async def _records(db: Any) -> Any:
+        return [
+            {
+                "record_id": "rec-rollback-1",
+                "fields": {"变更控制号": "BG-RB-1", "项目名称": "回滚分支计划"},
+            }
+        ]
+
+    async def _raise(db: Any, payload: Any) -> Any:
+        raise RuntimeError("insert boom")
+
+    monkeypatch.setattr(caps.feishu_sync, "search_records", _records)
+    monkeypatch.setattr(caps.repository, "create_change_action_plan", _raise)
+
+    result = await caps.sync_change_action_plans_from_feishu(session, "system")
+
+    assert (result.synced, result.failed) == (0, 1)
+    session.rollback.assert_awaited_once()

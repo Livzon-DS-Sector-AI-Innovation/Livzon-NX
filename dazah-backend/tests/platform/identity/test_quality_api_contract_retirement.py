@@ -23,3 +23,18 @@ def test_due_status_route_registered_in_reviewed_contract() -> None:
     """变更行动计划到期状态接口必须登记为已评审路由（页面权限绑定依赖）。"""
     routes = set(QUALITY_REVIEWED_API_ROUTES)
     assert ("GET", "/api/v1/quality/change-action-plans/due-status") in routes
+
+
+def test_due_status_route_binds_to_change_plans_and_ledgers() -> None:
+    """到期状态接口同时被变更计划页与变更台账页读取，绑定两页。"""
+    from app.platform.identity.page_policy import api_binding_for_route
+
+    binding = api_binding_for_route(
+        "GET", "/api/v1/quality/change-action-plans/due-status"
+    )
+    assert binding is not None
+    assert set(binding.page_keys) == {
+        "quality:change:change-action-plans",
+        "quality:change:change-ledger",
+        "quality:change:file-change-ledger",
+    }
