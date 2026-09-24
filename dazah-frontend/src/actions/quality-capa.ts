@@ -20,7 +20,7 @@ export async function createCapa(data: CreateCapaRequest) {
 }
 
 export async function updateCapa(capaId: string, data: Record<string, unknown>) {
-  const result = await actionFetch<{ success: boolean; feishu_sync_status?: string | null }>(`${API_BASE_URL}/api/v1/quality/capas/${capaId}`, {
+  const result = await actionFetch<{ success: boolean }>(`${API_BASE_URL}/api/v1/quality/capas/${capaId}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   })
@@ -36,19 +36,19 @@ export async function deleteCapa(capaId: string) {
   })
   revalidatePath('/quality')
   revalidatePath('/quality/capas')
-  // 删除本地记录后同步清空飞书关联
-  await deleteFeishuCapa(capaId).catch((e) => console.warn('飞书同步失败（非阻塞）:', e))
 }
 
-export async function syncCapasFromFeishu() {
-  const result = await actionFetch<{ synced: number; failed: number }>(
-    `${API_BASE_URL}/api/v1/quality/capas/sync-from-feishu`,
-    { method: 'POST' }
+export async function batchDeleteCapas(ids: string[]): Promise<{ deleted: number; failed: string[] }> {
+  const result = await actionFetch<{ deleted?: number; failed_ids?: string[] }>(
+    `${API_BASE_URL}/api/v1/quality/capas/batch-delete`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }
   )
   revalidatePath('/quality')
   revalidatePath('/quality/capas')
-  revalidatePath('/quality/capas/ledger')
-  return result ?? { synced: 0, failed: 0 }
+  return { deleted: result?.deleted ?? 0, failed: result?.failed_ids ?? [] }
 }
 
 export async function submitCapa(capaId: string) {
@@ -146,20 +146,6 @@ export async function confirmDeptHead(capaId: string, data: Record<string, unkno
   return result
 }
 
-export async function syncCapaToFeishu(capaId: string) {
-  const result = await actionFetch<{ record_id?: string; table_id?: string }>(
-    `${API_BASE_URL}/api/v1/quality/feishu-sync/capas/${capaId}`,
-    {
-      method: 'POST',
-    }
-  )
-  revalidatePath('/quality')
-  revalidatePath('/quality/capas')
-  revalidatePath('/quality/capas/ledger')
-  revalidatePath(`/quality/capas/${capaId}`)
-  return result
-}
-
 export async function createCapaPlanTrack(data: CreateCapaPlanTrackRequest) {
   const result = await actionFetch(`${API_BASE_URL}/api/v1/quality/capa-plan-tracks`, {
     method: 'POST',
@@ -216,55 +202,6 @@ export async function syncCapaPlanTrackToFeishu(trackId: string) {
   revalidatePath('/quality/capas')
   revalidatePath('/quality/capas/plans')
   return result
-}
-
-// ============ Feishu Native CAPA Actions ============
-
-export async function createFeishuCapa(data: Record<string, unknown>): Promise<{ record_id: string }> {
-  const result = await actionFetch<{ record_id: string }>(
-    `${API_BASE_URL}/api/v1/quality/feishu/capas`,
-    {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }
-  )
-  revalidatePath('/quality')
-  revalidatePath('/quality/capas')
-  revalidatePath('/quality/capas/ledger')
-  return result ?? { record_id: '' }
-}
-
-export async function updateFeishuCapa(recordId: string, data: Record<string, unknown>): Promise<void> {
-  await actionFetch(`${API_BASE_URL}/api/v1/quality/feishu/capas/${recordId}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  })
-  revalidatePath('/quality')
-  revalidatePath('/quality/capas')
-  revalidatePath('/quality/capas/ledger')
-}
-
-export async function deleteFeishuCapa(recordId: string): Promise<void> {
-  await actionFetch(`${API_BASE_URL}/api/v1/quality/feishu/capas/${recordId}`, {
-    method: 'DELETE',
-  })
-  revalidatePath('/quality')
-  revalidatePath('/quality/capas')
-  revalidatePath('/quality/capas/ledger')
-}
-
-export async function batchDeleteFeishuCapas(recordIds: string[]): Promise<{ success: boolean; message: string }> {
-  const result = await actionFetch<{ deleted?: number }>(
-    `${API_BASE_URL}/api/v1/quality/feishu/capas/batch-delete`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ ids: recordIds }),
-    }
-  )
-  revalidatePath('/quality')
-  revalidatePath('/quality/capas')
-  revalidatePath('/quality/capas/ledger')
-  return { success: true, message: `已删除 ${result?.deleted || 0} 条记录` }
 }
 
 // ============ Feishu Native CAPA Plan Track Actions ============

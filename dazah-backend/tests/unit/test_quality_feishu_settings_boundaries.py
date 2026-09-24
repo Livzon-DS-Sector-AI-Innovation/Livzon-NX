@@ -51,7 +51,7 @@ def _app_model() -> QualityFeishuAppSettings:
 
 
 def _entity_model(
-    entity_code: str = "capa_ledger",
+    entity_code: str = "capa_plan_track",
 ) -> QualityFeishuEntitySetting:
     name, group, order = service.DEFAULT_QUALITY_FEISHU_ENTITY_MAP[entity_code]
     return QualityFeishuEntitySetting(
@@ -89,7 +89,7 @@ def test_quality_feishu_setting_helpers_cover_defaults_and_redaction(
         True,
         False,
     )
-    assert service._get_default_sync_directions("capa_ledger") == (
+    assert service._get_default_sync_directions("capa_plan_track") == (
         True,
         True,
     )
@@ -121,7 +121,7 @@ def test_quality_feishu_setting_helpers_cover_defaults_and_redaction(
         )
     assert exc_info.value.__cause__ is not None
 
-    fields = service._build_system_fields("capa_ledger")
+    fields = service._build_system_fields("capa_plan_track")
     assert fields
     assert all(field.field_key for field in fields)
     assert service._build_system_fields("missing") == []

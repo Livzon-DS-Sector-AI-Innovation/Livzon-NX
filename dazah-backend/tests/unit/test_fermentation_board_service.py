@@ -702,14 +702,14 @@ def test_build_dr_board_tanks_and_kpis() -> None:
     assert tanks["B304"]["status"] == "idle"
 
     kpis = payload["kpis"]
-    # 周期内计划放罐：DR-26035(9/20) DR-2619(9/18) DR-2617(9/3) DR-26036(9/24)，
-    # 9/27 的 DR-26040 不计
-    assert kpis["month_planned"] == 4
+    # 周期内计划放罐的大罐批：DR-26035(9/20) DR-2617(9/3) DR-26036(9/24)；
+    # DR-2619 走 B305 小罐按罐线归中试不计数，9/27 的 DR-26040 不计
+    assert kpis["month_planned"] == 3
     assert kpis["month_done_planned"] == 1
-    # DR-26035(B401) / DR-2619 / DR-26036(B402)，放罐均在周期内
-    assert kpis["running"] == 3
+    # DR-26035(B402) / DR-26036(B401)，放罐均在周期内
+    assert kpis["running"] == 2
     # 中试-2622（9/25 待进罐）无本周期放罐计划 → 不计入未开始；
-    # 已完成 1 + 运行中 3 + 未开始 0 = month_planned 4
+    # 已完成 1 + 运行中 2 + 未开始 0 = month_planned 3
     assert kpis["pending"] == 0
 
     recent = payload["recent"]
@@ -741,7 +741,7 @@ def test_build_dr_board_trend_and_collect_dump_tanks() -> None:
     payload = board.build_dr_board(rows, [], now, actuals=actuals)
     assert payload is not None
     # 趋势按放罐日期升序，仅含周期内已放罐且有产量的正式批；
-    # 平均单产 = 含中试产量 ÷ 正式批批数（本例无中试，即柱子均值）
+    # 平均单产 = 大罐批已录产量均值（中试线不计入）
     assert payload["trend"] == {
         "batches": ["DR-2617", "DR-26035"],
         "outputs": [100.5, 88.0],
@@ -771,7 +771,8 @@ def test_build_dr_board_trend_and_collect_dump_tanks() -> None:
 
 
 def test_build_dr_board_pilot_batch_kpi_and_trend() -> None:
-    """中试批：不占 KPI 批次名额、不进条形图，产量累积进总产量并摊入平均单产。"""
+    """中试（按罐线：小罐 B30x）：不占 KPI 批次名额、不进条形图、
+    不计入平均单产，产量累积进总产量。"""
     rows = _dr_rows()
     sep = rows[12:]
     # 追加中试批 ZS-007：9/1 进罐 B303、9/10 放罐（周期内、now 之前）
@@ -790,18 +791,20 @@ def test_build_dr_board_pilot_batch_kpi_and_trend() -> None:
     assert payload is not None
 
     kpis = payload["kpis"]
-    # 中试不占批次名额：计划/已完成只数正式批（4 批正式全放罐）
-    assert kpis["month_planned"] == 4
-    assert kpis["month_done_planned"] == 4
+    # 中试（按罐线）不占批次名额：计划/已完成只数大罐正式批
+    # （DR-2619 走 B305 小罐归中试线；3 批大罐批全放罐）
+    assert kpis["month_planned"] == 3
+    assert kpis["month_done_planned"] == 3
     # 中试产量累积进总产量：100.5 + 88.0 + 60.0
     assert kpis["month_done_yield_kg"] == 248.5
     # 录入口径含中试：已录 3（含 ZS-007）、待录 2（DR-2619 / DR-26036）
     assert kpis["done_with_yield"] == 3
     assert kpis["yield_pending"] == 2
-    # 条形图只画正式批；平均单产 = 含中试总产量 ÷ 正式批批数 = 248.5 / 2
+    # 条形图只画大罐正式批；平均单产 = 大罐批均值
+    # （中试线 ZS-007 的 60 kg 不计入：(100.5+88.0)/2）
     assert payload["trend"]["batches"] == ["DR-2617", "DR-26035"]
     assert payload["trend"]["outputs"] == [100.5, 88.0]
-    assert payload["trend"]["avg_yield_kg"] == 124.25
+    assert payload["trend"]["avg_yield_kg"] == 94.25
     # 产量录入下拉仍含中试批
     assert {"batch_no": "ZS-007", "dump_date": "2026-09-10"} in payload[
         "dumped_batches"
@@ -914,9 +917,9 @@ def test_statin_board_parsing() -> None:
         is None
     )
 
-    # 看板组装（复用 MP 管线）：扎帐窗口内批次按接种量折算小数批——
-    # 计划 = 26059(1.0)+26060(1.0)+26063(1.0)+26064(1.0)+26069(1.0)
-    # +26070(1.0)+LV-26016(0.65，接种量 65/标准 100) = 6.65；
+    # 看板组装（复用 MP 管线）：扎帐窗口内逐批计数——美伐子批各记 1
+    # （26059/26060/26063/26064/26069/26070 = 6 批）+ 洛伐折算 0.65
+    # （接种量 65/标准 100）= 6.65；
     # 完成（≤6/20）= 前 6 批 = 6.0；运行 = LV-26016（按批次数计）
     payload = board.build_mp_board(
         rows,
@@ -945,6 +948,28 @@ def test_statin_board_parsing() -> None:
     assert any("【排产备注】6月份美伐放罐12批" in t for t in texts)
     assert any("距预估放罐剩余" in t and "305B" in t for t in texts)
     assert all(t != "备注：" for t in texts)
+
+
+def test_statin_mv_counts_integer_batches_despite_inoculation() -> None:
+    """美伐一批就是一批：复合批拆分后每个子批记 1，接种量不参与计数；
+    洛伐保持接种量折算小数批。转产月两种批号混排时逐批按各自规则计。"""
+    rows = _statin_rows()
+    # 6月块美伐复合批 MV-26069/070 接种量改为非标准 300
+    #（折算口径应为每子批 300/2/200 = 0.75）
+    inoc_row = rows[16 + 5]
+    assert inoc_row[2] == 400.0
+    inoc_row[2] = 300.0
+    timeline = board._statin_batch_timeline(rows)
+    assert timeline["MV-26069"]["units"] == 0.75
+    assert timeline["MV-26070"]["units"] == 0.75
+    payload = board.build_mp_board(
+        rows, [], datetime(2026, 6, 20, 12, 0), actuals=[], product="LV"
+    )
+    assert payload is not None
+    # 美伐 6 个子批各记 1（含非标准接种量的 26069/070）+ 洛伐 0.65
+    assert payload["kpis"]["month_planned"] == pytest.approx(6.65)
+    # 已完成（≤6/20 放罐的 6 个美伐子批）仍按整数计
+    assert payload["kpis"]["month_done_planned"] == pytest.approx(6.0)
 
 
 def test_statin_products_share_mp_pipeline() -> None:
@@ -1028,6 +1053,16 @@ def test_dr_batch_and_tank_helpers() -> None:
     assert board._dr_norm_tank("B401/2") == "B401"
     assert board._dr_norm_tank("B301/302") == "B301"
     assert board._dr_norm_tank("两个发酵") is None
+    # 罐线判定：B30x 小罐 = 中试线（含正式编号），B40x 大罐 = 正式线；
+    # 罐号缺失回退批号文字规则
+    assert board._dr_is_pilot_line("B305", "DR-2619")
+    assert board._dr_is_pilot_line("B304", "中试-2618")
+    assert not board._dr_is_pilot_line("B401", "DR-26034")
+    assert not board._dr_is_pilot_line("B402", "中试-2620")
+    assert board._dr_is_pilot_line(None, "中试-2620")
+    assert board._dr_is_pilot_line(None, "ZS-007")
+    assert not board._dr_is_pilot_line(None, "DR-26035")
+    assert board._dr_is_pilot_line("C501", "DR-26035") is False
 
 # ═══════════════════ MP（101车间）排产解析 ═══════════════════
 
@@ -1122,10 +1157,15 @@ def test_build_mp_board_tank_states_and_kpis() -> None:
     assert tanks["A302"]["inoculate_at"] == "2026-08-30T14:00:00"
     assert tanks["A302"]["dump_at"] == "2026-09-06T08:00:00"
     assert tanks["A302"]["cycle_hours"] == 162.0  # 8/30 14:00 → 9/6 08:00
+    # 回归：已放罐批次培养时长冻结在放罐时刻（= 计划周期），
+    # 不随当前时间（9/15）继续累计
+    assert tanks["A302"]["cultured_hours"] == 162.0
     # 运行中：A307 MC-26245 9/8 14:00 进罐、9/16 08:00 计划放罐 → 运行中
     assert tanks["A307"]["batch_no"] == "MC-26245"
     assert tanks["A307"]["status"] == "running"
     assert tanks["A307"]["dump_at"] == "2026-09-16T08:00:00"
+    # 运行中培养时长随当前时间累计：9/8 14:00 → 9/15 12:00 = 166h
+    assert tanks["A307"]["cultured_hours"] == 166.0
     # 罐序按移种时间：A302(8/30) → A307(9/8) → A306(9/9) → A310(9/10)
     # → A303(9/11) → A305(9/12)；A304 仅有放罐记录（无移种时间）置末
     order = [t["tank_no"] for t in payload["tanks"]]

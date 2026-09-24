@@ -389,6 +389,38 @@ def test_sales_plan_details_get_route_covers_overview_page():
     assert binding.scope_adapter == "production.plan"
 
 
+def test_fl_board_route_bound_to_overview_page():
+    """FL 氟苯尼考看板读取绑定到生产概览页（query 权限 + dashboard 适配）。"""
+    binding = page_policy.api_binding_for_route(
+        "GET", "/api/v1/production/fl-board"
+    )
+    assert binding is not None
+    assert binding.page_keys == ("production:overview",)
+    assert binding.permission == "query"
+    assert binding.scope_adapter == "production.dashboard"
+
+
+def test_feishu_sync_config_routes_cover_overview_page():
+    """概览页承载 FL 同步设置入口，飞书同步配置写端点授权生产概览页。"""
+    binding = page_policy.api_binding_for_route(
+        "PUT", "/api/v1/production/feishu-configs"
+    )
+    assert binding is not None
+    assert "production:overview" in binding.page_keys
+    assert binding.permission == "operate"
+    assert binding.scope_adapter == "production.feishu"
+
+
+def test_overview_delete_action_name_is_batch_specific():
+    """概览页 delete 动作文案对应产量记录删除/检修标注解除，不误读为删页面。"""
+    actions = page_policy._sensitive_actions(
+        "production:overview", "/api/v1/production/batch-actuals", "生产概览"
+    )
+    delete = [item for item in actions if item.key == "delete"]
+    assert delete, "概览页应保留 delete 敏感动作定义"
+    assert delete[0].name == "删除产量记录 / 解除检修标注"
+
+
 def test_hr_feishu_apps_route_bound_to_settings_page():
     """/feishu-settings/apps 读取双应用配置，绑定到 HR 设置-飞书页并带数据范围。"""
     binding = page_policy.api_binding_for_route(

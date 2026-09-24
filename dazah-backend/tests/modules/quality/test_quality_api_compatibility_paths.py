@@ -380,11 +380,6 @@ async def test_quality_capa_api_compatibility_success_paths(
         )
     monkeypatch.setattr(
         capa_api.service.quality_feishu_pages,
-        "sync_capas_from_feishu",
-        AsyncMock(return_value={"synced": 1}),
-    )
-    monkeypatch.setattr(
-        capa_api.service.quality_feishu_pages,
         "sync_capa_plan_tracks_from_feishu",
         AsyncMock(return_value={"synced": 1}),
     )
@@ -488,9 +483,6 @@ async def test_quality_capa_api_compatibility_success_paths(
         await capa_api.submit_capa_evaluation(
             capa_id, _data_object(), db=db, current_user=user
         )
-    ).status_code == 200
-    assert (
-        await capa_api.sync_capas_from_feishu(db=db, current_user=user)
     ).status_code == 200
     assert (
         await capa_api.sync_capa_plan_tracks_from_feishu(db=db, current_user=user)

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const actions = vi.hoisted(() => ({
   getFermentationBoard: vi.fn(),
+  getFlBoard: vi.fn(),
   markTankMaintenance: vi.fn(),
   removeTankMaintenance: vi.fn(),
   uploadScheduleExcel: vi.fn(),
@@ -22,6 +23,7 @@ const actions = vi.hoisted(() => ({
   getSalesPlanDetails: vi.fn(),
   getProductionLineStatus: vi.fn(),
   setProductionLineStatus: vi.fn(),
+  getLineHaltEvents: vi.fn(),
 }))
 
 vi.mock('@/actions/production', () => actions)
@@ -170,6 +172,35 @@ describe('ProductionHomePage (fermentation board)', () => {
       message: 'success',
       data: BOARD,
     })
+    // FL 视图默认空看板：未同步时不渲染批次表格（FL 分支用例自行覆盖数据态）
+    actions.getFlBoard.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: {
+        month: '2026-09',
+        batch_prefix: 'FL-2609',
+        is_current_month: true,
+        period: {
+          start: '2026-08-27',
+          end: '2026-09-26',
+          label: '8月27日～9月26日',
+        },
+        planned_kg: null,
+        planned_batches: 0,
+        inbound_batches: 0,
+        inbound_kg: null,
+        completion_rate: null,
+        in_progress_count: 0,
+        progress: {
+          by_batches: { inbound: 0, in_progress: 0, not_started: 0 },
+          by_kg: { completed_kg: null, planned_kg: null },
+        },
+        flow: [],
+        month_batches: [],
+        recent_completed: [],
+        generated_at: '2026-09-22T08:00:00',
+      },
+    })
     // 生产计划默认无数据：提炼计划产量卡显示"待更新"占位
     actions.getPlans.mockResolvedValue({
       code: 200,
@@ -201,6 +232,7 @@ describe('ProductionHomePage (fermentation board)', () => {
       message: '已标记为停产中',
       data: { product_code: 'FA', halted: true },
     })
+    actions.getLineHaltEvents.mockResolvedValue({ code: 200, data: { events: [] } })
     // 产品 Tab 复位为默认值，避免用例间状态串扰
     useProductContextStore.setState({ productCode: 'FA' })
     container = document.createElement('div')
@@ -447,6 +479,86 @@ describe('ProductionHomePage (fermentation board)', () => {
     expect(text).toContain('暂无销售计划数据，请先完成飞书同步设置并同步')
   })
 
+  it('renders the FL batch-flow view instead of the fermentation board', async () => {
+    actions.getFlBoard.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: {
+        month: '2026-09',
+        batch_prefix: 'FL-2609',
+        is_current_month: true,
+        period: {
+          start: '2026-08-27',
+          end: '2026-09-26',
+          label: '8月27日～9月26日',
+        },
+        planned_kg: 7000,
+        planned_batches: 3,
+        inbound_batches: 8,
+        inbound_kg: 15840,
+        completion_rate: 226.29,
+        in_progress_count: 1,
+        progress: {
+          by_batches: { inbound: 2, in_progress: 1, not_started: 0 },
+          by_kg: { completed_kg: 15840, planned_kg: 7000 },
+        },
+        flow: [
+          {
+            batch_no: 'FL-2609003',
+            seq: 3,
+            order_date: '2026-09-21',
+            pick_date: '2026-09-21',
+            charge_date: '2026-09-21',
+            charge_time: '8:00~10:00',
+            mix_date: null,
+            mix_time: null,
+            spec: null,
+            pack_date: null,
+            pack_time: null,
+            inspection_date: null,
+            planned_inbound_date: '2026-09-22',
+            actual_inbound_date: null,
+            stage_key: 'charge',
+            stage_label: '投料',
+            state: 'confirm_pending',
+            state_label: '待入库确认',
+            source_table: '9月排产',
+            elapsed_days: 1,
+          },
+        ],
+        month_batches: [],
+        recent_completed: [],
+        generated_at: '2026-09-22T08:53:00',
+      },
+    })
+    useProductContextStore.setState({ productCode: 'FL' })
+    await render()
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    // FL 独立视图：标题 + 批次工序看板（入库确认为准）
+    expect(text).toContain('2%氟苯尼考预混剂生产线')
+    expect(text).toContain('工序流转实时状态')
+    expect(text).toContain('FL-2609003')
+    expect(text).toContain('待入库确认')
+    expect(text).toContain('226.29%')
+    expect(text).toContain('计划批次')
+    // 来源角标存在
+    expect(
+      container.querySelectorAll('[data-testid="fl-source-mark"]').length,
+    ).toBeGreaterThanOrEqual(6)
+    // 发酵模块与排产存档告警全部不出现，也不拉发酵看板
+    expect(text).not.toContain('发酵罐实时状态')
+    expect(text).not.toContain('本月发酵进度')
+    expect(text).not.toContain('排产 Excel')
+    expect(actions.getFermentationBoard).not.toHaveBeenCalled()
+    // 月份参数随运行日期浮动，仅断言按概览当月取数一次
+    expect(actions.getFlBoard).toHaveBeenCalledTimes(1)
+    // FL 无发酵产量历史入口
+    const historyBtn = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('历史数据'),
+    )
+    expect(historyBtn).toBeFalsy()
+  })
+
   it('collapses the board into a halt placeholder when the line is halted', async () => {
     actions.getProductionLineStatus.mockResolvedValue({
       code: 200,
@@ -546,9 +658,9 @@ describe('ProductionHomePage (fermentation board)', () => {
       message: 'success',
       data: [
         {
-          id: 'p-fl',
+          id: 'p-ty',
           workshop: '102-2车间',
-          product_name: '2%氟苯尼考预混剂',
+          product_name: 'L-色氨酸',
           plan_date: '2026-09-01',
           planned_yield: 60000,
           unit: 'KG',
@@ -559,19 +671,20 @@ describe('ProductionHomePage (fermentation board)', () => {
       meta: { total: 1 },
     })
     await render()
-    // 切到氟苯尼考 Tab（新产品）
-    const flTab = Array.from(container.querySelectorAll('.rounded-lg')).find(
-      (b) => (b.textContent || '').trim() === '氟苯尼考',
+    // 切到 L-色氨酸 Tab（无排产存档的新产品，走统一周期兜底；
+    // FL 氟苯尼考已改为独立批次工序视图，不再走该骨架）
+    const tyTab = Array.from(container.querySelectorAll('.rounded-lg')).find(
+      (b) => (b.textContent || '').trim() === 'L-色氨酸',
     ) as HTMLElement
-    expect(flTab).toBeTruthy()
+    expect(tyTab).toBeTruthy()
     await act(async () => {
-      flTab.click()
+      tyTab.click()
       await new Promise((r) => setTimeout(r, 150))
     })
     const text = (container.textContent || '') + (document.body.textContent || '')
     // 未覆盖警示条保留，看板标题用全名
     expect(text).toContain('尚未上传覆盖 2026-09-18 所在扎帐周期的排产 Excel')
-    expect(text).toContain('2%氟苯尼考预混剂生产线')
+    expect(text).toContain('L-色氨酸生产线')
     // 提炼入库按统一扎帐周期出数，完成率 = 7920 ÷ 60000
     expect(text).toContain('7,920')
     expect(text).toContain('13.20%')
@@ -583,6 +696,205 @@ describe('ProductionHomePage (fermentation board)', () => {
     ) as HTMLElement
     await act(async () => {
       faTab.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+  })
+
+  it('renders the uncovered skeleton without period when viewing a future month', async () => {
+    // 切到未来扎帐周期且无排产（如洛伐 10 月）：骨架 period 为 null、
+    // is_current_period=false，页面不得崩溃（曾因 board?.period.end 抛
+    // TypeError 落入整页错误边界）
+    actions.getFermentationBoard.mockResolvedValue({
+      code: 200,
+      message: '尚未上传覆盖 2026-10-15 所在扎帐周期的排产 Excel',
+      data: {
+        covered: false,
+        now: '2026-09-23T12:00:00',
+        period: null,
+        kpis: null,
+        is_current_period: false,
+        month_planned_capacity_kg: null,
+        extract_finished_inbound_kg: null,
+        tanks: [],
+        recent: [],
+        trend: null,
+        dumped_batches: [],
+        extraction: null,
+        extraction_ledger: [],
+        alerts: [],
+        maintenance: [],
+      },
+    })
+    await render()
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('尚未上传覆盖 2026-10-15 所在扎帐周期的排产 Excel')
+    // 历史回看兜底：无周期时"截至"标签留空而不是渲染出 undefined/NaN
+    expect(text).not.toContain('undefined')
+    expect(text).not.toContain('NaN')
+  })
+
+  it('hints to upload or mark halt when uncovered and running', async () => {
+    // 未标停产：保留"尚未上传"提示并引导设置停产
+    actions.getFermentationBoard.mockResolvedValue({
+      code: 200,
+      message: '尚未上传覆盖 2026-10-15 所在扎帐周期的排产 Excel',
+      data: {
+        covered: false,
+        now: '2026-09-23T12:00:00',
+        period: null,
+        kpis: null,
+        is_current_period: false,
+        month_planned_capacity_kg: null,
+        extract_finished_inbound_kg: null,
+        tanks: [],
+        recent: [],
+        trend: null,
+        dumped_batches: [],
+        extraction: null,
+        extraction_ledger: [],
+        alerts: [],
+        maintenance: [],
+      },
+    })
+    actions.getProductionLineStatus.mockResolvedValue({
+      code: 200,
+      data: { halted: [], latest_events: {} },
+    })
+    await render()
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('尚未上传覆盖 2026-10-15 所在扎帐周期的排产 Excel')
+    expect(text).toContain('如该产线实际已停产，可将产线状态标记为停产')
+  })
+
+  it('states the line is halted instead of asking for upload', async () => {
+    // 已标停产：看板整块收起为停产占位，不再出现"尚未上传"提示
+    actions.getFermentationBoard.mockResolvedValue({
+      code: 200,
+      message: '尚未上传覆盖 2026-10-15 所在扎帐周期的排产 Excel',
+      data: {
+        covered: false,
+        now: '2026-09-23T12:00:00',
+        period: null,
+        kpis: null,
+        is_current_period: false,
+        month_planned_capacity_kg: null,
+        extract_finished_inbound_kg: null,
+        tanks: [],
+        recent: [],
+        trend: null,
+        dumped_batches: [],
+        extraction: null,
+        extraction_ledger: [],
+        alerts: [],
+        maintenance: [],
+      },
+    })
+    actions.getProductionLineStatus.mockResolvedValue({
+      code: 200,
+      data: { halted: ['FA'], latest_events: {} },
+    })
+    await render()
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('该产品生产线停产中')
+    expect(text).not.toContain('尚未上传覆盖')
+    expect(text).not.toContain('如该产线实际已停产')
+  })
+
+  it('opens the standalone halt history modal from the title card entry', async () => {
+    actions.getLineHaltEvents.mockResolvedValue({
+      code: 200,
+      data: {
+        events: [
+          {
+            product_code: 'FA',
+            halted: true,
+            reason: '检修',
+            operator_name: '王五',
+            created_at: '2026-09-23T09:00:00',
+          },
+          {
+            product_code: 'FA',
+            halted: false,
+            reason: null,
+            operator_name: '王五',
+            created_at: '2026-09-20T15:00:00',
+          },
+        ],
+      },
+    })
+    await render()
+    const entry = container.querySelector(
+      '[data-testid="halt-history-entry"]',
+    ) as HTMLElement
+    expect(entry).toBeTruthy()
+    await act(async () => {
+      entry.click()
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('停产历史')
+    expect(text).toContain('2026-09-23 09:00　停产 · 检修 · 王五')
+    expect(text).toContain('2026-09-20 15:00　复产 · 王五')
+    // 只读查看，不触发状态切换请求
+    expect(actions.setProductionLineStatus).not.toHaveBeenCalled()
+  })
+
+  it('keeps the selected month independent per product tab', async () => {
+    // FA 切到 2026-03 后切 MC：MC 仍是当月；切回 FA 仍显示 2026-03——
+    // 各视图（产品 Tab / 汇总）月份互不联动，会话内各自记忆
+    actions.getFermentationBoard.mockImplementation(async (date?: string) => ({
+      code: 200,
+      message: 'success',
+      data: {
+        ...BOARD,
+        period: date
+          ? { start: '2026-02-27', end: '2026-03-26', label: '2月27日～3月26日' }
+          : BOARD.period,
+        is_current_period: !date,
+      },
+    }))
+    await render()
+    const pickerInput = () =>
+      document.querySelector('.ant-picker input') as HTMLInputElement
+    // 在 FA 上通过键盘输入选 2026-03（面板在 jsdom 中不可交互，走输入回车路径）
+    const nativeSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      'value',
+    )?.set
+    await act(async () => {
+      pickerInput().focus()
+      nativeSetter?.call(pickerInput(), '2026-03')
+      pickerInput().dispatchEvent(new Event('input', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 100))
+    })
+    await act(async () => {
+      pickerInput().dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+      )
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    expect(pickerInput().value).toBe('2026-03')
+    // 切到 MC：应显示当月（2026-09），不受 FA 的 2026-03 影响
+    const mcTab = Array.from(container.querySelectorAll('.rounded-lg')).find(
+      (b) => (b.textContent || '').trim() === '霉酚酸',
+    ) as HTMLElement
+    await act(async () => {
+      mcTab.click()
+      await new Promise((r) => setTimeout(r, 150))
+    })
+    expect(pickerInput().value).toBe('2026-09')
+    // 切回 FA：仍记住 2026-03
+    const faTab = Array.from(container.querySelectorAll('.rounded-lg')).find(
+      (b) => (b.textContent || '').trim() === 'L-苯丙氨酸',
+    ) as HTMLElement
+    await act(async () => {
+      faTab.click()
+      await new Promise((r) => setTimeout(r, 150))
+    })
+    expect(pickerInput().value).toBe('2026-03')
+    // 复位产品 Tab，避免影响后续用例
+    await act(async () => {
+      mcTab.click()
       await new Promise((r) => setTimeout(r, 120))
     })
   })
@@ -1116,6 +1428,19 @@ describe('ProductionHomePage (fermentation board)', () => {
         document.body.querySelectorAll('.ant-modal .ant-btn-primary'),
       ).find((b) => !b.hasAttribute('disabled')) as HTMLElement | undefined
     expect(okBtn()).toBeUndefined()
+    // 倒计时期间先填原因（必填：不填不能确认）
+    const reasonInput = document.body.querySelector(
+      '[data-testid="line-status-reason"]',
+    ) as HTMLInputElement
+    const nativeSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      'value',
+    )?.set
+    await act(async () => {
+      nativeSetter?.call(reasonInput, '季节性停产')
+      reasonInput.dispatchEvent(new Event('input', { bubbles: true }))
+      await vi.advanceTimersByTimeAsync(100)
+    })
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5100)
     })
@@ -1135,8 +1460,130 @@ describe('ProductionHomePage (fermentation board)', () => {
     await act(async () => {
       await new Promise((r) => setTimeout(r, 200))
     })
-    expect(actions.setProductionLineStatus).toHaveBeenCalledWith(true, 'FA')
+    expect(actions.setProductionLineStatus).toHaveBeenCalledWith(
+      true,
+      'FA',
+      '季节性停产',
+    )
     expect(document.body.textContent || '').toContain('已标记为停产中')
+  })
+
+  it('shows the halt timeline in the confirm modal', async () => {
+    actions.setProductionLineStatus.mockResolvedValue({
+      code: 200,
+      message: '已标记为停产中',
+      data: null,
+    })
+    actions.getLineHaltEvents.mockResolvedValue({
+      code: 200,
+      data: {
+        events: [
+          {
+            product_code: 'MC',
+            halted: false,
+            reason: '检修完成',
+            operator_name: '李四',
+            created_at: '2026-09-01T10:00:00',
+          },
+        ],
+      },
+    })
+    await render()
+    const trigger = container.querySelector(
+      '[data-testid="line-status-select"]',
+    ) as HTMLElement
+    vi.useFakeTimers()
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      await vi.advanceTimersByTimeAsync(120)
+    })
+    const haltOption = Array.from(
+      document.body.querySelectorAll(
+        '.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option',
+      ),
+    ).find((o) => o.textContent?.includes('停产')) as HTMLElement
+    await act(async () => {
+      haltOption.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      haltOption.click()
+      await vi.advanceTimersByTimeAsync(120)
+    })
+    vi.useRealTimers()
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    const bodyText = document.body.textContent || ''
+    // 时间线在弹窗内展示（最近事件）
+    expect(bodyText).toContain('停产历史')
+    expect(bodyText).toContain('2026-09-01 10:00')
+    expect(bodyText).toContain('复产 · 检修完成 · 李四')
+  })
+
+  it('sends the halt reason with the confirm request', async () => {
+    actions.setProductionLineStatus.mockResolvedValue({
+      code: 200,
+      message: '已标记为停产中',
+      data: null,
+    })
+    await render()
+    const trigger = container.querySelector(
+      '[data-testid="line-status-select"]',
+    ) as HTMLElement
+    vi.useFakeTimers()
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      await vi.advanceTimersByTimeAsync(120)
+    })
+    const haltOption = Array.from(
+      document.body.querySelectorAll(
+        '.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option',
+      ),
+    ).find((o) => o.textContent?.includes('停产')) as HTMLElement
+    await act(async () => {
+      haltOption.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      haltOption.click()
+      await vi.advanceTimersByTimeAsync(120)
+    })
+    // 倒计时期间先填原因（React 受控输入按原生 setter 触发）
+    const reasonInput = document.body.querySelector(
+      '[data-testid="line-status-reason"]',
+    ) as HTMLInputElement
+    expect(reasonInput).toBeTruthy()
+    const nativeSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      'value',
+    )?.set
+    await act(async () => {
+      nativeSetter?.call(reasonInput, '转产美伐')
+      reasonInput.dispatchEvent(new Event('input', { bubbles: true }))
+      await vi.advanceTimersByTimeAsync(100)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5100)
+    })
+    for (let i = 0; i < 6; i++) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1100)
+      })
+      const ready = Array.from(
+        document.body.querySelectorAll('.ant-modal .ant-btn-primary'),
+      ).find((b) => !b.hasAttribute('disabled')) as HTMLElement | undefined
+      if (ready) {
+        await act(async () => {
+          ready.click()
+          await vi.advanceTimersByTimeAsync(200)
+        })
+        break
+      }
+    }
+    vi.useRealTimers()
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    expect(actions.setProductionLineStatus).toHaveBeenCalledWith(
+      true,
+      'FA',
+      '转产美伐',
+    )
   })
 
   it('closes the drawer and modals without saving', async () => {

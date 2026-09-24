@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -1053,3 +1053,123 @@ async def test_fermentation_board_without_archive_returns_unified_skeleton(
     board.get_warehouse_finished_inbound_kg.assert_awaited_once()
     kwargs = board.get_warehouse_finished_inbound_kg.call_args.kwargs
     assert str(kwargs["period_end"]) == "2026-09-26"
+
+
+@pytest.mark.anyio
+async def test_line_status_events_endpoint_returns_timeline(
+    auth_client: AsyncClient,
+    monkeypatch: Any,
+) -> None:
+    """停产时间线端点：事件按序返回；未知产品 400。"""
+    events = [
+        SimpleNamespace(
+            product_code="LV",
+            halted=True,
+            reason="转产",
+            operator_name="张三",
+            created_at=datetime(2026, 9, 21, 10, 0, 0, tzinfo=UTC),
+        )
+    ]
+    list_mock = AsyncMock(return_value=events)
+    monkeypatch.setattr(board, "list_line_halt_events", list_mock)
+    response = await auth_client.get(
+        f"{API}/production-line-status/events?product=LV"
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["code"] == 200
+    [event] = body["data"]["events"]
+    assert event["product_code"] == "LV"
+    assert event["halted"] is True
+    assert event["reason"] == "转产"
+    assert event["operator_name"] == "张三"
+    assert event["created_at"].startswith("2026-09-21T10:00")
+    assert list_mock.call_args.kwargs["product_code"] == "LV"
+
+    rejected = await auth_client.get(
+        f"{API}/production-line-status/events?product=XX"
+    )
+    assert rejected.status_code == 400
+
+
+@pytest.mark.anyio
+async def test_set_line_status_records_reason_and_latest_events(
+    auth_client: AsyncClient,
+    monkeypatch: Any,
+) -> None:
+    """设置停产：原因/操作人透传服务层并写入审计；状态列表带最近事件。"""
+    captured: dict[str, Any] = {}
+
+    async def _fake_set(
+        session: Any,
+        *,
+        product_code: str,
+        halted: bool,
+        updated_by: Any = None,
+        reason: str | None = None,
+        operator_name: str | None = None,
+    ) -> Any:
+        captured.update(
+            product_code=product_code,
+            halted=halted,
+            updated_by=updated_by,
+            reason=reason,
+            operator_name=operator_name,
+        )
+        return SimpleNamespace(
+            id=uuid.uuid4(), product_code=product_code, halted=halted
+        )
+
+    monkeypatch.setattr(board, "set_line_halted", _fake_set)
+    from app.modules.production import fermentation_board_api as board_api
+
+    monkeypatch.setattr(board_api, "record_audit_log", AsyncMock())
+    monkeypatch.setattr(
+        board,
+        "get_line_halted_map",
+        AsyncMock(return_value={"LV": True}),
+    )
+    monkeypatch.setattr(
+        board,
+        "latest_line_halt_events",
+        AsyncMock(
+            return_value={
+                "LV": SimpleNamespace(
+                    product_code="LV",
+                    halted=True,
+                    reason="转产",
+                    operator_name="张三",
+                    created_at=datetime(2026, 9, 21, 10, 0, 0),
+                )
+            }
+        ),
+    )
+
+    marked = await auth_client.post(
+        f"{API}/production-line-status?product=LV",
+        json={"halted": True, "reason": " 转产美伐 "},
+    )
+    assert marked.status_code == 200
+    assert marked.json()["data"] == {"product_code": "LV", "halted": True}
+    # 原因必填且去空格后透传；操作人取当前用户姓名
+    assert captured["reason"] == "转产美伐"
+    assert captured["operator_name"] == "看板测试用户"
+    assert captured["halted"] is True
+
+    # 原因缺失或全空白 → 422（时间线必须可追溯原因）
+    no_reason = await auth_client.post(
+        f"{API}/production-line-status?product=LV",
+        json={"halted": True},
+    )
+    assert no_reason.status_code == 422
+    blank_reason = await auth_client.post(
+        f"{API}/production-line-status?product=LV",
+        json={"halted": True, "reason": "   "},
+    )
+    assert blank_reason.status_code == 422
+
+    listed = await auth_client.get(f"{API}/production-line-status")
+    assert listed.status_code == 200
+    data = listed.json()["data"]
+    assert data["halted"] == ["LV"]
+    assert data["latest_events"]["LV"]["reason"] == "转产"

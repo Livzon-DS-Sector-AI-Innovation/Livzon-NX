@@ -105,7 +105,7 @@ export function DeviationPage() {
         <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>偏差台账</h1>
         {canOperate && <Link href="/quality/deviations/new">
           <Button type="primary" icon={<PlusOutlined />}>
-            新建偏差
+            新增台账
           </Button>
         </Link>}
       </div>

@@ -12,7 +12,7 @@ from functools import partial
 from typing import Any
 
 from fastapi import Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -41,6 +41,20 @@ class MaintenanceBody(BaseModel):
 
 class ProductionLineStatusBody(BaseModel):
     halted: bool = Field(..., description="是否停产中")
+    reason: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="原因（必填：转产/检修/季节性停产/误操作等），写入停产时间线",
+    )
+
+    @field_validator("reason", mode="after")
+    @classmethod
+    def strip_reason(cls: Any, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("原因不能为空")
+        return stripped
 
 
 class BatchActualBody(BaseModel):
@@ -479,19 +493,45 @@ async def set_fermentation_month_capacity(
 
 @router.get(
     "/production-line-status",
-    summary="产品生产线停产状态（停产品线代码列表）",
+    summary="产品生产线停产状态（停产品线代码 + 各自最近一次事件）",
 )
 async def list_production_line_status(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> Any:
     halted_map = await board.get_line_halted_map(db)
+    halted_codes = sorted(
+        code for code, halted in halted_map.items() if halted
+    )
+    latest = await board.latest_line_halt_events(db, halted_codes)
     return success_response(
         data={
-            "halted": sorted(
-                code for code, halted in halted_map.items() if halted
-            )
+            "halted": halted_codes,
+            "latest_events": {
+                code: board.serialize_line_halt_event(item)
+                for code, item in latest.items()
+            },
         }
+    )
+
+
+@router.get(
+    "/production-line-status/events",
+    summary="产品生产线停产/复产事件时间线（新→旧）",
+)
+async def list_production_line_halt_events(
+    product: str | None = Query(None, description="按产品代码过滤"),
+    limit: int = Query(100, ge=1, le=500, description="返回条数"),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    if product is not None and product not in board.PRODUCTION_LINE_CODES:
+        raise HTTPException(status_code=400, detail=f"未知的产品代码：{product}")
+    items = await board.list_line_halt_events(
+        db, product_code=product, limit=limit
+    )
+    return success_response(
+        data={"events": [board.serialize_line_halt_event(i) for i in items]}
     )
 
 
@@ -512,6 +552,8 @@ async def set_production_line_status(
         product_code=product,
         halted=body.halted,
         updated_by=current_user.id if current_user else None,
+        reason=body.reason,
+        operator_name=getattr(current_user, "name", None),
     )
     await record_audit_log(
         db,
@@ -519,7 +561,11 @@ async def set_production_line_status(
         user_id=current_user.id if current_user else None,
         resource_type="production_line_status",
         resource_id=item.id,
-        new_value={"product_code": product, "halted": body.halted},
+        new_value={
+            "product_code": product,
+            "halted": body.halted,
+            "reason": (body.reason or "").strip() or None,
+        },
     )
     return success_response(
         data={"product_code": product, "halted": bool(item.halted)},

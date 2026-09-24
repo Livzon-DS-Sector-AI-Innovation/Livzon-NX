@@ -51,7 +51,6 @@ import type {
   ValidationExecutionItem,
   ValidationListItem,
   ValidationUpcomingItem,
-  FeishuCapaLedgerItem,
   FeishuCapaPlanTrackItem,
   FeishuListResponse,
   ComplaintLedgerItem,
@@ -1351,22 +1350,6 @@ export async function fetchQualityAiLogs(params: {
 }
 
 // ---- Feishu Native APIs ----
-
-export async function fetchFeishuCapas(params?: {
-  keyword?: string
-  page?: number
-  page_size?: number
-}): Promise<FeishuListResponse<FeishuCapaLedgerItem>> {
-  const searchParams = new URLSearchParams()
-  if (params?.keyword) searchParams.set('keyword', params.keyword)
-  if (params?.page) searchParams.set('page', String(params.page))
-  if (params?.page_size) searchParams.set('page_size', String(params.page_size))
-  const query = searchParams.toString()
-  const res = await fetch(`/api/v1/quality/feishu/capas${query ? `?${query}` : ''}`)
-  if (!res.ok) throw await parseError(res)
-  const json = await res.json()
-  return { items: json.data ?? [], total: json.meta?.total ?? 0 }
-}
 
 export async function fetchFeishuCapaPlanTracks(params?: {
   keyword?: string

@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import AppException, NotFoundException
 from app.core.redis import cache_delete, cache_get, cache_set
 from app.modules.quality import repository
-from app.modules.quality.models import CAPA, CapaPlanTrack, ChangeControl
+from app.modules.quality.models import CapaPlanTrack, ChangeControl
 from app.modules.quality.service import (
     quality_feishu_settings as feishu_settings_service,
 )
@@ -2049,107 +2049,6 @@ async def list_validation_revalidation_upcoming_from_feishu(
 
 
 # ============ CAPA 台账 / CAPA 计划跟踪 Feishu Sync ============
-
-
-async def sync_capas_from_feishu(db: AsyncSession) -> dict[str, int]:
-    """Pull all records from the Feishu Bitable ``capa_ledger`` table and
-    upsert them into the local ``CAPA`` table.
-
-    Each Feishu record is matched by ``capa_code``:
-    - If a local CAPA with the same ``capa_code`` exists, it is updated.
-    - Otherwise a new CAPA row is created.
-
-    Returns ``{"synced": N, "failed": N}``.
-    """
-    synced = 0
-    failed = 0
-
-    try:
-        _, _entity = await _resolve_runtime_entity(db, "capa_ledger", direction="pull")
-    except AppException:
-        logger.exception("capa_ledger 飞书 Base 未启用，无法同步 CAPA 台账")
-        return {"synced": 0, "failed": 0}
-
-    try:
-        records = await _search_entity_records(db, "capa_ledger")
-    except Exception:
-        logger.exception("从飞书拉取 CAPA 台账记录失败")
-        return {"synced": 0, "failed": 0}
-
-    normalize_text = feishu_sync_service._normalize_text
-    parse_datetime = feishu_sync_service._parse_feishu_datetime
-
-    for record in records:
-        try:
-            fields = record.get("fields") or {}
-
-            capa_code = normalize_text(fields.get("CAPA编号"))
-            if not capa_code:
-                failed += 1
-                continue
-
-            status = normalize_text(fields.get("CAPA状态"))
-            title = normalize_text(fields.get("CAPA简述"))
-            department = normalize_text(fields.get("事件部门"))
-            affected_product = normalize_text(fields.get("涉及产品"))
-            evaluation_result = normalize_text(fields.get("CAPA效果评估"))
-            qa_confirmer = normalize_text(fields.get("QA质量员"))
-
-            closure_date = parse_datetime(fields.get("关闭日期"))
-            qa_confirm_date = parse_datetime(fields.get("QA质量员确认日期"))
-            expected_completion_date = parse_datetime(fields.get("启动日期"))
-
-            feishu_record_id = str(record.get("record_id") or "")
-            sync_at = datetime.now(UTC)
-
-            existing = await repository.get_capa_by_code(db, capa_code)
-
-            if existing:
-                existing.title = title
-                existing.status = status or existing.status
-                existing.department = department
-                existing.affected_product = affected_product
-                existing.evaluation_result = evaluation_result
-                existing.closure_date = closure_date
-                existing.qa_confirmer = qa_confirmer
-                existing.qa_confirm_date = qa_confirm_date
-                existing.expected_completion_date = expected_completion_date
-                existing.feishu_base_record_id = feishu_record_id or None
-                existing.feishu_sync_status = "synced"
-                existing.feishu_synced_at = sync_at
-                existing.feishu_last_sync_direction = "base_to_system"
-                existing.feishu_last_sync_error = None
-                existing.updated_at = sync_at
-            else:
-                capa = CAPA(
-                    capa_code=capa_code,
-                    title=title,
-                    status=status or "draft",
-                    department=department,
-                    affected_product=affected_product,
-                    evaluation_result=evaluation_result,
-                    closure_date=closure_date,
-                    qa_confirmer=qa_confirmer,
-                    qa_confirm_date=qa_confirm_date,
-                    expected_completion_date=expected_completion_date,
-                    feishu_base_record_id=feishu_record_id or None,
-                    feishu_sync_status="synced",
-                    feishu_synced_at=sync_at,
-                    feishu_last_sync_direction="base_to_system",
-                )
-                db.add(capa)
-
-            await db.commit()
-            synced += 1
-        except Exception:
-            try:
-                await db.rollback()
-            except Exception:
-                logger.warning("rollback 失败", exc_info=True)
-            logger.exception("同步 CAPA 台账记录失败: %s", record.get("record_id"))
-            failed += 1
-
-    return {"synced": synced, "failed": failed}
 
 
 async def sync_capa_plan_tracks_from_feishu(db: AsyncSession) -> dict[str, int]:

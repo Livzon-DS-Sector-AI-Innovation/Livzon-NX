@@ -19,7 +19,7 @@ from app.modules.quality.schemas import (
     UpdateDeviationRequest,
 )
 from app.modules.quality.service import quality_deviation as deviation_service
-from app.modules.quality.service import quality_feishu_pages, quality_feishu_sync
+from app.modules.quality.service import quality_feishu_pages
 from app.modules.quality.service import quality_management as service
 
 SimpleNamespace: Any = _SimpleNamespace
@@ -59,9 +59,6 @@ async def test_deviation_update_close_reopen_delete_and_rollback(
         returned_step=None,
     )
     db = _db(deviation)
-    monkeypatch.setattr(
-        quality_feishu_sync, "auto_sync_deviation_after_write", AsyncMock()
-    )
 
     closed = UpdateDeviationRequest.model_construct(
         title="更新后的偏差",
@@ -340,12 +337,6 @@ async def test_capa_create_update_delete_and_commit_rollback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     db = _db(None)
-    auto_sync: Any = AsyncMock()
-    monkeypatch.setattr(
-        quality_feishu_sync,
-        "auto_sync_capa_after_write",
-        auto_sync,
-    )
     create = CreateCapaRequest.model_construct(
         title="更换密封件",
         deviation_id=None,
@@ -380,7 +371,6 @@ async def test_capa_create_update_delete_and_commit_rollback(
         "user",
     ) == {"success": True}
     assert capa.expected_completion_date.isoformat().startswith("2026-08-02")
-    auto_sync.assert_awaited()
 
     assert await service.delete_capa(db, capa.id) == {"success": True}
     assert capa.is_deleted is True

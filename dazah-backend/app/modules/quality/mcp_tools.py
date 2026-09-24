@@ -136,20 +136,6 @@ async def quality_query_capas(
     result = await db.execute(stmt)
     items = result.scalars().all()
 
-    # DB 为空时回退飞书
-    if not items:
-        try:
-            from app.modules.quality.service.quality_feishu_pages import (
-                sync_capas_from_feishu,
-            )
-
-            await sync_capas_from_feishu(db)
-            # sync 后重新查 DB
-            result = await db.execute(stmt)
-            items = result.scalars().all()
-        except Exception:
-            pass
-
     return [
         {
             "id": str(c.id),

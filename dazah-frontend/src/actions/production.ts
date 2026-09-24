@@ -495,6 +495,19 @@ export async function getFermentationBoard(date?: string, product = 'FA') {
   return response.json()
 }
 
+// ============ FL 氟苯尼考看板 Actions ============
+
+export async function getFlBoard(month?: string) {
+  const params = new URLSearchParams()
+  if (month) params.set('month', month)
+  const qs = params.toString()
+  const response = await fetch(
+    `${API_BASE}/api/v1/production/fl-board${qs ? `?${qs}` : ''}`,
+    { headers: await getAuthHeaders(), cache: 'no-store' },
+  )
+  return response.json()
+}
+
 export async function markTankMaintenance(tankNo: string, reason: string) {
   const response = await fetch(
     `${API_BASE}/api/v1/production/tank-maintenance`,
@@ -593,14 +606,37 @@ export async function getProductionLineStatus() {
   return response.json()
 }
 
-export async function setProductionLineStatus(halted: boolean, product: string) {
+export async function setProductionLineStatus(
+  halted: boolean,
+  product: string,
+  reason?: string,
+) {
   const response = await fetch(
     `${API_BASE}/api/v1/production/production-line-status?product=${encodeURIComponent(product)}`,
     {
       method: 'POST',
       headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ halted }),
+      body: JSON.stringify({ halted, reason: reason?.trim() || undefined }),
     },
+  )
+  return response.json()
+}
+
+export interface LineHaltEvent {
+  product_code: string
+  halted: boolean
+  reason: string | null
+  operator_name: string | null
+  created_at: string | null
+}
+
+export async function getLineHaltEvents(product?: string, limit = 20) {
+  const params = new URLSearchParams()
+  if (product) params.set('product', product)
+  params.set('limit', String(limit))
+  const response = await fetch(
+    `${API_BASE}/api/v1/production/production-line-status/events?${params.toString()}`,
+    { headers: await getAuthHeaders() },
   )
   return response.json()
 }

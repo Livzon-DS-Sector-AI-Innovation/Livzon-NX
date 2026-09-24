@@ -22,7 +22,6 @@ from app.modules.quality.schemas import (
     AttachmentReviewOut,
     CapaDetail,
     CapaListItem,
-    CapaStatistics,
     ChangeDetail,
     ChangeListItem,
     ChangeStatistics,
@@ -1144,9 +1143,6 @@ async def create_capa(
 
         raise
     await db.flush()
-    from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
-
-    await feishu_sync_service.auto_sync_capa_after_write(db, capa.id)
     return {"id": str(capa.id), "code": capa.capa_code}
 
 
@@ -1196,9 +1192,6 @@ async def update_capa(
         await db.rollback()
 
         raise
-    from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
-
-    await feishu_sync_service.auto_sync_capa_after_write(db, capa.id)
     return {"success": True}
 
 
@@ -1224,69 +1217,6 @@ async def delete_capa(db: AsyncSession, capa_id: uuid.UUID) -> dict[str, bool]:
 # ============ Statistics ============
 # 偏差统计已收敛到 service/quality_statistics.py（/statistics/deviations 生效路由），
 # 此处不再保留重复实现。
-
-
-async def get_capa_statistics(db: AsyncSession) -> CapaStatistics:
-    from app.modules.quality.service import feishu_capa
-
-    try:
-        result = await feishu_capa.list_capa_ledger(
-            db,
-            page=1,
-            page_size=99999,
-        )
-        items = result.get("items", [])
-    except Exception:
-        items = []
-
-    total = len(items)
-    closed_count = sum(1 for item in items if item.get("status") == "closed")
-
-    # Simple overdue count for demonstration (would need proper date parsing)
-    today_str = date.today().isoformat()
-    overdue_count = 0
-    for item in items:
-        if item.get("status") not in ("closed", "cancelled"):
-            exp_date = item.get("expected_completion_date")
-            if exp_date and str(exp_date) < today_str:
-                overdue_count += 1
-
-    status_counts: dict[str, int] = {}
-    source_counts: dict[str, int] = {}
-    category_counts: dict[str, int] = {}
-    department_counts: dict[str, int] = {}
-
-    for item in items:
-        status = item.get("status") or "draft"
-        status_counts[status] = status_counts.get(status, 0) + 1
-
-        source = item.get("source") or "未知"
-        source_counts[source] = source_counts.get(source, 0) + 1
-
-        category = item.get("category") or "unknown"
-        category_counts[category] = category_counts.get(category, 0) + 1
-
-        dept = item.get("department") or item.get("事件部门") or "未知"
-        department_counts[dept] = department_counts.get(dept, 0) + 1
-
-    status_distribution = [{"status": k, "count": v} for k, v in status_counts.items()]
-    source_distribution = [{"source": k, "count": v} for k, v in source_counts.items()]
-    category_distribution = [
-        {"category": k, "count": v} for k, v in category_counts.items()
-    ]
-    department_distribution = [
-        {"name": k, "count": v} for k, v in department_counts.items()
-    ]
-
-    return CapaStatistics(
-        total=total,
-        closed_count=closed_count,
-        overdue_count=overdue_count,
-        status_distribution=status_distribution,
-        source_distribution=source_distribution,
-        category_distribution=category_distribution,
-        department_distribution=department_distribution,
-    )
 
 
 async def get_change_statistics(db: AsyncSession) -> ChangeStatistics:
