@@ -27,7 +27,7 @@ describe('LLM config form values', () => {
     expect(getNewLLMConfigFormValues()).toEqual({
       temperature: 0.1,
       use_temperature: false,
-      timeout_seconds: 120,
+      timeout_seconds: 30,
       is_active: false,
     })
   })
@@ -43,5 +43,10 @@ describe('LLM config form values', () => {
     expect(
       buildLLMConfigPayload({ ...baseValues, use_temperature: true }),
     ).toEqual(expect.objectContaining({ temperature: 0.7 }))
+  })
+
+  it('preserves the selected activation state in the save payload', () => {
+    expect(buildLLMConfigPayload(baseValues).is_active).toBe(true)
+    expect(buildLLMConfigPayload({ ...baseValues, is_active: false }).is_active).toBe(false)
   })
 })

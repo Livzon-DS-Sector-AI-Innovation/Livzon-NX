@@ -147,13 +147,13 @@ body {
 .top-nav-search {
   position: relative;
   flex: none;
-  width: clamp(36px, calc(100vw - 478px), 240px);
+  width: clamp(36px, calc(100vw - 478px), 200px);
   height: 36px;
 }
 
 @media (max-width: 767px) {
   .top-nav-search {
-    width: clamp(36px, calc(100vw - 358px), 240px);
+    width: clamp(36px, calc(100vw - 358px), 200px);
   }
 }
 
