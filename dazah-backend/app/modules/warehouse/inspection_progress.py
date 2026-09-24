@@ -797,6 +797,8 @@ async def _build_raw_overview(
                     "category": category,
                     "inbound_date": inbound.date().isoformat(),
                     "waited_hours": waited_hours,
+                    "record_id": item.source_record_id,
+                    "page_key": INBOUND_LEDGER_PAGE_KEY,
                 }
             )
             bucket["pending_count"] += 1
@@ -822,6 +824,7 @@ async def _build_raw_overview(
         "breakdown": breakdown,
         "daily": _daily_series(days, completed, now),
         "oldest_pending": pending[:5],
+        "pending_items": pending,
         "stages": None,
     }
 
@@ -906,6 +909,8 @@ async def _build_product_overview(
                         "product": product_label,
                         "inbound_date": inbound.date().isoformat(),
                         "waited_hours": waited_hours,
+                        "record_id": item.source_record_id,
+                        "page_key": page_key,
                     }
                 )
                 bucket["pending_count"] += 1
@@ -933,6 +938,7 @@ async def _build_product_overview(
         "breakdown": breakdown,
         "daily": _daily_series(days, completed, now),
         "oldest_pending": pending[:5],
+        "pending_items": pending,
         "stages": {
             "inbound_to_pending_avg_hours": _avg(stage1_hours_list),
             "pending_to_result_avg_hours": _avg(stage2_hours_list),

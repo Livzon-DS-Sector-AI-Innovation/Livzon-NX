@@ -44,6 +44,12 @@ async def test_overview_endpoint_contract(client: AsyncClient) -> None:
     assert "completed_count" in data["window"]
     assert isinstance(data["daily"], list)
     assert len(data["daily"]) == 7
+    # 待验下钻契约：全量列表存在，且待验项 schema 携带记录定位字段
+    assert isinstance(data.get("pending_items"), list)
+    assert all(
+        {"record_id", "page_key", "batch", "name"} <= set(item)
+        for item in data["pending_items"]
+    )
 
 
 async def test_overview_endpoint_rejects_invalid_scope(

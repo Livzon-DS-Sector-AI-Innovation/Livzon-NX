@@ -12,6 +12,7 @@ vi.mock('echarts-for-react', () => ({
 
 const apiClient = vi.hoisted(() => ({
   fetchWarehouseInspectionProgressOverview: vi.fn(),
+  fetchWarehouseRecordDetail: vi.fn(),
 }))
 
 vi.mock('@/lib/api/client/warehouse', () => apiClient)
@@ -58,9 +59,74 @@ const OVERVIEW = {
       product: null,
       inbound_date: '2026-09-18',
       waited_hours: 60.0,
+      record_id: 'rec-pending',
+      page_key: 'inbound-ledger',
+    },
+  ],
+  pending_items: [
+    {
+      name: '乳糖',
+      batch: 'YL-300',
+      category: '原辅料类',
+      product: null,
+      inbound_date: '2026-09-18',
+      waited_hours: 60.0,
+      record_id: 'rec-pending',
+      page_key: 'inbound-ledger',
+    },
+    {
+      name: '甘露醇',
+      batch: 'YL-400',
+      category: '原辅料类',
+      product: null,
+      inbound_date: '2026-09-19',
+      waited_hours: 36.0,
+      record_id: 'rec-pending-2',
+      page_key: 'inbound-ledger',
     },
   ],
   stages: null,
+}
+
+const RECORD_DETAIL = {
+  record_id: 'rec-pending-2',
+  fields: [
+    { field_name: '物料名称', value: '甘露醇' },
+    { field_name: '厂内批号', value: 'YL-400' },
+    { field_name: '入库日期', value: '2026-09-19' },
+    { field_name: '检测结果', value: null },
+  ],
+  inspection_cycle: {
+    page_key: 'inbound-ledger',
+    record_id: 'rec-pending-2',
+    status: 'pending',
+    status_label: '待验中',
+    result: null,
+    inbound_date: '2026-09-19',
+    pending_since: null,
+    result_at: null,
+    stages: [],
+    total_hours: 36.0,
+    note: null,
+  },
+}
+
+// happy-dom 解析 antd 内联 SVG 会截断后续 DOM，静态断言前先移除
+function visibleText(root: ParentNode): string {
+  root.querySelectorAll('svg').forEach((el) => el.remove())
+  return root.textContent ?? ''
+}
+
+function click(element: Element) {
+  act(() => {
+    element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+  })
+}
+
+async function settle(ms = 60) {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, ms))
+  })
 }
 
 describe('WarehouseInspectionProgressPanel', () => {
@@ -71,6 +137,7 @@ describe('WarehouseInspectionProgressPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     apiClient.fetchWarehouseInspectionProgressOverview.mockResolvedValue(OVERVIEW)
+    apiClient.fetchWarehouseRecordDetail.mockResolvedValue(RECORD_DETAIL)
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -95,9 +162,7 @@ describe('WarehouseInspectionProgressPanel', () => {
       )
     })
     if (waitRendered) {
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 60))
-      })
+      await settle()
     }
   }
 
@@ -111,6 +176,58 @@ describe('WarehouseInspectionProgressPanel', () => {
     expect(text).toContain('统计自 2026-09-09')
     expect(text).toContain('乳糖')
     expect(container.querySelector('[data-testid="echarts-mock"]')).not.toBeNull()
+  })
+
+  it('shows batch number column in the oldest pending table', async () => {
+    await mount('raw')
+    const text = visibleText(container)
+    expect(text).toContain('批号')
+    expect(text).toContain('YL-300')
+  })
+
+  it('opens the full pending list drawer when clicking the pending card', async () => {
+    await mount('raw')
+    const card = container.querySelector('.cursor-pointer')
+    expect(card).not.toBeNull()
+    expect(card?.textContent).toContain('当前待验批次')
+    click(card as Element)
+    await settle()
+
+    // 卡片点击触发一次主动拉新
+    expect(apiClient.fetchWarehouseInspectionProgressOverview.mock.calls.length).toBeGreaterThanOrEqual(2)
+    const text = visibleText(document.body)
+    expect(text).toContain('当前待验批次（共 2 条）')
+    // 抽屉展示全量列表（含 Top5 之外的批次）
+    expect(text).toContain('甘露醇')
+    expect(text).toContain('YL-400')
+    expect(text).toContain('前往台账查看')
+  })
+
+  it('opens the record detail modal when clicking a pending row', async () => {
+    await mount('raw')
+    // 打开全量列表抽屉后点击仅存在于抽屉中的批次行
+    const card = container.querySelector('.cursor-pointer') as Element
+    click(card)
+    await settle()
+
+    const row = Array.from(document.body.querySelectorAll('tr')).find((tr) =>
+      (tr.textContent ?? '').includes('YL-400')
+    )
+    expect(row).toBeDefined()
+    click(row as Element)
+    await settle()
+
+    expect(apiClient.fetchWarehouseRecordDetail).toHaveBeenCalledWith(
+      'inbound-ledger',
+      'rec-pending-2'
+    )
+    const text = visibleText(document.body)
+    expect(text).toContain('批次记录详情')
+    expect(text).toContain('物料名称')
+    expect(text).toContain('甘露醇')
+    expect(text).toContain('检验进度周期')
+    expect(text).toContain('待验中')
+    expect(text).toContain('总时长')
   })
 
   it('renders product scope stage stats when present', async () => {

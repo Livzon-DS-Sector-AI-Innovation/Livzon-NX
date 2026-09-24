@@ -212,6 +212,9 @@ class WarehouseInspectionPendingItem(BaseModel):
     product: str | None = None
     inbound_date: str | None = None
     waited_hours: float | None = None
+    # 下钻定位：飞书镜像行 ID 与所在物料页（记录详情弹窗使用）
+    record_id: str | None = None
+    page_key: str | None = None
 
 
 class WarehouseInspectionStageStats(BaseModel):
@@ -233,6 +236,8 @@ class WarehouseInspectionOverview(BaseModel):
     breakdown: list[WarehouseInspectionGroupBreakdown] = Field(default_factory=list)
     daily: list[WarehouseInspectionDailyPoint] = Field(default_factory=list)
     oldest_pending: list[WarehouseInspectionPendingItem] = Field(default_factory=list)
+    # 全量待验批次（按已等待时长降序），供仪表盘卡片下钻明细使用
+    pending_items: list[WarehouseInspectionPendingItem] = Field(default_factory=list)
     stages: WarehouseInspectionStageStats | None = None
 
 
