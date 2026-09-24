@@ -842,6 +842,7 @@ def _statin_rows() -> list[list]:
         out.append(row("移种", spec.get("shift", {})))
         out.append(row("倒罐", spec.get("turn", {})))
         out.append(row("倒罐时间", spec.get("turn_tank", {})))
+        out.append(row("", spec.get("turn_time", {})))
         out.append(row("放罐", spec.get("dump", {})))
         out.append(row("", spec.get("dump_tank", {})))
         out.append(row("放罐时间", spec.get("dump_time", {})))
@@ -867,7 +868,8 @@ def _statin_rows() -> list[list]:
         "ferm_tank": {2: "303B/305B", 12: "305B"},
         "shift": {2: 0.6666666666666666, 12: 0.7916666666666666},
         "turn": {7: "MV-26069/070", 14: "LV-26016", 17: "待放302B"},
-        "turn_tank": {7: "301A\n303B\n305B", 14: "305B\n301A"},
+        "turn_tank": {7: "303B\n305B\n301A", 14: "305B\n301A"},
+        "turn_time": {7: "09:00", 14: "21:00"},
         "dump": {4: "MV-26063/064", 13: "MV-26069/070", 23: "LV-26016"},
         "dump_tank": {4: "304B/306B", 13: "301A\n303B\n305B", 23: "305B\n301A"},
         "dump_time": {
@@ -876,7 +878,18 @@ def _statin_rows() -> list[list]:
             23: 0.7083333333333334,
         },
     })
-    return may + june
+    july = block_rows("2026年7月01日～2026年7月31日103发酵洛伐计划", 31, {
+        "种子罐": {2: "LV-26017"},
+        "接种时间": {2: "11:00"},
+        "接种量": {2: 65.0},
+        "ferm": {2: "LV-26017"},
+        "ferm_tank": {2: "303B"},
+        "shift": {2: 0.6666666666666666},
+        "dump": {12: "LV-26017"},
+        "dump_tank": {12: "303B"},
+        "dump_time": {12: 0.6666666666666666},
+    })
+    return may + june + july
 
 
 def test_statin_board_parsing() -> None:
@@ -942,11 +955,11 @@ def test_statin_board_parsing() -> None:
         "batches": ["MV-26063", "MV-26070"],
         "outputs": [10.0, 20.0],
     }
-    # 播报：排产备注取内容格；预放罐提醒（LV-26016 6/22 16:00 放罐，
-    # 6/20 12:00 时点剩 52h）；'备注：'标签本身不作为播报内容
+    # 播报：排产备注取内容格；预放罐提醒（LV-26016 6/14 21:00 倒罐入 301A，
+    # 6/20 12:00 时点在 301A 运行、剩 53h）；'备注：'标签本身不作为播报内容
     texts = [a["text"] for a in payload["alerts"]]
     assert any("【排产备注】6月份美伐放罐12批" in t for t in texts)
-    assert any("距预估放罐剩余" in t and "305B" in t for t in texts)
+    assert any("距预估放罐剩余" in t and "301A" in t for t in texts)
     assert all(t != "备注：" for t in texts)
 
 
@@ -956,7 +969,7 @@ def test_statin_mv_counts_integer_batches_despite_inoculation() -> None:
     rows = _statin_rows()
     # 6月块美伐复合批 MV-26069/070 接种量改为非标准 300
     #（折算口径应为每子批 300/2/200 = 0.75）
-    inoc_row = rows[16 + 5]
+    inoc_row = rows[17 + 5]
     assert inoc_row[2] == 400.0
     inoc_row[2] = 300.0
     timeline = board._statin_batch_timeline(rows)
@@ -970,6 +983,175 @@ def test_statin_mv_counts_integer_batches_despite_inoculation() -> None:
     assert payload["kpis"]["month_planned"] == pytest.approx(6.65)
     # 已完成（≤6/20 放罐的 6 个美伐子批）仍按整数计
     assert payload["kpis"]["month_done_planned"] == pytest.approx(6.0)
+
+
+def test_statin_tank_states_independent_pipeline() -> None:
+    """他汀罐状态独立判定（占用段模型）：空罐预告下次移种、倒罐后批次
+    转挂 301A 运行、放罐 2h 窗口内"放罐中"、窗口结束"已放罐"收尾、
+    无批次"等待排产"、检修标注优先、运行中优先于放罐窗口。
+    MC 判定不共用（走原分支，由既有用例覆盖）。"""
+    rows = _statin_rows()
+
+    def tank_map(
+        now: datetime,
+        product: str = "LV",
+        maintenance: list[dict] | None = None,
+    ) -> dict:
+        payload = board.build_mp_board(
+            rows, maintenance or [], now, actuals=[], product=product
+        )
+        assert payload is not None
+        return {t["tank_no"]: t for t in payload["tanks"]}
+
+    # 空罐预告：5/1 10:00（移种 16:00 前），304B/306B 各自预告子批
+    tanks = tank_map(datetime(2026, 5, 1, 10, 0), product="MV")
+    assert tanks["304B"]["status"] == "idle"
+    assert tanks["304B"]["batch_no"] is None
+    assert tanks["304B"]["inoculate_at"] == "2026-05-01T16:00:00"
+    assert tanks["304B"]["note"] == "预计05-01 16:00移种MV-26063"
+    assert tanks["306B"]["note"] == "预计05-01 16:00移种MV-26064"
+
+    # 倒罐预告：6/6 08:00（09:00 倒罐前）——303B/305B 在罐运行中，备注
+    # 预告往哪倒、几点倒；301A 空罐预告倒罐进罐，移种时间带（倒罐）标注
+    tanks = tank_map(datetime(2026, 6, 6, 8, 0))
+    assert tanks["303B"]["status"] == "running"
+    assert tanks["303B"]["batch_no"] == "MV-26069"
+    assert tanks["303B"]["note"] == "运行中（预计06-06 09:00倒罐至301A）"
+    assert tanks["305B"]["note"] == "运行中（预计06-06 09:00倒罐至301A）"
+    assert tanks["301A"]["status"] == "idle"
+    assert tanks["301A"]["inoculate_at"] == "2026-06-06T09:00:00"
+    assert tanks["301A"]["inoculate_mark"] == "（倒罐）"
+    assert tanks["301A"]["note"] == (
+        "预计06-06 09:00自303B、305B倒罐至301A（MV-26069/070）"
+    )
+
+    # 倒罐换罐：6/6 10:00（09:00 倒罐后 1 小时）——MV-26069/070 已转入
+    # 301A 运行（批号合并展示，培养时长自 6/1 16:00 连续累计），腾空的
+    # 303B 等待排产，305B 预告 6/11 移种的 LV-26016
+    tanks = tank_map(datetime(2026, 6, 6, 10, 0))
+    assert tanks["301A"]["status"] == "running"
+    assert tanks["301A"]["batch_no"] == "MV-26069/070"
+    assert tanks["301A"]["inoculate_at"] == "2026-06-01T16:00:00"
+    # 培养时长自原始移种连续累计（6/1 16:00 → 6/6 10:00 = 114h，换罐不重置）
+    assert tanks["301A"]["cultured_hours"] == 114.0
+    assert tanks["301A"]["dump_at"] == "2026-06-12T16:00:00"
+    assert tanks["303B"]["status"] == "idle"
+    # 跨扎帐周期预告：占用段取全量时间线，303B 空罐预告 7/1 移种批
+    assert tanks["303B"]["note"] == "预计07-01 16:00移种LV-26017"
+    assert tanks["305B"]["status"] == "idle"
+    assert tanks["305B"]["note"] == "预计06-11 19:00移种LV-26016"
+
+    # 放罐窗口：6/12 17:00（放罐 16:00）——301A"放罐中"；305B 在罐
+    # LV-26016 运行中（其 6/13 才倒罐）；303B 跨周期预告 7/1 移种批；
+    # 304B 直放批放罐窗口已过
+    tanks = tank_map(datetime(2026, 6, 12, 17, 0))
+    assert tanks["301A"]["status"] == "dumping"
+    assert tanks["301A"]["batch_no"] == "MV-26069/070"
+    assert tanks["301A"]["note"] == "放罐中（预计1h后结束）"
+    assert tanks["305B"]["status"] == "running"
+    assert tanks["305B"]["batch_no"] == "LV-26016"
+    assert tanks["305B"]["note"] == "运行中（预计06-13 21:00倒罐至301A）"
+    assert tanks["303B"]["status"] == "idle"
+    assert tanks["303B"]["note"] == "预计07-01 16:00移种LV-26017"
+    assert tanks["304B"]["status"] == "dumped"
+    assert tanks["304B"]["batch_no"] == "MV-26063"
+    assert tanks["304B"]["note"] == "该罐本批次放罐作业完成"
+    assert tanks["304B"]["inoculate_at"] == "2026-05-01T16:00:00"
+
+    # 倒罐进罐：6/15 08:00 —— LV-26016 昨晚 21:00 倒罐入 301A 后 301A
+    # 运行中（培养时长自 6/11 19:00 连续累计），305B 腾空等待排产
+    tanks = tank_map(datetime(2026, 6, 15, 8, 0))
+    assert tanks["301A"]["status"] == "running"
+    assert tanks["301A"]["batch_no"] == "LV-26016"
+    assert tanks["301A"]["cultured_hours"] == round(
+        (
+            datetime(2026, 6, 15, 8, 0) - datetime(2026, 6, 11, 19, 0)
+        ).total_seconds()
+        / 3600,
+        1,
+    )
+    assert tanks["301A"]["note"] == "运行中（06-13 21:00自305B倒罐）"
+    assert tanks["305B"]["status"] == "idle"
+    assert tanks["305B"]["note"] == "等待排产"
+
+    # 放罐收尾：6/23 10:00（LV-26016 6/22 17:00 放罐、窗口已过）——
+    # 301A 已放罐收尾；303B 跨周期预告 7/1 移种批
+    tanks = tank_map(datetime(2026, 6, 23, 10, 0))
+    assert tanks["301A"]["status"] == "dumped"
+    assert tanks["301A"]["batch_no"] == "LV-26016"
+    assert tanks["301A"]["note"] == "该罐本批次放罐作业完成"
+    assert tanks["303B"]["status"] == "idle"
+    assert tanks["303B"]["note"] == "预计07-01 16:00移种LV-26017"
+
+    # 检修标注优先于一切判定
+    tanks = tank_map(
+        datetime(2026, 6, 12, 17, 0),
+        maintenance=[{"tank_no": "305B", "reason": "滤芯更换"}],
+    )
+    assert tanks["305B"]["status"] == "maintenance"
+    assert tanks["305B"]["note"] == "检修：滤芯更换"
+
+
+def test_statin_merge_keys_are_keyword_scoped() -> None:
+    """他汀冻结合并的块 key 带产品关键字：同扎帐周期的洛伐块与美伐块
+    不互相对齐，防止转产期旧产品历史搬进新产品表；同产品重传冻结不变。"""
+    new_rows = _statin_rows()
+    old_rows = _statin_rows()
+    # 旧文件 5 月块改标题为洛伐：同扎帐周期 key、不同产品关键字
+    old_rows[0] = ["2026年5月01日～2026年5月31日103发酵洛伐计划"]
+    old_rows[8][2] = "18:00:00"  # 旧洛伐块 5/1 移种历史值
+
+    merged, report = board.merge_schedule_rows_for_product(
+        new_rows, old_rows, date(2026, 5, 15), "MV"
+    )
+    # 5 月美伐块与旧洛伐块不同 key 不对齐；6/7 月洛伐块同产品照常对齐
+    assert report["matched_blocks"] == 2
+    assert merged[8][2] == new_rows[8][2]  # 不搬运旧洛伐历史
+
+    # 同产品（美伐）重传：冻结照常生效（5/6/7 月三块都匹配）
+    old_same = _statin_rows()
+    old_same[8][2] = "18:00:00"
+    merged_same, report_same = board.merge_schedule_rows_for_product(
+        new_rows, old_same, date(2026, 5, 15), "MV"
+    )
+    assert report_same["matched_blocks"] == 3
+    assert report_same["frozen_columns"] == 14  # 5/1～5/14 日列
+    assert merged_same[8][2] == "18:00:00"
+
+
+def test_schedule_alerts_announce_tied_inoculations() -> None:
+    """同一时刻多批移种逐条播报（如美伐双罐位同刻移种），不再只报一批。"""
+    payload = board.build_mp_board(
+        _statin_rows(), [], datetime(2026, 4, 30, 12, 0), product="MV"
+    )
+    assert payload is not None
+    texts = [a["text"] for a in payload["alerts"]]
+    assert any(
+        "待进罐批次 MV-26063 计划 05-01 16:00 进 304B 罐" in t for t in texts
+    )
+    assert any(
+        "待进罐批次 MV-26064 计划 05-01 16:00 进 306B 罐" in t for t in texts
+    )
+
+
+def test_schedule_alerts_announce_upcoming_turn_pour() -> None:
+    """B 罐倒罐前的播报：预告往哪倒、几点倒、剩多久；
+    不再把倒罐误报成「距预估放罐剩余」。"""
+    payload = board.build_mp_board(
+        _statin_rows(), [], datetime(2026, 6, 5, 10, 0), product="LV"
+    )
+    assert payload is not None
+    texts = [a["text"] for a in payload["alerts"]]
+    assert any(
+        "【播报】303B罐批次 MV-26069 预计06-06 09:00倒罐至301A（剩23小时）" in t
+        for t in texts
+    )
+    assert any(
+        "【播报】305B罐批次 MV-26070 预计06-06 09:00倒罐至301A（剩23小时）" in t
+        for t in texts
+    )
+    # 倒罐不再误报为放罐
+    assert all("MV-26069 距预估放罐剩余" not in t for t in texts)
 
 
 def test_statin_products_share_mp_pipeline() -> None:

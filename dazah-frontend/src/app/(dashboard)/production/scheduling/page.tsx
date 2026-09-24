@@ -305,39 +305,38 @@ export default function SchedulingPage() {
       // 源表里标签列可能极窄(Excel 靠文本溢出显示),预览 overflow:hidden
       // 会把它裁没,统一抬到最小 80 保证最左侧的行标题可见
       width: Math.max(active.col_widths?.[ci] || 0, 80),
-      render: (cell: CellValue, _record: unknown, rowIndex: number) => {
+      onCell: (_record: unknown, rowIndex: number) => {
         const span = getMergeSpan(rowIndex, ci)
         if (span?.hide === 'row') {
-          // 被上方合并覆盖：该格并入上一行，标记 rowSpan:0
-          return { children: '', props: { rowSpan: 0 } }
+          // 被上方合并覆盖：该格并入上一行，不渲染
+          return { rowSpan: 0 }
         }
         if (span?.hide === 'col') {
           // 被左侧合并覆盖：不占列
-          return { children: '', props: { colSpan: 0 } }
+          return { colSpan: 0 }
         }
-        if (!cell) return ''
-        const display = cell !== '' ? String(cell) : ''
-        const cellProps: Record<string, unknown> = { style: {} as Record<string, unknown> }
-        const style = cellProps.style as Record<string, unknown>
-
+        const cellProps: Record<string, number> = {}
+        // 合并锚点（含空锚点）输出跨行/跨列占位：锚点不占位时，
+        // 被覆盖格移除后整行会向左错位（如他汀表倒罐罐序行）
         if (span && (span.rowSpan > 1 || span.colSpan > 1)) {
           if (span.rowSpan > 1) cellProps.rowSpan = span.rowSpan
           if (span.colSpan > 1) cellProps.colSpan = span.colSpan
         }
-
-        if (isDayNumber(cell)) {
+        // 日期/标题行的居中加粗样式放在 td 上（onCell 可拿到整行记录取格值）
+        const cell = (_record as Record<string, unknown> | undefined)?.[col]
+        const style: Record<string, unknown> = {}
+        if (isDayNumber(cell as CellValue)) {
           style.textAlign = 'center'
           style.fontWeight = 500
         }
-
-        if (isTitleRow(cell)) {
-          // 标题行仅加粗居中，不放大字号/内边距，保持行高与数据行一致
+        if (isTitleRow(cell as CellValue)) {
           style.textAlign = 'center'
           style.fontWeight = 700
         }
-
-        return { children: display, props: cellProps }
+        if (Object.keys(style).length) cellProps.style = style
+        return cellProps
       },
+      render: (cell: CellValue) => (cell ? String(cell) : ''),
     }))
 
     const tableData = activeRows.map((row, ri) => {

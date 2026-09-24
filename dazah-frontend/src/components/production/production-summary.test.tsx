@@ -51,6 +51,23 @@ const summaryPayload = {
         },
         alerts: [],
       },
+      {
+        product_code: 'FL',
+        product_name: '2%氟苯尼考预混剂',
+        covered: true,
+        ferment: {
+          planned_batches: null,
+          planned_capacity_kg: null,
+          done_yield_kg: null,
+          capacity_rate: null,
+        },
+        extract: {
+          planned_yield_kg: 7000,
+          finished_inbound_kg: 15840,
+          completion_rate: 226.29,
+        },
+        alerts: [],
+      },
     ],
   },
 }
@@ -95,6 +112,14 @@ describe('ProductionSummary', () => {
     // 未覆盖产线标识
     expect(text).toContain('排产未覆盖')
     expect(container.querySelectorAll('[data-rate-bar]').length).toBeGreaterThan(0)
+    // FL 无发酵工段：4 个发酵列合并为一格（colSpan 4），被覆盖列不渲染
+    const summaryRows = Array.from(container.querySelectorAll('tbody tr'))
+    const flRow = summaryRows.find((tr) => (tr.textContent || '').includes('氟苯尼考'))
+    expect(flRow).toBeTruthy()
+    const mergedCell = Array.from(flRow?.cells ?? []).find((c) =>
+      (c.textContent || '').includes('合成预混工艺、没有发酵工段'),
+    )
+    expect(mergedCell?.getAttribute('colspan')).toBe('4')
     // 参考日取当月 15 日（稳定落在该月扎帐周期内）
     expect(getProductionSummary).toHaveBeenCalledWith('2026-09-15')
   })

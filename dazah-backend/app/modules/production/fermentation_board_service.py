@@ -625,7 +625,7 @@ def _append_schedule_alerts(
 
     - 预放罐提醒：运行罐预估放罐剩 0~72h（仅日期的按当日 08:00 计）；
     - 检修冲突：检修罐本周期仍有计划批次；
-    - 待进罐提醒：最近一个已排未进罐批次；
+    - 待进罐提醒：最近一个移种时点的已排未进罐批次（同刻多批逐条播报）；
     - 排产备注；全部为空时兜底固定文案。
     """
     for tank in tanks:
@@ -642,15 +642,27 @@ def _append_schedule_alerts(
             continue
         remain_h = int((dump_at - now).total_seconds() // 3600)
         if 0 <= remain_h <= 72:
-            alerts.append(
-                {
-                    "level": "warn",
-                    "text": (
-                        f"【播报】{tank['tank_no']}罐批次 {tank['batch_no']} "
-                        f"距预估放罐剩余 {remain_h}h"
-                    ),
-                }
-            )
+            remain_minutes = max(0, int((dump_at - now).total_seconds() / 60))
+            hh, mm = divmod(remain_minutes, 60)
+            if hh == 0:
+                remain_text = f"{mm}分钟"
+            elif mm == 0:
+                remain_text = f"{hh}小时"
+            else:
+                remain_text = f"{hh}小时{mm}分钟"
+            # 倒罐出料（B 罐料倒入目的罐）与放罐是两个事件，分别措辞
+            if tank.get("end_kind") == "turn":
+                text = (
+                    f"【播报】{tank['tank_no']}罐批次 {tank['batch_no']} "
+                    f"预计{dump_at.strftime('%m-%d %H:%M')}"
+                    f"倒罐至{tank.get('turn_to') or ''}（剩{remain_text}）"
+                )
+            else:
+                text = (
+                    f"【播报】{tank['tank_no']}罐批次 {tank['batch_no']} "
+                    f"距预估放罐剩余 {remain_h}h"
+                )
+            alerts.append({"level": "warn", "text": text})
     for tank_no in sorted(maint_tanks):
         conflict = [
             item["batch_no"]
@@ -667,12 +679,17 @@ def _append_schedule_alerts(
                     ),
                 }
             )
-    next_inoc = min(
+    upcoming = sorted(
         (item for item in upcoming_inocs if item["start"] > now),
-        key=lambda item: item["start"],
-        default=None,
+        key=lambda item: (item["start"], item["batch_no"]),
     )
-    if next_inoc is not None:
+    # 最近一个移种时点：同一时刻的多批全部逐条播报（如双罐位同时移种）
+    tied = [
+        item
+        for item in upcoming
+        if upcoming and item["start"] == upcoming[0]["start"]
+    ]
+    for next_inoc in tied:
         start: datetime = next_inoc["start"]
         when = (
             start.strftime("%m-%d")
@@ -1148,6 +1165,8 @@ _STATIN_TURN_TANK = "301A"  # 倒罐目的罐（450kl），倒罐后批号跟随
 # → 0.65 批，对齐排产表备注"9月份洛伐放罐9.65批"口径）；美伐计数
 # 不折算——复合批号拆分后的子批一批就是一批（见 build_mp_board）
 _STATIN_SEED_BASE = {"LV": 100.0, "MV": 200.0}
+# 他汀放罐作业窗口：放罐时刻后罐内仍按"放罐中"展示的时长
+_STATIN_DUMP_WINDOW = timedelta(hours=2)
 
 
 def _statin_blocks(rows: list[list[Any]]) -> list[dict[str, Any]]:
@@ -1254,6 +1273,9 @@ def _statin_batch_timeline(
                 "ferm_tank": None,
                 "dump": None,
                 "dump_tank": None,
+                # 倒罐：批次于该时刻转入目的罐（如 303B/305B → 301A）继续发酵
+                "turn_at": None,
+                "turn_to": None,
                 # 批次折算数（标准接种量 = 1.0）；无种子记录的批默认整批
                 "units": 1.0,
             },
@@ -1295,6 +1317,10 @@ def _statin_batch_timeline(
         # 种子接种量 → 批次折算数：复合批均摊到子批，再除以标准接种量
         seed_row = labeled.get("种子罐", (None, []))[1]
         inoc_row = labeled.get("接种量", (None, []))[1]
+        # 倒罐行 + 罐序行 + 实际倒罐时刻行（时刻行无标签，紧随罐序行）
+        turn_idx, turn_row = labeled.get("倒罐", (None, []))
+        turn_tank_row = rows[turn_idx + 1] if turn_idx is not None else []
+        turn_time_row = rows[turn_idx + 2] if turn_idx is not None else []
         for col, col_date in col_dates.items():
             seed_batches = _statin_split_batch(
                 seed_row[col] if col < len(seed_row) else None
@@ -1367,6 +1393,28 @@ def _statin_batch_timeline(
                     )
                     if tank:
                         batch["dump_tank"] = tank
+            # 倒罐行：批号于倒罐日/时刻转入罐序末位罐（如 303B/305B → 301A），
+            # 批次所在罐自此切换，直至放罐
+            for turn_no in _statin_split_batch(
+                turn_row[col] if col < len(turn_row) else None
+            ):
+                batch = _ensure(turn_no)
+                turn_when = datetime.combine(
+                    col_date,
+                    _statin_row_time(
+                        turn_time_row[col] if col < len(turn_time_row) else None,
+                        "23:00",
+                    ),
+                )
+                if batch["turn_at"] is None or turn_when < batch["turn_at"]:
+                    batch["turn_at"] = turn_when
+                route = _statin_split_tanks(
+                    turn_tank_row[col] if col < len(turn_tank_row) else None
+                )
+                if route:
+                    batch["turn_to"] = route[-1]
+                elif batch["turn_to"] is None:
+                    batch["turn_to"] = _STATIN_TURN_TANK
     return timeline
 
 
@@ -1564,6 +1612,266 @@ def _mp_batch_timeline(
     return timeline
 
 
+def _compact_statin_batch_nos(batch_nos: list[str]) -> str:
+    """同罐多批的批号展示：MV-26071+MV-26072 → MV-26071/072（排产表同款写法）。"""
+    nos = sorted(set(batch_nos))
+    if len(nos) == 1:
+        return nos[0]
+    return nos[0] + "/" + "/".join(no[-3:] for no in nos[1:])
+
+
+def _statin_tanks(
+    timeline_batches: list[dict[str, Any]],
+    period_batches: list[dict[str, Any]],
+    maint_by_tank: dict[str, dict[str, Any]],
+    now: datetime,
+) -> list[dict[str, Any]]:
+    """他汀（103 车间 LV/MV）罐状态独立判定，不与 FA/MC 共用。
+
+    批次所在罐按占用段建模：移种→倒罐挂发酵罐（如 303B/305B），
+    倒罐→放罐挂倒罐目的罐（301A 大罐），倒罐后 B 罐即腾空。
+    罐集合按当期批次推导；占用段取全量时间线，空罐可预告跨扎帐
+    周期的下一批（移种/倒罐进罐）。每罐按优先级取一：
+    - 检修标注：检修维护（人工标注优先）；
+    - 在罐（占用段覆盖 now）：运行中；同罐多批批号合并展示；
+      倒罐段运行时备注带来源（几时自哪些罐倒罐而来）；
+    - 放罐窗口内（放罐 ≤ now < 放罐+窗口）：放罐中；
+    - 空罐但后续仍有占用：空闲，备注预告移种/倒罐进罐；
+    - 最后一段为放罐且窗口已过：已放罐（放罐作业完成收尾）；
+    - 其余：空闲（等待排产）。
+    """
+    # 占用段：批次在其发酵罐（移种→倒罐/放罐）与倒罐目的罐（倒罐→放罐）上的区间
+    segments: list[dict[str, Any]] = []
+    tank_nos: list[str] = []
+    for b in period_batches:
+        for tank in (b["ferm_tank"], b["turn_to"], b["dump_tank"]):
+            if tank and tank not in tank_nos:
+                tank_nos.append(tank)
+    for b in timeline_batches:
+        if b["ferm_tank"] and b["inoculate"]:
+            segments.append(
+                {
+                    "tank_no": b["ferm_tank"],
+                    "batch_no": b["batch_no"],
+                    "source_tank": b["ferm_tank"],
+                    "turn_to": b["turn_to"],
+                    "inoculate": b["inoculate"],
+                    "start": b["inoculate"],
+                    "end": b["turn_at"] or b["dump"],
+                    "kind": "ferm",
+                    "end_kind": "turn" if b["turn_at"] else "dump",
+                    "dump": b["dump"],
+                }
+            )
+        if b["turn_at"] and b["turn_to"]:
+            segments.append(
+                {
+                    "tank_no": b["turn_to"],
+                    "batch_no": b["batch_no"],
+                    "source_tank": b["ferm_tank"],
+                    "inoculate": b["inoculate"],
+                    "start": b["turn_at"],
+                    "end": b["dump"],
+                    "kind": "turn",
+                    "end_kind": "dump" if b["dump"] else None,
+                    "dump": b["dump"],
+                }
+            )
+
+    def _cycle(seg: dict[str, Any]) -> float | None:
+        if seg["dump"] and seg["inoculate"]:
+            return round(
+                (seg["dump"] - seg["inoculate"]).total_seconds() / 3600, 1
+            )
+        return None
+
+    def _iso(when: datetime | None) -> str | None:
+        return when.isoformat() if when else None
+
+    def _cultured(seg: dict[str, Any]) -> float | None:
+        # 已培养时长自原始移种时刻连续累计（倒罐换罐不重置）
+        if seg["inoculate"]:
+            return round((now - seg["inoculate"]).total_seconds() / 3600, 1)
+        return None
+
+    tanks: list[dict[str, Any]] = []
+    for tank_no in sorted(tank_nos):
+        maint = maint_by_tank.get(tank_no)
+        if maint:
+            tanks.append(
+                {
+                    "tank_no": tank_no,
+                    "status": "maintenance",
+                    "batch_no": None,
+                    "inoculate_at": None,
+                    "cultured_hours": None,
+                    "cycle_hours": None,
+                    "dump_at": None,
+                    "note": f"检修：{maint['reason']}",
+                }
+            )
+            continue
+        mine = [s for s in segments if s["tank_no"] == tank_no]
+        running = [
+            s
+            for s in mine
+            if s["start"] <= now < (s["end"] or datetime.max)
+        ]
+        if running:
+            seg = min(running, key=lambda x: (x["start"], x["batch_no"]))
+            dumps = sorted(x["end"] for x in running if x["end"])
+            # 运行中的 B 罐若已有排定的倒罐，备注预告往哪倒、几点倒；
+            # 倒罐目的罐（301A）运行中则备注带来源（几时自哪些罐倒罐而来）
+            note = "运行中"
+            if seg["end_kind"] == "turn" and seg["turn_to"] and seg["end"]:
+                note = (
+                    f"运行中（预计{seg['end'].strftime('%m-%d %H:%M')}"
+                    f"倒罐至{seg['turn_to']}）"
+                )
+            elif seg["kind"] == "turn":
+                sources = sorted(
+                    {x["source_tank"] for x in running if x["source_tank"]}
+                )
+                src = "、".join(sources)
+                when = seg["start"].strftime("%m-%d %H:%M")
+                note = f"运行中（{when}自{src}倒罐）"
+            tanks.append(
+                {
+                    "tank_no": tank_no,
+                    "status": "running",
+                    "batch_no": _compact_statin_batch_nos(
+                        [x["batch_no"] for x in running]
+                    ),
+                    "inoculate_at": _iso(seg["inoculate"]),
+                    "cultured_hours": _cultured(seg),
+                    "cycle_hours": _cycle(seg),
+                    "dump_at": _iso(dumps[0] if dumps else None),
+                    # 供播报引擎区分下一事件：倒罐出料 or 放罐
+                    "end_kind": seg["end_kind"],
+                    "turn_to": seg.get("turn_to"),
+                    "note": note,
+                }
+            )
+            continue
+        dumping = [
+            s
+            for s in mine
+            if s["end_kind"] == "dump"
+            and s["dump"] is not None
+            and s["dump"] <= now < s["dump"] + _STATIN_DUMP_WINDOW
+        ]
+        if dumping:
+            seg = max(dumping, key=lambda x: (x["dump"], x["batch_no"]))
+            remain_minutes = max(
+                0,
+                int(
+                    (seg["dump"] + _STATIN_DUMP_WINDOW - now).total_seconds()
+                    / 60
+                ),
+            )
+            hh, mm = divmod(remain_minutes, 60)
+            if hh == 0:
+                remain = f"{mm}min"
+            elif mm == 0:
+                remain = f"{hh}h"
+            else:
+                remain = f"{hh}h{mm}min"
+            tanks.append(
+                {
+                    "tank_no": tank_no,
+                    "status": "dumping",
+                    "batch_no": _compact_statin_batch_nos(
+                        [x["batch_no"] for x in dumping]
+                    ),
+                    "inoculate_at": _iso(seg["inoculate"]),
+                    "cultured_hours": _cultured(seg),
+                    "cycle_hours": _cycle(seg),
+                    "dump_at": _iso(seg["dump"]),
+                    "note": f"放罐中（预计{remain}后结束）",
+                }
+            )
+            continue
+        upcoming = [
+            s
+            for s in mine
+            if s["start"] is not None and s["start"] > now
+        ]
+        if upcoming:
+            seg = min(upcoming, key=lambda x: (x["start"], x["batch_no"]))
+            group = [s for s in upcoming if s["start"] == seg["start"]]
+            batch_label = _compact_statin_batch_nos(
+                [x["batch_no"] for x in group]
+            )
+            t = seg["start"].strftime("%m-%d %H:%M")
+            row = {
+                "tank_no": tank_no,
+                "status": "idle",
+                "batch_no": None,
+                "inoculate_at": _iso(seg["start"]),
+                "inoculate_mark": None,
+                "cultured_hours": None,
+                "cycle_hours": None,
+                "dump_at": None,
+                "note": None,
+            }
+            if seg["kind"] == "turn":
+                # 倒罐进罐：来源罐（B 罐）→ 目的罐（301A）+ 预计时刻，
+                # 移种时间列以（倒罐）标注区分于普通移种
+                sources = sorted(
+                    {x["source_tank"] for x in group if x["source_tank"]}
+                )
+                row["inoculate_mark"] = "（倒罐）"
+                row["note"] = (
+                    f"预计{t}自{'、'.join(sources)}"
+                    f"倒罐至{tank_no}（{batch_label}）"
+                )
+            else:
+                row["note"] = f"预计{t}移种{batch_label}"
+            tanks.append(row)
+            continue
+        dumped = [
+            s
+            for s in mine
+            if s["end_kind"] == "dump"
+            and s["dump"] is not None
+            and s["dump"] + _STATIN_DUMP_WINDOW <= now
+        ]
+        if dumped:
+            latest = max(s["dump"] for s in dumped)
+            group = [s for s in dumped if s["dump"] == latest]
+            seg = max(group, key=lambda x: x["batch_no"])
+            cycle = _cycle(seg)
+            tanks.append(
+                {
+                    "tank_no": tank_no,
+                    "status": "dumped",
+                    "batch_no": _compact_statin_batch_nos(
+                        [s["batch_no"] for s in group]
+                    ),
+                    "inoculate_at": _iso(seg["inoculate"]),
+                    # 已放罐：培养时长冻结在放罐时刻（= 计划总周期）
+                    "cultured_hours": cycle,
+                    "cycle_hours": cycle,
+                    "dump_at": _iso(seg["dump"]),
+                    "note": "该罐本批次放罐作业完成",
+                }
+            )
+            continue
+        tanks.append(
+            {
+                "tank_no": tank_no,
+                "status": "idle",
+                "batch_no": None,
+                "inoculate_at": None,
+                "cultured_hours": None,
+                "cycle_hours": None,
+                "dump_at": None,
+                "note": "等待排产",
+            }
+        )
+    return tanks
+
+
 def build_mp_board(
     rows: list[list[Any]],
     maintenance: list[dict[str, Any]],
@@ -1640,100 +1948,113 @@ def build_mp_board(
     ]
     planned = [b for b in batches if _in_period(b["dump"])]
 
-    # ── 罐状态：发酵罐集合，每罐取当前在罐批 ──
-    tank_nos: list[str] = []
-    for b in batches:
-        for tank in (b["ferm_tank"], b["dump_tank"]):
-            if tank and tank not in tank_nos:
-                tank_nos.append(tank)
-    tanks: list[dict[str, Any]] = []
-    for tank_no in sorted(tank_nos):
-        maint = maint_by_tank.get(tank_no)
-        if maint:
-            tanks.append(
-                {
-                    "tank_no": tank_no,
-                    "status": "maintenance",
-                    "batch_no": None,
-                    "inoculate_at": None,
-                    "cultured_hours": None,
-                    "cycle_hours": None,
-                    "dump_at": None,
-                    "note": f"检修：{maint['reason']}",
-                }
-            )
-            continue
-        own = [
-            b
-            for b in batches
-            if b["ferm_tank"] == tank_no
-            or (b["dump_tank"] == tank_no and b["ferm_tank"] is None)
-        ]
-        own.sort(
-            key=lambda b: (
-                b["inoculate"] or b["dump"] or datetime.max,
-            )
+    # ── 罐状态 ──
+    # 他汀（LV/MV）走独立判定（预告下次移种/倒罐进罐/放罐窗口/放罐收尾，
+    # 可跨扎帐周期预告）；MC 保持原判定，不共用
+    if product in _STATIN_KEYWORD:
+        tanks = _statin_tanks(
+            list(timeline.values()), batches, maint_by_tank, now
         )
-        active = [
-            b
-            for b in own
-            if b["inoculate"] is not None
-            and b["inoculate"] <= now
-            and (b["dump"] is None or b["dump"] > now)
-        ]
-        finished = [b for b in own if b["dump"] is not None and b["dump"] <= now]
-        batch = active[-1] if active else (finished[-1] if finished else None)
-        if batch is None:
-            tanks.append(
-                {
-                    "tank_no": tank_no,
-                    "status": "idle",
-                    "batch_no": None,
-                    "inoculate_at": None,
-                    "cultured_hours": None,
-                    "cycle_hours": None,
-                    "dump_at": None,
-                    "note": "等待排产",
-                }
+    else:
+        # MC：发酵罐集合，每罐取当前在罐批
+        tank_nos: list[str] = []
+        for b in batches:
+            for tank in (b["ferm_tank"], b["dump_tank"]):
+                if tank and tank not in tank_nos:
+                    tank_nos.append(tank)
+        tanks: list[dict[str, Any]] = []
+        for tank_no in sorted(tank_nos):
+            maint = maint_by_tank.get(tank_no)
+            if maint:
+                tanks.append(
+                    {
+                        "tank_no": tank_no,
+                        "status": "maintenance",
+                        "batch_no": None,
+                        "inoculate_at": None,
+                        "cultured_hours": None,
+                        "cycle_hours": None,
+                        "dump_at": None,
+                        "note": f"检修：{maint['reason']}",
+                    }
+                )
+                continue
+            own = [
+                b
+                for b in batches
+                if b["ferm_tank"] == tank_no
+                or (b["dump_tank"] == tank_no and b["ferm_tank"] is None)
+            ]
+            own.sort(
+                key=lambda b: (
+                    b["inoculate"] or b["dump"] or datetime.max,
+                )
             )
-            continue
-        cycle = (
-            round(
-                (batch["dump"] - batch["inoculate"]).total_seconds() / 3600, 1
+            active = [
+                b
+                for b in own
+                if b["inoculate"] is not None
+                and b["inoculate"] <= now
+                and (b["dump"] is None or b["dump"] > now)
+            ]
+            finished = [
+                b for b in own if b["dump"] is not None and b["dump"] <= now
+            ]
+            batch = (
+                active[-1] if active else (finished[-1] if finished else None)
             )
-            if batch["dump"] and batch["inoculate"]
-            else None
-        )
-        if batch in active:
-            status, note = "running", "运行中"
-            cultured = (
-                round((now - batch["inoculate"]).total_seconds() / 3600, 1)
-                if batch["inoculate"] and batch["inoculate"] <= now
+            if batch is None:
+                tanks.append(
+                    {
+                        "tank_no": tank_no,
+                        "status": "idle",
+                        "batch_no": None,
+                        "inoculate_at": None,
+                        "cultured_hours": None,
+                        "cycle_hours": None,
+                        "dump_at": None,
+                        "note": "等待排产",
+                    }
+                )
+                continue
+            cycle = (
+                round(
+                    (batch["dump"] - batch["inoculate"]).total_seconds() / 3600,
+                    1,
+                )
+                if batch["dump"] and batch["inoculate"]
                 else None
             )
-        else:
-            # 已放罐：培养时长冻结在放罐时刻（= 计划总周期），
-            # 不再随当前时间累计
-            status, note = "dumped", "已放罐"
-            cultured = cycle
-        tanks.append(
-            {
-                "tank_no": tank_no,
-                "status": status,
-                "batch_no": batch["batch_no"],
-                "inoculate_at": (
-                    batch["inoculate"].isoformat()
-                    if batch["inoculate"]
+            if batch in active:
+                status, note = "running", "运行中"
+                cultured = (
+                    round((now - batch["inoculate"]).total_seconds() / 3600, 1)
+                    if batch["inoculate"] and batch["inoculate"] <= now
                     else None
-                ),
-                "cultured_hours": cultured,
-                "cycle_hours": cycle,
-                "dump_at": (
-                    batch["dump"].isoformat() if batch["dump"] else None
-                ),
-                "note": note,
-            }
-        )
+                )
+            else:
+                # 已放罐：培养时长冻结在放罐时刻（= 计划总周期），
+                # 不再随当前时间累计
+                status, note = "dumped", "已放罐"
+                cultured = cycle
+            tanks.append(
+                {
+                    "tank_no": tank_no,
+                    "status": status,
+                    "batch_no": batch["batch_no"],
+                    "inoculate_at": (
+                        batch["inoculate"].isoformat()
+                        if batch["inoculate"]
+                        else None
+                    ),
+                    "cultured_hours": cultured,
+                    "cycle_hours": cycle,
+                    "dump_at": (
+                        batch["dump"].isoformat() if batch["dump"] else None
+                    ),
+                    "note": note,
+                }
+            )
     # 罐序按移种时间
     def _tank_order(entry: dict[str, Any]) -> tuple[bool, str, str]:
         inoculate = entry.get("inoculate_at")
@@ -2071,7 +2392,9 @@ def _mp_sheet_blocks(rows: list[list[Any]]) -> list[dict[str, Any]]:
 
 def _statin_sheet_blocks(rows: list[list[Any]]) -> list[dict[str, Any]]:
     """他汀（LV/MV）周期块枚举：行布局 label 驱动无固定偏移，
-    冻结行跨度取整块（标题行下一行～下块标题前一行），行标签取首列。"""
+    冻结行跨度取整块（标题行下一行～下块标题前一行），行标签取首列。
+    key 带块关键字（洛伐/美伐）：同扎帐周期的洛伐块与美伐块不互相对齐，
+    防止转产期冻结合并把旧产品历史搬进新产品表。"""
     all_blocks = _statin_blocks(rows)
     blocks: list[dict[str, Any]] = []
     for block in all_blocks:
@@ -2095,7 +2418,8 @@ def _statin_sheet_blocks(rows: list[list[Any]]) -> list[dict[str, Any]]:
                 labeled[label] = (r, row)
         blocks.append(
             {
-                "key": block["start"],
+                # key 带关键字：洛伐/美伐块同扎帐周期也不互相对齐
+                "key": (block["start"], block["keyword"]),
                 "start_row": block["start_row"],
                 "label": f"{block['year']}-{block['month']:02d}",
                 "row_span": (1, max(1, following - block["start_row"] - 1)),
