@@ -130,6 +130,17 @@ it('渲染五张指标卡：临期计划卡按选中窗口展示数量并默认 
   expect(soonCard?.textContent).toContain('15 天内')
 })
 
+it('五张指标卡排布在同一 5 列网格容器内', async () => {
+  await renderPageAsync()
+  const grid = Array.from(container.querySelectorAll('div')).find(
+    (el) =>
+      (el as HTMLElement).style.display === 'grid' &&
+      (el as HTMLElement).style.gridTemplateColumns.includes('repeat(5'),
+  ) as HTMLElement | undefined
+  expect(grid).toBeTruthy()
+  expect(grid?.querySelectorAll(':scope > .ant-card').length).toBe(5)
+})
+
 it('点击逾期/临期卡片弹出对应明细，临期切换窗口后按新窗口重新拉取', async () => {
   await renderPageAsync()
 
