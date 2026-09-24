@@ -836,3 +836,39 @@ async def test_training_import_and_custom_department_repository_operations() -> 
     )
     await training.delete_dept_mapping(mapping)
     assert mapping.is_deleted is True
+
+
+def test_parse_contract_date_handles_strings_and_unparseable_text() -> None:
+    """字符串合同日期按常见格式解析；无固定期限等文本返回 None。"""
+    from datetime import date as _date
+
+    assert repository.parse_contract_date("2026-08-20") == _date(2026, 8, 20)
+    assert repository.parse_contract_date(" 2026/08/20 ") == _date(2026, 8, 20)
+    assert repository.parse_contract_date("20260820") == _date(2026, 8, 20)
+    assert repository.parse_contract_date("无固定期限") is None
+    assert repository.parse_contract_date(None) is None
+
+
+def test_employee_contract_round_matches_string_round_and_sign_date() -> None:
+    """第 5/6 期字符串日期按格式解析并返回期次与签订日期。"""
+    from datetime import date as _date
+
+    employee = SimpleNamespace(
+        contract_start_date=_date(2024, 1, 1),
+        contract_end_date=_date(2026, 8, 20),
+        contract_start_2=None,
+        contract_end_2=None,
+        contract_start_3=None,
+        contract_end_3=None,
+        contract_start_4=None,
+        contract_end_4=None,
+        contract_start_5=_date(2026, 8, 21),
+        contract_end_5="2027-08-20",
+        contract_start_6=None,
+        contract_end_6=None,
+    )
+    seq, sign = repository.employee_contract_round(
+        employee, _date(2027, 8, 20)  # type: ignore[arg-type]
+    )
+    assert seq == 5
+    assert sign == _date(2026, 8, 21)

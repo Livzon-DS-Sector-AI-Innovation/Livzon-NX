@@ -686,3 +686,67 @@ async def test_change_action_plan_reminder_api_flow(
     assert confirm_response.json()["data"]["success"] is True
     assert confirm_response.json()["data"]["reminder_status"] == "confirmed"
     assert confirm_response.json()["data"]["reminder_confirmed_by"] == "飞书按钮确认"
+
+
+@pytest.mark.anyio
+async def test_change_action_plan_due_status_partitions(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """到期状态按有效截止日划分：逾期/临期计入，已完成与无截止日不计入。"""
+    from app.modules.quality.models.change_action_plan import ChangeActionPlan
+
+    change = ChangeControl(
+        id=uuid.uuid4(),
+        change_code="BG-DUE-001",
+        applicant_department="质量部",
+    )
+    db_session.add(change)
+    await db_session.commit()
+
+    today = datetime.now(UTC).date()
+
+    def _plan(**overrides: Any) -> ChangeActionPlan:
+        base: dict[str, Any] = {
+            "id": uuid.uuid4(),
+            "change_id": change.id,
+            "change_code": "BG-DUE-001",
+            "project_name": "到期状态划分计划",
+            "owner_name": "王五",
+            "status": "进行中",
+        }
+        base.update(overrides)
+        return ChangeActionPlan(**base)
+
+    db_session.add_all(
+        [
+            # 已逾期三天
+            _plan(deadline_date=today - timedelta(days=3)),
+            # 原截止日很远，延期后落入临期窗口（延期日期优先）
+            _plan(
+                deadline_date=today + timedelta(days=200),
+                delayed_deadline_date=today + timedelta(days=2),
+            ),
+            # 已完成，不计入逾期/临期
+            _plan(deadline_date=today + timedelta(days=3), status="已完成"),
+            # 无有效截止日，跳过
+            _plan(deadline_date=None),
+            # 临期且已确认，计入临期并计入 confirmed_count
+            _plan(
+                deadline_date=today + timedelta(days=1),
+                reminder_confirmed_at=datetime.now(UTC),
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    response = await client.get(
+        "/api/v1/quality/change-action-plans/due-status",
+        params={"lead_days": 7},
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["lead_days"] == 7
+    assert [entry["days_offset"] for entry in data["overdue"]] == [-3]
+    assert sorted(entry["days_offset"] for entry in data["due_soon"]) == [1, 2]
+    assert data["confirmed_count"] == 1

@@ -36,7 +36,8 @@ interface SummaryCard {
 
 const responsiveSpan = { xs: 12, sm: 8, lg: 4 }
 
-export default function EmployeeDashboardView({ stats }: Props) {
+// stats 缺省为空对象：所有字段访问都有守卫，默认导出可安全渲染默认表面
+export default function EmployeeDashboardView({ stats = {} as EmployeeStats }: Props) {
   const deptCount = stats.department_distribution?.length || 0
   // 飞书同步档案状态为“正式”，本地创建默认“在职”，两类都计入正式员工
   const statusCounts = stats.status_distribution || {}

@@ -219,21 +219,109 @@ async def test_hr_query_contract_expiring_skips_renewed_and_uses_current_end():
         contract_start_6=None,
         contract_end_6=None,
     )
+    # 无工号：合并时跳过（not key 分支）
+    employee_no_number = SimpleNamespace(
+        employee_number=None,
+        name="赵六",
+        department="质量部",
+        position="QC",
+        contract_type="固定期限",
+        hire_date=date(2023, 1, 1),
+        contract_start_date=date(2023, 1, 1),
+        contract_end_date=date(2026, 8, 10),
+        contract_start_2=None,
+        contract_end_2=None,
+        contract_start_3=None,
+        contract_end_3=None,
+        contract_start_4=None,
+        contract_end_4=None,
+        contract_start_5=None,
+        contract_end_5=None,
+        contract_start_6=None,
+        contract_end_6=None,
+    )
+    # 当前合同到期日在窗口外：跳过（不在窗口分支）
+    employee_out_of_window = SimpleNamespace(
+        employee_number="E004",
+        name="钱七",
+        department="生产部",
+        position="操作工",
+        contract_type="固定期限",
+        hire_date=date(2023, 2, 1),
+        contract_start_date=date(2023, 2, 1),
+        contract_end_date=date(2026, 12, 31),
+        contract_start_2=None,
+        contract_end_2=None,
+        contract_start_3=None,
+        contract_end_3=None,
+        contract_start_4=None,
+        contract_end_4=None,
+        contract_start_5=None,
+        contract_end_5=None,
+        contract_start_6=None,
+        contract_end_6=None,
+    )
+    # 合同管理表：工号与员工表重复（key in seen 分支）
+    ledger_duplicate = SimpleNamespace(
+        employee_number="E001",
+        name="张三（台账重复）",
+        dept_level1="质量部",
+        position="QA",
+        contract_start_1=date(2023, 8, 21),
+        contract_end_1=date(2026, 8, 20),
+        contract_start_2=None,
+        contract_end_2=None,
+        contract_start_3=None,
+        contract_end_3=None,
+        contract_start_4=None,
+        contract_end_4=None,
+        contract_start_5=None,
+        contract_end_5=None,
+        contract_start_6=None,
+        contract_end_6=None,
+    )
+    # 合同管理表独有工号且当期在窗口内：并入结果
+    ledger_unique = SimpleNamespace(
+        employee_number="E009",
+        name="孙八",
+        dept_level1="103车间",
+        position="值班员工",
+        contract_start_1=date(2023, 8, 15),
+        contract_end_1=date(2026, 8, 15),
+        contract_start_2=None,
+        contract_end_2=None,
+        contract_start_3=None,
+        contract_end_3=None,
+        contract_start_4=None,
+        contract_end_4=None,
+        contract_start_5=None,
+        contract_end_5=None,
+        contract_start_6=None,
+        contract_end_6=None,
+    )
     session = AsyncMock()
     emp_result = MagicMock()
     emp_result.scalars.return_value.all.return_value = [
         employee_active,
         employee_renewed,
+        employee_no_number,
+        employee_out_of_window,
     ]
     cm_result = MagicMock()
-    cm_result.scalars.return_value.all.return_value = [ledger_renewed]
+    cm_result.scalars.return_value.all.return_value = [
+        ledger_renewed,
+        ledger_duplicate,
+        ledger_unique,
+    ]
     session.execute = AsyncMock(side_effect=[emp_result, cm_result])
 
     result = await hr_query_contract_expiring(session, "2026-07-01", "2026-09-30")
 
-    assert [item["工号"] for item in result] == ["E001"]
+    assert [item["工号"] for item in result] == ["E001", "E009"]
     assert result[0]["合同到期日"] == "2026-08-20"
     assert result[0]["数据来源"] == "员工档案"
+    assert result[1]["合同到期日"] == "2026-08-15"
+    assert result[1]["数据来源"] == "合同管理表"
 
     # 员工查询的在职过滤按“非离职/待审批”，兼容飞书“正式”等取值
     emp_stmt = session.execute.call_args_list[0][0][0]
