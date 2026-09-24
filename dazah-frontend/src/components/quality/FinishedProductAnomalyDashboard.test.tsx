@@ -153,7 +153,7 @@ describe('FinishedProductAnomalyDashboard', () => {
   it('renders aggregate statistics, charts and year selector for configured years', async () => {
     await renderPage()
     const text = container.textContent || ''
-    expect(text).toContain('成品异常报告总览')
+    expect(text).toContain('成品异常报告仪表盘')
     expect(text).toContain('异常记录总数')
     expect(text).toContain('486')
     expect(text).toContain('各产品异常数量（按异常类型堆叠）')
