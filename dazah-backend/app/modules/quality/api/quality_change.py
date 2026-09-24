@@ -436,13 +436,17 @@ async def batch_delete_changes(
     response_model=ApiResponseEnvelope[dict[str, Any]],
 )
 async def sync_changes_from_feishu(
+    change_type: Literal["technical", "file"] = Query(
+        "technical", description="台账类型: technical=技术变更, file=文件变更"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
     await _require_full_change_page_scope(db, current_user)
-    await _require_full_change_page_scope(db, current_user)
-    result = await service.quality_feishu_pages.sync_changes_from_feishu(db)
+    result = await service.quality_feishu_pages.sync_changes_from_feishu(
+        db, change_type=change_type
+    )
     return success_response(data=result)
 
 

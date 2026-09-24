@@ -162028,6 +162028,22 @@
         "operationId": "sync_changes_from_feishu_api_v1_quality_changes_sync_from_feishu_post",
         "parameters": [
           {
+            "description": "台账类型: technical=技术变更, file=文件变更",
+            "in": "query",
+            "name": "change_type",
+            "required": false,
+            "schema": {
+              "default": "technical",
+              "description": "台账类型: technical=技术变更, file=文件变更",
+              "enum": [
+                "technical",
+                "file"
+              ],
+              "title": "Change Type",
+              "type": "string"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,

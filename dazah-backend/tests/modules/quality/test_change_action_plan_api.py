@@ -555,6 +555,57 @@ async def test_sync_from_feishu_creates_plan_from_production_shaped_record(
 
 
 @pytest.mark.anyio
+async def test_sync_from_feishu_isolates_per_record_failures(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """单条记录落库失败只回滚自身：不污染 session，后续记录继续同步。
+
+    回归背景：同步循环曾缺少逐条 rollback，一条 flush 报错后 session 中毒，
+    其余记录全部以 PendingRollbackError 连带失败。
+    """
+
+    async def _fake_search_records(_db: Any, change_code: Any = None) -> Any:  # noqa: ANN001
+        return [
+            {
+                "record_id": "rec_too_long",
+                "fields": {
+                    "变更控制号": [{"text": "BG-TOO-LONG", "type": "text"}],
+                    # 项目名称列 String(255)，超长触发真实数据库错误
+                    "项目名称": [{"text": "长" * 300, "type": "text"}],
+                },
+            },
+            {
+                "record_id": "rec_ok_after_failure",
+                "fields": {
+                    "变更控制号": [{"text": "BG-AFTER-FAIL", "type": "text"}],
+                    "项目名称": [{"text": "回滚后的正常记录", "type": "text"}],
+                },
+            },
+        ]
+
+    monkeypatch.setattr(
+        "app.modules.quality.service.change_action_plan.feishu_sync.search_records",
+        _fake_search_records,
+    )
+
+    sync_response = await client.post(
+        "/api/v1/quality/change-action-plans/sync-from-feishu"
+    )
+    assert sync_response.status_code == 200
+    assert sync_response.json()["data"] == {"synced": 1, "failed": 1}
+
+    list_response = await client.get(
+        "/api/v1/quality/change-action-plans",
+        params={"change_code": "BG-AFTER-FAIL"},
+    )
+    assert list_response.status_code == 200
+    items = list_response.json()["data"]
+    assert len(items) == 1
+    assert items[0]["project_name"] == "回滚后的正常记录"
+
+
+@pytest.mark.anyio
 async def test_change_action_plan_due_status_buckets(
     client: AsyncClient,
     db_session: AsyncSession,
