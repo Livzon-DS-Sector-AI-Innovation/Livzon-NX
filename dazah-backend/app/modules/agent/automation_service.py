@@ -69,6 +69,32 @@ class AgentAutomationService:
         self.repo = repo or AgentRepository()
         self.access_scope_service = access_scope_service or AgentAccessScopeService()
 
+    async def _list_visible_automations(
+        self,
+        db: AsyncSession,
+        *,
+        user: User,
+        scope: str,
+        status_value: str | None,
+    ) -> list[AgentAutomation]:
+        """Read all candidate pages before merging legacy definitions and runs."""
+        page = 1
+        page_size = 500
+        visible: list[AgentAutomation] = []
+        while True:
+            items, total = await self.repo.list_automations(
+                db,
+                owner_user_id=user.id if scope == "mine" else None,
+                scope=scope,
+                status_value=status_value,
+                page=page,
+                page_size=page_size,
+            )
+            visible.extend(item for item in items if self._can_view(user, item, scope))
+            if not items or page * page_size >= total:
+                return visible
+            page += 1
+
     async def create_draft(
         self,
         db: AsyncSession,
@@ -461,18 +487,9 @@ class AgentAutomationService:
         page_size: int,
     ) -> AgentAutomationPage:
         effective_scope = await self._effective_query_scope(db, user=user, scope=scope)
-        owner_id = user.id if effective_scope == "mine" else None
-        items, _ = await self.repo.list_automations(
-            db,
-            owner_user_id=owner_id,
-            scope=effective_scope,
-            status_value=status_value,
-            page=1,
-            page_size=500,
+        visible = await self._list_visible_automations(
+            db, user=user, scope=effective_scope, status_value=status_value
         )
-        visible = [
-            item for item in items if self._can_view(user, item, effective_scope)
-        ]
         triggers = await self.repo.list_automation_triggers(
             db, automation_ids=[item.id for item in visible]
         )
@@ -614,17 +631,9 @@ class AgentAutomationService:
         page_size: int,
     ) -> AgentAutomationRunPage:
         effective_scope = await self._effective_query_scope(db, user=user, scope=scope)
-        automations, _ = await self.repo.list_automations(
-            db,
-            owner_user_id=user.id if effective_scope == "mine" else None,
-            scope=effective_scope,
-            status_value=None,
-            page=1,
-            page_size=500,
+        visible = await self._list_visible_automations(
+            db, user=user, scope=effective_scope, status_value=None
         )
-        visible = [
-            item for item in automations if self._can_view(user, item, effective_scope)
-        ]
         items, total = await self.repo.list_automation_runs(
             db,
             automation_ids=[item.id for item in visible],
