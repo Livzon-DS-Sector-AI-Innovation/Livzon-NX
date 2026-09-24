@@ -23,7 +23,7 @@ from app.modules.quality.schemas import (
     UpdateCapaPlanTrackRequest,
     UpdateDeviationInvestigationPushRecordRequest,
 )
-from app.platform.identity.data_scope import DepartmentScope
+from app.platform.identity.data_scope import DepartmentScope, current_page_actor
 
 logger = logging.getLogger(__name__)
 
@@ -743,18 +743,61 @@ def _cap_plan_track_to_dict(track: Any) -> dict[str, Any]:
     return _cap_plan_track_to_detail(track).model_dump(mode="json")
 
 
+def _generate_capa_code() -> str:
+    return f"CAPA-{datetime.now(UTC).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6]}"
+
+
+async def _resolve_capa_for_plan_track(
+    db: AsyncSession,
+    capa_id: uuid.UUID | None,
+    capa_code: str | None,
+    department: str | None,
+):
+    """Resolve the CAPA a plan track belongs to.
+
+    Handwritten codes are matched against existing CAPAs first; an unknown
+    code creates a draft CAPA (same behaviour as the Feishu pull path), and a
+    missing code falls back to the system code generator.
+    """
+    if capa_id is not None:
+        capa = await repository.get_capa_by_id(db, capa_id)
+        if not capa:
+            raise NotFoundException(resource="CAPA", resource_id=str(capa_id))
+        return capa
+    code = (capa_code or "").strip()
+    if not code:
+        code = _generate_capa_code()
+    capa = await repository.get_capa_by_code(db, code)
+    if capa:
+        return capa
+    actor = current_page_actor.get()
+    return await repository.create_capa(
+        db,
+        {
+            "capa_code": code,
+            "title": code,
+            "status": "draft",
+            "department": department or (actor.department if actor else None),
+        },
+    )
+
+
 async def create_capa_plan_track(
     db: AsyncSession,
     data: CreateCapaPlanTrackRequest,
     user_id: str,
 ) -> dict[str, str]:
-    capa = await repository.get_capa_by_id(db, data.capa_id)
-    if not capa:
-        raise NotFoundException(resource="CAPA", resource_id=str(data.capa_id))
+    capa = await _resolve_capa_for_plan_track(
+        db, data.capa_id, data.capa_code, data.department
+    )
     await assert_quality_record_department(db, capa.department)
 
     payload = data.model_dump()
+    payload.pop("capa_id", None)
+    payload.pop("capa_code", None)
+    payload["capa_id"] = capa.id
     payload["capa_code"] = capa.capa_code
+    payload["plan_content"] = data.plan_content or ""
     if payload.get("department"):
         await assert_quality_record_department(db, payload["department"])
     payload.pop("department_head", None)
@@ -786,6 +829,15 @@ async def update_capa_plan_track(
     await _assert_capa_plan_track_department(db, track.capa_id)
 
     payload = data.model_dump(exclude_unset=True)
+    if "capa_code" in payload:
+        new_code = (payload.pop("capa_code") or "").strip()
+        if new_code and new_code != track.capa_code:
+            capa = await _resolve_capa_for_plan_track(
+                db, None, new_code, payload.get("department") or track.department
+            )
+            track.capa_id = capa.id
+            track.capa_code = capa.capa_code
+            await _assert_capa_plan_track_department(db, capa.id)
     if "capa_id" in payload:
         await _assert_capa_plan_track_department(db, payload["capa_id"])
     if payload.get("department"):
@@ -793,6 +845,8 @@ async def update_capa_plan_track(
     payload.pop("department_head", None)
     payload.pop("owner_confirmed", None)
     payload.pop("department_head_confirmed", None)
+    if payload.get("plan_content") is None:
+        payload.pop("plan_content", None)
     await repository.update_capa_plan_track(db, track, payload)
     await db.commit()
     result = await repository.get_capa_plan_track_by_id(db, track.id)

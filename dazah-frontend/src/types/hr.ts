@@ -110,19 +110,48 @@ export interface EmployeeResponse {
   data: Employee
 }
 
+export interface ContractExpiringItem {
+  employee_number: string
+  name: string
+  department: string | null
+  position: string | null
+  contract_end_date: string | null
+  contract_sequence?: number
+  contract_sign_date?: string | null
+}
+
+export interface ProbationDueItem {
+  employee_number: string
+  name: string
+  department: string | null
+  position: string | null
+  planned_probation_date: string
+}
+
+export interface CertificateDueItem {
+  employee_number: string
+  name: string
+  department: string | null
+  position: string | null
+  qualification_type?: string | null
+  certificate_review_date: string
+}
+
 export interface EmployeeStats {
   total?: number
   status_distribution?: Record<string, number>
   department_distribution?: Array<{ department: string; count: number }>
   education_distribution?: Record<string, number>
   contract_expiring_count?: number
-  contract_expiring_list?: Array<{
-    employee_number: string
-    name: string
-    department: string | null
-    position: string | null
-    contract_end_date: string | null
-  }>
+  contract_expiring_list?: ContractExpiringItem[]
+  contract_expiring_90d_count?: number
+  contract_expiring_90d_list?: ContractExpiringItem[]
+  probation_due_count?: number
+  probation_due_list?: ProbationDueItem[]
+  certificate_due_count?: number
+  certificate_due_list?: CertificateDueItem[]
+  hires_this_month?: number
+  departures_this_month?: number
 }
 
 // TODO: 生成 schema 未包含响应包装类型，待后端 OpenAPI 补充后替换

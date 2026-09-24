@@ -1,10 +1,16 @@
 import { fetchEmployees } from '@/actions/hr'
 import EmployeeProfileClient from '@/components/hr/EmployeeProfileClient'
+import type { Employee } from '@/types/hr'
 
 export const dynamic = 'force-dynamic'
 
-export default async function EmployeeProfilePage() {
-  let initialEmployees: any[] = []
+interface PageProps {
+  searchParams: Promise<{ department?: string }>
+}
+
+export default async function EmployeeProfilePage({ searchParams }: PageProps) {
+  const { department } = (await searchParams) || {}
+  let initialEmployees: Employee[] = []
   let initialTotal = 0
 
   try {
@@ -19,6 +25,7 @@ export default async function EmployeeProfilePage() {
     <EmployeeProfileClient
       initialEmployees={initialEmployees}
       initialTotal={initialTotal}
+      initialDepartment={department || ''}
     />
   )
 }

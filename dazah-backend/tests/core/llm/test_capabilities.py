@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import io
 import json
@@ -7,7 +8,11 @@ import httpx
 import pytest
 from PIL import Image
 
-from app.core.llm.capabilities import detect_model_capabilities, probe_api_base_url
+from app.core.llm.capabilities import (
+    detect_model_capabilities,
+    probe_api_base_url,
+    probe_model_connection,
+)
 from app.core.llm.exceptions import LLMConfigError
 
 
@@ -83,7 +88,7 @@ async def test_negotiates_token_parameter_from_error(phase: str) -> None:
         transport=httpx.MockTransport(handler),
     )
     assert result.supports_vision
-    assert len(requests) == 4
+    assert len(requests) == (4 if phase == "text" else 5)
     assert "max_completion_tokens" in requests[-1]
 
 
@@ -251,6 +256,52 @@ async def test_probe_api_base_url_reports_authentication_failure_safely() -> Non
         )
 
     assert "secret provider response" not in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_connection_probe_uses_only_text_request() -> None:
+    requests: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        requests.append(payload)
+        return answer_response("OK")
+
+    await probe_model_connection(
+        api_base_url="https://llm.example/v1",
+        api_key="test-key",
+        model_name="test-model",
+        timeout_seconds=120,
+        transport=httpx.MockTransport(handler),
+    )
+    assert len(requests) == 1
+    assert requests[0]["messages"][0]["content"] == "Reply only OK"
+
+
+@pytest.mark.asyncio
+async def test_independent_vision_challenges_run_concurrently() -> None:
+    both_started = asyncio.Event()
+    vision_count = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal vision_count
+        payload = json.loads(request.content)
+        if isinstance(payload["messages"][0]["content"], list):
+            vision_count += 1
+            if vision_count == 2:
+                both_started.set()
+            await asyncio.wait_for(both_started.wait(), timeout=1)
+        return answer_response(image_answer(payload))
+
+    result = await detect_model_capabilities(
+        api_base_url="https://llm.example/v1",
+        api_key="test-key",
+        model_name="test-model",
+        timeout_seconds=5,
+        transport=httpx.MockTransport(handler),
+    )
+    assert result.supports_vision
+    assert vision_count == 2
 
 
 @pytest.mark.asyncio

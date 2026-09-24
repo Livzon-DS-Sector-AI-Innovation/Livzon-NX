@@ -22,4 +22,6 @@ app/modules/{module}/
 
 ## 文件拆分规则
 
-当 `service.py`、`models.py`、`schemas.py` 单文件超过约 **300 行**时，拆成同名目录，并在目录级 `__init__.py` re-export 公开对象，保持外部 import 路径稳定。`api.py` 和 `repository.py` 只有确实过大时再按同样规则拆分。
+按业务职责拆分过大的文件，不以固定行数机械拆分。项目中的
+`safety/service/`、`registration/repository/` 已采用同名目录；增加拆分文件时
+在目录级 `__init__.py` 保持已有公开 import 路径，核对 API、测试和调用方。

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   fetchDeptApprovalConfigNames,
   fetchEmployeeDepartments,
+  fetchEmployeeStats,
   fetchOnboardingAttachmentContent,
   fetchTrainingDeptMappings,
 } from './hr'
@@ -132,5 +133,22 @@ describe('hr client onboarding/dept fetchers', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/hr/training/dept-mappings', {
       cache: 'no-store',
     })
+  })
+})
+
+describe('hr employee stats client', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('fetchEmployeeStats requests stats and returns the payload', async () => {
+    const payload = { code: 200, data: { total: 12, active: 10, offline: 2 } }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(payload)))
+    const result = await fetchEmployeeStats()
+    expect(result).toEqual(payload)
+    expect(String(vi.mocked(fetch).mock.calls[0][0])).toBe(
+      '/api/v1/hr/employees/stats',
+    )
   })
 })

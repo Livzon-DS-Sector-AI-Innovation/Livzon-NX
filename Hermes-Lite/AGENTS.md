@@ -40,6 +40,11 @@ Hermes 只注册一个 `dazah_tool`，支持：
 后端 `module_registry` 和 Tool Registry 是唯一事实源。Hermes 不维护业务
 operation 枚举、白名单、别名、旧参数转换或离线运行时目录。新增模块能力
 时只需在后端模块声明 Provider，禁止修改 Hermes 注册代码。
+当前消息投递存在 `identity.deliver_feishu_message` 的单一强制操作回退；它是
+平台交互契约，不是新增业务 operation 白名单的模板。修改它须核对可信主体、
+后端目录、确认和投递测试。
+`services/dazah_agent_service.py` 仍有质量查询等历史意图提示；维护这些路径时
+覆盖既有路由测试，不为新增业务模块复制按模块硬编码的 operation 提示。
 
 写操作必须使用后端 confirmation；返回 `requires_confirmation=true` 时
 只能说明已生成待确认项。审批、驳回、处分等人工责任判断不得代理执行。

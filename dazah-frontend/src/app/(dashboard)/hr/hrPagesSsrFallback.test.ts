@@ -50,7 +50,9 @@ describe('HR SSR pages degrade to empty data when backend fails', () => {
 
   it('profile page renders with empty data on fetch failure', async () => {
     const page = await import('./profile/page')
-    await expect(page.default()).resolves.toBeDefined()
+    await expect(
+      page.default({ searchParams: Promise.resolve({}) }),
+    ).resolves.toBeDefined()
   })
 
   it('recruitment page renders with empty data on fetch failure', async () => {

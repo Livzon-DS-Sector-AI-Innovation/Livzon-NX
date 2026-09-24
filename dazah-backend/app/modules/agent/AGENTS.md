@@ -6,6 +6,9 @@
 
 - 所有业务能力由模块 Agent Tool Provider 声明，经 `module_registry` 自动发现，
   并由 `ToolRegistry` 和 `ToolExecutor` 统一执行。
+- 业务 Provider 在 `app/shared/module_registry.py` 对应模块的
+  `agent_tools_module` 字段声明；`tool_registration.py` 已按注册表导入，
+  新增模块工具不手工修改 Agent 启动导入清单或 Hermes 业务白名单。
 - handler 只能调用所属模块 Service 或明确公开的 `public_api.py`，不得直接操作 ORM、私有 repository 或拼业务 SQL。
 - 工具输入使用 Pydantic v2 模型，不在 handler 内解析松散 dict。
 - 工具名使用 `<module>.<verb>_<resource>`；查询优先 `list_*`、`get_*`，写入使用明确业务动词。

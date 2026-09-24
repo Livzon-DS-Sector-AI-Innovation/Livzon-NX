@@ -441,6 +441,12 @@ export async function fetchLivzonTasks(): Promise<LivzonTaskPage> {
   return readEnvelope<LivzonTaskPage>(response)
 }
 
+export async function fetchPlatformLivzonTasks(page: number, pageSize: number): Promise<LivzonTaskPage> {
+  const search = new URLSearchParams({ scope: 'platform', page: String(page), page_size: String(pageSize) })
+  const response = await fetch(`/api/v1/agent/automations?${search}`, { credentials: 'include', cache: 'no-store' })
+  return readEnvelope<LivzonTaskPage>(response)
+}
+
 export async function fetchLivzonTaskVersions(
   automationId: string,
 ): Promise<LivzonTaskVersion[]> {
@@ -454,6 +460,12 @@ export async function fetchLivzonTaskRuns(): Promise<LivzonTaskRunPage> {
   const response = await fetch("/api/v1/agent/automation-runs?scope=mine&page=1&page_size=100", {
     credentials: "include",
   })
+  return readEnvelope<LivzonTaskRunPage>(response)
+}
+
+export async function fetchPlatformLivzonTaskRuns(page: number, pageSize: number): Promise<LivzonTaskRunPage> {
+  const search = new URLSearchParams({ scope: 'platform', page: String(page), page_size: String(pageSize) })
+  const response = await fetch(`/api/v1/agent/automation-runs?${search}`, { credentials: 'include', cache: 'no-store' })
   return readEnvelope<LivzonTaskRunPage>(response)
 }
 

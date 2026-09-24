@@ -319,3 +319,65 @@ async def test_pull_changes_handles_updates_creates_invalid_and_failures(
     assert existing.change_content == "更新"
     db.add.assert_called_once()
     db.rollback.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_pull_changes_marks_created_rows_with_requested_ledger_type(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db: Any = SimpleNamespace(
+        execute=AsyncMock(
+            side_effect=[SimpleNamespace(scalar_one_or_none=lambda: None)]
+        ),
+        add=Mock(),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
+    monkeypatch.setattr(
+        pages,
+        "_resolve_runtime_entity",
+        AsyncMock(return_value=(object(), _entity())),
+    )
+    monkeypatch.setattr(
+        pages,
+        "_search_entity_records",
+        AsyncMock(return_value=[{"fields": {"变更控制号": "BG-FILE-001"}}]),
+    )
+
+    result = await pages.sync_changes_from_feishu(db, change_type="file")
+    assert result == {"synced": 1, "failed": 0}
+    created = db.add.call_args.args[0]
+    assert created.change_type == "file"
+
+
+@pytest.mark.anyio
+async def test_change_action_plan_search_records_follows_pagination(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pages_seq: list[dict[str, Any]] = [
+        {
+            "items": [{"record_id": "r1"}, {"record_id": "r2"}],
+            "has_more": True,
+            "page_token": "tok2",
+            "total": None,
+        },
+        {
+            "items": [{"record_id": "r3"}],
+            "has_more": False,
+            "page_token": None,
+            "total": None,
+        },
+    ]
+    client = SimpleNamespace(search_records_page=AsyncMock(side_effect=pages_seq))
+
+    async def fake_resolve(_db: Any) -> tuple[Any, str]:
+        return client, "tbl_quality"
+
+    monkeypatch.setattr(
+        change_action_plan.feishu_sync, "_resolve_runtime", fake_resolve
+    )
+    items = await change_action_plan.feishu_sync.search_records(object())
+    assert [item["record_id"] for item in items] == ["r1", "r2", "r3"]
+    first_call, second_call = client.search_records_page.await_args_list
+    assert first_call.kwargs["page_token"] is None
+    assert second_call.kwargs["page_token"] == "tok2"

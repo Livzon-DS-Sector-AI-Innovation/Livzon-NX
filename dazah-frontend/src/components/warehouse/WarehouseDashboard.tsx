@@ -594,37 +594,27 @@ export function WarehouseDashboard({ group, title, baseName, initialData }: Ware
 
   return (
     <div className="w-full">
-      {/* 品牌渐变头图 */}
-      <div
-        className="relative mb-5 overflow-hidden rounded-2xl px-6 py-6 text-white shadow-md"
-        style={{ background: 'linear-gradient(135deg, #1a2a52 0%, #3b4db8 55%, #5645d4 100%)' }}
-      >
-        <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/10" />
-        <div className="pointer-events-none absolute -bottom-24 right-24 h-44 w-44 rounded-full bg-white/5" />
-        <div className="relative flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="text-[12px] font-medium uppercase tracking-[0.2em] text-white/70">WAREHOUSE ANALYTICS</div>
-            <h1 className="mt-1 text-[26px] font-bold leading-tight">{title}</h1>
-            <div className="mt-1 text-[13px] text-white/80">{baseName}多维表格 · 实时经营数据概览</div>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="rounded-full bg-white/15 px-3 py-1 text-[12px] backdrop-blur">
-              {syncedAt ? `同步于 ${syncedAt}` : '同步中'}
-            </span>
-            <span className="flex items-center gap-1.5 text-[12px] text-white/85">
-              自动刷新
-              <Switch size="small" checked={autoRefresh} onChange={setAutoRefresh} />
-            </span>
-            <Button
-              type="primary"
-              ghost
-              icon={<ReloadOutlined />}
-              onClick={() => refreshMutation.mutate(true)}
-              loading={loading}
-            >
-              刷新
-            </Button>
-          </div>
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-[var(--color-hairline)] pb-4">
+        <div>
+          <h1 className="text-[22px] font-semibold text-[var(--color-charcoal)]">{title}</h1>
+          <p className="mt-1 text-[13px] text-[var(--color-steel)]">{baseName}库存与出入库数据概览</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-[12px] text-[var(--color-steel)]">
+            {syncedAt ? `同步于 ${syncedAt}` : '同步中'}
+          </span>
+          <span className="flex items-center gap-1.5 text-[12px] text-[var(--color-steel)]">
+            自动刷新
+            <Switch size="small" checked={autoRefresh} onChange={setAutoRefresh} aria-label="自动刷新仪表盘" />
+          </span>
+          <Button
+            type="primary"
+            icon={<ReloadOutlined />}
+            onClick={() => refreshMutation.mutate(true)}
+            loading={loading}
+          >
+            刷新
+          </Button>
         </div>
       </div>
 

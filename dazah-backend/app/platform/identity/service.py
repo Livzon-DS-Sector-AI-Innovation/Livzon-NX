@@ -18,7 +18,7 @@ from uuid import UUID
 import httpx
 import jwt
 from fastapi import HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -1594,10 +1594,20 @@ def generate_jwt(user: User) -> str:
         "name": user.name,
         "role": user.role,
         "auth_source": user.auth_source,
+        "session_version": user.session_version,
         "iat": now,
         "exp": now + timedelta(seconds=settings.JWT_EXPIRE_SECONDS),
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
+
+
+async def revoke_user_sessions(db: AsyncSession, user_id: UUID) -> None:
+    """Invalidate every JWT previously issued to this user."""
+    await db.execute(
+        update(User)
+        .where(User.id == user_id)
+        .values(session_version=User.session_version + 1)
+    )
 
 
 async def authenticate_local_user(
@@ -1636,7 +1646,7 @@ async def bootstrap_local_users() -> None:
         for username, password, name, email, role in entries:
             if not username or not password:
                 continue
-            existing = await _repo.get_by_username(session, username)
+            existing = await _repo.get_by_username_including_deleted(session, username)
             if existing is None:
                 await _repo.create(
                     session,
@@ -1651,12 +1661,9 @@ async def bootstrap_local_users() -> None:
                 logger.info("Bootstrapped %s local user: %s", role, username)
                 continue
 
-            existing.password_hash = hash_password(password)
-            existing.name = name or existing.name
-            existing.email = email or existing.email
-            existing.role = role
-            existing.status = "active"
-            existing.auth_source = existing.auth_source or "local"
+            # Bootstrap is creation-only. Reapplying deployment credentials must
+            # never undo a password reset, disable action, or role change.
+            continue
 
         await get_or_create_system_admin(session)
         await session.commit()
@@ -1677,25 +1684,6 @@ async def get_or_create_system_admin(db: AsyncSession) -> User:
         logger.info("Created default platform administrator: %s", SYSTEM_ADMIN_USERNAME)
         return user
 
-    changed = False
-    if user.name != SYSTEM_ADMIN_NAME:
-        user.name = SYSTEM_ADMIN_NAME
-        changed = True
-    if user.role != "admin":
-        user.role = "admin"
-        changed = True
-    if user.status != "active":
-        user.status = "active"
-        changed = True
-    if user.auth_source != "local":
-        user.auth_source = "local"
-        changed = True
-    if user.is_deleted:
-        user.is_deleted = False
-        changed = True
-
-    if changed:
-        await db.flush()
     return user
 
 

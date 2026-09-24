@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { moduleMenus } from '@/lib/menu-config'
 
 describe('registration migrated menu contract', () => {
+  it('identifies first-level routes that open a dashboard', () => {
+    const registration = moduleMenus.find((menu) => menu.moduleCode === 'registration')
+    expect(registration?.children.filter((item) => item.dashboard).map((item) => item.path)).toEqual([
+      '/registration/project',
+      '/registration/certificate-management',
+      '/registration/fees',
+    ])
+  })
+
   it('matches the registration landing page at the top level', () => {
     const registration = moduleMenus.find((menu) => menu.moduleCode === 'registration')
 

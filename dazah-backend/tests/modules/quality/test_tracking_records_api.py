@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import urllib.request
 import uuid
 from collections.abc import AsyncIterator
@@ -683,6 +684,136 @@ async def test_capa_plan_track_api_roundtrip(
     assert update_response.json()["data"]["owner_confirmed"] is False
     assert update_response.json()["data"]["department_head_confirmed"] is False
     assert update_response.json()["data"]["progress"] == "completed"
+
+
+@pytest.mark.anyio
+async def test_capa_plan_track_create_with_handwritten_code_creates_draft_capa(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        feishu_sync_service,
+        "auto_sync_capa_plan_track_after_write",
+        AsyncMock(),
+    )
+    create_response = await client.post(
+        "/api/v1/quality/capa-plan-tracks",
+        json={
+            "capa_code": "CAPA-HAND-260001",
+            "plan_content": "手写编号新增计划",
+            "department": "QC",
+            "due_date": "2026-10-01",
+        },
+    )
+    assert create_response.status_code == 200, create_response.text
+    data = create_response.json()["data"]
+    assert data["capa_code"] == "CAPA-HAND-260001"
+    assert data["plan_content"] == "手写编号新增计划"
+    assert data["department"] == "QC"
+    assert data["due_date"] == "2026-10-01"
+
+    capa_result = await db_session.execute(
+        text("SELECT status FROM quality.capas WHERE capa_code = 'CAPA-HAND-260001'")
+    )
+    assert capa_result.scalar_one() == "draft"
+
+
+@pytest.mark.anyio
+async def test_capa_plan_track_create_reuses_existing_capa_code(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        feishu_sync_service,
+        "auto_sync_capa_plan_track_after_write",
+        AsyncMock(),
+    )
+    capa = CAPA(
+        id=uuid.uuid4(),
+        capa_code="CAPA-REUSE-001",
+        status="closed",
+        title="既有CAPA",
+    )
+    db_session.add(capa)
+    await db_session.commit()
+
+    create_response = await client.post(
+        "/api/v1/quality/capa-plan-tracks",
+        json={"capa_code": "CAPA-REUSE-001", "plan_content": "复用既有编号"},
+    )
+    assert create_response.status_code == 200, create_response.text
+    data = create_response.json()["data"]
+    assert data["capa_code"] == "CAPA-REUSE-001"
+    assert data["capa_id"] == str(capa.id)
+
+    capa_rows = await db_session.execute(
+        text("SELECT COUNT(*) FROM quality.capas WHERE capa_code = 'CAPA-REUSE-001'")
+    )
+    assert capa_rows.scalar_one() == 1
+
+
+@pytest.mark.anyio
+async def test_capa_plan_track_create_without_any_field_generates_capa_code(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        feishu_sync_service,
+        "auto_sync_capa_plan_track_after_write",
+        AsyncMock(),
+    )
+    create_response = await client.post(
+        "/api/v1/quality/capa-plan-tracks",
+        json={},
+    )
+    assert create_response.status_code == 200, create_response.text
+    data = create_response.json()["data"]
+    assert data["plan_content"] == ""
+    assert data["reminder_status"] == "pending"
+    assert re.fullmatch(r"CAPA-\d{8}-[0-9a-f]{6}", data["capa_code"])
+
+
+@pytest.mark.anyio
+async def test_capa_plan_track_update_with_new_capa_code_reassociates(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        feishu_sync_service,
+        "auto_sync_capa_plan_track_after_write",
+        AsyncMock(),
+    )
+    capa = CAPA(
+        id=uuid.uuid4(),
+        capa_code="CAPA-BEFORE-001",
+        status="draft",
+        title="原编号",
+    )
+    db_session.add(capa)
+    await db_session.commit()
+
+    create_response = await client.post(
+        "/api/v1/quality/capa-plan-tracks",
+        json={"capa_code": "CAPA-BEFORE-001", "plan_content": "待改编号"},
+    )
+    track_id = create_response.json()["data"]["id"]
+
+    update_response = await client.put(
+        f"/api/v1/quality/capa-plan-tracks/{track_id}",
+        json={"capa_code": "CAPA-AFTER-001"},
+    )
+    assert update_response.status_code == 200, update_response.text
+    data = update_response.json()["data"]
+    assert data["capa_code"] == "CAPA-AFTER-001"
+    assert data["capa_id"] != str(capa.id)
+
+    capa_result = await db_session.execute(
+        text("SELECT status FROM quality.capas WHERE capa_code = 'CAPA-AFTER-001'")
+    )
+    assert capa_result.scalar_one() == "draft"
 
 
 @pytest.mark.anyio

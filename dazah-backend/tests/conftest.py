@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.main import app  # noqa: A001
+from app.platform.audit import middleware as audit_middleware
+from app.platform.identity import permission_middleware
 from app.platform.identity.models import User  # noqa: F401
 from app.platform.identity.page_policy import api_binding_for_route
 from tests.db_safety import get_pytest_database_url
@@ -24,6 +26,17 @@ _test_session_factory = async_sessionmaker(
     class_=AsyncSession,
     expire_on_commit=False,
 )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_request_audit_database(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Independent request audit sessions must use the dedicated test database."""
+    monkeypatch.setattr(
+        audit_middleware, "async_session_factory", _test_session_factory
+    )
+    monkeypatch.setattr(
+        permission_middleware, "async_session_factory", _test_session_factory
+    )
 
 
 @pytest.fixture

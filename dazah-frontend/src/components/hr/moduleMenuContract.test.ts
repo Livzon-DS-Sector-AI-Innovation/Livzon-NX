@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { moduleMenus } from '@/lib/menu-config'
 
 describe('HR migrated menu contract', () => {
+  it('opens the employee dashboard from its first-level menu', () => {
+    const hr = moduleMenus.find((menu) => menu.moduleCode === 'hr')
+    expect(hr?.children.filter((item) => item.dashboard).map((item) => item.path)).toEqual([
+      '/hr/employee-management',
+    ])
+  })
+
   it('matches the HR landing page entry menu', () => {
     const hr = moduleMenus.find((menu) => menu.moduleCode === 'hr')
 

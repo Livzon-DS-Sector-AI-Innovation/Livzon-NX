@@ -5,13 +5,16 @@
   委托 app.platform.identity.access_check.check_access，与接口权限模拟器共用同一套逻辑
 - 公开路径豁免与 DEV_BYPASS_AUTH 在 JWT 解析之前提前放行
 - JWT 自动续签：剩余有效期 < 1h 时续签并 Set-Cookie
-- 登录频率限制：/api/v1/identity/auth/* 按 IP 限流（10 次/分钟，二轮评审新增）
+- 登录频率限制：认证入口按 IP 限流，密码登录再按账号限流
 """
 
 import asyncio
+import hashlib
+import hmac
 import logging
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlsplit
 
 import jwt
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -36,8 +39,15 @@ JWT_RENEW_THRESHOLD_SECONDS = 3600  # JWT 剩余 < 1h 自动续签
 
 # 登录频率限制：/api/v1/identity/auth/* 按 IP 限流
 AUTH_PATH_PREFIX = "/api/v1/identity/auth/"
-LOGIN_RATE_LIMIT = 10  # 每分钟最多 10 次
+RATE_LIMITED_AUTH_PATHS = {
+    f"{AUTH_PATH_PREFIX}login",
+    f"{AUTH_PATH_PREFIX}callback",
+    f"{AUTH_PATH_PREFIX}local/login",
+}
+LOGIN_RATE_LIMIT = 60  # 代理共享 IP 时保留足够的正常登录容量
 LOGIN_RATE_WINDOW_SECONDS = 60
+ACCOUNT_LOGIN_RATE_LIMIT = 10
+ACCOUNT_LOGIN_RATE_WINDOW_SECONDS = 15 * 60
 # Agent-to-Agent endpoints authenticate with their own service token at the
 # endpoint boundary.  They must bypass the end-user JWT gate here; otherwise a
 # valid Hermes service token is mistaken for a browser JWT and rejected before
@@ -81,10 +91,30 @@ def _has_module_access_dependency(request: Any, module_code: str | None) -> bool
     return False
 
 
-async def _check_login_rate_limit(request: Any) -> bool:
-    """登录端点按 IP 限流（10 次/分钟），返回 True 表示放行。
+def _trusted_browser_write_origin(request: Request, allowed_origins: list[str]) -> bool:
+    """Reject cross-site browser writes and require a source for cookie writes."""
+    if request.method.upper() in {"GET", "HEAD", "OPTIONS"}:
+        return True
+    if not request.url.path.startswith("/api/v1/"):
+        return True
+    origin = request.headers.get("origin")
+    if origin:
+        return origin in allowed_origins
+    if request.headers.get("sec-fetch-site") == "cross-site":
+        return False
+    if not request.cookies.get("auth_token"):
+        return True
+    referer = request.headers.get("referer", "")
+    parsed = urlsplit(referer)
+    if parsed.scheme and parsed.netloc:
+        return f"{parsed.scheme}://{parsed.netloc}" in allowed_origins
+    return False
 
-    使用 Redis INCR + EXPIRE 实现滑动窗口计数；Redis 不可用时放行（不阻断登录）。
+
+async def _check_login_rate_limit(request: Any) -> bool | None:
+    """认证端点按 IP 限流，返回 True 表示放行。
+
+    Redis 不可用时返回 None，认证入口必须拒绝尝试。
     """
     try:
         from app.core.redis import redis_client
@@ -98,9 +128,29 @@ async def _check_login_rate_limit(request: Any) -> bool:
         if count > LOGIN_RATE_LIMIT:
             logger.warning("Login rate limit exceeded for ip=%s", client_ip)
             return False
-    except Exception:
-        logger.warning("Login rate limit check skipped (redis unavailable)")
+    except Exception as exc:
+        logger.warning("Login rate limit unavailable: %s", type(exc).__name__)
+        return None
     return True
+
+
+async def check_local_account_rate_limit(username: str) -> bool | None:
+    """Bound distributed password guesses regardless of proxy IP aggregation."""
+    from app.core.redis import redis_client
+
+    normalized = username.strip().casefold().encode("utf-8")
+    secret = get_settings().SECRET_KEY.encode("utf-8")
+    identifier = hmac.new(secret, normalized, hashlib.sha256).hexdigest()
+    key = f"identity:local-login-account:{identifier}"
+    try:
+        async with asyncio.timeout(0.5):
+            count = await redis_client.incr(key)
+            if count == 1:
+                await redis_client.expire(key, ACCOUNT_LOGIN_RATE_WINDOW_SECONDS)
+        return bool(count <= ACCOUNT_LOGIN_RATE_LIMIT)
+    except Exception as exc:
+        logger.warning("Account login rate limit unavailable: %s", type(exc).__name__)
+        return None
 
 
 class PermissionMiddleware(BaseHTTPMiddleware):
@@ -110,9 +160,20 @@ class PermissionMiddleware(BaseHTTPMiddleware):
         settings = get_settings()
         path = request.url.path
 
-        # 登录频率限制（二轮评审新增）：auth/* 路径按 IP 限流
-        if path.startswith(AUTH_PATH_PREFIX) and not settings.DEV_BYPASS_AUTH:
+        if not _trusted_browser_write_origin(request, settings.browser_origins):
+            return error_response(
+                message="请求来源未经授权",
+                status_code=403,
+            )
+
+        # 认证入口按 IP 限流；本地密码登录在路由层再按账号限流。
+        if path in RATE_LIMITED_AUTH_PATHS and not settings.DEV_BYPASS_AUTH:
             allowed = await _check_login_rate_limit(request)
+            if allowed is None:
+                return error_response(
+                    message="登录服务暂时不可用，请稍后重试",
+                    status_code=503,
+                )
             if not allowed:
                 return error_response(
                     message="登录尝试过于频繁，请稍后再试",
@@ -170,8 +231,13 @@ class PermissionMiddleware(BaseHTTPMiddleware):
             from app.platform.identity.repository import UserRepository
 
             user = await UserRepository().get_by_id(db, user_id)
-            if user is None or user.status != "active":
+            if (
+                user is None
+                or user.status != "active"
+                or payload.get("session_version") != user.session_version
+            ):
                 return self._unauthorized()
+            request.state.audit_user_id = user.id
             # The unified identity is authoritative even if a pre-merge cache
             # still lacks the wildcard. Never trust a cached wildcard on demotion.
             permissions = (
@@ -227,7 +293,10 @@ class PermissionMiddleware(BaseHTTPMiddleware):
             async with async_session_factory() as db:
                 repo = UserRepository()
                 user = await repo.get_by_id(db, user_id)
-                if user is None:
+                if (
+                    user is None
+                    or user.session_version != payload.get("session_version")
+                ):
                     return response
                 new_token = generate_jwt(user)
 

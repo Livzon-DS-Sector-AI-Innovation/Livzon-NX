@@ -2,13 +2,10 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 import { getServerApiBaseUrl } from '@/lib/server-api'
-import { isSecurePublicRequest } from '@/lib/public-origin'
 import { getModuleByKey, getPageKeyByPath, getAuthorizedPageMenus } from '@/lib/menu-config'
 import type { SubMenuItem } from '@/lib/menu-config'
 import type { User } from '@/types/user'
 import { isSystemAdministrator, isSystemSettingsPath } from '@/lib/administrator-role'
-
-const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24
 
 function firstPage(items: SubMenuItem[]): string | undefined {
   for (const item of items) {
@@ -36,20 +33,10 @@ function denied(message: string, status = 403) {
 }
 
 export async function proxy(request: NextRequest) {
-  const legacyToken = request.nextUrl.searchParams.get('auth_token')
-  if (legacyToken) {
+  if (request.nextUrl.searchParams.has('auth_token')) {
     const target = request.nextUrl.clone()
     target.searchParams.delete('auth_token')
-
-    const response = NextResponse.redirect(target)
-    response.cookies.set('auth_token', legacyToken, {
-      httpOnly: true,
-      maxAge: AUTH_COOKIE_MAX_AGE,
-      path: '/',
-      sameSite: 'lax',
-      secure: isSecurePublicRequest(request),
-    })
-    return response
+    return NextResponse.redirect(target)
   }
 
   if (

@@ -60,14 +60,13 @@ describe('migrated server page coverage', () => {
 
   it('keeps employee management available when statistics fail', async () => {
     mocks.fetchEmployeeStatsServer.mockRejectedValueOnce(new Error('offline'))
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const { default: EmployeeManagementPage } = await import(
       './app/(dashboard)/hr/employee-management/page'
     )
 
+    // 员工管理页改为客户端拉取统计（加载/失败态见 EmployeeDashboardClient 测试），
+    // 服务端不再 fetch，页面组装本身不依赖统计结果
     expect(await EmployeeManagementPage()).toBeTruthy()
-    expect(warn).toHaveBeenCalled()
-    warn.mockRestore()
   })
 
   it('loads annual training metadata from the selected plan', async () => {

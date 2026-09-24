@@ -329,7 +329,7 @@ const server = createServer(async (request, response) => {
       response.end(JSON.stringify({ detail: '没有已激活的 LLM 配置' }))
       return
     }
-    response.end(JSON.stringify(llmDetection('当前激活模型连接正常')))
+    response.end(JSON.stringify(llmDetection('模型连接正常')))
     return
   }
 
@@ -342,8 +342,8 @@ const server = createServer(async (request, response) => {
     const config = {
       ...body,
       id: '30000000-0000-0000-0000-000000000002',
-      config_type: 'text',
-      capabilities: ['text', 'document'],
+      config_type: 'unknown',
+      capabilities: [],
       api_key_masked: '******',
       created_at: now,
       updated_at: now,
@@ -365,6 +365,8 @@ const server = createServer(async (request, response) => {
       response.end(JSON.stringify({ detail: 'Config not found' }))
       return
     }
+    config.config_type = 'text'
+    config.capabilities = ['text', 'document']
     response.end(JSON.stringify(llmDetection('已重新检测模型能力')))
     return
   }

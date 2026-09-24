@@ -230,7 +230,7 @@ export function ChangeActionPlanEditModal({
         )}
         {isEditingExisting ? (
           <Form.Item
-            label="部门总监"
+            label="部门负责人"
             name="director_name"
             extra="后续人员维护请在飞书多维表中完成，修改后点击系统“同步多维表格”回写。"
           >
@@ -238,7 +238,7 @@ export function ChangeActionPlanEditModal({
           </Form.Item>
         ) : (
           <Form.Item
-            label="部门总监"
+            label="部门负责人"
             name="director_user_id"
             extra="输入姓名、手机号或邮箱搜索飞书人员；创建成功后，后续维护请在飞书多维表中完成。"
           >

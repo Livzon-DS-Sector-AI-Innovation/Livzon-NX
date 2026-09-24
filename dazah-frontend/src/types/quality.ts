@@ -223,20 +223,6 @@ export interface DeviationDetail {
 }
 
 // ============ Feishu Native Types ============
-export interface FeishuCapaLedgerItem {
-  record_id: string
-  启动日期: string | null
-  事件部门: string | null
-  涉及产品: string | null
-  CAPA简述: string | null
-  CAPA效果评估: string | null
-  关闭日期: string | null
-  QA质量员: string | null
-  QA质量员确认日期: string | null
-  CAPA状态: string | null
-  CAPA编号: string
-}
-
 export interface FeishuCapaPlanTrackItem {
   record_id: string
   CAPA编号: string
@@ -668,8 +654,9 @@ export interface QualityFeishuEntityFieldMappingBundle {
 }
 
 export interface CreateCapaPlanTrackRequest {
-  capa_id: string;
-  plan_content: string;
+  capa_id?: string | null;
+  capa_code?: string | null;
+  plan_content?: string | null;
   due_date?: string | null;
   owner_name?: string | null;
   department?: string | null;
@@ -1033,23 +1020,16 @@ export interface DeviationDashboardStats {
 export interface CapaDashboardStats {
   total: number
   closedCount: number
-  overdueCount: number
-  statusDistribution: Array<{
-    status: string
-    count: number
-  }>
-  sourceDistribution: Array<{
-    source: string
-    count: number
-  }>
-  categoryDistribution: Array<{
-    category: string
+  inProgressCount: number
+  resultDistribution: Array<{
+    name: string
     count: number
   }>
   departmentDistribution: Array<{
     name: string
     count: number
   }>
+  monthlyTrend: Array<{ month: string; count: number }>
 }
 
 export interface ChangeDashboardStats {
@@ -1075,6 +1055,31 @@ export interface ChangeDashboardStats {
   actionPlanTotal: number
   actionPlanOverdue: number
   actionPlanConfirmed: number
+}
+
+export interface ChangeActionPlanDueStatusItem {
+  id: string
+  change_code: string | null
+  project_name: string | null
+  related_work: string | null
+  owner_name: string | null
+  owner_user_id: string | null
+  owner_avatar_url: string | null
+  director_name: string | null
+  deadline_date: string | null
+  delayed_deadline_date: string | null
+  status: string | null
+  /** 有效截止日距今天数：负数=已逾期，0=今天到期，正数=剩余天数 */
+  days_offset: number
+}
+
+export interface ChangeActionPlanDueStatus {
+  today: string
+  lead_days: number
+  overdue: ChangeActionPlanDueStatusItem[]
+  due_soon: ChangeActionPlanDueStatusItem[]
+  total_count: number
+  confirmed_count: number
 }
 
 export interface ValidationDashboardStats {

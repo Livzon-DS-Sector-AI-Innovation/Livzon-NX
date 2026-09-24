@@ -185,7 +185,6 @@ describe('migrated quality client API coverage', () => {
       table_id: ' table-id ',
     })
     await quality.fetchQualityAiLogs({ entity_type: 'deviation', entity_id: 'deviation-1', page: 2, page_size: 20 })
-    await quality.fetchFeishuCapas({ keyword: 'CAPA', page: 2, page_size: 20 })
     await quality.fetchFeishuCapaPlanTracks({ keyword: '计划', page: 2, page_size: 20 })
 
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/quality/ai/logs?'))).toBe(true)

@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import { Table, Button, Space, Tag, App } from 'antd'
 import {
   PlusOutlined, EyeOutlined, DeleteOutlined,
 } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
+import { useListUrlState } from '@/lib/useListUrlState'
 import dayjs from 'dayjs'
 import type { ValidationAuditTaskListItem, TaskStatus, AuditMode } from '@/types/validation-audit'
 import {
@@ -21,13 +22,10 @@ interface Props {
 export default function ValidationAuditListClient({ initialTasks, initialTotal }: Props) {
   const { message, modal } = App.useApp()
   const router = useRouter()
+  const { page, pageSize, setListQuery, detailHref } = useListUrlState(20)
   const [tasks, setTasks] = useState(initialTasks ?? [])
   const [total, setTotal] = useState(initialTotal)
   const [loading, setLoading] = useState(false)
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
-  // 首屏数据来自服务端预取，跳过首次拉取，仅在翻页/删除后重新请求
-  const skipFirstFetchRef = useRef(true)
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -44,14 +42,6 @@ export default function ValidationAuditListClient({ initialTasks, initialTotal }
     }
   }, [page, pageSize, message])
 
-  useEffect(() => {
-    if (skipFirstFetchRef.current) {
-      skipFirstFetchRef.current = false
-      return
-    }
-    void loadData()
-  }, [loadData])
-
   const handleDelete = useCallback((taskId: string, taskName: string) => {
     modal.confirm({
       title: '确认删除',
@@ -65,17 +55,17 @@ export default function ValidationAuditListClient({ initialTasks, initialTotal }
           message.success(result.message)
           // 当前页仅剩一条且不是第一页时回退一页，否则原地刷新
           if (tasks.length === 1 && page > 1) {
-            setPage(page - 1)
+            setListQuery({ page: page - 1 })
           } else {
             await loadData()
+            router.refresh()
           }
-          router.refresh()
         } else {
           message.error(result.message)
         }
       },
     })
-  }, [modal, message, tasks.length, page, loadData, router])
+  }, [modal, message, tasks.length, page, loadData, router, setListQuery])
 
   const columns = [
     {
@@ -160,7 +150,7 @@ export default function ValidationAuditListClient({ initialTasks, initialTotal }
             type="link"
             size="small"
             icon={<EyeOutlined />}
-            onClick={() => router.push(`/registration/validation-audit/${record.id}`)}
+            onClick={() => router.push(detailHref(`/registration/validation-audit/${record.id}`))}
           >
             查看
           </Button>
@@ -193,7 +183,7 @@ export default function ValidationAuditListClient({ initialTasks, initialTotal }
           type="primary"
           icon={<PlusOutlined />}
           size="large"
-          onClick={() => router.push('/registration/validation-audit/new')}
+          onClick={() => router.push(detailHref('/registration/validation-audit/new'))}
           style={{ borderRadius: 8 }}
         >
           新建审核任务
@@ -215,7 +205,7 @@ export default function ValidationAuditListClient({ initialTasks, initialTotal }
             total,
             showSizeChanger: true,
             showTotal: (t) => `共 ${t} 条`,
-            onChange: (p, ps) => { setPage(p); setPageSize(ps) },
+            onChange: (p, ps) => setListQuery({ page: ps !== pageSize ? 1 : p, page_size: ps }),
           }}
           scroll={{ x: 1200 }}
           size="middle"

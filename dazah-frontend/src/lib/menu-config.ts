@@ -9,6 +9,7 @@ export interface SubMenuItem {
   label: string
   path: string
   children?: SubMenuItem[]   // 嵌套子菜单 → Ant Design SubMenu
+  dashboard?: boolean         // 当前菜单路径直接打开仪表盘
   disabled?: boolean         // 灰显占位，功能未开发
   placement?: "bottom"       // 置底显示，例如模块设置入口
   adminOnly?: boolean         // 仅系统管理员可见
@@ -288,6 +289,7 @@ export const moduleMenus: ModuleMenu[] = [
         key: "project",
         label: "申报项目",
         path: "/registration/project",
+        dashboard: true,
         children: [
           {
             key: "project-ledger",
@@ -316,6 +318,7 @@ export const moduleMenus: ModuleMenu[] = [
         key: "certificate-management",
         label: "证书管理",
         path: "/registration/certificate-management",
+        dashboard: true,
         children: registrationCertificateSheets.map((item) => ({
           key: item.key,
           label: item.name,
@@ -327,6 +330,7 @@ export const moduleMenus: ModuleMenu[] = [
         key: "fees",
         label: "注册费用",
         path: "/registration/fees",
+        dashboard: true,
         children: [
           { key: "fee-ledger", label: "费用台账", path: "/registration/fees/ledger" },
           { key: "inspection-contacts", label: "外检联系", path: "/registration/fees/contacts" },
@@ -348,6 +352,7 @@ export const moduleMenus: ModuleMenu[] = [
         key: "deviations",
         label: "偏差管理",
         path: "/quality/deviations",
+        dashboard: true,
         children: [
           { key: "deviation-records", label: "报告记录", path: "/quality/deviations/records" },
           { key: "deviation-investigations", label: "调查推送", path: "/quality/deviations/investigations" },
@@ -360,6 +365,7 @@ export const moduleMenus: ModuleMenu[] = [
         key: "capas",
         label: "CAPA管理",
         path: "/quality/capas",
+        dashboard: true,
         children: [
           { key: "capa-ledger", label: "CAPA台账", path: "/quality/capas/ledger" },
           { key: "capa-plans", label: "计划跟踪", path: "/quality/capas/plans" },
@@ -463,6 +469,7 @@ export const moduleMenus: ModuleMenu[] = [
         key: "anomaly-report",
         label: "成品异常报告",
         path: "/quality/anomaly-report",
+        dashboard: true,
         children: [
           { key: "anomaly-report-ledger", label: "异常台账", path: "/quality/anomaly-report/ledger" },
         ],
@@ -480,6 +487,7 @@ export const moduleMenus: ModuleMenu[] = [
         key: "suppliers",
         label: "供应商管理",
         path: "/quality/suppliers",
+        dashboard: true,
         children: [
           { key: "supplier-qualification", label: "供应商资质台账", path: "/quality/suppliers/qualification" },
         ],
@@ -488,6 +496,7 @@ export const moduleMenus: ModuleMenu[] = [
         key: "change",
         label: "变更控制",
         path: "/quality/change",
+        dashboard: true,
         children: [
           { key: "change-ledger", label: "技术变更台账", path: "/quality/change/ledger" },
           { key: "file-change-ledger", label: "文件变更台账", path: "/quality/file-change/ledger" },
@@ -498,6 +507,7 @@ export const moduleMenus: ModuleMenu[] = [
         key: "validation",
         label: "验证与确认",
         path: "/quality/validation",
+        dashboard: true,
         children: [
           { key: "validation-plans", label: "验证主计划", path: "/quality/validation/plans" },
           { key: "equipment-qualification", label: "设备确认", path: "/quality/validation/equipment-qualification" },
@@ -535,6 +545,7 @@ export const moduleMenus: ModuleMenu[] = [
         key: "employee-management",
         label: "员工管理",
         path: "/hr/employee-management",
+        dashboard: true,
         children: [
           { key: "profile", label: "员工档案", path: "/hr/profile" },
           { key: "feishu-contacts", label: "飞书联系人", path: "/hr/feishu-contacts" },
@@ -596,6 +607,7 @@ export const moduleMenus: ModuleMenu[] = [
         key: "materials",
         label: "原辅料及包材",
         path: "/warehouse/materials/dashboard",
+        dashboard: true,
         feishuPageKey: "",
         children: [
           { key: "raw-summary", label: "原辅料库存总表", path: "/warehouse/materials/raw-summary", feishuPageKey: "raw-summary" },
@@ -615,6 +627,7 @@ export const moduleMenus: ModuleMenu[] = [
         key: "hardware",
         label: "五金",
         path: "/warehouse/hardware/dashboard",
+        dashboard: true,
         feishuPageKey: "",
         children: warehouseHardwarePages.map((item) => ({
           key: `hardware-${item.pageKey}`,
@@ -627,6 +640,7 @@ export const moduleMenus: ModuleMenu[] = [
         key: "product-inventory",
         label: "成品库存",
         path: "/warehouse/product/dashboard",
+        dashboard: true,
         feishuPageKey: "",
         children: [
           { key: "product-summary", label: "产品汇总", path: "/warehouse/product/summary", feishuPageKey: "product-summary" },

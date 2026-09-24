@@ -503,7 +503,7 @@ export function ValidationAiReviewPanel() {
 
       <Drawer
         title={record?.title || '审核详情'}
-        width={860}
+        size={860}
         open={!!detailId}
         onClose={() => setDetailId(null)}
         destroyOnHidden

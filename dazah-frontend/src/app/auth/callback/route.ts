@@ -41,17 +41,7 @@ function tokenRedirectResponse(
 }
 
 export async function GET(request: NextRequest) {
-  const token = request.nextUrl.searchParams.get("token")
-  const nextPath = sanitizeNextPath(request.nextUrl.searchParams.get("next"))
-  const publicOrigin = getPublicOrigin(request)
-
-  if (!token) {
-    return NextResponse.redirect(
-      new URL("/login?error=missing_token", publicOrigin),
-    )
-  }
-
-  return tokenRedirectResponse(request, token, nextPath)
+  return loginRedirect(request, "invalid_login_link")
 }
 
 export async function POST(request: NextRequest) {

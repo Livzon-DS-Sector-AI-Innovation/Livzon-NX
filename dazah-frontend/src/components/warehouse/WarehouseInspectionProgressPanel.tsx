@@ -1,22 +1,30 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Empty, Select, Table, Tag } from 'antd'
+import { App, Button, Descriptions, Drawer, Empty, Modal, Select, Spin, Table, Tag } from 'antd'
 import type { TableColumnsType } from 'antd'
 import {
   ClockCircleOutlined,
+  DatabaseOutlined,
   FieldTimeOutlined,
   InboxOutlined,
+  RightOutlined,
   SafetyCertificateOutlined,
 } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import { graphic } from 'echarts'
 import type { EChartsOption } from 'echarts'
 import { useQuery } from '@tanstack/react-query'
-import { fetchWarehouseInspectionProgressOverview } from '@/lib/api/client/warehouse'
+import {
+  fetchWarehouseInspectionProgressOverview,
+  fetchWarehouseRecordDetail,
+} from '@/lib/api/client/warehouse'
+import { formatDetailDisplayValue } from '@/lib/format/warehouse'
+import { renderInspectionCycleBlock } from './inspectionCycle'
 import type {
   WarehouseInspectionOverview,
   WarehouseInspectionPendingItem,
+  WarehouseRecordDetail,
 } from '@/types/warehouse'
 
 const BRAND = '#5645d4'
@@ -56,11 +64,15 @@ interface MiniStatProps {
   value: string
   hint?: string
   color: string
+  onClick?: () => void
 }
 
-function MiniStat({ icon, label, value, hint, color }: MiniStatProps) {
+function MiniStat({ icon, label, value, hint, color, onClick }: MiniStatProps) {
   return (
-    <div className="rounded-xl border border-[var(--color-hairline)] bg-white p-4 shadow-sm">
+    <div
+      className={`rounded-xl border border-[var(--color-hairline)] bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg${onClick ? ' cursor-pointer' : ''}`}
+      onClick={onClick}
+    >
       <div className="flex items-start gap-3">
         <div
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[18px] text-white"
@@ -73,7 +85,11 @@ function MiniStat({ icon, label, value, hint, color }: MiniStatProps) {
           <div className="mt-1 text-[20px] font-bold leading-none" style={{ color }}>
             {value}
           </div>
-          {hint ? <div className="mt-1 truncate text-[11px] text-[var(--color-muted)]">{hint}</div> : null}
+          {onClick ? (
+            <div className="mt-1 truncate text-[11px] text-[var(--color-primary)]">点击查看明细</div>
+          ) : hint ? (
+            <div className="mt-1 truncate text-[11px] text-[var(--color-muted)]">{hint}</div>
+          ) : null}
         </div>
       </div>
     </div>
@@ -156,7 +172,7 @@ function dailyChartOption(overview: WarehouseInspectionOverview): EChartsOption 
 
 const PENDING_COLUMNS: TableColumnsType<WarehouseInspectionPendingItem> = [
   { title: '名称', dataIndex: 'name', key: 'name', ellipsis: true },
-  { title: '批号', dataIndex: 'batch', key: 'batch', width: 120, render: (v) => v || '—' },
+  { title: '批号', dataIndex: 'batch', key: 'batch', width: 110, render: (v) => v || '—' },
   {
     title: '入库日期',
     dataIndex: 'inbound_date',
@@ -180,28 +196,59 @@ const PENDING_COLUMNS: TableColumnsType<WarehouseInspectionPendingItem> = [
 /**
  * 仓储仪表盘的「近期检验进度」面板：
  * 当前待验 / 近 N 天完成检验 / 检验周期分布 / 最久待验 Top5。
+ * 待验卡片与待验列表行可下钻查看批次记录详情（飞书全字段 + 检验周期）。
  * 接口失败时静默隐藏（不影响仪表盘主数据）。
  */
 export function WarehouseInspectionProgressPanel({ scope }: { scope: 'raw' | 'product' }) {
+  const { message } = App.useApp()
   const [days, setDays] = useState(30)
-  const { data } = useQuery({
+  const { data, refetch } = useQuery({
     queryKey: ['warehouse-inspection-progress', scope, days],
     queryFn: () => fetchWarehouseInspectionProgressOverview(scope, days),
     staleTime: 5 * 60 * 1000,
     retry: false,
   })
 
+  // ── 待验下钻：全量列表抽屉 + 单条记录详情弹窗 ─────────────────
+  const [listOpen, setListOpen] = useState(false)
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailData, setDetailData] = useState<WarehouseRecordDetail | null>(null)
+
+  const openPendingList = () => {
+    // 下钻时绕过前端 5 分钟新鲜窗口主动拉新（后端仍有进程缓存）
+    void refetch()
+    setListOpen(true)
+  }
+
+  const openRecordDetail = async (item: WarehouseInspectionPendingItem) => {
+    if (!item.page_key || !item.record_id) {
+      return
+    }
+    setDetailOpen(true)
+    setDetailLoading(true)
+    setDetailData(null)
+    try {
+      const detail = await fetchWarehouseRecordDetail(item.page_key, item.record_id)
+      setDetailData(detail)
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : '未知错误'
+      message.error(`详情加载失败：${reason}`)
+      setDetailOpen(false)
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
   const pendingColumns = useMemo(() => {
     if (scope === 'product') {
-      return [
-        PENDING_COLUMNS[0],
-        { title: '产品', dataIndex: 'product', key: 'product', width: 110, ellipsis: true, render: (v: string | null) => v || '—' },
-        ...PENDING_COLUMNS.slice(2),
-      ] as TableColumnsType<WarehouseInspectionPendingItem>
+      // 成品口径 name 即产品名称，不再重复产品列
+      return PENDING_COLUMNS as TableColumnsType<WarehouseInspectionPendingItem>
     }
     return [
       PENDING_COLUMNS[0],
-      { title: '物料类别', dataIndex: 'category', key: 'category', width: 100, render: (v: string | null) => v || '—' },
+      PENDING_COLUMNS[1],
+      { title: '物料类别', dataIndex: 'category', key: 'category', width: 96, render: (v: string | null) => v || '—' },
       ...PENDING_COLUMNS.slice(2),
     ] as TableColumnsType<WarehouseInspectionPendingItem>
   }, [scope])
@@ -212,6 +259,19 @@ export function WarehouseInspectionProgressPanel({ scope }: { scope: 'raw' | 'pr
   }
 
   const { current, window: win, stages, oldest_pending } = data
+  // 旧后端未返回全量列表时兜底 Top5，保证卡片数字与列表一致
+  const pendingRows = data.pending_items ?? oldest_pending ?? []
+  const ledgerLink =
+    scope === 'raw'
+      ? '/warehouse/materials/inbound-ledger'
+      : '/warehouse/product/inbound-detail'
+  const pendingRowKey = (record: WarehouseInspectionPendingItem) =>
+    record.record_id ?? `${record.name}-${record.batch ?? ''}-${record.inbound_date ?? ''}`
+  const pendingRowProps = (record: WarehouseInspectionPendingItem) => ({
+    style: { cursor: 'pointer' },
+    onClick: () => void openRecordDetail(record),
+  })
+
   return (
     <section className="mt-4 overflow-hidden rounded-xl border border-[var(--color-hairline)] bg-white shadow-sm">
       <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-hairline)] px-4 py-3">
@@ -222,7 +282,7 @@ export function WarehouseInspectionProgressPanel({ scope }: { scope: 'raw' | 'pr
         <span className="text-[14px] font-semibold text-[var(--color-charcoal)]">
           近期检验进度{data.scope_label ? ` · ${data.scope_label}` : ''}
         </span>
-        <Tag color="purple" bordered={false}>
+        <Tag color="purple" variant="filled">
           统计自 {data.start_date}
         </Tag>
         <div className="ml-auto">
@@ -243,6 +303,7 @@ export function WarehouseInspectionProgressPanel({ scope }: { scope: 'raw' | 'pr
           value={String(current.pending_count)}
           hint={`平均已等待 ${formatDuration(current.pending_avg_hours)}`}
           color="#faad14"
+          onClick={openPendingList}
         />
         <MiniStat
           icon={<SafetyCertificateOutlined />}
@@ -292,11 +353,15 @@ export function WarehouseInspectionProgressPanel({ scope }: { scope: 'raw' | 'pr
         <div className="xl:col-span-2">
           <div className="mb-2 text-[13px] font-medium text-[var(--color-charcoal)]">
             最久待验 Top 5
+            <span className="ml-2 text-[11px] font-normal text-[var(--color-muted)]">
+              点击行可查看批次详情
+            </span>
           </div>
           <Table<WarehouseInspectionPendingItem>
             columns={pendingColumns}
             dataSource={oldest_pending ?? []}
-            rowKey={(record) => `${record.name}-${record.batch ?? ''}-${record.inbound_date ?? ''}`}
+            rowKey={pendingRowKey}
+            onRow={pendingRowProps}
             size="small"
             pagination={false}
             locale={{
@@ -308,6 +373,91 @@ export function WarehouseInspectionProgressPanel({ scope }: { scope: 'raw' | 'pr
       <div className="border-t border-[var(--color-hairline)] px-4 py-2 text-[11px] text-[var(--color-muted)]">
         数据生成于 {formatDateTime(data.generated_at)}；检验周期 = 入库日期 → 检测结果/质量状态出结果时刻（同步间隔约 10 分钟）
       </div>
+
+      {/* 待验批次全量列表抽屉（点击「当前待验批次」卡片打开） */}
+      <Drawer
+        title={`当前待验批次（共 ${pendingRows.length} 条）`}
+        open={listOpen}
+        onClose={() => setListOpen(false)}
+        size={720}
+        extra={
+          <Button
+            type="link"
+            href={ledgerLink}
+            target="_blank"
+            rel="noreferrer"
+            icon={<DatabaseOutlined />}
+          >
+            前往台账查看
+          </Button>
+        }
+      >
+        <div className="mb-2 text-[12px] text-[var(--color-muted)]">
+          按已等待时长降序；点击行可查看该批次的完整记录详情与检验进度周期
+        </div>
+        <Table<WarehouseInspectionPendingItem>
+          columns={pendingColumns}
+          dataSource={pendingRows}
+          rowKey={pendingRowKey}
+          onRow={pendingRowProps}
+          size="small"
+          pagination={
+            pendingRows.length > 10
+              ? {
+                  pageSize: 10,
+                  showTotal: (total) => `共 ${total} 条`,
+                }
+              : false
+          }
+          locale={{
+            emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无待验批次" />,
+          }}
+        />
+      </Drawer>
+
+      {/* 待验批次记录详情（飞书全字段 + 检验周期，只读） */}
+      <Modal
+        open={detailOpen}
+        onCancel={() => setDetailOpen(false)}
+        width={820}
+        footer={null}
+        title={
+          <span className="flex items-center gap-2">
+            批次记录详情
+            {detailData ? (
+              <span className="text-[12px] font-normal text-[var(--color-muted)]">
+                {detailData.record_id}
+              </span>
+            ) : null}
+            <RightOutlined className="text-[12px] text-[var(--color-muted)]" />
+            <span className="text-[12px] font-normal text-[var(--color-muted)]">只读</span>
+          </span>
+        }
+      >
+        <Spin spinning={detailLoading}>
+          {detailData ? (
+            <>
+              <Descriptions bordered size="small" column={2} className="wh-detail-desc">
+                {detailData.fields.map((field) => (
+                  <Descriptions.Item
+                    key={field.field_name}
+                    label={
+                      <span className="break-all text-[12px]">{field.field_name}</span>
+                    }
+                  >
+                    <span className="break-all text-[13px]">
+                      {formatDetailDisplayValue(field)}
+                    </span>
+                  </Descriptions.Item>
+                ))}
+              </Descriptions>
+              {renderInspectionCycleBlock(detailData.inspection_cycle)}
+            </>
+          ) : (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="加载中或记录不存在" />
+          )}
+        </Spin>
+      </Modal>
     </section>
   )
 }

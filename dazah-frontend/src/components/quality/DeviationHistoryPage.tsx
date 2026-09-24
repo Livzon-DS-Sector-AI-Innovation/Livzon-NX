@@ -710,6 +710,7 @@ export function DeviationHistoryPage() {
         open={drawer.open}
         onClose={closeDrawer}
         destroyOnHidden
+        forceRender
         extra={
           <Space>
             <Button

@@ -23,6 +23,7 @@ import type {
   ContractApprovalResultVM,
   Candidate,
   Department,
+  EmployeeStats,
 } from '@/types/hr'
 
 export interface JobPostingVM {
@@ -62,6 +63,12 @@ export interface OnboardingListItem {
 export async function fetchMaxSeqNumber(): Promise<{ code: number; data: { max_seq: number; next_seq: number } }> {
   const res = await fetch('/api/v1/hr/employees/max-seq', { cache: 'no-store' })
   if (!res.ok) throw new Error('获取最大序号失败')
+  return res.json()
+}
+
+export async function fetchEmployeeStats(): Promise<{ code: number; message?: string; data: EmployeeStats }> {
+  const res = await fetch('/api/v1/hr/employees/stats', { cache: 'no-store' })
+  if (!res.ok) throw new Error('员工统计数据加载失败')
   return res.json()
 }
 

@@ -25,6 +25,11 @@ from app.modules.hr.public_api import (
     group_count_employees,
     query_employees,
 )
+from app.modules.hr.repository import (
+    active_employee_status_filter,
+    employee_current_contract_end,
+    resolve_current_contract_end,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -227,7 +232,9 @@ HR_QUERY_CONTRACT_EXPIRING_SCHEMA = {
     "type": "function",
     "function": {
         "name": "hr_query_contract_expiring",
-        "description": "查询合同即将到期或已到期的员工。需要指定日期范围。",
+        "description": (
+            "查询合同即将到期或已到期的员工（已续签的不返回）。需要指定日期范围。"
+        ),
         "parameters": {
             "type": "object",
             "properties": {
@@ -256,85 +263,90 @@ async def hr_query_contract_expiring(
     end_date: str,
     department: str | None = None,
 ) -> list[dict[str, Any]]:
-    """查询合同到期人员。会检查员工的全部合同（第1-6次合同到期日）和合同管理表。"""
-    from sqlalchemy import or_
+    """查询合同到期人员：按当前合同（6 期取最晚到期日）判断，已续签不返回。"""
+    from app.modules.hr.models import ContractManagement
 
     start = date.fromisoformat(start_date)
     end = date.fromisoformat(end_date)
 
-    # 员工表：检查全部合同到期日（仅 Date 类型字段，_5/_6 是字符串跳过）
+    # 员工表：当前合同到期日落在窗口内才返回（已续签/无固定期限不返回）
     stmt = select(Employee).where(
         Employee.is_deleted.is_(False),
-        Employee.status == "在职",
-        or_(
-            Employee.contract_end_date.between(start, end),
-            Employee.contract_end_2.between(start, end),
-            Employee.contract_end_3.between(start, end),
-            Employee.contract_end_4.between(start, end),
-        ),
+        active_employee_status_filter(),
     )
     if department:
         stmt = stmt.where(Employee.department == department)
-    stmt = stmt.order_by(Employee.contract_end_date.asc()).limit(MAX_RESULTS)
     result = await session.execute(stmt)
     employees = result.scalars().all()
 
-    # 合同管理表：也查一份
-    from app.modules.hr.models import ContractManagement
-
+    # 合同管理表：也按同样的当前合同口径查一份
     cm_stmt = select(ContractManagement).where(
         ContractManagement.is_deleted.is_(False),
-        ContractManagement.contract_end_1.between(start, end),
     )
     if department:
         cm_stmt = cm_stmt.where(ContractManagement.dept_level1 == department)
-    cm_stmt = cm_stmt.limit(MAX_RESULTS)
     cm_result = await session.execute(cm_stmt)
     contracts = cm_result.scalars().all()
 
+    cm_rounds = (
+        ("contract_start_1", "contract_end_1"),
+        ("contract_start_2", "contract_end_2"),
+        ("contract_start_3", "contract_end_3"),
+        ("contract_start_4", "contract_end_4"),
+        ("contract_start_5", "contract_end_5"),
+        ("contract_start_6", "contract_end_6"),
+    )
+
     # 合并去重（按工号）
-    seen = set()
-    merged = []
+    seen: set[str] = set()
+    merged: list[dict[str, Any]] = []
 
     for e in employees:
         key = e.employee_number
-        if key and key not in seen:
-            seen.add(key)
-            merged.append(
-                {
-                    "姓名": e.name,
-                    "工号": key,
-                    "部门": e.department or "",
-                    "职位": e.position or "",
-                    "合同类型": e.contract_type or "",
-                    "合同到期日": e.contract_end_date.isoformat()
-                    if e.contract_end_date
-                    else "",
-                    "入职日期": e.hire_date.isoformat() if e.hire_date else "",
-                    "数据来源": "员工档案",
-                }
-            )
+        if not key or key in seen:
+            continue
+        current_end = employee_current_contract_end(e)
+        if current_end is None or not start <= current_end <= end:
+            continue
+        seen.add(key)
+        merged.append(
+            {
+                "姓名": e.name,
+                "工号": key,
+                "部门": e.department or "",
+                "职位": e.position or "",
+                "合同类型": e.contract_type or "",
+                "合同到期日": current_end.isoformat(),
+                "入职日期": e.hire_date.isoformat() if e.hire_date else "",
+                "数据来源": "员工档案",
+            }
+        )
 
     for c in contracts:
         key = c.employee_number
-        if key and key not in seen:
-            seen.add(key)
-            merged.append(
-                {
-                    "姓名": c.name,
-                    "工号": key,
-                    "部门": c.dept_level1 or "",
-                    "职位": c.position or "",
-                    "合同类型": "",
-                    "合同到期日": c.contract_end_1.isoformat()
-                    if c.contract_end_1
-                    else "",
-                    "入职日期": "",
-                    "数据来源": "合同管理表",
-                }
-            )
+        if not key or key in seen:
+            continue
+        current_end = resolve_current_contract_end(
+            [getattr(c, end_attr, None) for _, end_attr in cm_rounds],
+            [getattr(c, start_attr, None) for start_attr, _ in cm_rounds],
+        )
+        if current_end is None or not start <= current_end <= end:
+            continue
+        seen.add(key)
+        merged.append(
+            {
+                "姓名": c.name,
+                "工号": key,
+                "部门": c.dept_level1 or "",
+                "职位": c.position or "",
+                "合同类型": "",
+                "合同到期日": current_end.isoformat(),
+                "入职日期": "",
+                "数据来源": "合同管理表",
+            }
+        )
 
-    return merged
+    return merged[:MAX_RESULTS]
 
 
 # ═══════════════════════════════════════════════════════════════════

@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { moduleMenus } from '@/lib/menu-config'
 
 describe('quality migrated menu contract', () => {
+  it('marks direct dashboard pages without marking the inspection card index', () => {
+    const quality = moduleMenus.find((menu) => menu.moduleCode === 'quality')
+    expect(quality?.children.filter((item) => item.dashboard).map((item) => item.key)).toEqual([
+      'deviations', 'capas', 'anomaly-report', 'suppliers', 'change', 'validation',
+    ])
+    expect(quality?.children.find((item) => item.key === 'inspection')?.dashboard).toBeUndefined()
+  })
+
   it('matches the quality landing entry order and keeps existing submenu groups', () => {
     const quality = moduleMenus.find((menu) => menu.moduleCode === 'quality')
     const children = quality?.children ?? []

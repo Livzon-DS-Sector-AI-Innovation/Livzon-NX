@@ -154,9 +154,7 @@ export default function CertificateDashboardPage({
 
   return (
     <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-      <Typography.Title level={3} style={{ marginBottom: 0 }}>
-        证书管理仪表盘
-      </Typography.Title>
+      <h1 className="text-[22px] font-semibold text-[var(--color-charcoal)]">证书管理仪表盘</h1>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <Space>

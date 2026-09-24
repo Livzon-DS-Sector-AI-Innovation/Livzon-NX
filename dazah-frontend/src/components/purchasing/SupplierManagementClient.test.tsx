@@ -7,6 +7,11 @@ import { useAuthStore } from '@/stores/auth'
 
 vi.mock('@/actions/purchasing', () => ({ importSupplierTable: vi.fn() }))
 vi.mock('@/lib/api/purchasing', () => ({ fetchSuppliers: vi.fn() }))
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/purchasing/supplier',
+  useRouter: () => ({ replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+}))
 import { SupplierManagementClient } from './SupplierManagementClient'
 
 afterEach(() => useAuthStore.getState().clearUser())

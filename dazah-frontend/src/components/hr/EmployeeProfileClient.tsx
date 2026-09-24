@@ -16,6 +16,7 @@ import ContractAlertBanner from './ContractAlertBanner'
 interface EmployeeProfileClientProps {
   initialEmployees: Employee[]
   initialTotal: number
+  initialDepartment?: string
   fetchAction?: typeof fetchEmployeesAction
 }
 
@@ -31,6 +32,7 @@ function useDebounce<T>(value: T, delay: number): T {
 export default function EmployeeProfileClient({
   initialEmployees,
   initialTotal,
+  initialDepartment = '',
   fetchAction }: EmployeeProfileClientProps) {
   const { message } = App.useApp()
   const { canOperate: canEditHr, canDelete, canSync } = usePagePermissions(
@@ -46,7 +48,7 @@ export default function EmployeeProfileClient({
   const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [departments, setDepartments] = useState<string[]>([])
-  const [filterDepartment, setFilterDepartment] = useState('')
+  const [filterDepartment, setFilterDepartment] = useState(initialDepartment)
   const [filterSubDepartment, setFilterSubDepartment] = useState('')
   const [filterGender, setFilterGender] = useState('')
   const [filterLevel, setFilterLevel] = useState('')

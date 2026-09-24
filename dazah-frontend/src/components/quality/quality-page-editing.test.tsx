@@ -123,6 +123,14 @@ it('CAPA ledger renders every Feishu column in order and keeps local-only column
   }
 })
 
+it('CAPA ledger page no longer offers a pull-from-Feishu action', async () => {
+  // 台账已本地化：页面文案与操作都不再出现飞书拉取入口
+  await renderPage(<CapaTable capas={[]} total={0} />)
+  for (const text of ['拉取飞书', '从飞书拉取']) {
+    expect(document.body.textContent).not.toContain(text)
+  }
+})
+
 it('OOS report keeps existing reporter if only text was edited', async () => {
   await renderPage(<OosOotReportRecordPage />)
   await button('修改')
@@ -170,12 +178,15 @@ it('CAPA owner switch preserves department head and existing confirmation values
   await renderPage(<CapaPlanTrackPage />)
   const headers = Array.from(container.querySelectorAll('th')).map(el => el.textContent)
   expect(headers).toEqual([...feishuColumnLayouts.capaPlan, '操作'])
+  // 预计完成时间为空时与其他列一样显示占位符
+  const firstRowCells = container.querySelectorAll('tbody tr.ant-table-row')[0].querySelectorAll('td')
+  expect(firstRowCells[2].textContent).toBe('-')
   await button('编辑')
   expect(document.querySelector<HTMLInputElement>('input[aria-label="部门负责人"]')?.readOnly).toBe(true)
   expect(Array.from(document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')).every(input => input.disabled)).toBe(true)
   await choose('owner_name', '新人员')
   await button('确定')
-  expect(mocks.capa).toHaveBeenCalledWith('plan', expect.objectContaining({ owner_name: '新人员', department: 'QC' }))
+  expect(mocks.capa).toHaveBeenCalledWith('plan', expect.objectContaining({ owner_name: '新人员', department: 'QC', capa_code: 'CA-1' }))
   expect(mocks.capa.mock.calls[0][1]).not.toHaveProperty('department_head')
   expect(mocks.capa.mock.calls[0][1]).not.toHaveProperty('owner_confirmed')
   expect(mocks.capa.mock.calls[0][1]).not.toHaveProperty('department_head_confirmed')
@@ -229,20 +240,26 @@ it('CAPA save reports Feishu sync failure instead of reporting full success', as
 })
 
 
-it('CAPA detail shows a warning when the saved update did not sync to Feishu', async () => {
-  mocks.saveDetail.mockResolvedValue({ success: true, feishu_sync_status: 'failed' })
+it('CAPA detail saves locally without any Feishu sync messaging', async () => {
+  mocks.saveDetail.mockResolvedValue({ success: true })
   await renderPage(<CapaDetail />)
   await button('编辑')
   await button('保存')
   expect(mocks.saveDetail).toHaveBeenCalled()
-  expect(document.body.textContent).toContain('CAPA已保存，但飞书同步失败')
+  expect(document.body.textContent).toContain('保存成功')
+  expect(document.body.textContent).not.toContain('飞书同步失败')
 })
 
-it('CAPA plan creation includes department but never writes automation confirmations', async () => {
+it('CAPA plan creation sends handwritten code and department but never writes automation confirmations', async () => {
   mocks.createPlan.mockResolvedValue({ feishu_sync_status: 'failed' })
   await renderPage(<CapaPlanTrackPage />)
   await button('新增计划跟踪')
-  await choose('capa_id', 'CA-1')
+  // 表单字段与表格列一一对应且无必填校验标记
+  for (const label of ['CAPA编号', '计划内容', '预计完成时间', '责任人', '部门', '部门负责人', '进度', '提醒状态']) {
+    expect(document.querySelector('.ant-modal')?.textContent).toContain(label)
+  }
+  expect(document.querySelector('.ant-modal .ant-form-item-required')).toBeNull()
+  await setInput('capa_code', 'CAPA-HAND-001')
   const input = document.querySelector<HTMLTextAreaElement>('#plan_content')!
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(input, '新计划')
@@ -250,7 +267,8 @@ it('CAPA plan creation includes department but never writes automation confirmat
   })
   await choose('department', 'QC')
   await button('确定')
-  expect(mocks.createPlan).toHaveBeenCalledWith(expect.objectContaining({ department: 'QC', plan_content: '新计划' }))
+  expect(mocks.createPlan).toHaveBeenCalledWith(expect.objectContaining({ capa_code: 'CAPA-HAND-001', department: 'QC', plan_content: '新计划' }))
+  expect(mocks.createPlan.mock.calls[0][0]).not.toHaveProperty('capa_id')
   expect(mocks.createPlan.mock.calls[0][0]).not.toHaveProperty('department_head')
   expect(mocks.createPlan.mock.calls[0][0]).not.toHaveProperty('owner_confirmed')
   expect(mocks.createPlan.mock.calls[0][0]).not.toHaveProperty('department_head_confirmed')
@@ -258,6 +276,22 @@ it('CAPA plan creation includes department but never writes automation confirmat
   await vi.waitFor(() => {
     expect(document.body.textContent).toContain('计划已创建，但飞书同步失败')
   })
+})
+
+it('CAPA plan creation submits an empty form without required-field blocking', async () => {
+  mocks.createPlan.mockResolvedValue({})
+  await renderPage(<CapaPlanTrackPage />)
+  await button('新增计划跟踪')
+  await button('确定')
+  expect(mocks.createPlan).toHaveBeenCalledWith(expect.objectContaining({
+    capa_code: null,
+    plan_content: '',
+    due_date: null,
+    owner_name: null,
+    department: null,
+    reminder_status: 'pending',
+  }))
+  expect(document.querySelector('.ant-form-item-explain-error')).toBeNull()
 })
 
 it('CAPA detail shows ledger columns, stays editable and hides platform workflow sections', async () => {

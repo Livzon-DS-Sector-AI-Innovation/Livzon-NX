@@ -576,21 +576,6 @@ async def submit_capa_evaluation(
 
 
 @router.post(
-    "/capas/sync-from-feishu",
-    summary="从飞书同步CAPA台账",
-    response_model=ApiResponseEnvelope[dict[str, Any]],
-)
-async def sync_capas_from_feishu(
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
-) -> Any:
-    _require_user(current_user)
-    await _require_full_capa_page_scope(db, current_user)
-    result = await service.quality_feishu_pages.sync_capas_from_feishu(db)
-    return success_response(data=result)
-
-
-@router.post(
     "/capa-plan-tracks/sync-from-feishu",
     summary="从飞书同步CAPA计划跟踪",
     response_model=ApiResponseEnvelope[dict[str, Any]],

@@ -90,11 +90,29 @@ export async function loginWithPassword(
     }
   }
 
-  redirect(`/auth/callback?token=${encodeURIComponent(token)}&next=%2Fproduction`)
+  const cookieStore = await cookies()
+  cookieStore.set('auth_token', token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 60 * 60 * 24,
+    path: '/',
+  })
+  redirect('/production')
 }
 
 export async function logout() {
   const cookieStore = await cookies()
+  const token = cookieStore.get('auth_token')?.value
+  if (token) {
+    const res = await fetchBackend('/api/v1/identity/auth/session/logout', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok && res.status !== 401) {
+      throw new Error('退出登录暂时失败，请稍后重试')
+    }
+  }
   cookieStore.delete('auth_token')
   revalidatePath('/')
   redirect('/login')

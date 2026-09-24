@@ -166,9 +166,6 @@ async def create_capa(
         raise
     result = await db.execute(select(CAPA).where(CAPA.id == capa.id))
     capa = result.scalar_one()
-    from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
-
-    await feishu_sync_service.auto_sync_capa_after_write(db, capa.id)
     return {"id": str(capa.id), "code": capa.capa_code}
 
 
@@ -227,10 +224,7 @@ async def update_capa(
         await db.rollback()
 
         raise
-    from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
-
-    await feishu_sync_service.auto_sync_capa_after_write(db, capa.id)
-    return {"success": True, "feishu_sync_status": capa.feishu_sync_status}
+    return {"success": True}
 
 
 async def delete_capa(

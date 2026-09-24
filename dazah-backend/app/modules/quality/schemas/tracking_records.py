@@ -130,8 +130,9 @@ class CapaPlanTrackDetail(CapaPlanTrackListItem):
 
 
 class CreateCapaPlanTrackRequest(BaseModel):
-    capa_id: uuid.UUID
-    plan_content: str
+    capa_id: uuid.UUID | None = None
+    capa_code: str | None = None
+    plan_content: str | None = None
     due_date: date | None = None
     owner_name: str | None = None
     department: str | None = None
@@ -143,6 +144,7 @@ class CreateCapaPlanTrackRequest(BaseModel):
 
 
 class UpdateCapaPlanTrackRequest(BaseModel):
+    capa_code: str | None = None
     plan_content: str | None = None
     due_date: date | None = None
     owner_name: str | None = None

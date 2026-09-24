@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.quality.models import (
+    CAPA,
     ChangeActionPlan,
     ChangeControl,
     Deviation,
@@ -20,14 +21,6 @@ from app.modules.quality.schemas import (
 from app.platform.identity.data_scope import DepartmentScope, department_in_clause
 
 logger = logging.getLogger(__name__)
-
-
-async def _fetch_feishu_records(
-    db: AsyncSession, entity_code: str
-) -> list[dict[str, Any]]:
-    from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
-
-    return await feishu_sync_service.feishu_sync.search_records(db, entity_code, None)
 
 
 async def get_deviation_statistics(
@@ -135,71 +128,81 @@ async def get_capa_statistics(
     db: AsyncSession,
     scope: DepartmentScope | None = None,
 ) -> CapaStatistics:
-    from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
+    """CAPA 台账统计。
 
-    records = await _fetch_feishu_records(db, "capa_ledger")
-    field_value = feishu_sync_service._get_mapped_field_value
-    normalize_text = feishu_sync_service._normalize_text
+    CAPA 台账已本地化：以 quality.capas 表为唯一数据源，按台账列口径统计
+    （效果评估、事件部门、启动日期趋势），空值归入「未填」。
+    """
+    # 部门数据隔离（后台可配置可见部门范围），本地 department 列直接过滤
+    scope_clause = department_in_clause(CAPA.department, scope) if scope else None
+    scope_where = [scope_clause] if scope_clause is not None else []
 
-    runtime = await feishu_sync_service.feishu_sync._resolve_runtime(db)
-    entity = (
-        runtime.get_entity_config("capa_ledger", direction="pull")
-        if runtime.is_enabled()
-        else None
+    result = await db.execute(
+        select(CAPA).where(
+            CAPA.is_deleted.is_(False),
+            *scope_where,
+        )
     )
+    records = list(result.scalars().all())
 
     total = len(records)
     closed_count = 0
-    overdue_count = 0
-    status_map: dict[str, int] = {}
-    source_map: dict[str, int] = {}
-    category_map: dict[str, int] = {}
+    result_map: dict[str, int] = {}
     department_map: dict[str, int] = {}
+    monthly_counter: dict[str, int] = {}
 
     for record in records:
-        fields = record.get("fields") or {}
-        status = normalize_text(field_value(entity, fields, "状态")) or "未知"
-        source = normalize_text(field_value(entity, fields, "来源")) or "未知"
-        category = (
-            normalize_text(field_value(entity, fields, "CAPA类型"))
-            or normalize_text(field_value(entity, fields, "类型"))
-            or "未知"
-        )
-        department = (
-            normalize_text(field_value(entity, fields, "责任部门"))
-            or normalize_text(field_value(entity, fields, "部门"))
-            or "未知"
-        )
-
-        # 部门数据隔离：CAPA 按责任部门过滤
-        if scope is not None and not scope.is_all and not scope.allows(department):
-            continue
-
-        status_map[status] = status_map.get(status, 0) + 1
-        source_map[source] = source_map.get(source, 0) + 1
-        category_map[category] = category_map.get(category, 0) + 1
-        department_map[department] = department_map.get(department, 0) + 1
-
-        if status in ("已关闭", "closed", "完成", "已完成"):
+        if record.closure_date is not None:
             closed_count += 1
 
-    status_distribution = [{"status": k, "count": v} for k, v in status_map.items()]
-    source_distribution = [{"source": k, "count": v} for k, v in source_map.items()]
-    category_distribution = [
-        {"category": k, "count": v} for k, v in category_map.items()
-    ]
-    department_distribution = [
-        {"name": k, "count": v} for k, v in department_map.items()
-    ]
+        # CAPA效果评估：台账列原文（有效/无效/进行中），空值记「未填」
+        evaluation = (record.evaluation_result or "").strip() or "未填"
+        result_map[evaluation] = result_map.get(evaluation, 0) + 1
+
+        # 事件部门：台账列原文，空值记「未填」
+        department = (record.department or "").strip() or "未填"
+        department_map[department] = department_map.get(department, 0) + 1
+
+        # 月度趋势：启动日期优先（本地存于 expected_completion_date），回退创建时间
+        started_at = record.expected_completion_date or record.created_at
+        if started_at is not None:
+            month_key = started_at.strftime("%Y-%m")
+            monthly_counter[month_key] = monthly_counter.get(month_key, 0) + 1
+
+    result_order = {"有效": 0, "无效": 1, "进行中": 2, "未填": 3}
+    result_distribution = sorted(
+        ({"name": key, "count": value} for key, value in result_map.items()),
+        key=lambda row: (
+            result_order.get(row["name"], len(result_order)),
+            -row["count"],
+        ),
+    )
+    department_distribution = sorted(
+        ({"name": key, "count": value} for key, value in department_map.items()),
+        key=lambda row: row["count"],
+        reverse=True,
+    )
+
+    now = datetime.now(UTC)
+    monthly_trend: list[dict[str, Any]] = []
+    for i in range(5, -1, -1):
+        year = now.year
+        month = now.month - i
+        while month <= 0:
+            month += 12
+            year -= 1
+        month_key = f"{year:04d}-{month:02d}"
+        monthly_trend.append(
+            {"month": month_key, "count": monthly_counter.get(month_key, 0)}
+        )
 
     return CapaStatistics(
         total=total,
         closed_count=closed_count,
-        overdue_count=overdue_count,
-        status_distribution=status_distribution,
-        source_distribution=source_distribution,
-        category_distribution=category_distribution,
+        in_progress_count=total - closed_count,
+        result_distribution=result_distribution,
         department_distribution=department_distribution,
+        monthly_trend=monthly_trend,
     )
 
 

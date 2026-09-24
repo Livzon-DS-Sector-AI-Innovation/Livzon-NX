@@ -14,7 +14,8 @@ Dazah 是面向原料药工厂的综合管理平台：
 
 - 前端和后端业务模块需要 AI 分析时，统一走“前端业务 API → 后端所属模块
   Service → `app.core.llm.llm_client`”。前端不得直接调用模型供应商，不得接触
-  LLM API Key；业务页面只能调用所属模块的 `/api/v1/...` 接口。
+  LLM API Key；AI 业务能力由所属模块的 `/api/v1/...` 接口承接。身份、权限、审计
+  等跨模块平台能力通过其公开平台 API 使用，不借平台接口绕过业务模块规则。
 - 后端业务代码统一使用 `from app.core.llm import llm_client`，不得直接实例化
   OpenAI 兼容客户端、拼接供应商 `/chat/completions` 请求、读取 `LLM_*`
   环境变量或创建旁路 provider。
@@ -47,7 +48,8 @@ Dazah 是面向原料药工厂的综合管理平台：
 首次修改前完整阅读适用的 `AGENTS.md`；同一任务中内容未变时不重复读取。目标目录有更近的 `AGENTS.md` 时叠加遵守；设计文档和示例仅按本次改动类型读取相关章节：
 
 - 前端：`dazah-frontend/AGENTS.md`、界面改动再读 `dazah-frontend/DESIGN.md`
-- 后端：`dazah-backend/AGENTS.md`
+- 后端：`dazah-backend/AGENTS.md`；判断业务归属时再读
+  `docs/business-module-boundaries.md`
 - Hermes-Lite：`Hermes-Lite/AGENTS.md`
 
 框架、编码和测试细节以下级规范为准。本文件只保留跨项目边界。冲突优先级为：用户当前要求 → 最近的 `AGENTS.md` → 子项目规范 → 本文件。
@@ -68,7 +70,9 @@ Dazah 是面向原料药工厂的综合管理平台：
 - Agent 工具变化时检查后端工具注册、权限、风险与确认策略，以及 Hermes-Lite `dazah_tool` 动态目录契约和受影响测试；仅跨项目契约变化时检查 Hermes 实现及相关文档，不新增业务白名单。
 - 新增或修改环境变量时同步根目录 `.env.example`（生产）和
   `.env.local.example`（开发）；禁止在前后端或 Hermes-Lite 子目录新增环境变量文件。
-- 开发和本地联调使用 `Dockerfile.dev` 的开发镜像与容器。根 `Dockerfile` 的交付镜像仅用于 CI 或用户明确授权的隔离交付验证，不得连接生产环境。
+- 启动本地服务和容器联调使用 `Dockerfile.dev` 的开发镜像与容器；不依赖
+  运行服务的定向静态检查和单元测试可按子项目命令在本机执行。根 `Dockerfile`
+  的交付镜像仅用于 CI 或用户明确授权的隔离交付验证，不得连接生产环境。
 - 启动依赖数据库的服务或集成验证前，确认目标是本次授权的开发库或独立测试库；存在待应用迁移时先迁移并确认成功。数据库测试仅使用独立测试库；纯单测和静态检查不受迁移阻塞。共享、生产库及破坏性迁移仍须明确授权。
 - 开发环节执行数据库测试时，使用根目录 `.env.local` 中的 `TEST_DATABASE_URL`，
   且必须指向专用测试数据库，与日常开发的 `DATABASE_URL` 隔离；未配置专用测试库时

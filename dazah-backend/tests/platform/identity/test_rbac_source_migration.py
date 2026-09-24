@@ -2,6 +2,7 @@
 
 import json
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import jwt
@@ -399,6 +400,10 @@ def _strict_app(monkeypatch):
         "app.platform.identity.permission_middleware.get_settings",
         lambda: strict_settings,
     )
+    monkeypatch.setattr(
+        "app.platform.identity.permission_middleware._check_login_rate_limit",
+        AsyncMock(return_value=True),
+    )
 
     test_engine = create_async_engine(
         get_settings().DATABASE_URL,
@@ -454,6 +459,7 @@ def _make_jwt(
         "sub": user_id,
         "open_id": open_id,
         "name": "测试用户",
+        "session_version": 0,
         "iat": now,
         "exp": now + timedelta(seconds=exp_offset),
     }

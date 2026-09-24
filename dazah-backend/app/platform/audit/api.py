@@ -28,6 +28,7 @@ async def list_general_audit_logs(
     keyword: str | None = None,
     started_at: datetime | None = None,
     ended_at: datetime | None = None,
+    module: str | None = None,
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     result = await GeneralAuditLogService().list_logs(
@@ -38,6 +39,7 @@ async def list_general_audit_logs(
         keyword=keyword,
         started_at=started_at,
         ended_at=ended_at,
+        module=module,
     )
     return success_response(data=result.model_dump(mode="json"))
 

@@ -68,9 +68,14 @@ async def get_current_user(
         if open_id:
             user = await repo.get_by_feishu_open_id(db, open_id)
 
-    if user is None or user.status == "disabled":
+    if (
+        user is None
+        or user.status != "active"
+        or payload.get("session_version") != user.session_version
+    ):
         return None
 
+    request.state.audit_user_id = user.id
     return user
 
 

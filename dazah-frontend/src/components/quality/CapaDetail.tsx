@@ -85,11 +85,7 @@ export function CapaDetail() {
           ? new Date(values.qa_confirm_date).toISOString()
           : undefined,
       })
-      if (result?.feishu_sync_status === 'failed') {
-        message.warning('CAPA已保存，但飞书同步失败，请重试保存')
-      } else {
-        message.success('保存成功')
-      }
+      message.success('保存成功')
       setEditMode(false)
       queryClient.invalidateQueries({ queryKey: ['quality-capa', 'detail', id] })
       queryClient.invalidateQueries({ queryKey: ['quality-capa'] })

@@ -36,21 +36,6 @@ router = APIRouter()
 
 
 @router.post(
-    "/feishu-sync/capas/{capa_id}",
-    summary="同步CAPA到飞书Base",
-    response_model=ApiResponseEnvelope[dict[str, Any]],
-)
-async def sync_capa_record_to_feishu(
-    capa_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
-) -> JSONResponse:
-    _require_user(current_user)
-    result = await service.sync_capa_to_feishu(db, capa_id)
-    return success_response(data=result)
-
-
-@router.post(
     "/feishu-sync/deviation-investigation-push-records/{record_id}",
     summary="同步偏差报告记录到飞书Base",
     response_model=ApiResponseEnvelope[dict[str, Any]],

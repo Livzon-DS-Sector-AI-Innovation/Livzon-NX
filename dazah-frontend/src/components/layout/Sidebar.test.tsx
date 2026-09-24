@@ -24,6 +24,8 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@ant-design/icons', () => ({
   LoadingOutlined: () => createElement('span', { 'data-testid': 'loading-icon' }),
+  MenuFoldOutlined: () => null,
+  MenuUnfoldOutlined: () => null,
   SettingOutlined: () => null,
 }))
 
@@ -97,6 +99,32 @@ afterEach(() => {
   vi.clearAllMocks()
   vi.unstubAllGlobals()
   document.body.replaceChildren()
+  window.localStorage.clear()
+})
+
+describe('Sidebar width control', () => {
+  const modules: ModuleMenu[] = [{
+    key: 'purchasing', moduleCode: 'procurement', label: '采购管理',
+    icon: 'shopping', path: '/purchasing', children: menuItems,
+  }]
+
+  it('collapses to a narrow rail and restores the menu', async () => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    try {
+      await act(async () => root.render(createElement(Sidebar, { user, modules })))
+      await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="收起侧边栏"]')?.click())
+      expect(host.querySelector('aside')?.classList.contains('w-11')).toBe(true)
+      expect(host.querySelector('[data-menu-key="requests"]')).toBeNull()
+      expect(window.localStorage.getItem(`dazah-sidebar-collapsed:${user.id}`)).toBe('true')
+      await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="展开侧边栏"]')?.click())
+      expect(host.querySelector('[data-menu-key="requests"]')).not.toBeNull()
+    } finally {
+      await act(async () => root.unmount())
+    }
+  })
 })
 
 describe('Sidebar role filtering', () => {
@@ -135,8 +163,54 @@ describe('system settings entry', () => {
 })
 
 describe('Sidebar navigation feedback', () => {
+  it.each([
+    { key: 'purchasing', label: '采购管理', path: '/purchasing', detailPath: '/purchasing/request' },
+    { key: 'safety', label: '安全管理', path: '/safety', detailPath: '/safety/scheduled-tasks' },
+  ])('returns from a $label page to its module entry via the title', async ({ key, label, path, detailPath }) => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+    navigation.pathname = detailPath
+    const modules: ModuleMenu[] = [{
+      key, moduleCode: key, label, icon: 'module', path,
+      children: [{ key: 'detail', label: '详情', path: detailPath }],
+    }]
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    try {
+      await act(async () => root.render(createElement(Sidebar, { user, modules })))
+      const heading = host.querySelector('h2')
+      const title = heading?.querySelector<HTMLAnchorElement>('a')
+      expect(heading?.className).toContain('text-[18px]')
+      expect(heading?.className).toContain('font-semibold')
+      expect(title?.textContent).toBe(label)
+      expect(title?.getAttribute('aria-label')).toBe(`返回${label}首页`)
+      expect(title?.getAttribute('title')).toBe(`点击返回${label}首页`)
+      expect(title?.getAttribute('href')).toBe(path)
+      expect(title?.className).toContain('hover:underline')
+      expect(title?.className).toContain('cursor-pointer')
+      expect(title?.tabIndex).toBe(0)
+
+      await act(async () => title?.focus())
+      expect(document.activeElement).toBe(title)
+      expect(navigation.prefetch).toHaveBeenCalledWith(path)
+
+      await act(async () => title?.click())
+      expect(navigation.push).toHaveBeenCalledWith(path)
+      expect(host.querySelector('[role="status"]')?.textContent).toContain('正在打开页面')
+
+      navigation.pathname = path
+      await act(async () => root.render(createElement(Sidebar, { user, modules })))
+      expect(host.querySelector('[role="status"]')).toBeNull()
+      await act(async () => title?.click())
+      expect(navigation.push).toHaveBeenCalledTimes(1)
+    } finally {
+      await act(async () => root.unmount())
+    }
+  })
+
   it('shows a live pending message until the route changes', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+    navigation.searchParams = new URLSearchParams('auth_token=preview')
     const host = document.createElement('div')
     document.body.append(host)
     const root = createRoot(host)
@@ -233,5 +307,42 @@ describe('Sidebar parent navigation contract', () => {
     expect(source).toContain('onParentNavigate')
     expect(source).toContain('event.stopPropagation()')
     expect(source).toContain('onParentNavigate?.(item.path)')
+  })
+})
+
+describe('Sidebar dashboard entries', () => {
+  const modules: ModuleMenu[] = [{
+    key: 'quality', moduleCode: 'quality', label: '质量管理', icon: 'quality', path: '/quality',
+    children: [
+      { key: 'deviations', label: '偏差管理', path: '/quality/deviations', dashboard: true, children: [
+        { key: 'deviation-ledger', label: '偏差台账', path: '/quality/deviations/ledger' },
+      ] },
+      { key: 'inspection', label: '质量检验', path: '/quality/inspection', children: [
+        { key: 'items', label: '物品管理', path: '/quality/inspection/items' },
+      ] },
+    ],
+  }]
+
+  it('keeps dashboard labels plain while preserving direct navigation and group expansion', async () => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+    navigation.pathname = '/quality'
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    try {
+      await act(async () => root.render(createElement(Sidebar, { user, modules })))
+      const dashboard = host.querySelector<HTMLElement>('[aria-label="打开偏差管理仪表盘"]')
+      expect(dashboard?.textContent).toBe('偏差管理')
+      await act(async () => dashboard?.click())
+      expect(navigation.push).toHaveBeenCalledWith('/quality/deviations')
+
+      const inspection = host.querySelector<HTMLButtonElement>('[data-menu-key="inspection"]')
+      expect(inspection?.textContent).not.toContain('仪表盘')
+      await act(async () => inspection?.click())
+      expect(inspection?.getAttribute('aria-expanded')).toBe('true')
+      expect(navigation.push).not.toHaveBeenCalledWith('/quality/inspection')
+    } finally {
+      await act(async () => root.unmount())
+    }
   })
 })

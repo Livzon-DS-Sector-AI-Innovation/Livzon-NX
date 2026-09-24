@@ -3,9 +3,24 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   fetchAgentInteractions,
   fetchLivzonTaskRun,
+  fetchPlatformLivzonTaskRuns,
+  fetchPlatformLivzonTasks,
   streamAgentMessage,
   submitAgentInteraction,
 } from "./agent"
+
+describe('platform automation audit reads', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('requests paged platform definitions and runs', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ data: { items: [], page: 2, page_size: 20, total: 0 } }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await fetchPlatformLivzonTasks(2, 20)
+    await fetchPlatformLivzonTaskRuns(2, 20)
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/agent/automations?scope=platform&page=2&page_size=20', expect.objectContaining({ credentials: 'include', cache: 'no-store' }))
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/agent/automation-runs?scope=platform&page=2&page_size=20', expect.objectContaining({ credentials: 'include', cache: 'no-store' }))
+  })
+})
 
 function v2Event(
   type: string,

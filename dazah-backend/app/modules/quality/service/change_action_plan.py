@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.exceptions import AppException, NotFoundException
+from app.core.exceptions import NotFoundException
 from app.modules.quality import repository
 from app.modules.quality.feishu_notification import (
     send_user_card_with_message_id,
@@ -32,6 +32,7 @@ from app.modules.quality.schemas.change_action_plan import (
     UpdateChangeActionPlanRequest,
 )
 from app.modules.quality.service.quality_notification_settings import (
+    DEFAULT_LEAD_DAYS,
     ChangeActionPlanDueConfig,
     load_change_action_plan_due_config,
 )
@@ -60,13 +61,15 @@ def _parse_date_value(value: Any) -> date | None:
     if isinstance(value, date):
         return value
     if isinstance(value, (int, float)):
-        return datetime.fromtimestamp(float(value) / 1000, tz=UTC).date()
+        return datetime.fromtimestamp(float(value) / 1000, tz=_SHANGHAI_TZ).date()
     if isinstance(value, str):
         raw = value.strip()
         if not raw:
             return None
         if raw.isdigit():
-            return datetime.fromtimestamp(int(raw) / 1000, tz=UTC).date()
+            return datetime.fromtimestamp(
+                int(raw) / 1000, tz=_SHANGHAI_TZ
+            ).date()
         return date.fromisoformat(raw.replace("/", "-"))
     return None
 
@@ -286,12 +289,21 @@ class ChangeActionPlanFeishuSync:
         filter_str = None
         if change_code:
             filter_str = f'CurrentValue.[变更控制号] = "{change_code}"'
-        return await client.search_records(
-            table_id,
-            filter_str=filter_str,
-            page_size=500,
-            user_id_type="union_id",
-        )
+        # 跟随 page_token 翻页取全量，单页上限 500，超过会漏记录
+        items: list[dict[str, Any]] = []
+        page_token: str | None = None
+        while True:
+            page = await client.search_records_page(
+                table_id,
+                filter_str=filter_str,
+                page_size=500,
+                page_token=page_token,
+                user_id_type="union_id",
+            )
+            items.extend(page["items"])
+            if not page["has_more"] or not page.get("page_token"):
+                return items
+            page_token = page["page_token"]
 
     async def upsert_record(
         self,
@@ -574,6 +586,65 @@ def _serialize_plan(plan: ChangeActionPlan) -> dict[str, Any]:
     ):
         data[field_name] = _normalize_feishu_text(data.get(field_name))
     return data
+
+
+DUE_STATUS_MAX_LEAD_DAYS = 60
+
+
+async def get_change_action_plan_due_status(
+    db: AsyncSession,
+    *,
+    lead_days: int | None = None,
+    today: date | None = None,
+) -> dict[str, Any]:
+    """变更计划逾期/临期明细，供仪表盘卡片与弹窗共用。
+
+    逾期：未完成且有效截止日（延期后日期优先）早于今天；
+    临期：未完成且有效截止日在今天起 lead_days 天内（含当天）。
+    lead_days 未传时取到期提醒配置，供卡片与提醒口径保持一致。
+    """
+    today = today or datetime.now(UTC).date()
+    try:
+        config = await load_change_action_plan_due_config(db)
+        default_lead_days = int(config.lead_days or DEFAULT_LEAD_DAYS)
+    except Exception:  # noqa: BLE001 —— 配置表异常时退回默认窗口，不阻塞仪表盘
+        default_lead_days = DEFAULT_LEAD_DAYS
+    window = default_lead_days if lead_days is None else int(lead_days)
+    window = max(1, min(window, DUE_STATUS_MAX_LEAD_DAYS))
+
+    items, total_count = await repository.get_change_action_plans(
+        db,
+        page=1,
+        page_size=9999,
+    )
+    overdue: list[dict[str, Any]] = []
+    due_soon: list[dict[str, Any]] = []
+    confirmed_count = 0
+    for plan in items:
+        if plan.reminder_confirmed_at is not None:
+            confirmed_count += 1
+        if _is_finished(plan):
+            continue
+        effective_deadline = _get_effective_deadline(plan)
+        if effective_deadline is None:
+            continue
+        days_offset = (effective_deadline - today).days
+        entry = _serialize_plan(plan)
+        entry["days_offset"] = days_offset
+        if days_offset < 0:
+            overdue.append(entry)
+        elif days_offset <= window:
+            due_soon.append(entry)
+    overdue.sort(key=lambda entry: entry["days_offset"])
+    due_soon.sort(key=lambda entry: entry["days_offset"])
+    return {
+        "today": today.isoformat(),
+        "lead_days": window,
+        "overdue": overdue,
+        "due_soon": due_soon,
+        "total_count": int(total_count),
+        "confirmed_count": confirmed_count,
+    }
 
 
 async def find_due_change_action_plan_reminders(
@@ -989,7 +1060,7 @@ async def update_change_action_plan_record(
     if person_fields.intersection(update_data) and (
         plan.feishu_record_id or plan.owner_user_id or plan.director_user_id
     ):
-        raise ValueError("负责人/部门总监请在飞书多维表中维护")
+        raise ValueError("总负责人/部门负责人请在飞书多维表中维护")
     target_change_code = update_data.get("change_code", plan.change_code)
     await _assert_change_plan_department(db, target_change_code)
     target_change_id = await _resolve_change_id(
@@ -1065,11 +1136,10 @@ async def sync_change_action_plans_from_feishu(
     for record in records:
         try:
             fields = record.get("fields", {})
+            # 飞书记录缺「变更控制号/项目名称」时不再跳过，按空值入库保证台账全量可见
             change_code = _normalize_feishu_text(fields.get("变更控制号")) or ""
             project_name = _normalize_feishu_text(fields.get("项目名称")) or ""
             related_work = _normalize_feishu_text(fields.get("涉及工作"))
-            if not change_code or not project_name:
-                raise AppException(message="飞书记录缺少变更控制号或项目名称")
 
             owner_name, owner_user_id, owner_avatar_url = _extract_user_info(
                 fields.get("总负责人")
@@ -1111,7 +1181,8 @@ async def sync_change_action_plans_from_feishu(
                     db,
                     record["record_id"],
                 )
-            if not existing:
+            # 变更控制号为空的记录无法可靠匹配既有行，仅按 record_id 命中
+            if not existing and change_code:
                 existing = await repository.get_change_action_plan_by_match_fields(
                     db,
                     change_code=change_code,
@@ -1125,10 +1196,15 @@ async def sync_change_action_plans_from_feishu(
                 if user_id != "system":
                     payload["created_by"] = uuid.UUID(user_id)
                 await repository.create_change_action_plan(db, payload)
+            # 逐条提交：单条失败只回滚自身，不污染 session 影响其余记录
+            await db.commit()
             synced += 1
         except Exception as exc:  # noqa: BLE001
+            try:
+                await db.rollback()
+            except Exception:  # noqa: BLE001 —— 回滚失败不应中断整体同步
+                logger.warning("rollback 失败", exc_info=True)
             logger.warning("Failed to sync change action plan from Feishu: %s", exc)
             failed += 1
 
-    await db.commit()
     return ChangeActionPlanSyncResult(synced=synced, failed=failed)

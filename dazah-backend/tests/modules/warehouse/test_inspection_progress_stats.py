@@ -320,6 +320,12 @@ async def test_raw_overview_statistics(db_session: AsyncSession) -> None:
     assert payload["oldest_pending"][0]["name"] == "乳糖"
     assert payload["oldest_pending"][0]["waited_hours"] == 60.0
 
+    # 全量待验列表（仪表盘卡片下钻）：与待验数一致，且携带定位字段
+    items = payload["pending_items"]
+    assert len(items) == payload["current"]["pending_count"] == 1
+    assert items[0]["record_id"] == "rec-pending"
+    assert items[0]["page_key"] == INBOUND_LEDGER_PAGE_KEY
+
     # 每日序列：09-12 合格 1，09-14 不合格 1
     daily = {item["date"]: item for item in payload["daily"]}
     assert daily["2026-09-12"]["qualified"] == 1
@@ -403,6 +409,13 @@ async def test_product_overview_statistics(db_session: AsyncSession) -> None:
     assert oldest[0]["batch"] == "B-200"
     assert oldest[0]["waited_hours"] == 132.0
     assert oldest[1]["waited_hours"] == 108.0
+
+    # 全量待验列表携带记录定位字段（page_key 为记录所在的成品明细页）
+    items = payload["pending_items"]
+    assert len(items) == payload["current"]["pending_count"] == 2
+    by_record = {item["record_id"]: item for item in items}
+    assert by_record["pd-pending"]["page_key"] == "product-detail-lovastatin"
+    assert by_record["pd-front"]["page_key"] == "product-detail-lovastatin"
 
 
 async def test_record_cycle_raw_completed_and_pending(

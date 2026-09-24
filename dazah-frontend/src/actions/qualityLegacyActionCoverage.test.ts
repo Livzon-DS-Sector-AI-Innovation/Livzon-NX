@@ -47,7 +47,8 @@ describe('quality legacy action compatibility coverage', () => {
   it('executes the complete CAPA action surface through the shared service', async () => {
     const count = await invokeAll(capaActions)
 
-    expect(count).toBeGreaterThanOrEqual(25)
+    // 飞书 CAPA 台账退休后 legacy action 面减少一个（#111 收尾）
+    expect(count).toBeGreaterThanOrEqual(24)
     expect(mocks.actionFetch.mock.calls.length).toBeGreaterThanOrEqual(count)
     expect(mocks.revalidatePath).toHaveBeenCalled()
   })

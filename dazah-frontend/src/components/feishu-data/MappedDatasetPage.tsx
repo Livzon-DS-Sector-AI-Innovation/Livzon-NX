@@ -400,7 +400,7 @@ function MappedDatasetPageContent({
       <Drawer
         open={Boolean(detail)}
         title={detail?.title}
-        width={720}
+        size={720}
         onClose={() => setDetail(null)}
       >
         {detail && activeBinding ? (

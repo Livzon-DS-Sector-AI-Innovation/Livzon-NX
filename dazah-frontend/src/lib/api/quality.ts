@@ -11,7 +11,6 @@ import type {
   CapaListItem,
   DeviationDetail,
   DeviationListItem,
-  FeishuCapaLedgerItem,
   FeishuCapaPlanTrackItem,
   FeishuDeviationReportRecordItem,
   DeviationInvestigationPushRecordItem,
@@ -129,11 +128,6 @@ async function downloadBlob(path: string, params?: QueryParams): Promise<{ blob:
   const filenameMatch = disposition.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)["']?/i)
   const filename = filenameMatch ? decodeURIComponent(filenameMatch[1]) : 'quality-export.xlsx'
   return { blob: await response.blob(), filename }
-}
-
-export async function fetchFeishuCapas(params?: QueryParams): Promise<ListResult<FeishuCapaLedgerItem>> {
-  const result = await apiFetch<ListResult<FeishuCapaLedgerItem> | FeishuCapaLedgerItem[]>(withQuery('/api/v1/quality/feishu/capas', params))
-  return Array.isArray(result) ? { items: result, total: result.length } : result
 }
 
 export async function fetchFeishuCapaPlanTracks(params?: QueryParams): Promise<ListResult<FeishuCapaPlanTrackItem>> {

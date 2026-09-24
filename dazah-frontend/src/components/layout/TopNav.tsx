@@ -21,6 +21,32 @@ interface SearchPage {
   path: string
 }
 
+interface FrequentPage {
+  path: string
+  count: number
+}
+
+const MAX_FREQUENT_PAGES = 5
+const MAX_TRACKED_PAGES = 50
+
+function readFrequentPages(userId: string): FrequentPage[] | null {
+  try {
+    const saved: unknown = JSON.parse(window.localStorage.getItem(`dazah-frequent-page-searches:${userId}`) || "[]")
+    if (!Array.isArray(saved)) return []
+    const entries: unknown[] = saved
+    return entries.flatMap((entry) => {
+      if (!entry || typeof entry !== "object" || !("path" in entry) || !("count" in entry)) return []
+      const { path, count } = entry
+      return typeof path === "string" && path.startsWith("/") &&
+        typeof count === "number" && Number.isSafeInteger(count) && count > 0
+        ? [{ path, count }]
+        : []
+    }).slice(0, MAX_TRACKED_PAGES)
+  } catch {
+    return null
+  }
+}
+
 function collectSearchPages(items: SubMenuItem[], ancestors: string[], isAdmin: boolean, queryablePages: Set<string>): SearchPage[] {
   return items.flatMap((item) => {
     if (item.disabled || (item.adminOnly && !isAdmin)) return []
@@ -39,7 +65,6 @@ export function TopNav({ user, modules }: TopNavProps) {
   const searchParams = useSearchParams()
   const activeModule = pathname.split("/")[1] || "production"
   const displayName = user.name || user.username || "用户"
-  const authToken = searchParams.get("auth_token")
   const currentHref = `${pathname}?${searchParams.toString()}`
   const [pendingNavigation, setPendingNavigation] = useState<{
     fromHref: string
@@ -47,6 +72,7 @@ export function TopNav({ user, modules }: TopNavProps) {
   } | null>(null)
   const [resultsOpen, setResultsOpen] = useState(false)
   const [searchText, setSearchText] = useState("")
+  const [frequentPages, setFrequentPages] = useState<{ userId: string; entries: FrequentPage[] }>({ userId: "", entries: [] })
   const searchContainerRef = useRef<HTMLDivElement>(null)
   const searchPages = useMemo(() => {
     const queryablePages = new Set(user.page_permissions
@@ -60,10 +86,50 @@ export function TopNav({ user, modules }: TopNavProps) {
   const searchResults = normalizedSearch
     ? searchPages.filter((page) => page.breadcrumb.toLocaleLowerCase().includes(normalizedSearch))
     : []
+  const currentFrequentPages = frequentPages.userId === user.id ? frequentPages.entries : []
+  const availablePages = new Map(searchPages.map((page) => [page.path, page]))
+  const frequentResults = [...currentFrequentPages]
+    .sort((a, b) => b.count - a.count)
+    .flatMap((entry) => availablePages.get(entry.path) || [])
+    .slice(0, MAX_FREQUENT_PAGES)
+  const openSearch = () => {
+    const entries = readFrequentPages(user.id) ?? currentFrequentPages
+    setFrequentPages({ userId: user.id, entries })
+    setResultsOpen(true)
+  }
+  const recordSearch = (page: SearchPage) => {
+    const previous = readFrequentPages(user.id) ?? currentFrequentPages
+    const count = previous.find((entry) => entry.path === page.path)?.count || 0
+    const entries = [{ path: page.path, count: Math.min(count + 1, Number.MAX_SAFE_INTEGER) },
+      ...previous.filter((entry) => entry.path !== page.path)]
+      .sort((a, b) => b.count - a.count)
+      .slice(0, MAX_TRACKED_PAGES)
+    setFrequentPages({ userId: user.id, entries })
+    try {
+      window.localStorage.setItem(`dazah-frequent-page-searches:${user.id}`, JSON.stringify(entries))
+    } catch {
+      // Browsers may disable storage; keep the suggestions for this session.
+    }
+  }
   const closeSearch = useCallback(() => {
     setResultsOpen(false)
     setSearchText("")
   }, [setResultsOpen, setSearchText])
+  const renderSearchPage = (page: SearchPage) => (
+    <li key={page.key}>
+      <Link
+        href={page.path}
+        onClick={() => {
+          recordSearch(page)
+          closeSearch()
+        }}
+        className="block rounded-[var(--rounded-sm)] px-3 py-2 text-[var(--color-ink)] hover:bg-[var(--color-surface)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]"
+      >
+        <span className="block font-medium">{page.label}</span>
+        <span className="block text-xs text-[var(--color-steel)]">{page.breadcrumb}</span>
+      </Link>
+    </li>
+  )
   useEffect(() => {
     if (!resultsOpen) return
     const onPointerDown = (event: PointerEvent) => {
@@ -92,16 +158,6 @@ export function TopNav({ user, modules }: TopNavProps) {
     return () => window.clearTimeout(timeout)
   }, [pendingNavigation])
 
-  const withAuthToken = (path: string) => {
-    if (!authToken) return path
-    const [targetPath, queryString = ""] = path.split("?")
-    const params = new URLSearchParams(queryString)
-    if (!params.has("auth_token")) {
-      params.set("auth_token", authToken)
-    }
-    const nextQuery = params.toString()
-    return `${targetPath}${nextQuery ? `?${nextQuery}` : ""}`
-  }
 
   return (
     <header className="h-16 bg-[var(--color-canvas)] border-b border-[var(--color-hairline)] flex items-center px-5 shrink-0">
@@ -128,7 +184,7 @@ export function TopNav({ user, modules }: TopNavProps) {
           return (
             <Link
               key={mod.key}
-              href={withAuthToken(mod.path)}
+              href={mod.path}
               className="top-nav-tab"
               aria-current={isActive ? "location" : undefined}
               data-pending={isPending || undefined}
@@ -154,14 +210,19 @@ export function TopNav({ user, modules }: TopNavProps) {
               aria-label="搜索页面名称"
               placeholder="输入页面或模块名称"
               value={searchText}
-              onFocus={() => setResultsOpen(true)}
+              onFocus={openSearch}
+              onClick={openSearch}
               onChange={(event) => {
                 setSearchText(event.target.value)
+                if (frequentPages.userId !== user.id) {
+                  setFrequentPages({ userId: user.id, entries: readFrequentPages(user.id) ?? [] })
+                }
                 setResultsOpen(true)
               }}
               onPressEnter={() => {
                 if (searchResults.length > 0) {
-                  router.push(withAuthToken(searchResults[0].path))
+                  recordSearch(searchResults[0])
+                  router.push(searchResults[0].path)
                   closeSearch()
                 }
               }}
@@ -173,23 +234,19 @@ export function TopNav({ user, modules }: TopNavProps) {
           {resultsOpen && (
             <div className="top-nav-search-results" role="region" aria-label="页面搜索结果" aria-live="polite">
               {!normalizedSearch ? (
-                <p className="py-4 text-center text-[var(--color-steel)]">输入关键词查找可访问的页面</p>
+                frequentResults.length > 0 ? (
+                  <>
+                    <p className="px-3 py-1 text-xs text-[var(--color-steel)]">常搜索页面</p>
+                    <ul className="space-y-1">
+                      {frequentResults.map(renderSearchPage)}
+                    </ul>
+                  </>
+                ) : <p className="py-4 text-center text-[var(--color-steel)]">输入关键词查找可访问的页面</p>
               ) : searchResults.length === 0 ? (
                 <p className="py-4 text-center text-[var(--color-steel)]">没有匹配的页面</p>
               ) : (
                 <ul className="space-y-1">
-                  {searchResults.map((page) => (
-                    <li key={page.key}>
-                      <Link
-                        href={withAuthToken(page.path)}
-                        onClick={closeSearch}
-                        className="block rounded-[var(--rounded-sm)] px-3 py-2 text-[var(--color-ink)] hover:bg-[var(--color-surface)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]"
-                      >
-                        <span className="block font-medium">{page.label}</span>
-                        <span className="block text-xs text-[var(--color-steel)]">{page.breadcrumb}</span>
-                      </Link>
-                    </li>
-                  ))}
+                  {searchResults.map(renderSearchPage)}
                 </ul>
               )}
             </div>

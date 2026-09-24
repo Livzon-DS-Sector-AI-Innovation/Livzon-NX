@@ -12,6 +12,7 @@ from sqlalchemy import (
     Text,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -25,6 +26,12 @@ class AuditLog(Base):
         Index("idx_audit_logs_user_id", "user_id"),
         Index("idx_audit_logs_resource", "resource_type", "resource_id"),
         Index("idx_audit_logs_created_at", "created_at"),
+        Index(
+            "idx_audit_logs_operations_module_time",
+            "resource_type",
+            "created_at",
+            postgresql_where=text("action = 'platform_api_request'"),
+        ),
         {"schema": "audit"},
     )
 

@@ -18,6 +18,7 @@ import {
   HistoryOutlined
 } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
+import { useListUrlState } from '@/lib/useListUrlState'
 import type { ScheduledTask } from '@/types/safety'
 import {
   deleteScheduledTask,
@@ -35,10 +36,10 @@ interface ScheduledTaskListProps {
 export default function ScheduledTaskList({ initialData, initialTotal }: ScheduledTaskListProps) {
   const { message } = App.useApp()
   const router = useRouter()
+  const { page, pageSize, setListQuery, detailHref } = useListUrlState(20)
   const [tasks, setTasks] = useState<ScheduledTask[]>(initialData)
   const [total, setTotal] = useState(initialTotal)
   const [loading, setLoading] = useState(false)
-  const [page, setPage] = useState(1)
   const [logDrawer, setLogDrawer] = useState<{ open: boolean; taskId: string; taskName: string }>({
     open: false,
     taskId: '',
@@ -48,7 +49,7 @@ export default function ScheduledTaskList({ initialData, initialTotal }: Schedul
   const fetchTasks = async (p: number) => {
     setLoading(true)
     try {
-      const res = await getScheduledTasks({ page: p, page_size: 20 })
+      const res = await getScheduledTasks({ page: p, page_size: pageSize })
       if (res.code === 200 && res.data) {
         setTasks(res.data)
         setTotal(res.meta?.total || 0)
@@ -179,7 +180,7 @@ export default function ScheduledTaskList({ initialData, initialTotal }: Schedul
           <Button
             size="small"
             icon={<EditOutlined />}
-            onClick={() => router.push(`/safety/scheduled-tasks/${r.id}`)}
+            onClick={() => router.push(detailHref(`/safety/scheduled-tasks/${r.id}`))}
             title="编辑"
           />
           <Popconfirm
@@ -201,7 +202,7 @@ export default function ScheduledTaskList({ initialData, initialTotal }: Schedul
         <Typography.Text type="secondary">
           共 {total} 个定时任务，调度器每30秒检查一次到期任务
         </Typography.Text>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => router.push('/safety/scheduled-tasks/new')}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => router.push(detailHref('/safety/scheduled-tasks/new'))}>
           新建任务
         </Button>
       </div>
@@ -213,12 +214,10 @@ export default function ScheduledTaskList({ initialData, initialTotal }: Schedul
         size="middle"
         pagination={{
           current: page,
-          pageSize: 20,
+          pageSize,
           total,
-          onChange: (p) => {
-            setPage(p)
-            fetchTasks(p)
-          },
+          showSizeChanger: true,
+          onChange: (p, ps) => setListQuery({ page: ps !== pageSize ? 1 : p, page_size: ps }),
           showTotal: (t) => `共 ${t} 个任务`
         }}
       />

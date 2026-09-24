@@ -5,13 +5,14 @@ import { alignFeishuColumns, feishuColumnLayouts } from './feishuColumnLayout'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { App, Button, Checkbox, Descriptions, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Typography } from 'antd'
+import { App, Button, Descriptions, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Typography, DatePicker } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { SyncOutlined } from '@ant-design/icons'
+import dayjs, { Dayjs } from 'dayjs'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createCapaPlanTrack as createCapaPlanTrackAction, deleteCapaPlanTrack as deleteCapaPlanTrackAction, updateCapaPlanTrack as updateCapaPlanTrackAction } from '@/actions/quality-capa'
 import { syncCapaPlanTracksFromFeishu } from '@/actions/quality-capa'
-import { fetchCapaPlanTracks, fetchCapas } from '@/lib/api/client/quality'
+import { fetchCapaPlanTracks } from '@/lib/api/client/quality'
 
 import { fetchQualityPersonDirectory } from '@/lib/api/client/quality'
 import { PersonCell } from './PersonCell'
@@ -19,6 +20,16 @@ import { qualityTokens } from './themeTokens'
 import { progressMeta, reminderMeta, PROGRESS_OPTIONS, REMINDER_OPTIONS } from './capaPlanTrackLabels'
 import { ConfirmFlag } from './ConfirmFlag'
 import type { CapaPlanTrackItem, CreateCapaPlanTrackRequest } from '@/types/quality'
+
+type PlanTrackFormValues = {
+  capa_code?: string
+  plan_content?: string
+  due_date?: Dayjs | null
+  owner_name?: string | null
+  department?: string | null
+  progress?: string | null
+  reminder_status?: string
+}
 
 function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback
@@ -34,17 +45,14 @@ export function CapaPlanTrackPage() {
   const [open, setOpen] = useState(false)
   const [editingRecord, setEditingRecord] = useState<CapaPlanTrackItem | null>(null)
   const [detailRecord, setDetailRecord] = useState<CapaPlanTrackItem | null>(null)
-  const [form] = Form.useForm<CreateCapaPlanTrackRequest>()
+  const [form] = Form.useForm<PlanTrackFormValues>()
   const selectedDepartment = Form.useWatch('department', form)
 
   const { data, isLoading: loading, error } = useQuery({
     queryKey: ['quality-capa-plan', 'list', { capa_code: capaCodeFilter }],
     queryFn: async () => {
-      const [tracks, capas] = await Promise.all([
-        fetchCapaPlanTracks({ page: 1, page_size: 50, capa_code: capaCodeFilter || undefined }),
-        fetchCapas({ page: 1, page_size: 50 }),
-      ])
-      return { items: tracks.items, capaOptions: capas.items }
+      const tracks = await fetchCapaPlanTracks({ page: 1, page_size: 50, capa_code: capaCodeFilter || undefined })
+      return { items: tracks.items }
     },
   })
 
@@ -75,7 +83,6 @@ export function CapaPlanTrackPage() {
   }, [error, message])
 
   const items = data?.items ?? []
-  const capaOptions = data?.capaOptions ?? []
   const departmentOptions = Array.from(new Set([
     ...contacts.map(item => item.department), ...items.map(item => item.department),
   ].filter((value): value is string => Boolean(value)))).map(value => ({ label: value, value }))
@@ -143,7 +150,7 @@ export function CapaPlanTrackPage() {
         return <Tag color={color}>{label}</Tag>
       },
     },
-    { title: '预计完成时间', dataIndex: 'due_date', key: 'due_date', width: 130 },
+    { title: '预计完成时间', dataIndex: 'due_date', key: 'due_date', width: 130, render: (value: string | null) => value || '-' },
   ], [renderPersons])
 
   const openCreate = useCallback(() => {
@@ -156,9 +163,9 @@ export function CapaPlanTrackPage() {
   const openEdit = useCallback((record: CapaPlanTrackItem) => {
     setEditingRecord(record)
     form.setFieldsValue({
-      capa_id: record.capa_id,
+      capa_code: record.capa_code,
       plan_content: record.plan_content,
-      due_date: record.due_date,
+      due_date: record.due_date ? dayjs(record.due_date) : null,
       owner_name: record.owner_name,
       department: record.department,
       progress: record.progress,
@@ -170,19 +177,25 @@ export function CapaPlanTrackPage() {
   const handleSubmit = useCallback(async () => {
     try {
       const values = await form.validateFields()
-      delete values.department_head
-      delete values.owner_confirmed
-      delete values.department_head_confirmed
+      const payload: CreateCapaPlanTrackRequest = {
+        capa_code: values.capa_code?.trim() || null,
+        plan_content: values.plan_content ?? '',
+        due_date: values.due_date ? values.due_date.format('YYYY-MM-DD') : null,
+        owner_name: values.owner_name ?? null,
+        department: values.department ?? null,
+        progress: values.progress ?? null,
+        reminder_status: values.reminder_status ?? 'pending',
+      }
       setSaving(true)
       if (editingRecord) {
-        const result = await updateCapaPlanTrackAction(editingRecord.id, values)
+        const result = await updateCapaPlanTrackAction(editingRecord.id, payload)
         if (result && typeof result === 'object' && 'feishu_sync_status' in result && result.feishu_sync_status === 'failed') {
           message.warning('计划已保存，但飞书同步失败，请在详情中查看同步状态后重试')
         } else {
           message.success('CAPA计划跟踪已更新')
         }
       } else {
-        const result = await createCapaPlanTrackAction(values)
+        const result = await createCapaPlanTrackAction(payload)
         if (result && typeof result === 'object' && 'feishu_sync_status' in result && result.feishu_sync_status === 'failed') {
           message.warning('计划已创建，但飞书同步失败，请在详情中查看同步状态后重试')
         } else {
@@ -288,20 +301,15 @@ export function CapaPlanTrackPage() {
         destroyOnHidden
       >
         <Form form={form} layout="vertical">
-          <Form.Item name="capa_id" label="CAPA记录" rules={[{ required: true, message: '请选择CAPA记录' }]}>
-            <Select
-              showSearch
-              optionFilterProp="label"
-              options={capaOptions.map((item) => ({
-                value: item.id,
-                label: `${item.capa_code} / ${item.title ?? '-'}`,
-              }))}
-            />
+          <Form.Item name="capa_code" label="CAPA编号">
+            <Input placeholder="手写CAPA编号，留空自动生成" allowClear />
           </Form.Item>
-          <Form.Item name="plan_content" label="计划内容" rules={[{ required: true, message: '请输入计划内容' }]}>
+          <Form.Item name="plan_content" label="计划内容">
             <Input.TextArea rows={3} />
           </Form.Item>
-          <Form.Item name="due_date" label="预计完成时间"><Input placeholder="2026-07-15" /></Form.Item>
+          <Form.Item name="due_date" label="预计完成时间">
+            <DatePicker style={{ width: '100%' }} allowClear placeholder="选择日期" />
+          </Form.Item>
           <Form.Item name="owner_name" label="责任人">
             <Select
               showSearch
@@ -314,14 +322,12 @@ export function CapaPlanTrackPage() {
 
             />
           </Form.Item>
-          <Form.Item><Checkbox checked={editingRecord?.owner_confirmed ?? false} disabled>责任人已确认（自动同步）</Checkbox></Form.Item>
           <Form.Item name="department" label="部门">
             <Select showSearch allowClear optionFilterProp="label" placeholder="选择部门" options={departmentOptions} />
           </Form.Item>
           <Form.Item label="部门负责人">
             <Input aria-label="部门负责人" readOnly value={(selectedDepartment || '') === (editingRecord?.department || '') ? editingRecord?.department_head || '' : ''} placeholder="由飞书按部门自动生成" />
           </Form.Item>
-          <Form.Item><Checkbox checked={editingRecord?.department_head_confirmed ?? false} disabled>部门负责人已确认（自动同步）</Checkbox></Form.Item>
           <Form.Item name="progress" label="进度">
             <Select allowClear options={PROGRESS_OPTIONS} />
           </Form.Item>

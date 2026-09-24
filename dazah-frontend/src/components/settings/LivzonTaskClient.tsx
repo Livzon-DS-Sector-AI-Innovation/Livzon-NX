@@ -726,7 +726,7 @@ export default function LivzonTaskClient() {
 
       <Drawer
         title="Livzon Task 详情"
-        width={680}
+        size={680}
         open={Boolean(detailItem)}
         loading={detailLoading}
         onClose={() => setDetailItem(null)}
@@ -791,7 +791,7 @@ export default function LivzonTaskClient() {
 
       <Drawer
         title={interactionItem?.title || '填写请求'}
-        width={560}
+        size={560}
         open={Boolean(interactionItem)}
         onClose={() => setInteractionItem(null)}
         extra={(

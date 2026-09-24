@@ -834,7 +834,7 @@ function ToolGovernance() {
       </Space>
       <Table rowKey="operation" columns={columns} dataSource={items} loading={loading} pagination={false} scroll={{ x: 1350 }} />
       <Pagination className="mt-4 text-right" current={page} pageSize={20} total={total} onChange={setPage} />
-      <Drawer title={selected?.operation || '能力详情'} width={680} open={!!selected} onClose={() => setSelected(null)}>
+      <Drawer title={selected?.operation || '能力详情'} size={680} open={!!selected} onClose={() => setSelected(null)}>
         {selected && (
           <Space orientation="vertical" className="w-full">
             <Descriptions column={1} size="small" bordered>

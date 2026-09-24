@@ -1,6 +1,8 @@
 # Hermes-Lite Integration Guide
 
-> Applies to Hermes-Lite, a lightweight trimmed fork of Hermes Agent v0.16.0.
+> Applies to the Hermes-Lite runtime pinned by `../AGENTS.md` and the upstream
+> lock manifest `../upstream-hermes.json`. This guide covers Dazah integration,
+> not a second version source.
 
 ## Architecture
 
@@ -25,22 +27,17 @@ Hermes-Lite Agent Core
 
 ## Installation
 
-```bash
-pip install -r requirements.txt
-```
-
-For Dazah development, use the workspace root `.env.local` with
-`compose.dev.yml`. For standalone development, provide the required values
-through the process environment. For Dazah central-agent deployment, do not
-store real model-provider API keys in Hermes-Lite; use the Dazah LLM proxy
-token described below.
+For Dazah development, use the workspace root `.env.local`, `compose.dev.yml`
+and `Dockerfile.dev`. Confirm the backend development database is migrated and
+`app` is healthy before starting `hermes-lite`. Do not store model-provider
+API keys inside Hermes-Lite.
 
 ## Configuration
 
 - `config.yaml` contains the default provider and runtime settings.
-- The workspace root `.env.local` contains development secrets and
-  deployment-specific API keys; standalone runs may use process environment
-  variables.
+- The workspace root `.env.local` supplies development configuration; variable
+  names and examples are maintained in root `.env.example` and
+  `.env.local.example`.
 - Runtime state such as sessions, memories, and caches should stay local and is
   ignored by git.
 
@@ -64,34 +61,8 @@ Hermes-Lite services.dazah_agent_service:/v2/agent/runs
         +-- Tool execute: Dazah /api/v1/agent/tools/execute
 ```
 
-For a standalone adapter process, provide these environment values:
-
-```bash
-HERMES_AGENT_TOKEN=change-me
-AGENT_LLM_PROXY_TOKEN=change-me
-DAZAH_API_BASE_URL=http://127.0.0.1:8000/api/v1
-DAZAH_AGENT_TOOL_TOKEN=change-me
-DAZAH_LLM_BASE_URL=http://127.0.0.1:8000/api/v1/agent/llm
-DAZAH_LLM_MODEL=dazah-active-text
-```
-
-Run the adapter:
-
-```bash
-uvicorn services.dazah_agent_service:app --host 0.0.0.0 --port 8100
-```
-
-Run the adapter with Docker:
-
-```bash
-# Run these commands from the workspace root.
-docker build --file Dockerfile --target hermes -t hermes-lite:prod .
-# Supply the variables above through the process environment or an external
-# untracked env file; do not create an env file inside Hermes-Lite.
-docker run --rm -p 8100:8100 hermes-lite:prod
-```
-
-For local Dazah development, run the root development Compose stack:
+For local Dazah development, run the root development Compose stack from the
+workspace root after confirming the backend is healthy:
 
 ```bash
 docker compose --env-file .env.local -f compose.dev.yml up -d --build hermes-lite
@@ -117,9 +88,9 @@ Security boundaries:
 - The active text model is resolved by Dazah backend from the platform LLM
   configuration table on every request.
 - The `dazah` toolset only calls the Dazah Agent tool gateway.
-- Identity/warehouse/procurement/quality operation whitelisting, write
-  confirmations, business permissions, audit records, Feishu credentials, and
-  transaction execution stay in the Dazah backend.
+- The backend module registry and Tool Registry define available operations.
+  Write confirmations, business permissions, audit records, Feishu credentials,
+  and transactions stay in the Dazah backend.
 
 ## Toolsets
 
@@ -132,7 +103,7 @@ Security boundaries:
 | `todo` | `todo` | Task planning |
 | `clarify` | `clarify` | Clarifying questions |
 | `skills` | `skill_manage` | Administrator/developer opt-in only |
-| `dazah` | `dazah_tool` | Dazah identity/warehouse/procurement/quality gateway only |
+| `dazah` | `dazah_tool` | Dynamic Dazah backend tool catalog, scoped to the trusted subject |
 
 ## Removed Business Extensions
 

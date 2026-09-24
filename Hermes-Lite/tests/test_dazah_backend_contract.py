@@ -219,6 +219,54 @@ def test_quality_operation_is_forwarded_to_backend_catalog(monkeypatch) -> None:
     assert request_json["params"] == {"page": 1}
 
 
+def test_automation_paged_audit_result_preserves_total(monkeypatch) -> None:
+    recorded: dict[str, object] = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self) -> dict[str, object]:
+            return {
+                "data": {
+                    "ok": True,
+                    "operation": "agent.list_automations",
+                    "data": {"items": [{"id": "automation-501"}], "page": 26, "total": 501},
+                }
+            }
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args) -> None:
+            pass
+
+        async def post(self, url, json, headers):
+            recorded.update(url=url, json=json)
+            return FakeResponse()
+
+    monkeypatch.setenv("DAZAH_AGENT_TOOL_TOKEN", "contract-token")
+    monkeypatch.setattr(dazah_platform.httpx, "AsyncClient", FakeAsyncClient)
+    token = _bind_context()
+    try:
+        payload = asyncio.run(
+            dazah_platform.dazah_tool(
+                "execute", operation="agent.list_automations", params={"page": 26}
+            )
+        )
+    finally:
+        dazah_platform.dazah_request_context.reset(token)
+
+    assert recorded["json"]["params"] == {"page": 26}
+    result = json.loads(payload)["data"]
+    assert result["operation"] == "agent.list_automations"
+    assert result["data"]["total"] == 501
+    assert result["data"]["items"][0]["id"] == "automation-501"
+
+
 def test_timeout_and_unavailable_backend_are_typed_errors(monkeypatch) -> None:
     class FailingAsyncClient:
         failure: type[httpx.HTTPError] = httpx.ReadTimeout

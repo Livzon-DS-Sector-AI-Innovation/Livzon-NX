@@ -1,15 +1,17 @@
 "use client"
 
+import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import { Menu } from "antd"
 import type { MenuProps } from "antd"
 import type { ModuleMenu, SubMenuItem } from "@/lib/menu-config"
-import { LoadingOutlined, SettingOutlined } from "@ant-design/icons"
+import { LoadingOutlined, MenuFoldOutlined, MenuUnfoldOutlined, SettingOutlined } from "@ant-design/icons"
 import type { User } from "@/types/user"
 import { isSystemAdministrator } from "@/lib/administrator-role"
 
 type MenuItem = Required<MenuProps>['items'][number]
+const dashboardModules = new Set(['registration', 'quality', 'hr', 'warehouse'])
 
 function parseMenuPath(path: string): { pathname: string; query: URLSearchParams } {
   const [pathname, queryString = ""] = path.split("?")
@@ -50,24 +52,37 @@ function buildKeyPathMap(items: SubMenuItem[]): Map<string, string> {
 // ── 递归构建 Ant Design 菜单项 ──
 function buildMenuItems(
   items: SubMenuItem[],
+  moduleKey: string,
   prefetchPath?: (path: string) => void,
   onParentNavigate?: (path: string) => void,
   onParentTitleClick?: (key: string) => void,
+  depth = 0,
 ): MenuItem[] {
   return items.map((item) => {
     if (item.children && item.children.length > 0) {
+      const directDashboard = depth === 0 && item.dashboard && Boolean(item.path)
+      const expandOnly = depth === 0 && dashboardModules.has(moduleKey) && !directDashboard
       const label =
-        item.path && !item.disabled ? (
+        item.path && !item.disabled && !expandOnly ? (
           <span
-            className="w-full"
+            role="link"
+            tabIndex={0}
+            aria-label={`打开${item.label}${directDashboard ? '仪表盘' : '页面'}`}
+            className="inline-flex w-full min-w-0 items-center rounded-[var(--rounded-sm)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]"
             onClick={(event) => {
-              // 点击父级标签导航到其仪表盘/落地页（不触发展开切换）
               event.stopPropagation()
               onParentNavigate?.(item.path)
             }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return
+              event.preventDefault()
+              event.stopPropagation()
+              onParentNavigate?.(item.path)
+            }}
+            onFocus={() => prefetchPath?.(item.path)}
             onMouseEnter={() => prefetchPath?.(item.path)}
           >
-            {item.label}
+            <span className="min-w-0 truncate">{item.label}</span>
           </span>
         ) : (
           item.label
@@ -77,7 +92,7 @@ function buildMenuItems(
         label,
         popupClassName: "sidebar-submenu-popup",
         onTitleClick: () => onParentTitleClick?.(item.key),
-        children: buildMenuItems(item.children, prefetchPath, onParentNavigate, onParentTitleClick),
+        children: buildMenuItems(item.children, moduleKey, prefetchPath, onParentNavigate, onParentTitleClick, depth + 1),
       }
     }
     const leaf: MenuItem = {
@@ -184,6 +199,19 @@ export function Sidebar({ user, modules }: SidebarProps) {
     fromHref: string
     targetHref: string
   } | null>(null)
+  const [collapsed, setCollapsed] = useState(false)
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setCollapsed(window.localStorage.getItem(`dazah-sidebar-collapsed:${user.id}`) === "true")
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [user.id])
+  const toggleCollapsed = () => {
+    const nextCollapsed = !collapsed
+    window.localStorage.setItem(`dazah-sidebar-collapsed:${user.id}`, String(nextCollapsed))
+    setCollapsed(nextCollapsed)
+    setOpenKeys([])
+  }
   const pendingHref = pendingNavigation?.fromHref === currentHref
     ? pendingNavigation.targetHref
     : null
@@ -221,43 +249,29 @@ export function Sidebar({ user, modules }: SidebarProps) {
     () => splitMenuItemsByPlacement(moduleChildren),
     [moduleChildren],
   )
-  const prefetchPath = (path: string) => {
-    router.prefetch(withAuthToken(path))
+  const navigateTo = (path: string) => {
+    if (path === currentHref) return
+    setOpenKeys([])
+    setPendingNavigation({ fromHref: currentHref, targetHref: path })
+    router.push(path)
   }
-  const withAuthToken = (path: string) => {
-    const token = searchParams.get("auth_token")
-    if (!token) return path
-    const [pathname, queryString = ""] = path.split("?")
-    const params = new URLSearchParams(queryString)
-    if (!params.has("auth_token")) {
-      params.set("auth_token", token)
-    }
-    const nextQuery = params.toString()
-    return `${pathname}${nextQuery ? `?${nextQuery}` : ""}`
+  const prefetchPath = (path: string) => {
+    router.prefetch(path)
   }
   const navigateParent = (path: string) => {
-    setOpenKeys([])
-    router.push(withAuthToken(path))
+    navigateTo(path)
   }
   const handleParentTitleClick = (key: string) => {
     setOpenKeys((keys) => keys.includes(key) ? keys.filter((openKey) => openKey !== key) : [...keys, key])
   }
-  const menuItems = buildMenuItems(mainItems, prefetchPath, navigateParent, handleParentTitleClick)
-  const bottomMenuItems = buildMenuItems(bottomItems, prefetchPath, navigateParent, handleParentTitleClick)
+  const menuItems = buildMenuItems(mainItems, moduleKey, prefetchPath, navigateParent, handleParentTitleClick)
+  const bottomMenuItems = buildMenuItems(bottomItems, moduleKey, prefetchPath, navigateParent, handleParentTitleClick)
   const keyPathMap = buildKeyPathMap(moduleChildren)
   const selectedKey = currentModule
     ? findSelectedKey(moduleChildren, pathname, query)
     : undefined
   const handleOpenChange = (keys: string[]) => {
     setOpenKeys(keys)
-  }
-
-  const navigateTo = (path: string) => {
-    const href = withAuthToken(path)
-    if (href === currentHref) return
-    setOpenKeys([])
-    setPendingNavigation({ fromHref: currentHref, targetHref: href })
-    router.push(href)
   }
 
   const handleClick: MenuProps['onClick'] = ({ key }) => {
@@ -269,17 +283,35 @@ export function Sidebar({ user, modules }: SidebarProps) {
 
   return (
     <>
-    <aside className="w-56 bg-[var(--color-canvas)] border-r border-[var(--color-hairline)] flex flex-col shrink-0 overflow-y-auto">
-      <div
-        className={`px-4 pt-5 pb-3${moduleKey === "safety" ? " cursor-pointer group" : ""}`}
-        onClick={moduleKey === "safety" ? () => navigateTo(currentModule.path) : undefined}
+    <aside aria-label={`${currentModule.label}侧边栏`} className={`${collapsed ? "w-11" : "w-56"} bg-[var(--color-canvas)] border-r border-[var(--color-hairline)] flex flex-col shrink-0 overflow-y-auto transition-[width] duration-200 motion-reduce:transition-none`}>
+      <button
+        type="button"
+        onClick={toggleCollapsed}
+        aria-label={collapsed ? "展开侧边栏" : "收起侧边栏"}
+        aria-expanded={!collapsed}
+        title={collapsed ? "展开侧边栏" : "收起侧边栏，扩大页面显示区域"}
+        className={`m-2 inline-flex min-h-8 items-center justify-center gap-2 rounded-[var(--rounded-sm)] text-[var(--color-steel)] hover:bg-[var(--color-surface)] hover:text-[var(--color-primary)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)] ${collapsed ? "w-7" : "self-end px-2"}`}
       >
-        <h2
-          className={`text-[18px] font-semibold text-[var(--color-charcoal)]${
-            moduleKey === "safety" ? " group-hover:text-[var(--color-primary)] transition-colors" : ""
-          }`}
-        >
-          {currentModule.label}
+        {collapsed ? <MenuUnfoldOutlined aria-hidden /> : <><MenuFoldOutlined aria-hidden /><span className="text-[12px]">收起</span></>}
+      </button>
+      {!collapsed && <>
+      <div className="px-4 pt-5 pb-3">
+        <h2 className="text-[18px] font-semibold text-[var(--color-charcoal)]">
+          <Link
+            href={currentModule.path}
+            aria-label={`返回${currentModule.label}首页`}
+            title={`点击返回${currentModule.label}首页`}
+            onClick={(event) => {
+              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+              event.preventDefault()
+              navigateTo(currentModule.path)
+            }}
+            onMouseEnter={() => prefetchPath(currentModule.path)}
+            onFocus={() => prefetchPath(currentModule.path)}
+            className="inline-block rounded-[var(--rounded-sm)] text-inherit cursor-pointer transition-colors hover:text-[var(--color-primary)] hover:underline focus-visible:underline focus-visible:outline-2 focus-visible:outline-[var(--color-primary)] underline-offset-4"
+          >
+            {currentModule.label}
+          </Link>
         </h2>
       </div>
 
@@ -326,6 +358,7 @@ export function Sidebar({ user, modules }: SidebarProps) {
           </button>
         )}
       </div>
+      </>}
     </aside>
     {pendingHref && (
       <div

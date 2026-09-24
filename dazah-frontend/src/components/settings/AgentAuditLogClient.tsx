@@ -27,24 +27,10 @@ import {
   type AgentAuditSessionDetail,
   type AgentAuditSessionItem,
 } from '@/lib/api/agentAudit'
+import { auditRiskLabel, auditStatusLabel, auditToolLabel } from './auditLabels'
 
 const { Text, Paragraph } = Typography
 const { RangePicker } = DatePicker
-
-const statusLabels: Record<string, string> = {
-  active: '进行中',
-  archived: '已归档',
-  completed: '已完成',
-  started: '执行中',
-  success: '成功',
-  succeeded: '成功',
-  executed: '已执行',
-  pending: '待确认',
-  cancelled: '已取消',
-  rejected: '已拒绝',
-  denied: '已阻止',
-  failed: '失败',
-}
 
 function statusTag(status: string) {
   const color = ['success', 'succeeded', 'executed', 'completed'].includes(status)
@@ -54,7 +40,7 @@ function statusTag(status: string) {
       : status === 'pending'
         ? 'warning'
         : 'processing'
-  return <Tag color={color}>{statusLabels[status] || status}</Tag>
+  return <Tag color={color}>{auditStatusLabel(status)}</Tag>
 }
 
 function formatTime(value: string) {
@@ -80,6 +66,7 @@ function OperationsTable({ operations }: { operations: AgentAuditOperationItem[]
       expandable={{
         expandedRowRender: (record) => (
           <div className="grid gap-4 lg:grid-cols-2">
+            <Text copyable>原始工具标识：{record.operation}</Text>
             <div>
               <Text strong>请求参数（已脱敏）</Text>
               <div className="mt-2"><JsonBlock value={record.request_payload} /></div>
@@ -97,7 +84,7 @@ function OperationsTable({ operations }: { operations: AgentAuditOperationItem[]
         ),
       }}
       columns={[
-        { title: '操作', dataIndex: 'operation', ellipsis: true },
+        { title: '操作', dataIndex: 'operation', ellipsis: true, render: (value: string) => auditToolLabel(value) },
         {
           title: '结果',
           dataIndex: 'status',
@@ -279,8 +266,8 @@ export default function AgentAuditLogClient() {
           color: item.status === 'executed' ? 'green' : item.status === 'rejected' ? 'red' : 'orange',
           children: (
             <div className="pb-3">
-              <Space wrap><Text strong>{item.summary}</Text>{statusTag(item.status)}<Tag>{item.risk_level}</Tag></Space>
-              <div className="mt-1 text-[12px] text-[var(--color-steel)]">{item.operation} · {formatTime(item.created_at)}</div>
+              <Space wrap><Text strong>{auditToolLabel(item.operation, item.summary)}</Text>{statusTag(item.status)}<Tag>{auditRiskLabel(item.risk_level)}</Tag></Space>
+              <div className="mt-1 text-[12px] text-[var(--color-steel)]">{formatTime(item.created_at)} · 原始工具标识：<Text copyable>{item.operation}</Text></div>
               <div className="mt-2"><JsonBlock value={{ request: item.request_payload, result: item.result_payload }} /></div>
             </div>
           ),
@@ -352,7 +339,7 @@ export default function AgentAuditLogClient() {
       <Drawer
         open={!!detail || detailLoading}
         loading={detailLoading}
-        width="min(960px, 92vw)"
+        size="min(960px, 92vw)"
         title="Livzon 对话审计详情"
         destroyOnHidden
         onClose={() => setDetail(null)}

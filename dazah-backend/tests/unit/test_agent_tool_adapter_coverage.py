@@ -163,6 +163,7 @@ async def test_quality_agent_tool_adapters_forward_validated_inputs(
     excluded = {
         "quality.create_cpv_parameter",
         "quality.create_cpv_product",
+        "quality.get_capa_statistics",
         "quality.get_cpv_product",
         "quality.get_inspection_record",
         "quality.get_oos_oot_record",
@@ -176,7 +177,8 @@ async def test_quality_agent_tool_adapters_forward_validated_inputs(
         assert result is not None
         invoked.append(spec.name)
 
-    assert len(invoked) >= 65
+    # 退休 5 个飞书 CAPA 台账/同步工具后（#109 台账本地化收尾），实际为 63 个。
+    assert len(invoked) >= 60
     assert sum(len(double.calls) for double in doubles) >= len(invoked)
 
 

@@ -23,6 +23,12 @@ it('blocks unauthorized and access-only pages before Server Components can execu
   expect(await accessOnly.text()).toContain('尚未获得查询数据权限')
 })
 
+it('strips a URL token without accepting it as a session', async () => {
+  const response = await proxy(new NextRequest('http://frontend.test/production?auth_token=stolen'))
+  expect(response.headers.get('location')).toBe('http://frontend.test/production')
+  expect(response.headers.get('set-cookie')).toBeNull()
+})
+
 it('lets a query-authorized page render with server-supplied context', async () => {
   me(['access', 'query'])
   const response = await proxy(new NextRequest('http://frontend.test/hr/profile'))

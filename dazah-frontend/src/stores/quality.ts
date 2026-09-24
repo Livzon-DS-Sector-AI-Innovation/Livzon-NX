@@ -9,7 +9,6 @@ import {
   CapaWorkflowStatus,
   CapaSource,
   CapaCategory,
-  FeishuCapaLedgerItem,
 } from '@/types/quality'
 
 // ============ Deviation Store ============
@@ -120,7 +119,6 @@ export const useDeviationStore = create<DeviationStore>()(
 // ============ CAPA Store ============
 interface CapaStore {
   // 数据
-  capas: FeishuCapaLedgerItem[]
   total: number
   loading: boolean
 
@@ -142,7 +140,6 @@ interface CapaStore {
   pageSize: number
 
   // 操作
-  setCapas: (capas: FeishuCapaLedgerItem[]) => void
   setTotal: (total: number) => void
   setLoading: (loading: boolean) => void
   setStatusFilter: (status: CapaWorkflowStatus | '') => void
@@ -165,7 +162,6 @@ interface CapaStore {
 export const useCapaStore = create<CapaStore>()(
   devtools(
     (set) => ({
-      capas: [],
       total: 0,
       loading: false,
 
@@ -185,7 +181,6 @@ export const useCapaStore = create<CapaStore>()(
       page: 1,
       pageSize: 20,
 
-      setCapas: (capas) => set({ capas }),
       setTotal: (total) => set({ total }),
       setLoading: (loading) => set({ loading }),
       setStatusFilter: (statusFilter) => set({ statusFilter, page: 1 }),

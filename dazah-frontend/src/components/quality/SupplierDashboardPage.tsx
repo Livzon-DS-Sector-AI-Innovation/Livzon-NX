@@ -206,10 +206,7 @@ export function SupplierDashboardPage() {
     <div style={{ maxWidth: 1280, margin: '0 auto', paddingBottom: 40 }}>
       {/* ── 标题 ── */}
       <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 13, color: qualityTokens.textTertiary, marginBottom: 4 }}>
-          质量管理 / <span style={{ color: '#475569', fontWeight: 500 }}>供应商管理</span>
-        </div>
-        <h1 style={{ fontSize: 28, fontWeight: 700, color: qualityTokens.textPrimary, margin: 0, letterSpacing: -0.5 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 600, color: qualityTokens.textPrimary, margin: 0 }}>
           供应商资质仪表盘
         </h1>
         <p style={{ color: qualityTokens.textSecondary, marginTop: 6, fontSize: 13 }}>

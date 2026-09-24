@@ -158,6 +158,9 @@ export interface WarehouseInspectionPendingItem {
   product?: string | null
   inbound_date?: string | null
   waited_hours?: number | null
+  /** 下钻定位：飞书镜像行 ID 与所在物料页（记录详情弹窗使用） */
+  record_id?: string | null
+  page_key?: string | null
 }
 
 export interface WarehouseInspectionStageStats {
@@ -175,6 +178,8 @@ export interface WarehouseInspectionOverview {
   breakdown: WarehouseInspectionGroupBreakdown[]
   daily: WarehouseInspectionDailyPoint[]
   oldest_pending: WarehouseInspectionPendingItem[]
+  /** 全量待验批次（按已等待时长降序），卡片下钻明细使用 */
+  pending_items?: WarehouseInspectionPendingItem[]
   stages?: WarehouseInspectionStageStats | null
 }
 

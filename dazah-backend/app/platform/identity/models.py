@@ -30,6 +30,9 @@ class User(BaseModel):
     name: Mapped[str] = mapped_column(String(100))
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
+    session_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     role: Mapped[str] = mapped_column(String(20), default="user", server_default="user")
     status: Mapped[str] = mapped_column(
         String(20), default="active", server_default="active"

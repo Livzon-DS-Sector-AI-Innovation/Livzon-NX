@@ -226,6 +226,8 @@ describe('ValidationAiReviewPanel', () => {
     expect(bodyText()).toContain('基准正文一致性核查')
     expect(bodyText()).toContain('方锥混合机操作规程')
     expect(bodyText()).toContain('2 处不一致')
+    expect(document.body.querySelector('.ant-drawer-content-wrapper')?.getAttribute('style'))
+      .toContain('width: 860px')
   })
 
   it('未选择文件时点击创建给出提示且不创建', async () => {
