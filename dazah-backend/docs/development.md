@@ -1,115 +1,61 @@
 # Development Setup
 
-This project is a modular monolith. Different developers can own different
-business modules, but all database structure changes must be aligned through
-Alembic migrations committed to the repository.
+本项目是模块化单体。日常开发使用工作区根目录 `.env.local`、`compose.dev.yml`
+和 `Dockerfile.dev`；业务归属见 `../../docs/business-module-boundaries.md`。
 
-## Database Alignment Rules
+## 数据库和迁移前提
 
-- Do not use `Base.metadata.create_all()` for development databases.
-- Every ORM model change that affects PostgreSQL must have an Alembic revision.
-- Before creating a migration, pull the latest branch and run migrations first:
+- ORM 结构变化必须有 Alembic revision；不使用 `Base.metadata.create_all()`
+  建开发库，不改已执行的历史 migration。
+- Git 同步、分支和提交按根目录 `AGENTS.md` 的授权边界执行；开发指南不自动执行
+  `pull`、`merge` 或切换分支。
+- 启动开发后端或依赖数据库的验证前，确认 `.env.local` 中 `DATABASE_URL` 指向
+  本次授权的开发库。先检查代码只有一个 Alembic head，再比较数据库 current；
+  版本不在当前迁移链、多个 head 或目标库不明时停止。
+- `TEST_DATABASE_URL` 必须指向独立、可重建的测试库。运行数据库测试时不得回退
+  到 `DATABASE_URL`，也不在开发库上试运行 downgrade。
 
-```powershell
-uv run alembic upgrade head
-```
-
-- Create a migration after editing models:
-
-```powershell
-uv run alembic revision --autogenerate -m "add production batch table"
-```
-
-- Review the generated migration before committing it. Alembic can detect many
-  changes, but it cannot reliably infer data backfills, column renames, or
-  destructive operations.
-- If two developers create migrations from the same parent revision, resolve the
-  branch before merging. Usually this means rebasing one branch and regenerating
-  the migration. Use an Alembic merge revision only when both migration branches
-  are intentionally kept.
-
-## Local PostgreSQL and Redis on Windows
-
-Prepare the root development environment file once:
+在**工作区根目录**启动开发依赖并检查迁移状态：
 
 ```powershell
-# Run from the dazah-backend directory; the environment file belongs in the workspace root.
-Copy-Item ..\.env.local.example ..\.env.local
-```
-
-Start only PostgreSQL and Redis:
-
-```powershell
-# Run from the workspace root.
 docker compose --env-file .env.local -f compose.dev.yml up -d db redis
+docker compose --env-file .env.local -f compose.dev.yml run --rm migrate .venv/bin/alembic heads
+docker compose --env-file .env.local -f compose.dev.yml run --rm migrate .venv/bin/alembic current
 ```
 
-Run migrations:
+确认数据库落后后，使用开发栈的迁移服务；依赖或镜像输入改变时先更新开发镜像：
 
 ```powershell
-uv run alembic upgrade head
+docker compose --env-file .env.local -f compose.dev.yml build migrate app
+docker compose --env-file .env.local -f compose.dev.yml run --rm migrate
+docker compose --env-file .env.local -f compose.dev.yml run --rm migrate .venv/bin/alembic current
 ```
 
-Start the backend locally:
+迁移成功且 `current == head` 后，再启动或重建后端：
 
 ```powershell
-uv run uvicorn app.main:app --reload
+docker compose --env-file .env.local -f compose.dev.yml up -d --force-recreate app
+docker compose --env-file .env.local -f compose.dev.yml ps app
+Invoke-RestMethod http://localhost:8000/health
 ```
 
-The native launcher loads the root `.env.local` and converts the container
-hostnames to local host URLs for the application process:
+`migrate` 默认执行 `alembic upgrade head`。生成 migration 时可在已确认目标的
+开发环境使用 `uv run alembic revision --autogenerate -m "<变更说明>"`，随后逐行
+审查 `upgrade()`、`downgrade()` 和跨模块 drift；未预期 DROP 立即停止。
 
-```env
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/dazah
-REDIS_URL=redis://localhost:6379/0
-```
+## 定向测试与日常排查
 
-Pytest must use a separate database because several tests commit setup and
-cleanup statements. Do not point tests at the development database above.
+在 `dazah-backend/` 运行与改动直接相关的 Ruff、Mypy 和 Pytest；涉及数据库的
+Pytest 必须先确认根目录 `.env.local` 的专用 `TEST_DATABASE_URL` 已配置并迁移。
+命令选择见 `../examples/commands.md`。纯单测和静态检查不需要等待开发库迁移。
 
-```env
-TEST_DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/dazah_test
-```
-
-Create and migrate the test database before running pytest:
+在工作区根目录查看开发服务状态：
 
 ```powershell
-createdb -h localhost -U postgres dazah_test
-$env:TEST_DATABASE_URL="postgresql+asyncpg://postgres:postgres@localhost:5432/dazah_test"
-uv run alembic upgrade head
-uv run pytest
-```
-
-## Optional Full Docker Run
-
-Run this from the workspace root to run the application inside Docker as well:
-
-```powershell
-docker compose --env-file .env.local -f compose.dev.yml up -d --build app
-```
-
-The `migrate` service runs `alembic upgrade head` before `app` starts Uvicorn.
-The application uses the Docker service hostnames from `.env.local`:
-
-```env
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/dazah
-REDIS_URL=redis://redis:6379/0
-```
-
-## Useful Commands
-
-```powershell
-# Run from the workspace root.
 docker compose --env-file .env.local -f compose.dev.yml ps
 docker compose --env-file .env.local -f compose.dev.yml logs -f db
 docker compose --env-file .env.local -f compose.dev.yml logs -f redis
-docker compose --env-file .env.local -f compose.dev.yml down
 ```
 
-To reset only local container data:
-
-```powershell
-docker compose --env-file .env.local -f compose.dev.yml down -v
-docker compose --env-file .env.local -f compose.dev.yml up -d db redis
-uv run alembic upgrade head
-```
+重置持久化卷会删除本地数据，不属于日常开发或迁移流程；仅在明确要求重置并
+核对卷范围后单独执行。不得用重置、`stamp` 或手工 SQL 掩盖迁移失败。

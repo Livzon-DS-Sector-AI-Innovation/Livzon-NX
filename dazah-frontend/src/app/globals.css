@@ -220,6 +220,11 @@ body {
 }
 
 /* Sidebar Menu Styles - Following DESIGN.md */
+.page-breadcrumb-menu .ant-dropdown-menu {
+  max-height: min(60vh, 480px);
+  overflow-y: auto;
+}
+
 .sidebar-menu.ant-menu {
   background: transparent;
 }

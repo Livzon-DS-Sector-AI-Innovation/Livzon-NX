@@ -15,6 +15,7 @@ from .capabilities import (
     LLMCapabilities,
     detect_model_capabilities,
     probe_api_base_url,
+    probe_model_connection,
 )
 from .config import LLMConfigModel
 from .encryption import decrypt_api_key, encrypt_api_key, mask_api_key
@@ -124,7 +125,9 @@ class LLMConfigProbeResponse(BaseModel):
 def _capability_names(config_type: str) -> list[str]:
     if config_type == "vision":
         return ["text", "document", "image"]
-    return ["text", "document"]
+    if config_type == "text":
+        return ["text", "document"]
+    return []
 
 
 def _detection_response(
@@ -231,18 +234,12 @@ async def create_config(
     current_user: AdminUser = None,
 ) -> Any:
     """Create a new LLM configuration (admin only)."""
-    capabilities = await _detect_capabilities(
-        api_base_url=data.api_base_url,
-        api_key=data.api_key,
-        model_name=data.model_name,
-        timeout_seconds=data.timeout_seconds,
-    )
     if data.is_active:
         await _deactivate_other_configs(db)
 
     config = LLMConfigModel(
         config_name=data.config_name,
-        config_type=capabilities.config_type,
+        config_type="unknown",
         api_base_url=data.api_base_url,
         encrypted_api_key=encrypt_api_key(data.api_key),
         model_name=data.model_name,
@@ -305,18 +302,19 @@ async def update_config(
         raise HTTPException(status_code=404, detail="Config not found")
 
     update_data = data.model_dump(exclude_unset=True)
-    candidate_api_key = str(update_data.get("api_key") or "")
-    if not candidate_api_key:
-        candidate_api_key = decrypt_api_key(config.encrypted_api_key)
-    capabilities = await _detect_capabilities(
-        api_base_url=str(update_data.get("api_base_url") or config.api_base_url),
-        api_key=candidate_api_key,
-        model_name=str(update_data.get("model_name") or config.model_name),
-        timeout_seconds=int(
-            update_data.get("timeout_seconds") or config.timeout_seconds
-        ),
-    )
-    update_data["config_type"] = capabilities.config_type
+    if (
+        (
+            "api_base_url" in update_data
+            and update_data["api_base_url"] != config.api_base_url
+        )
+        or ("api_key" in update_data and bool(update_data["api_key"]))
+        or (
+            "model_name" in update_data
+            and update_data["model_name"] != config.model_name
+        )
+    ):
+        # A changed endpoint, credential or model invalidates the last probe result.
+        update_data["config_type"] = "unknown"
 
     if data.is_active is True:
         await _deactivate_other_configs(db, exclude_id=config.id)
@@ -436,7 +434,7 @@ async def test_connection(
     db: AsyncSession = Depends(get_db),
     current_user: AdminUser = None,
 ) -> Any:
-    """Detect the active model's text and vision capabilities."""
+    """Verify the active model responds without running vision detection."""
     result = await db.execute(
         select(LLMConfigModel)
         .where(
@@ -449,4 +447,17 @@ async def test_connection(
     config = result.scalar_one_or_none()
     if config is None:
         raise HTTPException(status_code=404, detail="没有已激活的 LLM 配置")
-    return await _detect_saved_config(db, config)
+    try:
+        await probe_model_connection(
+            api_base_url=config.api_base_url,
+            api_key=decrypt_api_key(config.encrypted_api_key),
+            model_name=config.model_name,
+            timeout_seconds=config.timeout_seconds,
+        )
+    except LLMConfigError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return LLMCapabilityDetectionResponse(
+        config_type=config.config_type,
+        capabilities=_capability_names(config.config_type),
+        detail="模型连接正常",
+    )

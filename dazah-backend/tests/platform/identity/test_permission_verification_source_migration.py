@@ -521,6 +521,7 @@ def _make_jwt(open_id: str, user_id: str) -> str:
         "sub": user_id,
         "open_id": open_id,
         "name": "测试用户",
+        "session_version": 0,
         "iat": now,
         "exp": now + timedelta(seconds=3600),
     }

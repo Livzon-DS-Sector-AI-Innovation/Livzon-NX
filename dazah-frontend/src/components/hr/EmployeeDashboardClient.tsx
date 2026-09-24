@@ -37,7 +37,7 @@ export default function EmployeeDashboardClient({ stats }: Props) {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h1 className="text-[22px] font-semibold text-[var(--color-charcoal)]">员工管理</h1>
+        <h1 className="text-[22px] font-semibold text-[var(--color-charcoal)]">员工管理仪表盘</h1>
         <Button icon={<QrcodeOutlined />} onClick={() => setQrOpen(true)}>生成填写二维码</Button>
       </div>
       <EmployeeQrCode open={qrOpen} onClose={() => setQrOpen(false)} />

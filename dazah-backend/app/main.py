@@ -196,6 +196,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
 
     scheduler_registry.register_task(sensitive_page_permission_expiry_task)
+    from app.platform.audit.retention import user_operation_retention_task
+
+    scheduler_registry.register_task(user_operation_retention_task)
 
     from app.modules.equipment.scheduled import (
         InspectionScheduleGenerator,
@@ -398,13 +401,11 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.browser_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-app.add_middleware(AuditMiddleware)
 
 # Enforce the same RBAC decision used by the permission simulator. Module
 # access defaults to explicit grants; ``MODULE_ACCESS_MODE=all`` is retained
@@ -412,6 +413,7 @@ app.add_middleware(AuditMiddleware)
 from app.platform.identity.permission_middleware import PermissionMiddleware  # noqa: E402
 
 app.add_middleware(PermissionMiddleware)
+app.add_middleware(AuditMiddleware)
 
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 

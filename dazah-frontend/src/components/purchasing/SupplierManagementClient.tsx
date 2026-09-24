@@ -23,10 +23,10 @@ import { importSupplierTable } from '@/actions/purchasing'
 import { fetchSuppliers } from '@/lib/api/purchasing'
 import type { SupplierListResponse, SupplierResponse } from '@/types/purchasing'
 import { useAuthStore } from '@/stores/auth'
+import { useListUrlState } from '@/lib/useListUrlState'
 
 const { Dragger } = Upload
 const { Search } = Input
-const DEFAULT_PAGE_SIZE = 20
 const MAX_SUPPLIER_UPLOAD_SIZE_MB = 50
 const MAX_SUPPLIER_UPLOAD_SIZE_BYTES = MAX_SUPPLIER_UPLOAD_SIZE_MB * 1024 * 1024
 const SUPPLIER_FILE_EXTENSIONS = ['.xlsx', '.xlsm', '.csv', '.tsv']
@@ -74,17 +74,17 @@ export function SupplierManagementClient({
   initialLoadFailed = false,
 }: SupplierManagementClientProps) {
   const { message, modal } = App.useApp()
+  const { page, pageSize, params, setListQuery } = useListUrlState(20)
   const canImport = useAuthStore((state) => state.hasPagePermission('purchasing:supplier', 'operate', 'bulk_import'))
   const [records, setRecords] = useState(initialRecords)
   const [columns, setColumns] = useState(
     initialColumns.length ? initialColumns : FALLBACK_COLUMNS
   )
   const [total, setTotal] = useState(initialTotal)
-  const [page, setPage] = useState(1)
-  const [keyword, setKeyword] = useState('')
-  const [supplierName, setSupplierName] = useState('')
-  const [materialName, setMaterialName] = useState('')
-  const [purchaseCategory, setPurchaseCategory] = useState<string | undefined>()
+  const [keyword, setKeyword] = useState(params.get('keyword') || '')
+  const [supplierName, setSupplierName] = useState(params.get('supplier_name') || '')
+  const [materialName, setMaterialName] = useState(params.get('material_name') || '')
+  const [purchaseCategory, setPurchaseCategory] = useState<string | undefined>(params.get('purchase_category') || undefined)
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
 
@@ -102,20 +102,16 @@ export function SupplierManagementClient({
     ? records[0].created_at.replace('T', ' ').slice(0, 16)
     : '-'
 
-  const loadRecords = async (
-    nextPage = page,
-    options?: { resetFilters?: boolean }
-  ) => {
-    const resetFilters = options?.resetFilters ?? false
+  const loadRecords = async () => {
     setLoading(true)
     try {
       const response = await fetchSuppliers({
-        keyword: resetFilters ? undefined : keyword || undefined,
-        supplier_name: resetFilters ? undefined : supplierName || undefined,
-        material_name: resetFilters ? undefined : materialName || undefined,
-        purchase_category: resetFilters ? undefined : purchaseCategory || undefined,
-        page: nextPage,
-        page_size: DEFAULT_PAGE_SIZE,
+        keyword: params.get('keyword') || undefined,
+        supplier_name: params.get('supplier_name') || undefined,
+        material_name: params.get('material_name') || undefined,
+        purchase_category: params.get('purchase_category') || undefined,
+        page,
+        page_size: pageSize,
       })
       setRecords(response.data ?? [])
       setTotal(Number(response.meta?.total ?? response.data?.length ?? 0))
@@ -123,7 +119,6 @@ export function SupplierManagementClient({
       if (nextColumns.length) {
         setColumns(nextColumns)
       }
-      setPage(nextPage)
     } catch {
       message.error('供应商清单加载失败')
     } finally {
@@ -162,7 +157,7 @@ export function SupplierManagementClient({
               setMaterialName('')
               setPurchaseCategory(undefined)
               setColumns(importedColumns.length ? importedColumns : columns)
-              await loadRecords(1, { resetFilters: true })
+              setListQuery({ page: 1, keyword: null, supplier_name: null, material_name: null, purchase_category: null })
             } else {
               message.error(response.message || '供应商清单导入失败')
             }
@@ -218,7 +213,7 @@ export function SupplierManagementClient({
         <Button
           icon={<ReloadOutlined />}
           loading={loading}
-          onClick={() => void loadRecords(page)}
+          onClick={() => void loadRecords()}
         >
           刷新
         </Button>
@@ -296,21 +291,21 @@ export function SupplierManagementClient({
               placeholder="搜索供应商、物料、厂家或任意原始字段"
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
-              onSearch={() => void loadRecords(1)}
+              onSearch={() => setListQuery({ keyword, supplier_name: supplierName, material_name: materialName, purchase_category: purchaseCategory }, true)}
             />
             <Input
               allowClear
               placeholder="供应商名称"
               value={supplierName}
               onChange={(event) => setSupplierName(event.target.value)}
-              onPressEnter={() => void loadRecords(1)}
+              onPressEnter={() => setListQuery({ keyword, supplier_name: supplierName, material_name: materialName, purchase_category: purchaseCategory }, true)}
             />
             <Input
               allowClear
               placeholder="物料名称"
               value={materialName}
               onChange={(event) => setMaterialName(event.target.value)}
-              onPressEnter={() => void loadRecords(1)}
+              onPressEnter={() => setListQuery({ keyword, supplier_name: supplierName, material_name: materialName, purchase_category: purchaseCategory }, true)}
             />
             <Select
               allowClear
@@ -325,7 +320,7 @@ export function SupplierManagementClient({
               type="primary"
               icon={<SearchOutlined />}
               loading={loading}
-              onClick={() => void loadRecords(1)}
+              onClick={() => setListQuery({ keyword, supplier_name: supplierName, material_name: materialName, purchase_category: purchaseCategory }, true)}
             >
               检索
             </Button>
@@ -339,11 +334,11 @@ export function SupplierManagementClient({
           scroll={{ x: Math.max(columns.length * 150, 1080) }}
           pagination={{
             current: page,
-            pageSize: DEFAULT_PAGE_SIZE,
+            pageSize,
             total,
-            showSizeChanger: false,
+            showSizeChanger: true,
             showTotal: (value) => `共 ${value} 条`,
-            onChange: (nextPage) => void loadRecords(nextPage),
+            onChange: (nextPage, nextPageSize) => setListQuery({ page: nextPageSize !== pageSize ? 1 : nextPage, page_size: nextPageSize }),
           }}
         />
       </section>

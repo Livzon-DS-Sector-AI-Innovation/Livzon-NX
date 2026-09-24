@@ -9,7 +9,7 @@ export function getNewLLMConfigFormValues(): Partial<LLMConfigFormValues> {
     temperature: 0.1,
     use_temperature: false,
     timeout_seconds: 120,
-    is_active: true,
+    is_active: false,
   }
 }
 

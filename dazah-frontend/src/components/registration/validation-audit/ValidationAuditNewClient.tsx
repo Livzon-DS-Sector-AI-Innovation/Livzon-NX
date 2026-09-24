@@ -7,6 +7,7 @@ import {
   FileTextOutlined, AuditOutlined, SyncOutlined,
 } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
+import { detailHrefWithReturnTo, getSafeListReturnHref } from '@/lib/list-url-state'
 import type { AuditMode } from '@/types/validation-audit'
 import {
   createValidationAuditTask,
@@ -43,6 +44,11 @@ const AUDIT_MODE_CARDS: { value: AuditMode; icon: React.ReactNode; title: string
 export default function ValidationAuditNewClient() {
   const { message } = App.useApp()
   const router = useRouter()
+  const returnToList = () => getSafeListReturnHref(
+    new URLSearchParams(window.location.search).get('returnTo'),
+    window.location.pathname,
+    '/registration/validation-audit',
+  ) || '/registration/validation-audit'
   const [form] = Form.useForm()
   const [submitting, setSubmitting] = useState(false)
   const [fileList, setFileList] = useState<any[]>([])
@@ -85,7 +91,7 @@ export default function ValidationAuditNewClient() {
       // 引导到详情页分类型上传，避免报告被错误标记为方案。
       if (values.audit_mode === 'protocol_report') {
         message.info('联合审核模式：请进入任务详情，分别上传验证方案与验证报告')
-        router.push(`/registration/validation-audit/${taskId}`)
+        router.push(detailHrefWithReturnTo(`/registration/validation-audit/${taskId}`, returnToList()))
         return
       }
 
@@ -104,7 +110,7 @@ export default function ValidationAuditNewClient() {
       }
 
       message.success('任务创建成功，正在进入审核...')
-      router.push(`/registration/validation-audit/${taskId}`)
+      router.push(detailHrefWithReturnTo(`/registration/validation-audit/${taskId}`, returnToList()))
     } catch (error) {
       if (error instanceof Error) {
         message.error(error.message)
@@ -121,7 +127,7 @@ export default function ValidationAuditNewClient() {
         <Button
           type="text"
           icon={<ArrowLeftOutlined />}
-          onClick={() => router.push('/registration/validation-audit')}
+          onClick={() => router.push(returnToList())}
           style={{ borderRadius: 8 }}
         />
         <div>
@@ -312,7 +318,7 @@ export default function ValidationAuditNewClient() {
       <div className="flex justify-end gap-3 mt-6 pb-8">
         <Button
           size="large"
-          onClick={() => router.push('/registration/validation-audit')}
+          onClick={() => router.push(returnToList())}
           style={{ borderRadius: 8 }}
         >
           取消

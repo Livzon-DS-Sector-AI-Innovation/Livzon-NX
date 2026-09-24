@@ -11,6 +11,7 @@ import {
   FilePdfOutlined, FileWordOutlined, DownloadOutlined,
 } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
+import { getSafeListReturnHref } from '@/lib/list-url-state'
 import type {
   ValidationAuditTask, ValidationAuditFileListItem, ValidationAuditIssue,
   ValidationAuditReport, IssueType,
@@ -48,6 +49,11 @@ export default function ValidationAuditDetailClient({
 }: Props) {
   const { message } = App.useApp()
   const router = useRouter()
+  const returnToList = () => getSafeListReturnHref(
+    new URLSearchParams(window.location.search).get('returnTo'),
+    window.location.pathname,
+    '/registration/validation-audit',
+  ) || '/registration/validation-audit'
 
   const [task, setTask] = useState<ValidationAuditTask>(serverTask)
   const [files, setFiles] = useState<ValidationAuditFileListItem[]>(initialFiles)
@@ -200,7 +206,7 @@ export default function ValidationAuditDetailClient({
           <Button
             type="text"
             icon={<ArrowLeftOutlined />}
-            onClick={() => router.push('/registration/validation-audit')}
+            onClick={() => router.push(returnToList())}
             style={{ borderRadius: 8 }}
           />
           <div>

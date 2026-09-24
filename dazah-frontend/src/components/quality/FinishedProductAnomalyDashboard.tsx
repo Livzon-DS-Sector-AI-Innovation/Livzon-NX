@@ -145,8 +145,7 @@ export function FinishedProductAnomalyDashboard() {
   return (
     <div>
       <div style={{ marginBottom: 16 }}>
-        <p className="mb-2 text-[13px] text-[var(--color-stone)]">质量管理 / 成品异常报告</p>
-        <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>成品异常报告总览</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>成品异常报告仪表盘</h1>
         <p style={{ marginTop: 8, color: 'var(--color-steel)' }}>
           由 AI 以资深现场 QA 视角，按产品与异常类型归类统计各年度成品异常记录；支持一键分析并实时同步飞书数据。
         </p>

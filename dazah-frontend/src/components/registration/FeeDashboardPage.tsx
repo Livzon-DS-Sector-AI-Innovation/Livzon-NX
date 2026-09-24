@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import {  Col, InputNumber, Row, Spin, Typography } from 'antd'
+import { Col, InputNumber, Row, Spin } from 'antd'
 import type { FeeDashboard, FeeTypeSummary, YearSummary } from '@/types/registration'
 import { fetchFeeDashboard } from '@/lib/api/client/registration'
 import {
@@ -128,7 +128,7 @@ export default function FeeDashboardPage({ dashboard: initialDashboard, defaultY
   return (
     <div style={{ width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Typography.Title level={3} style={{ margin: 0 }}>注册费用仪表盘</Typography.Title>
+        <h1 className="text-[22px] font-semibold text-[var(--color-charcoal)]">注册费用仪表盘</h1>
         <InputNumber value={yearFrom} min={2000} max={2099} style={{ width: 120 }}
           onChange={(v) => setYearFrom(v || 2023)} />
       </div>

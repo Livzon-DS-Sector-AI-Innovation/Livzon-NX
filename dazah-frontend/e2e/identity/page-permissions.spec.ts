@@ -8,7 +8,7 @@ test.describe('页面最小授权', () => {
     await expect(page.getByRole('heading', { name: '暂无页面访问权限' })).toHaveCount(0)
     await expect(page.locator('input[type="file"]')).toBeEnabled()
     for (const moduleName of ['生产管理', '质量管理', '人事管理', '仓储管理', '采购管理']) {
-      await expect(page.getByRole('navigation').getByRole('link', { name: moduleName, exact: true })).toBeVisible()
+      await expect(page.getByRole('navigation', { name: '业务模块' }).getByRole('link', { name: moduleName, exact: true })).toBeVisible()
     }
     await page.goto('/quality/deviations/ledger')
     await expect(page.getByRole('heading', { name: '偏差台账' })).toBeVisible()

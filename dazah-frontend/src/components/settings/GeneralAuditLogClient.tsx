@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   App,
+  Alert,
   Button,
   DatePicker,
   Descriptions,
   Drawer,
   Empty,
   Input,
+  Select,
   Space,
   Table,
   Tag,
@@ -29,6 +31,10 @@ const { Text } = Typography
 const { RangePicker } = DatePicker
 
 const categoryConfig: Record<GeneralAuditCategory, { title: string; description: string }> = {
+  operations: {
+    title: '用户操作审计',
+    description: '按请求追溯平台用户的查询、下载和写入操作。',
+  },
   permissions: {
     title: '权限与授权审计',
     description: '追溯用户模块权限、授权版本及 Livzon 有效访问范围的变更和查询。',
@@ -52,6 +58,7 @@ const categoryConfig: Record<GeneralAuditCategory, { title: string; description:
 }
 
 const actionLabels: Record<string, string> = {
+  platform_api_request: '平台 API 操作',
   replace_user_module_permissions: '修改用户模块权限',
   view_user_module_permissions: '查看用户模块权限',
   view_user_permission_audit: '查看权限审计',
@@ -64,6 +71,15 @@ const actionLabels: Record<string, string> = {
   feishu_card_action_callback: '飞书卡片操作回调',
 }
 
+const moduleLabels: Record<string, string> = {
+  administration: '行政管理', agent: 'Agent', audit: '审计日志', dossier_writer: '申报资料撰写',
+  energy: '能源管理', environment: '环保管理', equipment: '设备管理', hr: '人事管理',
+  identity: '身份与权限', llm: '模型配置', procurement: '采购管理', product: '产品管理',
+  production: '生产管理', quality: '质量管理', registration: '注册管理',
+  regulatory_tracker: '法规追踪', research: '研发管理', safety: '安全管理',
+  storage: '文件存储', system: '系统管理', warehouse: '仓储管理',
+}
+
 function actionLabel(action: string) {
   return actionLabels[action] || action
 }
@@ -73,7 +89,7 @@ function formatTime(value: string) {
 }
 
 function actor(record: GeneralAuditLogItem) {
-  return record.actor_name || record.actor_username || '系统'
+  return record.actor_name || record.actor_username || record.actor_user_id || '系统'
 }
 
 function summaryOf(record: GeneralAuditLogItem) {
@@ -141,12 +157,14 @@ export default function GeneralAuditLogClient({ category }: { category: GeneralA
   const { message } = App.useApp()
   const [items, setItems] = useState<GeneralAuditLogItem[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [total, setTotal] = useState(0)
   const [keywordInput, setKeywordInput] = useState('')
   const [keyword, setKeyword] = useState('')
   const [range, setRange] = useState<[Dayjs, Dayjs] | null>(null)
+  const [module, setModule] = useState<string | undefined>()
   const [detail, setDetail] = useState<GeneralAuditLogDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const config = categoryConfig[category]
@@ -161,15 +179,19 @@ export default function GeneralAuditLogClient({ category }: { category: GeneralA
         keyword: keyword || undefined,
         startedAt: range?.[0].startOf('day').toISOString(),
         endedAt: range?.[1].endOf('day').toISOString(),
+        module: category === 'operations' ? module : undefined,
       })
       setItems(result.items || [])
       setTotal(result.total)
+      setLoadError(null)
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载审计日志失败')
+      const errorText = error instanceof Error ? error.message : '加载审计日志失败'
+      setLoadError(errorText)
+      message.error(errorText)
     } finally {
       setLoading(false)
     }
-  }, [category, keyword, message, page, pageSize, range])
+  }, [category, keyword, message, module, page, pageSize, range])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => void load(), 0)
@@ -218,6 +240,16 @@ export default function GeneralAuditLogClient({ category }: { category: GeneralA
   }
 
   const columns: ColumnsType<GeneralAuditLogItem> = (() => {
+    if (category === 'operations') {
+      return [
+        commonActorColumn,
+        { title: '操作', key: 'operation', ellipsis: true, render: (_: unknown, record) => record.operation || `${record.method || ''} ${record.path || ''}` },
+        { title: '影响模块', dataIndex: 'resource_type', width: 150, render: (value?: string | null) => value ? moduleLabels[value] || value : '-' },
+        { title: '结果', key: 'result', width: 110, render: (_: unknown, record) => resultTag(record) },
+        commonTimeColumn,
+        viewColumn,
+      ]
+    }
     if (category === 'permissions') {
       return [
         commonActorColumn,
@@ -328,11 +360,21 @@ export default function GeneralAuditLogClient({ category }: { category: GeneralA
           <Text className="text-[13px] text-[var(--color-steel)]">{config.description}</Text>
         </div>
         <Space wrap>
+          {category === 'operations' && (
+            <Select
+              allowClear
+              value={module}
+              placeholder="全部模块"
+              style={{ width: 160 }}
+              options={Object.entries(moduleLabels).map(([value, label]) => ({ value, label }))}
+              onChange={(value) => { setPage(1); setModule(value) }}
+            />
+          )}
           <Input
             allowClear
             value={keywordInput}
             prefix={<SearchOutlined />}
-            placeholder="操作、资源、路径或用户"
+            placeholder={category === 'operations' ? '操作、路径或用户' : '操作、资源、路径或用户'}
             style={{ width: 240 }}
             onChange={(event) => setKeywordInput(event.target.value)}
             onPressEnter={() => { setPage(1); setKeyword(keywordInput.trim()) }}
@@ -346,11 +388,14 @@ export default function GeneralAuditLogClient({ category }: { category: GeneralA
         </Space>
       </div>
 
+      {loadError && <Alert type="error" showIcon title="审计日志加载失败" description={loadError} action={<Button onClick={() => void load()}>重试</Button>} />}
+
       <Table
         rowKey="id"
         columns={columns}
         dataSource={items}
         loading={loading}
+        locale={{ emptyText: category === 'operations' ? '暂无操作记录' : '暂无数据' }}
         scroll={{ x: 980 }}
         pagination={{
           current: page,
@@ -377,8 +422,9 @@ export default function GeneralAuditLogClient({ category }: { category: GeneralA
           <div className="space-y-5">
             <Descriptions size="small" column={{ xs: 1, sm: 2 }}>
               <Descriptions.Item label="操作">{actionLabel(detail.action)}</Descriptions.Item>
+              {category === 'operations' && <Descriptions.Item label="具体操作">{detail.operation || '-'}</Descriptions.Item>}
               <Descriptions.Item label="操作人">{actor(detail)}</Descriptions.Item>
-              <Descriptions.Item label="资源类型">{detail.resource_type || '-'}</Descriptions.Item>
+              <Descriptions.Item label={category === 'operations' ? '影响模块' : '资源类型'}>{category === 'operations' ? moduleLabels[detail.resource_type || ''] || detail.resource_type || '-' : detail.resource_type || '-'}</Descriptions.Item>
               <Descriptions.Item label="资源 ID">{detail.resource_id || '-'}</Descriptions.Item>
               <Descriptions.Item label="请求">{detail.method || '-'} {detail.path || ''}</Descriptions.Item>
               <Descriptions.Item label="请求结果">{detail.status_code ?? '-'}</Descriptions.Item>

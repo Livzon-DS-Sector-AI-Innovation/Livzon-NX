@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { moduleMenus } from '@/lib/menu-config'
 
 describe('warehouse migrated menu contract', () => {
+  it('opens each stock group dashboard from its first-level menu', () => {
+    const warehouse = moduleMenus.find((menu) => menu.moduleCode === 'warehouse')
+    expect(warehouse?.children.filter((item) => item.dashboard).map((item) => item.path)).toEqual([
+      '/warehouse/materials/dashboard',
+      '/warehouse/hardware/dashboard',
+      '/warehouse/product/dashboard',
+    ])
+  })
+
   it('exposes materials, hardware, product ledger and AI analysis', () => {
     const warehouse = moduleMenus.find((menu) => menu.moduleCode === 'warehouse')
     const paths = JSON.stringify(warehouse?.children ?? [])

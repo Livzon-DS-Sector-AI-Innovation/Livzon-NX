@@ -7957,6 +7957,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identity/auth/session/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 撤销当前用户会话 */
+        post: operations["revoke_session_api_v1_identity_auth_session_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identity/departments": {
         parameters: {
             query?: never;
@@ -8511,7 +8528,7 @@ export interface paths {
         put?: never;
         /**
          * Test Connection
-         * @description Detect the active model's text and vision capabilities.
+         * @description Verify the active model responds without running vision detection.
          */
         post: operations["test_connection_api_v1_llm_configs_test_post"];
         delete?: never;
@@ -42149,7 +42166,7 @@ export interface components {
              * Category
              * @enum {string}
              */
-            category: "permissions" | "agent_tools" | "automations" | "feishu" | "business";
+            category: "operations" | "permissions" | "agent_tools" | "automations" | "feishu" | "business";
             /**
              * Created At
              * Format: date-time
@@ -42178,6 +42195,8 @@ export interface components {
             old_value?: {
                 [key: string]: unknown;
             } | null;
+            /** Operation */
+            operation?: string | null;
             /** Path */
             path?: string | null;
             /** Request Id */
@@ -42209,7 +42228,7 @@ export interface components {
              * Category
              * @enum {string}
              */
-            category: "permissions" | "agent_tools" | "automations" | "feishu" | "business";
+            category: "operations" | "permissions" | "agent_tools" | "automations" | "feishu" | "business";
             /**
              * Created At
              * Format: date-time
@@ -42222,6 +42241,8 @@ export interface components {
             id: string;
             /** Method */
             method?: string | null;
+            /** Operation */
+            operation?: string | null;
             /** Path */
             path?: string | null;
             /** Resource Id */
@@ -63420,12 +63441,13 @@ export interface operations {
     list_general_audit_logs_api_v1_audit_logs_get: {
         parameters: {
             query: {
-                category: "permissions" | "agent_tools" | "automations" | "feishu" | "business";
+                category: "operations" | "permissions" | "agent_tools" | "automations" | "feishu" | "business";
                 page?: number;
                 page_size?: number;
                 keyword?: string | null;
                 started_at?: string | null;
                 ended_at?: string | null;
+                module?: string | null;
             };
             header?: never;
             path?: never;
@@ -81356,6 +81378,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    revoke_session_api_v1_identity_auth_session_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

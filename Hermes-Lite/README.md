@@ -1,6 +1,7 @@
 # Hermes-Lite
 
-> Hermes-Lite 是基于 Hermes Agent v0.16.0 裁剪和适配后的轻量中枢 Agent。  
+> Hermes-Lite 使用仓库锁定的 Hermes 上游版本；当前版本与提交以 `AGENTS.md`
+> 和 `upstream-hermes.json` 为准。
 > 在 Dazah / Livzon Agent 场景中，它负责理解用户意图、编排工具调用、连接平台 LLM 代理，并将业务结果组织成适合前端聊天窗口展示的回复。
 
 ## 1. Hermes 的作用
@@ -162,7 +163,8 @@ Hermes-Lite 保留 Hermes Agent 的核心运行能力，但对默认功能面做
 - 未经 Dazah 后端网关授权的数据库直连。
 - 任意第三方 URL 工具调用。
 
-这样做的目的是降低业务系统内嵌 Agent 的执行风险。需要新增高权限能力时，应先在 Dazah 后端建立受控 Service、权限校验、审计和确认机制，再通过 `@agent_tool` 注册为受控工具，最后同步 Hermes 工具 schema。
+新增高权限能力时，先在 Dazah 后端建立受控 Service、权限、审计和确认机制，
+再通过 `@agent_tool` 注册并验证动态目录；仅跨服务契约变化时修改 Hermes。
 
 ### 3.3 模型接口兼容
 
@@ -219,342 +221,48 @@ disabled_toolsets=["memory"]
 | `agent` | `clarify` | 在意图不明确时提出澄清问题 |
 | `agent` | `web_search` | 搜索公开网页 |
 | `agent` | `web_extract` | 提取网页内容 |
-| `dazah` | `dazah_tool` | 调用 Dazah 平台能源、仓储、采购、质量管理和通讯录等业务工具 |
-
-## 5. 当前 Dazah 后端注册工具
-
-以下工具由 Dazah 后端通过 `@agent_tool` 注册并由 `ToolRegistry` 统一管理。Hermes-Lite 的 `dazah_tool` 调用这些 operation 时，后端会再次校验工具是否注册、用户是否有权限、参数是否符合 InputSchema，以及该操作是否需要确认或必须人工判断。
-
-Hermes-Lite 只注册一个 `dazah_tool`。模型先调用 `search`，按需调用
-`describe`，再调用 `execute`；运行时目录以后端 Tool Registry 为唯一事实源，
-不维护本地 operation 枚举或白名单。
-
-### 5.1 能源模块
-
-| 操作 | 说明 |
-| --- | --- |
-| `energy.get_feishu_config` | 读取能源飞书配置脱敏摘要（管理员） |
-| `energy.list_feishu_source_roots` | 查询能源飞书数据入口（管理员） |
-| `energy.create_feishu_source_root` | 新增能源飞书数据表入口（管理员，生成待确认项） |
-| `energy.update_feishu_source_root` | 修改能源飞书数据表入口（管理员，生成待确认项） |
-| `energy.delete_feishu_source_root` | 停用能源飞书数据表入口（管理员，生成高风险待确认项） |
-| `energy.delete_source_sheets` | 删除资源目录数据表及本地映射、快照和数据库记录（管理员，生成高风险待确认项） |
-| `energy.test_feishu_connectivity` | 检查能源飞书连通性（管理员） |
-| `energy.list_sync_runs` | 查询能源飞书同步记录 |
-| `energy.list_source_documents` | 查询能源飞书来源文档 |
-| `energy.list_source_sheets` | 查询能源飞书数据表、表头和映射状态 |
-| `energy.list_sheet_snapshots` | 查询能源数据表历史快照 |
-| `energy.get_sheet_mapping` | 读取能源数据表字段映射 |
-| `energy.list_snapshot_rows` | 分页读取能源数据表快照行 |
-| `energy.get_overview` | 查询能源汇总、趋势、分布和最新指标 |
-| `energy.trigger_sync` | 手动同步能源飞书数据（生成待确认项） |
-
-能源飞书配置工具只返回 `app_secret_configured` 和掩码等脱敏字段，不向 Hermes-Lite 或模型暴露 App Secret 明文。配置摘要、入口和连通性检查沿用后端管理员权限；新增、修改、删除入口都由后端创建二次确认，且只管理 Dazah 本地入口配置，不直接修改或删除飞书原表。其余查询继续受能源模块访问范围控制。
-
-### 5.2 仓储模块
-
-| 操作 | 说明 |
-| --- | --- |
-| `identity.get_department_tree` | 查询 Livzon 助手已同步的飞书部门树 |
-| `identity.search_personnel` | 查询 Livzon 助手已同步的飞书人员、手机号、邮箱和部门关系 |
-| `identity.check_feishu_permissions` | 诊断 Livzon 助手飞书通讯录权限（管理员） |
-| `identity.deliver_feishu_message` | 通过 Hermes Delivery API 幂等投递消息，执行前确认收件人和内容摘要 |
-| `warehouse.list_raw_materials` | 查询原辅料库存 |
-| `warehouse.list_packaging_materials` | 查询包材库存 |
-| `warehouse.list_products` | 查询成品库存 |
-| `warehouse.list_feishu_tables` | 查询飞书表配置 |
-| `warehouse.get_feishu_table_records` | 查询指定飞书表记录 |
-| `warehouse.get_feishu_ws_status` | 查询飞书同步状态 |
-| `warehouse.sync_feishu_table` | 同步指定飞书表 |
-| `warehouse.restart_feishu_ws` | 重启飞书 WebSocket 同步 |
-
-### 5.3 采购模块
-
-| 操作 | 说明 |
-| --- | --- |
-| `procurement.list_invoice_records` | 查询发票识别记录 |
-| `procurement.list_suppliers` | 查询供应商清单 |
-| `procurement.list_purchase_requests` | 查询采购申请列表 |
-| `procurement.get_purchase_request` | 查询采购申请详情 |
-| `procurement.create_purchase_request` | 创建采购申请 |
-| `procurement.update_purchase_request` | 更新采购申请 |
-| `procurement.submit_purchase_request` | 提交采购申请 |
-| `procurement.approve_purchase_request` | 审批通过采购申请 |
-| `procurement.reject_purchase_request` | 驳回采购申请 |
-| `procurement.list_purchase_orders` | 查询采购订单 |
-| `procurement.export_purchase_orders` | 导出采购订单 |
-| `procurement.list_contract_templates` | 获取四类合同模板、字段清单、必填项和模板文件信息 |
-| `procurement.get_contract_template` | 获取指定合同模板、字段清单、必填项和模板文件信息 |
-| `procurement.generate_contract` | 生成采购合同 |
-
-读操作可直接返回结果。写操作应由 Dazah 后端生成 pending confirmation，前端展示二次确认，用户确认后再执行。
-
-合同生成建议流程：
-
-1. 用户询问“有哪些合同模板/某类合同需要填什么字段”时，优先调用 `procurement.list_contract_templates` 或 `procurement.get_contract_template`。
-2. 用户要求生成合同时，先根据模板字段收集 `category`、`contract_number`、`contract_date`、`seller.*` 和至少一条 `items` 明细；`items` 每条至少需要 `name`、`quantity`、`unit_price`。
-3. 用户明确说“示例/样例/模板演示”时，可以调用 `procurement.generate_contract` 生成示例合同；Dazah 后端会按合同分类匹配对应 Word 模板。
-
-### 5.4 质量模块
-
-质量模块工具覆盖偏差、CAPA、变更、验证、CPV 和质量飞书只读/同步能力。查询类工具直接执行；创建、更新、提交、同步、回拉和提醒类工具由 Dazah 后端生成 pending confirmation，用户确认后才执行。
-
-质量模块明确不向 Hermes-Lite 暴露删除、批量删除、审批通过、驳回、部门主管确认、QA 批准、执行完成确认、效果评价确认、飞书配置管理、字段映射管理和文件导入上传接口。
-
-| 操作 | 说明 |
-| --- | --- |
-| `quality.list_deviations` | 查询偏差列表 |
-| `quality.get_deviation` | 查询偏差详情 |
-| `quality.list_deviation_report_records` | 查询偏差报告记录 |
-| `quality.get_related_capas` | 查询偏差关联CAPA |
-| `quality.get_deviation_statistics` | 查询偏差统计 |
-| `quality.create_deviation` | 创建偏差 |
-| `quality.update_deviation` | 更新偏差 |
-| `quality.submit_deviation` | 提交偏差启动流程 |
-| `quality.submit_deviation_investigation` | 提交偏差调查报告 |
-| `quality.resubmit_deviation` | 重新提交偏差 |
-| `quality.list_capas` | 查询CAPA列表 |
-| `quality.get_capa` | 查询CAPA详情 |
-| `quality.list_capa_departments` | 查询CAPA部门 |
-| `quality.auto_fill_capa_from_deviation` | 从偏差生成CAPA表单建议 |
-| `quality.get_capa_statistics` | 查询CAPA统计 |
-| `quality.create_capa` | 创建CAPA |
-| `quality.update_capa` | 更新CAPA |
-| `quality.submit_capa` | 提交CAPA |
-| `quality.resubmit_capa` | 重新提交CAPA |
-| `quality.link_capa_deviation` | 关联偏差到CAPA |
-| `quality.complete_capa_part` | 完成CAPA部分内容 |
-| `quality.add_capa_execution_track` | 添加CAPA执行记录 |
-| `quality.list_changes` | 查询变更列表 |
-| `quality.get_change` | 查询变更详情 |
-| `quality.get_next_change_code` | 获取下一个变更控制号 |
-| `quality.get_change_statistics` | 查询变更统计 |
-| `quality.create_change` | 创建变更 |
-| `quality.update_change` | 更新变更 |
-| `quality.list_change_action_plans` | 查询变更计划列表 |
-| `quality.list_change_action_plans_by_change` | 查询指定变更下的变更计划 |
-| `quality.create_change_action_plan` | 创建变更计划 |
-| `quality.update_change_action_plan` | 更新变更计划 |
-| `quality.sync_change_action_plan` | 同步变更计划到飞书 |
-| `quality.sync_change_action_plans_from_feishu` | 从飞书同步变更计划 |
-| `quality.run_change_action_plan_reminders` | 执行变更计划提醒 |
-| `quality.send_change_action_plan_reminder` | 发送单条变更计划提醒 |
-| `quality.list_validations` | 查询验证列表 |
-| `quality.get_validation` | 查询验证详情 |
-| `quality.get_validation_statistics` | 查询验证统计 |
-| `quality.list_validation_executions` | 查询验证执行列表 |
-| `quality.create_validation` | 创建验证记录 |
-| `quality.update_validation` | 更新验证记录 |
-| `quality.update_validation_execution` | 更新验证执行记录 |
-| `quality.list_cpv_products` | 查询CPV产品 |
-| `quality.get_cpv_product` | 查询CPV产品详情 |
-| `quality.create_cpv_product` | 创建CPV产品 |
-| `quality.update_cpv_product` | 更新CPV产品 |
-| `quality.list_cpv_parameters` | 查询CPV参数 |
-| `quality.create_cpv_parameter` | 创建CPV参数 |
-| `quality.update_cpv_parameter` | 更新CPV参数 |
-| `quality.list_cpv_batches` | 查询CPV批次 |
-| `quality.list_cpv_cpp_batches` | 查询CPP宽表批次 |
-| `quality.list_cpv_cqa_batches` | 查询CQA宽表批次 |
-| `quality.get_cpv_statistics` | 查询CPV统计数据 |
-| `quality.get_cpv_trend` | 查询CPV趋势数据 |
-| `quality.list_quality_sync_conflicts` | 查询质量飞书同步冲突 |
-| `quality.pull_quality_records_from_feishu` | 从飞书回拉质量数据 |
-| `quality.sync_deviation_to_feishu` | 同步偏差到飞书 |
-| `quality.sync_deviation_report_record_to_feishu` | 同步偏差报告记录到飞书 |
-| `quality.sync_capa_to_feishu` | 同步CAPA到飞书 |
-| `quality.sync_capa_plan_track_to_feishu` | 同步CAPA计划跟踪到飞书 |
-| `quality.list_feishu_capa_ledger` | 查询飞书CAPA台账 |
-| `quality.get_feishu_capa_ledger` | 查询飞书CAPA台账详情 |
-| `quality.list_feishu_capa_plan_tracks` | 查询飞书CAPA计划跟踪 |
-| `quality.get_feishu_capa_plan_track` | 查询飞书CAPA计划跟踪详情 |
-| `quality.list_feishu_validations` | 查询飞书验证记录 |
-| `quality.get_feishu_validation` | 查询飞书验证记录详情 |
-| `quality.pull_feishu_validations` | 从飞书回拉验证记录 |
-
-### 5.5 Livzon Task 工具
-
-| 操作 | 说明 |
-| --- | --- |
-| `agent.get_current_time` | 获取当前北京时间、UTC 时间和 cron 时区 |
-| `agent.get_my_access_scope` | 查询当前用户的 Livzon 有效模块、可调用工具和可编排工具 |
-| `agent.create_automation` | 直接创建不含时间触发的自动化流程，由后端生成定义并返回待确认项 |
-| `agent.create_scheduled_task` | 创建 Cron、单次或间隔定时任务草案，由后端生成定义并返回结构化预览 |
-| `agent.list_automations` | 查询本人、共享或管理员脱敏平台范围的自动化 |
-| `agent.get_automation` | 查看自动化摘要和触发器 |
-| `agent.list_automation_audit` | 查看自动化版本、修改摘要和变更字段 |
-| `agent.update_automation` | 更新自动化定义，返回待确认项 |
-| `agent.set_automation_enabled` | 启用或暂停自动化，返回待确认项 |
-| `agent.archive_automation` | 归档自动化，返回待确认项 |
-| `agent.simulate_automation` | 预览计划、时区、并发策略与未来执行时间，不执行业务动作 |
-| `agent.list_scheduled_triggers` | 查询已配置的计划触发器 |
-| `agent.list_automation_runs` | 查询自动化运行记录 |
-| `agent.get_automation_run` | 查看运行、步骤和结构化时间线 |
-| `agent.list_push_deliveries` | 查询当前用户的自动化飞书投递状态 |
-| `agent.get_push_delivery` | 查看当前用户的一条飞书投递详情 |
-| `agent.list_domain_events` | 按 correlation ID 追踪跨模块事件链路 |
-| `agent.list_automation_capability_impacts` | 扫描受弃用或不兼容能力影响的自动化 |
-| `agent.complete_manual_task` | 完成人工待办并恢复等待中的自动化运行 |
-
-Livzon Task 规则由 Dazah 后端 `ToolRegistry` 和 `ToolExecutor` 控制：
-
-- 对话层只保留“自动化流程”和“定时任务”两类，不再暴露旧工作流操作。
-- 不含时间语义时调用 `agent.create_automation`；出现日期、星期、时刻、间隔或重复语义时调用 `agent.create_scheduled_task`。
-- 创建定时任务时，`requirement` 必须保留用户完整原始需求；需要通过飞书发送查询数据、汇总、统计、清单、报表或记录时，`actions` 必须先执行对应查询，再执行 `identity.deliver_feishu_message`。
-- 单次计划使用 `once`，分钟/小时/天间隔使用 `interval`，其他周期使用五段 `cron`；创建结果始终是草案，核对后再通过 `agent.confirm_automation` 生成版本授权并启用。
-- 后端会在每次定时运行时把前序查询结果合并到飞书正文；仅发送固定寒暄或“请查收”的数据任务会被拒绝创建。
-- 后端负责生成、编译和校验节点定义，LLM 不拼装底层 `notify`、`condition` 或触发器结构。
-- 审批、驳回、批准、重启等人工责任判断操作不得被加入自动化。
-- 用户模块授权只能由平台管理员在权限管理界面配置。Hermes 只能通过 `agent.get_my_access_scope` 读取并解释当前有效范围，不得代用户修改权限。
-- 创建、修改、启停和归档均由后端确认链路控制。管理员平台查询仅获取脱敏载荷，不能借治理身份读取业务明细。
-
-## 6. 如何与新的业务模块适配
-
-新增一个业务模块时，建议按以下顺序适配。
-
-### 6.1 在 Dazah 后端建立业务 Service
-
-先在 Dazah 后端业务模块中提供明确的 Service 方法，不建议让 Hermes 直接访问数据库，也不建议让工具 handler 直接操作 ORM model。
-
-后端需要负责：
-
-- 登录用户和租户上下文识别。
-- 模块权限校验。
-- 参数校验和字段归一化。
-- 数据库事务。
-- 写操作二次确认。
-- 审计日志。
-- 错误信息结构化。
-
-### 6.2 编写 InputSchema 并注册 @agent_tool
-
-在业务模块内创建或更新 `agent_tools.py`，定义 Pydantic v2 InputSchema，并使用 `@agent_tool` 注册 operation。
-
-推荐目录：
-
-```text
-app/modules/<module>/agent_tools.py
-```
-
-示例：
-
-```python
-from pydantic import BaseModel
-
-from app.modules.agent.tools import ToolContext, agent_tool
-
-
-class QualityInspectionListInput(BaseModel):
-    status: str | None = None
-    keyword: str | None = None
-    page: int = 1
-    page_size: int = 20
-
-
-@agent_tool(
-    name="quality.list_inspections",
-    summary="查询质量检查记录",
-    input_model=QualityInspectionListInput,
-    write=False,
-    risk_level="medium",
-    workflow_allowed=True,
-    method="GET",
-    path="/quality/inspections",
-)
-async def list_quality_inspections(
-    context: ToolContext,
-    data: QualityInspectionListInput,
-) -> dict:
-    ...
-```
-
-工具 handler 应调用本模块 Service 或 public API，不直接操作数据库，不直接调用其他模块内部实现。
-
-### 6.3 命名 operation
-
-建议 operation 命名采用：
-
-```text
-模块名.动作名_资源名
-```
-
-示例：
-
-```text
-warehouse.list_raw_materials
-procurement.create_purchase_request
-quality.list_inspections
-```
-
-### 6.4 触发后端工具注册
-
-在 Dazah 后端 `app/modules/agent/tool_registration.py` 中导入新模块的 `agent_tools.py`，保证 FastAPI 启动时触发装饰器注册。
-
-示例：
-
-```python
-import app.modules.quality.agent_tools  # noqa: F401
-```
-
-注册成功后，Dazah 后端会通过以下接口暴露工具元数据：
-
-```text
-POST /api/v1/agent/tools/search
-GET /api/v1/agent/tools/{operation}
-POST /api/v1/agent/tools/execute
-```
-
-### 6.5 自动发现
-
-业务模块在 `module_registry` 声明 Agent Tool Provider。新增、更新、禁用或
-替换工具不需要修改 Hermes-Lite；目录刷新后立即生效。
-
-### 6.6 更新工具 schema 描述
-
-如果新模块需要特定参数，应补充工具输入模型和 `input_schema` 描述，帮助模型生成更准确的结构化参数。参数校验最终由 Dazah 后端 Pydantic InputSchema 负责。
-
-### 6.7 更新系统提示词
-
-在 `services/dazah_agent_service.py` 的 `_system_prompt()` 中补充模块边界和回复规范。
-
-当前提示词要求：
-
-- 不编造平台数据。
-- 必须通过 `dazah_tool` 查询平台业务数据。
-- 写操作只能生成确认项。
-- 禁止输出 Markdown 表格。
-- 少量数据卡片式展示。
-- 大量数据摘要 + 前几条 + 继续查看提示。
-- 复杂明细分组展示。
-
-新增模块时，应让模型清楚该模块支持哪些查询、哪些写操作需要确认、哪些字段必须重点展示。
-
-### 6.8 前端展示适配
-
-如果新模块返回复杂数据，优先让 LLM 组织成业务卡片式回复。对于稳定结构的数据，也可以在前端增加专用渲染组件。
-
-建议：
-
-- 少量数据：完整卡片。
-- 大量数据：摘要 + 前 3 条 + “查看更多”。
-- 复杂明细：折叠展示。
-- 异常数据：单独标记。
-- 避免 Markdown 表格。
-
-### 6.9 验证用例
-
-每个新模块至少验证以下场景：
-
-- 普通查询。
-- 带筛选条件查询。
-- 空结果。
-- 参数缺失。
-- 无权限。
-- 写操作生成确认项。
-- 用户确认后执行成功。
-- 用户取消确认。
-- 工具返回错误时的前端展示。
-- 流式输出中断。
+| `dazah` | `dazah_tool` | 搜索、描述并执行当前可信主体可用的后端工具目录 |
+
+## 5. Dazah 工具目录
+
+Hermes-Lite 只注册 `dazah_tool`。运行时先 `search` 当前可信主体可用的能力，再
+`describe` 目标 operation 的实时输入 Schema，最后按 Schema `execute`。
+后端 `dazah-backend/app/shared/module_registry.py` 声明 Provider，
+`ToolRegistry` 管工具元数据，
+`ToolExecutor` 执行权限、参数、风险、确认和审计。README 不复制静态 operation
+清单；当前能力以有权主体调用的目录和后端模块 `agent_tools.py` 为准。
+
+后端接口为 `POST /api/v1/agent/tools/search`、
+`GET /api/v1/agent/tools/{operation}` 和
+`POST /api/v1/agent/tools/execute`。Hermes 不提供任意业务 URL 调用。
+飞书原生文档、云盘、Base 和 Wiki 由 `lark_cli` 处理，不通过业务工具冒充
+飞书资源权限。
+
+## 6. 新增业务 Agent 能力
+
+1. 先按工作区 `docs/business-module-boundaries.md` 确定记录所有者，在该模块
+   Service 实现业务规则、权限所需上下文和事务；handler 只做 InputSchema 接收、
+   Service 调用及结果序列化。
+2. 在所有者模块的 `agent_tools.py` 定义 Pydantic v2 InputSchema 和
+   `@agent_tool` 元数据。operation 使用 `<module>.<verb>_<resource>`；
+   查询设置 `write=False`，写入设置 `write=True` 并走后端 confirmation。
+   审批、驳回等人工责任判断设置 `human_decision_required=True`、
+   `workflow_allowed=False`。
+3. 需要自动发现时，在 `dazah-backend/app/shared/module_registry.py` 的对应
+   `ModuleDefinition` 声明 `agent_tools_module`。后端
+   `app/modules/agent/tool_registration.py` 已遍历该注册表，无需手写导入；
+   新业务能力也无需修改 Hermes 工具注册或在系统提示词中添加 operation 清单。
+4. 验证目录搜索、实时 Schema、参数错误、无权限、风险拒绝、写入确认、取消、
+   审计和所属模块核心调用。变更后端端点或请求/响应 Schema 时按根规范生成
+   OpenAPI 和前端类型；只有跨服务契约变化时才修改 Hermes 适配实现。
+5. 若新能力需要专门的聊天展示，在前端已有 Agent 组件中处理稳定的结构化结果，
+   同时覆盖空结果、后端失败和流式中断；不要把业务规则放进展示层。
+
+后端 Provider 入口可参考当前
+`dazah-backend/app/modules/warehouse/agent_tools.py`、
+`dazah-backend/app/modules/quality/agent_tools.py` 和
+`dazah-backend/app/shared/module_registry.py` 的
+`agent_tools_module` 声明。
 
 ## 7. 数据查询方式
 
@@ -578,88 +286,28 @@ Hermes-Lite
 - 写操作可被确认和审计。
 - 后续新增模块时不会破坏 Agent 的安全边界。
 
-## 8. 字段筛选适配建议
+## 8. 查询参数与筛选
 
-针对查询类工具，建议统一支持 `filters` 参数。
+筛选字段、操作符、分页上限和排序规则由所属模块工具的 Pydantic InputSchema
+声明，并由所属模块 Service 校验。Hermes 在 `describe` 后按实时 Schema 组装
+参数，不维护一套独立的 `filters` 通用 DSL、字段白名单或 SQL 规则。新增筛选
+能力时先改后端工具契约及测试，再核对 Hermes 能否按目录描述调用。
 
-建议格式：
+## 9. 本地运行与验证
 
-```json
-{
-  "filters": [
-    {
-      "field": "quantity",
-      "op": "gte",
-      "value": 100
-    }
-  ],
-  "page": 1,
-  "page_size": 20
-}
-```
+Dazah 联调使用工作区根目录的 `.env.local` 和 `compose.dev.yml`。先按后端
+`docs/development.md` 确认开发库迁移和 `app` 健康，再在**工作区根目录**
+启动开发镜像：
 
-建议操作符：
-
-| 操作符 | 含义 |
-| --- | --- |
-| `eq` | 等于 |
-| `ne` | 不等于 |
-| `gt` | 大于 |
-| `gte` | 大于等于 |
-| `lt` | 小于 |
-| `lte` | 小于等于 |
-| `contains` | 包含 |
-| `in` | 在指定集合中 |
-| `between` | 区间范围 |
-
-建议由 Dazah 后端负责字段白名单、类型转换和 SQL 条件构造，Hermes 只负责根据用户自然语言生成结构化筛选参数。
-
-## 9. 本地运行
-
-安装依赖：
-
-```bash
-pip install -r requirements.txt
-# Dazah development uses the workspace root .env.local; see the workspace README.
-```
-
-本地启动 Hermes 适配服务：
-
-```bash
-uvicorn services.dazah_agent_service:app --host 0.0.0.0 --port 8100
-```
-
-Docker 开发环境启动：
-
-```bash
-# 在工作区根目录执行
+```powershell
 docker compose --env-file .env.local -f compose.dev.yml up -d --build hermes-lite
+docker compose --env-file .env.local -f compose.dev.yml ps hermes-lite
+Invoke-RestMethod http://localhost:8100/health
 ```
 
-健康检查：
-
-```bash
-curl http://127.0.0.1:8100/health
-```
-
-预期返回：
-
-```json
-{
-  "status": "ok"
-}
-```
-
-Dazah 后端工具发现检查：
-
-```bash
-curl -X POST -H "Authorization: Bearer $DAZAH_AGENT_TOOL_TOKEN" \
-  -H "Content-Type: application/json" \
-  "$DAZAH_API_BASE_URL/agent/tools/search" \
-  -d '{"query":"库存","subject":{"tenant_id":"default","user_id":"<uuid>","source":"internal"}}'
-```
-
-该接口只返回可信主体有权发现的活动工具。
+局部代码修改在 `Hermes-Lite/` 运行受影响路径的编译和测试；完整参考命令见
+`AGENTS.md`。工具发现、可信 subject、确认和风险拒绝由后端与 Hermes 契约
+测试验证，不在命令示例里手填可信用户身份或服务令牌。
 
 ## 10. 环境变量
 
