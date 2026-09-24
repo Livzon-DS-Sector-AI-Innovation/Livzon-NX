@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.redaction import redact_sensitive
-from app.platform.audit.middleware import OPERATION_ACTION
+from app.platform.audit.middleware import OPERATION_ACTION, current_audit_request_id
 from app.platform.audit.models import AuditLog
 from app.platform.audit.schemas import (
     AuditCategory,
@@ -33,8 +33,16 @@ _PERMISSION_RESOURCE_TYPES = frozenset(
         "identity.permission_module_rollout",
     }
 )
+_FEISHU_RESOURCE_TYPES = frozenset(
+    {
+        "feishu_card_action",
+        "feishu_gateway",
+        "feishu_resource",
+        "feishu_resource_change",
+    }
+)
 _CATEGORY_SUMMARY_KEYS: dict[AuditCategory, tuple[str, ...]] = {
-    "operations": (),
+    "operations": ("target",),
     "permissions": (
         "grant_version",
         "reason",
@@ -54,8 +62,12 @@ _CATEGORY_SUMMARY_KEYS: dict[AuditCategory, tuple[str, ...]] = {
         "action_key",
         "status",
         "outcome",
+        "result",
+        "capability",
         "message_id",
         "card_id",
+        "feishu_log_id",
+        "run_id",
     ),
     "business": (),
 }
@@ -72,7 +84,11 @@ def audit_category_of(log: AuditLog) -> AuditCategory | None:
         return "agent_tools"
     if log.resource_type == "agent_automation":
         return "automations"
-    if log.method == "FEISHU" or log.resource_type == "feishu_card_action":
+    if (
+        log.method == "FEISHU"
+        or log.resource_type in _FEISHU_RESOURCE_TYPES
+        or (log.resource_type or "").startswith("quality.feishu.")
+    ):
         return "feishu"
     return "business"
 
@@ -88,7 +104,8 @@ def _category_filter(category: AuditCategory) -> ColumnElement[bool]:
     feishu = func.coalesce(
         or_(
             AuditLog.method == "FEISHU",
-            AuditLog.resource_type == "feishu_card_action",
+            AuditLog.resource_type.in_(_FEISHU_RESOURCE_TYPES),
+            AuditLog.resource_type.like("quality.feishu.%"),
         ),
         false(),
     )
@@ -130,6 +147,8 @@ class GeneralAuditLogService:
                     AuditLog.resource_type.ilike(pattern),
                     AuditLog.path.ilike(pattern),
                     AuditLog.extra["operation"].as_string().ilike(pattern),
+                    AuditLog.extra["target"].as_string().ilike(pattern),
+                    AuditLog.request_id.ilike(pattern),
                     User.name.ilike(pattern),
                     User.username.ilike(pattern),
                 )
@@ -151,7 +170,7 @@ class GeneralAuditLogService:
             select(AuditLog, User.name, User.username)
             .outerjoin(User, User.id == AuditLog.user_id)
             .where(*filters)
-            .order_by(AuditLog.created_at.desc())
+            .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
@@ -190,6 +209,36 @@ class GeneralAuditLogService:
             actor_name=actor_name,
             actor_username=actor_username,
         )
+        extra = redact_sensitive(log.extra) or {}
+        if log.action == OPERATION_ACTION and log.request_id:
+            related_logs = (
+                await db.scalars(
+                    select(AuditLog)
+                    .where(
+                        AuditLog.request_id == log.request_id,
+                        AuditLog.id != log.id,
+                        AuditLog.action.not_in(_CONVERSATION_ACTIONS),
+                    )
+                    .order_by(AuditLog.created_at, AuditLog.id)
+                    .limit(21)
+                )
+            ).all()
+            extra["related_events_truncated"] = len(related_logs) > 20
+            extra["related_events"] = [
+                {
+                    "id": str(related.id),
+                    "action": related.action,
+                    "resource_type": related.resource_type,
+                    "resource_id": (
+                        str(related.resource_id) if related.resource_id else None
+                    ),
+                    "old_value": redact_sensitive(related.old_value),
+                    "new_value": redact_sensitive(related.new_value),
+                    "extra": redact_sensitive(related.extra),
+                    "created_at": related.created_at.isoformat(),
+                }
+                for related in related_logs[:20]
+            ]
         return GeneralAuditLogDetail(
             **item.model_dump(),
             request_id=log.request_id,
@@ -198,7 +247,7 @@ class GeneralAuditLogService:
             new_value=redact_sensitive(log.new_value),
             ip_address=log.ip_address,
             user_agent=log.user_agent,
-            extra=redact_sensitive(log.extra),
+            extra=extra,
         )
 
     @staticmethod
@@ -246,7 +295,7 @@ async def record_audit_log(
     extra: dict[str, Any] | None = None,
 ) -> AuditLog:
     audit_log = AuditLog(
-        request_id=request_id,
+        request_id=request_id or current_audit_request_id.get(),
         user_id=user_id,
         resource_type=resource_type,
         resource_id=resource_id,

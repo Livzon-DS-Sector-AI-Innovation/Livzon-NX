@@ -626,7 +626,7 @@ export default function ProjectLedgerSheetPage({ detail }: ProjectLedgerSheetPag
               ? '新增申报台账子记录'
               : '新增申报台账主记录'
         }
-        width={560}
+        size={560}
         footer={
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <Button

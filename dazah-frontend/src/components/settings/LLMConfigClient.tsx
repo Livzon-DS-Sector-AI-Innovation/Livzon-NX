@@ -95,6 +95,7 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
 
   const handleEdit = (record: LLMConfig) => {
     setEditingConfig(record)
+    form.resetFields()
     form.setFieldsValue({
       config_name: record.config_name,
       api_base_url: record.api_base_url,
@@ -103,6 +104,7 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
       temperature: record.temperature > 0 ? record.temperature : 0.1,
       use_temperature: record.temperature > 0,
       timeout_seconds: record.timeout_seconds,
+      is_active: record.is_active,
       notes: record.notes,
     })
     setModalOpen(true)
@@ -126,11 +128,10 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
       if (editingConfig) {
         const updatePayload: LLMConfigUpdate = { ...payload }
         if (!updatePayload.api_key) delete updatePayload.api_key
-        delete updatePayload.is_active
         await updateLLMConfig(editingConfig.id, updatePayload)
         message.success('更新成功')
       } else {
-        await createLLMConfig({ ...payload, is_active: false })
+        await createLLMConfig(payload)
         message.success('创建成功')
       }
       setModalOpen(false)
@@ -225,7 +226,9 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
       render: (name: string, record: LLMConfig) => (
         <Space>
           {name}
-          {record.is_active && <Tag color="success">当前使用</Tag>}
+          {record.is_active
+            ? <Tag color="success">当前使用</Tag>
+            : <Tag>未激活</Tag>}
         </Space>
       ),
     },
@@ -448,6 +451,19 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
             </Space.Compact>
           </Form.Item>
 
+          <Form.Item
+            name="is_active"
+            label="激活状态"
+            valuePropName="checked"
+            extra="启用后将作为当前使用模型，并自动停用其他配置；停用后不再使用此配置。"
+          >
+            <Switch
+              checkedChildren="已激活"
+              unCheckedChildren="未激活"
+              aria-label="激活状态"
+            />
+          </Form.Item>
+
           <Space size="large">
             <Form.Item
               label="温度设置"
@@ -457,7 +473,7 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
             >
               <Space>
                 <Form.Item name="use_temperature" valuePropName="checked" noStyle>
-                  <Switch checkedChildren="自定义" unCheckedChildren="模型默认" />
+                  <Switch checkedChildren="自定义" unCheckedChildren="模型默认" aria-label="温度设置" />
                 </Form.Item>
                 {useTemperature && (
                   <Form.Item

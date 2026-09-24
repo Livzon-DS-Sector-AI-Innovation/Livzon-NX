@@ -18,6 +18,7 @@ from app.platform.audit.service import (
     GeneralAuditLogService,
     _category_filter,
     audit_category_of,
+    record_audit_log,
 )
 from app.platform.identity import permission_cache, permission_middleware
 from app.platform.identity.models import User
@@ -41,6 +42,9 @@ class FakeSession:
     async def commit(self) -> None:
         if self.fail:
             raise RuntimeError("audit storage unavailable")
+
+    async def flush(self) -> None:
+        return None
 
 
 @pytest.mark.asyncio
@@ -82,9 +86,12 @@ async def test_user_api_requests_record_one_safe_row_each(monkeypatch: Any) -> N
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
-        await client.get("/api/v1/quality/items/secret-id?token=secret")
+        await client.get(
+            "/api/v1/quality/items/item-123?token=secret&clientSecret=hidden&page=1&page=2"
+        )
         await client.post(
-            "/api/v1/quality/items/secret-id", json={"password": "secret"}
+            "/api/v1/quality/items/item-123",
+            json={"status": "approved", "password": "secret", "apiKey": "hidden"},
         )
         await client.post("/api/v1/identity/auth/local/login")
         await client.post("/api/v1/identity/auth/session/logout")
@@ -97,9 +104,100 @@ async def test_user_api_requests_record_one_safe_row_each(monkeypatch: Any) -> N
     assert all(row.action == OPERATION_ACTION for row in session.records)
     assert session.records[0].resource_type == "quality"
     assert session.records[0].path == "/api/v1/quality/items/{item_id}"
-    assert session.records[0].extra == {"operation": "查看质量记录"}
+    assert session.records[0].extra == {
+        "operation": "查看质量记录",
+        "target": "item_id=item-123",
+        "request": {
+            "path_params": {"item_id": "item-123"},
+            "query_params": {
+                "token": "***", "clientSecret": "***", "page": ["1", "2"]
+            },
+            "content_type": None,
+        },
+        "response": {"status_code": 200, "content_length": 17},
+    }
+    assert session.records[1].extra["request"]["body"] == {
+        "status": "approved", "password": "***", "apiKey": "***"
+    }
+    assert session.records[1].ip_address == "127.0.0.1"
+    assert session.records[2].extra["request"]["body_omitted"] == "sensitive_route"
     assert session.records[2].resource_type == "identity"
     assert "secret" not in str([row.__dict__ for row in session.records])
+
+
+@pytest.mark.asyncio
+async def test_sensitive_and_oversized_payloads_are_not_stored(
+    monkeypatch: Any,
+) -> None:
+    session = FakeSession()
+    monkeypatch.setattr(audit_middleware, "async_session_factory", lambda: session)
+    app = FastAPI()
+
+    @app.post("/api/v1/identity/auth/local/login", summary="登录")
+    async def login(request: Request) -> JSONResponse:
+        request.state.audit_user_id = uuid.uuid4()
+        return JSONResponse({"ok": True})
+
+    @app.post("/api/v1/quality/items", summary="更新记录")
+    async def update(request: Request) -> JSONResponse:
+        request.state.audit_user_id = uuid.uuid4()
+        return JSONResponse({"ok": True})
+
+    app.add_middleware(AuditMiddleware)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        await client.post(
+            "/api/v1/identity/auth/local/login?code=private-code",
+            json={"username": "private-user"},
+        )
+        await client.post("/api/v1/quality/items", json={"note": "x" * 20_000})
+        await client.post(
+            "/api/v1/quality/items",
+            content="not-json",
+            headers={"content-type": "application/json"},
+        )
+        await client.post(
+            "/api/v1/quality/items",
+            content="attachment",
+            headers={"content-type": "text/plain"},
+        )
+
+    assert session.records[0].extra["request"]["body_omitted"] == "sensitive_route"
+    assert session.records[0].extra["request"]["query_params"] == {}
+    assert (
+        session.records[1].extra["request"]["body_omitted"]
+        == "size_unknown_or_exceeded"
+    )
+    assert "private-user" not in str(session.records[0].extra)
+    assert "private-code" not in str(session.records[0].extra)
+    assert "x" * 100 not in str(session.records[1].extra)
+    assert session.records[2].extra["request"]["body_omitted"] == "invalid_json"
+    assert session.records[3].extra["request"]["body_omitted"] == "non_json"
+
+
+@pytest.mark.asyncio
+async def test_business_audit_inherits_request_id(monkeypatch: Any) -> None:
+    session = FakeSession()
+    monkeypatch.setattr(audit_middleware, "async_session_factory", lambda: session)
+    app = FastAPI()
+
+    @app.post("/api/v1/quality/items", summary="更新记录")
+    async def update(request: Request) -> JSONResponse:
+        request.state.audit_user_id = uuid.uuid4()
+        await record_audit_log(session, action="update_item", resource_type="item")
+        return JSONResponse({"ok": True})
+
+    app.add_middleware(AuditMiddleware)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post("/api/v1/quality/items", json={"status": "done"})
+
+    assert response.status_code == 200
+    assert len(session.records) == 2
+    assert session.records[0].request_id == session.records[1].request_id
+    assert response.headers["X-Request-ID"] == session.records[0].request_id
 
 
 @pytest.mark.asyncio
@@ -227,6 +325,8 @@ async def test_operation_list_filters_module_and_operation_name() -> None:
     )
     assert "audit.logs.resource_type = 'quality'" in sql
     assert "operation" in sql
+    assert "target" in sql
+    assert "request_id" in sql
     assert "查看质量记录" in sql
 
 
