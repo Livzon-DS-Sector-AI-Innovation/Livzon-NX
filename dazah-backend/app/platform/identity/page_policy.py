@@ -1324,6 +1324,7 @@ def _quality_remaining_api_bindings() -> tuple[PageApiBinding, ...]:
         # page mapping below; each reviewed route still declares one binding.
         shared_read_pages = {
             "capas": capa_ledger + capa_plans,
+            "change-action-plans/due-status": change_plans + change_ledgers,
             "deviation-report-records": deviation_records
             + deviation_investigations
             + deviation_workbench,
