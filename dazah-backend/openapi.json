@@ -85595,6 +85595,13 @@
             "title": "Oldest Pending",
             "type": "array"
           },
+          "pending_items": {
+            "items": {
+              "$ref": "#/components/schemas/WarehouseInspectionPendingItem"
+            },
+            "title": "Pending Items",
+            "type": "array"
+          },
           "scope": {
             "title": "Scope",
             "type": "string"
@@ -85810,6 +85817,17 @@
             "title": "Name",
             "type": "string"
           },
+          "page_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Key"
+          },
           "product": {
             "anyOf": [
               {
@@ -85820,6 +85838,17 @@
               }
             ],
             "title": "Product"
+          },
+          "record_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Id"
           },
           "waited_hours": {
             "anyOf": [

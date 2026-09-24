@@ -60121,6 +60121,8 @@ export interface components {
             generated_at: string;
             /** Oldest Pending */
             oldest_pending?: components["schemas"]["WarehouseInspectionPendingItem"][];
+            /** Pending Items */
+            pending_items?: components["schemas"]["WarehouseInspectionPendingItem"][];
             /** Scope */
             scope: string;
             /** Scope Label */
@@ -60204,8 +60206,12 @@ export interface components {
             inbound_date?: string | null;
             /** Name */
             name: string;
+            /** Page Key */
+            page_key?: string | null;
             /** Product */
             product?: string | null;
+            /** Record Id */
+            record_id?: string | null;
             /** Waited Hours */
             waited_hours?: number | null;
         };
