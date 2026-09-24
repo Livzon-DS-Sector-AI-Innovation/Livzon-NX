@@ -40909,6 +40909,7 @@
           },
           "category": {
             "enum": [
+              "operations",
               "permissions",
               "agent_tools",
               "automations",
@@ -40996,6 +40997,17 @@
               }
             ],
             "title": "Old Value"
+          },
+          "operation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation"
           },
           "path": {
             "anyOf": [
@@ -41121,6 +41133,7 @@
           },
           "category": {
             "enum": [
+              "operations",
               "permissions",
               "agent_tools",
               "automations",
@@ -41150,6 +41163,17 @@
               }
             ],
             "title": "Method"
+          },
+          "operation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation"
           },
           "path": {
             "anyOf": [
@@ -93289,6 +93313,7 @@
             "required": true,
             "schema": {
               "enum": [
+                "operations",
                 "permissions",
                 "agent_tools",
                 "automations",
@@ -93367,6 +93392,22 @@
                 }
               ],
               "title": "Ended At"
+            }
+          },
+          {
+            "in": "query",
+            "name": "module",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Module"
             }
           },
           {
@@ -128085,6 +128126,54 @@
         ]
       }
     },
+    "/api/v1/identity/auth/session/logout": {
+      "post": {
+        "operationId": "revoke_session_api_v1_identity_auth_session_logout_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "撤销当前用户会话",
+        "tags": [
+          "认证",
+          "认证"
+        ]
+      }
+    },
     "/api/v1/identity/departments": {
       "get": {
         "description": "获取所有部门。传 ?tree=true 返回层级组织架构树。",
@@ -130222,7 +130311,7 @@
     },
     "/api/v1/llm/configs/test": {
       "post": {
-        "description": "Detect the active model's text and vision capabilities.",
+        "description": "Verify the active model responds without running vision detection.",
         "operationId": "test_connection_api_v1_llm_configs_test_post",
         "parameters": [
           {

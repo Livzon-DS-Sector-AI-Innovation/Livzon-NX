@@ -10,6 +10,11 @@ export default function AuditLogClient() {
       defaultActiveKey="livzon-conversations"
       items={[
         {
+          key: 'operations',
+          label: '用户操作',
+          children: <GeneralAuditLogClient category="operations" />,
+        },
+        {
           key: 'livzon-conversations',
           label: 'Livzon 对话',
           children: <AgentAuditLogClient />,

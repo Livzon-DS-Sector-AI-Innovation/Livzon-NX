@@ -289,6 +289,45 @@ async def probe_api_base_url(
     raise LLMConfigError(f"URL 连通性测试失败（HTTP {response.status_code}）")
 
 
+async def probe_model_connection(
+    *,
+    api_base_url: str,
+    api_key: str,
+    model_name: str,
+    timeout_seconds: int,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> None:
+    """Check that the configured model returns a text answer in one request."""
+    deadline = max(1, min(timeout_seconds, 30))
+    try:
+        async with (
+            asyncio.timeout(deadline),
+            httpx.AsyncClient(
+                timeout=httpx.Timeout(deadline), transport=transport
+            ) as client,
+        ):
+            session = _ProbeSession(
+                client=client,
+                url=api_base_url.rstrip("/") + "/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+            response = await session.post(
+                {
+                    "model": model_name,
+                    "messages": [{"role": "user", "content": "Reply only OK"}],
+                    "stream": False,
+                }
+            )
+            if not response.is_success:
+                raise LLMConfigError(
+                    f"模型连通性测试失败（HTTP {response.status_code}）"
+                )
+    except (httpx.HTTPError, TimeoutError) as exc:
+        raise LLMConfigError(
+            f"模型连通性测试未完成：{type(exc).__name__}，请重试"
+        ) from exc
+
+
 async def detect_model_capabilities(
     *,
     api_base_url: str,
@@ -324,21 +363,30 @@ async def detect_model_capabilities(
                     f"文本能力检测失败（HTTP {text_response.status_code}）"
                 )
 
-            previous: tuple[str, ...] | None = None
-            image_first = True
-            for round_index in range(2):
-                # Answers live only in pixels; aliases and prompts reveal no answer.
-                palette = tuple(color for color, _ in _VISION_PROBE_PALETTE)
-                bands = tuple(secrets.choice(palette) for _ in range(6))
-                if bands == previous:
-                    bands = (palette[(palette.index(bands[0]) + 1) % 4], *bands[1:])
-                previous = bands
+            # The two independent image challenges can run together after text
+            # connectivity is confirmed, avoiding a second model round trip.
+            palette = tuple(color for color, _ in _VISION_PROBE_PALETTE)
+            first_bands = tuple(secrets.choice(palette) for _ in range(6))
+            second_bands = tuple(secrets.choice(palette) for _ in range(6))
+            if second_bands == first_bands:
+                second_bands = (
+                    palette[(palette.index(second_bands[0]) + 1) % 4],
+                    *second_bands[1:],
+                )
+
+            async def verify_image(bands: tuple[str, ...]) -> bool:
+                vision_session = _ProbeSession(
+                    client=client,
+                    url=session.url,
+                    headers=session.headers,
+                    token_field=session.token_field,
+                )
                 for attempt in range(2):
-                    response = await session.post(
+                    response = await vision_session.post(
                         _build_vision_probe_payload(
                             model_name=model_name,
                             bands=bands,
-                            image_first=image_first,
+                            image_first=attempt == 0,
                         )
                     )
                     if not response.is_success:
@@ -364,20 +412,29 @@ async def detect_model_capabilities(
                             response.status_code in {400, 415, 422}
                             and explicit_rejection
                         ):
-                            if round_index == 0:
-                                return LLMCapabilities(True, False)
-                            raise LLMConfigError("能力检测结果不一致，请重试")
+                            return False
                         raise LLMConfigError(
                             f"视觉能力检测未完成（HTTP {response.status_code}）："
                             "请检查接口及图片输入兼容性后重试"
                         )
                     if _matches_vision_probe(_response_text(response.json()), bands):
-                        break
+                        return True
                     if attempt == 1:
                         raise LLMConfigError(
                             "视觉能力检测未完成：未能验证图片内容，保留原有能力配置"
                         )
-                    image_first = not image_first
-            return LLMCapabilities(True, True)
+                raise LLMConfigError("视觉能力检测未完成：请重试")
+
+            results = await asyncio.gather(
+                verify_image(first_bands),
+                verify_image(second_bands),
+                return_exceptions=True,
+            )
+            for result in results:
+                if isinstance(result, BaseException):
+                    raise result
+            if results[0] != results[1]:
+                raise LLMConfigError("能力检测结果不一致，请重试")
+            return LLMCapabilities(True, bool(results[0]))
     except (httpx.HTTPError, TimeoutError) as exc:
         raise LLMConfigError(f"能力检测未完成：{type(exc).__name__}，请重试") from exc

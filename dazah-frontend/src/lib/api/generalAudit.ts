@@ -30,6 +30,7 @@ export async function fetchGeneralAuditLogs(params: {
   keyword?: string
   startedAt?: string
   endedAt?: string
+  module?: string
 }): Promise<GeneralAuditLogPage> {
   const search = new URLSearchParams({
     category: params.category,
@@ -39,6 +40,7 @@ export async function fetchGeneralAuditLogs(params: {
   if (params.keyword) search.set('keyword', params.keyword)
   if (params.startedAt) search.set('started_at', params.startedAt)
   if (params.endedAt) search.set('ended_at', params.endedAt)
+  if (params.module) search.set('module', params.module)
   return fetchAudit<GeneralAuditLogPage>(`/logs?${search}`)
 }
 

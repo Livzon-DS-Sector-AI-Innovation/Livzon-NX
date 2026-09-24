@@ -1,8 +1,5 @@
 'use client'
 
-import { qualityTokens } from './themeTokens'
-import Link from 'next/link'
-import { Card, Row, Col } from 'antd'
 import {
   AlertOutlined,
   ApartmentOutlined,
@@ -18,109 +15,24 @@ import {
   SettingOutlined,
   WarningOutlined,
 } from '@ant-design/icons'
+import { ModuleLandingCards, type ModuleLandingEntry } from '@/components/shared/ModuleLandingCards'
+
+const entries: ModuleLandingEntry[] = [
+  { title: '文件管理', description: '按部门浏览和管理文件目录', href: '/quality/documents', icon: <FolderOpenOutlined /> },
+  { title: '偏差管理', description: '偏差统计、报告记录与处理进度', href: '/quality/deviations', icon: <FileTextOutlined />, dashboard: true },
+  { title: 'CAPA管理', description: '纠正预防措施统计与计划跟踪', href: '/quality/capas', icon: <SafetyCertificateOutlined />, dashboard: true },
+  { title: '投诉管理', description: '客户投诉台账和处理记录', href: '/quality/complaints', icon: <NotificationOutlined /> },
+  { title: '质量检验', description: '物品、仪器和成品检验入口', href: '/quality/inspection', icon: <ExperimentOutlined /> },
+  { title: 'OOS/OOT管理', description: '报告记录、调查推送及台账', href: '/quality/oos-oot', icon: <WarningOutlined /> },
+  { title: '产品质量', description: '产品质量标准与回顾', href: '/quality/product-quality', icon: <DatabaseOutlined /> },
+  { title: '成品异常报告', description: '成品异常统计与年度明细', href: '/quality/anomaly-report', icon: <AlertOutlined />, dashboard: true },
+  { title: '退货召回', description: '退货申请与退货台账', href: '/quality/return-recalls', icon: <RollbackOutlined /> },
+  { title: '供应商管理', description: '供应商资质状态与台账', href: '/quality/suppliers', icon: <ApartmentOutlined />, dashboard: true },
+  { title: '变更控制', description: '变更台账与行动计划概览', href: '/quality/change', icon: <AuditOutlined />, dashboard: true },
+  { title: '验证与确认', description: '验证计划和执行概览', href: '/quality/validation', icon: <SafetyOutlined />, dashboard: true },
+  { title: '质量设置', description: '数据同步映射与通知设置', href: '/quality/settings', icon: <SettingOutlined /> },
+]
 
 export function QualityLanding() {
-  const cards = [
-    {
-      title: '质量设置',
-      description: '配置质量模块飞书应用、台账同步映射与通知提醒',
-      href: '/quality/settings',
-      icon: <SettingOutlined style={{ fontSize: 32, color: '#0958d9' }} />,
-    },
-    {
-      title: '文件管理',
-      description: '按部门浏览和管理各部门文件目录',
-      href: '/quality/documents',
-      icon: <FolderOpenOutlined style={{ fontSize: 32, color: '#2f54eb' }} />,
-    },
-    {
-      title: '偏差管理',
-      description: '记录和跟踪生产偏差',
-      href: '/quality/deviations',
-      icon: <FileTextOutlined style={{ fontSize: 32, color: qualityTokens.primary }} />,
-    },
-    {
-      title: 'CAPA管理',
-      description: '纠正和预防措施',
-      href: '/quality/capas',
-      icon: <SafetyCertificateOutlined style={{ fontSize: 32, color: qualityTokens.success }} />,
-    },
-    {
-      title: '投诉管理',
-      description: '查看客户投诉台账和处理记录',
-      href: '/quality/complaints',
-      icon: <NotificationOutlined style={{ fontSize: 32, color: '#d46b08' }} />,
-    },
-    {
-      title: '质量检验',
-      description: '查看检验仪表盘与分组明细',
-      href: '/quality/inspection',
-      icon: <ExperimentOutlined style={{ fontSize: 32, color: '#08979c' }} />,
-    },
-    {
-      title: 'OOS/OOT管理',
-      description: '管理报告记录、调查推送及台账',
-      href: '/quality/oos-oot',
-      icon: <WarningOutlined style={{ fontSize: 32, color: '#cf1322' }} />,
-    },
-    {
-      title: '产品质量',
-      description: '查看产品质量标准与回顾页',
-      href: '/quality/product-quality',
-      icon: <DatabaseOutlined style={{ fontSize: 32, color: '#722ed1' }} />,
-    },
-    {
-      title: '成品异常报告',
-      description: '查看各年度成品异常汇总与明细',
-      href: '/quality/anomaly-report',
-      icon: <AlertOutlined style={{ fontSize: 32, color: '#d4380d' }} />,
-    },
-    {
-      title: '退货召回',
-      description: '处理退货申请和退货台账',
-      href: '/quality/return-recalls',
-      icon: <RollbackOutlined style={{ fontSize: 32, color: qualityTokens.warning }} />,
-    },
-    {
-      title: '供应商管理',
-      description: '查看供应商资质仪表盘和台账',
-      href: '/quality/suppliers',
-      icon: <ApartmentOutlined style={{ fontSize: 32, color: '#531dab' }} />,
-    },
-    {
-      title: '变更控制',
-      description: '查看变更台账与变更计划概览',
-      href: '/quality/change',
-      icon: <AuditOutlined style={{ fontSize: 32, color: '#d46b08' }} />,
-    },
-    {
-      title: '验证与确认',
-      description: '查看验证主计划和各执行子表概览',
-      href: '/quality/validation',
-      icon: <SafetyOutlined style={{ fontSize: 32, color: '#531dab' }} />,
-    },
-  ]
-
-  return (
-    <div>
-      <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 24 }}>质量管理</h1>
-      <Row gutter={[16, 16]}>
-        {cards.map((card) => (
-          <Col xs={24} sm={12} md={8} key={card.href}>
-            <Link href={card.href}>
-              <Card hoverable>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  {card.icon}
-                  <div>
-                    <div style={{ fontSize: 16, fontWeight: 600 }}>{card.title}</div>
-                    <div style={{ fontSize: 13, color: qualityTokens.textMuted }}>{card.description}</div>
-                  </div>
-                </div>
-              </Card>
-            </Link>
-          </Col>
-        ))}
-      </Row>
-    </div>
-  )
+  return <ModuleLandingCards title="质量管理" description="查看质量状态、风险与业务入口" entries={entries} />
 }

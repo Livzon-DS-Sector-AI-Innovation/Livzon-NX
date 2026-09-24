@@ -65,6 +65,7 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
   const [probing, setProbing] = useState<LLMConfigProbeRequest['probe_type'] | null>(null)
   const [testingId, setTestingId] = useState<string | null>(null)
   const [activatingId, setActivatingId] = useState<string | null>(null)
+  const [testingConnection, setTestingConnection] = useState(false)
   const [form] = Form.useForm<LLMConfigFormValues>()
   const useTemperature = Form.useWatch('use_temperature', form) ?? false
 
@@ -102,7 +103,6 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
       temperature: record.temperature > 0 ? record.temperature : 0.1,
       use_temperature: record.temperature > 0,
       timeout_seconds: record.timeout_seconds,
-      is_active: record.is_active,
       notes: record.notes,
     })
     setModalOpen(true)
@@ -126,10 +126,11 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
       if (editingConfig) {
         const updatePayload: LLMConfigUpdate = { ...payload }
         if (!updatePayload.api_key) delete updatePayload.api_key
+        delete updatePayload.is_active
         await updateLLMConfig(editingConfig.id, updatePayload)
         message.success('更新成功')
       } else {
-        await createLLMConfig(payload)
+        await createLLMConfig({ ...payload, is_active: false })
         message.success('创建成功')
       }
       setModalOpen(false)
@@ -146,7 +147,7 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
     setActivatingId(id)
     try {
       await updateLLMConfig(id, { is_active: true })
-      message.success('能力检测通过并已激活，所有 AI 调用将使用此配置')
+      message.success('已激活此配置，所有 AI 调用将使用此配置')
       loadConfigs()
     } catch {
       message.error('激活失败')
@@ -204,12 +205,14 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
   }
 
   const handleTestConnection = async () => {
+    setTestingConnection(true)
     try {
       const res = await testLLMConnection()
       message.success(res.data.detail)
-      loadConfigs()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '当前模型能力检测失败')
+      message.error(error instanceof Error ? error.message : '当前模型连接测试失败')
+    } finally {
+      setTestingConnection(false)
     }
   }
 
@@ -233,8 +236,9 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
       width: 210,
       render: (capabilities: string[]) => (
         <Space size={4} wrap>
-          <Tag color="blue">文本</Tag>
-          <Tag color="cyan">文档</Tag>
+          {capabilities.length === 0 && <Tag>待检测</Tag>}
+          {capabilities.includes('text') && <Tag color="blue">文本</Tag>}
+          {capabilities.includes('document') && <Tag color="cyan">文档</Tag>}
           {capabilities.includes('image') && <Tag color="purple">图片 / 视觉</Tag>}
         </Space>
       ),
@@ -337,11 +341,11 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
             LLM 模型配置
           </Title>
           <Text style={{ fontSize: 14, color: '#666', marginTop: 8, display: 'block' }}>
-            配置 AI 大模型 API 连接参数。系统会发送真实探测请求，自动识别文本、文档和图片能力；同一时间仅一个配置生效。
+            保存连接参数后，可单独测试连接或检测模型能力；同一时间仅一个配置生效。
           </Text>
         </div>
         <Space>
-          <Button icon={<ApiOutlined />} onClick={handleTestConnection}>
+          <Button icon={<ApiOutlined />} loading={testingConnection} onClick={handleTestConnection}>
             测试连接
           </Button>
           <Button
@@ -476,10 +480,6 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
               <InputNumber min={10} max={600} style={{ width: 120 }} />
             </Form.Item>
           </Space>
-
-          <Form.Item name="is_active" label="激活状态" valuePropName="checked">
-            <Switch checkedChildren="激活" unCheckedChildren="未激活" />
-          </Form.Item>
 
           <Form.Item name="notes" label="备注">
             <TextArea rows={2} placeholder="配置说明" />

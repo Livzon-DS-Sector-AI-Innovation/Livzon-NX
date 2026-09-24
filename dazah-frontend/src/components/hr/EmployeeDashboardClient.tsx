@@ -25,7 +25,7 @@ function EmployeeDashboardInner() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h1 className="text-[22px] font-semibold text-[var(--color-charcoal)]">员工管理</h1>
+        <h1 className="text-[22px] font-semibold text-[var(--color-charcoal)]">员工管理仪表盘</h1>
         <Space>
           <Button icon={<ReloadOutlined />} loading={isFetching} onClick={() => refetch()}>
             刷新数据

@@ -137,7 +137,6 @@ export function ChangeDashboardPage() {
   return (
     <div>
       <div style={{ marginBottom: 16 }}>
-        <p className="mb-2 text-[13px] text-[var(--color-stone)]">质量管理 / 变更控制</p>
         <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>变更控制仪表盘</h1>
       </div>
       <Space style={{ marginBottom: 16 }} wrap>
