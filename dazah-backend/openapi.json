@@ -160388,6 +160388,76 @@
         ]
       }
     },
+    "/api/v1/quality/change-action-plans/due-status": {
+      "get": {
+        "operationId": "get_change_action_plan_due_status_api_v1_quality_change_action_plans_due_status_get",
+        "parameters": [
+          {
+            "description": "临期窗口天数；不传则取到期提醒配置",
+            "in": "query",
+            "name": "lead_days",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 60,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "临期窗口天数；不传则取到期提醒配置",
+              "title": "Lead Days"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_dict_str__Any__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取变更计划逾期/临期明细",
+        "tags": [
+          "质量管理",
+          "Quality-Management"
+        ]
+      }
+    },
     "/api/v1/quality/change-action-plans/person-options": {
       "get": {
         "operationId": "search_change_action_plan_persons_api_v1_quality_change_action_plans_person_options_get",

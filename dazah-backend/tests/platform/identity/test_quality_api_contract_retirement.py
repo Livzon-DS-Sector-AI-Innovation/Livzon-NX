@@ -17,3 +17,9 @@ def test_retired_feishu_capa_routes_removed_from_reviewed_contract() -> None:
         ("PUT", "/api/v1/quality/feishu/capas/{record_id}"),
     ):
         assert retired not in routes, f"退休路由仍登记在评审契约: {retired}"
+
+
+def test_due_status_route_registered_in_reviewed_contract() -> None:
+    """变更行动计划到期状态接口必须登记为已评审路由（页面权限绑定依赖）。"""
+    routes = set(QUALITY_REVIEWED_API_ROUTES)
+    assert ("GET", "/api/v1/quality/change-action-plans/due-status") in routes

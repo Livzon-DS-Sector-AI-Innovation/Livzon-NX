@@ -1381,7 +1381,6 @@ async def get_change_statistics(db: AsyncSession) -> ChangeStatistics:
     total = len(items)
     closed_count = sum(1 for item in items if item.get("status") == "closed")
     delay_count = sum(1 for item in items if item.get("is_delayed"))
-    in_progress_count = sum(1 for item in items if item.get("status") == "in_progress")
 
     status_counts: dict[str, int] = {}
     level_counts: dict[str, int] = {}
@@ -1414,9 +1413,15 @@ async def get_change_statistics(db: AsyncSession) -> ChangeStatistics:
         {"name": k, "count": v} for k, v in department_counts.items()
     ]
 
-    action_plan_total = closed_count + in_progress_count
-    action_plan_overdue = delay_count
-    action_plan_confirmed = closed_count
+    # 变更计划指标读真实计划表（与台账/提醒同源），不再用变更台账状态代理
+    from app.modules.quality.service.change_action_plan import (
+        get_change_action_plan_due_status,
+    )
+
+    due_status = await get_change_action_plan_due_status(db)
+    action_plan_total = int(due_status["total_count"])
+    action_plan_overdue = len(due_status["overdue"])
+    action_plan_confirmed = int(due_status["confirmed_count"])
 
     return ChangeStatistics(
         total=total,

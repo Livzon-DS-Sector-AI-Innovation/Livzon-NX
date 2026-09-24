@@ -14180,6 +14180,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quality/change-action-plans/due-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取变更计划逾期/临期明细 */
+        get: operations["get_change_action_plan_due_status_api_v1_quality_change_action_plans_due_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quality/change-action-plans/person-options": {
         parameters: {
             query?: never;
@@ -97398,6 +97415,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponseEnvelope_ChangeActionPlanDetail_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_change_action_plan_due_status_api_v1_quality_change_action_plans_due_status_get: {
+        parameters: {
+            query?: {
+                /** @description 临期窗口天数；不传则取到期提醒配置 */
+                lead_days?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
                 };
             };
             /** @description Validation Error */

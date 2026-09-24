@@ -1057,6 +1057,31 @@ export interface ChangeDashboardStats {
   actionPlanConfirmed: number
 }
 
+export interface ChangeActionPlanDueStatusItem {
+  id: string
+  change_code: string | null
+  project_name: string | null
+  related_work: string | null
+  owner_name: string | null
+  owner_user_id: string | null
+  owner_avatar_url: string | null
+  director_name: string | null
+  deadline_date: string | null
+  delayed_deadline_date: string | null
+  status: string | null
+  /** 有效截止日距今天数：负数=已逾期，0=今天到期，正数=剩余天数 */
+  days_offset: number
+}
+
+export interface ChangeActionPlanDueStatus {
+  today: string
+  lead_days: number
+  overdue: ChangeActionPlanDueStatusItem[]
+  due_soon: ChangeActionPlanDueStatusItem[]
+  total_count: number
+  confirmed_count: number
+}
+
 export interface ValidationDashboardStats {
   total: number
   typeDistribution: Array<{

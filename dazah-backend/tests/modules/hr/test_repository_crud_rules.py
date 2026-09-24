@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from types import SimpleNamespace as _SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, Mock
@@ -311,6 +311,7 @@ async def test_employee_statistics_assemble_all_distributions() -> None:
         SimpleNamespace(all=lambda: [("质量部", 5)]),
         SimpleNamespace(all=lambda: [("本科", 3)]),
         SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [emp])),
+        SimpleNamespace(scalar=lambda: 1),
     ]
     session: Any = SimpleNamespace(execute=AsyncMock(side_effect=results))
     stats = await repository.EmployeeRepository(session).get_stats({"质量部"})
@@ -320,6 +321,8 @@ async def test_employee_statistics_assemble_all_distributions() -> None:
     assert stats["education_distribution"] == {"本科": 3}
     assert stats["contract_expiring_count"] == 1
     assert stats["contract_expiring_list"][0]["employee_number"] == "E001"
+    assert stats["contract_expiring_list"][0]["contract_sequence"] == 1
+    assert stats["departures_this_month"] == 1
 
 
 @pytest.mark.anyio
@@ -345,12 +348,14 @@ async def test_employee_statistics_parses_string_contract_end_5() -> None:
         SimpleNamespace(all=lambda: [("质量部", 1)]),
         SimpleNamespace(all=lambda: []),
         SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [emp])),
+        SimpleNamespace(scalar=lambda: 0),
     ]
     session: Any = SimpleNamespace(execute=AsyncMock(side_effect=results))
     stats = await repository.EmployeeRepository(session).get_stats({"质量部"})
     assert stats["contract_expiring_count"] == 1
     assert stats["contract_expiring_list"][0]["employee_number"] == "E002"
     assert stats["contract_expiring_list"][0]["contract_end_date"] == "2026-09-15"
+    assert stats["contract_expiring_list"][0]["contract_sequence"] == 5
 
 
 @pytest.mark.anyio
@@ -390,6 +395,251 @@ async def test_employee_contract_expiry_selects_latest_contract_and_paginates() 
     assert total == 1
     assert rows[0]["contract_sequence"] == 5
     assert rows[0]["contract_sign_date"] == "2025-10-01"
+
+
+@pytest.mark.anyio
+async def test_employee_contract_expiry_excludes_renewed_employees() -> None:
+    """已续签员工不进入到期列表：无固定期限后期次、下期已签未填到期日两种形态。"""
+    renewed_indefinite: Any = SimpleNamespace(
+        id=uuid4(),
+        employee_number="E101",
+        name="无固定",
+        department="质量部",
+        sub_department=None,
+        position="负责人",
+        contract_start_date=date(2023, 8, 21),
+        contract_end_date=date(2026, 8, 20),
+        contract_start_2=date(2026, 8, 21),
+        contract_end_2="无固定期限",
+        contract_start_3=None,
+        contract_end_3=None,
+        contract_start_4=None,
+        contract_end_4=None,
+        contract_start_5=None,
+        contract_end_5=None,
+        contract_start_6=None,
+        contract_end_6=None,
+    )
+    renewed_unrecorded: Any = SimpleNamespace(
+        id=uuid4(),
+        employee_number="E102",
+        name="已续签",
+        department="101二车间",
+        sub_department=None,
+        position="机修工",
+        contract_start_date=date(2023, 7, 4),
+        contract_end_date=date(2026, 7, 3),
+        contract_start_2=date(2026, 7, 4),
+        contract_end_2=None,
+        contract_start_3=None,
+        contract_end_3=None,
+        contract_start_4=None,
+        contract_end_4=None,
+        contract_start_5=None,
+        contract_end_5=None,
+        contract_start_6=None,
+        contract_end_6=None,
+    )
+    not_renewed: Any = SimpleNamespace(
+        id=uuid4(),
+        employee_number="E103",
+        name="待续签",
+        department="103车间",
+        sub_department=None,
+        position="值班员工",
+        contract_start_date=date(2023, 8, 21),
+        contract_end_date=date(2026, 8, 20),
+        contract_start_2=None,
+        contract_end_2=None,
+        contract_start_3=None,
+        contract_end_3=None,
+        contract_start_4=None,
+        contract_end_4=None,
+        contract_start_5=None,
+        contract_end_5=None,
+        contract_start_6=None,
+        contract_end_6=None,
+    )
+    session: Any = SimpleNamespace(
+        execute=AsyncMock(
+            return_value=SimpleNamespace(
+                scalars=lambda: _Result(
+                    [renewed_indefinite, renewed_unrecorded, not_renewed]
+                )
+            )
+        )
+    )
+    rows, total = await repository.EmployeeRepository(session).list_contract_expiring(
+        "2026-07-01",  # type: ignore[arg-type]
+        "2026-09-30",  # type: ignore[arg-type]
+        page=1,
+        page_size=10,
+    )
+    assert total == 1
+    assert rows[0]["employee_number"] == "E103"
+    assert rows[0]["contract_end_date"] == "2026-08-20"
+    assert rows[0]["contract_sequence"] == 1
+
+
+@pytest.mark.anyio
+async def test_contract_expiry_status_filter_matches_feishu_active_statuses() -> None:
+    """在职过滤兼容飞书“正式/试用期/实习生”取值：按非离职/待审批过滤。"""
+    session: Any = SimpleNamespace(
+        execute=AsyncMock(return_value=SimpleNamespace(scalars=lambda: _Result([])))
+    )
+    await repository.EmployeeRepository(session).list_contract_expiring(
+        date(2026, 7, 1), date(2026, 9, 30)
+    )
+    stmt = session.execute.call_args[0][0]
+    sql = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+    assert "NOT IN" in sql.upper()
+    assert "离职" in sql
+    assert "待审批" in sql
+
+
+@pytest.mark.anyio
+async def test_employee_statistics_exclude_renewed_contracts() -> None:
+    """看板季度到期统计排除已续签员工（下期已签、到期未填）。"""
+    today = date.today()
+    q_start_month = ((today.month - 1) // 3) * 3 + 1
+    in_quarter = date(today.year, q_start_month + 1, 15)
+    emp: Any = SimpleNamespace(
+        employee_number="E201",
+        name="已续签",
+        department="质量部",
+        position="QA",
+        status="正式",
+        is_deleted=False,
+        contract_start_date=in_quarter - timedelta(days=365),
+        contract_end_date=in_quarter,
+        contract_start_2=in_quarter + timedelta(days=1),
+        contract_end_2=None,
+        contract_start_3=None,
+        contract_end_3=None,
+        contract_start_4=None,
+        contract_end_4=None,
+        contract_start_5=None,
+        contract_end_5=None,
+        contract_start_6=None,
+        contract_end_6=None,
+    )
+    results = [
+        SimpleNamespace(scalar=lambda: 1),
+        SimpleNamespace(all=lambda: [("正式", 1)]),
+        SimpleNamespace(all=lambda: [("质量部", 1)]),
+        SimpleNamespace(all=lambda: []),
+        SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [emp])),
+        SimpleNamespace(scalar=lambda: 0),
+    ]
+    session: Any = SimpleNamespace(execute=AsyncMock(side_effect=results))
+    stats = await repository.EmployeeRepository(session).get_stats()
+    assert stats["contract_expiring_count"] == 0
+    assert stats["contract_expiring_list"] == []
+    assert stats["contract_expiring_90d_count"] == 0
+
+
+@pytest.mark.anyio
+async def test_employee_statistics_reminder_and_turnover_metrics() -> None:
+    """看板提醒指标：未来90天到期、试用期将转正、证书将复审、本月入职。"""
+    today = date.today()
+    contract_due_soon: Any = SimpleNamespace(
+        employee_number="E301",
+        name="快到期",
+        department="质量部",
+        position="QA",
+        status="正式",
+        is_deleted=False,
+        contract_start_date=today - timedelta(days=700),
+        contract_end_date=today + timedelta(days=45),
+        contract_start_2=None,
+        contract_end_2=None,
+        contract_start_3=None,
+        contract_end_3=None,
+        contract_start_4=None,
+        contract_end_4=None,
+        contract_start_5=None,
+        contract_end_5=None,
+        contract_start_6=None,
+        contract_end_6=None,
+        hire_date=today - timedelta(days=800),
+        planned_probation_date=None,
+        certificate_review_date=today + timedelta(days=60),
+        qualification_type="理化检验",
+    )
+    probation_member: Any = SimpleNamespace(
+        employee_number="E302",
+        name="将转正",
+        department="101一车间",
+        position="操作工",
+        status="试用期",
+        is_deleted=False,
+        contract_start_date=today - timedelta(days=30),
+        contract_end_date=today + timedelta(days=335),
+        contract_start_2=None,
+        contract_end_2=None,
+        contract_start_3=None,
+        contract_end_3=None,
+        contract_start_4=None,
+        contract_end_4=None,
+        contract_start_5=None,
+        contract_end_5=None,
+        contract_start_6=None,
+        contract_end_6=None,
+        hire_date=today - timedelta(days=30),
+        planned_probation_date=today + timedelta(days=10),
+        certificate_review_date=None,
+        qualification_type=None,
+    )
+    newcomer: Any = SimpleNamespace(
+        employee_number="E303",
+        name="本月入职",
+        department="103车间",
+        position="值班员工",
+        status="正式",
+        is_deleted=False,
+        contract_start_date=today,
+        contract_end_date=today + timedelta(days=1095),
+        contract_start_2=None,
+        contract_end_2=None,
+        contract_start_3=None,
+        contract_end_3=None,
+        contract_start_4=None,
+        contract_end_4=None,
+        contract_start_5=None,
+        contract_end_5=None,
+        contract_start_6=None,
+        contract_end_6=None,
+        hire_date=today,
+        planned_probation_date=None,
+        certificate_review_date=None,
+        qualification_type=None,
+    )
+    results = [
+        SimpleNamespace(scalar=lambda: 3),
+        SimpleNamespace(all=lambda: [("正式", 2), ("试用期", 1)]),
+        SimpleNamespace(all=lambda: [("质量部", 1)]),
+        SimpleNamespace(all=lambda: []),
+        SimpleNamespace(
+            scalars=lambda: SimpleNamespace(
+                all=lambda: [contract_due_soon, probation_member, newcomer]
+            )
+        ),
+        SimpleNamespace(scalar=lambda: 2),
+    ]
+    session: Any = SimpleNamespace(execute=AsyncMock(side_effect=results))
+    stats = await repository.EmployeeRepository(session).get_stats()
+    assert stats["contract_expiring_90d_count"] == 1
+    assert stats["contract_expiring_90d_list"][0]["employee_number"] == "E301"
+    assert stats["contract_expiring_90d_list"][0]["contract_sequence"] == 1
+    assert stats["probation_due_count"] == 1
+    assert stats["probation_due_list"][0]["employee_number"] == "E302"
+    assert stats["probation_due_list"][0]["planned_probation_date"] == (
+        today + timedelta(days=10)
+    ).isoformat()
+    assert stats["certificate_due_count"] == 1
+    assert stats["certificate_due_list"][0]["qualification_type"] == "理化检验"
+    assert stats["hires_this_month"] == 1
+    assert stats["departures_this_month"] == 2
 
 
 @pytest.mark.anyio
@@ -586,3 +836,39 @@ async def test_training_import_and_custom_department_repository_operations() -> 
     )
     await training.delete_dept_mapping(mapping)
     assert mapping.is_deleted is True
+
+
+def test_parse_contract_date_handles_strings_and_unparseable_text() -> None:
+    """字符串合同日期按常见格式解析；无固定期限等文本返回 None。"""
+    from datetime import date as _date
+
+    assert repository.parse_contract_date("2026-08-20") == _date(2026, 8, 20)
+    assert repository.parse_contract_date(" 2026/08/20 ") == _date(2026, 8, 20)
+    assert repository.parse_contract_date("20260820") == _date(2026, 8, 20)
+    assert repository.parse_contract_date("无固定期限") is None
+    assert repository.parse_contract_date(None) is None
+
+
+def test_employee_contract_round_matches_string_round_and_sign_date() -> None:
+    """第 5/6 期字符串日期按格式解析并返回期次与签订日期。"""
+    from datetime import date as _date
+
+    employee = SimpleNamespace(
+        contract_start_date=_date(2024, 1, 1),
+        contract_end_date=_date(2026, 8, 20),
+        contract_start_2=None,
+        contract_end_2=None,
+        contract_start_3=None,
+        contract_end_3=None,
+        contract_start_4=None,
+        contract_end_4=None,
+        contract_start_5=_date(2026, 8, 21),
+        contract_end_5="2027-08-20",
+        contract_start_6=None,
+        contract_end_6=None,
+    )
+    seq, sign = repository.employee_contract_round(
+        employee, _date(2027, 8, 20)  # type: ignore[arg-type]
+    )
+    assert seq == 5
+    assert sign == _date(2026, 8, 21)
