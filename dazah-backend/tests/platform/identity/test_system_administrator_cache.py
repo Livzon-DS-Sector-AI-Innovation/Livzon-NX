@@ -25,13 +25,14 @@ from app.platform.identity.repository import UserRepository
 async def test_identity_precedes_stale_wildcard_cache(
     monkeypatch, role, status, cached, include_open_id, expected
 ):
-    user = SimpleNamespace(id=uuid4(), role=role, status=status)
+    user = SimpleNamespace(id=uuid4(), role=role, status=status, session_version=0)
     settings = SimpleNamespace(
         DEV_BYPASS_AUTH=False,
         SECRET_KEY="test-only-signing-key-32-characters",
         effective_module_access_mode="roles",
+        browser_origins=[],
     )
-    payload = {"sub": str(user.id)}
+    payload = {"sub": str(user.id), "session_version": 0}
     if include_open_id:
         payload["open_id"] = "test-open-id"
     token = jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")

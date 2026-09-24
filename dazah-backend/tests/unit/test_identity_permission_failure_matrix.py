@@ -30,6 +30,7 @@ def _user(*, role: Any = "user", status: Any = "active") -> Any:
         status=status,
         is_deleted=False,
         grant_version=0,
+        session_version=0,
         updated_at=datetime.now(UTC),
     )
 
@@ -102,7 +103,7 @@ async def test_current_user_falls_back_to_cookie_and_open_id(monkeypatch: Any) -
     )
     monkeypatch.setattr(deps, "UserRepository", lambda: repository)
     token = jwt.encode(
-        {"sub": str(uuid4()), "open_id": "open"},
+        {"sub": str(uuid4()), "open_id": "open", "session_version": 0},
         "secret",
         algorithm="HS256",
     )
