@@ -1,5 +1,6 @@
 """HR database queries live here."""
 
+from collections.abc import Sequence
 from datetime import date
 from datetime import datetime as dt
 from typing import TYPE_CHECKING, Any, cast
@@ -49,6 +50,111 @@ from app.modules.hr.page_access import (
 
 if TYPE_CHECKING:
     from app.modules.hr.models import HrCustomTrainingDepartment, TrainingDeptMapping
+
+# 员工状态存在两套取值：本地创建默认“在职”，飞书同步写入“正式/试用期/实习生”。
+# 在职判断统一按“非离职且非待审批”，两套取值都能命中。
+_INACTIVE_EMPLOYEE_STATUSES: tuple[str, ...] = ("离职", "待审批")
+_CONTRACT_DATE_FORMATS: tuple[str, ...] = ("%Y/%m/%d", "%Y-%m-%d", "%Y%m%d")
+_EMPLOYEE_CONTRACT_ROUNDS: tuple[tuple[str, str], ...] = (
+    ("contract_start_date", "contract_end_date"),
+    ("contract_start_2", "contract_end_2"),
+    ("contract_start_3", "contract_end_3"),
+    ("contract_start_4", "contract_end_4"),
+    ("contract_start_5", "contract_end_5"),
+    ("contract_start_6", "contract_end_6"),
+)
+
+
+def active_employee_status_filter() -> ColumnElement[bool]:
+    """在职员工状态过滤（不含离职、待审批）。"""
+    return or_(
+        Employee.status.is_(None),
+        Employee.status.notin_(_INACTIVE_EMPLOYEE_STATUSES),
+    )
+
+
+def parse_contract_date(value: object) -> date | None:
+    """合同起止字段解析：Date 字段直接返回，字符串字段按常见格式解析。
+
+    “无固定期限”等无法解析的文本返回 None。
+    """
+    if isinstance(value, dt):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str) and value.strip():
+        for fmt in _CONTRACT_DATE_FORMATS:
+            try:
+                return dt.strptime(value.strip(), fmt).date()
+            except ValueError:
+                continue
+    return None
+
+
+def resolve_current_contract_end(
+    end_values: Sequence[object], start_values: Sequence[object]
+) -> date | None:
+    """当前合同到期日：6 期合同取最晚到期日；已续签返回 None。
+
+    最晚到期日之后又出现更晚的签订日期（新一轮合同已签，到期为
+    “无固定期限”或尚未填写）视为已续签，不再计入到期提醒。
+    """
+    end_dates = [d for d in map(parse_contract_date, end_values) if d is not None]
+    if not end_dates:
+        return None
+    latest_end = max(end_dates)
+    for raw_start in start_values:
+        start = parse_contract_date(raw_start)
+        if start is not None and start > latest_end:
+            return None
+    return latest_end
+
+
+def employee_current_contract_end(employee: Employee) -> date | None:
+    """按员工档案 6 期合同字段解析当前合同到期日（已续签返回 None）。"""
+    starts: list[object] = []
+    ends: list[object] = []
+    for start_attr, end_attr in _EMPLOYEE_CONTRACT_ROUNDS:
+        starts.append(getattr(employee, start_attr, None))
+        ends.append(getattr(employee, end_attr, None))
+    return resolve_current_contract_end(ends, starts)
+
+
+def employee_contract_round(
+    employee: Employee, end_date: date
+) -> tuple[int, date | None]:
+    """定位到期日对应的合同期次与签订日期。"""
+    pairs = [
+        (1, getattr(employee, "contract_end_date", None),
+         getattr(employee, "contract_start_date", None)),
+        (2, getattr(employee, "contract_end_2", None),
+         getattr(employee, "contract_start_2", None)),
+        (3, getattr(employee, "contract_end_3", None),
+         getattr(employee, "contract_start_3", None)),
+        (4, getattr(employee, "contract_end_4", None),
+         getattr(employee, "contract_start_4", None)),
+    ]
+    for seq, end_dt, sign_dt in pairs:
+        if isinstance(end_dt, date) and end_dt == end_date:
+            return seq, sign_dt if isinstance(sign_dt, date) else None
+    # 字符串期次（第 5、6 次合同）
+    for seq, attr_name, sign_attr in [
+        (5, "contract_end_5", "contract_start_5"),
+        (6, "contract_end_6", "contract_start_6"),
+    ]:
+        val = getattr(employee, attr_name, None)
+        if isinstance(val, str) and val.strip():
+            for fmt in _CONTRACT_DATE_FORMATS:
+                try:
+                    d = dt.strptime(val.strip(), fmt).date()
+                except ValueError:
+                    continue
+                if d == end_date:
+                    sign_val = getattr(employee, sign_attr, None)
+                    sign_d = parse_contract_date(sign_val)
+                    return seq, sign_d
+                break
+    return 1, None
 
 
 class EmployeeRepository:
@@ -220,7 +326,10 @@ class EmployeeRepository:
             )
         if sub_department:
             stmt = stmt.where(Employee.sub_department.ilike(f"{sub_department}%"))
-        if status:
+        if status == "在职":
+            # “在职”映射为非离职/待审批：兼容飞书同步的“正式/试用期/实习生”取值
+            stmt = stmt.where(active_employee_status_filter())
+        elif status:
             stmt = stmt.where(Employee.status == status)
         else:
             # 默认排除待审批员工，只有显式筛选时才显示
@@ -474,11 +583,12 @@ class EmployeeRepository:
         edu_result = await self.session.execute(edu_stmt.group_by(Employee.education))
         education_distribution = {row[0]: row[1] for row in edu_result.all()}
 
-        # Contract expiring（当前季度，与员工档案「合同到期提醒」口径完全一致：
-        # 全公司在职员工，取 6 个合同字段中最晚的非空日期，判断是否在本季度内到期；
-        # 不按部门可见范围过滤，避免与员工档案季度提醒结果不一致）
+        # ─── 提醒与流动指标 ───
+        # 提醒类指标（合同到期/试用期转正/证书复审）基于在职员工全集计算，
+        # 按当前用户数据范围过滤，与员工档案页「合同到期」横幅口径一致；
+        # 当前合同到期日取 6 期合同最晚到期日，已续签（更晚一期已签订、
+        # 到期为“无固定期限”或尚未填写）不统计
         from datetime import date as _date
-        from datetime import datetime as _dt
         from datetime import timedelta as _timedelta
 
         today = _date.today()
@@ -489,59 +599,102 @@ class EmployeeRepository:
         else:
             # 下季度首月 1 日减一天 = 本季度最后一天（如 7 月季度 → 9-30）
             q_end = _date(today.year, q_start_month + 3, 1) + _timedelta(days=-1)
+        window_30d_end = today + _timedelta(days=30)
+        window_90d_end = today + _timedelta(days=90)
+        month_start = today.replace(day=1)
 
         emp_query = select(Employee).where(
             Employee.is_deleted.is_(False),
-            Employee.status == "在职",
+            active_employee_status_filter(),
         )
+        if dept_scope is not None:
+            emp_query = emp_query.where(dept_scope)
         all_emps = (await self.session.execute(emp_query)).scalars().all()
 
-        def _max_contract_date(emp: Employee) -> date | None:
-            dates: list[date] = []
-            for attr in (
-                "contract_end_date",
-                "contract_end_2",
-                "contract_end_3",
-                "contract_end_4",
-            ):
-                val = getattr(emp, attr, None)
-                if isinstance(val, date):
-                    dates.append(val)
-            for attr in ("contract_end_5", "contract_end_6"):
-                val = getattr(emp, attr, None)
-                if isinstance(val, str) and val.strip():
-                    for fmt in ("%Y/%m/%d", "%Y-%m-%d", "%Y%m%d"):
-                        try:
-                            dates.append(_dt.strptime(val.strip(), fmt).date())
-                            break
-                        except ValueError:
-                            continue
-            return max(dates) if dates else None
+        def _in_window(value: object, start: _date, end: _date) -> bool:
+            return isinstance(value, _date) and start <= value <= end
 
         expiring: list[dict[str, Any]] = []
+        expiring_90d: list[dict[str, Any]] = []
+        probation_due: list[dict[str, Any]] = []
+        certificate_due: list[dict[str, Any]] = []
+        hires_this_month = 0
         for emp in all_emps:
-            max_date = _max_contract_date(emp)
-            if max_date and q_start <= max_date <= q_end:
-                expiring.append(
+            current_end = employee_current_contract_end(emp)
+            if current_end is not None:
+                seq, sign_date = employee_contract_round(emp, current_end)
+                item = {
+                    "employee_number": emp.employee_number,
+                    "name": emp.name,
+                    "department": emp.department,
+                    "position": emp.position,
+                    "contract_end_date": current_end.isoformat(),
+                    "contract_sequence": seq,
+                    "contract_sign_date": sign_date.isoformat()
+                    if sign_date
+                    else None,
+                }
+                if q_start <= current_end <= q_end:
+                    expiring.append(item)
+                if today <= current_end <= window_90d_end:
+                    expiring_90d.append(item)
+            planned = getattr(emp, "planned_probation_date", None)
+            if emp.status == "试用期" and _in_window(planned, today, window_30d_end):
+                probation_due.append(
                     {
                         "employee_number": emp.employee_number,
                         "name": emp.name,
                         "department": emp.department,
                         "position": emp.position,
-                        "contract_end_date": str(max_date),
+                        "planned_probation_date": planned.isoformat(),
                     }
                 )
+            review = getattr(emp, "certificate_review_date", None)
+            if _in_window(review, today, window_90d_end):
+                certificate_due.append(
+                    {
+                        "employee_number": emp.employee_number,
+                        "name": emp.name,
+                        "department": emp.department,
+                        "position": emp.position,
+                        "qualification_type": getattr(
+                            emp, "qualification_type", None
+                        ),
+                        "certificate_review_date": review.isoformat(),
+                    }
+                )
+            if getattr(emp, "hire_date", None) and emp.hire_date >= month_start:
+                hires_this_month += 1
+
         expiring.sort(key=lambda item: item["contract_end_date"])
-        contract_expiring_count = len(expiring)
-        contract_expiring_list = expiring
+        expiring_90d.sort(key=lambda item: item["contract_end_date"])
+        probation_due.sort(key=lambda item: item["planned_probation_date"])
+        certificate_due.sort(key=lambda item: item["certificate_review_date"])
+
+        # 本月离职：离职员工转为软删，需绕过 is_deleted 按最后工作日统计
+        departures_result = await self.session.execute(
+            select(func.count()).select_from(Employee).where(
+                Employee.status == "离职",
+                Employee.last_working_day >= month_start,
+            )
+        )
+        departures_this_month = departures_result.scalar() or 0
 
         return {
             "total": total,
             "status_distribution": status_distribution,
             "department_distribution": department_distribution,
             "education_distribution": education_distribution,
-            "contract_expiring_count": contract_expiring_count,
-            "contract_expiring_list": contract_expiring_list,
+            "contract_expiring_count": len(expiring),
+            "contract_expiring_list": expiring,
+            "contract_expiring_90d_count": len(expiring_90d),
+            "contract_expiring_90d_list": expiring_90d,
+            "probation_due_count": len(probation_due),
+            "probation_due_list": probation_due,
+            "certificate_due_count": len(certificate_due),
+            "certificate_due_list": certificate_due,
+            "hires_this_month": hires_this_month,
+            "departures_this_month": departures_this_month,
         }
 
     def _apply_filters(self, stmt: Any, **filters: Any) -> Any:
@@ -666,8 +819,7 @@ class EmployeeRepository:
         page_size: int = 20,
         dept_alias_set: set[str] | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
-        """筛选合同到期人员。取6个合同字段中最晚的非空日期。"""
-        from datetime import date
+        """筛选合同到期人员。取6个合同字段中最晚的非空日期；已续签不返回。"""
 
         # Ensure date objects (defensive)
         if isinstance(start_date, str):
@@ -677,7 +829,7 @@ class EmployeeRepository:
 
         stmt = select(Employee).where(
             Employee.is_deleted.is_(False),
-            Employee.status == "在职",
+            active_employee_status_filter(),
         )
         if dept_alias_set is not None:
             # 部门级数据隔离：可见部门别名集合
@@ -691,76 +843,13 @@ class EmployeeRepository:
         result = await self.session.execute(stmt)
         all_employees = result.scalars().all()
 
-        def _get_max_contract_date(emp: Employee) -> date | None:
-            dates: list[date] = []
-            for attr_name in (
-                "contract_end_date",
-                "contract_end_2",
-                "contract_end_3",
-                "contract_end_4",
-            ):
-                val = getattr(emp, attr_name, None)
-                if isinstance(val, date):
-                    dates.append(val)
-            # contract_end_5 and _6 are strings, try parse
-            for attr_name in ("contract_end_5", "contract_end_6"):
-                val = getattr(emp, attr_name, None)
-                if isinstance(val, str) and val.strip():
-                    for fmt in ("%Y/%m/%d", "%Y-%m-%d", "%Y%m%d"):
-                        try:
-                            parsed = dt.strptime(val.strip(), fmt).date()
-                            dates.append(parsed)
-                            break
-                        except ValueError:
-                            continue
-            return max(dates) if dates else None
-
-        def _get_contract_seq_and_sign(
-            emp: Employee, max_date: date
-        ) -> tuple[int, date | None]:
-            "Return (sequence_number, sign_date) for the contract ending at max_date."
-            pairs = [
-                (1, emp.contract_end_date, emp.contract_start_date),
-                (2, emp.contract_end_2, emp.contract_start_2),
-                (3, emp.contract_end_3, emp.contract_start_3),
-                (4, emp.contract_end_4, emp.contract_start_4),
-            ]
-            for seq, end_dt, sign_dt in pairs:
-                if isinstance(end_dt, date) and end_dt == max_date:
-                    return seq, sign_dt if isinstance(sign_dt, date) else None
-            # Check string fields
-            for seq, attr_name, sign_attrs in [
-                (5, "contract_end_5", ["contract_start_5"]),
-                (6, "contract_end_6", ["contract_start_6"]),
-            ]:
-                val = getattr(emp, attr_name, None)
-                if isinstance(val, str) and val.strip():
-                    for fmt in ("%Y/%m/%d", "%Y-%m-%d", "%Y%m%d"):
-                        try:
-                            d = dt.strptime(val.strip(), fmt).date()
-                            if d == max_date:
-                                sign_val = getattr(emp, sign_attrs[0], None)
-                                sign_d = None
-                                if isinstance(sign_val, str) and sign_val.strip():
-                                    try:
-                                        sign_d = dt.strptime(
-                                            sign_val.strip(), "%Y/%m/%d"
-                                        ).date()
-                                    except ValueError:
-                                        pass
-                                return seq, sign_d
-                            break
-                        except ValueError:
-                            continue
-            return 1, None
-
         expiring: list[dict[str, Any]] = []
         for emp in all_employees:
-            max_date = _get_max_contract_date(emp)
+            max_date = employee_current_contract_end(emp)
             if max_date is None:
                 continue
             if start_date <= max_date <= end_date:
-                seq, sign_date = _get_contract_seq_and_sign(emp, max_date)
+                seq, sign_date = employee_contract_round(emp, max_date)
                 expiring.append(
                     {
                         "employee_id": str(emp.id),

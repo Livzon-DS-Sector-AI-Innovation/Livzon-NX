@@ -5,6 +5,7 @@ from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -150,6 +151,14 @@ async def test_quality_statistics_cover_local_and_feishu_branches(
                 _Result(scalar_value=3),
             ]
         )
+    )
+    async def _fake_due_status(_db: Any, **_kwargs: Any) -> dict[str, Any]:
+        # 变更计划指标读真实计划表，这里固定计数保持聚合断言稳定
+        return {"total_count": 6, "overdue": [{}, {}], "confirmed_count": 3}
+
+    monkeypatch.setattr(
+        "app.modules.quality.service.change_action_plan.get_change_action_plan_due_status",
+        _fake_due_status,
     )
     change_stats = await quality_statistics.get_change_statistics(change_db)
     assert change_stats.total == 4

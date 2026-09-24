@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -10,6 +10,7 @@ from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.quality import repository
 from app.modules.quality.models.change_control import ChangeControl
 
 
@@ -54,8 +55,10 @@ async def _clean_change_action_plans(
                 related_work TEXT NULL,
                 owner_name VARCHAR(100) NULL,
                 owner_user_id VARCHAR(100) NULL,
+                owner_avatar_url VARCHAR(512) NULL,
                 director_name VARCHAR(100) NULL,
                 director_user_id VARCHAR(100) NULL,
+                director_avatar_url VARCHAR(512) NULL,
                 deadline_date DATE NULL,
                 status VARCHAR(100) NULL,
                 delay_flag VARCHAR(100) NULL,
@@ -89,7 +92,9 @@ async def _clean_change_action_plans(
             ADD COLUMN IF NOT EXISTS last_reminded_at TIMESTAMPTZ NULL,
             ADD COLUMN IF NOT EXISTS reminder_confirmed_at TIMESTAMPTZ NULL,
             ADD COLUMN IF NOT EXISTS reminder_confirmed_by VARCHAR(100) NULL,
-            ADD COLUMN IF NOT EXISTS reminder_message_id VARCHAR(100) NULL
+            ADD COLUMN IF NOT EXISTS reminder_message_id VARCHAR(100) NULL,
+            ADD COLUMN IF NOT EXISTS owner_avatar_url VARCHAR(512) NULL,
+            ADD COLUMN IF NOT EXISTS director_avatar_url VARCHAR(512) NULL
             """
         )
     )
@@ -453,6 +458,184 @@ async def test_sync_from_feishu_overwrites_owner_fields_for_existing_plan(
     assert item["owner_user_id"] == "ou_new_owner"
     assert item["director_name"] == "王经理"
     assert item["director_user_id"] == "ou_new_director"
+
+
+@pytest.mark.anyio
+async def test_sync_from_feishu_creates_plan_from_production_shaped_record(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """空表全量拉取走 create 路径：人员字段带 avatar_url、日期为毫秒时间戳时同步成功。
+
+    回归背景：同步 payload 曾写入模型不存在的 owner_avatar_url/director_avatar_url，
+    ChangeActionPlan(**payload) 对每条记录抛 TypeError，生产 94 条全部失败。
+    同时覆盖：缺「变更控制号/项目名称」的飞书记录不再跳过，按空值入库保证台账全量可见。
+    """
+
+    async def _fake_search_records(_db: Any, change_code: Any = None) -> Any:  # noqa: ANN001
+        return [
+            {
+                "record_id": "rec_create_001",
+                "fields": {
+                    "变更控制号": [{"text": "BG-2601004", "type": "text"}],
+                    "项目名称": [{"text": "修订检验规程", "type": "text"}],
+                    "涉及工作": [{"text": "跟踪残留溶剂检测", "type": "text"}],
+                    "总负责人": [
+                        {
+                            "name": "李文昊",
+                            "id": "on_45aff2627b8d",
+                            "avatar_url": "https://example.feishucdn.com/a.jpeg",
+                        }
+                    ],
+                    "部门负责人": [
+                        {
+                            "name": "王经理",
+                            "id": "on_director_001",
+                            "avatar_url": "https://example.feishucdn.com/d.jpeg",
+                        }
+                    ],
+                    "项目截止时间": 1773504000000,
+                    "状态": "已完成",
+                    "未完成是否延期": "否",
+                    "延期后的日期": None,
+                },
+            },
+            {
+                "record_id": "rec_create_002",
+                "fields": {
+                    "涉及工作": [{"text": "待补录控制号的记录", "type": "text"}],
+                    "状态": "推进中",
+                },
+            },
+        ]
+
+    monkeypatch.setattr(
+        "app.modules.quality.service.change_action_plan.feishu_sync.search_records",
+        _fake_search_records,
+    )
+
+    sync_response = await client.post(
+        "/api/v1/quality/change-action-plans/sync-from-feishu"
+    )
+    assert sync_response.status_code == 200
+    assert sync_response.json()["data"]["synced"] == 2
+    assert sync_response.json()["data"]["failed"] == 0
+
+    list_response = await client.get(
+        "/api/v1/quality/change-action-plans",
+        params={"change_code": "BG-2601004"},
+    )
+    assert list_response.status_code == 200
+    items = list_response.json()["data"]
+    assert len(items) == 1
+    item = items[0]
+    assert item["project_name"] == "修订检验规程"
+    assert item["related_work"] == "跟踪残留溶剂检测"
+    assert item["owner_name"] == "李文昊"
+    assert item["owner_user_id"] == "on_45aff2627b8d"
+    assert item["owner_avatar_url"] == "https://example.feishucdn.com/a.jpeg"
+    assert item["director_name"] == "王经理"
+    assert item["director_user_id"] == "on_director_001"
+    assert item["director_avatar_url"] == "https://example.feishucdn.com/d.jpeg"
+    assert item["status"] == "已完成"
+    # 多维表时区为 Asia/Shanghai，1773504000000 = 上海 2026-03-15 00:00
+    assert item["deadline_date"] == "2026-03-15"
+
+    # 缺必填字段的记录不再被跳过：可按涉及工作检索到（空值序列化为 None，页面显示 -）
+    missing_response = await client.get(
+        "/api/v1/quality/change-action-plans",
+        params={"related_work": "待补录控制号的记录"},
+    )
+    assert missing_response.status_code == 200
+    missing_items = missing_response.json()["data"]
+    assert len(missing_items) == 1
+    assert missing_items[0]["change_code"] is None
+    assert missing_items[0]["project_name"] is None
+    assert missing_items[0]["status"] == "推进中"
+
+
+@pytest.mark.anyio
+async def test_change_action_plan_due_status_buckets(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """仪表盘逾期/临期明细：有效截止日（延期后优先）、已完成排除、窗口筛选、与统计同源。"""
+    today = datetime.now(UTC).date()
+
+    async def _seed(
+        code: str,
+        *,
+        deadline: date | None = None,
+        delayed: date | None = None,
+        status: str | None = None,
+        confirmed: bool = False,
+    ) -> None:
+        payload: dict[str, Any] = {
+            "change_code": code,
+            "project_name": f"{code} 项目",
+            "deadline_date": deadline,
+            "delayed_deadline_date": delayed,
+            "status": status,
+        }
+        if confirmed:
+            payload["reminder_confirmed_at"] = datetime.now(UTC)
+        await repository.create_change_action_plan(db_session, payload)
+
+    await _seed("BG-DUE-001", deadline=today - timedelta(days=1), status="推进中")
+    await _seed("BG-DUE-002", deadline=today + timedelta(days=5))
+    await _seed("BG-DUE-003", deadline=today - timedelta(days=2), status="已完成")
+    await _seed(
+        "BG-DUE-004",
+        deadline=today - timedelta(days=10),
+        delayed=today + timedelta(days=1),
+        status="推进中",
+    )
+    await _seed("BG-DUE-005", status="推进中")
+    await _seed(
+        "BG-DUE-006",
+        deadline=today - timedelta(days=3),
+        status="推进中",
+        confirmed=True,
+    )
+    await db_session.commit()
+
+    response = await client.get(
+        "/api/v1/quality/change-action-plans/due-status",
+        params={"lead_days": 10},
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["lead_days"] == 10
+    assert data["total_count"] == 6
+    assert data["confirmed_count"] == 1
+    # 已完成(BG-DUE-003)与无截止日(BG-DUE-005)不进任何桶
+    assert [item["change_code"] for item in data["overdue"]] == [
+        "BG-DUE-006",
+        "BG-DUE-001",
+    ]
+    assert data["overdue"][0]["days_offset"] == -3
+    # BG-DUE-004 原截止日已过但延期到明天 → 按延期后日期进临期桶
+    assert [item["change_code"] for item in data["due_soon"]] == [
+        "BG-DUE-004",
+        "BG-DUE-002",
+    ]
+
+    narrow = await client.get(
+        "/api/v1/quality/change-action-plans/due-status",
+        params={"lead_days": 2},
+    )
+    assert narrow.status_code == 200
+    narrow_data = narrow.json()["data"]
+    assert [item["change_code"] for item in narrow_data["due_soon"]] == ["BG-DUE-004"]
+    assert len(narrow_data["overdue"]) == 2
+
+    # 仪表盘统计的变更计划指标与 due-status 同源（真实计划表口径）
+    stats = await client.get("/api/v1/quality/statistics/changes")
+    assert stats.status_code == 200
+    stats_data = stats.json()["data"]
+    assert stats_data["actionPlanTotal"] == 6
+    assert stats_data["actionPlanOverdue"] == 2
+    assert stats_data["actionPlanConfirmed"] == 1
 
 
 @pytest.mark.anyio

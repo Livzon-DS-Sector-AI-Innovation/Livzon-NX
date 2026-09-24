@@ -9,6 +9,7 @@ import type {
   CapaPlanTrackItem,
   ChangeDashboardStats,
   ChangeActionPlanDetail,
+  ChangeActionPlanDueStatus,
   ChangeActionPlanListItem,
   ChangeActionPlanPersonOption,
   QualityPersonOption,
@@ -570,6 +571,17 @@ export async function fetchCapaStatistics(): Promise<CapaDashboardStats> {
 
 export async function fetchChangeDashboardStats(): Promise<ChangeDashboardStats> {
   const res = await fetch('/api/v1/quality/statistics/changes')
+  if (!res.ok) throw new Error(`请求失败: ${res.status}`)
+  const json = await res.json()
+  return json.data ?? json
+}
+
+export async function fetchChangeActionPlanDueStatus(
+  leadDays: number,
+): Promise<ChangeActionPlanDueStatus> {
+  const res = await fetch(
+    `/api/v1/quality/change-action-plans/due-status?lead_days=${leadDays}`,
+  )
   if (!res.ok) throw new Error(`请求失败: ${res.status}`)
   const json = await res.json()
   return json.data ?? json

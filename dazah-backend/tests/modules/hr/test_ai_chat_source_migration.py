@@ -7,6 +7,8 @@
 - 写工具执行
 """
 
+from datetime import date
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -19,6 +21,7 @@ from app.modules.hr.ai_tools import (
     hr_create_offboarding_record,
     hr_create_training_record,
     hr_list_contracts,
+    hr_query_contract_expiring,
     hr_query_employee,
     hr_query_offboarding,
     hr_query_position_transfers,
@@ -153,6 +156,90 @@ async def test_hr_list_contracts_with_filters():
     session = _mock_session(return_rows=[])
     result = await hr_list_contracts(session, department="生产管理部")
     assert isinstance(result, list)
+
+
+@pytest.mark.asyncio
+async def test_hr_query_contract_expiring_skips_renewed_and_uses_current_end():
+    """合同到期查询返回当前合同到期日；已续签（无固定期限/下期未填到期日）不返回。"""
+    employee_active = SimpleNamespace(
+        employee_number="E001",
+        name="张三",
+        department="质量部",
+        position="QA",
+        contract_type="固定期限",
+        hire_date=date(2023, 8, 21),
+        contract_start_date=date(2023, 8, 21),
+        contract_end_date=date(2026, 8, 20),
+        contract_start_2=None,
+        contract_end_2=None,
+        contract_start_3=None,
+        contract_end_3=None,
+        contract_start_4=None,
+        contract_end_4=None,
+        contract_start_5=None,
+        contract_end_5=None,
+        contract_start_6=None,
+        contract_end_6=None,
+    )
+    employee_renewed = SimpleNamespace(
+        employee_number="E002",
+        name="李四",
+        department="101二车间",
+        position="机修工",
+        contract_type="",
+        hire_date=date(2023, 7, 4),
+        contract_start_date=date(2023, 7, 4),
+        contract_end_date=date(2026, 7, 3),
+        contract_start_2=date(2026, 7, 4),
+        contract_end_2=None,
+        contract_start_3=None,
+        contract_end_3=None,
+        contract_start_4=None,
+        contract_end_4=None,
+        contract_start_5=None,
+        contract_end_5=None,
+        contract_start_6=None,
+        contract_end_6=None,
+    )
+    ledger_renewed = SimpleNamespace(
+        employee_number="E003",
+        name="王五",
+        dept_level1="103车间",
+        position="值班员工",
+        contract_start_1=date(2020, 7, 17),
+        contract_end_1=date(2026, 7, 16),
+        contract_start_2=date(2026, 7, 17),
+        contract_end_2="无固定期限",
+        contract_start_3=None,
+        contract_end_3=None,
+        contract_start_4=None,
+        contract_end_4=None,
+        contract_start_5=None,
+        contract_end_5=None,
+        contract_start_6=None,
+        contract_end_6=None,
+    )
+    session = AsyncMock()
+    emp_result = MagicMock()
+    emp_result.scalars.return_value.all.return_value = [
+        employee_active,
+        employee_renewed,
+    ]
+    cm_result = MagicMock()
+    cm_result.scalars.return_value.all.return_value = [ledger_renewed]
+    session.execute = AsyncMock(side_effect=[emp_result, cm_result])
+
+    result = await hr_query_contract_expiring(session, "2026-07-01", "2026-09-30")
+
+    assert [item["工号"] for item in result] == ["E001"]
+    assert result[0]["合同到期日"] == "2026-08-20"
+    assert result[0]["数据来源"] == "员工档案"
+
+    # 员工查询的在职过滤按“非离职/待审批”，兼容飞书“正式”等取值
+    emp_stmt = session.execute.call_args_list[0][0][0]
+    sql = str(emp_stmt.compile(compile_kwargs={"literal_binds": True}))
+    assert "NOT IN" in sql.upper()
+    assert "离职" in sql
 
 
 # ── Write Tool Tests ─────────────────────────────────────

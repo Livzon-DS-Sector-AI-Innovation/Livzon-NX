@@ -232,6 +232,23 @@ async def sync_change_action_plans_from_feishu(
         raise AppException(message=str(e))
 
 
+@router.get(
+    "/change-action-plans/due-status",
+    summary="获取变更计划逾期/临期明细",
+    response_model=ApiResponseEnvelope[dict[str, Any]],
+)
+async def get_change_action_plan_due_status(
+    lead_days: int | None = Query(
+        None, ge=1, le=60, description="临期窗口天数；不传则取到期提醒配置"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    _require_user(current_user)
+    result = await service.get_change_action_plan_due_status(db, lead_days=lead_days)
+    return success_response(data=result)
+
+
 @router.post(
     "/change-action-plans/reminders/run",
     summary="立即执行变更计划提醒",

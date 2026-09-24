@@ -247,32 +247,6 @@ export default function PositionTransferClient({
       width: 80,
     },
     {
-      title: '联系电话',
-      dataIndex: 'contact_phone',
-      key: 'contact_phone',
-      width: 100,
-    },
-    {
-      title: '申请人确认说明',
-      dataIndex: 'applicant_confirmation_text',
-      key: 'applicant_confirmation_text',
-      width: 200,
-      ellipsis: { showTitle: false },
-      render: (text: string) => text ? <Tooltip title={text}>{text}</Tooltip> : '-',
-    },
-    {
-      title: '申请人签名',
-      dataIndex: 'applicant_signature',
-      key: 'applicant_signature',
-      width: 80,
-    },
-    {
-      title: '确认日期',
-      dataIndex: 'applicant_confirmation_date',
-      key: 'applicant_confirmation_date',
-      width: 90,
-    },
-    {
       title: '审批状态',
       dataIndex: 'approval_status',
       key: 'approval_status',
@@ -408,7 +382,7 @@ export default function PositionTransferClient({
           showTotal: (t) => `共 ${t} 条`,
           onChange: handlePageChange,
         }}
-        scroll={{ x: 1400 }}
+        scroll={{ x: 900 }}
         size="small"
       />
 

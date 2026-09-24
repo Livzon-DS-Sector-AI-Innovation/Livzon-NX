@@ -218,7 +218,7 @@ export function ChangeActionPlanTable({
         ),
       },
       {
-        title: '部门总监',
+        title: '部门负责人',
         dataIndex: 'director_name',
         key: 'director_name',
         width: defaultColumnWidths.director_name,

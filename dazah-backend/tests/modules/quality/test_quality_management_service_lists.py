@@ -2205,6 +2205,15 @@ async def test_change_statistics_prefers_ledger_then_legacy_fields(
         feishu_bitable.BitableClient, "search_records", fake_search_records
     )
 
+    async def _fake_due_status(_db: AsyncSession, **_kwargs: Any) -> dict[str, Any]:
+        # 变更计划指标已改为读真实计划表（due-status 同源），这里固定计数验证聚合口径
+        return {"total_count": 2, "overdue": [{}, {}, {}], "confirmed_count": 1}
+
+    monkeypatch.setattr(
+        "app.modules.quality.service.change_action_plan.get_change_action_plan_due_status",
+        _fake_due_status,
+    )
+
     result = await service.get_change_statistics(db_session)
 
     assert result.total == 4
