@@ -94,7 +94,6 @@ OOS_OOT_INVESTIGATION_PUSH_TABLE_ID = ""
 DEFAULT_QUALITY_FEISHU_ENTITIES: list[tuple[str, str, str, int]] = [
     ("deviation_report_record", "报告记录", "偏差管理", 10),
     ("deviation_investigation_push_record", "调查推送", "偏差管理", 20),
-    ("capa_ledger", "CAPA台账", "CAPA管理", 40),
     ("capa_plan_track", "计划跟踪", "CAPA管理", 50),
     ("validation_master_plan", "验证主计划", "验证与确认", 70),
     ("validation_equipment_qualification", "设备确认", "验证与确认", 80),
@@ -283,11 +282,6 @@ QUALITY_FEISHU_ENTITY_ENV_PREFILLS: dict[str, dict[str, str]] = {
         "app_token_setting": "QUALITY_FEISHU_APP_TOKEN",
         "table_id_setting": "QUALITY_FEISHU_DEVIATION_INVESTIGATION_PUSH_TABLE_ID",
         "table_name": "偏差调查推送记录",
-    },
-    "capa_ledger": {
-        "app_token_setting": "QUALITY_FEISHU_APP_TOKEN",
-        "table_id_setting": "QUALITY_FEISHU_CAPA_TABLE_ID",
-        "table_name": "CAPA台账",
     },
     "capa_plan_track": {
         "app_token_setting": "QUALITY_FEISHU_APP_TOKEN",
@@ -711,19 +705,6 @@ QUALITY_FEISHU_ENTITY_ENV_PREFILLS: dict[str, dict[str, str]] = {
 }
 
 QUALITY_FEISHU_SYSTEM_FIELDS: dict[str, list[tuple[str, str, str]]] = {
-    "capa_ledger": [
-        ("CAPA编号", "CAPA编号", "both"),
-        ("启动日期", "启动日期", "push"),
-        ("事件部门", "事件部门", "push"),
-        ("涉及产品", "涉及产品", "push"),
-        ("CAPA简述", "CAPA简述", "push"),
-        ("CAPA效果评估", "CAPA效果评估", "push"),
-        ("关闭日期", "关闭日期", "both"),
-        ("QA质量员", "QA质量员", "push"),
-        ("QA质量员确认日期", "QA质量员确认日期", "push"),
-        ("CAPA状态", "CAPA状态", "both"),
-        ("关联CAPA计划", "关联CAPA计划", "push"),
-    ],
     "deviation_report_record": [
         ("偏差编号", "偏差编号", "both"),
         ("报告时间", "报告时间", "both"),
@@ -1210,6 +1191,8 @@ async def ensure_quality_feishu_entity_settings(
             "supplier_ledger",
             # 偏差台账已与飞书多维表格解耦（本地台账页不受影响）
             "deviation_ledger",
+            # CAPA 台账已本地化，不再读写飞书
+            "capa_ledger",
             # 部门联系人功能已下线（人员目录统一为共享人员服务）
             "department_contact",
         }

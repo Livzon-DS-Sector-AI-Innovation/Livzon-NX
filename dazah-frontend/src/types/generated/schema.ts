@@ -13956,23 +13956,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/quality/capas/sync-from-feishu": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** 从飞书同步CAPA台账 */
-        post: operations["sync_capas_from_feishu_api_v1_quality_capas_sync_from_feishu_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/quality/capas/{capa_id}": {
         parameters: {
             query?: never;
@@ -15665,23 +15648,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/quality/feishu-sync/capas/{capa_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** 同步CAPA到飞书Base */
-        post: operations["sync_capa_record_to_feishu_api_v1_quality_feishu_sync_capas__capa_id__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/quality/feishu-sync/conflicts": {
         parameters: {
             query?: never;
@@ -15710,23 +15676,6 @@ export interface paths {
         put?: never;
         /** 同步偏差报告记录到飞书Base */
         post: operations["sync_deviation_investigation_push_record_to_feishu_api_v1_quality_feishu_sync_deviation_investigation_push_records__record_id__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/feishu-sync/deviations/{deviation_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** 同步偏差到飞书Base */
-        post: operations["sync_deviation_record_to_feishu_api_v1_quality_feishu_sync_deviations__deviation_id__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -15811,78 +15760,6 @@ export interface paths {
         post?: never;
         /** 删除飞书CAPA计划跟踪记录 */
         delete: operations["api_delete_capa_plan_track_record_api_v1_quality_feishu_capa_plan_tracks__record_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/feishu/capas": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 获取飞书CAPA台账列表
-         * @description 获取飞书CAPA台账列表，支持关键词检索与分页。
-         */
-        get: operations["api_list_capa_ledger_api_v1_quality_feishu_capas_get"];
-        put?: never;
-        /**
-         * 创建飞书CAPA台账记录
-         * @description 在飞书CAPA台账表中创建一条新记录。
-         */
-        post: operations["api_create_capa_ledger_record_api_v1_quality_feishu_capas_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/feishu/capas/export": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 导出CAPA台账为Word文档
-         * @description 按筛选条件导出CAPA台账为 Word (.docx) 文件流。
-         */
-        get: operations["api_export_capa_ledger_api_v1_quality_feishu_capas_export_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/quality/feishu/capas/{record_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 获取飞书CAPA台账详情
-         * @description 根据记录 ID 获取单条飞书CAPA台账详情。
-         */
-        get: operations["api_get_capa_ledger_record_api_v1_quality_feishu_capas__record_id__get"];
-        /**
-         * 更新飞书CAPA台账记录
-         * @description 根据记录 ID 更新飞书CAPA台账字段。
-         */
-        put: operations["api_update_capa_ledger_record_api_v1_quality_feishu_capas__record_id__put"];
-        post?: never;
-        /**
-         * 删除飞书CAPA台账记录
-         * @description 根据记录 ID 删除飞书CAPA台账记录。
-         */
-        delete: operations["api_delete_capa_ledger_record_api_v1_quality_feishu_capas__record_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -32468,26 +32345,25 @@ export interface components {
             /** Plan Content */
             plan_content: string;
         };
-        /** CapaStatistics */
+        /**
+         * CapaStatistics
+         * @description CAPA 台账统计：按台账列口径（本地台账数据源）。
+         */
         CapaStatistics: {
-            /** Categorydistribution */
-            categoryDistribution: {
-                [key: string]: unknown;
-            }[];
             /** Closedcount */
             closedCount: number;
             /** Departmentdistribution */
             departmentDistribution: {
                 [key: string]: unknown;
             }[];
-            /** Overduecount */
-            overdueCount: number;
-            /** Sourcedistribution */
-            sourceDistribution: {
+            /** Inprogresscount */
+            inProgressCount: number;
+            /** Monthlytrend */
+            monthlyTrend: {
                 [key: string]: unknown;
             }[];
-            /** Statusdistribution */
-            statusDistribution: {
+            /** Resultdistribution */
+            resultDistribution: {
                 [key: string]: unknown;
             }[];
             /** Total */
@@ -34866,11 +34742,10 @@ export interface components {
         };
         /** CreateCapaPlanTrackRequest */
         CreateCapaPlanTrackRequest: {
-            /**
-             * Capa Id
-             * Format: uuid
-             */
-            capa_id: string;
+            /** Capa Code */
+            capa_code?: string | null;
+            /** Capa Id */
+            capa_id?: string | null;
             /** Department */
             department?: string | null;
             /** Department Head */
@@ -34890,7 +34765,7 @@ export interface components {
             /** Owner Name */
             owner_name?: string | null;
             /** Plan Content */
-            plan_content: string;
+            plan_content?: string | null;
             /** Progress */
             progress?: string | null;
             /**
@@ -41651,58 +41526,6 @@ export interface components {
              * @description 工号
              */
             employee_number: string;
-        };
-        /**
-         * FeishuCapaLedgerCreateRequest
-         * @description 创建飞书CAPA台账记录请求体。
-         */
-        FeishuCapaLedgerCreateRequest: {
-            /** Capa效果评估 */
-            "CAPA\u6548\u679C\u8BC4\u4F30"?: string | null;
-            /** Capa状态 */
-            "CAPA\u72B6\u6001"?: string | null;
-            /** Capa简述 */
-            "CAPA\u7B80\u8FF0"?: string | null;
-            /** Capa编号 */
-            "CAPA\u7F16\u53F7"?: string | null;
-            /** Qa质量员 */
-            "QA\u8D28\u91CF\u5458"?: string | null;
-            /** Qa质量员确认日期 */
-            "QA\u8D28\u91CF\u5458\u786E\u8BA4\u65E5\u671F"?: string | null;
-            /** 事件部门 */
-            "\u4E8B\u4EF6\u90E8\u95E8"?: string | null;
-            /** 关闭日期 */
-            "\u5173\u95ED\u65E5\u671F"?: string | null;
-            /** 启动日期 */
-            "\u542F\u52A8\u65E5\u671F"?: string | null;
-            /** 涉及产品 */
-            "\u6D89\u53CA\u4EA7\u54C1"?: string | null;
-        };
-        /**
-         * FeishuCapaLedgerUpdateRequest
-         * @description 更新飞书CAPA台账记录请求体。
-         */
-        FeishuCapaLedgerUpdateRequest: {
-            /** Capa效果评估 */
-            "CAPA\u6548\u679C\u8BC4\u4F30"?: string | null;
-            /** Capa状态 */
-            "CAPA\u72B6\u6001"?: string | null;
-            /** Capa简述 */
-            "CAPA\u7B80\u8FF0"?: string | null;
-            /** Capa编号 */
-            "CAPA\u7F16\u53F7"?: string | null;
-            /** Qa质量员 */
-            "QA\u8D28\u91CF\u5458"?: string | null;
-            /** Qa质量员确认日期 */
-            "QA\u8D28\u91CF\u5458\u786E\u8BA4\u65E5\u671F"?: string | null;
-            /** 事件部门 */
-            "\u4E8B\u4EF6\u90E8\u95E8"?: string | null;
-            /** 关闭日期 */
-            "\u5173\u95ED\u65E5\u671F"?: string | null;
-            /** 启动日期 */
-            "\u542F\u52A8\u65E5\u671F"?: string | null;
-            /** 涉及产品 */
-            "\u6D89\u53CA\u4EA7\u54C1"?: string | null;
         };
         /**
          * FeishuCapaPlanTrackCreateRequest
@@ -57574,6 +57397,8 @@ export interface components {
         };
         /** UpdateCapaPlanTrackRequest */
         UpdateCapaPlanTrackRequest: {
+            /** Capa Code */
+            capa_code?: string | null;
             /** Department */
             department?: string | null;
             /** Department Head */
@@ -96994,37 +96819,6 @@ export interface operations {
             };
         };
     };
-    sync_capas_from_feishu_api_v1_quality_capas_sync_from_feishu_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_capa_api_v1_quality_capas__capa_id__get: {
         parameters: {
             query?: never;
@@ -101509,39 +101303,6 @@ export interface operations {
             };
         };
     };
-    sync_capa_record_to_feishu_api_v1_quality_feishu_sync_capas__capa_id__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                capa_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_quality_sync_conflicts_api_v1_quality_feishu_sync_conflicts_get: {
         parameters: {
             query?: {
@@ -101595,39 +101356,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    sync_deviation_record_to_feishu_api_v1_quality_feishu_sync_deviations__deviation_id__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                deviation_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -101852,215 +101580,6 @@ export interface operations {
         };
     };
     api_delete_capa_plan_track_record_api_v1_quality_feishu_capa_plan_tracks__record_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                record_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_list_capa_ledger_api_v1_quality_feishu_capas_get: {
-        parameters: {
-            query?: {
-                keyword?: string | null;
-                page?: number;
-                page_size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponseEnvelope_list_dict_str__Any___"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_create_capa_ledger_record_api_v1_quality_feishu_capas_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FeishuCapaLedgerCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_export_capa_ledger_api_v1_quality_feishu_capas_export_get: {
-        parameters: {
-            query?: {
-                keyword?: string | null;
-                department?: string | null;
-                product?: string | null;
-                status?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_get_capa_ledger_record_api_v1_quality_feishu_capas__record_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                record_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_update_capa_ledger_record_api_v1_quality_feishu_capas__record_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                record_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FeishuCapaLedgerUpdateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_delete_capa_ledger_record_api_v1_quality_feishu_capas__record_id__delete: {
         parameters: {
             query?: never;
             header?: never;

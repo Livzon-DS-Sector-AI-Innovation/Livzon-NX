@@ -350,4 +350,35 @@ describe('DeviationHistoryPage', () => {
     expect(text).toContain('批量重新提取结果')
     expect(text).toContain('AI 服务调用失败')
   })
+
+  it('keeps the form connected when opening the create/edit drawers', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      apiClient.fetchHistoricalDeviations.mockResolvedValue({
+        items: [makeItem()],
+        total: 1,
+        page: 1,
+        page_size: 20,
+      })
+      apiClient.fetchHistoricalDeviation.mockResolvedValue(makeDetail())
+      await renderPage()
+      await act(async () => {
+        clickButton('新建历史偏差')
+        await new Promise((resolve) => setTimeout(resolve, 80))
+      })
+      await act(async () => {
+        clickButton('编辑')
+        await new Promise((resolve) => setTimeout(resolve, 120))
+      })
+      const formWarnings = errorSpy.mock.calls.filter((call) =>
+        call
+          .map((part) => String(part))
+          .join(' ')
+          .includes('not connected to any Form element')
+      )
+      expect(formWarnings).toHaveLength(0)
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
 })

@@ -49,37 +49,8 @@ async def test_selected_people_are_translated_without_rewriting_untouched_fields
     assert write.await_args.kwargs["user_id_type"] == "union_id"
 
 
-async def test_capa_qa_member_and_plan_choices_use_feishu_field_types(monkeypatch):
-    capa = SimpleNamespace(
-        id="capa",
-        capa_code="CA-1",
-        created_at=None,
-        closure_date=None,
-        qa_confirm_date=None,
-        department="QC",
-        affected_product="A",
-        capa_content="措施",
-        title="标题",
-        evaluation_result=None,
-        qa_confirmer="质保人员",
-        status="draft",
-        feishu_base_record_id="rec_capa",
-    )
-    monkeypatch.setattr(sync.repository, "get_capa_by_id", AsyncMock(return_value=capa))
-    monkeypatch.setattr(
-        sync.repository, "get_capa_plan_tracks_by_capa_ids", AsyncMock(return_value=[])
-    )
-    monkeypatch.setattr(
-        sync,
-        "_resolve_contact_bitable_user_value",
-        AsyncMock(return_value=[{"id": "on_qa"}]),
-    )
-    monkeypatch.setattr(sync, "_mark_sync_success", AsyncMock())
-    write = AsyncMock(return_value=("rec_capa", "table"))
-    monkeypatch.setattr(sync.feishu_sync, "_upsert_record", write)
-    await sync.sync_capa_to_feishu(SimpleNamespace(), "capa")
-    assert write.await_args.args[4]["QA质量员"] == [{"id": "on_qa"}]
-
+async def test_capa_plan_choices_use_feishu_field_types(monkeypatch):
+    # CAPA 台账已本地化（无推送）；此处仅校验计划跟踪推送的字段类型
     track = SimpleNamespace(
         capa_id="capa",
         capa_code="CA-1",
@@ -97,7 +68,18 @@ async def test_capa_qa_member_and_plan_choices_use_feishu_field_types(monkeypatc
     monkeypatch.setattr(
         sync.repository, "get_capa_plan_track_by_id", AsyncMock(return_value=track)
     )
+    monkeypatch.setattr(
+        sync.repository, "get_capa_by_id", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(
+        sync,
+        "_resolve_contact_bitable_user_value",
+        AsyncMock(return_value=[{"id": "on_owner"}]),
+    )
+    monkeypatch.setattr(sync, "_mark_sync_success", AsyncMock())
     monkeypatch.setattr(sync, "_refresh_capa_plan_derived_fields", AsyncMock())
+    write = AsyncMock(return_value=("rec_plan", "table"))
+    monkeypatch.setattr(sync.feishu_sync, "_upsert_record", write)
     await sync.sync_capa_plan_track_to_feishu(SimpleNamespace(), "plan")
     assert write.await_args.args[4]["进度"] == "正在进行"
     assert write.await_args.args[4]["提醒状态"] == "已提醒"

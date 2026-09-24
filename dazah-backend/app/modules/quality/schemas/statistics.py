@@ -34,15 +34,16 @@ class DeviationStatistics(CamelAliasModel):
 
 
 class CapaStatistics(CamelAliasModel):
+    """CAPA 台账统计：按台账列口径（本地台账数据源）。"""
+
     total: int
     closed_count: int = Field(alias="closedCount")
-    overdue_count: int = Field(alias="overdueCount")
-    status_distribution: list[dict[str, Any]] = Field(alias="statusDistribution")
-    source_distribution: list[dict[str, Any]] = Field(alias="sourceDistribution")
-    category_distribution: list[dict[str, Any]] = Field(alias="categoryDistribution")
+    in_progress_count: int = Field(alias="inProgressCount")
+    result_distribution: list[dict[str, Any]] = Field(alias="resultDistribution")
     department_distribution: list[dict[str, Any]] = Field(
         alias="departmentDistribution"
     )
+    monthly_trend: list[dict[str, Any]] = Field(alias="monthlyTrend")
 
 
 class ChangeStatistics(CamelAliasModel):

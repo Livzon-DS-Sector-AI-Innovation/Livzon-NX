@@ -49,15 +49,10 @@ from app.modules.quality.service.deviation_workbench import (
     upload_workbench_attachment,
 )
 from app.modules.quality.service.feishu_capa import (
-    create_capa_ledger_record,
     create_capa_plan_track_record,
-    delete_capa_ledger_record,
     delete_capa_plan_track_record,
-    get_capa_ledger_record,
     get_capa_plan_track_record,
-    list_capa_ledger,
     list_capa_plan_tracks,
-    update_capa_ledger_record,
     update_capa_plan_track_record,
 )
 from app.modules.quality.service.historical_deviation import (
@@ -207,10 +202,7 @@ from app.modules.quality.service.quality_feishu_sync import (
     get_quality_sync_conflicts,
     pull_quality_records_from_feishu,
     sync_capa_plan_track_to_feishu,
-    sync_capa_to_feishu,
     sync_deviation_investigation_push_record_to_feishu,
-    sync_deviation_report_record_to_feishu,
-    sync_deviation_to_feishu,
 )
 from app.modules.quality.service.quality_notification_settings import (
     ensure_quality_notification_settings,
@@ -309,9 +301,6 @@ __all__ = [
     "create_capa_plan_track",
     "update_capa_plan_track",
     "delete_capa_plan_track",
-    "sync_deviation_report_record_to_feishu",
-    "sync_capa_to_feishu",
-    "sync_deviation_to_feishu",
     "sync_deviation_investigation_push_record_to_feishu",
     "sync_capa_plan_track_to_feishu",
     "pull_quality_records_from_feishu",
@@ -414,11 +403,6 @@ __all__ = [
     "delete_validation",
     "quality_feishu_pages",
     # Feishu native CAPA
-    "list_capa_ledger",
-    "get_capa_ledger_record",
-    "create_capa_ledger_record",
-    "update_capa_ledger_record",
-    "delete_capa_ledger_record",
     "list_capa_plan_tracks",
     "get_capa_plan_track_record",
     "create_capa_plan_track_record",

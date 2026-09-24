@@ -339,15 +339,6 @@ class CapaPlanTrackIdInput(BaseModel):
     track_id: uuid.UUID
 
 
-class FeishuCapaLedgerListInput(BaseModel):
-    keyword: str | None = None
-    department: str | None = None
-    product: str | None = None
-    status: str | None = None
-    page: int = Field(default=1, ge=1)
-    page_size: int = Field(default=50, ge=1, le=100)
-
-
 class FeishuCapaPlanTrackListInput(BaseModel):
     keyword: str | None = None
     page: int = Field(default=1, ge=1)
@@ -386,24 +377,16 @@ _QUALITY_TOOL_PAGE_KEYS: dict[str, tuple[str, ...]] = {
     "quality.list_cpv_products": QUALITY_PRODUCT_PAGES,
     "quality.update_cpv_parameter": QUALITY_PRODUCT_PAGES,
     "quality.update_cpv_product": QUALITY_PRODUCT_PAGES,
-    "quality.get_feishu_capa_ledger": ("quality:capas:capa-ledger",),
-    "quality.list_feishu_capa_ledger": ("quality:capas:capa-ledger",),
     "quality.get_feishu_capa_plan_track": ("quality:capas:capa-plans",),
     "quality.list_feishu_capa_plan_tracks": ("quality:capas:capa-plans",),
-    "quality.sync_deviation_report_record_to_feishu": (
-        "quality:deviations:deviation-records",
-    ),
 }
 
 _QUALITY_TOOL_SENSITIVE_ACTIONS = {
     "quality.pull_feishu_validations": "sync_config",
     "quality.pull_quality_records_from_feishu": "sync_config",
     "quality.sync_capa_plan_track_to_feishu": "sync_config",
-    "quality.sync_capa_to_feishu": "sync_config",
     "quality.sync_change_action_plan": "sync_config",
     "quality.sync_change_action_plans_from_feishu": "sync_config",
-    "quality.sync_deviation_report_record_to_feishu": "sync_config",
-    "quality.sync_deviation_to_feishu": "sync_config",
 }
 
 _P = ParamSpec("_P")
@@ -721,7 +704,10 @@ async def auto_fill_capa_from_deviation(
     path="/quality/statistics/capas",
 )
 async def get_capa_statistics(context: ToolContext, _: BaseModel) -> dict[str, Any]:
-    return _dump_object(await quality_management.get_capa_statistics(context.db))
+    # CAPA 台账已本地化，统计与 /statistics/capas 同源（本地表）
+    from app.modules.quality.service import quality_statistics
+
+    return _dump_object(await quality_statistics.get_capa_statistics(context.db))
 
 
 @agent_tool(
@@ -1516,63 +1502,6 @@ async def pull_quality_records_from_feishu(
 
 
 @agent_tool(
-    name="quality.sync_deviation_to_feishu",
-    summary="同步偏差到飞书Base",
-    input_model=DeviationIdInput,
-    write=True,
-    risk_level="medium",
-    method="POST",
-    path="/quality/feishu-sync/deviations/{deviation_id}",
-)
-async def sync_deviation_to_feishu(
-    context: ToolContext, data: DeviationIdInput
-) -> dict[str, Any]:
-    return _dump_object(
-        await quality_feishu_sync.sync_deviation_to_feishu(
-            context.db, data.deviation_id
-        )
-    )
-
-
-@agent_tool(
-    name="quality.sync_deviation_report_record_to_feishu",
-    summary="同步偏差报告记录到飞书Base",
-    input_model=DeviationReportSyncInput,
-    write=True,
-    risk_level="medium",
-    method="POST",
-    path="/quality/feishu-sync/deviation-report-records/{deviation_id}",
-)
-async def sync_deviation_report_record_to_feishu(
-    context: ToolContext, data: DeviationReportSyncInput
-) -> dict[str, Any]:
-    return _dump_object(
-        await quality_feishu_sync.sync_deviation_report_record_to_feishu(
-            context.db,
-            data.deviation_id,
-            target_record_id=data.target_record_id,
-        )
-    )
-
-
-@agent_tool(
-    name="quality.sync_capa_to_feishu",
-    summary="同步CAPA到飞书Base",
-    input_model=CapaIdInput,
-    write=True,
-    risk_level="medium",
-    method="POST",
-    path="/quality/feishu-sync/capas/{capa_id}",
-)
-async def sync_capa_to_feishu(
-    context: ToolContext, data: CapaIdInput
-) -> dict[str, Any]:
-    return _dump_object(
-        await quality_feishu_sync.sync_capa_to_feishu(context.db, data.capa_id)
-    )
-
-
-@agent_tool(
     name="quality.sync_capa_plan_track_to_feishu",
     summary="同步CAPA计划跟踪到飞书Base",
     input_model=CapaPlanTrackIdInput,
@@ -1588,36 +1517,6 @@ async def sync_capa_plan_track_to_feishu(
         await quality_feishu_sync.sync_capa_plan_track_to_feishu(
             context.db, data.track_id
         )
-    )
-
-
-@agent_tool(
-    name="quality.list_feishu_capa_ledger",
-    summary="查询飞书CAPA台账",
-    input_model=FeishuCapaLedgerListInput,
-    method="GET",
-    path="/quality/feishu-capa/capas",
-)
-async def list_feishu_capa_ledger(
-    context: ToolContext, data: FeishuCapaLedgerListInput
-) -> dict[str, Any]:
-    return _dump_object(
-        await feishu_capa.list_capa_ledger(context.db, **data.model_dump())
-    )
-
-
-@agent_tool(
-    name="quality.get_feishu_capa_ledger",
-    summary="查看飞书CAPA台账详情",
-    input_model=FeishuRecordIdInput,
-    method="GET",
-    path="/quality/feishu-capa/capas/{record_id}",
-)
-async def get_feishu_capa_ledger(
-    context: ToolContext, data: FeishuRecordIdInput
-) -> dict[str, Any]:
-    return _dump_object(
-        await feishu_capa.get_capa_ledger_record(context.db, data.record_id)
     )
 
 

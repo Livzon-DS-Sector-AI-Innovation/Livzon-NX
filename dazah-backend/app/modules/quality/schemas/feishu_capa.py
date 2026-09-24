@@ -5,41 +5,6 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 # ──────────────────────────────────────────────
-#  CAPA 台账
-# ──────────────────────────────────────────────
-
-
-class FeishuCapaLedgerCreateRequest(BaseModel):
-    """创建飞书CAPA台账记录请求体。"""
-
-    CAPA编号: str | None = None
-    启动日期: str | None = None
-    事件部门: str | None = None
-    涉及产品: str | None = None
-    CAPA简述: str | None = None
-    CAPA效果评估: str | None = None
-    关闭日期: str | None = None
-    QA质量员: str | None = None
-    QA质量员确认日期: str | None = None
-    CAPA状态: str | None = None
-
-
-class FeishuCapaLedgerUpdateRequest(BaseModel):
-    """更新飞书CAPA台账记录请求体。"""
-
-    CAPA编号: str | None = None
-    启动日期: str | None = None
-    事件部门: str | None = None
-    涉及产品: str | None = None
-    CAPA简述: str | None = None
-    CAPA效果评估: str | None = None
-    关闭日期: str | None = None
-    QA质量员: str | None = None
-    QA质量员确认日期: str | None = None
-    CAPA状态: str | None = None
-
-
-# ──────────────────────────────────────────────
 #  CAPA 计划跟踪
 # ──────────────────────────────────────────────
 
