@@ -4,11 +4,11 @@ import type { Employee } from '@/types/hr'
 
 export const dynamic = 'force-dynamic'
 
-export default async function EmployeeProfilePage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ department?: string }>
-} = {}) {
+interface PageProps {
+  searchParams: Promise<{ department?: string }>
+}
+
+export default async function EmployeeProfilePage({ searchParams }: PageProps) {
   const { department } = (await searchParams) || {}
   let initialEmployees: Employee[] = []
   let initialTotal = 0
