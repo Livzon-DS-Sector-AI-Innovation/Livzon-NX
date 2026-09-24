@@ -15,6 +15,7 @@ import {
   fetchQcValidationRecords,
   fetchQcValidationShareLinks,
   fetchQcValidationYears,
+  fetchChangeActionPlanDueStatus,
   fetchOotLimitProductExport,
   fetchOotLimitProductsExportAll,
 } from './quality'
@@ -463,5 +464,22 @@ describe('飞书 CAPA 台账客户端退休', () => {
     expect(
       (qualityClient as Record<string, unknown>).fetchFeishuCapas,
     ).toBeUndefined()
+  })
+})
+
+describe('变更行动计划到期状态客户端', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('fetchChangeActionPlanDueStatus 带 lead_days 请求并返回 data', async () => {
+    const payload = { code: 200, data: { overdue: 3, dueSoon: 5 } }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(payload)))
+    const result = await fetchChangeActionPlanDueStatus(7)
+    expect(result).toEqual(payload.data)
+    expect(String(vi.mocked(fetch).mock.calls[0][0])).toBe(
+      '/api/v1/quality/change-action-plans/due-status?lead_days=7',
+    )
   })
 })

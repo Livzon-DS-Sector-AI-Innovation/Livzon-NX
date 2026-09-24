@@ -1381,7 +1381,6 @@ async def get_change_statistics(db: AsyncSession) -> ChangeStatistics:
     total = len(items)
     closed_count = sum(1 for item in items if item.get("status") == "closed")
     delay_count = sum(1 for item in items if item.get("is_delayed"))
-    in_progress_count = sum(1 for item in items if item.get("status") == "in_progress")
 
     status_counts: dict[str, int] = {}
     level_counts: dict[str, int] = {}

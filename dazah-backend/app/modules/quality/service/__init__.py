@@ -279,6 +279,7 @@ __all__ = [
     "update_change",
     "delete_change",
     "generate_next_change_code",
+    "get_change_action_plan_due_status",
     "get_change_action_plan_list",
     "get_change_action_plans_for_change",
     "create_change_action_plan_record",
