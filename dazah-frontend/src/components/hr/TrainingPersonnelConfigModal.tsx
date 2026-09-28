@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { App, Modal, Select, Input, Button, Space, Spin, Tag, Popconfirm, Table, Alert } from 'antd'
+import { App, Modal, Select, Input, Button, Space, Spin, Tag, Popconfirm, Table } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons'
 import { pinyin } from 'pinyin-pro'
 import type { TrainingPersonnelItem, TrainingPersonnelConfig, Department } from '@/types/hr'
