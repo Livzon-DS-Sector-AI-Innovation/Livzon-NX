@@ -21,6 +21,7 @@ from typing import Any
 
 import openpyxl  # type: ignore[import-untyped]
 
+from app.core.exceptions import AppException
 from app.modules.hr.date_format import fmt_date_str
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,8 @@ QA_ROW_INDEX = 56  # 1-based 行号（insert_rows 后自动下移）
 
 def _find_template() -> Path:
     candidates = [
+        # 随代码分发的受控模板（git 跟踪，容器内外一致），优先于本机散放目录
+        Path(__file__).resolve().parent / "templates" / TEMPLATE_NAME,
         Path("员工培训教育管理规程") / TEMPLATE_NAME,
         Path("../员工培训教育管理规程") / TEMPLATE_NAME,
         Path(__file__).resolve().parent.parent.parent
@@ -44,7 +47,14 @@ def _find_template() -> Path:
     for p in candidates:
         if p.exists():
             return p
-    raise FileNotFoundError(f"模板文件未找到: {TEMPLATE_NAME}")
+    raise AppException(
+        status_code=500,
+        message=(
+            f"导出模板缺失：{TEMPLATE_NAME}。"
+            "请将该受控模板放入 dazah-backend/app/modules/hr/templates/ "
+            "并随代码部署后重试"
+        ),
+    )
 
 
 def _apply_data_style(ws: Any, row: int, col: int) -> None:
