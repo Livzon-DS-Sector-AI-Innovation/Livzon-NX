@@ -30425,10 +30425,20 @@ export interface components {
              */
             dump_date?: string | null;
             /**
+             * Dumped At
+             * @description 实际放罐时刻（分钟精度）
+             */
+            dumped_at?: string | null;
+            /**
              * Extract Kg
              * @description 提炼成品产量(kg)
              */
             extract_kg?: number | null;
+            /**
+             * Inoculated At
+             * @description 实际移种时刻（分钟精度）
+             */
+            inoculated_at?: string | null;
             /**
              * Remark
              * @description 备注

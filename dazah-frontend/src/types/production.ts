@@ -521,12 +521,26 @@ export interface BoardTank {
   tank_no: string
   status: 'running' | 'dumping' | 'idle' | 'maintenance' | 'dumped'
   batch_no: string | null
+  /** 有效值：有实际移种时刻时为实际，否则排产值 */
   inoculate_at: string | null
   /** 非空表示该时间为倒罐进罐（如「（倒罐）」），渲染时拼接在时间后 */
   inoculate_mark?: string | null
+  /** 排产移种时间（计划口径，来源标记与偏差展示用） */
+  inoculate_plan_at?: string | null
+  /** 实际移种时刻（分钟精度）；null 表示未确认 */
+  inoculate_actual_at?: string | null
   cultured_hours: number | null
   cycle_hours: number | null
+  /** 运行中恒为排产放罐时间；已放罐且有实际值时为实际放罐时刻 */
   dump_at: string | null
+  /** 排产放罐时间（计划口径） */
+  dump_plan_at?: string | null
+  /** 实际放罐时刻（分钟精度）；null 表示未录入 */
+  dump_actual_at?: string | null
+  /** 该罐当前批次展开批号列表（确认移种取首个为主批号） */
+  batch_nos?: string[]
+  /** true = 倒罐目的罐（如他汀 301A），移种继承来源批，不提供确认移种 */
+  turn_in?: boolean
   note: string | null
 }
 
@@ -618,6 +632,10 @@ export interface FermentationBatchActual {
   /** 放罐罐号（由排产存档解析，缺失为 null） */
   tank_no: string | null
   dump_date: string | null
+  /** 实际移种时刻（分钟精度 ISO 串），未确认为 null */
+  inoculated_at?: string | null
+  /** 实际放罐时刻（分钟精度 ISO 串），未录入为 null */
+  dumped_at?: string | null
   yield_kg: number | null
   /** 提炼成品产量(kg)，仅持提炼产量权限时返回 */
   extract_kg?: number | null
@@ -627,6 +645,8 @@ export interface FermentationBatchActual {
 export interface FermentationBatchActualFormData {
   batch_no: string
   dump_date?: string | null
+  inoculated_at?: string | null
+  dumped_at?: string | null
   yield_kg?: number | null
   extract_kg?: number | null
   remark?: string | null
@@ -671,8 +691,13 @@ export interface FermentationBoard {
     outputs: number[]
     avg_yield_kg?: number | null
   } | null
-  /** 当前周期内已放罐（放罐窗口已结束）的批次，供产量录入下拉 */
-  dumped_batches: { batch_no: string; dump_date: string }[]
+  /** 当前周期内已放罐（放罐窗口已结束或放罐日已到）的批次，供产量录入下拉 */
+  dumped_batches: {
+    batch_no: string
+    dump_date: string
+    /** 排产放罐时刻（产量录入弹窗「放罐时间」的默认值） */
+    dump_plan_at?: string | null
+  }[]
   /** 提炼工段汇总；无提炼产量权限时为 null */
   extraction: BoardExtraction | null
   alerts: BoardAlert[]

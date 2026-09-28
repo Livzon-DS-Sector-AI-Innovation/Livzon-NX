@@ -562,6 +562,12 @@ export async function upsertFermentationBatchActual(
         ...(data.dump_date !== undefined
           ? { dump_date: data.dump_date || null }
           : {}),
+        ...(data.inoculated_at !== undefined
+          ? { inoculated_at: data.inoculated_at || null }
+          : {}),
+        ...(data.dumped_at !== undefined
+          ? { dumped_at: data.dumped_at || null }
+          : {}),
         ...(data.yield_kg !== undefined ? { yield_kg: data.yield_kg ?? null } : {}),
         ...(data.extract_kg !== undefined
           ? { extract_kg: data.extract_kg ?? null }

@@ -25,6 +25,7 @@ import {
   Statistic,
   Empty,
   Space,
+  Tooltip,
 } from 'antd'
 import {
   ScheduleOutlined,
@@ -143,11 +144,86 @@ function fmtShort(value?: string | null): string {
   return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
+// 罐行时间解析：date-only（排产日粒度）按本地零点，避免 UTC 偏移
+function parseBoardTime(value?: string | null): Date | null {
+  if (!value) return null
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (dateOnly) {
+    return new Date(
+      Number(dateOnly[1]),
+      Number(dateOnly[2]) - 1,
+      Number(dateOnly[3]),
+    )
+  }
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+/** 实际与计划时刻的偏差文案：早/晚 N h M m（分钟精度） */
+function fmtDeviation(
+  actual?: string | null,
+  plan?: string | null,
+): string | null {
+  const a = parseBoardTime(actual)
+  const p = parseBoardTime(plan)
+  if (!a || !p) return null
+  const diffMin = Math.round((a.getTime() - p.getTime()) / 60000)
+  if (diffMin === 0) return '准点'
+  const abs = Math.abs(diffMin)
+  const h = Math.floor(abs / 60)
+  const m = abs % 60
+  const span = h ? (m ? `${h}h${m}m` : `${h}h`) : `${m}m`
+  return diffMin > 0 ? `晚 ${span}` : `早 ${span}`
+}
+
+/** 实际时刻来源角标：悬停展示计划值、实际值与偏差（计划/实际分离标记） */
+function ActualTimeMark({
+  actual,
+  plan,
+}: {
+  actual?: string | null
+  plan?: string | null
+}) {
+  const lines = [
+    plan ? `计划：${fmtShort(plan)}` : null,
+    `实际：${fmtShort(actual)}`,
+    `偏差：${fmtDeviation(actual, plan) ?? '无计划值对照'}`,
+  ].filter(Boolean)
+  return (
+    <Tooltip
+      title={<div style={{ whiteSpace: 'pre-line' }}>{lines.join('\n')}</div>}
+    >
+      <sup
+        data-testid="actual-time-mark"
+        style={{
+          color: 'var(--color-primary)',
+          cursor: 'help',
+          fontSize: 12,
+          marginInlineStart: 2,
+        }}
+      >
+        实
+      </sup>
+    </Tooltip>
+  )
+}
+
 // 批次顺序号 = 批次号后三位（如 FA26234 → 234）；无法解析时返回 null，排序时置于末尾
 function batchSeqNo(batchNo: string | null): number | null {
   if (!batchNo) return null
   const tail = batchNo.slice(-3)
   return /^\d{3}$/.test(tail) ? Number(tail) : null
+}
+
+/** 排产时间是否落在今天（提前移种确认入口只对"当天排产"的待进罐开放） */
+function isBoardTimeToday(value?: string | null): boolean {
+  if (!value) return false
+  return dayjs(value).isSame(dayjs(), 'day')
+}
+
+// 罐行当前批次展开批号列表（确认移种取首个为主批号）
+function primaryBatchNo(record: BoardTank): string | null {
+  return record.batch_no || record.batch_nos?.[0] || null
 }
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
@@ -192,13 +268,19 @@ export default function ProductionDashboard() {
   const [maintModalOpen, setMaintModalOpen] = useState(false)
   const [maintTank, setMaintTank] = useState<BoardTank | null>(null)
   const [maintReason, setMaintReason] = useState('')
+  // 确认移种：记录实际移种时刻（默认当前时刻，可改，支持补录）
+  const [inoculateModalOpen, setInoculateModalOpen] = useState(false)
+  const [inoculateTank, setInoculateTank] = useState<BoardTank | null>(null)
+  const [inoculateAt, setInoculateAt] = useState<dayjs.Dayjs | null>(null)
   const [actualsOpen, setActualsOpen] = useState(false)
   const [actuals, setActuals] = useState<FermentationBatchActual[]>([])
   const [actualsLoading, setActualsLoading] = useState(false)
   const [actualModalOpen, setActualModalOpen] = useState(false)
   const [editingActual, setEditingActual] = useState<FermentationBatchActual | null>(null)
   const [actualBatchNo, setActualBatchNo] = useState('')
-  const [actualDumpDate, setActualDumpDate] = useState<dayjs.Dayjs | null>(null)
+  // 放罐时间（分钟精度）：选批次默认带排产放罐时刻，改为实际时刻保存；
+  // 日期部分存 dump_date（扎帐月归属），完整时刻存 dumped_at（状态/时长）
+  const [actualDumpAt, setActualDumpAt] = useState<dayjs.Dayjs | null>(null)
   const [actualYieldKg, setActualYieldKg] = useState<number | null>(null)
   const [actualRemark, setActualRemark] = useState('')
   const [capacityModalOpen, setCapacityModalOpen] = useState(false)
@@ -390,6 +472,42 @@ export default function ProductionDashboard() {
     }
   }
 
+  // 确认移种：默认当前时刻；已确认过的回填原实际值便于修改（支持补录）
+  const openInoculateModal = (record: BoardTank) => {
+    if (!canOperate) return
+    setInoculateTank(record)
+    setInoculateAt(
+      record.inoculate_actual_at ? dayjs(record.inoculate_actual_at) : dayjs(),
+    )
+    setInoculateModalOpen(true)
+  }
+
+  const submitInoculate = async () => {
+    if (!canOperate || !inoculateTank) return
+    if (!inoculateAt) {
+      message.warning('请选择实际移种时刻')
+      return
+    }
+    // 他汀合并批号/待进罐行取首个批号挂靠实际时刻；后端按显式字段部分
+    // 更新，不触碰该批已录入的产量与放罐日期
+    const confirmBatchNo = primaryBatchNo(inoculateTank)
+    if (!confirmBatchNo) return
+    const res = await upsertFermentationBatchActual(
+      {
+        batch_no: confirmBatchNo,
+        inoculated_at: inoculateAt.format('YYYY-MM-DDTHH:mm:00'),
+      },
+      productCode,
+    )
+    if (res.code === 200) {
+      message.success(`${inoculateTank.tank_no} 已记录实际移种时刻`)
+      setInoculateModalOpen(false)
+      await loadBoard()
+    } else {
+      message.error(res.message || '保存失败')
+    }
+  }
+
   const openActuals = async () => {
     setActualsOpen(true)
     setActualsLoading(true)
@@ -415,7 +533,14 @@ export default function ProductionDashboard() {
     if (!canOperate) return
     setEditingActual(item)
     setActualBatchNo(item?.batch_no ?? '')
-    setActualDumpDate(item?.dump_date ? dayjs(item.dump_date) : null)
+    // 编辑回填：有实际放罐时刻用完整时刻；老记录只有放罐日期按当日 00:00
+    setActualDumpAt(
+      item?.dumped_at
+        ? dayjs(item.dumped_at)
+        : item?.dump_date
+          ? dayjs(item.dump_date)
+          : null,
+    )
     setActualYieldKg(item?.yield_kg ?? null)
     setActualRemark(item?.remark ?? '')
     setActualModalOpen(true)
@@ -432,8 +557,11 @@ export default function ProductionDashboard() {
       batch_no: actualBatchNo.trim(),
     }
     if (canFerm) {
-      payload.dump_date = actualDumpDate
-        ? actualDumpDate.format('YYYY-MM-DD')
+      // 一个控件拆两个字段：日期 → 放罐日期（账务口径），
+      // 完整时刻 → 实际放罐时刻（状态翻转/时长冻结/偏差）
+      payload.dump_date = actualDumpAt ? actualDumpAt.format('YYYY-MM-DD') : null
+      payload.dumped_at = actualDumpAt
+        ? actualDumpAt.format('YYYY-MM-DDTHH:mm:00')
         : null
       payload.yield_kg = actualYieldKg
       payload.remark = actualRemark.trim() || null
@@ -657,9 +785,23 @@ export default function ProductionDashboard() {
       dataIndex: 'inoculate_at',
       key: 'inoculate_at',
       width: 124,
-      // 倒罐进罐的时间追加（倒罐）标注，与普通移种区分
+      // 倒罐进罐的时间追加（倒罐）标注；已确认实际移种的行加「实」角标
+      // （悬停展示计划/实际/偏差）
       render: (v: string | null, record: BoardTank) =>
-        v ? `${fmtShort(v)}${record.inoculate_mark || ''}` : '-',
+        v ? (
+          <>
+            {fmtShort(v)}
+            {record.inoculate_mark || ''}
+            {record.inoculate_actual_at ? (
+              <ActualTimeMark
+                actual={record.inoculate_actual_at}
+                plan={record.inoculate_plan_at}
+              />
+            ) : null}
+          </>
+        ) : (
+          '-'
+        ),
     },
     {
       title: '已培养时长',
@@ -680,7 +822,22 @@ export default function ProductionDashboard() {
       dataIndex: 'dump_at',
       key: 'dump_at',
       width: 136,
-      render: (v: string | null) => fmtShort(v),
+      // 运行中恒为排产值（不随实际移种顺延）；已放罐行有实际放罐时刻
+      // 时显示实际值并加「实」角标
+      render: (v: string | null, record: BoardTank) =>
+        v ? (
+          <>
+            {fmtShort(v)}
+            {record.dump_actual_at ? (
+              <ActualTimeMark
+                actual={record.dump_actual_at}
+                plan={record.dump_plan_at}
+              />
+            ) : null}
+          </>
+        ) : (
+          fmtShort(v)
+        ),
     },
     {
       title: '备注',
@@ -692,29 +849,62 @@ export default function ProductionDashboard() {
     {
       title: '操作',
       key: 'actions',
-      width: 120,
-      render: (_: unknown, record: BoardTank) =>
-        record.status === 'dumped' || !isCurrent ? (
+      // 「改移种时间」+「标记检修」双按钮合计约 184px，列宽不足会把
+      // 后者顶出单元格（溢出在宽屏可见、窄屏被裁剪）
+      width: 200,
+      render: (_: unknown, record: BoardTank) => {
+        if (record.status === 'dumped' || !isCurrent) {
           // 占位与操作列 small 按钮同高（主题 controlHeightSM），保证已放罐行与其他行行高一致；
           // 历史周期为只读视图，不提供检修操作
-          <span style={{ display: 'inline-block', height: 36, lineHeight: '36px' }}>-</span>
-        ) : record.status === 'maintenance' && canDelete ? (
-          <Button size="small" onClick={() => void releaseMaintenance(record)}>
-            解除检修
-          </Button>
-        ) : canOperate ? (
-          <Button
-            size="small"
-            icon={<ToolOutlined />}
-            onClick={() => {
-              setMaintTank(record)
-              setMaintReason('')
-              setMaintModalOpen(true)
-            }}
-          >
-            标记检修
-          </Button>
-        ) : null,
+          return (
+            <span style={{ display: 'inline-block', height: 36, lineHeight: '36px' }}>-</span>
+          )
+        }
+        // 确认移种：运行中的常规移种罐，以及"排产移种日就在今天"的待进罐
+        // （提前移种当场可录；倒罐目的罐继承来源批，不单独确认）
+        const inoculatePlan = record.inoculate_plan_at ?? record.inoculate_at
+        const inoculateBtn =
+          canOperate &&
+          !record.turn_in &&
+          ((record.status === 'running' && record.batch_no) ||
+            (record.status === 'idle' &&
+              Boolean(record.batch_nos?.length) &&
+              isBoardTimeToday(inoculatePlan))) ? (
+            <Button size="small" onClick={() => openInoculateModal(record)}>
+              {record.inoculate_actual_at ? '改移种时间' : '确认移种'}
+            </Button>
+          ) : null
+        let maintenanceBtn: React.ReactNode = null
+        if (record.status === 'maintenance' && canDelete) {
+          maintenanceBtn = (
+            <Button size="small" onClick={() => void releaseMaintenance(record)}>
+              解除检修
+            </Button>
+          )
+        } else if (canOperate) {
+          maintenanceBtn = (
+            <Button
+              size="small"
+              icon={<ToolOutlined />}
+              onClick={() => {
+                setMaintTank(record)
+                setMaintReason('')
+                setMaintModalOpen(true)
+              }}
+            >
+              标记检修
+            </Button>
+          )
+        }
+        return inoculateBtn && maintenanceBtn ? (
+          <Space size={4}>
+            {inoculateBtn}
+            {maintenanceBtn}
+          </Space>
+        ) : (
+          (inoculateBtn ?? maintenanceBtn)
+        )
+      },
     },
   ]
 
@@ -1505,6 +1695,35 @@ export default function ProductionDashboard() {
         </Text>
       </Modal>
 
+      {/* 确认移种弹窗：记录实际移种时刻（分钟精度，支持补录） */}
+      <Modal
+        title={`确认移种：${inoculateTank?.tank_no || ''}`}
+        open={inoculateModalOpen && canOperate}
+        onOk={canOperate ? () => void submitInoculate() : undefined}
+        onCancel={() => setInoculateModalOpen(false)}
+        okText="保存"
+        cancelText="取消"
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size={12}>
+          <Text>批次号：{inoculateTank ? (primaryBatchNo(inoculateTank) ?? '-') : '-'}</Text>
+          <Text type="secondary">
+            排产移种时间：
+            {fmtShort(inoculateTank?.inoculate_plan_at ?? inoculateTank?.inoculate_at)}
+          </Text>
+          <DatePicker
+            showTime={{ format: 'HH:mm' }}
+            format="YYYY-MM-DD HH:mm"
+            style={{ width: '100%' }}
+            value={inoculateAt}
+            onChange={(d) => setInoculateAt(d)}
+          />
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            默认当前时刻，可修改补录；保存后移种时间与已培养时长按实际值展示，
+            预估放罐时间仍按排产。
+          </Text>
+        </Space>
+      </Modal>
+
       {/* 历史数据抽屉：批次实际产量 */}
       <Drawer
         title="批次产量历史数据"
@@ -1554,18 +1773,25 @@ export default function ProductionDashboard() {
             notFoundContent="暂无已放罐批次"
             onChange={(value) => {
               setActualBatchNo(value)
-              // 选中批次后自动带出排产的计划放罐日期，仍可手动修改
+              // 选中批次后默认带出排产放罐时刻（无时刻信息的按 10:00），
+              // 录入时改为实际放罐时刻
               const found = board?.dumped_batches.find((b) => b.batch_no === value)
-              if (found?.dump_date) setActualDumpDate(dayjs(found.dump_date))
+              if (found?.dump_plan_at) {
+                setActualDumpAt(dayjs(found.dump_plan_at))
+              } else if (found?.dump_date) {
+                setActualDumpAt(dayjs(found.dump_date).hour(10).minute(0))
+              }
             }}
           />
           {canFerm && (
             <>
               <DatePicker
-                placeholder="放罐日期（可选）"
+                placeholder="放罐时间（默认排产值，改为实际时刻）"
+                showTime={{ format: 'HH:mm' }}
+                format="YYYY-MM-DD HH:mm"
                 style={{ width: '100%' }}
-                value={actualDumpDate}
-                onChange={(d) => setActualDumpDate(d)}
+                value={actualDumpAt}
+                onChange={(d) => setActualDumpAt(d)}
               />
               <InputNumber
                 placeholder="放罐产量 (kg)"
@@ -1588,6 +1814,7 @@ export default function ProductionDashboard() {
           )}
         </Space>
         <Text type="secondary" style={{ fontSize: 12 }}>
+          放罐时间默认带排产值，请改为实际放罐时刻；日期部分用于扎帐月归属。
           同一批次重复录入会更新原记录；保存后看板图表立即刷新。
         </Text>
       </Modal>
