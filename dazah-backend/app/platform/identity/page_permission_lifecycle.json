@@ -4253,6 +4253,10 @@
         "sensitive_export": {
           "status": "active",
           "category": "sensitive_export"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
         }
       }
     },

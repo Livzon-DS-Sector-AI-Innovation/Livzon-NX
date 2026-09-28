@@ -509,7 +509,7 @@ def _sensitive_actions(
         "hr:contracts:contracts-ledger": ("sync_config",),
         "hr:training:training-ledger": ("delete", "sync_config"),
         "hr:training:annual-plan": ("delete", "sensitive_export"),
-        "hr:training:sign-in-sheet": ("delete", "sensitive_export"),
+        "hr:training:sign-in-sheet": ("delete", "sensitive_export", "sync_config"),
         "hr:training:trainer": ("delete", "sensitive_export", "sync_config"),
         "hr:training:position-training": (
             "delete",
@@ -4081,11 +4081,17 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
             "/employees/contract-expiring",
             "/employees/contract-expiring/push-status",
             "/employees/max-seq",
-            "/employees/new-hires",
             "/employees/sync-status",
             "/new/employees",
         ),
         profile,
+        scope_adapter="hr.employee_department",
+    )
+    # 培训资料页「拉取新员工」按入职日期取新员工名单，与员工档案页共用
+    add(
+        "GET",
+        "/employees/new-hires",
+        profile + sign_in,
         scope_adapter="hr.employee_department",
     )
     add(
@@ -4446,7 +4452,8 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
             "/annual-training-plans/{plan_id}/attachments",
             "/annual-training-plans/{plan_id}/items",
         ),
-        annual_plan,
+        # 培训资料页按级别/年度加载计划与附件章节作为培训内容来源
+        annual_plan + sign_in,
         scope_adapter="hr.training_department",
     )
     add_many(
@@ -4863,16 +4870,18 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
         "delete",
         "hr.training_department",
     )
+    # 培训资料页「配置公司级/部门级培训人员」弹窗读写班组配置；培训师页
+    # 前端未调用这组接口，实际调用方只有培训资料页
     add(
         "GET",
         "/training-personnel-configs",
-        trainer,
+        trainer + sign_in,
         scope_adapter="hr.training_department",
     )
     add(
         "POST",
         "/training-personnel-configs",
-        trainer,
+        trainer + sign_in,
         "operate",
         "sync_config",
         "hr.training_department",
@@ -4880,7 +4889,7 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
     add(
         "DELETE",
         "/training-personnel-configs/{config_id}",
-        trainer,
+        trainer + sign_in,
         "operate",
         "delete",
         "hr.training_department",
@@ -4906,13 +4915,18 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
         sensitive_action="sensitive_export",
         scope_adapter="hr.training_department",
     )
-    add_many(
+    add(
         "POST",
-        (
-            "/position-training-lists",
-            "/position-training-mappings",
-        ),
+        "/position-training-lists",
         position_training,
+        permission="operate",
+        scope_adapter="hr.training_department",
+    )
+    # 新员工培训页为未生成计划的员工保存初始岗位映射后再生成计划
+    add(
+        "POST",
+        "/position-training-mappings",
+        position_training + new_employee_training,
         permission="operate",
         scope_adapter="hr.training_department",
     )
@@ -5018,7 +5032,6 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
             "/feishu-settings/entities",
             "/feishu-settings/entities/{entity_code}/field-mapping",
             "/feishu-settings/entities/{entity_code}/tables",
-            "/hr-settings/feishu-members",
             "/hr-settings/feishu-members/departments",
             "/hr-settings/hr-members",
             "/hr-settings/hr-members/sync-status",
@@ -5030,14 +5043,37 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
         ),
         scope_adapter="hr.settings",
     )
+    # 培训资料页「配置人员」弹窗分页拉取在职联系人作为参训人员候选，
+    # 与联系人页/设置页共用该端点
+    add(
+        "GET",
+        "/hr-settings/feishu-members",
+        settings_feishu
+        + (
+            "hr:employee-management:feishu-contacts",
+            "hr:hr-settings:hr-settings-dept-mapping",
+        )
+        + sign_in,
+        scope_adapter="hr.settings",
+    )
     add_many(
         "POST",
         (
             "/feishu-settings/app/test",
             "/feishu-settings/entities/{entity_code}/test",
-            "/hr-settings/hr-members/sync",
         ),
         settings_feishu,
+        permission="operate",
+        sensitive_action="sync_config",
+        scope_adapter="hr.settings",
+    )
+    # 联系人页顶部的「从飞书同步」是该同步端点的唯一前端入口（与上面的
+    # GET 组同源），只登记设置页会让携带联系人页 page key 的调用被页面
+    # 上下文校验拒绝，超管同样被拦。
+    add(
+        "POST",
+        "/hr-settings/hr-members/sync",
+        settings_feishu + ("hr:employee-management:feishu-contacts",),
         permission="operate",
         sensitive_action="sync_config",
         scope_adapter="hr.settings",
