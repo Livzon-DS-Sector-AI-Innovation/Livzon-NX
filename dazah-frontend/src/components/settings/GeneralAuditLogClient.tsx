@@ -80,6 +80,11 @@ function JsonBlock({ value, emptyDescription = '无数据' }: { value: unknown; 
   )
 }
 
+function recordedFields(extra: GeneralAuditLogDetail['extra'], keys: string[]) {
+  const entries = keys.filter((key) => extra && Object.hasOwn(extra, key)).map((key) => [key, extra?.[key]])
+  return entries.length ? Object.fromEntries(entries) : undefined
+}
+
 function detailSections(category: GeneralAuditCategory, detail: GeneralAuditLogDetail): { title: string; value: unknown; emptyDescription?: string }[] {
   if (category === 'operations') {
     return [
@@ -113,14 +118,29 @@ function detailSections(category: GeneralAuditCategory, detail: GeneralAuditLogD
   }
   if (category === 'automations') {
     return [
-      { title: '自动化操作结果', value: detail.new_value },
+      { title: '自动化查询条件', value: detail.extra?.request ?? recordedFields(detail.extra, ['scope', 'status', 'page', 'page_size']), emptyDescription: '此记录未保存查询条件' },
+      { title: '自动化操作结果', value: detail.new_value, emptyDescription: '此记录未保存自动化查询结果，历史记录无法补采' },
+      ...(detail.extra?.response ? [{ title: '响应摘要', value: detail.extra.response }] : []),
       { title: '自动化上下文', value: detail.extra },
     ]
   }
   if (category === 'feishu') {
+    const recordedResult = detail.action === 'restart_livzon_feishu_gateway'
+      ? recordedFields(detail.extra, ['status', 'previous_reconnects', 'gateway_reconnects', 'config_version'])
+      : undefined
     return [
-      { title: '交互结果', value: detail.new_value },
+      { title: detail.new_value == null && recordedResult ? '交互结果（已记录摘要）' : '交互结果', value: detail.new_value ?? recordedResult, emptyDescription: '此记录未保存交互结果' },
+      ...(detail.extra?.response ? [{ title: '响应摘要', value: detail.extra.response }] : []),
       { title: '飞书事件标识', value: detail.extra },
+    ]
+  }
+  if (category === 'business' && detail.action === 'search_agent_tools') {
+    const recordedResult = recordedFields(detail.extra, ['result_count'])
+    return [
+      { title: '搜索条件', value: detail.extra?.request ?? recordedFields(detail.extra, ['module', 'limit']), emptyDescription: '此记录未保存搜索条件' },
+      { title: detail.new_value == null && recordedResult ? '搜索结果（已记录摘要）' : '搜索结果', value: detail.new_value ?? recordedResult, emptyDescription: '此记录未保存搜索结果' },
+      ...(detail.extra?.response ? [{ title: '响应摘要', value: detail.extra.response }] : []),
+      { title: '操作上下文', value: detail.extra },
     ]
   }
   return [
@@ -408,18 +428,21 @@ export default function GeneralAuditLogClient({ category }: { category: GeneralA
               {category === 'agent_tools' && Boolean(detail.extra?.operation) && <Descriptions.Item label="原始工具标识"><Text copyable>{String(detail.extra?.operation)}</Text></Descriptions.Item>}
               <Descriptions.Item label="操作人">{actor(detail)}</Descriptions.Item>
               <Descriptions.Item label={category === 'operations' ? '影响模块' : '资源类型'}>{category === 'operations' ? auditModuleLabels[detail.resource_type || ''] || detail.resource_type || '-' : detail.resource_type || '-'}</Descriptions.Item>
-              <Descriptions.Item label="资源 ID">{detail.resource_id || '-'}</Descriptions.Item>
+              <Descriptions.Item label="资源 ID">{detail.resource_id || (['list_agent_automations', 'search_agent_tools'].includes(detail.action) ? '列表查询，不对应单个资源' : '-')}</Descriptions.Item>
               <Descriptions.Item label="请求">{detail.method || '-'} {detail.path || ''}</Descriptions.Item>
               <Descriptions.Item label="请求结果">{detail.status_code ?? '-'}</Descriptions.Item>
               {category === 'operations' && <Descriptions.Item label="目标对象">{String(summaryOf(detail).target || '-')}</Descriptions.Item>}
-              <Descriptions.Item label="耗时">{detail.duration_ms == null ? '-' : `${detail.duration_ms} ms`}</Descriptions.Item>
-              <Descriptions.Item label="来源 IP">{detail.ip_address || '-'}</Descriptions.Item>
-              <Descriptions.Item label="客户端">{detail.user_agent || '-'}</Descriptions.Item>
-              <Descriptions.Item label="请求 ID">{detail.request_id || '-'}</Descriptions.Item>
+              <Descriptions.Item label="耗时">{detail.duration_ms == null ? '未采集' : `${detail.duration_ms} ms`}</Descriptions.Item>
+              <Descriptions.Item label="来源 IP">{detail.ip_address || '未采集'}</Descriptions.Item>
+              <Descriptions.Item label="客户端">{detail.user_agent || '未采集'}</Descriptions.Item>
+              <Descriptions.Item label="请求 ID">{detail.request_id || '未采集'}</Descriptions.Item>
               <Descriptions.Item label="发生时间">{formatTime(detail.created_at)}</Descriptions.Item>
             </Descriptions>
             {category === 'permissions' && detail.method === 'GET' && (
               <Alert type="info" showIcon title="本次为只读查询，未变更授权。" />
+            )}
+            {((category === 'business' && detail.action === 'search_agent_tools') || (category === 'automations' && detail.method === 'GET')) && (
+              <Alert type="info" showIcon title="本次为只读查询，未变更业务数据。" />
             )}
             {detailSections(category, detail).map((section) => (
               <section key={section.title}>

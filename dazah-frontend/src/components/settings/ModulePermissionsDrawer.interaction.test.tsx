@@ -32,6 +32,33 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
+it.each([false, true])('derives page status without requiring legacy module grants (legacy=%s)', async (allowed) => {
+  mocks.get.mockResolvedValue(result('A'))
+  await act(async () => root.render(createElement(ModulePermissionsDrawer, {
+    user: { ...user('A'), module_codes: allowed ? ['hr'] : [] }, open: true, onClose: vi.fn(),
+  })))
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+  expect(document.body.textContent).toContain('模块入口随有效页面访问权限自动生效')
+  expect(document.body.textContent).not.toContain('模块入口未开通')
+  expect(document.querySelector('[data-platform-notice="warning"]')).toBeNull()
+  await act(async () => button('可查看').click())
+  await act(async () => mocks.confirm.mock.lastCall![0].onOk())
+  expect(document.querySelector('.ant-table-tbody')?.textContent).toContain('可查看')
+  expect(mocks.replace).not.toHaveBeenCalled()
+})
+
+it('exempts the system administrator from the module prerequisite', async () => {
+  mocks.get.mockResolvedValue(result('A'))
+  await act(async () => root.render(createElement(ModulePermissionsDrawer, {
+    user: { ...user('A'), role: 'admin', module_codes: [] }, open: true, onClose: vi.fn(),
+  })))
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+  expect(document.body.textContent).toContain('系统管理员拥有全部权限，无需逐页配置')
+  expect(document.body.textContent).not.toContain('请先开通相应模块')
+  expect(document.querySelector('[data-platform-notice="warning"]')).toBeNull()
+  expect(mocks.replace).not.toHaveBeenCalled()
+})
+
 it('auto-expands high risk pages without granting actions and displays editable scope', async () => {
   const data = result('A')
   data.definitions![0].sensitive_actions = [{ key: 'delete', name: '删除员工档案', category: 'destructive', description: '删除员工记录' }]

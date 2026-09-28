@@ -34,6 +34,7 @@ from app.platform.identity.models import (
     UserModuleGrant,
     UserPageGrant,
 )
+from app.platform.identity.page_permission_repository import PagePermissionRepository
 from app.platform.identity.permissions import IdentityPermissionService
 from app.platform.identity.rbac import seed_menus
 from app.platform.identity.schemas import (
@@ -609,16 +610,14 @@ async def test_revoked_scope_suspends_scheduled_automation(
     trigger = await db_session.get(AgentAutomationTrigger, automation.triggers[0].id)
     assert trigger is not None
     trigger.next_fire_at = datetime.now(UTC)
-    await IdentityPermissionService().replace_user_permissions(
+    await PagePermissionRepository().replace_user_grants(
         db_session,
-        target_user_id=owner.id,
-        request=UserModulePermissionsUpdate(
-            expected_grant_version=owner.grant_version,
-            reason="撤销 Phase 2 调度权限",
-            grants=[],
-        ),
-        current_user=admin,
+        user_id=owner.id,
+        grants=[],
+        actor_id=admin.id,
     )
+    owner.grant_version += 1
+    await db_session.flush()
 
     runner = AgentAutomationRunner()
     claimed = await runner.claim_due_work(db_session)

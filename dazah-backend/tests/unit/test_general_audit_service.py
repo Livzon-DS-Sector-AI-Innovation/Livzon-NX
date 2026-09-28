@@ -210,15 +210,23 @@ async def test_operation_detail_includes_correlated_business_change() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "resource_type",
+    [
+        "user_module_permissions",
+        "agent_automation",
+        "feishu_gateway",
+        "agent_capability_search",
+    ],
+)
 @pytest.mark.parametrize("linked", [True, False])
 @pytest.mark.parametrize("has_metadata", [True, False])
-async def test_permission_detail_uses_only_correlated_request_metadata(
+async def test_event_detail_uses_only_correlated_request_metadata(
+    resource_type: str,
     linked: bool,
     has_metadata: bool,
 ) -> None:
-    log = _log(
-        action="view_user_module_permissions", resource_type="user_module_permissions"
-    )
+    log = _log(action="view_resource", resource_type=resource_type)
     log.user_id = uuid.uuid4()
     log.request_id = "permission-request" if linked else None
     log.new_value = {"grants": [], "password": "hidden"}
@@ -234,6 +242,10 @@ async def test_permission_detail_uses_only_correlated_request_metadata(
     operation.user_agent = "request-client"
     operation.path = "/api/v1/identity/users/{user_id}/module-permissions"
     operation.status_code = 200
+    operation.extra = {
+        "request": {"query_params": {"page": "2", "api_key": "hidden"}},
+        "response": {"status_code": 200},
+    }
     statements: list[Any] = []
 
     class QuerySession:
@@ -258,6 +270,14 @@ async def test_permission_detail_uses_only_correlated_request_metadata(
     assert detail.method == ("GET" if has_metadata or linked else None)
     assert detail.path == (operation.path if linked else None)
     assert detail.status_code == (200 if linked else None)
+    assert detail.extra == (
+        {
+            "request": {"query_params": {"page": "2", "api_key": "***"}},
+            "response": {"status_code": 200},
+        }
+        if linked
+        else {}
+    )
     if statements:
         sql = str(
             statements[0].compile(

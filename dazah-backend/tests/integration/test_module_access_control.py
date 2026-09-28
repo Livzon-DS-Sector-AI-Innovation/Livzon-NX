@@ -111,10 +111,11 @@ async def test_business_module_routes_are_open_to_authenticated_users_in_all_mod
 
 
 @pytest.mark.anyio
-async def test_current_user_exposes_all_module_codes_in_all_mode(
+async def test_current_user_derives_modules_from_pages_in_both_modes(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
+    await seed_menus(db_session)
     user = User(
         name="当前用户模块测试",
         username=f"current-modules-{uuid.uuid4().hex[:12]}",
@@ -126,6 +127,14 @@ async def test_current_user_exposes_all_module_codes_in_all_mode(
     await db_session.flush()
     db_session.add_all(
         [
+            UserPageGrant(
+                user_id=user.id,
+                page_key="warehouse:materials:raw-summary",
+                permissions=["access", "query"],
+                sensitive_actions=[],
+                scope_type="all",
+                department_ids=[],
+            ),
             UserModuleGrant(
                 user_id=user.id,
                 module_code="warehouse",
@@ -164,7 +173,7 @@ async def test_current_user_exposes_all_module_codes_in_all_mode(
     try:
         response = await client.get("/api/v1/identity/me")
         assert response.status_code == 200
-        assert response.json()["data"]["module_codes"] == sorted(MODULES_BY_CODE)
+        assert response.json()["data"]["module_codes"] == ["warehouse"]
 
         app.dependency_overrides[get_settings] = lambda: SimpleNamespace(
             effective_module_access_mode="roles"
@@ -185,11 +194,11 @@ async def test_current_user_exposes_all_module_codes_in_all_mode(
 
 
 @pytest.mark.anyio
-async def test_production_uses_saved_module_grants_even_with_legacy_all_setting(
+async def test_legacy_module_grants_neither_open_nor_close_page_access(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """A stale production ``MODULE_ACCESS_MODE=all`` cannot bypass grants."""
+    """Only effective pages determine module access, including legacy all mode."""
 
     admin = User(
         name="生产权限管理员",
@@ -253,13 +262,30 @@ async def test_production_uses_saved_module_grants_even_with_legacy_all_setting(
         )
         granted = await client.get("/api/v1/identity/me")
         assert granted.status_code == 200
-        assert granted.json()["data"]["module_codes"] == ["warehouse"]
-        # The module grant is visible in /me, while a context-free request
-        # still fails the separate mandatory page authorization layer.
+        assert granted.json()["data"]["module_codes"] == []
         assert (await client.get("/api/v1/warehouse/")).status_code == 403
         assert (await client.get("/api/v1/production/")).status_code == 403
 
+        await seed_menus(db_session)
+        page = UserPageGrant(
+            user_id=target.id,
+            page_key="warehouse:materials:raw-summary",
+            permissions=["access", "query"],
+            sensitive_actions=[],
+            scope_type="all",
+            department_ids=[],
+        )
+        db_session.add(page)
+        await db_session.flush()
         await replace([])
+        effective = await client.get("/api/v1/identity/me")
+        assert effective.json()["data"]["module_codes"] == ["warehouse"]
+        headers = {"X-Dazah-Page-Key": "warehouse:materials:raw-summary"}
+        assert (
+            await client.get("/api/v1/warehouse/", headers=headers)
+        ).status_code == 200
+        page.permissions = []
+        await db_session.flush()
         revoked = await client.get("/api/v1/identity/me")
         assert revoked.status_code == 200
         assert revoked.json()["data"]["module_codes"] == []
@@ -320,7 +346,8 @@ async def test_system_admin_has_all_pages_and_registered_livzon_tools(
 
         assert set(scope.tool_names) == {spec.name for spec in tool_registry.list()}
         assert set(scope.workflow_tool_names) == {
-            spec.name for spec in tool_registry.list()
+            spec.name
+            for spec in tool_registry.list()
             if spec.workflow_allowed and not spec.human_decision_required
         }
 

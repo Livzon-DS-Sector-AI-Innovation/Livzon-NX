@@ -12,6 +12,7 @@ from app.modules.agent.automation_service import AgentAutomationService
 from app.modules.agent.models import AgentWorkflow
 from app.modules.agent.schemas import AgentAutomationDraftCreate
 from app.platform.identity.models import User, UserPageGrant
+from app.platform.identity.page_permission_repository import PagePermissionRepository
 from app.platform.identity.permissions import IdentityPermissionService
 from app.platform.identity.rbac import seed_menus
 from app.platform.identity.schemas import (
@@ -204,16 +205,14 @@ async def test_revoked_automation_permission_suspends_enable_attempt(
     )
     await service.confirm_automation(db_session, user=owner, automation_id=draft.id)
 
-    await IdentityPermissionService().replace_user_permissions(
+    await PagePermissionRepository().replace_user_grants(
         db_session,
-        target_user_id=owner.id,
-        request=UserModulePermissionsUpdate(
-            expected_grant_version=owner.grant_version,
-            reason="撤销 Phase 1 自动化权限",
-            grants=[],
-        ),
-        current_user=admin,
+        user_id=owner.id,
+        grants=[],
+        actor_id=admin.id,
     )
+    owner.grant_version += 1
+    await db_session.flush()
 
     with pytest.raises(HTTPException) as exc_info:
         await service.set_enabled(

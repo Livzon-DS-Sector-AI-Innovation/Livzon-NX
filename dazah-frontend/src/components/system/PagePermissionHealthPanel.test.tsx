@@ -81,6 +81,8 @@ it('renders health counts with severity colors without Statistic deprecation war
   const consoleError = vi.spyOn(console, 'error')
   try {
     await renderPanel()
+    expect(host.textContent).not.toContain('无模块入口授权')
+    expect(host.textContent).toContain('失效页面和部门及冗余用户覆盖')
     const statistics = [...host.querySelectorAll('.ant-statistic')]
     for (const [title, value, color] of [
       ['问题总数', '2', ''],

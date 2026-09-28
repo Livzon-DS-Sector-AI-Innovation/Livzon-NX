@@ -55,12 +55,25 @@ describe('application shell permission boundary', () => {
   it.each([undefined, []])('does not treat missing ordinary-user module grants as unrestricted: %j', (module_codes) => {
     const html = renderToStaticMarkup(<AppShell user={makeUser({ module_codes })}>业务内容</AppShell>)
     expect(html).toContain('暂无模块访问权限')
-    expect(html).toContain('当前账号未获“采购管理”的查看权限')
+    expect(html).toContain('当前账号在“采购管理”中没有可访问页面')
     expect(html).not.toContain('业务内容')
   })
 
+  it('opens an effectively granted page with no legacy module grant and closes it after revocation', () => {
+    const html = renderToStaticMarkup(<AppShell user={makeUser({ module_codes: [],
+      page_permissions: pageGrant(['access', 'query']),
+    })}>业务内容</AppShell>)
+    expect(html).toContain('业务内容')
+    expect(html).toContain('href="/purchasing"')
+    const revoked = renderToStaticMarkup(<AppShell user={makeUser({ module_codes: ['procurement'],
+      page_permissions: pageGrant([]),
+    })}>业务内容</AppShell>)
+    expect(revoked).toContain('暂无模块访问权限')
+    expect(revoked).not.toContain('业务内容')
+  })
+
   it.each([
-    { permissions: [], message: '暂无页面访问权限' },
+    { permissions: [], message: '暂无模块访问权限' },
     { permissions: ['access'] as const, message: '当前页面仅允许访问' },
   ])('preserves ordinary-user denial: $message', async ({ permissions, message }) => {
     session.user = makeUser({ page_permissions: pageGrant([...permissions]) })

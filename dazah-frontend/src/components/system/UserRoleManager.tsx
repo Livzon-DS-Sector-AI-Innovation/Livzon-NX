@@ -158,8 +158,8 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
 
   const permissionSummary = <div className="space-y-3 pt-2">
     <Alert showIcon type={selectedSystemAdmin ? "warning" : "info"}
-      title={selectedSystemAdmin ? "系统管理员将拥有全部权限" : "多个角色的页面权限将合并生效"}
-      description="角色提供页面权限基线：基础权限与高风险操作取并集，数据范围按页面合并；已有用户页面覆盖仍优先于角色基线。" />
+      title={selectedSystemAdmin ? "系统管理员将拥有全部权限" : "多个角色的页面权限合并生效，模块入口随有效页面访问权限自动开通或关闭。"}
+      description="角色提供页面权限基线：基础权限与高风险操作取并集，数据范围按页面合并；已有用户页面覆盖仍优先于角色基线。模块内至少一个页面具有有效访问权限时，模块入口自动开通；撤销最后一个可访问页面后，入口自动关闭。系统管理员默认拥有全部模块访问权限。" />
     <div><Typography.Text strong>已选角色：</Typography.Text>{selectedRoleIds.length
       ? initialRoles.filter((role) => selectedRoleSet.has(role.id)).map((role) => <Tag key={role.id}>{role.name}</Tag>)
       : <Typography.Text type="secondary">未分配角色</Typography.Text>}</div>
@@ -174,7 +174,7 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
         : dataScope.scopeType === "departments" ? dataScope.departmentNames.join("、") || "尚未选择部门" : "本部门 + 子部门"}
     </div>}
     <Typography.Paragraph type="secondary" className="mb-0">
-      此处预览角色与范围配置；具体页面的有效权限还取决于用户页面覆盖和页面权限规则。
+      此处预览角色与范围配置；具体页面的有效权限还取决于用户页面覆盖和页面权限规则，模块入口由最终有效页面权限计算。
     </Typography.Paragraph>
   </div>
 
@@ -194,6 +194,8 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
     icon: null,
     okText: "我知道了",
     content: <div>
+      <Typography.Text strong>模块入口随有效页面权限自动生效</Typography.Text>
+      <p>为角色配置页面权限后，只需给账号分配角色。模块内至少一个页面具有有效访问权限时，模块入口自动开通；撤销最后一个可访问页面后，入口自动关闭。多个角色合并计算，用户页面覆盖优先；明确拒绝的页面不参与入口开通。系统管理员默认拥有全部模块访问权限。</p>
       <Typography.Text strong>角色决定页面权限基线</Typography.Text>
       <p>多个普通角色会合并生效：页面基础权限和附加高风险操作取并集，页面数据范围按规则合并；用户页面覆盖优先。系统管理员拥有全部权限，普通管理员不能进入系统设置，两类管理员角色均单独选择。兼容部门范围仅用于尚未接入页面级数据范围的功能。</p>
     </div>,
@@ -272,7 +274,7 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
               isSystemAdmin: record.roles.some((role) => role.code === "super_admin"),
             })}
           >
-            模块访问
+            有效权限
           </Button>
         </div>
       ),
@@ -281,6 +283,9 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
 
   return (
     <div>
+      <Alert className="mb-3" type="info" showIcon
+        title="为角色配置页面权限后，只需分配角色；模块入口随有效页面访问权限自动生效。"
+        onLearnRules={showPermissionRules} />
       <div className="mb-3 max-w-sm">
         <Input.Search
           placeholder="按姓名 / 部门搜索"
@@ -321,7 +326,9 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
       >
         <ConfigProvider componentDisabled={saving}>
         <div className={styles.body}>
-        <Alert showIcon type="info" title="角色决定功能权限，部门范围决定可查看的数据范围。"
+        <Alert showIcon type="info"
+          title={selectedSystemAdmin ? "系统管理员默认拥有全部模块访问权限，无需单独开通。"
+            : "模块入口随有效页面访问权限自动生效；用户页面覆盖优先于角色基线。"}
           onLearnRules={showPermissionRules} />
         <section aria-label="已选择的角色">
           <div className={styles.sectionHeading}>

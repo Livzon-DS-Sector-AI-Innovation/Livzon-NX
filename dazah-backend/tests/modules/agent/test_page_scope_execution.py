@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
@@ -10,6 +10,86 @@ from app.modules.agent.schemas import AgentToolExecuteRequest
 from app.modules.agent.tools import ToolExecutor, tool_registry
 from app.platform.identity.models import User
 from app.platform.identity.schemas import EffectivePageGrantOut, PageDataScopeInput
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failed", [False, True])
+async def test_scope_sync_generator_initializes_and_tracks_outbox(monkeypatch, failed):
+    from app.modules.agent.scheduled import AgentAccessScopeSyncGenerator
+
+    generator = AgentAccessScopeSyncGenerator(batch_size=20)
+    assert generator.batch_size == 20
+    assert isinstance(generator.scope_service, AgentAccessScopeService)
+    synchronize = AsyncMock(
+        side_effect=RuntimeError("scope sync failed") if failed else None
+    )
+    processed = AsyncMock()
+    mark_failed = AsyncMock()
+    monkeypatch.setattr(generator.scope_service, "synchronize", synchronize)
+    monkeypatch.setattr(generator.permission_repo, "mark_outbox_processed", processed)
+    monkeypatch.setattr(generator.permission_repo, "mark_outbox_failed", mark_failed)
+    actor_id = uuid4()
+    item = SimpleNamespace(user_id=uuid4(), updated_by=actor_id, created_by=uuid4())
+    session = object()
+
+    await generator.execute_one(session, item)
+
+    synchronize.assert_awaited_once_with(
+        session, user_id=item.user_id, actor_id=actor_id
+    )
+    if failed:
+        processed.assert_not_awaited()
+        mark_failed.assert_awaited_once_with(
+            session, item, error="scope sync failed", actor_id=actor_id
+        )
+    else:
+        processed.assert_awaited_once_with(session, item, actor_id=actor_id)
+        mark_failed.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_tool_scope_follows_pages_without_legacy_module_grants(monkeypatch):
+    from app.modules.agent.tool_registration import ensure_agent_tools_registered
+    from app.platform.identity.page_permissions import PagePermissionService
+
+    ensure_agent_tools_registered()
+    service = AgentAccessScopeService()
+    user = SimpleNamespace(id=uuid4(), role="user", grant_version=1, is_deleted=False)
+    grants = [
+        EffectivePageGrantOut(
+            page_key="quality:deviations:deviation-ledger",
+            module_code="quality",
+            permissions=["access", "query"],
+            sensitive_actions=[],
+            data_scope=PageDataScopeInput(scope_type="department_tree"),
+            source="role",
+        )
+    ]
+    monkeypatch.setattr(
+        PagePermissionService,
+        "effective_grants",
+        AsyncMock(side_effect=lambda *a, **kw: grants),
+    )
+    monkeypatch.setattr(service, "get_snapshot", AsyncMock(return_value=None))
+    db = SimpleNamespace(
+        get=AsyncMock(return_value=user), add=Mock(), flush=AsyncMock()
+    )
+    snapshot = await service.synchronize(db, user_id=user.id)
+    assert [module["module_code"] for module in snapshot.modules] == ["quality"]
+    assert "quality.list_deviations" in snapshot.tool_names
+    assert "quality.list_deviations" in snapshot.workflow_tool_names
+    assert "procurement.list_purchase_requests" not in snapshot.tool_names
+    assert all(
+        not tool_registry.require(name).write
+        for name in snapshot.tool_names
+        if tool_registry.require(name).module == "quality"
+    )
+    grants.clear()
+    user.grant_version += 1
+    revoked = await service.synchronize(db, user_id=user.id)
+    assert revoked.modules == []
+    assert "quality.list_deviations" not in revoked.tool_names
+    assert "quality.list_deviations" not in revoked.workflow_tool_names
 
 
 @pytest.mark.asyncio

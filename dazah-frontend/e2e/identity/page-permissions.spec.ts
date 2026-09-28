@@ -1,6 +1,30 @@
 import { expect, test } from '@playwright/test'
 
 test.describe('页面最小授权', () => {
+  for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+    test(`有效权限只读展示自动模块入口 ${viewport.width}`, async ({ context, page }, testInfo) => {
+      await page.setViewportSize(viewport)
+      await context.addCookies([{ name: 'auth_token', value: 'effective-admin', url: 'http://127.0.0.1:3200' }])
+      await page.goto('/system/user-roles')
+      await expect(page.getByText('为用户分配角色，模块入口随有效页面权限自动生效。', { exact: true })).toBeVisible()
+      await expect(page.getByRole('button', { name: /模块访问$/ })).toHaveCount(0)
+      await page.getByRole('button', { name: /有效权限$/ }).click()
+      const drawer = page.getByRole('dialog')
+      await expect(drawer.getByText('已开通 1 个模块', { exact: true })).toBeVisible()
+      const hrRow = drawer.getByRole('row').filter({ hasText: '人事管理' })
+      await expect(hrRow.getByText('自动开通', { exact: true })).toBeVisible()
+      await hrRow.getByRole('button', { name: '展开行' }).click()
+      await expect(drawer.getByText('员工查看角色', { exact: true })).toBeVisible()
+      const pageRow = await drawer.getByRole('row').filter({ hasText: '员工管理' }).last().boundingBox()
+      const nextModuleRow = await drawer.getByRole('row').filter({ hasText: '仓储管理' }).boundingBox()
+      expect(pageRow && nextModuleRow && pageRow.y + pageRow.height <= nextModuleRow.y).toBe(true)
+      await expect(drawer.getByRole('checkbox')).toHaveCount(0)
+      await expect(drawer.getByRole('button', { name: /保存/ })).toHaveCount(0)
+      await expect(drawer).toHaveCSS('width', viewport.width === 390 ? '390px' : '820px')
+      await page.screenshot({ path: testInfo.outputPath('effective-permissions.png'), fullPage: true })
+    })
+  }
+
   test('系统管理员无需逐页授权即可访问已发布模块并进行操作', async ({ context, page }) => {
     await context.addCookies([{ name: 'auth_token', value: 'admin-no-page-grants', url: 'http://127.0.0.1:3200' }])
     const response = await page.goto('/purchasing/supplier')
@@ -58,10 +82,11 @@ test.describe('页面最小授权', () => {
     })
   }
 
-  test('查询权限可打开授权页面，但不能导入或直接访问同模块其他页面', async ({ context, page }) => {
+  test('无独立模块授权时查询权限自动开通模块，但不能导入或访问其他页面', async ({ context, page }) => {
     await context.addCookies([{ name: 'auth_token', value: 'page-query', url: 'http://127.0.0.1:3200' }])
     await page.goto('/purchasing')
     await expect(page).toHaveURL(/\/purchasing\/supplier$/)
+    await expect(page.getByRole('navigation', { name: '业务模块' }).getByRole('link', { name: '采购管理', exact: true })).toBeVisible()
     await expect(page.getByText('未获得批量导入权限，仅可查询供应商清单')).toBeVisible()
     await expect(page.locator('input[type="file"]')).toBeDisabled()
     const response = await page.goto('/purchasing/order')

@@ -1,0 +1,385 @@
+.editor .container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-radius: var(--editor-radius-lg) 0 0 var(--editor-radius-lg);
+}
+
+.editor .header {
+  padding: 24px 24px 16px;
+  border-bottom: 0;
+}
+
+.editor .body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  padding: 0 24px;
+  overflow: auto;
+}
+
+.mask {
+  backdrop-filter: blur(5px);
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 48px;
+}
+
+.heading > h3 {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.editor .historyButton {
+  flex: none;
+  border-color: var(--editor-primary-border);
+  color: var(--editor-primary);
+}
+
+.rulesNotice,
+.changesNotice,
+.moduleNavigation,
+.toolbar,
+.treeToolbar {
+  flex: none;
+}
+
+.moduleNavigation {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.editor .modules {
+  padding: 0;
+  background: var(--editor-surface);
+  border-radius: var(--editor-radius);
+}
+
+.modules :global(.ant-segmented-item-label) {
+  min-height: 48px;
+  padding-inline: 20px;
+  line-height: 48px;
+}
+
+.modules :global(.ant-segmented-item-selected) {
+  color: var(--editor-primary);
+  background: var(--editor-primary-bg);
+  box-shadow: inset 0 -2px var(--editor-primary);
+  font-weight: 600;
+}
+
+.toolbar,
+.filters,
+.batchActions,
+.treeToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.toolbar {
+  justify-content: space-between;
+}
+
+.filters {
+  flex: 1;
+  min-width: 0;
+  gap: 20px;
+}
+
+.filters :global(.ant-checkbox-wrapper),
+.batchActions > span {
+  white-space: nowrap;
+}
+
+.editor .search {
+  flex: 1;
+  min-width: 220px;
+  max-width: 300px;
+}
+
+.batchActions {
+  gap: 8px;
+}
+
+.editor .clearButton {
+  background: var(--editor-primary-bg);
+  border-color: var(--editor-primary-border);
+  color: var(--editor-primary);
+}
+
+.editor .batchDropdown {
+  width: auto;
+}
+
+.treeToolbar > span {
+  flex: 1;
+  min-width: 260px;
+}
+
+.tableArea {
+  flex: 1;
+  min-height: 260px;
+  overflow: hidden;
+}
+
+.permissionTable :global(.ant-table-thead) > tr > th {
+  height: 48px;
+  background: var(--editor-surface);
+}
+
+.permissionTable :global(.ant-table-cell) {
+  vertical-align: top;
+}
+
+.menuRow :global(.ant-table-cell) {
+  display: flex;
+  align-items: center;
+  min-height: 76px;
+  padding: 16px 12px;
+}
+
+.menuIdentity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+}
+
+.editor .expandButton,
+.expandPlaceholder {
+  flex: none;
+  width: 28px;
+  height: 28px;
+}
+
+.editor .expandButton {
+  padding: 0;
+  border-color: var(--editor-primary-border);
+  background: var(--editor-primary-bg);
+  color: var(--editor-primary);
+}
+
+.folderIcon {
+  flex: none;
+  color: var(--editor-primary);
+  font-size: 24px;
+}
+
+.pageContent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pageHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pageTitle,
+.pageKey {
+  overflow-wrap: anywhere;
+}
+
+.pageKey {
+  display: block;
+}
+
+.tiers {
+  display: inline-flex;
+  white-space: nowrap;
+}
+
+.tiers :global(.ant-radio-button-wrapper) {
+  padding-inline: 15px;
+}
+
+.tiers :global(.ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled)) {
+  background: var(--editor-primary-bg);
+  border-color: var(--editor-primary-border);
+  color: var(--editor-primary);
+  font-weight: 600;
+}
+
+.detailsRow :global(.ant-table-cell) {
+  padding: 0 20px 16px;
+}
+
+.detailPanels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  width: 100%;
+}
+
+.detailPanel {
+  min-width: 0;
+  padding: 18px;
+  border-radius: var(--editor-radius);
+  background: var(--editor-surface);
+}
+
+.detailPanel:only-child {
+  grid-column: 1 / -1;
+}
+
+.panelHeading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.panelIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--editor-primary-bg);
+  color: var(--editor-primary);
+  font-size: 18px;
+}
+
+.selectedCount {
+  margin-inline-start: auto;
+}
+
+.visibleSections {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px 8px;
+  margin-top: 20px;
+}
+
+.sensitiveActions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.visibleSections :global(.ant-checkbox-wrapper),
+.sensitiveActions :global(.ant-checkbox-wrapper) {
+  align-items: flex-start;
+  margin-inline-start: 0;
+}
+
+.actionName,
+.actionDescription {
+  display: block;
+  white-space: normal;
+}
+
+.actionDescription {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.scopeControls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.scopeControls :global(.ant-select) {
+  width: 100%;
+}
+
+.editor .drawerFooter {
+  flex: none;
+  padding: 16px 24px 24px;
+  border-top: 1px solid var(--editor-border);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.editor .reason {
+  flex: 1;
+  min-width: 0;
+}
+
+.reason :global(.ant-input-prefix) {
+  margin-inline-end: 12px;
+  color: var(--editor-primary);
+  font-size: 20px;
+}
+
+.editor .footerButton {
+  flex: none;
+  min-width: 100px;
+}
+
+@media (max-width: 1350px) {
+  .toolbar {
+    gap: 16px;
+  }
+
+  .filters {
+    flex-basis: 100%;
+  }
+}
+
+@media (max-width: 767px) {
+  .editor .header,
+  .editor .drawerFooter {
+    padding: 16px;
+  }
+
+  .editor .body {
+    padding-inline: 16px;
+  }
+
+  .heading {
+    gap: 8px;
+  }
+
+  .editor .historyButton {
+    padding-inline: 10px;
+  }
+
+  .filters,
+  .batchActions {
+    gap: 12px;
+  }
+
+  .editor .search {
+    flex-basis: 100%;
+    max-width: none;
+  }
+
+  .batchActions > span {
+    flex-basis: 100%;
+  }
+
+  .footer {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .editor .reason {
+    flex-basis: 100%;
+  }
+}

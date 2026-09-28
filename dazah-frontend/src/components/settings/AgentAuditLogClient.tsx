@@ -238,7 +238,7 @@ export default function AgentAuditLogClient() {
         <Timeline
           items={detailMessages.map((item) => ({
             color: item.role === 'user' ? 'blue' : item.role === 'assistant' ? 'purple' : 'gray',
-            children: (
+            content: (
               <div className="pb-3">
                 <Space className="mb-2">
                   <Tag>{item.role === 'user' ? '用户' : item.role === 'assistant' ? 'Livzon' : item.role}</Tag>
@@ -264,7 +264,7 @@ export default function AgentAuditLogClient() {
       children: detailConfirmations.length ? (
         <Timeline items={detailConfirmations.map((item) => ({
           color: item.status === 'executed' ? 'green' : item.status === 'rejected' ? 'red' : 'orange',
-          children: (
+          content: (
             <div className="pb-3">
               <Space wrap><Text strong>{auditToolLabel(item.operation, item.summary)}</Text>{statusTag(item.status)}<Tag>{auditRiskLabel(item.risk_level)}</Tag></Space>
               <div className="mt-1 text-[12px] text-[var(--color-steel)]">{formatTime(item.created_at)} · 原始工具标识：<Text copyable>{item.operation}</Text></div>
