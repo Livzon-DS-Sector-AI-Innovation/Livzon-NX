@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { App, Button, Card, Modal, Space, Tag, Row, Col, Table, Upload } from 'antd'
-import { ExclamationCircleOutlined, SendOutlined, CheckCircleOutlined, CloseCircleOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons'
+import { SendOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons'
+import PlatformNotice from '@/components/shared/PlatformNotice'
 import * as XLSX from 'xlsx'
 import {
   pushContractExpiringAction,
@@ -262,18 +263,16 @@ export default function ContractAlertBanner({ onViewExpiring }: Props) {
 
   if (items.length === 0) {
     return (
-      <Card size="small" style={{ marginBottom: 16, background: '#f6ffed', border: '1px solid #b7eb8f' }}>
-        <Space><CheckCircleOutlined style={{ color: '#52c41a' }} /><span style={{ fontWeight: 600 }}>{quarter.label} 暂无合同到期人员</span><Tag color="green">已检查6个字段</Tag></Space>
-      </Card>
+      <PlatformNotice type="success" style={{ marginBottom: 16 }}
+        title={`${quarter.label} 暂无合同到期人员`} description="已检查 6 个合同字段。" />
     )
   }
 
   return (
     <>
       <Card
-        style={{ marginBottom: 16, background: '#fff7e6', border: '1px solid #ffa940' }}
+        style={{ marginBottom: 16 }}
         styles={{ body: { padding: '14px 20px' } }}
-        title={<span style={{ fontWeight: 700, fontSize: 15 }}><ExclamationCircleOutlined style={{ color: '#fa8c16', marginRight: 6 }} />合同到期提醒 — {quarter.label}<Tag color="warning" style={{ marginLeft: 8 }}>{items.length}人</Tag></span>}
         extra={
           <Space>
             {items.length > 20 && <Button size="small" onClick={() => setDetailOpen(true)}>查看全部</Button>}
@@ -289,6 +288,9 @@ export default function ContractAlertBanner({ onViewExpiring }: Props) {
           </Space>
         }
       >
+        <PlatformNotice type="warning" style={{ marginBottom: 16 }}
+          title={`${quarter.label} 有 ${items.length} 位员工合同即将到期`}
+          description="请核对到期员工名单，按部门发起合同续签审批。" />
         <Row gutter={[12, 6]}>
           {items.slice(0, 20).map((item) => (
             <Col key={item.employee_id} xs={24} sm={12}>
@@ -303,10 +305,8 @@ export default function ContractAlertBanner({ onViewExpiring }: Props) {
           ))}
         </Row>
         {notifyMsg && (
-          <div style={{ marginTop: 10, padding: '6px 12px', background: '#fffbe6', borderRadius: 4, border: '1px solid #ffe58f', fontSize: 13 }}>
-            {notifyMsg.includes('失败') ? <CloseCircleOutlined style={{ color: '#ff4d4f', marginRight: 4 }} /> : <CheckCircleOutlined style={{ color: '#52c41a', marginRight: 4 }} />}
-            {notifyMsg}
-          </div>
+          <PlatformNotice style={{ marginTop: 10 }} title={notifyMsg}
+            type={isSyncing ? 'info' : notifyMsg.includes('失败') ? 'error' : 'success'} />
         )}
       </Card>
 

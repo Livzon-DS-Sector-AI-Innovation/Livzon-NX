@@ -1,19 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import {
-  Alert,
-  App,
-  Button,
-  Card,
-  Descriptions,
-  Input,
-  Modal,
-  Progress,
-  Space,
-  Tag,
-  Typography,
-} from 'antd'
+import { App, Button, Card, Descriptions, Input, Modal, Progress, Space, Tag, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import {
   CheckCircleOutlined,
   LinkOutlined,

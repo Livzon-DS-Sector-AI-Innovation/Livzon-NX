@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Upload, Button, Card, Alert, Space, App, Typography } from 'antd'
+import { Upload, Button, Card, Space, App, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { UploadOutlined, RobotOutlined, FileTextOutlined } from '@ant-design/icons'
 import type { UploadFile } from 'antd/es/upload/interface'
 import { parseExperimentRecord, parseProcessParameters } from '@/actions/ai-parse'

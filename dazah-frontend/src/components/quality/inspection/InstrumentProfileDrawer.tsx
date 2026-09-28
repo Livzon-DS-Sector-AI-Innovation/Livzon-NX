@@ -1,7 +1,8 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Alert, Descriptions, Drawer, Space, Spin, Table, Tabs, Typography } from 'antd'
+import { Descriptions, Drawer, Space, Spin, Table, Tabs, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import type { ColumnsType } from 'antd/es/table'
 import { useQuery } from '@tanstack/react-query'
 import { fetchInstrumentProfile } from '@/lib/api/client/quality'

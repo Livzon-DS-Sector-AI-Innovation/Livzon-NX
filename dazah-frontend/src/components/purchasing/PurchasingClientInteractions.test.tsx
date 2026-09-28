@@ -35,7 +35,9 @@ vi.mock('next/link', () => ({
     <a href={href} {...props}>{children}</a>,
 }))
 
-vi.mock('antd', async () => {
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd')>()
+  const businessMock = await (async () => {
   const React = await import('react')
   type AnyProps = Record<string, any>
 
@@ -273,6 +275,8 @@ vi.mock('antd', async () => {
     Tag,
     Upload,
   }
+})()
+  return { ...actual, ...businessMock, Alert: actual.Alert, theme: actual.theme, Typography: actual.Typography }
 })
 
 import { PurchaseApprovalClient } from './PurchaseApprovalClient'

@@ -1,18 +1,8 @@
 'use client'
 
 import { useRef, useState, type ChangeEvent } from 'react'
-import {
-  Alert,
-  App,
-  Button,
-  Card,
-  Col,
-  Row,
-  Space,
-  Table,
-  Tag,
-  Typography,
-} from 'antd'
+import { App, Button, Card, Col, Row, Space, Table, Tag, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { useRouter } from 'next/navigation'
 
 import { importCertificateWorkbook } from '@/actions/registration'

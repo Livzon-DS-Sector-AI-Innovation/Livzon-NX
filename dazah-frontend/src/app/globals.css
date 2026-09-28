@@ -220,6 +220,55 @@ body {
 }
 
 /* Sidebar Menu Styles - Following DESIGN.md */
+.settings-side-link {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 11px;
+  flex: none;
+  padding-inline: 12px;
+  border-radius: var(--rounded-md);
+  color: var(--color-charcoal);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.settings-side-link:hover {
+  background-color: rgba(86, 69, 212, 0.09);
+  color: var(--color-primary);
+  box-shadow: inset 3px 0 var(--color-primary);
+  text-decoration: none;
+}
+
+.settings-side-link[aria-current="page"] {
+  background-color: rgba(86, 69, 212, 0.12);
+  color: var(--color-primary);
+  font-weight: 600;
+  box-shadow: inset 3px 0 var(--color-primary);
+}
+
+.settings-side-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+@media (min-width: 80rem) {
+  .settings-side-link {
+    display: flex;
+    margin-block: 2px;
+  }
+}
+
+.sidebar-module-title,
+.sidebar-module-title:hover,
+.sidebar-module-title:focus-visible {
+  color: var(--color-ink-deep);
+  text-decoration: none;
+}
+
 .page-breadcrumb-menu .ant-dropdown-menu {
   max-height: min(60vh, 480px);
   overflow-y: auto;
@@ -239,7 +288,7 @@ body {
      antd cssinjs 运行期注入会覆盖同特异性常规声明 */
   margin-inline-start: 6px !important;
   margin-inline-end: 6px !important;
-  margin-block: 4px !important;
+  margin-block: 2px !important;
   padding-inline: 12px;
   padding-inline-start: 24px !important;
   height: 38px !important;
@@ -248,13 +297,13 @@ body {
 /* 子菜单标题与同层菜单项使用同一基线，右侧保留展开箭头空间。 */
 .sidebar-menu.ant-menu .ant-menu-submenu-title {
   font-size: 14px !important;
-  font-weight: 500 !important;
+  font-weight: 600 !important;
   line-height: 38px !important;
-  color: var(--color-charcoal) !important;
+  color: var(--color-ink) !important;
   border-radius: 8px !important;
   margin-inline-start: 6px !important;
   margin-inline-end: 6px !important;
-  margin-block: 4px !important;
+  margin-block: 2px !important;
   padding-inline-start: 24px !important;
   height: 38px !important;
 }
@@ -286,7 +335,8 @@ body {
 .sidebar-menu.ant-menu .ant-menu-item-selected {
   background-color: rgba(86, 69, 212, 0.12) !important;
   color: var(--color-primary) !important;
-  font-weight: 500;
+  font-weight: 600;
+  box-shadow: inset 3px 0 var(--color-primary);
 }
 
 .sidebar-menu.ant-menu .ant-menu-submenu-open > .ant-menu-submenu-title,
@@ -316,14 +366,21 @@ body {
   font-weight: 500;
   height: 38px !important;
   line-height: 38px !important;
-  margin-block: 4px !important;
+  margin-block: 2px !important;
   margin-inline: 6px !important;
   border-radius: 8px;
+}
+
+.sidebar-submenu-popup .ant-menu-submenu-title {
+  font-weight: 600;
+  color: var(--color-ink);
 }
 
 .sidebar-submenu-popup .ant-menu-item-selected {
   background-color: rgba(86, 69, 212, 0.12) !important;
   color: var(--color-primary) !important;
+  font-weight: 600;
+  box-shadow: inset 3px 0 var(--color-primary);
 }
 
 .sidebar-menu.ant-menu .ant-menu-item-selected:hover,

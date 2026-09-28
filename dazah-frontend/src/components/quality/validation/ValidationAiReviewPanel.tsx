@@ -1,29 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import {
-  Alert,
-  App,
-  Button,
-  Card,
-  Collapse,
-  Descriptions,
-  Drawer,
-  Empty,
-  Form,
-  Modal,
-  Popconfirm,
-  Input,
-  Select,
-  Space,
-  Spin,
-  Statistic,
-  Table,
-  Tag,
-  Tooltip,
-  Typography,
-  Upload,
-} from 'antd'
+import { App, Button, Card, Collapse, Descriptions, Drawer, Empty, Form, Modal, Popconfirm, Input, Select, Space, Spin, Statistic, Table, Tag, Tooltip, Typography, Upload } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   DeleteOutlined,

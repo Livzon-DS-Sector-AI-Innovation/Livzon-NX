@@ -3,8 +3,10 @@
 import { useMemo } from "react"
 import { PAGE_DATA_SCOPE_VISIBLE } from "@/lib/page-permission-editor"
 import { Radio, Tree } from "antd"
+import { ApartmentOutlined, BankOutlined, UserOutlined } from "@ant-design/icons"
 import type { TreeDataNode } from "antd"
 import type { DepartmentItem } from "@/lib/api/server/admin"
+import styles from "./DataScopeConfig.module.css"
 
 export type DataScopeSelection = {
   scopeType: "all" | "departments" | null // null = 默认（本部门+子部门）
@@ -15,6 +17,7 @@ interface DataScopeConfigProps {
   departments: DepartmentItem[]
   value: DataScopeSelection
   onChange: (selection: DataScopeSelection) => void
+  segmented?: boolean
 }
 
 /**
@@ -23,7 +26,7 @@ interface DataScopeConfigProps {
  * - 全部部门：可看全厂数据（如高管）
  * - 指定部门：勾选可见部门集合
  */
-export function DataScopeConfig({ departments, value, onChange }: DataScopeConfigProps) {
+export function DataScopeConfig({ departments, value, onChange, segmented = false }: DataScopeConfigProps) {
   const deptTreeData = useMemo(() => {
     const byParent = new Map<string, DepartmentItem[]>()
     for (const dept of departments) {
@@ -48,6 +51,8 @@ export function DataScopeConfig({ departments, value, onChange }: DataScopeConfi
   return (
     <div>
       <Radio.Group
+        className={segmented ? styles.scopeOptions : undefined}
+        aria-label="部门数据范围"
         value={value.scopeType ?? "default"}
         onChange={(e) => {
           const scopeType = e.target.value as "default" | "all" | "departments"
@@ -57,12 +62,18 @@ export function DataScopeConfig({ departments, value, onChange }: DataScopeConfi
           })
         }}
       >
-        <Radio value="default">默认（本部门 + 子部门）</Radio>
-        <Radio value="all">全部部门</Radio>
-        <Radio value="departments">指定部门</Radio>
+        {segmented ? <>
+          <Radio.Button value="default"><ApartmentOutlined /> 本部门 + 子部门</Radio.Button>
+          <Radio.Button value="all"><BankOutlined /> 全部部门</Radio.Button>
+          <Radio.Button value="departments"><UserOutlined /> 指定部门</Radio.Button>
+        </> : <>
+          <Radio value="default">默认（本部门 + 子部门）</Radio>
+          <Radio value="all">全部部门</Radio>
+          <Radio value="departments">指定部门</Radio>
+        </>}
       </Radio.Group>
       {value.scopeType === "departments" && (
-        <div className="mt-2 max-h-64 overflow-y-auto border rounded-md p-3">
+        <div className="mt-2 max-h-64 overflow-y-auto rounded-md border border-hairline p-3">
           <Tree
             key="data-scope-dept-tree"
             checkable

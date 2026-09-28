@@ -2,12 +2,16 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd')>()
+  const businessMock = await (() => ({
   Alert: ({ title, description }: { title: React.ReactNode; description: React.ReactNode }) =>
     React.createElement('div', null, title, description),
   Button: ({ children }: { children: React.ReactNode }) => React.createElement('button', null, children),
   Space: ({ children }: { children: React.ReactNode }) => React.createElement('div', null, children),
-}))
+}))()
+  return { ...actual, ...businessMock, Alert: actual.Alert, theme: actual.theme, Typography: actual.Typography }
+})
 
 import EquipmentErrorPage from './error'
 import AssetsErrorPage from './assets/error'

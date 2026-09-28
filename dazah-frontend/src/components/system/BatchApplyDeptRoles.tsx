@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { App, Button, Input, Progress, Radio, Space, Table, Tag } from "antd"
+import PlatformNotice from "@/components/shared/PlatformNotice"
 import { applyDeptRolesToUser } from "@/actions/admin"
 import { fetchAdminUsers, type AdminUserItem, type AdminUserQuery, type RoleItem } from "@/lib/api/client/admin"
 
@@ -96,9 +97,9 @@ export function BatchApplyDeptRoles({ role, departmentId, departmentName, onRunn
       <Input.Search placeholder="按姓名搜索用户" allowClear disabled={running} onSearch={(value) => {
         setLoading(true); setError(""); setPage(1); setKeyword(value); setReload((current) => current + 1)
       }} />
-      {error && <div role="alert">{error}<Button onClick={() => {
+      {error && <PlatformNotice type="error" title={error} action={<Button onClick={() => {
         setLoading(true); setReload((value) => value + 1)
-      }}>重试</Button></div>}
+      }}>重试</Button>} />}
       <Table<AdminUserItem> rowKey="id" size="small" loading={loading} dataSource={error ? [] : users}
         scroll={{ x: 560 }} columns={[
           { title: "姓名", dataIndex: "name" },

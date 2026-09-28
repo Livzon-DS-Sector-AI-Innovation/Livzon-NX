@@ -8,28 +8,8 @@ import {
   SafetyCertificateOutlined,
 } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  Alert,
-  Button,
-  Card,
-  Col,
-  Drawer,
-  Empty,
-  Form,
-  Input,
-  Modal,
-  Row,
-  Select,
-  Space,
-  Spin,
-  Statistic,
-  Table,
-  Tabs,
-  Tag,
-  Typography,
-  message,
-  type TableColumnsType,
-} from 'antd'
+import { Button, Card, Col, Drawer, Empty, Form, Input, Modal, Row, Select, Space, Spin, Statistic, Table, Tabs, Tag, Typography, message, type TableColumnsType } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { useEffect, useMemo, useState, useTransition } from 'react'
 
 import {

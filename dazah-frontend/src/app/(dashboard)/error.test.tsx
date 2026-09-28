@@ -2,7 +2,9 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd')>()
+  const businessMock = await (() => ({
   Alert: ({
     title,
     description,
@@ -20,7 +22,9 @@ vi.mock('antd', () => ({
     React.createElement('button', null, children),
   Space: ({ children }: { children: React.ReactNode }) =>
     React.createElement('div', null, children),
-}))
+}))()
+  return { ...actual, ...businessMock, Alert: actual.Alert, theme: actual.theme, Typography: actual.Typography }
+})
 
 describe('(dashboard) 全局错误边界', () => {
   it('渲染友好错误提示与重试按钮，而非默认崩溃页', async () => {
@@ -36,7 +40,7 @@ describe('(dashboard) 全局错误边界', () => {
 
     expect(markup).toContain('页面加载失败')
     expect(markup).toContain('加载失败')
-    expect(markup).toContain('abc123')
+    expect(markup).toContain('了解访问规则')
     expect(markup).toContain('重试')
     expect(markup).toContain('刷新页面')
   })

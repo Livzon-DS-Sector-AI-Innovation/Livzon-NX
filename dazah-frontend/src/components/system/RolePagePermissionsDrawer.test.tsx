@@ -1,12 +1,13 @@
 /* @vitest-environment happy-dom */
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { RolePagePermissionsOut } from '@/actions/admin'
 import type { RoleItem } from '@/lib/api/client/admin'
 
 const mocks = vi.hoisted(() => ({
-  get: vi.fn(), preview: vi.fn(), replace: vi.fn(), confirm: vi.fn(),
+  get: vi.fn(), preview: vi.fn(), replace: vi.fn(), confirm: vi.fn(), info: vi.fn(),
   message: { success: vi.fn(), warning: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
 vi.mock('@/actions/admin', () => ({
@@ -15,7 +16,7 @@ vi.mock('@/actions/admin', () => ({
 }))
 vi.mock('antd', async (importOriginal) => {
   const actual = await importOriginal<typeof import('antd')>()
-  return { ...actual, App: { useApp: () => ({ message: mocks.message, modal: { confirm: mocks.confirm } }) } }
+  return { ...actual, App: { useApp: () => ({ message: mocks.message, modal: { confirm: mocks.confirm, info: mocks.info } }) } }
 })
 import { RolePagePermissionsDrawer } from './RolePagePermissionsDrawer'
 
@@ -66,6 +67,8 @@ it('presents high risk actions as add-ons to ordinary operation', async () => {
   expect(document.body.textContent).toContain('依赖普通操作')
   const action = document.querySelector<HTMLInputElement>('input[value="delete"]')!
   await act(async () => action.click())
+  expect(document.body.textContent).not.toContain('高风险权限需要有效期限')
+  expect([...document.querySelectorAll('button')].some((item) => item.textContent?.includes('续期'))).toBe(false)
   expect(document.querySelector<HTMLInputElement>('[aria-label="权限档位"] input[value="operate"]')!.checked).toBe(true)
   await act(async () => document.querySelector<HTMLInputElement>('[aria-label="权限档位"] input[value="query"]')!.click())
   expect(action.checked).toBe(false)
@@ -83,6 +86,28 @@ it('shows production overview stages instead of a department or inapplicable sco
   await act(async () => button('展开全部菜单').click())
   expect(document.body.textContent).toContain('全部生产数据')
   expect(document.body.textContent).not.toContain('不适用')
+})
+
+it('saves selected overview sections separately from page query permission', async () => {
+  const data = result('A')
+  data.definitions = [{ page_key: 'production:overview', module_code: 'production',
+    page_name: '生产管理概览', route_path: '/production', supported_scope_types: ['all'] }]
+  data.grants = [{ page_key: 'production:overview', module_code: 'production', source: 'role',
+    permissions: ['access', 'query'], visible_sections: null,
+    data_scope: { scope_type: 'all' } }]
+  mocks.get.mockResolvedValue(data)
+  mocks.replace.mockResolvedValue({ ok: true, data })
+  await show('A')
+  await act(async () => button('展开全部菜单').click())
+  const product = document.querySelector<HTMLInputElement>('input[value="FA"]')!
+  expect(product.checked).toBe(true)
+  await act(async () => product.click())
+  const confirmation = await preview()
+  await act(async () => { await confirmation.onOk() })
+  expect(mocks.replace).toHaveBeenCalledWith('A', expect.objectContaining({ grants: [expect.objectContaining({
+    permissions: ['access', 'query'],
+    visible_sections: expect.not.arrayContaining(['FA']),
+  })] }))
 })
 let root: Root
 let host: HTMLDivElement
@@ -121,17 +146,82 @@ async function preview() {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '岗位调整')
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })
-  await act(async () => button('预览并保存基线').click())
+  await act(async () => button('保存').click())
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
   expect(mocks.confirm).toHaveBeenCalled()
   return mocks.confirm.mock.lastCall![0] as { onOk: () => Promise<void> | void }
 }
 
+it('previews changes without requiring a reason or offering a save action', async () => {
+  mocks.get.mockResolvedValue(result('A'))
+  await show('A')
+  await act(async () => button('展开全部菜单').click())
+  await act(async () => document.querySelector<HTMLInputElement>('[aria-label="权限档位"] input[value="query"]')!.click())
+  await act(async () => button('预览').click())
+  expect(mocks.preview).toHaveBeenCalledWith('A', expect.objectContaining({
+    expected_grant_version: 3, grants: [expect.objectContaining({ permissions: ['access', 'query'] })],
+  }))
+  expect(mocks.info).toHaveBeenCalledWith(expect.objectContaining({ title: '角色A的页面权限预览', okText: '返回修改' }))
+  const content = renderToStaticMarkup(mocks.info.mock.lastCall![0].content)
+  expect(content).toContain('角色成员 2 人，实际权限会变化 1 人')
+  expect(content).toContain('权限扩大 1 人；权限收紧 0 人；混合变化 0 人')
+  expect(mocks.info.mock.lastCall![0].onOk).toBeUndefined()
+  expect(mocks.confirm).not.toHaveBeenCalled()
+  expect(mocks.replace).not.toHaveBeenCalled()
+  expect(mocks.message.warning).not.toHaveBeenCalled()
+  expect(document.querySelector<HTMLInputElement>('[aria-label="权限档位"] input[value="query"]')!.checked).toBe(true)
+})
+
+it('requires an adjustment reason before starting save confirmation', async () => {
+  mocks.get.mockResolvedValue(result('A'))
+  await show('A')
+  await act(async () => button('保存').click())
+  expect(mocks.message.warning).toHaveBeenCalledWith('请填写本次角色授权调整原因')
+  expect(mocks.preview).not.toHaveBeenCalled()
+  expect(mocks.confirm).not.toHaveBeenCalled()
+  expect(mocks.replace).not.toHaveBeenCalled()
+})
+
+it('keeps edits and restores both buttons after a preview failure', async () => {
+  mocks.get.mockResolvedValue(result('A'))
+  mocks.preview.mockRejectedValue(new Error('影响预演失败'))
+  await show('A')
+  await act(async () => button('展开全部菜单').click())
+  await act(async () => document.querySelector<HTMLInputElement>('[aria-label="权限档位"] input[value="query"]')!.click())
+  await act(async () => button('预览').click())
+  expect(document.body.textContent).toContain('影响预演失败')
+  expect(document.querySelector<HTMLInputElement>('[aria-label="权限档位"] input[value="query"]')!.checked).toBe(true)
+  expect(button('预览').disabled).toBe(false)
+  expect(button('保存').disabled).toBe(false)
+  expect(mocks.info).not.toHaveBeenCalled()
+  expect(mocks.replace).not.toHaveBeenCalled()
+})
+
+it('disables both actions during preview and ignores a late preview for a previous role', async () => {
+  mocks.get.mockImplementation(async (id: string) => result(id))
+  const pending = deferred<Awaited<ReturnType<typeof import('@/actions/admin').previewRolePagePermissions>>>()
+  mocks.preview.mockReturnValue(pending.promise)
+  await show('A')
+  await act(async () => button('展开全部菜单').click())
+  await act(async () => document.querySelector<HTMLInputElement>('[aria-label="权限档位"] input[value="query"]')!.click())
+  await act(async () => button('预览').click())
+  expect(button('预览').disabled).toBe(true)
+  expect(button('保存').disabled).toBe(true)
+  await show('B')
+  await act(async () => pending.resolve({ role_id: 'A', grant_version: 3, member_count: 2,
+    affected_user_count: 1, expanded_user_count: 1, restricted_user_count: 0,
+    mixed_user_count: 0, users_with_overrides: 1, affected_user_samples: [] }))
+  expect(mocks.info).not.toHaveBeenCalled()
+  expect(mocks.replace).not.toHaveBeenCalled()
+  expect(button('预览').disabled).toBe(false)
+  expect(button('保存').disabled).toBe(false)
+})
+
 it('disables saving during initial loading and ignores a previous role response', async () => {
   const first = deferred<RolePagePermissionsOut>()
   mocks.get.mockImplementation((id: string) => id === 'A' ? first.promise : Promise.resolve(result(id)))
   await show('A')
-  expect(button('预览并保存基线').disabled).toBe(true)
+  expect(button('保存').disabled).toBe(true)
   await show('B')
   await act(async () => first.resolve(result('A')))
   await act(async () => button('展开全部菜单').click())
@@ -164,7 +254,7 @@ it('does not replace the new role state with a late save response', async () => 
   await act(async () => { pending.resolve({ ok: true, data: result('A') }); await save })
   await act(async () => button('展开全部菜单').click())
   expect(document.body.textContent).toContain('员工档案B')
-  expect(button('预览并保存基线').disabled).toBe(false)
+  expect(button('保存').disabled).toBe(false)
   expect(mocks.message.success).not.toHaveBeenCalled()
 })
 
@@ -184,7 +274,7 @@ it('rejects a mismatched load response instead of showing another role grants', 
   await show('A')
   expect(document.body.textContent).toContain('角色授权返回对象不一致')
   expect(document.body.textContent).not.toContain('员工档案B')
-  expect(button('预览并保存基线').disabled).toBe(true)
+  expect(button('保存').disabled).toBe(true)
 })
 
 it('saves the current role once and clears the successful adjustment', async () => {

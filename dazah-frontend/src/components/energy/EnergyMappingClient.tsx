@@ -2,7 +2,8 @@
 
 import { DeleteOutlined, EyeOutlined, PlusOutlined, SaveOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, App, Button, Card, Empty, Form, Input, InputNumber, Select, Space, Switch, Table, Tag } from 'antd'
+import { App, Button, Card, Empty, Form, Input, InputNumber, Select, Space, Switch, Table, Tag } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { previewEnergyMapping, saveEnergyMapping } from '@/actions/energy'

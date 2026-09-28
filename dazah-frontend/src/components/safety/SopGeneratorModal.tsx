@@ -1,5 +1,7 @@
 'use client'
 
+import PlatformNotice from '@/components/shared/PlatformNotice'
+
 import React, { useState, useRef, useCallback } from 'react'
 import { App, Modal, Button, Typography } from 'antd'
 import {
@@ -281,19 +283,6 @@ const styles = {
     padding: '24px 0 0 0'
   } as React.CSSProperties,
 
-  // error banner
-  errorBanner: {
-    width: '100%',
-    background: '#fef2f2',
-    border: `1px solid #fecaca`,
-    borderRadius: RADIUS.md,
-    padding: '10px 16px',
-    color: TOKENS.semanticError,
-    fontSize: 13,
-    fontWeight: 500,
-    lineHeight: 1.5,
-    marginBottom: 20
-  } as React.CSSProperties
 }
 
 /* ─────── component ─────── */
@@ -456,7 +445,7 @@ export default function SopGeneratorModal({
         </div>
 
         {/* error banner */}
-        {errorMsg && <div style={styles.errorBanner}>{errorMsg}</div>}
+        {errorMsg && <PlatformNotice type="error" style={{ marginBottom: 16 }} title={<>{errorMsg}</>} />}
 
         {/* main area: drop zone or file card or generating */}
         {uploading ? (

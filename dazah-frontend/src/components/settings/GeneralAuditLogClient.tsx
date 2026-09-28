@@ -1,21 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import {
-  App,
-  Alert,
-  Button,
-  DatePicker,
-  Descriptions,
-  Drawer,
-  Empty,
-  Input,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
-} from 'antd'
+import { App, Button, DatePicker, Descriptions, Drawer, Empty, Input, Select, Space, Table, Tag, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import type { ColumnsType } from 'antd/es/table'
 import { EyeOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
@@ -84,8 +71,8 @@ function resultTag(record: GeneralAuditLogItem) {
   return <Tag color={record.status_code < 400 ? 'success' : 'error'}>{record.status_code}</Tag>
 }
 
-function JsonBlock({ value }: { value: unknown }) {
-  if (value === null || value === undefined) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="无数据" />
+function JsonBlock({ value, emptyDescription = '无数据' }: { value: unknown; emptyDescription?: string }) {
+  if (value === null || value === undefined) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyDescription} />
   return (
     <pre className="m-0 max-h-[360px] overflow-auto rounded-lg bg-[var(--color-surface)] p-3 text-[12px] leading-5 text-[var(--color-charcoal)]">
       {JSON.stringify(value, null, 2)}
@@ -93,7 +80,7 @@ function JsonBlock({ value }: { value: unknown }) {
   )
 }
 
-function detailSections(category: GeneralAuditCategory, detail: GeneralAuditLogDetail) {
+function detailSections(category: GeneralAuditCategory, detail: GeneralAuditLogDetail): { title: string; value: unknown; emptyDescription?: string }[] {
   if (category === 'operations') {
     return [
       { title: '请求参数与内容', value: detail.extra?.request },
@@ -111,8 +98,9 @@ function detailSections(category: GeneralAuditCategory, detail: GeneralAuditLogD
   }
   if (category === 'permissions') {
     return [
-      { title: '变更前', value: detail.old_value },
-      { title: '变更后', value: detail.new_value },
+      ...(detail.method === 'GET'
+        ? [{ title: '查询结果', value: detail.new_value, emptyDescription: '此记录未保存查询结果' }]
+        : [{ title: '变更前', value: detail.old_value }, { title: '变更后', value: detail.new_value }]),
       { title: '授权上下文', value: detail.extra },
     ]
   }
@@ -430,10 +418,13 @@ export default function GeneralAuditLogClient({ category }: { category: GeneralA
               <Descriptions.Item label="请求 ID">{detail.request_id || '-'}</Descriptions.Item>
               <Descriptions.Item label="发生时间">{formatTime(detail.created_at)}</Descriptions.Item>
             </Descriptions>
+            {category === 'permissions' && detail.method === 'GET' && (
+              <Alert type="info" showIcon title="本次为只读查询，未变更授权。" />
+            )}
             {detailSections(category, detail).map((section) => (
               <section key={section.title}>
                 <Text strong>{section.title}</Text>
-                <div className="mt-2"><JsonBlock value={section.value} /></div>
+                <div className="mt-2"><JsonBlock value={section.value} emptyDescription={section.emptyDescription} /></div>
               </section>
             ))}
           </div>

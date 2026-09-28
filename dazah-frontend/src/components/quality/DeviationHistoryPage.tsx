@@ -1,22 +1,8 @@
 'use client'
 
 import { useCallback, useRef, useState } from 'react'
-import {
-  Alert,
-  App,
-  Button,
-  Card,
-  Drawer,
-  Form,
-  Input,
-  Modal,
-  Space,
-  Spin,
-  Table,
-  Tag,
-  Typography,
-  Upload,
-} from 'antd'
+import { App, Button, Card, Drawer, Form, Input, Modal, Space, Spin, Table, Tag, Typography, Upload } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import type { TableColumnsType } from 'antd'
 import {
   DeleteOutlined,

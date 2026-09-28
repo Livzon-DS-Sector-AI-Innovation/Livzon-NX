@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { Alert, Button, Card, List, Space, Tag, Typography } from 'antd'
+import { Button, Card, List, Space, Tag, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { ReloadOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { fetchQualitySyncConflicts } from '@/lib/api/client/quality'

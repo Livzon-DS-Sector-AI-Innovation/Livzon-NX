@@ -38164,10 +38164,6 @@ export interface components {
             resolution?: string[];
             /** Role Sources */
             role_sources?: components["schemas"]["PagePermissionRoleSourceOut"][];
-            /** Sensitive Action Expirations */
-            sensitive_action_expirations?: {
-                [key: string]: string | null;
-            };
             /** Sensitive Actions */
             sensitive_actions?: string[];
             /**
@@ -38177,6 +38173,8 @@ export interface components {
             source: "super_admin" | "user" | "role" | "none";
             /** Source Role Names */
             source_role_names?: string[];
+            /** Visible Sections */
+            visible_sections?: string[] | null;
         };
         /**
          * EhsChangeCreate
@@ -48304,8 +48302,8 @@ export interface components {
              * @description 附加高风险操作；非空时服务端同时授予 operate 基础权限
              */
             sensitive_actions?: string[];
-            /** Sensitive Actions Expires At */
-            sensitive_actions_expires_at?: string | null;
+            /** Visible Sections */
+            visible_sections?: string[] | null;
         };
         /** PagePermissionDefinitionOut */
         PagePermissionDefinitionOut: {
@@ -48328,7 +48326,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "retired_page" | "invalid_department" | "missing_module_access" | "redundant_user_override" | "sensitive_without_expiry" | "sensitive_expired" | "sensitive_expiring";
+            code: "retired_page" | "invalid_department" | "missing_module_access" | "redundant_user_override";
             /** Detail */
             detail: string;
             /** Grant Version */
@@ -48518,8 +48516,8 @@ export interface components {
             role_name: string;
             /** Sensitive Actions */
             sensitive_actions?: string[];
-            /** Sensitive Actions Expires At */
-            sensitive_actions_expires_at?: string | null;
+            /** Visible Sections */
+            visible_sections?: string[] | null;
         };
         /** PagePermissionRollbackPreviewOut */
         PagePermissionRollbackPreviewOut: {

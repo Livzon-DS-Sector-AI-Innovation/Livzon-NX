@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Alert, Button, Card, Checkbox, Empty, Space, Tag, Typography } from 'antd'
+import { Button, Card, Checkbox, Empty, Space, Tag, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import type { DeviationAiSessionResultPayload } from '@/types/quality'
 
 const { Paragraph, Text } = Typography

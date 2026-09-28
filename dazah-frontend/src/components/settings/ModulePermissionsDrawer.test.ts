@@ -43,10 +43,22 @@ describe('page permission editor state', () => {
       mode: 'inherit',
       permissions: [],
       sensitiveActions: [],
-      sensitiveActionsExpiresAt: null,
       scopeType: 'department_tree',
       departmentIds: [],
+      visibleSections: null,
     })
+  })
+
+  it('keeps the selected overview sections in a user override', () => {
+    const editable = initialPageEditableState(permissionResult({
+      definitions: [{ page_key: 'production:overview', module_code: 'production',
+        page_name: '生产管理概览', route_path: '/production', supported_scope_types: ['all'] }],
+      custom_page_keys: ['production:overview'],
+      custom_grants: [{ page_key: 'production:overview', module_code: 'production',
+        permissions: ['access', 'query'], visible_sections: ['MC', 'sales_plan'],
+        data_scope: { scope_type: 'all' }, source: 'user' }],
+    }))
+    expect(editable['production:overview'].visibleSections).toEqual(['MC', 'sales_plan'])
   })
 
   it('preserves a user exact deny instead of restoring the role baseline', () => {

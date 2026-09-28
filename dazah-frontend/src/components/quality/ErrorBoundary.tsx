@@ -1,6 +1,8 @@
 'use client'
 
 import { Component, type ReactNode } from 'react'
+import { Button } from 'antd'
+import PlatformNotice from '@/components/shared/PlatformNotice'
 
 interface Props {
   children: ReactNode
@@ -22,14 +24,8 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="p-8 text-center">
-          <h2 className="text-lg font-semibold mb-2">页面出错了</h2>
-          <p className="text-sm text-gray-500 mb-4">{this.state.error?.message}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-500 text-white rounded"
-          >
-            刷新页面
-          </button>
+          <PlatformNotice type="error" title="页面出错了" description={this.state.error?.message}
+            action={<Button onClick={() => window.location.reload()}>刷新页面</Button>} />
         </div>
       )
     }

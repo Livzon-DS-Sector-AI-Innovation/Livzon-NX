@@ -10,18 +10,8 @@
 // 每张卡标题右上角的 * 悬停显示该卡数据来源与口径。
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  Alert,
-  Card,
-  Col,
-  Empty,
-  Row,
-  Statistic,
-  Table,
-  Tag,
-  Tooltip,
-  Typography,
-} from 'antd'
+import { Card, Col, Empty, Row, Statistic, Table, Tag, Tooltip, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { getFlBoard } from '@/actions/production'
 import type { ApiResponse, FlBoard, FlBoardBatch } from '@/types/production'
 import {

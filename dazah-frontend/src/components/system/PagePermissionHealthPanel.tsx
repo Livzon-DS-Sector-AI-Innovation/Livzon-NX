@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Alert, App, Button, Card, Empty, Select, Space, Statistic, Table, Tag, Typography } from "antd"
+import { App, Button, Card, Empty, Select, Space, Statistic, Table, Tag, Typography } from "antd"
+import Alert from "@/components/shared/PlatformNotice"
 import { EditOutlined, ReloadOutlined, ToolOutlined } from "@ant-design/icons"
 import { getPagePermissionHealth, remediatePagePermissionHealth, type PagePermissionHealthOut } from "@/actions/admin"
 import { getPermissionDepartments, getUsers, type UserManagementItem } from "@/actions/users"
@@ -16,8 +17,6 @@ type HealthIssue = NonNullable<PagePermissionHealthOut["issues"]>[number]
 const issueLabels: Record<string, string> = {
   retired_page: "页面已停用", invalid_department: "部门已失效",
   missing_module_access: "缺少模块入口", redundant_user_override: "冗余用户覆盖",
-  sensitive_without_expiry: "高风险权限无期限", sensitive_expired: "高风险权限已到期",
-  sensitive_expiring: "高风险权限即将到期",
 }
 
 export function PagePermissionHealthPanel() {
@@ -104,12 +103,12 @@ export function PagePermissionHealthPanel() {
   return <Card title="权限健康检查" size="small" extra={<Button size="small"
     icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>重新检查</Button>}>
     <Typography.Paragraph type="secondary">
-      检查失效页面和部门、无模块入口授权、冗余用户覆盖，以及高风险权限的到期状态，并可直接定位或修复。
+      检查失效页面和部门、无模块入口授权及冗余用户覆盖，并可直接定位或修复。
     </Typography.Paragraph>
     {result && <><Space size="large" wrap className="mb-4">
       <Statistic title="问题总数" value={result.issue_count} />
-      <Statistic title="错误" value={result.error_count} valueStyle={{ color: "#cf1322" }} />
-      <Statistic title="提醒" value={result.warning_count} valueStyle={{ color: "#d48806" }} />
+      <Statistic title="错误" value={result.error_count} styles={{ content: { color: "#cf1322" } }} />
+      <Statistic title="提醒" value={result.warning_count} styles={{ content: { color: "#d48806" } }} />
     </Space>{!result.issue_count && <Alert className="mb-4" type="success" showIcon title="未发现页面权限健康问题" />}</>}
     <Space wrap className="mb-4">
       <Select value={severity} onChange={setSeverity} className="w-32" options={[

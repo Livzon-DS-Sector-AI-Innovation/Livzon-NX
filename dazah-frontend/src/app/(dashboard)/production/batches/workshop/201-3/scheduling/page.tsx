@@ -4,7 +4,8 @@
 // 接罐执行确认：待接罐 → 确认接罐 / 填报延期 →（无资质）待班组长审批
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Alert, App, Button, Card, Col, Descriptions, Form, Input, Modal, Row, Select, Space, Spin, Statistic, Table, Tag, Typography, Upload } from 'antd'
+import { App, Button, Card, Col, Descriptions, Form, Input, Modal, Row, Select, Space, Spin, Statistic, Table, Tag, Typography, Upload } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { BellOutlined, CalendarOutlined, ScheduleOutlined, UploadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'

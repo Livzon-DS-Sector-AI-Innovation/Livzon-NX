@@ -1,4 +1,4 @@
-import { Alert } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 
 import { RegistrationSettingsPage, RegistrationQueryProvider } from '@/components/registration'
 import {

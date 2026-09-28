@@ -1,5 +1,7 @@
 'use client'
 
+import PlatformNotice from '@/components/shared/PlatformNotice'
+
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
@@ -184,12 +186,7 @@ export function AuthCompletion({ nextPath }: AuthCompletionProps) {
           )}
 
         {failureMessage && (
-          <div
-            role="alert"
-            className={`${styles.errorNotice} ${styles.completionError}`}
-          >
-            {failureMessage}
-          </div>
+          <PlatformNotice type="error" className={styles.completionError} title={<>{failureMessage}</>} />
         )}
 
         {state === 'error' && (

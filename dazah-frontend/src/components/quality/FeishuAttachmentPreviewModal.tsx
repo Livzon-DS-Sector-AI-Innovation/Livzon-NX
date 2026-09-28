@@ -1,6 +1,7 @@
 'use client'
 
-import { Alert, Button, Modal, Space, Spin } from 'antd'
+import { Button, Modal, Space, Spin } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { DownloadOutlined, FileTextOutlined } from '@ant-design/icons'
 import { useEffect, useRef, useState } from 'react'
 import { FeishuPdfPreview } from './FeishuPdfPreview'

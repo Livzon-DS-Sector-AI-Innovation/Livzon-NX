@@ -1,5 +1,7 @@
 'use client'
 
+import PlatformNotice from '@/components/shared/PlatformNotice'
+
 import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { App, Table, Button, Space, Typography, Empty, Spin } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -309,20 +311,7 @@ export default function SopGeneratorPanel({
 
         {/* Error banner */}
         {errorMsg && (
-          <div
-            style={{
-              background: '#fef2f2',
-              border: '1px solid #fecaca',
-              borderRadius: 8,
-              padding: '10px 16px',
-              color: '#e03131',
-              fontSize: 13,
-              fontWeight: 500,
-              marginBottom: 16
-            }}
-          >
-            {errorMsg}
-          </div>
+          <PlatformNotice type="error" style={{ marginBottom: 16 }} title={<>{errorMsg}</>} />
         )}
 
         {/* Upload area or generating state */}

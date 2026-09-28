@@ -1,6 +1,7 @@
 'use client'
 
-import { Alert, Spin } from 'antd'
+import { Spin } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { usePathname, useSearchParams } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'

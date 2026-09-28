@@ -1,8 +1,8 @@
 "use client"
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
-import { Alert, App, Button, Checkbox, ConfigProvider, Drawer, Input, Radio, Segmented, Select, Space, Table, Tag, Typography } from "antd"
-import dayjs from "dayjs"
+import { App, Button, Checkbox, ConfigProvider, Drawer, Input, Radio, Segmented, Select, Space, Table, Tag, Typography } from "antd"
+import Alert from "@/components/shared/PlatformNotice"
 import {
   getRolePagePermissions,
   previewRolePagePermissions,
@@ -12,6 +12,7 @@ import {
 import type { RoleItem } from "@/lib/api/client/admin"
 import type { DepartmentItem } from "@/lib/api/server/admin"
 import { getPermissionModuleName } from "@/lib/menu-config"
+import { PRODUCTION_OVERVIEW_SECTIONS, PRODUCTION_OVERVIEW_SECTION_KEYS } from "@/lib/production-overview-sections"
 import {
   PAGE_DATA_SCOPE_VISIBLE, pageGrantChanges, pagePermissionTier, pagePermissionTierLabel,
   pagePermissionTierOptions, pageScopeIssue, pageScopeSummary, permissionsForTier, type PagePermissionTier,
@@ -20,7 +21,6 @@ import type { ColumnsType } from "antd/es/table"
 import { buildPermissionTree, filterAuthorizedTree, type PermissionTreeNode } from "./rolePagePermissionTree"
 import { PagePermissionDiff } from "@/components/shared/PagePermissionDiff"
 import { PagePermissionHistoryDrawer } from "@/components/shared/PagePermissionHistoryDrawer"
-import { SensitiveActionExpiryEditor, sensitiveActionExpiryFromDays } from "@/components/shared/SensitiveActionExpiryEditor"
 
 type Level = "access" | "query" | "operate"
 type Grant = {
@@ -28,7 +28,7 @@ type Grant = {
   sensitiveActions: string[]
   scopeType: "not_applicable" | "department_tree" | "departments" | "all" | "self" | "production_fermentation" | "production_extraction"
   departmentIds: string[]
-  sensitiveActionsExpiresAt: string | null
+  visibleSections: string[] | null
 }
 const order: Level[] = ["access", "query", "operate"]
 const scopeNames: Record<string, string> = {
@@ -55,8 +55,7 @@ function editableState(result: RolePagePermissionsOut): Record<string, Grant> {
       sensitiveActions: grant?.sensitive_actions || [],
       scopeType: grant?.data_scope.scope_type || definition.supported_scope_types?.[0] || "all",
       departmentIds: grant?.data_scope.department_ids || [],
-      sensitiveActionsExpiresAt: Object.values(grant?.sensitive_action_expirations || {})
-        .find((value) => value != null) || null,
+      visibleSections: grant?.visible_sections ?? null,
     }]
   }))
 }
@@ -78,7 +77,8 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
   const [reason, setReason] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [previewing, setPreviewing] = useState(false)
+  const [pendingAction, setPendingAction] = useState<"preview" | "save" | null>(null)
+  const previewing = pendingAction !== null
   const [errorMessage, setErrorMessage] = useState("")
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [authorizedOnly, setAuthorizedOnly] = useState(false)
@@ -95,7 +95,7 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
       if (version !== loadVersion.current) return
       setLoading(true)
       setSaving(false)
-      setPreviewing(false)
+      setPendingAction(null)
       savingVersion.current = null
       setResult(null)
       setReason("")
@@ -147,13 +147,6 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
       definition.supported_scope_types || [], activeDepartmentIds)
     return issue ? [`${definition.page_name}：${issue}`] : []
   })
-  const riskIssues = (result?.definitions || []).flatMap((definition) => {
-    const grant = editable[definition.page_key]
-    if (!grant?.sensitiveActions.length) return []
-    if (!grant.sensitiveActionsExpiresAt) return [`${definition.page_name}：请设置高风险权限到期时间`]
-    if (dayjs(grant.sensitiveActionsExpiresAt).isBefore(dayjs())) return [`${definition.page_name}：高风险权限到期时间必须晚于当前时间`]
-    return []
-  })
   const inCurrentSession = (action: () => void | Promise<void>) => {
     const version = loadVersion.current
     return () => { if (version === loadVersion.current) return action() }
@@ -169,7 +162,7 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
       mode: "custom" as const,
       permissions: grant.permissions,
       sensitive_actions: grant.sensitiveActions,
-      sensitive_actions_expires_at: grant.sensitiveActionsExpiresAt,
+      visible_sections: grant.visibleSections,
       data_scope: {
         scope_type: grant.scopeType,
         department_ids: grant.scopeType === "departments" ? grant.departmentIds : [],
@@ -215,37 +208,43 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
     }
   }
 
-  const previewSave = async () => {
-    if (previewing) return
-    if (!reason.trim()) { message.warning("请填写本次角色授权调整原因"); return }
-    if (!changes.length) { message.info("没有需要保存的权限调整"); return }
+  const previewChanges = async (action: "preview" | "save") => {
+    if (!open || loading || saving || previewing || !role || !result || result.role_id !== role.id) return
+    if (action === "save" && !reason.trim()) { message.warning("请填写本次角色授权调整原因"); return }
+    if (!changes.length) { message.info("没有需要预览或保存的权限调整"); return }
     if (scopeIssues.length) { message.error(scopeIssues[0]); return }
-    if (riskIssues.length) { message.error(riskIssues[0]); return }
-    if (!role || !result) return
     const version = loadVersion.current
     const idempotencyKey = crypto.randomUUID()
-    pendingIdempotencyKey.current = idempotencyKey
-    setPreviewing(true)
+    if (action === "save") pendingIdempotencyKey.current = idempotencyKey
+    setPendingAction(action)
     try {
       const impact = await previewRolePagePermissions(role.id, {
         expected_grant_version: result.grant_version,
         grants: roleGrants(),
-        reason: reason.trim(),
+        reason: reason.trim() || "预览角色页面权限",
         idempotency_key: idempotencyKey,
       })
       if (version !== loadVersion.current) return
-      modal.confirm({ title: `确认调整${role.name}的页面权限`, width: 960,
-        content: <PagePermissionDiff changes={changes} impactNote={<div className="space-y-1">
+      const content = <div className="space-y-3">
+        <PagePermissionDiff changes={changes} />
+        <div className="space-y-1">
           <div>角色成员 {impact.member_count} 人，实际权限会变化 {impact.affected_user_count} 人：</div>
           <div>权限扩大 {impact.expanded_user_count} 人；权限收紧 {impact.restricted_user_count} 人；混合变化 {impact.mixed_user_count} 人。</div>
           <div>其中 {impact.users_with_overrides} 人在本次变化涉及的页面设置了用户覆盖，最终结果已按覆盖优先计算。</div>
           {!!impact.affected_user_samples?.length && <div>影响样例：{impact.affected_user_samples.map((item) => item.user_name).join("、")}</div>}
-        </div>} />, okText: "确认保存", cancelText: "返回修改",
+        </div>
+      </div>
+      if (action === "preview") {
+        modal.info({ title: `${role.name}的页面权限预览`, width: 960, content, okText: "返回修改" })
+        return
+      }
+      modal.confirm({ title: `确认调整${role.name}的页面权限`, width: 960, content,
+        okText: "确认保存", cancelText: "返回修改",
         onOk: inCurrentSession(save), onCancel: () => { pendingIdempotencyKey.current = null } })
     } catch (error) {
       if (version === loadVersion.current) setErrorMessage(error instanceof Error ? error.message : "角色授权影响预演失败")
     } finally {
-      if (version === loadVersion.current) setPreviewing(false)
+      if (version === loadVersion.current) setPendingAction(null)
     }
   }
 
@@ -271,11 +270,11 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
     })
   }
 
-  const updateVisibleSensitiveActions = (mode: "renew" | "revoke") => {
+  const revokeVisibleSensitiveActions = () => {
     const targetKeys = visibleDefinitions.map((item) => item.page_key)
       .filter((pageKey) => editable[pageKey]?.sensitiveActions.length)
     if (!targetKeys.length) { message.info("当前筛选没有已授权的高风险动作"); return }
-    const verb = mode === "renew" ? "续期 30 天" : "撤销"
+    const verb = "撤销"
     modal.confirm({
       title: `批量${verb}高风险权限？`,
       content: `将处理当前筛选结果中的 ${targetKeys.length} 个页面。`,
@@ -285,8 +284,7 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
           ...current,
           ...Object.fromEntries(targetKeys.map((pageKey) => [pageKey, {
             ...current[pageKey],
-            sensitiveActions: mode === "revoke" ? [] : current[pageKey].sensitiveActions,
-            sensitiveActionsExpiresAt: mode === "revoke" ? null : sensitiveActionExpiryFromDays(30),
+            sensitiveActions: [],
           }])),
         }))
         message.info(`已${verb} ${targetKeys.length} 个页面的高风险权限，保存后生效`)
@@ -296,11 +294,15 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
 
   return <Drawer title={`${role?.name || "角色"} · 页面权限基线`} open={open} onClose={close}
     extra={<Button onClick={() => setHistoryOpen(true)} disabled={!result}>授权历史</Button>}
-    loading={loading} size="min(1080px, 100vw)" footer={<div className="flex gap-3">
+    loading={loading} size="min(1080px, 100vw)" footer={<div className="flex flex-col gap-3 sm:flex-row">
       <Input disabled={loading || saving || previewing} value={reason} onChange={(event) => setReason(event.target.value)}
         placeholder="填写角色授权调整原因" maxLength={500} />
-      <Button type="primary" loading={saving || previewing} onClick={() => void previewSave()}
-        disabled={loading || !result || result.role_id !== role?.id}>预览并保存基线</Button>
+      <Space className="shrink-0 self-end">
+        <Button loading={pendingAction === "preview"} onClick={() => void previewChanges("preview")}
+          disabled={loading || saving || previewing || !result || result.role_id !== role?.id}>预览</Button>
+        <Button type="primary" loading={saving || pendingAction === "save"} onClick={() => void previewChanges("save")}
+          disabled={loading || saving || previewing || !result || result.role_id !== role?.id}>保存</Button>
+      </Space>
     </div>}>
     <Typography.Paragraph type="secondary">
       这里只配置可访问模块内的菜单页面和基础权限档位，不会开启一级模块入口；高风险操作是“普通操作”之上的附加授权，勾选时会自动启用普通操作，取消普通操作时会一并撤销。用户有精确覆盖时，以用户覆盖为准。
@@ -312,8 +314,6 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
       })}>重新加载</Button>} />}
     {!!scopeIssues.length && <Alert className="mb-4" type="warning" showIcon
       title="存在无法保存的数据范围" description={scopeIssues.slice(0, 3).join("；")} />}
-    {!!riskIssues.length && <Alert className="mb-4" type="warning" showIcon
-      title="高风险权限需要有效期限" description={riskIssues.slice(0, 3).join("；")} />}
     <ConfigProvider componentDisabled={loading || saving || previewing || result?.role_id !== roleId}>
     <div className="mb-4 overflow-x-auto"><Segmented value={moduleCode} onChange={(value) => setModuleCode(String(value))}
       options={modules.map((code) => ({ value: code, label: getPermissionModuleName(code) }))} /></div>
@@ -327,8 +327,7 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
         danger={value === 'none'} onClick={() => setVisiblePermission(value)}>
         {label}
       </Button>)}
-      <Button size="small" onClick={() => updateVisibleSensitiveActions("renew")}>高风险续期 30 天</Button>
-      <Button size="small" danger onClick={() => updateVisibleSensitiveActions("revoke")}>撤销高风险权限</Button>
+      <Button size="small" danger onClick={revokeVisibleSensitiveActions}>撤销高风险权限</Button>
     </Space>
     <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
       <Typography.Text type={changes.length ? "warning" : "secondary"}>未保存调整 {changes.length} 个页面</Typography.Text>
@@ -337,7 +336,7 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
     <div className="mb-3 flex flex-wrap items-center gap-3">
       <Button size="small" onClick={() => setExpandedKeys(allGroupKeys(tree))}>展开全部菜单</Button>
       <Button size="small" onClick={() => setExpandedKeys([])}>折叠全部菜单</Button>
-      <Typography.Text type="secondary">父级勾选或取消会递归应用到全部下级（含筛选隐藏项）；附加高风险操作需逐项授权并设置期限。</Typography.Text>
+      <Typography.Text type="secondary">父级勾选或取消会递归应用到全部下级（含筛选隐藏项）；附加高风险操作需逐项授权。</Typography.Text>
     </div>
     <Table<PermissionTreeNode> rowKey="page_key" dataSource={definitions} pagination={false} size="small"
       virtual scroll={{ x: 980, y: 520 }} locale={{ emptyText: search.trim() ? "当前筛选没有匹配页面" : authorizedOnly ? "当前模块没有已授权页面" : "当前模块暂无可配置页面" }}
@@ -347,6 +346,16 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
           {node.pageKeys.some((key) => changedPageKeys.has(key)) && <Tag color="orange" className="ml-2">未保存</Tag>}
           {node.children?.length ? <Typography.Text type="secondary" className="ml-2">{node.pageKeys.length} 个页面</Typography.Text> : null}
           {node.definition && <Typography.Text type="secondary" className="ml-2 text-xs">{node.page_key}</Typography.Text>}
+          {node.page_key === 'production:overview' && <div className="ml-6 my-2">
+            <Typography.Text strong>页面内可见项</Typography.Text>
+            <Typography.Text type="secondary" className="block text-xs">产品勾选同时控制汇总数据；产销计划单独控制。</Typography.Text>
+            <Checkbox.Group className="mt-2" value={editable[node.page_key]?.visibleSections ?? PRODUCTION_OVERVIEW_SECTION_KEYS}
+              disabled={!editable[node.page_key]?.permissions.includes('query')}
+              onChange={(values) => update(node.page_key, { visibleSections:
+                values.length === PRODUCTION_OVERVIEW_SECTION_KEYS.length ? null : values as string[] })}>
+              <Space wrap>{PRODUCTION_OVERVIEW_SECTIONS.map((section) => <Checkbox key={section.key} value={section.key}>{section.label}</Checkbox>)}</Space>
+            </Checkbox.Group>
+          </div>}
           {!!node.definition?.sensitive_actions?.length && <div className="ml-6 my-2">
             <Space wrap size={6}>
               <Typography.Text strong>附加高风险操作</Typography.Text>
@@ -357,16 +366,9 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
             <Checkbox.Group className="mt-2" value={editable[node.page_key]?.sensitiveActions || []}
               onChange={(values) => update(node.page_key, {
                 sensitiveActions: values as string[],
-                sensitiveActionsExpiresAt: values.length ? editable[node.page_key]?.sensitiveActionsExpiresAt || null : null,
                 permissions: values.length ? normalize(["operate"]) : editable[node.page_key]?.permissions || [],
               })}><Space orientation="vertical">{node.definition.sensitive_actions.map((action) => <Checkbox key={action.key} value={action.key}
                 title={action.description}>{action.name}</Checkbox>)}</Space></Checkbox.Group>
-            {!!editable[node.page_key]?.sensitiveActions.length && <SensitiveActionExpiryEditor
-              value={editable[node.page_key]?.sensitiveActionsExpiresAt}
-              onChange={(value) => update(node.page_key, { sensitiveActionsExpiresAt: value })}
-              onRevoke={() => update(node.page_key, {
-                sensitiveActions: [], sensitiveActionsExpiresAt: null,
-              })} />}
           </div>}
         </span> },
         { title: "权限档位", key: "permissions", width: 360, render: (_, node) => {

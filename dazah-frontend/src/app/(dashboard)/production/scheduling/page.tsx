@@ -2,7 +2,8 @@
 
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, TdHTMLAttributes } from 'react'
-import { Card, Typography, Upload, Table, App, Row, Col, Button, Popconfirm, Space, Modal, Input, Alert, Tag } from 'antd'
+import { Card, Typography, Upload, Table, App, Row, Col, Button, Popconfirm, Space, Modal, Input, Tag } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import type { ColumnsType } from 'antd/es/table'
 import { ScheduleOutlined, InboxOutlined, ReloadOutlined, DownloadOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined } from '@ant-design/icons'
 import {
@@ -567,7 +568,8 @@ export default function SchedulingPage() {
           type="warning"
           showIcon
           className="!mb-3"
-          message="重复存档默认冻结历史列，以下改动已被放弃、原存档保持不变。确认为有意修正时，请填写原因后提交（将写入审计日志）。"
+          title="历史列已冻结，以下改动已放弃；填写原因后可提交修正并记录审计。"
+          description="重复存档默认冻结历史列，以下改动已被放弃、原存档保持不变。确认为有意修正时，请填写原因后提交（将写入审计日志）。"
         />
         <MergeChangeTable changes={mergeReport?.discarded_changes ?? EMPTY_CHANGES} />
         {mergeReport?.truncated && (

@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, App, Button, Descriptions, Drawer, Empty, Space, Table, Tabs, Tag, Timeline, Typography } from 'antd'
+import { App, Button, Descriptions, Drawer, Empty, Space, Table, Tabs, Tag, Timeline, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { EyeOutlined, ReloadOutlined } from '@ant-design/icons'
 import {
   fetchLivzonTaskRun,

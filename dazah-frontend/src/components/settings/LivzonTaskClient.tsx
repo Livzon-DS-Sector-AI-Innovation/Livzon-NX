@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { EditOutlined, EyeOutlined, PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons'
+import { ClockCircleOutlined, EditOutlined, EyeOutlined, FileTextOutlined, FormOutlined, PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons'
 import {
   App,
   Button,
@@ -16,12 +16,13 @@ import {
   Select,
   Space,
   Table,
-  Tabs,
   Tag,
   Timeline,
   Typography,
 } from 'antd'
 import type { TableColumnsType } from 'antd'
+import SettingsSegmentedNav from './SettingsSegmentedNav'
+import SettingsSubnav from './SettingsSubnav'
 
 import {
   cancelLivzonTaskConfirmation,
@@ -47,6 +48,11 @@ const { TextArea } = Input
 
 type TaskKind = 'automation' | 'scheduled'
 type ActiveTab = TaskKind | 'interactions'
+
+const taskSections = [
+  { key: 'tasks', label: '任务管理', views: ['automation', 'scheduled'] },
+  { key: 'requests', label: '填写请求', views: ['interactions'] },
+] as const
 
 type EditValues = {
   name: string
@@ -292,6 +298,7 @@ export default function LivzonTaskClient() {
   const [items, setItems] = useState<LivzonTaskItem[]>([])
   const [loading, setLoading] = useState(false)
   const [activeKind, setActiveKind] = useState<ActiveTab>('automation')
+  const activeSection = taskSections.find((item) => item.views.some((key) => key === activeKind)) ?? taskSections[0]
   const [interactions, setInteractions] = useState<AgentInteractionArtifact[]>([])
   const [interactionItem, setInteractionItem] = useState<AgentInteractionArtifact | null>(null)
   const [interactionSaving, setInteractionSaving] = useState(false)
@@ -701,28 +708,46 @@ export default function LivzonTaskClient() {
   )
 
   return (
-    <section aria-label="Livzon Task 管理">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="text-base font-semibold text-[var(--color-text-primary)]">Livzon Task</div>
-          <Paragraph className="!mb-0 !mt-1 !text-[13px]" type="secondary">
-            管理由 Livzon 助手创建的自动化流程和定时任务。含时间触发的流程统一归入定时任务。
-          </Paragraph>
+    <section aria-label="Livzon Agent Task 管理">
+      <div className="mb-5">
+        <SettingsSegmentedNav
+          ariaLabel="Livzon Agent Task分类"
+          items={taskSections.map((item) => item.key === 'requests' ? { ...item, label: `填写请求 ${interactions.length}` } : item)}
+          activeKey={activeSection.key}
+          onChange={(key) => setActiveKind(key === 'requests' ? 'interactions' : 'automation')}
+          panelId="agent-task-section-panel"
+        />
+      </div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span aria-hidden="true" className="flex size-12 shrink-0 items-center justify-center rounded-[var(--rounded-lg)] border border-[var(--color-hairline-soft)] bg-[var(--color-canvas)] text-xl text-[var(--color-primary)]"><FileTextOutlined /></span>
+          <div>
+            <h2 className="m-0 text-xl font-semibold text-[var(--color-ink-deep)]">Livzon Agent Task</h2>
+            <Paragraph className="!mb-0 !text-sm" type="secondary">
+              管理由 Livzon 助手创建的自动化流程和定时任务。
+            </Paragraph>
+          </div>
         </div>
         <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void loadTasks()}>
           刷新
         </Button>
       </div>
 
-      <Tabs
+      <div id="agent-task-section-panel" role="tabpanel" aria-labelledby={`agent-task-section-panel-tab-${activeSection.key}`}>
+      <SettingsSubnav
+        ariaLabel="Livzon Agent Task子导航"
         activeKey={activeKind}
-        onChange={(key) => setActiveKind(key as ActiveTab)}
+        onChange={(key) => {
+          if (key === 'automation' || key === 'scheduled' || key === 'interactions') setActiveKind(key)
+        }}
+        showNav={activeSection.views.length > 1}
         items={[
-          { key: 'automation', label: `自动化流程 ${automations.length}`, children: table(automations) },
-          { key: 'scheduled', label: `定时任务 ${scheduled.length}`, children: table(scheduled) },
-          { key: 'interactions', label: `填写请求 ${interactions.length}`, children: interactionTable },
-        ]}
+          { key: 'automation', label: `自动化流程 ${automations.length}`, icon: <PlayCircleOutlined />, children: table(automations) },
+          { key: 'scheduled', label: `定时任务 ${scheduled.length}`, icon: <ClockCircleOutlined />, children: table(scheduled) },
+          { key: 'interactions', label: `填写请求 ${interactions.length}`, icon: <FormOutlined />, children: interactionTable },
+        ].filter((item) => activeSection.views.some((key) => key === item.key))}
       />
+      </div>
 
       <Drawer
         title="Livzon Task 详情"

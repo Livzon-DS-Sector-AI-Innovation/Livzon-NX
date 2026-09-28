@@ -342,6 +342,7 @@ async def test_batch_actuals_crud_endpoints(
     item = SimpleNamespace(
         id="x",
         batch_no="FA26232",
+        product_code="FA",
         dump_date=date(2026, 9, 9),
         inoculated_at=datetime(2026, 9, 8, 21, 30),
         dumped_at=None,

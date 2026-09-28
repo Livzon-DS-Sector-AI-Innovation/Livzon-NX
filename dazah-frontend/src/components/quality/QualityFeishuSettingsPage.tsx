@@ -3,22 +3,8 @@
 import { usePagePermissions } from '@/hooks/usePagePermissions'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  Alert,
-  App,
-  Button,
-  Card,
-  Collapse,
-  Drawer,
-  Input,
-  Modal,
-  Select,
-  Space,
-  Switch,
-  Table,
-  Tag,
-  Typography,
-} from 'antd'
+import { App, Button, Card, Collapse, Drawer, Input, Modal, Select, Space, Switch, Table, Tag, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import {
   CloudDownloadOutlined,
   LinkOutlined,

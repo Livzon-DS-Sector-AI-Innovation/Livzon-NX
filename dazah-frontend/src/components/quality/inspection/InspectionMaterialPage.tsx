@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, App, Select, Space, Spin, Tag } from 'antd'
+import { App, Select, Space, Spin, Tag } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'next/navigation'
 

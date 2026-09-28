@@ -1,10 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import {
-  App, Button, Tag, Select, Input, Space, Alert,
-  Badge, Empty, Spin, Card, Modal, Typography,
-} from 'antd'
+import { App, Button, Tag, Select, Input, Space, Badge, Empty, Spin, Card, Modal, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import {
   ThunderboltOutlined, CheckOutlined,
   ReloadOutlined, FileImageOutlined,

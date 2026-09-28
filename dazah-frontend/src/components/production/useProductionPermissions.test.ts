@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   hasProductionPagePermission,
+  hasProductionOverviewSection,
   PRODUCTION_PAGE_KEYS,
 } from './useProductionPermissions'
 
@@ -60,5 +61,16 @@ describe('production page permissions', () => {
       expect(hasProductionPagePermission(admin, pageKey, 'access')).toBe(true)
       expect(hasProductionPagePermission(admin, pageKey, 'operate', 'delete')).toBe(true)
     }
+  })
+
+  it('uses individual overview visibility after query permission', () => {
+    const grant = { page_key: PRODUCTION_PAGE_KEYS.overview,
+      permissions: ['access', 'query'] as const, visible_sections: ['MC', 'sales_plan'] }
+    const user = { ...baseUser, page_permissions: [grant] }
+    expect(hasProductionOverviewSection(user, 'MC')).toBe(true)
+    expect(hasProductionOverviewSection(user, 'FA')).toBe(false)
+    expect(hasProductionOverviewSection(user, 'sales_plan')).toBe(true)
+    expect(hasProductionOverviewSection({ ...baseUser, page_permissions: [{ ...grant, permissions: ['access'] as const }] }, 'MC')).toBe(false)
+    expect(hasProductionOverviewSection({ ...baseUser, page_permissions: [{ ...grant, visible_sections: null }] }, 'FA')).toBe(true)
   })
 })

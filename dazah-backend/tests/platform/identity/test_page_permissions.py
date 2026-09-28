@@ -362,22 +362,87 @@ def test_page_input_rejects_unknown_sensitive_action_and_unsupported_scope() -> 
         )
     with pytest.raises(HTTPException, match="不支持数据范围"):
         service.normalize_inputs(
-            [
-                PageGrantInput(
-                    page_key="hr:employee-management:profile",
-                    data_scope=PageDataScopeInput(scope_type="self"),
-                )
-            ],
+            [PageGrantInput(
+                page_key="hr:employee-management:profile",
+                data_scope=PageDataScopeInput(scope_type="self"),
+            )],
             allow_inherit=True,
         )
 
 
-def test_sensitive_action_expiry_requires_an_action() -> None:
-    with pytest.raises(ValidationError):
-        PageGrantInput(
-            page_key="hr:employee-management:profile",
-            sensitive_actions_expires_at=datetime.now(UTC) + timedelta(days=1),
+def test_overview_sections_are_validated_and_preserved() -> None:
+    service = PagePermissionService(repo=_PageRepo())  # type: ignore[arg-type]
+    grant = PageGrantInput(
+        page_key="production:overview", permissions=["access", "query"],
+        visible_sections=["sales_plan", "MC", "MC"],
+        data_scope=PageDataScopeInput(scope_type="all"),
+    )
+    normalized = service.normalize_inputs([grant], allow_inherit=True)
+    assert normalized[0]["visible_sections"] == ["MC", "sales_plan"]
+    with pytest.raises(HTTPException, match="未知页面内可见项"):
+        service.normalize_inputs(
+            [grant.model_copy(update={"visible_sections": ["invalid"]})],
+            allow_inherit=True,
         )
+    with pytest.raises(HTTPException, match="仅生产管理概览"):
+        service.normalize_inputs(
+            [PageGrantInput(
+                page_key="hr:employee-management:profile", visible_sections=["MC"],
+            )],
+            allow_inherit=True,
+        )
+
+
+def test_overview_visibility_change_is_audit_restriction() -> None:
+    before = {
+        "page_key": "production:overview",
+        "permissions": ["access", "query"],
+        "sensitive_actions": [],
+        "scope_type": "all",
+        "department_ids": [],
+        "visible_sections": None,
+    }
+    after = {**before, "visible_sections": ["MC"]}
+    change = PagePermissionService.history_changes([before], [after])[0]
+    assert change.kind == "restrict"
+    assert "页面内可见项" in change.summary
+
+
+@pytest.mark.asyncio
+async def test_overview_visibility_role_merge_and_user_override(monkeypatch):
+    roles = [
+        SimpleNamespace(id=uuid4(), code=f"role-{index}", name=f"角色{index}")
+        for index in range(2)
+    ]
+    monkeypatch.setattr(rbac, "resolve_user_roles", AsyncMock(return_value=roles))
+    role_grants = [
+        SimpleNamespace(
+            role_id=role.id, page_key="production:overview",
+            permissions=["access", "query"], sensitive_actions=[],
+            visible_sections=[section], scope_type="all", department_ids=[],
+        )
+        for role, section in zip(roles, ("MC", "sales_plan"), strict=True)
+    ]
+    user = SimpleNamespace(id=uuid4(), role="user")
+    repo = _PageRepo(role_grants=role_grants)
+    service = PagePermissionService(repo=repo)  # type: ignore[arg-type]
+    effective = await service.effective_grants(None, user=user)
+    assert effective[0].visible_sections == ["MC", "sales_plan"]
+    repo.user_grants = [SimpleNamespace(
+        page_key="production:overview", permissions=["access", "query"],
+        sensitive_actions=[], visible_sections=["FA"], scope_type="all",
+        department_ids=[],
+    )]
+    effective = await service.effective_grants(None, user=user)
+    assert effective[0].visible_sections == ["FA"]
+
+
+def test_sensitive_action_does_not_require_an_expiry() -> None:
+    grant = PageGrantInput(
+        page_key="hr:employee-management:profile", sensitive_actions=["delete"]
+    )
+    assert grant.sensitive_actions == ["delete"]
+    assert "sensitive_actions_expires_at" not in grant.model_dump()
 
 
 def test_sensitive_action_is_additive_to_ordinary_operation() -> None:
@@ -398,7 +463,7 @@ def test_sensitive_action_is_additive_to_ordinary_operation() -> None:
 
 
 @pytest.mark.asyncio
-async def test_expired_sensitive_action_stops_authorizing(monkeypatch) -> None:
+async def test_legacy_expiry_does_not_stop_sensitive_action(monkeypatch) -> None:
     role = SimpleNamespace(id=uuid4(), code="hr_operator", name="人事经办员")
     monkeypatch.setattr(rbac, "resolve_user_roles", AsyncMock(return_value=[role]))
     repo = _PageRepo(
@@ -422,12 +487,37 @@ async def test_expired_sensitive_action_stops_authorizing(monkeypatch) -> None:
         item for item in grants if item.page_key == "hr:employee-management:profile"
     )
     assert grant.permissions == ["access", "query", "operate"]
-    assert grant.sensitive_actions == []
-    assert grant.sensitive_action_expirations == {}
+    assert grant.sensitive_actions == ["delete"]
 
 
 @pytest.mark.asyncio
-async def test_health_check_reports_sensitive_action_without_expiry(
+async def test_legacy_expiry_does_not_stop_user_override(monkeypatch) -> None:
+    monkeypatch.setattr(rbac, "resolve_user_roles", AsyncMock(return_value=[]))
+    repo = _PageRepo(
+        user_grants=[
+            SimpleNamespace(
+                page_key="hr:employee-management:profile",
+                permissions=["operate"],
+                sensitive_actions=["delete"],
+                sensitive_actions_expires_at=datetime.now(UTC) - timedelta(days=1),
+                scope_type="department_tree",
+                department_ids=[],
+            )
+        ]
+    )
+
+    grants = await PagePermissionService(repo=repo).effective_grants(
+        None, user=SimpleNamespace(id=uuid4(), role="user")
+    )
+    grant = next(
+        item for item in grants if item.page_key == "hr:employee-management:profile"
+    )
+    assert grant.source == "user"
+    assert grant.sensitive_actions == ["delete"]
+
+
+@pytest.mark.asyncio
+async def test_health_check_accepts_sensitive_action_without_expiry(
     monkeypatch,
 ) -> None:
     role_id = uuid4()
@@ -448,12 +538,37 @@ async def test_health_check_reports_sensitive_action_without_expiry(
 
     health = await PagePermissionService(repo=repo).permission_health(None)
 
-    assert health.issue_count == 1
-    assert health.warning_count == 1
-    assert health.issues[0].code == "sensitive_without_expiry"
-    assert health.issues[0].target_id == role_id
-    assert health.issues[0].remediation == "edit"
-    assert health.issues[0].grant_version == 0
+    assert health.issue_count == 0
+
+
+@pytest.mark.asyncio
+async def test_health_keeps_distinct_overview_visibility_override(monkeypatch):
+    role = SimpleNamespace(id=uuid4(), code="overview", name="概览角色")
+    user = SimpleNamespace(id=uuid4(), role="user", name="用户", grant_version=0)
+    common = dict(
+        page_key="production:overview", permissions=["access", "query"],
+        sensitive_actions=[], scope_type="all", department_ids=[],
+    )
+    repo = _PageRepo(
+        role_grants=[SimpleNamespace(role_id=role.id, visible_sections=None, **common)],
+        user_grants=[
+            SimpleNamespace(user_id=user.id, visible_sections=["MC"], **common)
+        ],
+    )
+    monkeypatch.setattr(repo, "list_users_by_ids", AsyncMock(return_value=[user]))
+    monkeypatch.setattr(
+        rbac, "resolve_users_roles", AsyncMock(return_value={user.id: [role]})
+    )
+    monkeypatch.setattr(
+        page_permissions, "get_settings",
+        lambda: SimpleNamespace(effective_module_access_mode="all"),
+    )
+    monkeypatch.setattr(
+        page_permissions.PermissionGrantRepository,
+        "list_module_access_by_user", AsyncMock(return_value={}),
+    )
+    issues = (await PagePermissionService(repo=repo).permission_health(None)).issues
+    assert not any(issue.code == "redundant_user_override" for issue in issues)
 
 
 @pytest.mark.asyncio

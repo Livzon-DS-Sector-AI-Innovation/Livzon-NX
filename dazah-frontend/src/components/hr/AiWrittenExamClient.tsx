@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
-import { Alert, App, Button, Input, InputNumber, Space, Spin, Tag } from 'antd'
+import { App, Button, Input, InputNumber, Space, Spin, Tag } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import {
   RobotOutlined,
   DownloadOutlined,

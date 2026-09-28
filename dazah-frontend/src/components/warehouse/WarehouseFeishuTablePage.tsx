@@ -3,28 +3,8 @@
 import dayjs, { type Dayjs } from 'dayjs'
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import {
-  App,
-  Alert,
-  Avatar,
-  Button,
-  Card,
-  DatePicker,
-  Descriptions,
-  Empty,
-  Input,
-  InputNumber,
-  Modal,
-  Popconfirm,
-  Select,
-  Skeleton,
-  Space,
-  Spin,
-  Statistic,
-  Switch,
-  Table,
-  Tag,
-} from 'antd'
+import { App, Avatar, Button, Card, DatePicker, Descriptions, Empty, Input, InputNumber, Modal, Popconfirm, Select, Skeleton, Space, Spin, Statistic, Switch, Table, Tag } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import {
   ClockCircleOutlined,

@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect } from 'react'
-import { Alert, Button, Space } from 'antd'
+import { Button, Space } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { getUserErrorMessage } from '@/lib/user-error'
 
 export default function AssetsErrorPage({
@@ -21,7 +22,8 @@ export default function AssetsErrorPage({
       <Alert
         type="error"
         showIcon
-        title="设备台账加载失败"
+        title={"设备台账加载失败：" + getUserErrorMessage(error, "请重试或刷新页面")}
+        action={<Space wrap><Button size="small" onClick={() => unstable_retry()}>重试</Button><Button size="small" onClick={() => window.location.reload()}>刷新页面</Button></Space>}
         description={
           <div>
             <p style={{ margin: '4px 0' }}>{getUserErrorMessage(error, '设备台账加载失败，请重试或刷新页面')}</p>
@@ -30,14 +32,6 @@ export default function AssetsErrorPage({
                 错误标识: <code>{error.digest}</code>（在服务端日志中搜索此标识查看完整堆栈）
               </p>
             )}
-            <Space style={{ marginTop: 8 }}>
-              <Button size="small" type="primary" onClick={() => unstable_retry()}>
-                重试
-              </Button>
-              <Button size="small" onClick={() => window.location.reload()}>
-                刷新页面
-              </Button>
-            </Space>
           </div>
         }
       />

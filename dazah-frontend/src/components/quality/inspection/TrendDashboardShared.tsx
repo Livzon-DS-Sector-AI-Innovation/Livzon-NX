@@ -6,22 +6,8 @@ import { useQuery } from '@tanstack/react-query'
 import type { ColumnsType } from 'antd/es/table'
 import type { EChartsOption, LineSeriesOption } from 'echarts'
 import ReactECharts from 'echarts-for-react'
-import {
-  Alert,
-  Button,
-  Card,
-  Col,
-  Descriptions,
-  Empty,
-  Modal,
-  Row,
-  Space,
-  Spin,
-  Statistic,
-  Table,
-  Tag,
-  Typography,
-} from 'antd'
+import { Button, Card, Col, Descriptions, Empty, Modal, Row, Space, Spin, Statistic, Table, Tag, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import {
   AlertOutlined,
   BulbOutlined,
@@ -307,7 +293,7 @@ export function TrendAiPanel({
       <Alert
         type="warning"
         showIcon
-        title="趋势 AI 分析失败"
+        title="趋势 AI 分析失败，暂不判定趋势异常"
         description="AI 终审未完成，本指标暂不判定趋势异常；可稍后重试。"
       />
     )
@@ -318,7 +304,7 @@ export function TrendAiPanel({
         type="success"
         showIcon
         icon={<BulbOutlined />}
-        title="未发现趋势异常"
+        title={status === 'completed' ? '未发现趋势异常，经 AI 终审复核为正常 / 改善' : '未发现趋势异常，未触发连续趋势等判据'}
         description={
           status === 'completed'
             ? '该指标经 AI 终审复核为正常 / 改善，未判定趋势异常。'

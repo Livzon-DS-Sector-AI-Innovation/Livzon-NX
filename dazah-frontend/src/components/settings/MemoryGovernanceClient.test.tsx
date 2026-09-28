@@ -16,7 +16,8 @@ const ui = vi.hoisted(() => ({
 
 vi.mock('@/actions/settings', () => actions)
 
-vi.mock('antd', async () => {
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd')>()
   const { createElement } = await import('react')
   const Wrapper = ({ children }: { children?: ReactNode }) =>
     createElement('div', null, children)
@@ -57,13 +58,16 @@ vi.mock('antd', async () => {
     action,
     description,
     message,
+    title,
   }: {
     action?: ReactNode
     description?: ReactNode
     message?: ReactNode
-  }) => createElement('div', { role: 'alert' }, message, description, action)
+    title?: ReactNode
+  }) => createElement('div', { role: 'alert' }, title ?? message, description, action)
 
   return {
+    ...actual,
     Alert,
     App: { useApp: () => ({ message: ui.message, modal: ui.modal }) },
     Button,
@@ -71,7 +75,7 @@ vi.mock('antd', async () => {
     Skeleton: { Input: Wrapper },
     Space: Wrapper,
     Tag: Wrapper,
-    Typography: { Text: Wrapper },
+    Typography: { ...actual.Typography, Text: Wrapper },
   }
 })
 
@@ -171,9 +175,13 @@ describe('MemoryGovernanceClient contracts', () => {
 
     act(() => root.render(<MemoryGovernanceClient />))
     await act(async () => vi.runOnlyPendingTimersAsync())
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      '策略读取失败',
-    )
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('记忆治理策略不可用')
+    const rulesButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.includes('了解访问规则'),
+    )!
+    await act(async () => rulesButton.click())
+    expect(document.querySelector('.ant-modal')?.textContent).toContain('策略读取失败')
+    await act(async () => document.querySelector<HTMLButtonElement>('.ant-modal-footer button')!.click())
 
     const retryButton = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === '重试',

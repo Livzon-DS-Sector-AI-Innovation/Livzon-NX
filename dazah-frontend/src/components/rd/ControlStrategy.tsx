@@ -1,6 +1,7 @@
 'use client'
 
-import { Card, Table, Tag, Typography, Row, Col, Alert, Space } from 'antd'
+import { Card, Table, Tag, Typography, Row, Col, Space } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { SafetyCertificateOutlined, ToolOutlined } from '@ant-design/icons'
 
 const { Text } = Typography

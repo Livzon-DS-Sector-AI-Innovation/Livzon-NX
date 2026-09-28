@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Card, Button, Space, Tag, Collapse, App, Alert, Progress, Spin, Tabs, Table, Descriptions, Divider, Upload } from 'antd'
+import { Card, Button, Space, Tag, Collapse, App, Progress, Spin, Tabs, Table, Descriptions, Divider, Upload } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { CheckCircleOutlined, SaveOutlined, ExperimentOutlined, ShoppingCartOutlined, SafetyOutlined, FileTextOutlined, DownloadOutlined, EditOutlined, UploadOutlined } from '@ant-design/icons'
 import type { CandidateRoute, ExperimentPlan } from '@/types/rd'
 import { updateRoute } from '@/lib/api/rd'

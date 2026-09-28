@@ -2,7 +2,8 @@
 
 import { useMemo } from 'react'
 import Link from 'next/link'
-import { Alert, Button, Card, Col, Empty, Row, Space, Spin, Statistic } from 'antd'
+import { Button, Card, Col, Empty, Row, Space, Spin, Statistic } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import ReactECharts from 'echarts-for-react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchCapaStatistics } from '@/lib/api/client/quality'

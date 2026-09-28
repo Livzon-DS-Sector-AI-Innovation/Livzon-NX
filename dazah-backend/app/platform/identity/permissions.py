@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.redaction import is_sensitive_key, redact_sensitive
+from app.platform.audit.middleware import current_audit_request_id
 from app.platform.audit.models import AuditLog
 from app.platform.identity.models import User
 from app.platform.identity.permission_repository import PermissionGrantRepository
@@ -114,6 +115,7 @@ class IdentityPermissionService:
                 resource_type="user_module_permissions",
                 resource_id=target_user_id,
                 action="replace_user_module_permissions",
+                request_id=current_audit_request_id.get(),
                 old_value=redact_sensitive(old_value),
                 new_value=redact_sensitive(new_value),
                 extra={
@@ -154,6 +156,7 @@ class IdentityPermissionService:
                 resource_type="user_module_permissions",
                 resource_id=target_user_id,
                 action="view_user_permission_audit",
+                request_id=current_audit_request_id.get(),
                 extra={"returned": len(logs)},
             )
         )

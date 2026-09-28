@@ -18,7 +18,9 @@ const tableProps: Array<{ pagination?: Record<string, unknown> }> = []
 
 vi.mock('@/lib/api/purchasing', () => api)
 
-vi.mock('antd', () => {
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd')>()
+  const businessMock = await (() => {
   const Wrapper = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>
   const Button = ({
     children,
@@ -117,6 +119,8 @@ vi.mock('antd', () => {
     },
     Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
   }
+})()
+  return { ...actual, ...businessMock, Alert: actual.Alert, theme: actual.theme, Typography: actual.Typography }
 })
 
 import { MaterialLibraryClient } from './MaterialLibraryClient'
@@ -485,7 +489,7 @@ describe('MaterialLibraryClient', () => {
     )
   })
 
-  it('shows the sync error alert, the load-failed banner and a missing sync time', () => {
+  it('shows the sync error alert, its details, the load-failed banner and a missing sync time', async () => {
     act(() => {
       root.render(
         <MaterialLibraryClient
@@ -504,7 +508,11 @@ describe('MaterialLibraryClient', () => {
 
     expect(container.textContent).toContain('物料编码库暂时无法加载')
     expect(container.textContent).toContain('最近一次同步失败')
-    expect(container.textContent).toContain('飞书读取超时')
+    const notice = [...container.querySelectorAll<HTMLElement>('[data-platform-notice]')]
+      .find((node) => node.textContent?.includes('最近一次同步失败'))!
+    const rules = [...notice.querySelectorAll('button')].find((button) => button.textContent?.includes('了解访问规则'))!
+    await act(async () => rules.click())
+    expect(document.body.textContent).toContain('飞书读取超时')
     expect(container.textContent).toContain('—')
   })
 })

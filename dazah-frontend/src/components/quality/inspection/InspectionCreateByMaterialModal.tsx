@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, App, Form, Modal, Select, Space, Spin, Tag } from 'antd'
+import { App, Form, Modal, Select, Space, Spin, Tag } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { useQuery } from '@tanstack/react-query'
 
 import { createInspectionFeishuRecord } from '@/actions/quality-inspection'

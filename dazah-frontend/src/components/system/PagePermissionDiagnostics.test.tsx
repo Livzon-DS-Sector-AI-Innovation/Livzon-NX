@@ -28,6 +28,7 @@ vi.mock('antd', async (importOriginal) => {
   return { ...actual, Select, App: { useApp: () => ({ message: mocks.message }) } }
 })
 import { PagePermissionDiagnostics } from './PagePermissionDiagnostics'
+import { openNoticeDetails } from '../shared/tests/notice-interactions'
 
 let root: Root
 let host: HTMLDivElement
@@ -77,6 +78,7 @@ it('diagnoses effective permission with source and data scope', async () => {
   })
   expect(document.body.textContent).toContain('授权条件满足')
   expect(document.body.textContent).toContain('实际接口还会核对页面绑定')
+  await openNoticeDetails('授权条件满足')
   expect(document.body.textContent).toContain('角色：质量审核员')
   expect(document.body.textContent).toContain('数据范围：本部门及下级')
   expect(document.body.textContent).toContain('判定过程')

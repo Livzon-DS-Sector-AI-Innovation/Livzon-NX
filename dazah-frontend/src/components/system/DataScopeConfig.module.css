@@ -1,0 +1,35 @@
+.scopeOptions {
+  display: flex;
+  width: 100%;
+}
+
+.scopeOptions :global(.ant-radio-button-wrapper) {
+  display: flex;
+  flex: 1;
+  height: auto;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 8px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.scopeOptions :global(.ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled)) {
+  background: var(--ant-color-primary-bg);
+}
+
+.scopeOptions :global(.anticon) {
+  margin-right: 8px;
+}
+
+@media (max-width: 575px) {
+  .scopeOptions :global(.ant-radio-button-wrapper) {
+    font-size: var(--ant-font-size-sm);
+  }
+
+  .scopeOptions :global(.anticon) {
+    display: block;
+    margin: 0 0 6px;
+  }
+}

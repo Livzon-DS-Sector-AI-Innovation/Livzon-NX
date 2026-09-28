@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { App, Modal, Select, Input, Button, Space, Spin, Tag, Popconfirm, Table } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons'
 import { pinyin } from 'pinyin-pro'
 import type { TrainingPersonnelItem, TrainingPersonnelConfig, Department } from '@/types/hr'
@@ -92,6 +93,14 @@ export function resolvePersonnelValue(
   return { name: value, department: rowDept }
 }
 
+/** 在职联系人拉取失败且没有任何候选人时提示（曾有数据时静默，避免误报） */
+export function shouldShowMembersLoadError(
+  membersByDept: Record<string, Member[]>,
+  loadFailed: boolean,
+): boolean {
+  return loadFailed && Object.keys(membersByDept).length === 0
+}
+
 /** 已存人员项 → Select 回显 value：能匹配到部门候选人的用其内部 value，其余原样姓名（手动输入项）；
  *  occIdx 为同名项中的出现序号，保证同名且都无工号的两条历史数据也能回显为两个标签 */
 export function itemToOptionValue(p: TrainingPersonnelItem, members: Member[], occIdx = 0): string {
@@ -172,6 +181,8 @@ export default function TrainingPersonnelConfigModal({ open, level, scopeDept, o
   // 部门行 + 各部门在职联系人
   const [deptRows, setDeptRows] = useState<string[]>([])
   const [membersByDept, setMembersByDept] = useState<Record<string, Member[]>>({})
+  // 在职联系人拉取失败标记：失败且无任何候选人时在弹窗顶部提示
+  const [membersLoadFailed, setMembersLoadFailed] = useState(false)
   const [deptFilter, setDeptFilter] = useState('')
   // 自定义部门行（手动添加，保存后进入全局部门来源）
   const [customDeptRows, setCustomDeptRows] = useState<string[]>([])
@@ -192,29 +203,37 @@ export default function TrainingPersonnelConfigModal({ open, level, scopeDept, o
     if (!open) return
     let cancelled = false
     setLoading(true)
+    setMembersLoadFailed(false)
     ensureDeptMappings().catch(() => {})
     const dept = level === '部门级' ? scopeDept : undefined
     // 弹窗专属规则（配置表 modal_drop/modal_extra/modal_no_expand）
     const modalRules = getModalRules()
 
+    let membersFailed = false
     const loadAllMembers = async (): Promise<Record<string, Member[]>> => {
-      const first = await fetchFeishuMembers({ page: 1, page_size: 100, status: '1' })
-      const total = first.meta?.total || (first.data || []).length
-      const pages = Math.min(Math.ceil(total / 100), 20)
-      const restPages = Array.from({ length: pages - 1 }, (_, i) => i + 2)
-      const rest = restPages.length
-        ? await Promise.all(restPages.map((p) => fetchFeishuMembers({ page: p, page_size: 100, status: '1' })))
-        : []
-      const all = [...(first.data || []), ...rest.flatMap((r) => r.data || [])]
-      const grouped: Record<string, Member[]> = {}
-      all.forEach((m) => {
-        const raw = m.department || '未设置部门'
-        if (modalRules.drop.has(raw)) return // 丢弃的部门不提供候选人
-        const d = aliasDept(raw)
-        if (!grouped[d]) grouped[d] = []
-        grouped[d].push({ name: m.name, employee_no: m.employee_no || undefined })
-      })
-      return grouped
+      try {
+        const first = await fetchFeishuMembers({ page: 1, page_size: 100, status: '1' })
+        const total = first.meta?.total || (first.data || []).length
+        const pages = Math.min(Math.ceil(total / 100), 20)
+        const restPages = Array.from({ length: pages - 1 }, (_, i) => i + 2)
+        const rest = restPages.length
+          ? await Promise.all(restPages.map((p) => fetchFeishuMembers({ page: p, page_size: 100, status: '1' })))
+          : []
+        const all = [...(first.data || []), ...rest.flatMap((r) => r.data || [])]
+        const grouped: Record<string, Member[]> = {}
+        all.forEach((m) => {
+          const raw = m.department || '未设置部门'
+          if (modalRules.drop.has(raw)) return // 丢弃的部门不提供候选人
+          const d = aliasDept(raw)
+          if (!grouped[d]) grouped[d] = []
+          grouped[d].push({ name: m.name, employee_no: m.employee_no || undefined })
+        })
+        return grouped
+      } catch (e) {
+        console.error('加载在职联系人失败，参训人员候选列表为空', e)
+        membersFailed = true
+        return {}
+      }
     }
 
     Promise.all([
@@ -223,7 +242,7 @@ export default function TrainingPersonnelConfigModal({ open, level, scopeDept, o
         console.error('加载培训部门列表失败', e)
         return [] as string[]
       }),
-      loadAllMembers().catch(() => ({} as Record<string, Member[]>)),
+      loadAllMembers(),
     ])
       .then(([cfgRes, trainingDepts, grouped]) => {
         if (cancelled) return
@@ -236,6 +255,7 @@ export default function TrainingPersonnelConfigModal({ open, level, scopeDept, o
         const deptsWithMembers = new Set(memberDepts.map(renameDept))
         setConfigs(cfgRes.data || [])
         setMembersByDept(grouped)
+        setMembersLoadFailed(membersFailed)
         setDeptRows(
           applyModalCuration(
             level === '部门级' && scopeDept
@@ -450,6 +470,13 @@ export default function TrainingPersonnelConfigModal({ open, level, scopeDept, o
     >
       <Spin spinning={loading}>
         <div className="space-y-4">
+          {shouldShowMembersLoadError(membersByDept, membersLoadFailed) && (
+            <Alert
+              type="error"
+              showIcon
+              message="在职联系人加载失败，参训人员候选列表为空，请关闭弹窗重试；持续失败请联系管理员检查接口权限"
+            />
+          )}
           {/* 已有配置列表 */}
           <div>
             <div className="flex items-center justify-between mb-2">

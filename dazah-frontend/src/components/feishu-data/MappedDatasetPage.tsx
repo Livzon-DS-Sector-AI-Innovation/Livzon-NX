@@ -2,22 +2,8 @@
 
 import { SettingOutlined } from '@ant-design/icons'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
-import {
-  Alert,
-  Button,
-  Card,
-  Checkbox,
-  Drawer,
-  Dropdown,
-  Empty,
-  Input,
-  Select,
-  Space,
-  Table,
-  Tabs,
-  Tag,
-  Typography,
-} from 'antd'
+import { Button, Card, Checkbox, Drawer, Dropdown, Empty, Input, Select, Space, Table, Tabs, Tag, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import type { ColumnsType as AntColumnsType } from 'antd/es/table'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'

@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import type { ReactNode } from 'react'
+import { AntdProvider } from '@/components/AntdProvider'
 
 import styles from './AuthLayout.module.css'
 
@@ -12,7 +13,7 @@ export function AuthLayout({
   footerText = '仅限已授权人员使用',
 }: AuthLayoutProps) {
   return (
-    <main className={styles.authPage}>
+    <AntdProvider><main className={styles.authPage}>
       <section className={styles.brandPane} aria-label="平台介绍">
         <div className={styles.brandGlow} aria-hidden="true" />
         <div className={styles.brandContent}>
@@ -58,6 +59,6 @@ export function AuthLayout({
         <div className={styles.accessContent}>{children}</div>
         <p className={styles.accessFooter}>{footerText}</p>
       </section>
-    </main>
+    </main></AntdProvider>
   )
 }

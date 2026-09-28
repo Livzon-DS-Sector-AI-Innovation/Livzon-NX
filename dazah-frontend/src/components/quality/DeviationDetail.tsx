@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { Alert, App, Card, Button, Space, Form, Input, Select, DatePicker, Radio } from 'antd'
+import { App, Card, Button, Space, Form, Input, Select, DatePicker, Radio } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { ArrowLeftOutlined, DeleteOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'

@@ -5,6 +5,7 @@ import {
   memberOptionLabel,
   resolvePersonnelValue,
   itemToOptionValue,
+  shouldShowMembersLoadError,
 } from './TrainingPersonnelConfigModal'
 import type { TrainingPersonnelItem } from '@/types/hr'
 
@@ -124,5 +125,23 @@ describe('班组人员配置弹窗 - 重名选择支持', () => {
     // 解码回 name 仍是纯姓名
     expect(resolvePersonnelValue(v0, members, [], '仪器组').name).toBe('赵六')
     expect(resolvePersonnelValue(v1, members, [], '仪器组').name).toBe('赵六')
+  })
+})
+
+// ── 在职联系人加载失败提示（shouldShowMembersLoadError）──
+
+describe('配置人员弹窗加载失败提示', () => {
+  it('拉取失败且无任何候选人时提示', () => {
+    expect(shouldShowMembersLoadError({}, true)).toBe(true)
+  })
+
+  it('拉取成功时不提示', () => {
+    expect(shouldShowMembersLoadError({}, false)).toBe(false)
+  })
+
+  it('失败但仍有部分候选人数据时不提示，避免误报', () => {
+    expect(
+      shouldShowMembersLoadError({ 一车间: [{ name: '张三' }] }, true),
+    ).toBe(false)
   })
 })

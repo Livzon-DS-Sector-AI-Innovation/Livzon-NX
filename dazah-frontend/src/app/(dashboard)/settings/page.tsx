@@ -3,30 +3,35 @@ import { getCurrentUser } from '@/actions/auth'
 import { isSystemAdministrator } from '@/lib/administrator-role'
 import { notFound } from 'next/navigation'
 import {
-  serverFetchAdminUsers,
   serverFetchDepartments,
   serverFetchDeptRules,
-  serverFetchMenus,
   serverFetchRoles,
 } from '@/lib/api/server/admin'
 
 export const dynamic = 'force-dynamic'
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string | string[] }>
+}) {
   const user = await getCurrentUser()
   if (!user || !isSystemAdministrator(user)) notFound()
 
-  const [roles, departments, deptRules, menus, users] = await Promise.all([
-    serverFetchRoles(),
-    serverFetchDepartments(),
-    serverFetchDeptRules(),
-    serverFetchMenus(),
-    serverFetchAdminUsers(),
-  ])
+  const requestedTab = (await searchParams).tab
+  const activeTab = typeof requestedTab === 'string' ? requestedTab : 'users'
+  const systemPermissions = activeTab === 'permissions'
+    ? await Promise.all([
+        serverFetchRoles(),
+        serverFetchDepartments(),
+        serverFetchDeptRules(),
+      ]).then(([roles, departments, deptRules]) => ({ roles, departments, deptRules }))
+    : null
 
   return (
     <SettingsAdminClient
-      systemPermissions={{ roles, departments, deptRules, menus, users }}
+      activeTab={activeTab}
+      systemPermissions={systemPermissions}
     />
   )
 }

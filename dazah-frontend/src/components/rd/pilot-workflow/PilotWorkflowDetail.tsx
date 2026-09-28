@@ -1,5 +1,7 @@
 'use client'
 
+import PlatformNotice from '@/components/shared/PlatformNotice'
+
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
@@ -329,9 +331,7 @@ function StepDetail({ step }: { step: PilotWorkflowStep }) {
   return (
     <div className="space-y-4">
       {step.error_message && (
-        <div className="rounded bg-red-50 p-3 text-red-600">
-          <Text strong>错误：</Text> {step.error_message}
-        </div>
+        <PlatformNotice type="error" title={<><Text strong>错误：</Text>{step.error_message}</>} />
       )}
 
       {step.output_data && (

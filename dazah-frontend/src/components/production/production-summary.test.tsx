@@ -90,9 +90,9 @@ describe('ProductionSummary', () => {
     vi.clearAllMocks()
   })
 
-  async function render(props: { month: string }) {
+  async function render(props: { month: string; visibleCodes?: readonly string[] }) {
     act(() => {
-      root.render(<ProductionSummary month={props.month} />)
+      root.render(<ProductionSummary month={props.month} visibleCodes={props.visibleCodes} />)
     })
     await act(async () => {
       await new Promise((r) => setTimeout(r, 60))
@@ -128,12 +128,29 @@ describe('ProductionSummary', () => {
   })
 
   it('surfaces backend failures instead of an empty table', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     getProductionSummary.mockResolvedValue({
       code: 500,
       message: '汇总数据加载失败',
       data: null,
     })
-    await render({ month: '2026-09' })
-    expect((container.textContent || '')).toContain('汇总数据加载失败')
+    try {
+      await render({ month: '2026-09' })
+      expect((container.textContent || '')).toContain('汇总数据加载失败')
+      const warnings = [...warn.mock.calls, ...error.mock.calls].flat().join(' ')
+      expect(warnings).not.toContain('`message` is deprecated')
+    } finally {
+      warn.mockRestore()
+      error.mockRestore()
+    }
+  })
+
+  it('excludes hidden product rows and their alerts from summary', async () => {
+    await render({ month: '2026-09', visibleCodes: ['MV'] })
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('美伐他汀')
+    expect(text).not.toContain('霉酚酸')
+    expect(text).not.toContain('MC-26247')
   })
 })

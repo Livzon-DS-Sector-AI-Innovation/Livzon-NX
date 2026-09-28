@@ -1,7 +1,8 @@
 'use client'
 
 import {useState, useEffect, useCallback, useMemo} from 'react'
-import { Button, Modal, Form, Input, AutoComplete, Typography, App, Alert, Space, Tag } from 'antd'
+import { Button, Modal, Form, Input, AutoComplete, Typography, App, Space, Tag } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { LinkOutlined, SyncOutlined, PlayCircleOutlined, ClockCircleOutlined } from '@ant-design/icons'
 import {
   useProductionPermissions,

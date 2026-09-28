@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, Input, Button, Space, Tag, Table, Form, DatePicker, Select, Alert, App, Collapse, Descriptions, Upload } from 'antd'
+import { Card, Input, Button, Space, Tag, Table, Form, DatePicker, Select, App, Collapse, Descriptions, Upload } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { UploadOutlined, RobotOutlined, WarningOutlined, CheckCircleOutlined, PlusOutlined, FileTextOutlined } from '@ant-design/icons'
 import type { ExperimentRecord, ExperimentPlan } from '@/types/rd'
 import dayjs from 'dayjs'

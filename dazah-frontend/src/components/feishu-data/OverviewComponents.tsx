@@ -1,7 +1,8 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Alert, Card, Col, Empty, Row, Space, Statistic, Tag, Typography } from 'antd'
+import { Card, Col, Empty, Row, Space, Statistic, Tag, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 

@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Alert, App, Button, Card, Col, Input, InputNumber, Row, Select, Space, Switch, Tag, Typography } from 'antd'
+import { App, Button, Card, Col, Input, InputNumber, Row, Select, Space, Switch, Tag, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 
 import { testRegulatoryTrackerNotificationSettings } from '@/actions/regulatory-tracker'
 import {

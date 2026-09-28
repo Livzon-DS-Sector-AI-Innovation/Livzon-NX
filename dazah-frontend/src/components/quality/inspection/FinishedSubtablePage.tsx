@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Alert, App, Select, Space, Spin, Tag } from 'antd'
+import { App, Select, Space, Spin, Tag } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { useQuery } from '@tanstack/react-query'
 
 import { InspectionFeishuTable } from './InspectionFeishuTable'
