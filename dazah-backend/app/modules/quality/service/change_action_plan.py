@@ -289,12 +289,21 @@ class ChangeActionPlanFeishuSync:
         filter_str = None
         if change_code:
             filter_str = f'CurrentValue.[变更控制号] = "{change_code}"'
-        return await client.search_records(
-            table_id,
-            filter_str=filter_str,
-            page_size=500,
-            user_id_type="union_id",
-        )
+        # 跟随 page_token 翻页取全量，单页上限 500，超过会漏记录
+        items: list[dict[str, Any]] = []
+        page_token: str | None = None
+        while True:
+            page = await client.search_records_page(
+                table_id,
+                filter_str=filter_str,
+                page_size=500,
+                page_token=page_token,
+                user_id_type="union_id",
+            )
+            items.extend(page["items"])
+            if not page["has_more"] or not page.get("page_token"):
+                return items
+            page_token = page["page_token"]
 
     async def upsert_record(
         self,
@@ -1187,10 +1196,15 @@ async def sync_change_action_plans_from_feishu(
                 if user_id != "system":
                     payload["created_by"] = uuid.UUID(user_id)
                 await repository.create_change_action_plan(db, payload)
+            # 逐条提交：单条失败只回滚自身，不污染 session 影响其余记录
+            await db.commit()
             synced += 1
         except Exception as exc:  # noqa: BLE001
+            try:
+                await db.rollback()
+            except Exception:  # noqa: BLE001 —— 回滚失败不应中断整体同步
+                logger.warning("rollback 失败", exc_info=True)
             logger.warning("Failed to sync change action plan from Feishu: %s", exc)
             failed += 1
 
-    await db.commit()
     return ChangeActionPlanSyncResult(synced=synced, failed=failed)

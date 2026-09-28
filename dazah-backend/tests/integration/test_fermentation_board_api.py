@@ -1049,10 +1049,19 @@ async def test_fermentation_board_without_archive_returns_unified_skeleton(
     assert data["period"]["start"].endswith("-27")
     assert data["period"]["end"].endswith("-26")
     assert data["extract_finished_inbound_kg"] == 7920.0
-    # 入库取数按统一周期区间调用
+    # 入库取数按统一周期区间调用（当前周期随北京日期推导：
+    # 27 日及以后属下个周期，周期末为下月 26 日，否则当月 26 日）
     board.get_warehouse_finished_inbound_kg.assert_awaited_once()
     kwargs = board.get_warehouse_finished_inbound_kg.call_args.kwargs
-    assert str(kwargs["period_end"]) == "2026-09-26"
+    now_bj = datetime.now(timezone(timedelta(hours=8)))
+    if now_bj.day >= 27:
+        if now_bj.month == 12:
+            year, month = now_bj.year + 1, 1
+        else:
+            year, month = now_bj.year, now_bj.month + 1
+    else:
+        year, month = now_bj.year, now_bj.month
+    assert str(kwargs["period_end"]) == f"{year:04d}-{month:02d}-26"
 
 
 @pytest.mark.anyio

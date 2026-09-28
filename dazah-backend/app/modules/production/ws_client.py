@@ -103,14 +103,27 @@ async def start_ws_from_db() -> dict[str, Any]:
                 _last_error = "未启用生产飞书配置"
                 return await get_ws_status()
 
-            # Start WS for the first config
+            # 订阅全部启用配置的 Base（生产计划/产销计划/FL 批次月表
+            # 可能是不同多维表格），token 去重；应用凭据取第一个配置
+            app_tokens: dict[str, str] = {}
+            seen_tokens: set[str] = set()
+            for item in configs:
+                token = item.bitable_app_token
+                if not token or token in seen_tokens:
+                    continue
+                seen_tokens.add(token)
+                label = item.product_name or item.name or f"base-{len(seen_tokens)}"
+                app_tokens[label] = token
+
             config = configs[0]
             return await restart_ws_with_config(
                 app_id=config.app_id,
-                app_secret=decrypt_secret(config.encrypted_app_secret),
-                app_tokens={
-                    config.product_name or config.name: config.bitable_app_token
-                },
+                app_secret=(
+                    decrypt_secret(config.encrypted_app_secret)
+                    if config.encrypted_app_secret
+                    else ""
+                ),
+                app_tokens=app_tokens,
             )
     except Exception as exc:
         await stop_ws()
@@ -142,11 +155,16 @@ async def restart_ws_with_config(
         return await get_ws_status()
 
     try:
-        for app_token in app_tokens.values():
+        for label, app_token in app_tokens.items():
             client = ProductionFeishuClient(
                 app_id=app_id, app_secret=app_secret, app_token=app_token
             )
-            await client.subscribe()
+            try:
+                await client.subscribe()
+            except Exception:
+                # 单个 Base 订阅失败不阻断其余 Base 与长连接启动，
+                # 该 Base 的数据由 10 分钟定时轮次兜底
+                logger.exception("生产飞书 WS 订阅 Base 失败: %s", label)
         start_ws_client(
             app_id=app_id,
             app_secret=app_secret,

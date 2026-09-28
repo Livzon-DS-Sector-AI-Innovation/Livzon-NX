@@ -144,53 +144,66 @@ export function ChangeDashboardPage() {
         <Link href="/quality/change/action-plans"><Button>进入变更计划</Button></Link>
       </Space>
       <Spin spinning={loading || dueLoading}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+            gap: 16,
+            marginBottom: 16,
+          }}
+        >
+          <Card style={{ height: '100%' }}>
+            <Statistic title="变更总数" value={stats?.total ?? 0} />
+          </Card>
+          <Card style={{ height: '100%' }}>
+            <Statistic title="变更计划总数" value={dueStatus?.total_count ?? stats?.actionPlanTotal ?? 0} />
+          </Card>
+          <Card
+            hoverable
+            style={{ height: '100%', cursor: 'pointer' }}
+            onClick={() => setDetailBucket('overdue')}
+          >
+            <Statistic title="逾期计划" value={dueStatus?.overdue.length ?? 0} styles={{ content: { color: '#cf1322' } }} />
+          </Card>
+          <Card
+            hoverable
+            style={{ height: '100%', cursor: 'pointer' }}
+            onClick={() => setDetailBucket('due_soon')}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: 'rgba(0, 0, 0, 0.45)', fontSize: 14, whiteSpace: 'nowrap' }}>临期计划</span>
+              <Select
+                size="small"
+                value={dueWindow}
+                options={DUE_WINDOW_OPTIONS}
+                onChange={setDueWindow}
+                style={{ width: 90 }}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+            <Statistic value={dueStatus?.due_soon.length ?? 0} styles={{ content: { color: '#d46b08' } }} />
+          </Card>
+          <Card style={{ height: '100%' }}>
+            <Statistic title="已确认提醒" value={dueStatus?.confirmed_count ?? stats?.actionPlanConfirmed ?? 0} />
+          </Card>
+        </div>
         <Row gutter={[16, 16]}>
-          <Col xs={24} sm={12} lg={8}>
-            <Card><Statistic title="变更总数" value={stats?.total ?? 0} /></Card>
-          </Col>
-          <Col xs={24} sm={12} lg={8}>
-            <Card><Statistic title="变更计划总数" value={dueStatus?.total_count ?? stats?.actionPlanTotal ?? 0} /></Card>
-          </Col>
-          <Col xs={24} sm={12} lg={8}>
-            <Card hoverable style={{ cursor: 'pointer' }} onClick={() => setDetailBucket('overdue')}>
-              <Statistic title="逾期计划（点击查看明细）" value={dueStatus?.overdue.length ?? 0} styles={{ content: { color: '#cf1322' } }} />
-            </Card>
-          </Col>
-          <Col xs={24} sm={12} lg={8}>
-            <Card hoverable style={{ cursor: 'pointer' }} onClick={() => setDetailBucket('due_soon')}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <span style={{ color: 'rgba(0, 0, 0, 0.45)', fontSize: 14 }}>临期计划（点击查看明细）</span>
-                <Select
-                  size="small"
-                  value={dueWindow}
-                  options={DUE_WINDOW_OPTIONS}
-                  onChange={setDueWindow}
-                  style={{ width: 92 }}
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </div>
-              <Statistic value={dueStatus?.due_soon.length ?? 0} styles={{ content: { color: '#d46b08' } }} />
-            </Card>
-          </Col>
-          <Col xs={24} sm={12} lg={8}>
-            <Card><Statistic title="已确认提醒" value={dueStatus?.confirmed_count ?? stats?.actionPlanConfirmed ?? 0} /></Card>
-          </Col>
           <Col xs={24} md={8}>
-            <Card title="状态分布">
+            <Card title="状态分布" style={{ height: '100%' }}>
               {stats?.statusDistribution.length ? (
                 <ReactECharts option={statusChartOption} style={{ height: 300 }} />
               ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无数据" />}
             </Card>
           </Col>
           <Col xs={24} md={8}>
-            <Card title="等级分布">
+            <Card title="等级分布" style={{ height: '100%' }}>
               {stats?.levelDistribution.length ? (
                 <ReactECharts option={levelChartOption} style={{ height: 300 }} />
               ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无数据" />}
             </Card>
           </Col>
           <Col xs={24} md={8}>
-            <Card title="部门分布">
+            <Card title="部门分布" style={{ height: '100%' }}>
               {stats?.departmentDistribution.length ? (
                 <ReactECharts option={deptChartOption} style={{ height: 300 }} />
               ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无数据" />}

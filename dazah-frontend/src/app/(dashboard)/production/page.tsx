@@ -649,7 +649,9 @@ export default function ProductionDashboard() {
       dataIndex: 'inoculate_at',
       key: 'inoculate_at',
       width: 124,
-      render: (v: string | null) => fmtShort(v),
+      // 倒罐进罐的时间追加（倒罐）标注，与普通移种区分
+      render: (v: string | null, record: BoardTank) =>
+        v ? `${fmtShort(v)}${record.inoculate_mark || ''}` : '-',
     },
     {
       title: '已培养时长',

@@ -261,7 +261,6 @@ export default function FlBoardView({ month, refreshKey }: Props) {
       title: '批次号',
       dataIndex: 'batch_no',
       key: 'batch_no',
-      render: (v: string) => <Text strong>{v}</Text>,
     },
     { title: '入库(实际)', dataIndex: 'actual_inbound_date', key: 'actual_inbound', render: fmtDate },
     {
@@ -324,6 +323,21 @@ export default function FlBoardView({ month, refreshKey }: Props) {
         </Card>
       ) : (
         <>
+          {/* 批次明细/最近完成批次卡片固定 343px（对齐苯丙氨酸单批产量卡）：
+              表体 243px 固定；批次明细滚动条常驻（数据后续会增加），
+              最近完成批次溢出才出滚轮 */}
+          <style>{`
+            .fl-fixed-card {
+              height: 343px;
+            }
+            .fl-fixed-card .ant-table-body {
+              height: 243px;
+              overflow-y: auto !important;
+            }
+            .fl-fixed-card .fl-fixed-table .ant-table-body {
+              overflow-y: scroll !important;
+            }
+          `}</style>
           {/* KPI 卡片区 */}
           <Row gutter={[12, 12]}>
             {kpiCards.map((card) => (
@@ -420,17 +434,19 @@ export default function FlBoardView({ month, refreshKey }: Props) {
                   </span>
                 }
                 variant="borderless"
-                className="shadow-sm h-full"
+                className="shadow-sm fl-fixed-card"
                 styles={{ body: { padding: 8 } }}
               >
                 <Table
                   rowKey="batch_no"
                   size="small"
+                  className="fl-fixed-table"
                   loading={loading}
                   columns={monthColumns}
                   dataSource={monthBatches}
-                  pagination={{ pageSize: 12, hideOnSinglePage: true, size: 'small' }}
-                  scroll={{ x: 950 }}
+                  pagination={false}
+                  // 固定表头模式：实际高度由 fl-fixed-card 的 flex 撑满决定
+                  scroll={{ x: 950, y: 270 }}
                   locale={{ emptyText: '本月暂无已确认入库的批次' }}
                 />
               </Card>
@@ -444,7 +460,7 @@ export default function FlBoardView({ month, refreshKey }: Props) {
                   </span>
                 }
                 variant="borderless"
-                className="shadow-sm h-full"
+                className="shadow-sm fl-fixed-card"
                 styles={{ body: { padding: 8 } }}
               >
                 <Table
@@ -454,6 +470,8 @@ export default function FlBoardView({ month, refreshKey }: Props) {
                   columns={recentColumns}
                   dataSource={recentCompleted}
                   pagination={false}
+                  // 固定表头模式：实际高度由 fl-fixed-card 的 flex 撑满决定
+                  scroll={{ y: 270 }}
                   locale={{ emptyText: '暂无已确认入库批次' }}
                 />
               </Card>

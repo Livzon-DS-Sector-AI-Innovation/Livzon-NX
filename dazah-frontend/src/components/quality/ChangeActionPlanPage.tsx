@@ -83,7 +83,11 @@ export function ChangeActionPlanPage() {
   const handleSyncAll = useCallback(async () => {
     try {
       const result = await syncChangeActionPlansFromFeishu()
-      message.success(`同步完成：成功 ${result.synced} 条，失败 ${result.failed} 条。飞书多维表中的总负责人/部门负责人已按最新结果回写系统。`)
+      if (result.failed > 0) {
+        message.warning(`同步完成：成功 ${result.synced} 条，失败 ${result.failed} 条。失败记录详见后端日志与飞书数据。`)
+      } else {
+        message.success(`同步完成：成功 ${result.synced} 条。飞书多维表中的总负责人/部门负责人已按最新结果回写系统。`)
+      }
       queryClient.invalidateQueries({ queryKey: ['quality-change-plan'] })
     } catch (error: unknown) {
       message.error(getErrorMessage(error, '同步飞书失败'))

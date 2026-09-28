@@ -738,13 +738,17 @@ async def delete_change_from_feishu(
     return True
 
 
-async def sync_changes_from_feishu(db: AsyncSession) -> dict[str, int]:
+async def sync_changes_from_feishu(
+    db: AsyncSession,
+    change_type: str = "technical",
+) -> dict[str, int]:
     """Pull all records from the Feishu Bitable change_ledger table and
     upsert them into the local ChangeControl table.
 
     Each Feishu record is matched by change_code:
     - If a local record with the same change_code exists, it is updated.
-    - Otherwise a new ChangeControl row is created.
+    - Otherwise a new ChangeControl row is created; change_type marks the
+      target ledger (technical=技术变更台账, file=文件变更台账).
 
     Returns ``{"synced": N, "failed": N}``.
     """
@@ -815,6 +819,7 @@ async def sync_changes_from_feishu(db: AsyncSession) -> dict[str, int]:
                 change = ChangeControl(
                     serial_number=serial_number,
                     change_code=change_code,
+                    change_type=change_type,
                     applicant_department=applicant_department,
                     change_object=change_object,
                     change_content=change_content,

@@ -206,38 +206,36 @@ export default function ProductionSummary({ month, visibleCodes }: { month: stri
     {
       title: '发酵月计划批次',
       key: 'planned_batches',
-      // FL 无发酵工段：4 个发酵列合并为一格居中标注
+      // FL 无发酵工段：4 个发酵列合并为一格居中标注（onCell 声明跨列）
+      onCell: (row: ProductionSummaryRow) =>
+        row.product_code === 'FL' ? { colSpan: 4 } : {},
       render: (_: unknown, row: ProductionSummaryRow) =>
-        row.product_code === 'FL'
-          ? { children: noFermentMerged, props: { colSpan: 4 } }
-          : fermentCell(row, 'planned_batches'),
+        row.product_code === 'FL' ? noFermentMerged : fermentCell(row, 'planned_batches'),
     },
     {
       title: '发酵月计划产能(kg)',
       key: 'planned_capacity_kg',
-      render: (_: unknown, row: ProductionSummaryRow) =>
-        row.product_code === 'FL'
-          ? { children: null, props: { colSpan: 0 } }
-          : fermentCell(row, 'planned_capacity_kg'),
+      // FL：被上方合并格覆盖（colSpan 0 = 不渲染该格）
+      onCell: (row: ProductionSummaryRow) =>
+        row.product_code === 'FL' ? { colSpan: 0 } : {},
+      render: (_: unknown, row: ProductionSummaryRow) => fermentCell(row, 'planned_capacity_kg'),
     },
     {
       title: '发酵已完成产能(kg)',
       key: 'done_yield_kg',
-      render: (_: unknown, row: ProductionSummaryRow) =>
-        row.product_code === 'FL'
-          ? { children: null, props: { colSpan: 0 } }
-          : fermentCell(row, 'done_yield_kg'),
+      onCell: (row: ProductionSummaryRow) =>
+        row.product_code === 'FL' ? { colSpan: 0 } : {},
+      render: (_: unknown, row: ProductionSummaryRow) => fermentCell(row, 'done_yield_kg'),
     },
     {
       title: '发酵产能达成率',
       key: 'capacity_rate',
       width: 240,
-      render: (_: unknown, row: ProductionSummaryRow) =>
-        row.product_code === 'FL' ? (
-          { children: null, props: { colSpan: 0 } }
-        ) : (
-          <RateCell rate={row.ferment?.capacity_rate ?? null} />
-        ),
+      onCell: (row: ProductionSummaryRow) =>
+        row.product_code === 'FL' ? { colSpan: 0 } : {},
+      render: (_: unknown, row: ProductionSummaryRow) => (
+        <RateCell rate={row.ferment?.capacity_rate ?? null} />
+      ),
     },
     {
       title: '提炼计划产量(kg)',

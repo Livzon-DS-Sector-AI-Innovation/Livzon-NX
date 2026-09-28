@@ -522,6 +522,8 @@ export interface BoardTank {
   status: 'running' | 'dumping' | 'idle' | 'maintenance' | 'dumped'
   batch_no: string | null
   inoculate_at: string | null
+  /** 非空表示该时间为倒罐进罐（如「（倒罐）」），渲染时拼接在时间后 */
+  inoculate_mark?: string | null
   cultured_hours: number | null
   cycle_hours: number | null
   dump_at: string | null
