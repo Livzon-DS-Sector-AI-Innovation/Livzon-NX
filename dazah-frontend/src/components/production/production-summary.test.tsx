@@ -113,10 +113,13 @@ describe('ProductionSummary', () => {
     expect(text).toContain('排产未覆盖')
     expect(container.querySelectorAll('[data-rate-bar]').length).toBeGreaterThan(0)
     // FL 无发酵工段：4 个发酵列合并为一格（colSpan 4），被覆盖列不渲染
-    const summaryRows = Array.from(container.querySelectorAll('tbody tr'))
+    const summaryRows: HTMLTableRowElement[] = Array.from(
+      container.querySelectorAll('tbody tr'),
+    )
     const flRow = summaryRows.find((tr) => (tr.textContent || '').includes('氟苯尼考'))
     expect(flRow).toBeTruthy()
-    const mergedCell = Array.from(flRow?.cells ?? []).find((c) =>
+    const flCells: HTMLTableCellElement[] = Array.from(flRow?.cells ?? [])
+    const mergedCell = flCells.find((c) =>
       (c.textContent || '').includes('合成预混工艺、没有发酵工段'),
     )
     expect(mergedCell?.getAttribute('colspan')).toBe('4')

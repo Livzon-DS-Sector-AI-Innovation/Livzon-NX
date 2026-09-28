@@ -1,6 +1,7 @@
 'use client'
 
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import type { CSSProperties, TdHTMLAttributes } from 'react'
 import { Card, Typography, Upload, Table, App, Row, Col, Button, Popconfirm, Space, Modal, Input, Alert, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { ScheduleOutlined, InboxOutlined, ReloadOutlined, DownloadOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined } from '@ant-design/icons'
@@ -305,8 +306,8 @@ export default function SchedulingPage() {
       // 源表里标签列可能极窄(Excel 靠文本溢出显示),预览 overflow:hidden
       // 会把它裁没,统一抬到最小 80 保证最左侧的行标题可见
       width: Math.max(active.col_widths?.[ci] || 0, 80),
-      onCell: (_record: unknown, rowIndex: number) => {
-        const span = getMergeSpan(rowIndex, ci)
+      onCell: (_record: unknown, rowIndex?: number) => {
+        const span = rowIndex === undefined ? undefined : getMergeSpan(rowIndex, ci)
         if (span?.hide === 'row') {
           // 被上方合并覆盖：该格并入上一行，不渲染
           return { rowSpan: 0 }
@@ -315,7 +316,7 @@ export default function SchedulingPage() {
           // 被左侧合并覆盖：不占列
           return { colSpan: 0 }
         }
-        const cellProps: Record<string, number> = {}
+        const cellProps: TdHTMLAttributes<HTMLTableCellElement> = {}
         // 合并锚点（含空锚点）输出跨行/跨列占位：锚点不占位时，
         // 被覆盖格移除后整行会向左错位（如他汀表倒罐罐序行）
         if (span && (span.rowSpan > 1 || span.colSpan > 1)) {
@@ -324,7 +325,7 @@ export default function SchedulingPage() {
         }
         // 日期/标题行的居中加粗样式放在 td 上（onCell 可拿到整行记录取格值）
         const cell = (_record as Record<string, unknown> | undefined)?.[col]
-        const style: Record<string, unknown> = {}
+        const style: CSSProperties = {}
         if (isDayNumber(cell as CellValue)) {
           style.textAlign = 'center'
           style.fontWeight = 500

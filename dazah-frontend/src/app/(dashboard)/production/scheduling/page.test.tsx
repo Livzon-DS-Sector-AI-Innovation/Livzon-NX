@@ -206,7 +206,9 @@ describe('SchedulingPage archive flow', () => {
 
     const tables = Array.from(container.querySelectorAll('table'))
     const grid = tables[tables.length - 1]
-    const bodyRows = Array.from(grid.querySelectorAll('tbody tr'))
+    const bodyRows: HTMLTableRowElement[] = Array.from(
+      grid.querySelectorAll('tbody tr'),
+    )
     const valueRow = bodyRows.find((tr) =>
       Array.from(tr.cells).some((c) => (c.textContent || '') === 'VALUE'),
     )
