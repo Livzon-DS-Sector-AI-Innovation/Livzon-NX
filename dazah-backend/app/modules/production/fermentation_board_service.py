@@ -1679,10 +1679,10 @@ def _statin_tanks(
             )
 
     def _cycle(seg: dict[str, Any]) -> float | None:
-        if seg["dump"] and seg["inoculate"]:
-            return round(
-                (seg["dump"] - seg["inoculate"]).total_seconds() / 3600, 1
-            )
+        dump: datetime | None = seg["dump"]
+        inoculate: datetime | None = seg["inoculate"]
+        if dump and inoculate:
+            return round((dump - inoculate).total_seconds() / 3600, 1)
         return None
 
     def _iso(when: datetime | None) -> str | None:
@@ -1690,8 +1690,9 @@ def _statin_tanks(
 
     def _cultured(seg: dict[str, Any]) -> float | None:
         # 已培养时长自原始移种时刻连续累计（倒罐换罐不重置）
-        if seg["inoculate"]:
-            return round((now - seg["inoculate"]).total_seconds() / 3600, 1)
+        inoculate: datetime | None = seg["inoculate"]
+        if inoculate:
+            return round((now - inoculate).total_seconds() / 3600, 1)
         return None
 
     tanks: list[dict[str, Any]] = []
@@ -1951,6 +1952,7 @@ def build_mp_board(
     # ── 罐状态 ──
     # 他汀（LV/MV）走独立判定（预告下次移种/倒罐进罐/放罐窗口/放罐收尾，
     # 可跨扎帐周期预告）；MC 保持原判定，不共用
+    tanks: list[dict[str, Any]]
     if product in _STATIN_KEYWORD:
         tanks = _statin_tanks(
             list(timeline.values()), batches, maint_by_tank, now
@@ -1962,7 +1964,7 @@ def build_mp_board(
             for tank in (b["ferm_tank"], b["dump_tank"]):
                 if tank and tank not in tank_nos:
                     tank_nos.append(tank)
-        tanks: list[dict[str, Any]] = []
+        tanks = []
         for tank_no in sorted(tank_nos):
             maint = maint_by_tank.get(tank_no)
             if maint:
