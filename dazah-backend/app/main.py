@@ -157,6 +157,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     set_warehouse_ws_main_loop(asyncio.get_running_loop())
     await start_warehouse_ws()
 
+    # ── 生产计划/产销计划/FL 批次月表飞书 WebSocket（记录变更秒级同步）──
+    try:
+        from app.modules.production.ws_client import (
+            set_main_loop as set_production_ws_main_loop,
+        )
+        from app.modules.production.ws_client import (
+            start_ws_from_db as start_production_ws,
+        )
+
+        set_production_ws_main_loop(asyncio.get_running_loop())
+        await start_production_ws()
+    except Exception:
+        logger.exception("生产飞书长连接启动失败（不阻断启动）")
+
     # ── 设备模块飞书 WebSocket 长连接（独立交互机器人，原生 WebSocket） ──
     equipment_ws_task: asyncio.Task[None] | None = None
     if settings.EQUIPMENT_FEISHU_APP_ID and settings.EQUIPMENT_FEISHU_APP_SECRET:
@@ -212,7 +226,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         ResumeFolderScanner,
     )
     from app.modules.production.scheduled import (
-        ProductionPlanHourlySyncGenerator,
+        ProductionPlanFeishuSyncGenerator,
     )
     from app.modules.quality.scheduled import (
         AttachmentCacheWarmupGenerator,
@@ -248,7 +262,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_registry.register_generator(AgentAccessScopeSyncGenerator())
     scheduler_registry.register_generator(AgentAutomationGenerator())
     scheduler_registry.register_generator(AgentPushDeliveryGenerator())
-    scheduler_registry.register_generator(ProductionPlanHourlySyncGenerator())
+    scheduler_registry.register_generator(ProductionPlanFeishuSyncGenerator())
     scheduler_registry.register_generator(InspectionScheduleGenerator())
     scheduler_registry.register_generator(EnergyWikiSyncGenerator())
     scheduler_registry.register_generator(WarehouseFeishuDailySyncGenerator())
