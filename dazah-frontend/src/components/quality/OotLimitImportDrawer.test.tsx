@@ -3,6 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { openNoticeDetails } from '@/components/shared/tests/notice-interactions'
 
 const mocks = vi.hoisted(() => ({
   previewOotLimitImport: vi.fn(),
@@ -114,7 +115,14 @@ describe('OotLimitImportDrawer', () => {
     expect(document.body.textContent).toContain('更新产品（P01）')
     expect(document.body.textContent).toContain('洛伐他汀')
     expect(document.body.textContent).toContain('限度 12 项')
+    expect(document.body.textContent).toContain('解析结果包含 1 项提醒')
+    expect(document.body.textContent).not.toContain('第 3 行单位为空')
+    await openNoticeDetails('解析结果包含 1 项提醒')
     expect(document.body.textContent).toContain('第 3 行单位为空')
+    expect(mocks.confirmOotLimitImport).not.toHaveBeenCalled()
+    expect(props.onSuccess).not.toHaveBeenCalled()
+    clickButton('我知道了')
+    await flush()
 
     clickButton('确认导入')
     await flush()
@@ -138,7 +146,10 @@ describe('OotLimitImportDrawer', () => {
     clickButton('预览解析结果')
     await flush()
 
+    expect(document.body.textContent).toContain('文件解析失败')
+    await openNoticeDetails('文件解析失败')
     expect(document.body.textContent).toContain('无法解析文档结构')
+    expect(mocks.confirmOotLimitImport).not.toHaveBeenCalled()
     const confirmButton = Array.from(document.querySelectorAll('button')).find(
       (item) => item.textContent?.replace(/\s+/g, '') === '确认导入',
     ) as HTMLButtonElement

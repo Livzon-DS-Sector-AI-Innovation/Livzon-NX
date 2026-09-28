@@ -3,24 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  App,
-  Alert,
-  Button,
-  Card,
-  Col,
-  DatePicker,
-  Descriptions,
-  Drawer,
-  Empty,
-  Input,
-  Row,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
-} from 'antd'
+import { App, Button, Card, Col, DatePicker, Descriptions, Drawer, Empty, Input, Row, Select, Space, Table, Tag, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import type { ColumnsType } from 'antd/es/table'
 import { EyeOutlined, LinkOutlined, ReloadOutlined } from '@ant-design/icons'
 

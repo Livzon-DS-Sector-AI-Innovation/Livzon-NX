@@ -70,7 +70,10 @@ describe('automation audit facts', () => {
     api.fetchPlatformLivzonTasks.mockRejectedValue(new Error('服务不可用'))
     await act(async () => root.render(createElement(App, null, createElement(AutomationAuditFactsClient))))
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
-    expect(host.textContent).toContain('服务不可用')
+    expect(host.textContent).toContain('自动化记录加载失败')
+    const rules = [...host.querySelectorAll('button')].find((button) => button.textContent?.includes('了解访问规则'))!
+    await act(async () => rules.click())
+    expect(document.body.textContent).toContain('服务不可用')
     expect(host.textContent?.replace(/\s/g, '')).toContain('重试')
   })
 })

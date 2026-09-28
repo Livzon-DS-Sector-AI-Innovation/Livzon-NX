@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Alert, App, Button, DatePicker, Drawer, Empty, Input, Select, Space, Table, Tag, Typography } from "antd"
+import { App, Button, DatePicker, Drawer, Empty, Input, Select, Space, Table, Tag, Typography } from "antd"
+import Alert from "@/components/shared/PlatformNotice"
 import type { Dayjs } from "dayjs"
 import {
   exportRolePagePermissionHistory, getRolePagePermissionHistory,
@@ -42,7 +43,7 @@ function grantSummary(value?: Record<string, unknown> | null) {
   const scope = typeof value.scope_type === "string" ? value.scope_type : "—"
   const expiry = typeof value.sensitive_actions_expires_at === "string"
     ? new Date(value.sensitive_actions_expires_at).toLocaleString("zh-CN") : "—"
-  return `权限：${list("permissions")}；高风险动作：${list("sensitive_actions")}；数据范围：${scope}（${list("department_ids")}）；到期：${expiry}`
+  return `权限：${list("permissions")}；高风险动作：${list("sensitive_actions")}；数据范围：${scope}（${list("department_ids")}）${expiry === "—" ? "" : `；历史到期设置（已停用）：${expiry}`}`
 }
 
 function SnapshotTable({ item }: { item: PagePermissionHistoryItemOut }) {
@@ -56,7 +57,7 @@ function SnapshotTable({ item }: { item: PagePermissionHistoryItemOut }) {
       { title: "数据范围", dataIndex: "scope_type", width: 130 },
       { title: "指定部门", dataIndex: "department_ids", width: 180,
         render: (value?: string[]) => value?.join("、") || "—" },
-      { title: "高风险到期", dataIndex: "sensitive_actions_expires_at", width: 180,
+      { title: "历史到期设置（已停用）", dataIndex: "sensitive_actions_expires_at", width: 180,
         render: (value?: string | null) => value ? new Date(value).toLocaleString("zh-CN") : "—" },
     ]} />
 }

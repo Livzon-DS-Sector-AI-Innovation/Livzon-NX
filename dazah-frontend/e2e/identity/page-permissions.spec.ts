@@ -34,7 +34,7 @@ test.describe('页面最小授权', () => {
     await expect(permissionTier.getByRole('radio', { name: '普通操作' })).not.toBeChecked()
     await expect(drawer.getByRole('checkbox', { name: '作废生产批次', exact: true })).not.toBeChecked()
     await drawer.getByPlaceholder('填写角色授权调整原因').fill('调整页面只读范围')
-    await drawer.getByRole('button', { name: '预览并保存基线' }).click()
+    await drawer.getByRole('button', { name: /^保\s*存$/ }).click()
     const confirmation = page.getByRole('dialog').filter({ hasText: '确认调整页面授权测试角色的页面权限' })
     await expect(confirmation.getByRole('columnheader', { name: '调整前', exact: true })).toBeVisible()
     await expect(confirmation.getByRole('columnheader', { name: '调整后', exact: true })).toBeVisible()

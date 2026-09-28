@@ -25,10 +25,9 @@ const migratedPages = [
   '/warehouse/hardware/dashboard',
   '/warehouse/product',
   '/warehouse/ai-analysis',
-  // 系统权限五页
+  // 系统授权与权限检查
   '/system/roles',
   '/system/user-roles',
-  '/system/menus',
   '/system/dept-roles',
   '/system/permission-verification',
 ] as const

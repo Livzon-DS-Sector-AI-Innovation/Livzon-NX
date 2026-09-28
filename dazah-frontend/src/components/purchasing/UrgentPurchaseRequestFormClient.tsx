@@ -3,22 +3,8 @@
 import { useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
-import {
-  Alert,
-  App,
-  Button,
-  DatePicker,
-  Descriptions,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
-  Popconfirm,
-  Select,
-  Space,
-  Table,
-  Tag,
-} from 'antd'
+import { App, Button, DatePicker, Descriptions, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import type { FormInstance, TableProps } from 'antd'
 import {
   DeleteOutlined,

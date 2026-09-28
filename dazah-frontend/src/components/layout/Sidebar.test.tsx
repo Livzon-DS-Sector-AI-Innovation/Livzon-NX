@@ -115,8 +115,11 @@ describe('Sidebar width control', () => {
     const root = createRoot(host)
     try {
       await act(async () => root.render(createElement(Sidebar, { user, modules })))
+      expect(host.querySelector('aside')?.firstElementChild?.querySelector('h2')).not.toBeNull()
+      expect(host.querySelector('aside')?.firstElementChild?.querySelector('[aria-label="收起侧边栏"]')).not.toBeNull()
       await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="收起侧边栏"]')?.click())
       expect(host.querySelector('aside')?.classList.contains('w-11')).toBe(true)
+      expect(host.querySelector('aside')?.firstElementChild?.querySelector('h2')).toBeNull()
       expect(host.querySelector('[data-menu-key="requests"]')).toBeNull()
       expect(window.localStorage.getItem(`dazah-sidebar-collapsed:${user.id}`)).toBe('true')
       await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="展开侧边栏"]')?.click())
@@ -186,9 +189,13 @@ describe('Sidebar navigation feedback', () => {
       expect(title?.getAttribute('aria-label')).toBe(`返回${label}首页`)
       expect(title?.getAttribute('title')).toBe(`点击返回${label}首页`)
       expect(title?.getAttribute('href')).toBe(path)
-      expect(title?.className).toContain('hover:underline')
+      expect(title?.classList.contains('sidebar-module-title')).toBe(true)
+      expect(title?.className).toContain('hover:bg-[var(--color-surface)]')
       expect(title?.className).toContain('cursor-pointer')
       expect(title?.tabIndex).toBe(0)
+      expect(title?.querySelector('[aria-hidden="true"]')).not.toBeNull()
+      expect(heading?.parentElement?.className).toContain('border-b')
+      expect(heading?.parentElement?.querySelector('[aria-label="收起侧边栏"]')).not.toBeNull()
 
       await act(async () => title?.focus())
       expect(document.activeElement).toBe(title)
@@ -206,6 +213,11 @@ describe('Sidebar navigation feedback', () => {
     } finally {
       await act(async () => root.unmount())
     }
+  })
+
+  it('keeps module headings black across link states', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/app/globals.css'), 'utf8')
+    expect(styles).toMatch(/\.sidebar-module-title,\s*\.sidebar-module-title:hover,\s*\.sidebar-module-title:focus-visible\s*\{\s*color:\s*var\(--color-ink-deep\)/)
   })
 
   it('shows a live pending message until the route changes', async () => {

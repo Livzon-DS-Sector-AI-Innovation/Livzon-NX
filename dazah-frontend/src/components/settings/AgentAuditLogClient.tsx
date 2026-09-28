@@ -285,7 +285,7 @@ export default function AgentAuditLogClient() {
     <div className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h2 className="m-0 text-[20px] font-semibold text-[var(--color-charcoal)]">Livzon 对话审计</h2>
+          <h2 className="m-0 text-[20px] font-semibold text-[var(--color-charcoal)]">Livzon Agent对话审计</h2>
           <Text className="text-[13px] text-[var(--color-steel)]">
             按用户追溯对话、工具调用、确认决策和执行结果。敏感凭证不会在此显示。
           </Text>

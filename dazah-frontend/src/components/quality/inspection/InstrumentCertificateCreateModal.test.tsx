@@ -162,6 +162,9 @@ describe('InstrumentCertificateCreateModal 上传校准证书识别', () => {
     })
 
     expect(document.body.textContent).toContain('识别提示')
+    const notice = [...document.querySelectorAll<HTMLElement>('[data-platform-notice]')]
+      .find((node) => node.textContent?.includes('识别提示'))!
+    await act(async () => notice.querySelector<HTMLButtonElement>('.ant-btn-link')!.click())
     expect(document.body.textContent).toContain('周期 24 个月')
   })
 })

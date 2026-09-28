@@ -46,6 +46,7 @@ type ProductionPermissionUser = Pick<AuthUser, 'id' | 'role'> & {
     page_key: string
     permissions?: ReadonlyArray<ProductionPermissionLevel>
     sensitive_actions?: ReadonlyArray<string>
+    visible_sections?: ReadonlyArray<string> | null
     data_scope?: { scope_type: string }
   }>
 }
@@ -60,6 +61,17 @@ export function hasProductionOverviewStage(
   if (!grant?.permissions?.includes('query')) return false
   const scope = grant.data_scope?.scope_type
   return scope === 'all' || scope === `production_${stage}`
+}
+
+export function hasProductionOverviewSection(
+  user: ProductionPermissionUser | null | undefined,
+  section: string,
+): boolean {
+  if (!user) return false
+  if (user.role === 'admin') return true
+  const grant = user.page_permissions?.find((item) => item.page_key === PRODUCTION_PAGE_KEYS.overview)
+  return Boolean(grant?.permissions?.includes('query') &&
+    (grant.visible_sections == null || grant.visible_sections.includes(section)))
 }
 
 /** Pure form used by pages and tests; the server remains the final authority. */

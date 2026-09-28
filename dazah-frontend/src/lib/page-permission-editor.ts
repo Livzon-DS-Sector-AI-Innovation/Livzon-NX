@@ -1,4 +1,5 @@
 import type { components } from '@/types/generated/schema'
+import { PRODUCTION_OVERVIEW_SECTIONS, PRODUCTION_OVERVIEW_SECTION_KEYS } from '@/lib/production-overview-sections'
 import { getPermissionModuleName } from '@/lib/menu-config'
 
 export type PageLevel = 'access' | 'query' | 'operate'
@@ -83,9 +84,9 @@ export type PageEditorGrant = {
   mode?: 'inherit' | 'custom'
   permissions: PageLevel[]
   sensitiveActions: string[]
-  sensitiveActionsExpiresAt?: string | null
   scopeType: string
   departmentIds: string[]
+  visibleSections?: string[] | null
 }
 
 export type PageGrantChangeKind = 'grant' | 'expand' | 'restrict' | 'revoke' | 'mixed' | 'source'
@@ -97,23 +98,26 @@ export type PageGrantChange = {
   kind: PageGrantChangeKind
 }
 
-function grantFacts(grant: PageEditorGrant): Set<string> {
+function grantFacts(grant: PageEditorGrant, pageKey?: string): Set<string> {
   return new Set([
     ...grant.permissions.map((permission) => `permission:${permission}`),
     ...grant.sensitiveActions.map((action) => `action:${action}`),
+    ...(pageKey === 'production:overview'
+      ? (grant.visibleSections ?? PRODUCTION_OVERVIEW_SECTION_KEYS).map((section) => `section:${section}`)
+      : []),
   ])
 }
 
-export function pageGrantChangeKind(before: PageEditorGrant, after: PageEditorGrant): PageGrantChangeKind {
-  const previous = grantFacts(before)
-  const next = grantFacts(after)
+export function pageGrantChangeKind(before: PageEditorGrant, after: PageEditorGrant, pageKey?: string): PageGrantChangeKind {
+  const previous = grantFacts(before, pageKey)
+  const next = grantFacts(after, pageKey)
   const added = [...next].some((fact) => !previous.has(fact))
   const removed = [...previous].some((fact) => !next.has(fact))
   if (added && !removed) return previous.size ? 'expand' : 'grant'
   if (removed && !added) return next.size ? 'restrict' : 'revoke'
   if (added || removed || before.scopeType !== after.scopeType ||
-    before.sensitiveActionsExpiresAt !== after.sensitiveActionsExpiresAt ||
-    JSON.stringify([...before.departmentIds].sort()) !== JSON.stringify([...after.departmentIds].sort())) return 'mixed'
+    JSON.stringify([...before.departmentIds].sort()) !== JSON.stringify([...after.departmentIds].sort()) ||
+    JSON.stringify(before.visibleSections?.slice().sort() ?? null) !== JSON.stringify(after.visibleSections?.slice().sort() ?? null)) return 'mixed'
   return 'source'
 }
 
@@ -132,6 +136,7 @@ export function pageGrantChanges(
     ...grant, permissions: [...grant.permissions].sort(),
     sensitiveActions: [...grant.sensitiveActions].sort(),
     departmentIds: grant.scopeType === 'departments' ? [...grant.departmentIds].sort() : [],
+    visibleSections: grant.visibleSections?.slice().sort() ?? null,
   })
   return definitions.flatMap((definition) => {
     const oldGrant = before[definition.page_key]
@@ -144,11 +149,12 @@ export function pageGrantChanges(
         ? '全部生产数据' : scopes[grant.scopeType] || '未配置范围') : '',
       PAGE_DATA_SCOPE_VISIBLE && grant.scopeType === 'departments' ? grant.departmentIds.map((id) => departmentNames.get(id) || '已失效部门').join('、') : '',
       ...grant.sensitiveActions.map((key) => definition.sensitive_actions?.find((action) => action.key === key)?.name || '已失效业务动作'),
-      grant.sensitiveActions.length && grant.sensitiveActionsExpiresAt
-        ? `到期：${new Date(grant.sensitiveActionsExpiresAt).toLocaleString('zh-CN')}` : '',
+      definition.page_key === 'production:overview' ? `可见项：${grant.visibleSections == null ? '全部' : grant.visibleSections.map((key) =>
+        PRODUCTION_OVERVIEW_SECTIONS.find((item) => item.key === key)?.label || key,
+      ).join('、') || '无'}` : '',
     ].filter(Boolean).join('；')
     return [{ pageKey: definition.page_key,
       pageName: `${getPermissionModuleName(definition.module_code)} · ${definition.page_name}`,
-      before: describe(oldGrant), after: describe(newGrant), kind: pageGrantChangeKind(oldGrant, newGrant) }]
+      before: describe(oldGrant), after: describe(newGrant), kind: pageGrantChangeKind(oldGrant, newGrant, definition.page_key) }]
   })
 }

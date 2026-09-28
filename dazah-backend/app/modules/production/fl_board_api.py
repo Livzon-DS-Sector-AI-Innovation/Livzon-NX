@@ -279,6 +279,9 @@ async def get_fl_board(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> Any:
+    from app.modules.production.overview_visibility import require_overview_section
+
+    require_overview_section("FL")
     now = datetime.now(BEIJING_TZ).replace(tzinfo=None)
     month_str = month or now.strftime("%Y-%m")
     year, month_no = (int(part) for part in month_str.split("-"))

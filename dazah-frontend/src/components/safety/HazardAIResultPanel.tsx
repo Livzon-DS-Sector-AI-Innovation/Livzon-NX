@@ -1,17 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import {
-  Card,
-  Button,
-  Typography,
-  Alert,
-  Select,
-  Input,
-  Row,
-  Col,
-  App,
-} from 'antd'
+import { Card, Button, Typography, Select, Input, Row, Col, App } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import {
   CheckCircleOutlined,
   EditOutlined,

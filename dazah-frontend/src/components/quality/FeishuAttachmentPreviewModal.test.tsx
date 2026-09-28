@@ -187,6 +187,9 @@ describe('FeishuAttachmentPreviewModal', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
     expect(document.body.textContent).toContain('文本内容加载失败')
+    const rules = [...document.querySelectorAll<HTMLButtonElement>('[data-platform-notice] button')]
+      .find((button) => button.textContent?.includes('了解访问规则'))!
+    await act(async () => rules.click())
     expect(document.body.textContent).toContain('请点击下方按钮下载原文件查看')
     vi.unstubAllGlobals()
   })

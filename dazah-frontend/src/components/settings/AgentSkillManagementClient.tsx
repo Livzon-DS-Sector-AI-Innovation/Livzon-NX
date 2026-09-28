@@ -227,9 +227,7 @@ export default function AgentSkillManagementClient() {
     <div className="space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="m-0 text-[20px] font-semibold text-[var(--color-charcoal)]">
-            Livzon Skill 管理
-          </h2>
+          <h3 className="m-0 text-[20px] font-semibold text-[var(--color-charcoal)]">Skill 列表</h3>
           <Text className="text-[13px] text-[var(--color-steel)]">
             管理助手渐进式披露的 Skill。普通用户只能使用，不能创建或修改。
           </Text>

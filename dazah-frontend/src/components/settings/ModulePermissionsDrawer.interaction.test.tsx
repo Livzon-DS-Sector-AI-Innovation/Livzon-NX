@@ -55,6 +55,32 @@ it('auto-expands high risk pages without granting actions and displays editable 
   })] }))
 })
 
+it('saves a high risk user override without an expiry', async () => {
+  const data = result('A')
+  data.definitions![0].sensitive_actions = [{ key: 'delete', name: '删除员工档案', category: 'destructive', description: '删除员工记录' }]
+  data.custom_page_keys = ['hr:employee-management:profile']
+  data.grants = [{ page_key: 'hr:employee-management:profile', module_code: 'hr', source: 'user',
+    permissions: ['operate'], sensitive_actions: [], data_scope: { scope_type: 'department_tree' } }]
+  mocks.get.mockResolvedValue(data)
+  mocks.replace.mockResolvedValue({ ok: true, data })
+  await show('A')
+  await act(async () => document.querySelector<HTMLInputElement>('input[value="delete"]')!.click())
+  expect(document.body.textContent).not.toContain('高风险权限需要有效期限')
+  expect(button('撤销高风险权限')).toBeTruthy()
+  expect([...document.querySelectorAll('button')].some((item) => item.textContent?.includes('续期'))).toBe(false)
+  const input = document.querySelector<HTMLInputElement>('input[placeholder="填写授权调整原因"]')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '职责调整')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => button('预览并保存授权').click())
+  const confirmation = mocks.confirm.mock.lastCall![0] as { onOk: () => Promise<void> | void }
+  await act(async () => { await confirmation.onOk() })
+  const grant = mocks.replace.mock.lastCall![1].grants[0]
+  expect(grant.sensitive_actions).toEqual(['delete'])
+  expect(grant).not.toHaveProperty('sensitive_actions_expires_at')
+})
+
 it('limits batch changes to the current search result', async () => {
   const data = result('A')
   data.definitions!.push({ ...data.definitions![0], page_key: 'hr:other', page_name: '其他页面' })

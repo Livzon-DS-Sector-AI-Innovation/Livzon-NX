@@ -39,6 +39,8 @@ it('rejects empty, stale and unsupported editable data scopes', () => {
 
 it('classifies grant impact for review', () => {
   expect(pageGrantChangeKind(before, { ...before, mode: 'custom' })).toBe('source')
+  expect(pageGrantChangeKind({ ...before, visibleSections: null },
+    { ...before, visibleSections: ['MC'] }, 'production:overview')).toBe('restrict')
   expect(pageGrantChangeKind(before, { ...before, permissions: ['access', 'query', 'operate'] })).toBe('expand')
   expect(pageGrantChangeKind(before, { ...before, permissions: [] })).toBe('revoke')
   expect(pageGrantChangeKind(

@@ -12,6 +12,7 @@ from app.platform.identity.data_scope import (
     current_page_actor,
     current_page_data_scope,
     current_page_key,
+    current_page_visible_sections,
 )
 from app.platform.identity.models import User
 from app.platform.identity.page_permissions import PagePermissionService
@@ -127,6 +128,7 @@ def require_module_view(module_code: str) -> Callable[..., Awaitable[User]]:
         current_page_data_scope.set(None)
         current_page_actor.set(None)
         current_page_key.set(None)
+        current_page_visible_sections.set(None)
         if getattr(user, "role", None) == "admin":
             current_page_actor.set(user)
             # Full authority does not remove the business page context: reviewed
@@ -225,6 +227,15 @@ def require_module_view(module_code: str) -> Callable[..., Awaitable[User]]:
                 status.HTTP_403_FORBIDDEN,
                 f"未获授权在页面“{definition.page_name}”执行当前业务请求",
             )
+        if page_key == "production:overview" and grant.visible_sections is not None:
+            # Shared production routes can accept a product even when their
+            # original page binding predates overview section permissions.
+            product = request.query_params.get("product") or request.query_params.get(
+                "product_code"
+            )
+            if product in {"MC", "LN", "DR", "FA", "LV", "MV", "TY", "FL"}:
+                if product not in grant.visible_sections:
+                    raise HTTPException(403, "未获授权查看生产管理概览中的该产品")
         sensitive_action = binding.sensitive_action
         if binding.action_selector is not None:
             selector = binding.action_selector
@@ -254,6 +265,7 @@ def require_module_view(module_code: str) -> Callable[..., Awaitable[User]]:
         current_page_data_scope.set(grant.data_scope.model_dump())
         current_page_actor.set(user)
         current_page_key.set(page_key)
+        current_page_visible_sections.set(grant.visible_sections)
         return user
 
     setattr(_require_module_view, "_dazah_module_code", module_code)

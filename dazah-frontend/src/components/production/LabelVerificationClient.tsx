@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import {Table, Input, Select, DatePicker, Button, Space, Tag, Card, Statistic, Row, Col, Modal, App, Form, InputNumber, Checkbox, Upload, Alert, Descriptions} from 'antd'
+import { Table, Input, Select, DatePicker, Button, Space, Tag, Card, Statistic, Row, Col, Modal, App, Form, InputNumber, Checkbox, Upload, Descriptions } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import {SearchOutlined, CheckCircleOutlined, CloseCircleOutlined, BarChartOutlined, PlusOutlined, UploadOutlined, LoadingOutlined, RobotOutlined,} from '@ant-design/icons'
 import { LabelVerification, LabelVerificationCreateInput } from '@/types/label-verification'
 import { fetchLabelVerifications, fetchLabelVerificationStatistics, createLabelVerification, autoCompareVideo, AutoCompareResult } from '@/lib/api/label-verification'

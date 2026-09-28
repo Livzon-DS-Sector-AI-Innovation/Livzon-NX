@@ -207,3 +207,88 @@ async def test_operation_detail_includes_correlated_business_change() -> None:
     assert events[0]["action"] == "update_quality_item"
     assert events[0]["old_value"] == {"status": "draft", "password": "***"}
     assert events[0]["new_value"] == {"status": "approved"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("linked", [True, False])
+@pytest.mark.parametrize("has_metadata", [True, False])
+async def test_permission_detail_uses_only_correlated_request_metadata(
+    linked: bool,
+    has_metadata: bool,
+) -> None:
+    log = _log(
+        action="view_user_module_permissions", resource_type="user_module_permissions"
+    )
+    log.user_id = uuid.uuid4()
+    log.request_id = "permission-request" if linked else None
+    log.new_value = {"grants": [], "password": "hidden"}
+    if not has_metadata:
+        log.method = None
+    if has_metadata:
+        log.duration_ms = 0
+        log.ip_address = "192.0.2.1"
+        log.user_agent = "event-client"
+    operation = _log(action="platform_api_request", resource_type="identity")
+    operation.duration_ms = 42
+    operation.ip_address = "127.0.0.1"
+    operation.user_agent = "request-client"
+    operation.path = "/api/v1/identity/users/{user_id}/module-permissions"
+    operation.status_code = 200
+    statements: list[Any] = []
+
+    class QuerySession:
+        async def execute(self, _statement: Any) -> Any:
+            return SimpleNamespace(one_or_none=lambda: (log, "审计用户", "audit"))
+
+        async def scalar(self, statement: Any) -> AuditLog:
+            statements.append(statement)
+            return operation
+
+    detail = await GeneralAuditLogService().get_log(QuerySession(), log_id=log.id)
+    assert detail is not None
+    assert detail.request_id == log.request_id
+    assert detail.new_value == {"grants": [], "password": "***"}
+    assert detail.duration_ms == (0 if has_metadata else 42 if linked else None)
+    assert detail.ip_address == (
+        "192.0.2.1" if has_metadata else "127.0.0.1" if linked else None
+    )
+    assert detail.user_agent == (
+        "event-client" if has_metadata else "request-client" if linked else None
+    )
+    assert detail.method == ("GET" if has_metadata or linked else None)
+    assert detail.path == (operation.path if linked else None)
+    assert detail.status_code == (200 if linked else None)
+    if statements:
+        sql = str(
+            statements[0].compile(
+                dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+            )
+        )
+        assert "permission-request" in sql
+        assert "platform_api_request" in sql
+        assert str(log.user_id) in sql
+        assert "LIMIT 1" in sql
+    else:
+        assert not linked
+
+
+@pytest.mark.asyncio
+async def test_permission_detail_handles_missing_related_operation() -> None:
+    log = _log(
+        action="view_user_module_permissions", resource_type="user_module_permissions"
+    )
+    log.request_id = "expired-operation"
+
+    class QuerySession:
+        async def execute(self, _statement: Any) -> Any:
+            return SimpleNamespace(one_or_none=lambda: (log, None, None))
+
+        async def scalar(self, _statement: Any) -> None:
+            return None
+
+    detail = await GeneralAuditLogService().get_log(QuerySession(), log_id=log.id)
+    assert detail is not None
+    assert detail.request_id == "expired-operation"
+    assert detail.duration_ms is None
+    assert detail.ip_address is None
+    assert detail.user_agent is None

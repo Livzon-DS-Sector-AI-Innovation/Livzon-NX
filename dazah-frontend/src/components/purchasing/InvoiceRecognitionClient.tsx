@@ -3,17 +3,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Key } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import {
-  Alert,
-  App,
-  Button,
-  Input,
-  Popconfirm,
-  Switch,
-  Table,
-  Tag,
-  Upload,
-} from 'antd'
+import { App, Button, Input, Popconfirm, Switch, Table, Tag, Upload } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import type { UploadProps } from 'antd'
 import {
   DeleteOutlined,

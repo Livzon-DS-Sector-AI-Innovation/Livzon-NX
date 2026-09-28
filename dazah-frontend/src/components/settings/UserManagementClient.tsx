@@ -1,21 +1,12 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import {
-  App,
-  Button,
-  Form,
-  Input,
-  Modal,
-  Popconfirm,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
-} from 'antd'
+import { useSearchParams } from 'next/navigation'
+import { App, Button, Dropdown, Form, Input, Modal, Select, Space, Table, Tag, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import {
   LockOutlined,
+  MoreOutlined,
   PlusOutlined,
   ReloadOutlined,
   TeamOutlined,
@@ -48,29 +39,51 @@ const statusOptions = [
 
 export default function UserManagementClient() {
   const { message, modal } = App.useApp()
+  const searchParams = useSearchParams()
+  const keyword = searchParams.get('q')?.trim() || ''
+  const requestedPage = Number(searchParams.get('page'))
+  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1
+  const requestedSize = Number(searchParams.get('size'))
+  const pageSize = [10, 20, 50].includes(requestedSize) ? requestedSize : 10
   const [users, setUsers] = useState<UserManagementItem[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<UserManagementItem | null>(null)
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [passwordUser, setPasswordUser] = useState<UserManagementItem | null>(null)
-  const [keyword, setKeyword] = useState('')
+  const [searchDraft, setSearchDraft] = useState({ keyword, value: keyword })
   const [form] = Form.useForm()
   const [passwordForm] = Form.useForm()
 
+  const searchText = searchDraft.keyword === keyword ? searchDraft.value : keyword
+
+  const updateListUrl = (nextKeyword: string, nextPage: number, nextSize = pageSize) => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', 'users')
+    if (nextKeyword) params.set('q', nextKeyword)
+    else params.delete('q')
+    if (nextPage > 1) params.set('page', String(nextPage))
+    else params.delete('page')
+    if (nextSize !== 10) params.set('size', String(nextSize))
+    else params.delete('size')
+    window.history.replaceState(null, '', `/settings?${params.toString()}`)
+  }
+
   const loadUsers = useCallback(async () => {
     setLoading(true)
+    setLoadError(false)
     try {
       const result = await getUsers({ keyword: keyword || undefined })
       setUsers(result.items || [])
     } catch (error) {
       console.error(error)
-      message.error('加载用户失败')
+      setLoadError(true)
     } finally {
       setLoading(false)
     }
-  }, [keyword, message])
+  }, [keyword])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => void loadUsers(), 0)
@@ -164,7 +177,20 @@ export default function UserManagementClient() {
       loadUsers()
     } catch (error) {
       if (error instanceof Error) message.error(error.message)
+      throw error
     }
+  }
+
+  const confirmStatus = (record: UserManagementItem) => {
+    const disabling = record.status === 'active'
+    modal.confirm({
+      title: `确认${disabling ? '禁用' : '启用'}${record.name}？`,
+      content: disabling ? '禁用后，该用户将无法继续登录。' : '启用后，该用户可恢复登录。',
+      okText: disabling ? '确认禁用' : '确认启用',
+      okButtonProps: { danger: disabling },
+      cancelText: '取消',
+      onOk: () => handleStatus(record),
+    })
   }
 
   const handleResetPassword = async () => {
@@ -219,13 +245,13 @@ export default function UserManagementClient() {
     {
       title: '部门',
       dataIndex: 'department',
-      width: 160,
+      width: 150,
       render: (department: string | null) => department || '-',
     },
     {
       title: '职位',
       dataIndex: 'position',
-      width: 160,
+      width: 150,
       render: (position: string | null) => position || '-',
     },
     {
@@ -239,30 +265,34 @@ export default function UserManagementClient() {
     {
       title: '操作',
       key: 'actions',
-      width: 250,
+      width: 150,
       fixed: 'right' as const,
       render: (_: unknown, record: UserManagementItem) => (
-        <Space>
+        <Space size={4}>
           <Button size="small" onClick={() => handleEdit(record)}>
             编辑
           </Button>
-          <Button
-            size="small"
-            icon={<LockOutlined />}
-            onClick={() => setPasswordUser(record)}
+          <Dropdown
+            trigger={['click']}
+            menu={{
+              items: [
+                { key: 'password', label: '重置密码', icon: <LockOutlined /> },
+                {
+                  key: 'status',
+                  label: record.status === 'active' ? '禁用用户' : '启用用户',
+                  danger: record.status === 'active',
+                },
+              ],
+              onClick: ({ key }) => {
+                if (key === 'password') setPasswordUser(record)
+                if (key === 'status') confirmStatus(record)
+              },
+            }}
           >
-            重置密码
-          </Button>
-          <Popconfirm
-            title={record.status === 'active' ? '确认禁用该用户？' : '确认启用该用户？'}
-            onConfirm={() => handleStatus(record)}
-            okText="确定"
-            cancelText="取消"
-          >
-            <Button size="small" danger={record.status === 'active'}>
-              {record.status === 'active' ? '禁用' : '启用'}
+            <Button size="small" icon={<MoreOutlined />} aria-label={`${record.name}的更多操作`}>
+              更多
             </Button>
-          </Popconfirm>
+          </Dropdown>
         </Space>
       ),
     },
@@ -270,21 +300,25 @@ export default function UserManagementClient() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <h2 className="m-0 text-[20px] font-semibold text-[var(--color-charcoal)]">
-            用户管理
-          </h2>
+          <h3 className="m-0 text-[20px] font-semibold text-[var(--color-charcoal)]">用户列表</h3>
           <Text className="text-[13px] text-[var(--color-steel)]">
             管理开发阶段本地账号，并为飞书 SSO 用户分配平台角色。
           </Text>
         </div>
-        <Space>
+        <div className="flex w-full flex-wrap items-center gap-2 xl:w-auto">
           <Input.Search
             allowClear
             placeholder="搜索姓名、账号、邮箱"
-            onSearch={(value) => setKeyword(value)}
-            style={{ width: 260 }}
+            value={searchText}
+            onChange={(event) => setSearchDraft({ keyword, value: event.target.value })}
+            onSearch={(value) => {
+              const nextKeyword = value.trim()
+              setSearchDraft({ keyword: nextKeyword, value: nextKeyword })
+              updateListUrl(nextKeyword, 1)
+            }}
+            className="w-full sm:w-[260px]"
           />
           <Button icon={<ReloadOutlined />} onClick={loadUsers}>
             刷新
@@ -299,16 +333,27 @@ export default function UserManagementClient() {
           <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
             新建用户
           </Button>
-        </Space>
+        </div>
       </div>
+
+      {loadError && (
+        <Alert type="error" showIcon title="用户列表加载失败" description="请重试，当前列表可能不是最新数据。" action={<Button onClick={() => void loadUsers()}>重试</Button>} />
+      )}
 
       <Table
         columns={columns}
         dataSource={users}
         rowKey="id"
         loading={loading}
-        scroll={{ x: 1050 }}
-        pagination={{ pageSize: 10 }}
+        scroll={{ x: 990 }}
+        locale={{ emptyText: keyword ? '没有符合条件的用户' : '暂无用户' }}
+        pagination={{
+          current: Math.min(page, Math.max(1, Math.ceil(users.length / pageSize))),
+          pageSize,
+          pageSizeOptions: ['10', '20', '50'],
+          showSizeChanger: true,
+          onChange: (nextPage, nextSize) => updateListUrl(keyword, nextPage, nextSize),
+        }}
       />
 
       <Modal

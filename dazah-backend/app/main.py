@@ -205,11 +205,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_registry = SchedulerRegistry()
     scheduler_engine = SchedulerEngine(scheduler_registry)
 
-    from app.platform.identity.page_permission_expiry import (
-        sensitive_page_permission_expiry_task,
-    )
-
-    scheduler_registry.register_task(sensitive_page_permission_expiry_task)
     from app.platform.audit.retention import user_operation_retention_task
 
     scheduler_registry.register_task(user_operation_retention_task)

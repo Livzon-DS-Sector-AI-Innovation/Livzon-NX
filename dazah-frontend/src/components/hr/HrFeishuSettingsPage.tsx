@@ -1,24 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  Alert,
-  App,
-  Button,
-  Card,
-  Collapse,
-  Drawer,
-  Form,
-  Input,
-  Modal,
-  Select,
-  Space,
-  Switch,
-  Table,
-  Tag,
-  Typography,
-  Upload,
-} from 'antd'
+import { App, Button, Card, Collapse, Drawer, Form, Input, Modal, Select, Space, Switch, Table, Tag, Typography, Upload } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import {
   LinkOutlined,
   ReloadOutlined,

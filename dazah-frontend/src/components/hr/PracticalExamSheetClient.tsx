@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Alert, App, Button, Input, Space, Upload } from 'antd'
+import { App, Button, Input, Space, Upload } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { DownloadOutlined, UploadOutlined } from '@ant-design/icons'
 import type { ExportedDoc, TrainingDocExporter, TrainingSessionData } from '@/types/hr'
 import { upsertTrainingSession, upsertTrainingDocument, generatePracticalExamResult, importPracticalExamQuestions } from '@/actions/hr'

@@ -2,21 +2,8 @@
 
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import Link from 'next/link'
-import {
-  Table,
-  Button,
-  Input,
-  Select,
-  message,
-  Typography,
-  Modal,
-  Descriptions,
-  Alert,
-  App,
-  Space,
-  Checkbox,
-  Popover,
-} from 'antd'
+import { Table, Button, Input, Select, message, Typography, Modal, Descriptions, App, Space, Checkbox, Popover } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import type { ColumnsType } from 'antd/es/table'
 import {
   PlusOutlined,

@@ -47,7 +47,7 @@ const authStore = vi.hoisted(() => {
       name: '测试用户',
       role: 'admin' as string,
       permissions: ['*'] as string[],
-      page_permissions: [] as Array<{ page_key: string; permissions: Array<'access' | 'query' | 'operate'>; data_scope: { scope_type: string } }>,
+      page_permissions: [] as Array<{ page_key: string; permissions: Array<'access' | 'query' | 'operate'>; data_scope: { scope_type: string }; visible_sections?: string[] | null }>,
     },
   }
   return {
@@ -477,6 +477,20 @@ describe('ProductionHomePage (fermentation board)', () => {
     const text = (container.textContent || '') + (document.body.textContent || '')
     expect(text).toContain('产销计划')
     expect(text).toContain('暂无销售计划数据，请先完成飞书同步设置并同步')
+  })
+
+  it('hides revoked product tabs and sales plan card', async () => {
+    authStore.state.user.role = 'user'
+    authStore.state.user.permissions = []
+    authStore.state.user.page_permissions = [{ page_key: 'production:overview',
+      permissions: ['access', 'query'], data_scope: { scope_type: 'all' },
+      visible_sections: ['MC'] }]
+    useProductContextStore.setState({ productCode: 'SUMMARY' })
+    await render()
+    expect(container.querySelector('[data-testid="nav-block:MC"]')).toBeTruthy()
+    expect(container.querySelector('[data-testid="nav-block:FA"]')).toBeNull()
+    expect(container.textContent).not.toContain('产销计划')
+    expect(actions.getSalesPlanDetails).not.toHaveBeenCalled()
   })
 
   it('renders the FL batch-flow view instead of the fermentation board', async () => {

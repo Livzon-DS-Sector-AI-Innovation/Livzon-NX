@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Alert, App, Button, Modal, Space, Table, Typography, Upload } from 'antd'
+import { App, Button, Modal, Space, Table, Typography, Upload } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import type { UploadProps } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
 import { importPurchaseRequestTable } from '@/actions/purchasing'

@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { App, Alert, Button, Card, Col, Row, Select, Space, Statistic, Table, Tag, Tooltip } from 'antd'
+import { App, Button, Card, Col, Row, Select, Space, Statistic, Table, Tag, Tooltip } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import type { ColumnsType } from 'antd/es/table'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { LinkOutlined, MessageOutlined, RightOutlined, ThunderboltOutlined } from '@ant-design/icons'

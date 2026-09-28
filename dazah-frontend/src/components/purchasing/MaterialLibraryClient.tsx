@@ -1,18 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  Alert,
-  App,
-  Button,
-  Card,
-  Input,
-  Progress,
-  Space,
-  Statistic,
-  Table,
-  Tag,
-} from 'antd'
+import { App, Button, Card, Input, Progress, Space, Statistic, Table, Tag } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import type { TableProps } from 'antd'
 import { ReloadOutlined, SearchOutlined, SyncOutlined } from '@ant-design/icons'
 import { fetchMaterialCatalog, fetchMaterialSourceConfig } from '@/lib/api/purchasing'

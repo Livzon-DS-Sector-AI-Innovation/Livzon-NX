@@ -225,6 +225,10 @@ def _grant_payload(grants: list[Any]) -> list[dict[str, Any]]:
             "page_key": grant.page_key,
             "permissions": list(grant.permissions or []),
             "sensitive_actions": list(grant.sensitive_actions or []),
+            "visible_sections": (
+                None if getattr(grant, "visible_sections", None) is None
+                else list(grant.visible_sections)
+            ),
             "sensitive_actions_expires_at": (
                 grant.sensitive_actions_expires_at.isoformat()
                 if getattr(grant, "sensitive_actions_expires_at", None)
@@ -243,7 +247,7 @@ def _snapshot_inputs(grants: list[dict[str, Any]]) -> list[PageGrantInput]:
             page_key=str(grant["page_key"]),
             permissions=list(grant.get("permissions") or []),
             sensitive_actions=list(grant.get("sensitive_actions") or []),
-            sensitive_actions_expires_at=grant.get("sensitive_actions_expires_at"),
+            visible_sections=grant.get("visible_sections"),
             data_scope=PageDataScopeInput(
                 scope_type=grant.get("scope_type", "department_tree"),
                 department_ids=list(grant.get("department_ids") or []),

@@ -1,4 +1,5 @@
 'use client'
+import PlatformNotice from '@/components/shared/PlatformNotice'
 // 全链路追溯页面 — DR 多拉菌素批次血链横向流程图 + 收率递推 + 断链标注 + 分析面板
 // 数据源：/api/v1/production/dr（六工段表隐式关联，无 batch_lineage 血链表）
 
@@ -377,9 +378,8 @@ const LOSS_COLORS = { green: '#52c41a', yellow: '#faad14', red: '#f5222d' }
 function LossFunnelCard({ data }: { data: any }) {
   if (!data || !data.layers || data.layers.length === 0) {
     return (
-      <Card size="small" style={{ marginTop: 12, background: '#fffbe6', borderColor: '#ffe58f' }}>
-        <Text type="secondary">未找到层析湿粉起点（数据未闭合或非 DR 批次）</Text>
-      </Card>
+      <PlatformNotice type="warning" style={{ marginTop: 12 }}
+        title="未找到层析湿粉起点（数据未闭合或非 DR 批次）" />
     )
   }
   const layers = data.layers
@@ -756,11 +756,9 @@ function TraceabilityPage() {
             </Card>
             {/* ── 断链清单 ── */}
             {traceData.broken_links && traceData.broken_links.length > 0 && (
-              <Card size="small" style={{ marginTop: 12, borderColor: '#ffccc7', background: '#fff1f0' }}>
-                <Space orientation="vertical" style={{ width: '100%' }}>
-                  <Text strong style={{ color: '#cf1322' }}>
-                    <ReloadOutlined /> 断链清单（{traceData.broken_links.length} 处）— 投料无源头 / 回收粉标签
-                  </Text>
+              <PlatformNotice type="error" style={{ marginTop: 12 }}
+                title={`发现 ${traceData.broken_links.length} 处断链：投料无源头或回收粉标签`}
+                description={
                   <Space wrap>
                     {traceData.broken_links.map((b: any, i: number) => (
                       <Tag key={i} color="red" style={{ fontSize: 11 }}>
@@ -768,8 +766,7 @@ function TraceabilityPage() {
                       </Tag>
                     ))}
                   </Space>
-                </Space>
-              </Card>
+                } />
             )}
             <CumulativeYieldBar stages={traceData.stages} />
             {/* ── 全程损耗漏斗（层析湿粉 → 干粉逐段对账） ── */}

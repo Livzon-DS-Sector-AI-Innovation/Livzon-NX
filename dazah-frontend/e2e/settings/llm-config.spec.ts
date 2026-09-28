@@ -3,10 +3,10 @@ import { expect, test, type Page } from '@playwright/test'
 async function openLLMSettings(page: Page) {
   await page.goto('/settings?auth_token=e2e-admin')
   await page.waitForLoadState('networkidle')
-  const llmTab = page.getByRole('tab', { name: 'LLM 模型配置' })
+  const llmTab = page.getByRole('link', { name: 'LLM 模型配置', exact: true })
   await expect(async () => {
     await llmTab.click()
-    await expect(llmTab).toHaveAttribute('aria-selected', 'true')
+    await expect(llmTab).toHaveAttribute('aria-current', 'page')
   }).toPass({ timeout: 15_000 })
   await expect(page.getByText('现有测试配置')).toBeVisible()
 }

@@ -204,6 +204,9 @@ describe('QualityNotificationSettingsPanel', () => {
     )
     await renderPanel()
     expect(document.body.textContent).toContain('通知设置加载失败')
+    const rules = [...document.querySelectorAll<HTMLButtonElement>('[data-platform-notice] button')]
+      .find((button) => button.textContent?.includes('了解访问规则'))!
+    await act(async () => rules.click())
     expect(document.body.textContent).toContain('通知服务不可用')
   })
 

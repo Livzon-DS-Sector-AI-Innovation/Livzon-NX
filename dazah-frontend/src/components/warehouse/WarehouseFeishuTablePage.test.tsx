@@ -65,7 +65,9 @@ vi.mock('@/actions/warehouse', () => ({
   deleteWarehouseRecordAction: mocks.deleteWarehouseRecordAction,
   updateWarehouseRecordAction: mocks.updateWarehouseRecordAction,
 }))
-vi.mock('@ant-design/icons', () => {
+vi.mock('@ant-design/icons', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@ant-design/icons')>()
+  const businessMock = await (() => {
   const Icon = () => null
   return {
     ClockCircleOutlined: Icon,
@@ -75,8 +77,12 @@ vi.mock('@ant-design/icons', () => {
     ImportOutlined: Icon,
     ReloadOutlined: Icon,
   }
+})()
+  return { ...actual, ...businessMock }
 })
-vi.mock('antd', async () => {
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd')>()
+  const businessMock = await (async () => {
   const React = await import('react')
   const Wrapper = ({ children, ...props }: { children?: ReactNode } & Record<string, unknown>) =>
     React.createElement('div', props, children)
@@ -162,6 +168,8 @@ vi.mock('antd', async () => {
     Table,
     Tag,
   }
+})()
+  return { ...actual, ...businessMock, Alert: actual.Alert, theme: actual.theme, Typography: actual.Typography }
 })
 
 import {

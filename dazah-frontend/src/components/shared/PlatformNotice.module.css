@@ -1,0 +1,80 @@
+.notice:global(.ant-alert) {
+  align-items: center;
+  flex-wrap: wrap;
+  container-type: inline-size;
+  container-name: platform-notice;
+  min-width: 0;
+}
+
+.notice :global(.ant-alert-content),
+.notice :global(.ant-alert-section) {
+  min-width: 0;
+  flex: 1 1 min(200px, calc(100% - 32px));
+}
+
+.summary {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: var(--ant-font-size);
+  font-weight: 400;
+  line-height: var(--ant-line-height);
+}
+
+.notice :global(.ant-alert-icon) {
+  margin-inline-end: 12px;
+  font-size: var(--ant-font-size-lg);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.notice .rulesButton:global(.ant-btn) {
+  height: auto;
+  padding-inline: 0;
+  white-space: nowrap;
+}
+
+.details {
+  max-height: min(60vh, 560px);
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+
+.description {
+  white-space: pre-wrap;
+}
+
+.details .accessNote {
+  margin: 16px 0 0;
+}
+
+@media (max-width: 575px) {
+  .notice:global(.ant-alert) {
+    flex-wrap: wrap;
+  }
+
+  .notice:global(.ant-alert) :global(.ant-alert-actions) {
+    width: 100%;
+    margin: 8px 0 0 30px;
+  }
+
+  .actions {
+    justify-content: flex-start;
+  }
+}
+
+@container platform-notice (max-width: 480px) {
+  .notice :global(.ant-alert-actions) {
+    width: 100%;
+    margin: 8px 0 0 30px;
+  }
+
+  .actions {
+    justify-content: flex-start;
+  }
+}

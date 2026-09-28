@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, Button, Space, Tag, Table, Form, Input, Select, App, Tabs, Alert, Row, Col, Statistic } from 'antd'
+import { Card, Button, Space, Tag, Table, Form, Input, Select, App, Tabs, Row, Col, Statistic } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { CheckCircleOutlined, PlusOutlined, DeleteOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
 import type { QualityStandardSet, QualityStandard, TestMethod, DOEExperiment, ImpurityStudy, CrystalFormStudy } from '@/types/rd'
 

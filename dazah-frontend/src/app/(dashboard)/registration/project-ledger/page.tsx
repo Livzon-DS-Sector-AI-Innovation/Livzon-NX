@@ -1,4 +1,5 @@
-import { Alert, Space } from 'antd'
+import { Space } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 
 import { ProjectLedgerDashboardPage } from '@/components/registration'
 import {

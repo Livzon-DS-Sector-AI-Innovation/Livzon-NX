@@ -1,6 +1,7 @@
 'use client'
 
-import { App, Alert, Space } from 'antd'
+import { App, Space } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 

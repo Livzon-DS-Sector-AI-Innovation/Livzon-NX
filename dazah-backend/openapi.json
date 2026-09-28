@@ -30382,21 +30382,6 @@
             "title": "Role Sources",
             "type": "array"
           },
-          "sensitive_action_expirations": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "title": "Sensitive Action Expirations",
-            "type": "object"
-          },
           "sensitive_actions": {
             "items": {
               "type": "string"
@@ -30420,6 +30405,20 @@
             },
             "title": "Source Role Names",
             "type": "array"
+          },
+          "visible_sections": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Sections"
           }
         },
         "required": [
@@ -55428,17 +55427,20 @@
             "title": "Sensitive Actions",
             "type": "array"
           },
-          "sensitive_actions_expires_at": {
+          "visible_sections": {
             "anyOf": [
               {
-                "format": "date-time",
-                "type": "string"
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 9,
+                "type": "array"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Sensitive Actions Expires At"
+            "title": "Visible Sections"
           }
         },
         "required": [
@@ -55505,10 +55507,7 @@
               "retired_page",
               "invalid_department",
               "missing_module_access",
-              "redundant_user_override",
-              "sensitive_without_expiry",
-              "sensitive_expired",
-              "sensitive_expiring"
+              "redundant_user_override"
             ],
             "title": "Code",
             "type": "string"
@@ -55980,17 +55979,19 @@
             "title": "Sensitive Actions",
             "type": "array"
           },
-          "sensitive_actions_expires_at": {
+          "visible_sections": {
             "anyOf": [
               {
-                "format": "date-time",
-                "type": "string"
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Sensitive Actions Expires At"
+            "title": "Visible Sections"
           }
         },
         "required": [

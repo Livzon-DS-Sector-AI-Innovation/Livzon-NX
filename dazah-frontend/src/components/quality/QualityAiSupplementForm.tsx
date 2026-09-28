@@ -1,6 +1,7 @@
 'use client'
 
-import { Alert, Button, Card, Input, Space } from 'antd'
+import { Button, Card, Input, Space } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 
 interface QualityAiSupplementFormProps {
   value: string

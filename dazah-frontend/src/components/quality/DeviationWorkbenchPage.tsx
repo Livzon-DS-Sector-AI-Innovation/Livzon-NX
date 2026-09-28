@@ -1,25 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  Alert,
-  App,
-  Button,
-  Card,
-  Collapse,
-  DatePicker,
-  Drawer,
-  Form,
-  Input,
-  Modal,
-  Select,
-  Space,
-  Spin,
-  Table,
-  Tag,
-  Typography,
-  Upload,
-} from 'antd'
+import { App, Button, Card, Collapse, DatePicker, Drawer, Form, Input, Modal, Select, Space, Spin, Table, Tag, Typography, Upload } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import type { TableColumnsType } from 'antd'
 import {
   CopyOutlined,

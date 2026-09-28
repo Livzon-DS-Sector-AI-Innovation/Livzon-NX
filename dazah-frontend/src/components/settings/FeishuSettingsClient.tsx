@@ -8,36 +8,14 @@ import {
   ExclamationCircleOutlined,
   LinkOutlined,
   ReloadOutlined,
+  RobotOutlined,
   SafetyCertificateOutlined,
   SearchOutlined,
-  SettingOutlined,
   TeamOutlined,
   ToolOutlined,
 } from '@ant-design/icons'
-import {
-  Alert,
-  App,
-  Button,
-  Card,
-  Col,
-  Descriptions,
-  Divider,
-  Drawer,
-  Empty,
-  Form,
-  Input,
-  List,
-  Pagination,
-  Row,
-  Select,
-  Space,
-  Statistic,
-  Switch,
-  Table,
-  Tabs,
-  Tag,
-  Typography,
-} from 'antd'
+import { App, Button, Card, Col, Descriptions, Divider, Drawer, Empty, Form, Input, List, Pagination, Row, Select, Space, Statistic, Switch, Table, Tag, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import type { ColumnsType } from 'antd/es/table'
 import {
   createExternalIdentityBinding,
@@ -76,6 +54,8 @@ import {
 } from '@/actions/settings'
 import { getUsers, type UserManagementItem } from '@/actions/users'
 import MemoryGovernanceClient from './MemoryGovernanceClient'
+import SettingsSegmentedNav from './SettingsSegmentedNav'
+import SettingsSubnav from './SettingsSubnav'
 
 const { Text, Title } = Typography
 
@@ -1072,9 +1052,16 @@ function TraceDelivery({
   )
 }
 
+const agentSections = [
+  { key: 'runtime', label: '运行与接入', views: ['overview', 'feishu'] },
+  { key: 'identity', label: '身份与授权', views: ['identity', 'authorizations'] },
+  { key: 'capabilities', label: '能力与诊断', views: ['tools', 'trace'] },
+] as const
+
 export default function FeishuSettingsClient() {
   const { message } = App.useApp()
   const [activeKey, setActiveKey] = useState('overview')
+  const activeSection = agentSections.find((item) => item.views.some((key) => key === activeKey)) ?? agentSections[0]
   const [config, setConfig] = useState<FeishuConfig | null>(null)
   const [status, setStatus] = useState<FeishuGatewayStatus | null>(null)
   const [health, setHealth] = useState<AgentRuntimeOverview | null>(null)
@@ -1118,12 +1105,14 @@ export default function FeishuSettingsClient() {
   const items = [
     {
       key: 'overview',
-      label: <Space><CloudServerOutlined />运行总览</Space>,
+      label: '运行总览',
+      icon: <CloudServerOutlined />,
       children: <Overview config={config} status={status} health={health} onNavigate={(key, traceId) => { if (traceId) void queryTrace(traceId); setActiveKey(key) }} />,
     },
     {
       key: 'feishu',
-      label: <Space><LinkOutlined />飞书接入</Space>,
+      label: '飞书接入',
+      icon: <LinkOutlined />,
       children: (
         <FeishuAccess
           config={config}
@@ -1135,24 +1124,28 @@ export default function FeishuSettingsClient() {
     },
     {
       key: 'identity',
-      label: <Space><TeamOutlined />身份与准入</Space>,
+      label: '身份与准入',
+      icon: <TeamOutlined />,
       children: config
         ? <IdentityAdmission tenantId={config.tenant_id} appId={config.app_id} />
         : <Alert type="warning" showIcon title="请先完成飞书接入配置" />,
     },
     {
       key: 'tools',
-      label: <Space><ToolOutlined />能力目录与策略</Space>,
+      label: '能力目录与策略',
+      icon: <ToolOutlined />,
       children: <ToolGovernance />,
     },
     {
       key: 'authorizations',
-      label: <Space><SafetyCertificateOutlined />授权与确认</Space>,
+      label: '授权与确认',
+      icon: <SafetyCertificateOutlined />,
       children: <AuthorizationConfirmation />,
     },
     {
       key: 'trace',
-      label: <Space><AuditOutlined />调用链路与投递诊断</Space>,
+      label: '调用链路与投递诊断',
+      icon: <AuditOutlined />,
       children: (
         <TraceDelivery
           traceId={traceQuery.traceId}
@@ -1166,20 +1159,31 @@ export default function FeishuSettingsClient() {
 
   return (
     <div className="w-full">
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <Title level={3} style={{ margin: 0 }}>
-            <SettingOutlined className="mr-2" />
-            Livzon Agent管理
-          </Title>
-          <Text type="secondary">统一管理助手编排服务（Hermes）、飞书接入、可信身份、企业能力、授权确认与调用链路。</Text>
+      <div className="mb-5">
+        <SettingsSegmentedNav
+          ariaLabel="Agent 管理分类"
+          items={agentSections}
+          activeKey={activeSection.key}
+          onChange={(key) => setActiveKey(agentSections.find((item) => item.key === key)?.views[0] ?? agentSections[0].views[0])}
+          panelId="agent-section-panel"
+        />
+      </div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span aria-hidden="true" className="flex size-12 shrink-0 items-center justify-center rounded-[var(--rounded-lg)] border border-[var(--color-hairline-soft)] bg-[var(--color-canvas)] text-xl text-[var(--color-primary)]"><RobotOutlined /></span>
+          <div>
+            <h2 className="m-0 text-xl font-semibold text-[var(--color-ink-deep)]">Livzon Agent管理</h2>
+            <Text type="secondary">统一管理助手编排服务、飞书接入、可信身份、企业能力和调用链路。</Text>
+          </div>
         </div>
         <Button loading={loading} icon={<ReloadOutlined />} onClick={() => void loadOverview()}>刷新运行状态</Button>
       </div>
       {status?.gateway === 'failed' && (
         <Alert type="error" showIcon title="Hermes 飞书网关连接失败" description="请先在“飞书接入”运行诊断，再通过“调用链路与投递诊断”定位失败环节。" className="mb-4" />
       )}
-      <Tabs activeKey={activeKey} onChange={setActiveKey} items={items} />
+      <div id="agent-section-panel" role="tabpanel" aria-labelledby={`agent-section-panel-tab-${activeSection.key}`}>
+      <SettingsSubnav ariaLabel="Livzon Agent管理子导航" activeKey={activeKey} onChange={setActiveKey} items={items.filter((item) => activeSection.views.some((key) => key === item.key))} />
+      </div>
     </div>
   )
 }

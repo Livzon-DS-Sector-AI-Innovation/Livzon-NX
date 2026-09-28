@@ -17,7 +17,9 @@ vi.mock('@/actions/purchasing', () => actions)
 
 const uploadProps: Array<Record<string, any>> = []
 
-vi.mock('antd', async () => {
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd')>()
+  const businessMock = await (async () => {
   const React = await import('react')
   const App = { useApp: () => ({ message: ui.message }) }
   const Upload = ({ children, ...props }: Record<string, any>) => {
@@ -77,11 +79,17 @@ vi.mock('antd', async () => {
   const Typography = { Title: ({ children }: Record<string, any>) => React.createElement('div', null, children) }
   const Space = ({ children }: Record<string, any>) => React.createElement('div', null, children)
   return { App, Upload, Modal, Button, Alert, Table, Typography, Space }
+})()
+  return { ...actual, ...businessMock, Alert: actual.Alert, theme: actual.theme, Typography: actual.Typography }
 })
 
-vi.mock('@ant-design/icons', () => ({
+vi.mock('@ant-design/icons', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@ant-design/icons')>()
+  const businessMock = await (() => ({
   UploadOutlined: () => null,
-}))
+}))()
+  return { ...actual, ...businessMock }
+})
 
 import { PurchaseRequestImportButton } from './PurchaseRequestImportButton'
 

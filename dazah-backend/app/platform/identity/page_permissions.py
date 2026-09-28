@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 from uuid import UUID
@@ -19,6 +19,7 @@ from app.platform.identity.page_policy import (
     PAGE_PERMISSION_SET,
     PAGES_BY_KEY,
     PAGES_BY_MODULE,
+    PRODUCTION_OVERVIEW_VISIBLE_SECTIONS,
     PageDefinition,
     api_bindings_for_module,
     api_route_catalog,
@@ -85,11 +86,11 @@ class PagePermissionService:
     ) -> list[PagePermissionHistoryChangeOut]:
         def canonical(item: dict[str, Any]) -> dict[str, Any]:
             result = dict(item)
-            expiry = result.get("sensitive_actions_expires_at")
-            if isinstance(expiry, datetime):
-                result["sensitive_actions_expires_at"] = expiry.isoformat()
+            result.pop("sensitive_actions_expires_at", None)
             for field in ("permissions", "sensitive_actions", "department_ids"):
                 result[field] = sorted(set(result.get(field) or []))
+            if result.get("visible_sections") is not None:
+                result["visible_sections"] = sorted(set(result["visible_sections"]))
             return result
 
         old_by_key = {str(item.get("page_key")): canonical(item) for item in old_grants}
@@ -113,13 +114,25 @@ class PagePermissionService:
                 after_values = set(after.get("permissions") or []) | set(
                     after.get("sensitive_actions") or []
                 )
+                if page_key == "production:overview":
+                    before_sections = before.get("visible_sections")
+                    after_sections = after.get("visible_sections")
+                    before_values.update(
+                        f"section:{item}" for item in (
+                            PRODUCTION_OVERVIEW_VISIBLE_SECTIONS
+                            if before_sections is None else before_sections
+                        )
+                    )
+                    after_values.update(
+                        f"section:{item}" for item in (
+                            PRODUCTION_OVERVIEW_VISIBLE_SECTIONS
+                            if after_sections is None else after_sections
+                        )
+                    )
                 scope_same = before.get("scope_type") == after.get(
                     "scope_type"
                 ) and set(before.get("department_ids") or []) == set(
                     after.get("department_ids") or []
-                )
-                expiry_same = before.get("sensitive_actions_expires_at") == after.get(
-                    "sensitive_actions_expires_at"
                 )
                 changed_fields = [
                     label
@@ -128,13 +141,13 @@ class PagePermissionService:
                         ("sensitive_actions", "高风险动作"),
                         ("scope_type", "数据范围"),
                         ("department_ids", "指定部门"),
-                        ("sensitive_actions_expires_at", "高风险到期时间"),
+                        ("visible_sections", "页面内可见项"),
                     )
                     if before.get(field) != after.get(field)
                 ]
-                if before_values < after_values and scope_same and expiry_same:
+                if before_values < after_values and scope_same:
                     kind = "expand"
-                elif after_values < before_values and scope_same and expiry_same:
+                elif after_values < before_values and scope_same:
                     kind = "restrict"
                 else:
                     kind = "mixed"
@@ -199,6 +212,7 @@ class PagePermissionService:
                     module_code=item.module_code,
                     permissions=["access", "query", "operate"],
                     sensitive_actions=[action.key for action in item.sensitive_actions],
+                    visible_sections=None,
                     data_scope=PageDataScopeInput(
                         scope_type="all"
                         if "all" in item.supported_scope_types
@@ -244,7 +258,8 @@ class PagePermissionService:
                 {
                     "permissions": set(),
                     "sensitive_actions": set(),
-                    "sensitive_action_expirations": {},
+                    "visible_sections": set(),
+                    "all_sections": False,
                     "scope_types": set(),
                     "department_ids": set(),
                     "role_names": set(),
@@ -252,19 +267,12 @@ class PagePermissionService:
                 },
             )
             item["permissions"].update(grant.permissions or [])
-            expires_at = getattr(grant, "sensitive_actions_expires_at", None)
-            active_actions = self._active_sensitive_actions(
-                grant.sensitive_actions or [], expires_at
-            )
+            active_actions = list(grant.sensitive_actions or [])
             item["sensitive_actions"].update(active_actions)
-            for action in active_actions:
-                previous_expiry = item["sensitive_action_expirations"].get(action)
-                if action not in item["sensitive_action_expirations"]:
-                    item["sensitive_action_expirations"][action] = expires_at
-                elif previous_expiry is not None and (
-                    expires_at is None or expires_at > previous_expiry
-                ):
-                    item["sensitive_action_expirations"][action] = expires_at
+            if getattr(grant, "visible_sections", None) is None:
+                item["all_sections"] = True
+            else:
+                item["visible_sections"].update(grant.visible_sections)
             item["scope_types"].add(grant.scope_type)
             item["department_ids"].update(grant.department_ids or [])
             role = role_by_id.get(grant.role_id)
@@ -281,7 +289,7 @@ class PagePermissionService:
                             set(active_actions)
                             & {action.key for action in definition.sensitive_actions}
                         ),
-                        sensitive_actions_expires_at=expires_at,
+                        visible_sections=getattr(grant, "visible_sections", None),
                         data_scope=PageDataScopeInput(
                             scope_type=grant.scope_type,
                             department_ids=list(grant.department_ids or []),
@@ -307,10 +315,9 @@ class PagePermissionService:
                 module_code=definition.module_code,
                 permissions=permissions,
                 sensitive_actions=sensitive_actions,
-                sensitive_action_expirations={
-                    action: value["sensitive_action_expirations"].get(action)
-                    for action in sensitive_actions
-                },
+                visible_sections=(
+                    None if value["all_sections"] else sorted(value["visible_sections"])
+                ),
                 data_scope=PageDataScopeInput(
                     scope_type=scope_type, department_ids=department_ids
                 ),
@@ -351,14 +358,8 @@ class PagePermissionService:
                 continue
             permissions = list(normalize_permissions(list(override.permissions or [])))
             allowed_actions = {action.key for action in definition.sensitive_actions}
-            override_expiry = getattr(override, "sensitive_actions_expires_at", None)
             sensitive_actions = sorted(
-                set(
-                    self._active_sensitive_actions(
-                        override.sensitive_actions or [], override_expiry
-                    )
-                )
-                & allowed_actions
+                set(override.sensitive_actions or []) & allowed_actions
             )
             if sensitive_actions and "operate" not in permissions:
                 permissions = list(normalize_permissions([*permissions, "operate"]))
@@ -370,9 +371,7 @@ class PagePermissionService:
                 module_code=definition.module_code,
                 permissions=permissions,
                 sensitive_actions=sensitive_actions,
-                sensitive_action_expirations={
-                    action: override_expiry for action in sensitive_actions
-                },
+                visible_sections=getattr(override, "visible_sections", None),
                 data_scope=PageDataScopeInput(
                     scope_type=override.scope_type,
                     department_ids=list(override.department_ids or []),
@@ -412,7 +411,10 @@ class PagePermissionService:
             return (
                 tuple(grant.permissions or []),
                 tuple(sorted(grant.sensitive_actions or [])),
-                getattr(grant, "sensitive_actions_expires_at", None),
+                (
+                    None if getattr(grant, "visible_sections", None) is None
+                    else tuple(sorted(grant.visible_sections))
+                ),
                 grant.scope_type,
                 tuple(sorted(grant.department_ids or [])),
             )
@@ -424,7 +426,10 @@ class PagePermissionService:
             grant["page_key"]: (
                 tuple(grant["permissions"]),
                 tuple(grant["sensitive_actions"]),
-                grant.get("sensitive_actions_expires_at"),
+                (
+                    None if grant.get("visible_sections") is None
+                    else tuple(sorted(grant["visible_sections"]))
+                ),
                 grant["scope_type"],
                 tuple(sorted(grant["department_ids"])),
             )
@@ -457,6 +462,12 @@ class PagePermissionService:
                 )
                 facts.update(
                     f"{prefix}:action:{item}" for item in grant.sensitive_actions
+                )
+                sections = set(grant.visible_sections or [])
+                if grant.visible_sections is None and prefix == "production:overview":
+                    sections = set(PRODUCTION_OVERVIEW_VISIBLE_SECTIONS)
+                facts.update(
+                    f"{prefix}:section:{item}" for item in sections
                 )
                 facts.add(f"{prefix}:scope:{grant.data_scope.scope_type}")
                 facts.update(
@@ -580,7 +591,6 @@ class PagePermissionService:
             if definition is None or page_key not in active_keys:
                 continue
             actions = sorted(set(grant.sensitive_actions or []))
-            expires_at = getattr(grant, "sensitive_actions_expires_at", None)
             custom_outputs.append(
                 EffectivePageGrantOut(
                     page_key=page_key,
@@ -589,9 +599,7 @@ class PagePermissionService:
                         normalize_permissions(list(grant.permissions or []))
                     ),
                     sensitive_actions=actions,
-                    sensitive_action_expirations={
-                        action: expires_at for action in actions
-                    },
+                    visible_sections=getattr(grant, "visible_sections", None),
                     data_scope=PageDataScopeInput(
                         scope_type=grant.scope_type,
                         department_ids=list(grant.department_ids or []),
@@ -639,10 +647,7 @@ class PagePermissionService:
                         normalize_permissions(list(grant.permissions or []))
                     ),
                     sensitive_actions=sorted(set(active_actions)),
-                    sensitive_action_expirations={
-                        action: getattr(grant, "sensitive_actions_expires_at", None)
-                        for action in active_actions
-                    },
+                    visible_sections=getattr(grant, "visible_sections", None),
                     data_scope=PageDataScopeInput(
                         scope_type=grant.scope_type,
                         department_ids=list(grant.department_ids or []),
@@ -656,21 +661,8 @@ class PagePermissionService:
                             permissions=list(
                                 normalize_permissions(list(grant.permissions or []))
                             ),
-                            sensitive_actions=sorted(
-                                set(
-                                    self._active_sensitive_actions(
-                                        grant.sensitive_actions or [],
-                                        getattr(
-                                            grant,
-                                            "sensitive_actions_expires_at",
-                                            None,
-                                        ),
-                                    )
-                                )
-                            ),
-                            sensitive_actions_expires_at=getattr(
-                                grant, "sensitive_actions_expires_at", None
-                            ),
+                            sensitive_actions=sorted(set(active_actions)),
+                            visible_sections=getattr(grant, "visible_sections", None),
                             data_scope=PageDataScopeInput(
                                 scope_type=grant.scope_type,
                                 department_ids=list(grant.department_ids or []),
@@ -851,7 +843,6 @@ class PagePermissionService:
         from app.platform.identity.rbac import resolve_users_roles
 
         now = datetime.now(UTC)
-        warning_at = now + timedelta(days=30)
         role_grants = await self.repo.list_all_role_grants(db)
         user_grants = await self.repo.list_all_user_grants(db)
         role_ids = {grant.role_id for grant in role_grants}
@@ -955,43 +946,6 @@ class PagePermissionService:
                     grant=grant,
                     detail=f"包含 {len(missing_departments)} 个已失效部门",
                 )
-            actions = list(grant.sensitive_actions or [])
-            expires_at = getattr(grant, "sensitive_actions_expires_at", None)
-            if not actions:
-                return
-            if expires_at is None:
-                add_issue(
-                    code="sensitive_without_expiry",
-                    severity="warning",
-                    target_type=target_type,
-                    target_id=target_id,
-                    target_name=target_name,
-                    grant=grant,
-                    detail="高风险动作尚未设置到期时间",
-                )
-                return
-            expiry = expires_at if expires_at.tzinfo else expires_at.replace(tzinfo=UTC)
-            if expiry <= now:
-                add_issue(
-                    code="sensitive_expired",
-                    severity="error",
-                    target_type=target_type,
-                    target_id=target_id,
-                    target_name=target_name,
-                    grant=grant,
-                    detail="高风险动作授权已到期并停止生效",
-                )
-            elif expiry <= warning_at:
-                add_issue(
-                    code="sensitive_expiring",
-                    severity="warning",
-                    target_type=target_type,
-                    target_id=target_id,
-                    target_name=target_name,
-                    grant=grant,
-                    detail="高风险动作授权将在 30 天内到期",
-                )
-
         for role_grant in role_grants:
             role = roles.get(role_grant.role_id)
             inspect_common(
@@ -1026,16 +980,13 @@ class PagePermissionService:
                 canonical_page_key(user_grant.page_key)
             )
             if baseline and user_grant.permissions:
-                current_actions = sorted(
-                    self._active_sensitive_actions(
-                        user_grant.sensitive_actions or [],
-                        getattr(user_grant, "sensitive_actions_expires_at", None),
-                    )
-                )
+                current_actions = sorted(user_grant.sensitive_actions or [])
                 if (
                     list(normalize_permissions(user_grant.permissions or []))
                     == baseline.permissions
                     and current_actions == baseline.sensitive_actions
+                    and getattr(user_grant, "visible_sections", None)
+                    == baseline.visible_sections
                     and user_grant.scope_type == baseline.data_scope.scope_type
                     and sorted(user_grant.department_ids or [])
                     == sorted(baseline.data_scope.department_ids)
@@ -1096,6 +1047,19 @@ class PagePermissionService:
                 )
             if grant.sensitive_actions:
                 permissions = list(normalize_permissions([*permissions, "operate"]))
+            visible_sections = grant.visible_sections
+            if visible_sections is not None:
+                if page_key != "production:overview":
+                    raise HTTPException(400, "仅生产管理概览支持页面内可见项")
+                unknown_sections = (
+                    set(visible_sections) - PRODUCTION_OVERVIEW_VISIBLE_SECTIONS
+                )
+                if unknown_sections:
+                    raise HTTPException(
+                        400, f"未知页面内可见项：{', '.join(sorted(unknown_sections))}"
+                    )
+                if set(visible_sections) == PRODUCTION_OVERVIEW_VISIBLE_SECTIONS:
+                    visible_sections = None
             if grant.data_scope.scope_type not in definition.supported_scope_types:
                 raise HTTPException(
                     400,
@@ -1107,8 +1071,9 @@ class PagePermissionService:
                     "page_key": page_key,
                     "permissions": permissions,
                     "sensitive_actions": sorted(set(grant.sensitive_actions)),
-                    "sensitive_actions_expires_at": (
-                        grant.sensitive_actions_expires_at
+                    "visible_sections": (
+                        None if visible_sections is None
+                        else sorted(set(visible_sections))
                     ),
                     "scope_type": grant.data_scope.scope_type,
                     "department_ids": grant.data_scope.department_ids,
@@ -1136,19 +1101,6 @@ class PagePermissionService:
                 400,
                 f"包含不存在或已停用的部门：{', '.join(sorted(missing))}",
             )
-
-    @staticmethod
-    def _active_sensitive_actions(
-        actions: list[str], expires_at: datetime | None
-    ) -> list[str]:
-        if expires_at is None:
-            return list(actions)
-        normalized_expiry = (
-            expires_at.replace(tzinfo=UTC)
-            if expires_at.tzinfo is None
-            else expires_at.astimezone(UTC)
-        )
-        return list(actions) if normalized_expiry > datetime.now(UTC) else []
 
     async def rollout_out(
         self, db: AsyncSession, *, module_code: str

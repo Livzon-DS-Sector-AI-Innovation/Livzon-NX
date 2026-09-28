@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, Button, Space, Tag, Table, Form, Input, InputNumber, Select, App, Tabs, Alert, Row, Col, Statistic, Descriptions, Modal } from 'antd'
+import { Card, Button, Space, Tag, Table, Form, Input, InputNumber, Select, App, Tabs, Row, Col, Statistic, Descriptions, Modal } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { CheckCircleOutlined, PlusOutlined, DeleteOutlined, BugOutlined, SafetyOutlined, RobotOutlined } from '@ant-design/icons'
 import type { ImpurityStudy, Impurity, ImpurityCategory, ICHM7Class, ICHSolventClass, ControlMethod, DOEExperiment } from '@/types/rd'
 import { identifyImpurities, generateIdentificationReport } from '@/lib/impurity-identifier'

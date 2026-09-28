@@ -1,5 +1,7 @@
 'use client'
 
+import PlatformNotice from '@/components/shared/PlatformNotice'
+
 import { useState } from 'react'
 import { Modal, Form, Radio, Input, App, Tag, Descriptions } from 'antd'
 import { verifyLevel } from '@/actions/safety'
@@ -164,18 +166,7 @@ export default function HazardVerifyModal({
         </div>
       )}
 
-      <div
-        style={{
-          background: '#fffbe6',
-          border: '1px solid #ffe58f',
-          padding: '8px 12px',
-          borderRadius: 6,
-          marginBottom: 16,
-          fontSize: 13,
-        }}
-      >
-        💡 {LEVEL_LABELS[currentLevel] || `第${currentLevel}级复核`} — {LEVEL_REQUIREMENTS[currentLevel]}
-      </div>
+      <PlatformNotice type="warning" className="mb-4" title={<>💡 {LEVEL_LABELS[currentLevel] || `第${currentLevel}级复核`}— {LEVEL_REQUIREMENTS[currentLevel]}</>} />
 
       <Form form={form} layout="vertical" initialValues={{ level: currentLevel }}>
         <Form.Item name="level" label="复核级别" hidden>

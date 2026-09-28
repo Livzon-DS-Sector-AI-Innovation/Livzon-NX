@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Alert, App, Button, Input, Space } from 'antd'
+import { App, Button, Input, Space } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { PlusOutlined, DeleteOutlined, DownloadOutlined, RobotOutlined, CloseCircleOutlined } from '@ant-design/icons'
 import type { ExportedDoc, TrainingDocExporter, TrainingSessionData } from '@/types/hr'
 import { upsertTrainingSession, upsertTrainingDocument, generateOralExamResult } from '@/actions/hr'

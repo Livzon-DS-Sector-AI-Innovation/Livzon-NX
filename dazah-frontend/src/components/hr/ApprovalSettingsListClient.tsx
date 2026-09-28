@@ -1,5 +1,7 @@
 'use client'
 
+import PlatformNotice from '@/components/shared/PlatformNotice'
+
 import { useEffect, useState, useCallback } from 'react'
 import { App, Card, Button, Space, Table, Tag, Typography, AutoComplete, Popconfirm } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
@@ -214,15 +216,12 @@ export default function ApprovalSettingsListClient() {
       </div>
 
       <Card>
-        <div className="mb-4 p-3 bg-blue-50 rounded">
-          <Typography.Text strong>岗位调动审批流程说明：</Typography.Text>
-          <ul className="mt-2 ml-4 text-sm text-gray-600">
+        <PlatformNotice type="info" className="mb-4" title="岗位调动与合同到期审批按部门配置逐级处理" description={<><Typography.Text strong>岗位调动审批流程说明：</Typography.Text><ul className="mt-2 ml-4 text-sm text-gray-600">
             <li><b>主管以下人员</b>：直属领导 → 部门经理/总监（经理签了总监就不用，同一人自动跳过）</li>
             <li><b>主管以上人员</b>：部门经理 → 部门总监 → 主管领导</li>
             <li>原部门和接收部门各走一遍，最后 HR → 常务副总 → 总经理</li>
             <li>审批人从下表按部门配置，未配置的从部门负责人自动解析</li>
-          </ul>
-          <div className="mt-3 pt-3 border-t border-blue-200">
+          </ul><div className="mt-3 pt-3 border-t border-blue-200">
             <Typography.Text strong>员工合同到期审批流程说明：</Typography.Text>
             <ul className="mt-2 ml-4 text-sm text-gray-600">
               <li><b>部门经理 = 部门负责人（第一级）</b>：收到合同到期审批卡片并审批（无经理回退直属领导）</li>
@@ -230,8 +229,7 @@ export default function ApprovalSettingsListClient() {
               <li>直属领导/主管领导仅用于岗位调动审批，不用于合同审批</li>
               <li>审批卡片在飞书内直接点击处理，不跳转浏览器</li>
             </ul>
-          </div>
-        </div>
+          </div></>} />
         <Table
           rowKey="department_id"
           columns={columns}

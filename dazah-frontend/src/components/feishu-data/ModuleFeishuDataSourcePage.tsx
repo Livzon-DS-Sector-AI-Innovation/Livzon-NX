@@ -9,23 +9,8 @@ import {
   SaveOutlined,
   SyncOutlined,
 } from '@ant-design/icons'
-import {
-  Alert,
-  App,
-  Button,
-  Card,
-  Empty,
-  Form,
-  Input,
-  Modal,
-  Popconfirm,
-  Select,
-  Space,
-  Spin,
-  Switch,
-  Table,
-  Tag,
-} from 'antd'
+import { App, Button, Card, Empty, Form, Input, Modal, Popconfirm, Select, Space, Spin, Switch, Table, Tag } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import {

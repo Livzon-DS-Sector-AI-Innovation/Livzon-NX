@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { Button, Input, Table, Tag, Card, Upload, App, Alert, Progress, Tooltip, Space, Popconfirm } from 'antd'
+import { Button, Input, Table, Tag, Card, Upload, App, Progress, Tooltip, Space, Popconfirm } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { PlayCircleOutlined, UploadOutlined, FilePdfOutlined, ReloadOutlined, DeleteOutlined } from '@ant-design/icons'
 import { RouteWorkflowPage } from './RouteWorkflowPage'
 import { fetchRoutes, createRoute, deleteRoute } from '@/lib/api/rd'

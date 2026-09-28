@@ -1,7 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Alert, App, Button, Card, Modal, Table, Tag } from "antd"
+import { App, Button, Card, Modal, Table, Tag } from "antd"
+import Alert from "@/components/shared/PlatformNotice"
 import { getPermissionModuleName, moduleMenus } from "@/lib/menu-config"
 import {
   listPagePermissionRollouts,

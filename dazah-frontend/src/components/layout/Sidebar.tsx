@@ -284,19 +284,10 @@ export function Sidebar({ user, modules }: SidebarProps) {
   return (
     <>
     <aside aria-label={`${currentModule.label}侧边栏`} className={`${collapsed ? "w-11" : "w-56"} bg-[var(--color-canvas)] border-r border-[var(--color-hairline)] flex flex-col shrink-0 overflow-y-auto transition-[width] duration-200 motion-reduce:transition-none`}>
-      <button
-        type="button"
-        onClick={toggleCollapsed}
-        aria-label={collapsed ? "展开侧边栏" : "收起侧边栏"}
-        aria-expanded={!collapsed}
-        title={collapsed ? "展开侧边栏" : "收起侧边栏，扩大页面显示区域"}
-        className={`m-2 inline-flex min-h-8 items-center justify-center gap-2 rounded-[var(--rounded-sm)] text-[var(--color-steel)] hover:bg-[var(--color-surface)] hover:text-[var(--color-primary)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)] ${collapsed ? "w-7" : "self-end px-2"}`}
-      >
-        {collapsed ? <MenuUnfoldOutlined aria-hidden /> : <><MenuFoldOutlined aria-hidden /><span className="text-[12px]">收起</span></>}
-      </button>
-      {!collapsed && <>
-      <div className="px-4 pt-5 pb-3">
-        <h2 className="text-[18px] font-semibold text-[var(--color-charcoal)]">
+      <div className={collapsed
+        ? "flex h-12 items-center justify-center"
+        : "mx-3 flex h-14 items-center justify-between gap-1 border-b border-[var(--color-hairline-soft)]"}>
+        {!collapsed && <h2 className="min-w-0 text-[18px] font-semibold leading-6">
           <Link
             href={currentModule.path}
             aria-label={`返回${currentModule.label}首页`}
@@ -308,12 +299,24 @@ export function Sidebar({ user, modules }: SidebarProps) {
             }}
             onMouseEnter={() => prefetchPath(currentModule.path)}
             onFocus={() => prefetchPath(currentModule.path)}
-            className="inline-block rounded-[var(--rounded-sm)] text-inherit cursor-pointer transition-colors hover:text-[var(--color-primary)] hover:underline focus-visible:underline focus-visible:outline-2 focus-visible:outline-[var(--color-primary)] underline-offset-4"
+            className="sidebar-module-title inline-flex min-h-9 max-w-full cursor-pointer items-center gap-2 rounded-[var(--rounded-sm)] px-1.5 transition-colors hover:bg-[var(--color-surface)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)] focus-visible:outline-offset-2"
           >
-            {currentModule.label}
+            <span aria-hidden="true" className="h-5 w-[3px] shrink-0 rounded-full bg-[var(--color-primary)]" />
+            <span className="truncate">{currentModule.label}</span>
           </Link>
-        </h2>
+        </h2>}
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? "展开侧边栏" : "收起侧边栏"}
+          aria-expanded={!collapsed}
+          title={collapsed ? "展开侧边栏" : "收起侧边栏，扩大页面显示区域"}
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--rounded-sm)] text-[var(--color-steel)] hover:bg-[var(--color-surface)] hover:text-[var(--color-primary)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]"
+        >
+          {collapsed ? <MenuUnfoldOutlined aria-hidden /> : <MenuFoldOutlined aria-hidden />}
+        </button>
       </div>
+      {!collapsed && <>
 
       <Menu
         mode="vertical"

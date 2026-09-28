@@ -1,5 +1,7 @@
 'use client'
 
+import PlatformNotice from '@/components/shared/PlatformNotice'
+
 import { useState } from 'react'
 import Link from 'next/link'
 import { App, Button, Card, Space, Table, Tag, Input, Select, Drawer, Descriptions, Popconfirm, Modal, Form, DatePicker, Row, Col } from 'antd'
@@ -401,11 +403,8 @@ export default function ContractTableClient({ initialData, initialTotal }: Contr
           <Button key="save" type="primary" loading={renewing} onClick={handleRenewSave}>保存并同步员工档案</Button>,
         ]}
       >
-        <div style={{ marginBottom: 16, padding: '8px 12px', background: '#f6ffed', borderRadius: 6, border: '1px solid #b7eb8f', fontSize: 13 }}>
-          当前合同次数：<b>{selected?.contract_sequence || '-'}</b>
-          <br />
-          填写本次续签的开始日期和截止日期，保存后自动写入合同管理表和员工档案表对应的合同字段，并同步飞书。
-        </div>
+        <PlatformNotice type="info" className="mb-4" title="续签将更新合同管理、员工档案并同步飞书" description={<>当前合同次数：<b>{selected?.contract_sequence || '-'}</b><br />填写本次续签的开始日期和截止日期，保存后自动写入合同管理表和员工档案表对应的合同字段，并同步飞书。
+        </>} />
         <Form form={renewForm} layout="vertical">
           <Form.Item name="start_date" label="续签开始日期" rules={[{ required: true, message: '请选择开始日期' }]}>
             <DatePicker style={{ width: '100%' }} placement="bottomLeft" getPopupContainer={(node) => node.parentNode as HTMLElement} />

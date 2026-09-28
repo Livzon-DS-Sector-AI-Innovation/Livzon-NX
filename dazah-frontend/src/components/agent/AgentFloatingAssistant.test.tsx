@@ -11,16 +11,20 @@ import {
   confirmationNarrative,
   getAgentStreamTimeoutMs,
 } from "./AgentFloatingAssistant"
-import type { AgentConfirmation } from "@/lib/api/agent"
+import type { AgentConfirmation, AgentSessionItem } from "@/lib/api/agent"
 import { useAgentStore } from "@/stores/agent"
 
 const mocks = vi.hoisted(() => ({
   streamAgentMessage: vi.fn(),
+  fetchAgentSessions: vi.fn(),
+  fetchAgentSession: vi.fn(),
 }))
 
 vi.mock("@/lib/api/agent", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/agent")>()),
   streamAgentMessage: mocks.streamAgentMessage,
+  fetchAgentSessions: mocks.fetchAgentSessions,
+  fetchAgentSession: mocks.fetchAgentSession,
 }))
 
 const nativeConfirmation: AgentConfirmation = {
@@ -63,6 +67,99 @@ describe("Feishu native confirmation feedback", () => {
     expect(feedback).toContain("回读验证未通过")
     expect(feedback).toContain("未确认")
     expect(feedback).not.toContain("已执行")
+  })
+})
+
+describe("agent session history", () => {
+  const session: AgentSessionItem = {
+    id: "00000000-0000-0000-0000-000000000002",
+    title: "质量偏差查询",
+    channel: "feishu",
+    status: "active",
+    created_at: "2026-08-05T10:00:00Z",
+    updated_at: "2026-08-05T11:00:00Z",
+    message_count: 3,
+    pending_confirmation_count: 2,
+    last_message_preview: "查询本月偏差记录",
+  }
+  let root: Root
+  let host: HTMLDivElement
+
+  beforeEach(() => {
+    useAgentStore.getState().startNewConversation()
+    useAgentStore.getState().setOpen(true)
+    mocks.fetchAgentSessions.mockResolvedValue({
+      items: [session, { ...session, id: "empty-session", title: null, channel: "web", last_message_preview: null, pending_confirmation_count: 0 }],
+      page: 1,
+      page_size: 20,
+      total: 2,
+    })
+    mocks.fetchAgentSession.mockResolvedValue({
+      session,
+      messages: [{ role: "assistant", content: "已恢复历史对话" }],
+      confirmations: [],
+    })
+    host = document.createElement("div")
+    document.body.append(host)
+    root = createRoot(host)
+  })
+
+  afterEach(async () => {
+    await act(async () => root.unmount())
+    host.remove()
+    useAgentStore.getState().startNewConversation()
+    useAgentStore.getState().setOpen(false)
+    mocks.fetchAgentSessions.mockReset()
+    mocks.fetchAgentSession.mockReset()
+    vi.restoreAllMocks()
+  })
+
+  async function openHistory() {
+    await act(async () => {
+      root.render(createElement(App, null, createElement(AgentFloatingAssistant)))
+    })
+    const historyButton = host.querySelector<HTMLButtonElement>('button[aria-label="查看历史会话"]')
+    expect(historyButton).not.toBeNull()
+    await act(async () => historyButton!.click())
+  }
+
+  it("renders session summaries and fallbacks without the deprecated List warning", async () => {
+    const errors = vi.spyOn(console, "error")
+    await openHistory()
+
+    expect(mocks.fetchAgentSessions).toHaveBeenCalledOnce()
+    expect(document.body.textContent).toContain("质量偏差查询")
+    expect(document.body.textContent).toContain("查询本月偏差记录")
+    expect(document.body.textContent).toContain("飞书 · 3 条消息")
+    expect(document.body.textContent).toContain(new Date(session.updated_at).toLocaleString())
+    expect(document.body.textContent).toContain("2 项待确认")
+    expect(document.body.textContent).toContain("未命名对话")
+    expect(document.body.textContent).toContain("暂无消息摘要")
+    expect(document.body.textContent).toContain("Web · 3 条消息")
+    expect(errors.mock.calls.flat().join(" ")).not.toContain("[antd: List]")
+  })
+
+  it("restores the selected conversation", async () => {
+    await openHistory()
+    const restoreButtons = [...document.body.querySelectorAll("button")].filter(
+      (button) => button.textContent === "继续对话",
+    )
+    expect(restoreButtons).toHaveLength(2)
+    await act(async () => restoreButtons[0].click())
+
+    expect(mocks.fetchAgentSession).toHaveBeenCalledWith(session.id)
+    expect(useAgentStore.getState().sessionId).toBe(session.id)
+    expect(host.textContent).toContain("已恢复历史对话")
+  })
+
+  it("shows the empty state when there are no sessions", async () => {
+    mocks.fetchAgentSessions.mockResolvedValue({ items: [], page: 1, page_size: 20, total: 0 })
+    await openHistory()
+
+    expect(document.body.textContent).toContain("还没有历史会话")
+    expect([...document.body.querySelectorAll("button")].some(
+      (button) => button.textContent === "继续对话",
+    )).toBe(false)
   })
 })
 

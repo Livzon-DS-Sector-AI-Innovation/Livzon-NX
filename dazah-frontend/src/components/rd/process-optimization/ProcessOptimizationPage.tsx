@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { Button, Input, Table, Tag, Card, App, Alert, Space, Popconfirm, Select } from 'antd'
+import { Button, Input, Table, Tag, Card, App, Space, Popconfirm, Select } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { PlayCircleOutlined, ReloadOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import { ProcessOptimizationWorkflowPage } from './ProcessOptimizationWorkflowPage'
 import { fetchOptimizations, createOptimization, deleteOptimization } from '@/lib/api/rd'

@@ -22,7 +22,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.database import get_db
+from app.core.redaction import redact_sensitive
 from app.core.response import success_response
+from app.platform.audit.middleware import current_audit_request_id
 from app.platform.audit.service import record_audit_log
 from app.platform.identity.authorization_guard import lock_authorization_actor
 from app.platform.identity.data_scope import publish_data_scope_changed
@@ -746,6 +748,8 @@ async def get_user_module_permissions(
             resource_type="user_module_permissions",
             resource_id=user_id,
             action="view_user_module_permissions",
+            request_id=current_audit_request_id.get(),
+            new_value=redact_sensitive(result.model_dump(mode="json")),
             extra={"grant_version": result.grant_version},
         )
     )
@@ -827,6 +831,7 @@ async def get_user_livzon_access_scope(
     snapshot = await scope_service.get_snapshot(db, user_id=user_id)
     if snapshot is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Livzon 范围尚未同步")
+    result = scope_service.snapshot_out(snapshot)
     db.add(
         AuditLog(
             user_id=current_user.id,
@@ -836,10 +841,11 @@ async def get_user_livzon_access_scope(
             resource_type="agent_access_scope",
             resource_id=user_id,
             action="view_user_livzon_access_scope",
+            request_id=current_audit_request_id.get(),
+            new_value=redact_sensitive(result.model_dump(mode="json")),
             extra={"source_grant_version": snapshot.source_grant_version},
         )
     )
-    result = scope_service.snapshot_out(snapshot)
     return success_response(data=result.model_dump(mode="json"))
 
 
@@ -873,6 +879,7 @@ async def sync_user_livzon_access_scope(
             resource_type="agent_access_scope",
             resource_id=user_id,
             action="sync_user_livzon_access_scope",
+            request_id=current_audit_request_id.get(),
             new_value={
                 "source_grant_version": snapshot.source_grant_version,
                 "agent_scope_version": snapshot.agent_scope_version,

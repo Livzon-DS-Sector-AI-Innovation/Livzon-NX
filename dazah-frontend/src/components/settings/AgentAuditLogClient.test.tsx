@@ -50,6 +50,7 @@ describe('Livzon conversation audit detail', () => {
     try {
       await act(async () => root.render(createElement(App, null, createElement(AgentAuditLogClient))))
       await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+      expect(host.querySelector('h2')?.textContent).toBe('Livzon Agent对话审计')
       const viewButton = Array.from(host.querySelectorAll('button')).find((button) => button.textContent?.includes('查看'))
       expect(viewButton).toBeDefined()
       await act(async () => viewButton?.click())

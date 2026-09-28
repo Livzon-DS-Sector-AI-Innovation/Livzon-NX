@@ -39,7 +39,7 @@ class PagePermissionRoleSourceOut(BaseModel):
     role_name: str
     permissions: list[PagePermissionLevel] = Field(default_factory=list)
     sensitive_actions: list[str] = Field(default_factory=list)
-    sensitive_actions_expires_at: datetime | None = None
+    visible_sections: list[str] | None = None
     data_scope: PageDataScopeInput
 
 
@@ -48,9 +48,7 @@ class EffectivePageGrantOut(BaseModel):
     module_code: str
     permissions: list[PagePermissionLevel] = Field(default_factory=list)
     sensitive_actions: list[str] = Field(default_factory=list)
-    sensitive_action_expirations: dict[str, datetime | None] = Field(
-        default_factory=dict
-    )
+    visible_sections: list[str] | None = None
     data_scope: PageDataScopeInput
     source: Literal["super_admin", "user", "role", "none"]
     source_role_names: list[str] = Field(default_factory=list)
@@ -302,14 +300,8 @@ class PageGrantInput(BaseModel):
         max_length=100,
         description="附加高风险操作；非空时服务端同时授予 operate 基础权限",
     )
-    sensitive_actions_expires_at: datetime | None = None
+    visible_sections: list[str] | None = Field(default=None, max_length=9)
     data_scope: PageDataScopeInput = Field(default_factory=PageDataScopeInput)
-
-    @model_validator(mode="after")
-    def validate_sensitive_action_expiry(self) -> "PageGrantInput":
-        if self.sensitive_actions_expires_at and not self.sensitive_actions:
-            raise ValueError("未授权高风险动作时不能设置到期时间")
-        return self
 
 
 class UserPagePermissionsUpdate(BaseModel):
@@ -474,9 +466,6 @@ class PagePermissionHealthIssueOut(BaseModel):
         "invalid_department",
         "missing_module_access",
         "redundant_user_override",
-        "sensitive_without_expiry",
-        "sensitive_expired",
-        "sensitive_expiring",
     ]
     severity: Literal["warning", "error"]
     target_type: Literal["role", "user"]

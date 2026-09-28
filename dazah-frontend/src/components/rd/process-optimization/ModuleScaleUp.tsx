@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, Button, Space, Tag, Table, Form, Input, InputNumber, Select, App, Tabs, Alert, Row, Col, Statistic, Descriptions } from 'antd'
+import { Card, Button, Space, Tag, Table, Form, Input, InputNumber, Select, App, Tabs, Row, Col, Statistic, Descriptions } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { CheckCircleOutlined, PlusOutlined, ExpandOutlined } from '@ant-design/icons'
 import type { ScaleUpStudy, ScaleUpBatch, DOEExperiment, LabConfirmationStudy } from '@/types/rd'
 import { AIFileParser } from './AIFileParser'

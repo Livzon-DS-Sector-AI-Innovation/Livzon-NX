@@ -5,27 +5,8 @@
 // 实际完成/收率/合格率等指标待实际数据接入后启用（当前显示 --）。
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import {
-  Alert,
-  Card,
-  Row,
-  Col,
-  Typography,
-  Button,
-  Tag,
-  Table,
-  App,
-  Modal,
-  Input,
-  InputNumber,
-  DatePicker,
-  Drawer,
-  Popconfirm,
-  Select,
-  Statistic,
-  Empty,
-  Space,
-} from 'antd'
+import { Card, Row, Col, Typography, Button, Tag, Table, App, Modal, Input, InputNumber, DatePicker, Drawer, Popconfirm, Select, Statistic, Empty, Space } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import {
   ScheduleOutlined,
   SyncOutlined,
@@ -46,10 +27,12 @@ import LineStatusConfirmModal, {
   LineHaltHistoryModal,
 } from '@/components/production/line-status-confirm-modal'
 import { useProductContextStore } from '@/stores/product-context'
+import { PRODUCTION_OVERVIEW_PRODUCT_CODES } from '@/lib/production-overview-sections'
 import { useAuthStore } from '@/stores/auth'
 import {
   hasProductionOverviewStage,
   PRODUCTION_PAGE_KEYS,
+  hasProductionOverviewSection,
   useProductionPermissions,
 } from '@/components/production/useProductionPermissions'
 import {
@@ -166,6 +149,13 @@ export default function ProductionDashboard() {
   // 概览页授权用户按页面数据范围（production_fermentation/extraction/all）解析
   const canFerm = hasProductionOverviewStage(productionUser, 'fermentation')
   const canExtract = hasProductionOverviewStage(productionUser, 'extraction')
+  const hiddenOverviewCodes = useMemo(
+    () => PRODUCTION_OVERVIEW_PRODUCT_CODES.filter(
+      (code) => !hasProductionOverviewSection(productionUser, code),
+    ),
+    [productionUser],
+  )
+  const canViewSalesPlan = hasProductionOverviewSection(productionUser, 'sales_plan')
   const [board, setBoard] = useState<FermentationBoard | null>(null)
   const [boardMessage, setBoardMessage] = useState<string>('')
   const [loading, setLoading] = useState(true)
@@ -184,7 +174,8 @@ export default function ProductionDashboard() {
   const viewDate = viewDateMap[productCode] ?? ''
   const setViewDate = (value: string) =>
     setViewDateMap((prev) => ({ ...prev, [productCode]: value }))
-  const isSummaryView = productCode === 'SUMMARY'
+  // 本地保存的旧产品选择可能已被管理员撤销；恢复期间只展示允许的汇总视图。
+  const isSummaryView = productCode === 'SUMMARY' || hiddenOverviewCodes.includes(productCode)
   // FL 氟苯尼考为合成预混工艺：无发酵工段，概览渲染独立批次工序看板
   const isFlView = productCode === 'FL'
   // FL 视图刷新信号：页面「立即刷新」按钮驱动（发酵视图走 loadBoard）
@@ -239,11 +230,11 @@ export default function ProductionDashboard() {
   }, [viewDate, productCode])
 
   useEffect(() => {
-    if (isSummaryView || isFlView) return // 汇总无单产品看板；FL 走独立视图自取数
+    if (isSummaryView || isFlView || hiddenOverviewCodes.includes(productCode)) return // 汇总无单产品看板；FL 走独立视图自取数
     void loadBoard() // eslint-disable-line react-hooks/set-state-in-effect -- 看板初始加载，与 201-1 页面既有模式一致
     const timer = setInterval(() => void loadBoard(), REFRESH_INTERVAL_MS)
     return () => clearInterval(timer)
-  }, [loadBoard, isSummaryView, isFlView])
+  }, [loadBoard, isSummaryView, isFlView, hiddenOverviewCodes, productCode])
 
   // 产线停产状态：进入页面拉一次，切换确认后本地即时更新
   const loadHaltedLines = useCallback(async () => {
@@ -305,6 +296,7 @@ export default function ProductionDashboard() {
 
   useEffect(() => {
     let cancelled = false
+    if (isSummaryView || hiddenOverviewCodes.includes(productCode)) return
     void (async () => {
       let remembered = ''
       try {
@@ -317,7 +309,7 @@ export default function ProductionDashboard() {
         // 存储不可用则当作无记录
       }
       try {
-        const res = await getPlans({ month: planMonth, page_size: 200 })
+        const res = await getPlans({ month: planMonth, product_name: currentProductName, page_size: 200 })
         if (res.code === 200 && !cancelled) {
           const allRows = res.data || []
           setPlanRows(allRows)
@@ -339,7 +331,7 @@ export default function ProductionDashboard() {
     return () => {
       cancelled = true
     }
-  }, [planMonth, productCode, currentProductName, planMemoryKey])
+  }, [planMonth, productCode, currentProductName, planMemoryKey, isSummaryView, hiddenOverviewCodes])
 
   // 显式选择时写入本地存储（按产品+月份分开记忆）
   const handlePlanSelect = useCallback(
@@ -895,7 +887,7 @@ export default function ProductionDashboard() {
     <div className="p-4 flex flex-col gap-3">
       {/* 顶部导航块：第 4 位为当前产品 L-苯丙氨酸，第 5/6 位洛伐他汀/美伐他汀
           （复用 MP 管线），首位为汇总 Tab（原地切换五产线聚合视图） */}
-      <BoardNavBlocks />
+      <BoardNavBlocks hideCodes={hiddenOverviewCodes} />
 
       {/* 顶部标题卡：汇总态标题切换、单产品操作按钮隐藏 */}
       <Card
@@ -1049,9 +1041,9 @@ export default function ProductionDashboard() {
       {/* 汇总视图：五产线聚合表 + 播报汇总 */}
       {isSummaryView && (
         <>
-          <ProductionSummary month={planMonth} />
+          <ProductionSummary month={planMonth} visibleCodes={PRODUCTION_OVERVIEW_PRODUCT_CODES.filter((code) => !hiddenOverviewCodes.includes(code))} />
           {/* 产销计划卡：销售计划执行表（飞书同步），跟随概览月份切换 */}
-          <SalesPlanCard month={planMonth} />
+          {canViewSalesPlan && <SalesPlanCard month={planMonth} />}
         </>
       )}
 

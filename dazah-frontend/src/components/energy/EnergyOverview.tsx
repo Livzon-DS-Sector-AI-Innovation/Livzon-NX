@@ -9,19 +9,8 @@ import {
   WarningOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import {
-  Alert,
-  Button,
-  Card,
-  DatePicker,
-  Empty,
-  Select,
-  Skeleton,
-  Statistic,
-  Table,
-  Tag,
-  Tooltip,
-} from 'antd'
+import { Button, Card, DatePicker, Empty, Select, Skeleton, Statistic, Table, Tag, Tooltip } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import dayjs, { type Dayjs } from 'dayjs'
 import type { EChartsOption } from 'echarts'
 import ReactECharts from 'echarts-for-react'
