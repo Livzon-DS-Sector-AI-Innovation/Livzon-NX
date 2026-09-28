@@ -75,8 +75,13 @@ async def submit_job(
             result = await fn(**kwargs)
             status = {"state": "completed", "progress": "完成", "result": result}
         except Exception as e:
-            logger.error("Job %s failed: %s", job_id, e)
-            status = {"state": "failed", "progress": f"失败: {str(e)}", "result": None}
+            # TimeoutError 等异常 str 为空，回退异常类名，避免状态里只剩“失败: ”
+            logger.exception("Job %s failed: %s", job_id, e)
+            status = {
+                "state": "failed",
+                "progress": f"失败: {str(e) or type(e).__name__}",
+                "result": None,
+            }
         finally:
             hb.cancel()
             await cache_delete(_heartbeat_key(job_id))
