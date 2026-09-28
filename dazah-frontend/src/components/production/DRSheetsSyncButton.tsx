@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import {Button, Modal, Checkbox, Typography, App, Alert, Tag} from 'antd'
+import { Button, Modal, Checkbox, Typography, App, Tag } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { SyncOutlined } from '@ant-design/icons'
 import { useProductionPermissions, type ProductionPageKey } from './useProductionPermissions'
 

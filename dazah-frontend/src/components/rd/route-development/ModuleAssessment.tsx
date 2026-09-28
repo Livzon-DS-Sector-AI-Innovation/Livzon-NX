@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Card, Slider, Button, Space, Tag, Alert, Select, Row, Col, App } from 'antd'
+import { Card, Slider, Button, Space, Tag, Select, Row, Col, App } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { CheckCircleOutlined, ReloadOutlined, FileTextOutlined, DownloadOutlined } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import type { DimensionAssessment, DimensionWeights, ExperimentRecord } from '@/types/rd'

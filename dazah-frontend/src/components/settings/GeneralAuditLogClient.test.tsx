@@ -75,10 +75,29 @@ describe('user operation audit tab', () => {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
     const livzon = Array.from(host.querySelectorAll('[role="tab"]')).find((tab) => tab.textContent === 'Livzon助手') as HTMLElement
     await act(async () => livzon.click())
-    expect(host.textContent).toContain('自动化版本与运行')
+    const livzonNav = host.querySelector('nav[aria-label="Livzon助手子导航"]')
+    expect(livzonNav?.textContent).toContain('自动化版本与运行')
+    expect(livzonNav?.querySelector('[aria-current="page"]')?.textContent).toContain('对话')
+    const automationAccess = Array.from(livzonNav?.querySelectorAll('button') || []).find((button) => button.textContent?.includes('自动化访问记录'))
+    await act(async () => automationAccess?.click())
+    expect(livzonNav?.querySelector('[aria-current="page"]')?.textContent).toContain('自动化访问记录')
+    expect(api.fetchGeneralAuditLogs).toHaveBeenCalledWith(expect.objectContaining({ category: 'automations' }))
     const business = Array.from(host.querySelectorAll('[role="tab"]')).find((tab) => tab.textContent === '业务与外部交互') as HTMLElement
     await act(async () => business.click())
-    expect(host.textContent).toContain('飞书交互')
+    const businessNav = host.querySelector('nav[aria-label="业务与外部交互子导航"]')
+    expect(businessNav?.textContent).toContain('飞书交互')
+    expect(businessNav?.querySelector('[aria-current="page"]')?.textContent).toContain('业务与平台记录')
+  })
+
+  it('supports keyboard switching in the primary audit navigation', async () => {
+    await act(async () => root.render(createElement(App, null, createElement(AuditLogClient))))
+    const operations = host.querySelector('[role="tab"][aria-selected="true"]') as HTMLElement
+    operations.focus()
+    await act(async () => operations.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })))
+
+    expect(host.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('权限与授权')
+    expect(document.activeElement?.textContent).toBe('权限与授权')
+    expect(api.fetchGeneralAuditLogs).toHaveBeenCalledWith(expect.objectContaining({ category: 'permissions' }))
   })
 
   it('shows actor, operation, module and time from the paged API', async () => {
@@ -186,6 +205,55 @@ describe('user operation audit tab', () => {
     })
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
     expect(host.textContent).toContain('暂无操作记录')
+  })
+
+  it.each([true, false])('shows permission query results and trace metadata (snapshot: %s)', async (hasSnapshot) => {
+    const detail = {
+      id: 'permission-1', category: 'permissions', actor_name: '管理员甲',
+      action: 'view_user_module_permissions', resource_type: 'user_module_permissions',
+      method: 'GET', path: '/api/v1/identity/users/user-1/module-permissions',
+      status_code: 200, created_at: '2026-09-28T08:00:00Z',
+      request_id: 'permission-trace', duration_ms: 0,
+      ip_address: '127.0.0.1', user_agent: 'permission-client',
+      new_value: hasSnapshot ? { grant_version: 5, grants: [{ module_code: 'quality', permissions: ['module.view'] }] } : null,
+      extra: { grant_version: 5 },
+    }
+    api.fetchGeneralAuditLogs.mockResolvedValue({ items: [detail], page: 1, page_size: 20, total: 1 })
+    api.fetchGeneralAuditLog.mockResolvedValue(detail)
+    await act(async () => root.render(createElement(App, null, createElement(GeneralAuditLogClient, { category: 'permissions' }))))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+    const viewButton = Array.from(host.querySelectorAll('button')).find((button) => button.textContent?.includes('查看'))
+    await act(async () => viewButton?.click())
+    const content = document.body.textContent || ''
+    expect(content).toContain('权限与授权审计详情')
+    expect(content).toContain('本次为只读查询，未变更授权。')
+    expect(content).toContain('查询结果')
+    expect(content).not.toContain('变更前')
+    expect(content).not.toContain('变更后')
+    expect(content).toContain('permission-trace')
+    expect(content).toContain('0 ms')
+    expect(content).toContain('127.0.0.1')
+    expect(content).toContain('permission-client')
+    expect(content).toContain(hasSnapshot ? 'module.view' : '此记录未保存查询结果')
+  })
+
+  it('keeps before and after values for permission changes', async () => {
+    const detail = {
+      id: 'permission-write', category: 'permissions', action: 'replace_user_module_permissions',
+      resource_type: 'user_module_permissions', method: 'PUT', created_at: '2026-09-28T08:00:00Z',
+      old_value: { permissions: ['module.view'] }, new_value: { permissions: ['module.view', 'module.admin'] },
+    }
+    api.fetchGeneralAuditLogs.mockResolvedValue({ items: [detail], page: 1, page_size: 20, total: 1 })
+    api.fetchGeneralAuditLog.mockResolvedValue(detail)
+    await act(async () => root.render(createElement(App, null, createElement(GeneralAuditLogClient, { category: 'permissions' }))))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+    const viewButton = Array.from(host.querySelectorAll('button')).find((button) => button.textContent?.includes('查看'))
+    await act(async () => viewButton?.click())
+    const content = document.body.textContent || ''
+    expect(content).toContain('变更前')
+    expect(content).toContain('变更后')
+    expect(content).toContain('module.admin')
+    expect(content).not.toContain('本次为只读查询')
   })
 
   it('shows Hermes Feishu outcome and external log ID', async () => {

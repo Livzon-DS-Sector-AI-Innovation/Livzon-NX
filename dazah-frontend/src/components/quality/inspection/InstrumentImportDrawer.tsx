@@ -1,7 +1,8 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Alert, App, Button, Drawer, Space, Table, Tag, Typography } from 'antd'
+import { App, Button, Drawer, Space, Table, Tag, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import type { ColumnsType } from 'antd/es/table'
 import {
   confirmInstrumentImport,

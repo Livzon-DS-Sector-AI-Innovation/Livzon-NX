@@ -1,19 +1,7 @@
 'use client'
 
-import {
-  Alert,
-  Button,
-  Card,
-  Col,
-  Empty,
-  Row,
-  Space,
-  Spin,
-  Statistic,
-  Table,
-  Tag,
-  Typography,
-} from 'antd'
+import { Button, Card, Col, Empty, Row, Space, Spin, Statistic, Table, Tag, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { CloudUploadOutlined, ReloadOutlined, RiseOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState, useTransition } from 'react'

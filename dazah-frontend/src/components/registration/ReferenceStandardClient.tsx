@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { Table, Input, Button, Space, App, Card, Modal, Form, Upload, Row, Col, Spin, Alert } from 'antd'
+import { Table, Input, Button, Space, App, Card, Modal, Form, Upload, Row, Col, Spin } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import {  DownloadOutlined, DeleteOutlined, FileSearchOutlined } from '@ant-design/icons'
 import { ReferenceStandardListItem } from '@/types/registration'
 import { fetchReferenceStandards, getReferenceStandardDownloadUrl, parseCOA } from '@/lib/api/registration'

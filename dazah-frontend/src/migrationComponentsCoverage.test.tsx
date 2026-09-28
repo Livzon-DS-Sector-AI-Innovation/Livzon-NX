@@ -211,11 +211,17 @@ vi.mock('./components/hr/AttachmentContentModal', () => ({
     : createElement('div', null, '附件内容'),
 }))
 
-vi.mock('@ant-design/icons', async () =>
-  await vi.importActual<typeof import('@ant-design/icons')>('@ant-design/icons')
+vi.mock('@ant-design/icons', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@ant-design/icons')>()
+  const businessMock = await (async () =>
+  await vi.importActual<typeof import('@ant-design/icons')>('@ant-design/icons'))()
+  return { ...actual, ...businessMock }
+}
 )
 
-vi.mock('antd', async () => {
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd')>()
+  const businessMock = await (async () => {
   const React = await import('react')
   const { Children, cloneElement, createContext, forwardRef, isValidElement, useMemo, useRef } = React
   const FormContext = createContext<Record<string, unknown> | null>(null)
@@ -418,6 +424,8 @@ vi.mock('antd', async () => {
   const Avatar = Wrapper
   const exports = { App, Alert, AutoComplete, Avatar, Badge, Breadcrumb: Wrapper, Button, Card, Checkbox, Collapse, Col: Wrapper, ConfigProvider: Wrapper, DatePicker: Object.assign(DatePicker, { RangePicker }), Descriptions: Object.assign(Wrapper, { Item: Wrapper }), Divider, Drawer, Dropdown, Empty, Flex: Wrapper, Form, Input, InputNumber, List, Menu, Modal, Pagination, Popconfirm, Progress: Wrapper, Radio, Result, Row: Wrapper, Select, Segmented, Space, Spin, Statistic, Switch, Table, Tabs, Tag, TimePicker, Timeline: Wrapper, Tooltip: Wrapper, Tree, Typography, Upload }
   return new Proxy(exports, { get: (target, name: string | symbol) => name === 'then' ? undefined : target[name as keyof typeof target] ?? Wrapper })
+})()
+  return { ...actual, ...businessMock, Alert: actual.Alert, theme: actual.theme, Typography: actual.Typography }
 })
 
 import { HrFeishuSettingsPage } from './components/hr/HrFeishuSettingsPage'
@@ -499,7 +507,6 @@ import WarehouseFeishuConfigPage from './components/warehouse/WarehouseFeishuCon
 import { RoleManager } from './components/system/RoleManager'
 import { UserRoleManager } from './components/system/UserRoleManager'
 import { DeptRoleMapper } from './components/system/DeptRoleMapper'
-import { MenuManager } from './components/system/MenuManager'
 import { PermissionVerification } from './components/system/PermissionVerification'
 
 const notificationSettings = {
@@ -576,7 +583,7 @@ const interactiveTargets = [
   'DeclarationProgressPage.tsx', 'KnowledgeBasePage.tsx',
   'QualityFeishuSettingsPage.tsx', 'OotLimitManagementPage.tsx', 'DocumentCatalogPage.tsx',
   'WarehouseFeishuConfigPage.tsx', 'WarehouseAiPanel.tsx', 'RoleManager.tsx', 'UserRoleManager.tsx',
-  'MenuManager.tsx', 'PermissionVerification.tsx', 'DeptRoleMapper.tsx',
+  'PermissionVerification.tsx', 'DeptRoleMapper.tsx',
   'OosOotInvestigationPushPage.tsx', 'OosOotReportRecordPage.tsx', 'OosOotProductDepartmentPage.tsx',
   'ReturnApplicationPage.tsx', 'ReturnLedgerPage.tsx', 'SupplierQualificationPage.tsx',
   'DeviationReportRecordPage.tsx', 'DeviationInvestigationPushPage.tsx', 'ChangeTable.tsx',
@@ -1079,7 +1086,7 @@ describe('migrated component coverage', () => {
     closeRendered(failedDelete)
   })
 
-  it('drives system permission settings role, user, menu and verification workflows', async () => {
+  it('drives system permission settings role, user and verification workflows', async () => {
     const role = { id: 'role-1', name: '质量管理员', code: 'quality-admin', description: '质量模块管理员', is_system: false, permissions: ['quality.read'] }
     const systemRole = { id: 'role-system', name: '系统管理员', code: 'admin', description: '内置', is_system: true, permissions: ['*'] }
     const departments = [
@@ -1154,19 +1161,6 @@ describe('migrated component coverage', () => {
     await settle()
     closeRendered(deptView)
 
-    const menuView = renderClient(createElement(MenuManager, { initialMenus: menus as never }))
-    await settle()
-    const menuButton = (text: string) => Array.from(menuView.container.querySelectorAll('button')).find((button) => button.textContent?.includes(text))
-    menuButton('新建菜单')?.click()
-    await settle()
-    menuButton('保存')?.click()
-    await settle()
-    menuView.container.querySelector('[title="编辑"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    menuView.container.querySelector('[title="禁用"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    menuView.container.querySelector('[title="删除"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    await settle()
-    closeRendered(menuView)
-
     const verificationView = renderClient(createElement(PermissionVerification))
     await settle()
     const account = Array.from(verificationView.container.querySelectorAll('select')).find((select) => select.querySelector('option[value="user-1"]'))
@@ -1182,46 +1176,6 @@ describe('migrated component coverage', () => {
     Array.from(verificationView.container.querySelectorAll('button')).find((button) => button.textContent?.includes('导出权限清单'))?.click()
     await settle()
     closeRendered(verificationView)
-  })
-
-  it('covers system menu create, edit, status and delete error paths', async () => {
-    const menus = [
-      { id: 'menu-root', key: 'root', parent_id: null, name: '系统设置', type: 'directory', permission_code: null, route_path: '/settings', component_path: null, icon: 'setting', sort_order: 1, status: 'active' },
-      { id: 'menu-disabled', key: 'disabled', parent_id: 'menu-root', name: '旧入口', type: 'menu', permission_code: 'system:read', route_path: '/settings/old', component_path: null, icon: null, sort_order: 2, status: 'disabled' },
-    ]
-    getMock('actions/admin', 'createMenu').mockResolvedValue({ id: 'menu-new' })
-    getMock('actions/admin', 'updateMenu').mockResolvedValue({})
-    getMock('actions/admin', 'deleteMenu').mockResolvedValue({})
-    const rendered = renderClient(createElement(MenuManager, { initialMenus: menus as never }))
-    await settle()
-    const byTitle = (title: string) => rendered.container.querySelector(`[title="${title}"]`) as HTMLButtonElement | null
-    const textButton = (text: string) => Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes(text))
-    textButton('新建菜单')?.click()
-    await settle()
-    textButton('保存')?.click()
-    await settle()
-    byTitle('编辑')?.click()
-    await settle()
-    textButton('保存')?.click()
-    await settle()
-    byTitle('禁用')?.click()
-    await settle()
-    byTitle('启用')?.click()
-    await settle()
-    byTitle('删除')?.click()
-    await settle()
-    getMock('actions/admin', 'createMenu').mockRejectedValueOnce(new Error('创建失败'))
-    textButton('新建菜单')?.click()
-    await settle()
-    textButton('保存')?.click()
-    await settle()
-    getMock('actions/admin', 'updateMenu').mockRejectedValueOnce(new Error('状态更新失败'))
-    byTitle('禁用')?.click()
-    await settle()
-    getMock('actions/admin', 'deleteMenu').mockRejectedValueOnce(new Error('删除失败'))
-    byTitle('删除')?.click()
-    await settle()
-    closeRendered(rendered)
   })
 
   it('exercises annual training plan loading, editing, attachment preview and export', async () => {

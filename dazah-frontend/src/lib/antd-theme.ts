@@ -96,6 +96,17 @@ export const antdTheme: ThemeConfig = {
     colorLinkHover: '#40a9ff',
   },
   components: {
+    // 页面提示统一采用浅色、无描边提示条；语义背景和图标沿用 Ant Design。
+    Alert: {
+      borderRadiusLG: 12,
+      defaultPadding: '16px 20px',
+      withDescriptionPadding: '16px 20px',
+      withDescriptionIconSize: 24,
+      colorInfoBorder: 'transparent',
+      colorSuccessBorder: 'transparent',
+      colorWarningBorder: 'transparent',
+      colorErrorBorder: 'transparent',
+    },
     // 按钮组件
     Button: {
       borderRadius: 8,

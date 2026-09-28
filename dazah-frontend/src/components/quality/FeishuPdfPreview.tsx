@@ -1,6 +1,7 @@
 'use client'
 
-import { Alert, Button, Space, Spin } from 'antd'
+import { Button, Space, Spin } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { useEffect, useRef, useState } from 'react'
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
 

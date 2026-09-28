@@ -1,5 +1,7 @@
 "use client"
 
+import PlatformNotice from '@/components/shared/PlatformNotice'
+
 import { useRef, useState } from "react"
 import { confirmOotLimitImport, previewOotLimitImport, type OotLimitImportPreviewFile } from "@/actions/quality"
 
@@ -118,11 +120,9 @@ export function OotLimitImportDrawer({ isOpen, onClose, onSuccess }: OotLimitImp
           </div>
 
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-            <div className="bg-blue-50 rounded-lg p-4 text-sm text-blue-800">
-              选择一个或多个「XX年 XX 产品OOT限度通知单」Word 文件（.docx）。系统按
-              <span className="font-medium"> 产品名 + 年份 </span>
-              匹配已有产品：命中则更新该产品全部限度明细，未命中则自动新建产品。
-            </div>
+            <PlatformNotice type="warning" title="导入将更新匹配产品的全部限度明细，未匹配产品将新建" description={<>选择一个或多个「XX年 XX 产品OOT限度通知单」Word 文件（.docx）。系统按
+              <span className="font-medium"> 产品名 + 年份 </span>匹配已有产品：命中则更新该产品全部限度明细，未命中则自动新建产品。
+            </>} />
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">选择文件（可多选）</label>
@@ -152,8 +152,8 @@ export function OotLimitImportDrawer({ isOpen, onClose, onSuccess }: OotLimitImp
               )}
             </div>
 
-            {errorMsg && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{errorMsg}</div>}
-            {successMsg && <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg p-3">{successMsg}</div>}
+            {errorMsg && <PlatformNotice type="error" title={<>{errorMsg}</>} />}
+            {successMsg && <PlatformNotice type="success" title={<>{successMsg}</>} />}
 
             {previewed && (
               <div className="space-y-3">
@@ -161,7 +161,7 @@ export function OotLimitImportDrawer({ isOpen, onClose, onSuccess }: OotLimitImp
                 {previewFiles.map((entry) => (
                   <div
                     key={entry.filename}
-                    className={`rounded-lg p-3 text-sm border ${entry.status === "error" ? "bg-red-50 border-red-200" : "bg-gray-50 border-gray-200"}`}
+                    className="rounded-lg p-3 text-sm border bg-gray-50 border-gray-200"
                   >
                     <div className="flex justify-between gap-2">
                       <span className="font-medium text-gray-800 truncate">{entry.filename}</span>
@@ -180,18 +180,20 @@ export function OotLimitImportDrawer({ isOpen, onClose, onSuccess }: OotLimitImp
                           {entry.document_year ? ` · ${entry.document_year}年` : ""} · 限度 {entry.item_count} 项
                         </div>
                         {entry.warnings && entry.warnings.length > 0 && (
-                          <div className="text-xs text-amber-600 mt-1">{entry.warnings.join("；")}</div>
+                          <PlatformNotice type="warning" className="mt-1" title={`解析结果包含 ${entry.warnings.length} 项提醒`}
+                            description={entry.warnings.join("；")} />
                         )}
                         {entry.row_errors && entry.row_errors.length > 0 && (
                           <div className="mt-1 max-h-32 overflow-y-auto">
                             {entry.row_errors.map((error, index) => (
-                              <div key={index} className="text-xs text-red-600 bg-red-50 p-2 rounded mb-1">{error}</div>
+                              <PlatformNotice type="error" key={index} title={<>{error}</>} />
                             ))}
                           </div>
                         )}
                       </>
                     )}
-                    {entry.status === "error" && <div className="text-xs text-red-600 mt-1">{entry.error}</div>}
+                    {entry.status === "error" && <PlatformNotice type="error" className="mt-1" title="文件解析失败"
+                      description={entry.error} />}
                   </div>
                 ))}
               </div>

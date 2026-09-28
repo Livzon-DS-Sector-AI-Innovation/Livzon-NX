@@ -43,7 +43,6 @@ vi.mock('@/lib/api/client/admin', () => ({
 
 import { DataScopeConfig } from './DataScopeConfig'
 import { DeptRoleMapper } from './DeptRoleMapper'
-import { MenuManager } from './MenuManager'
 import { PermissionVerification } from './PermissionVerification'
 import { RoleManager } from './RoleManager'
 import { UserRoleManager } from './UserRoleManager'
@@ -121,21 +120,14 @@ describe('system permissions settings pages', () => {
         feishu_department_id: 'feishu-1',
         department_name: '质量部',
       }],
-      menus,
-      users: [{
-        id: 'user-1',
-        name: '测试用户',
-        department: '质量部',
-        roles,
-      }],
     }))
     expect(settingsHtml).toContain('权限管理')
     expect(settingsHtml).not.toContain('数据范围')
     expect(settingsHtml).toContain('角色管理')
     expect(settingsHtml).toContain('用户角色')
     expect(settingsHtml).toContain('部门角色映射')
-    expect(settingsHtml).toContain('菜单管理')
-    expect(settingsHtml).toContain('权限接入检查')
+    expect(settingsHtml).not.toContain('菜单管理')
+    expect(settingsHtml).toContain('权限检查')
     expect(settingsHtml).toContain('质量管理员')
 
     const scopeHtml = renderInApp(React.createElement(DataScopeConfig, {
@@ -181,10 +173,6 @@ describe('system permissions settings pages', () => {
     expect(deptRoleHtml).toContain('查询部门用户')
     expect(deptRoleHtml).toContain('已有角色')
     expect(deptRoleHtml).not.toContain('新增规则')
-
-    const menuHtml = renderInApp(React.createElement(MenuManager, { initialMenus: menus }))
-    expect(menuHtml).toContain('新建菜单')
-    expect(menuHtml).toContain('CAPA')
 
     const verificationHtml = renderInApp(React.createElement(PermissionVerification))
     expect(verificationHtml).toContain('模块权限接入完整性')

@@ -311,7 +311,8 @@ describe('FeishuSettingsClient governance lifecycle', () => {
     await (findButton(tree, '刷新运行状态').props?.onClick as () => Promise<void>)()
     expect(actions.getAgentRuntimeOverview).toHaveBeenCalledTimes(2)
 
-    const tabs = walk(tree).find((element) => Array.isArray(element.props?.items))
+    const tabs = walk(tree).find((element) => element.props?.ariaLabel === 'Livzon Agent管理子导航')
+    expect((tabs?.props?.items as Array<{ label: string }>).map((item) => item.label)).toEqual(['运行总览', '飞书接入'])
     const overviewTab = (tabs?.props?.items as Array<{ children: ElementLike }>)[0].children
     ;(overviewTab.props?.onNavigate as (key: string, traceId: string) => void)(
       'trace',

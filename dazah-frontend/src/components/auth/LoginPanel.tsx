@@ -1,5 +1,7 @@
 'use client'
 
+import PlatformNotice from '@/components/shared/PlatformNotice'
+
 import { useEffect, useRef, useState } from 'react'
 import { ArrowRightOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
 
@@ -97,9 +99,7 @@ export function LoginPanel({
         </div>
 
         {(navigationError || (message && !isBusy)) && (
-          <div role="alert" className={styles.errorNotice}>
-            {navigationError || message}
-          </div>
+          <PlatformNotice type="error" className="mb-5" title={navigationError || message} />
         )}
 
         <div className={styles.loginMethod}>

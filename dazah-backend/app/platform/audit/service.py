@@ -239,7 +239,7 @@ class GeneralAuditLogService:
                 }
                 for related in related_logs[:20]
             ]
-        return GeneralAuditLogDetail(
+        detail = GeneralAuditLogDetail(
             **item.model_dump(),
             request_id=log.request_id,
             duration_ms=log.duration_ms,
@@ -249,6 +249,28 @@ class GeneralAuditLogService:
             user_agent=log.user_agent,
             extra=extra,
         )
+        if item.category == "permissions" and log.request_id:
+            operation = await db.scalar(
+                select(AuditLog)
+                .where(
+                    AuditLog.request_id == log.request_id,
+                    AuditLog.action == OPERATION_ACTION,
+                    AuditLog.user_id == log.user_id,
+                )
+                .order_by(AuditLog.created_at, AuditLog.id)
+                .limit(1)
+            )
+            if operation is not None:
+                # Preserve event-specific values; only fill missing HTTP metadata.
+                detail.method = detail.method or operation.method
+                detail.path = detail.path or operation.path
+                if detail.status_code is None:
+                    detail.status_code = operation.status_code
+                if detail.duration_ms is None:
+                    detail.duration_ms = operation.duration_ms
+                detail.ip_address = detail.ip_address or operation.ip_address
+                detail.user_agent = detail.user_agent or operation.user_agent
+        return detail
 
     @staticmethod
     def _item(

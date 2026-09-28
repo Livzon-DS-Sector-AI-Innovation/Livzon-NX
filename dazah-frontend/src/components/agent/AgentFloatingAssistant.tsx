@@ -21,7 +21,8 @@ import {
   StopOutlined,
   SyncOutlined,
 } from "@ant-design/icons"
-import { Alert, App, Button, Drawer, Empty, Input, List, Skeleton, Tag, Tooltip } from "antd"
+import { App, Button, Drawer, Empty, Input, Skeleton, Tag, Tooltip } from "antd"
+import Alert from "@/components/shared/PlatformNotice"
 import { BusinessMessageContent } from "@/components/agent/BusinessMessageContent"
 import { AgentEntryButton, AgentMark } from "@/components/agent/AgentEntryButton"
 import type { AgentArtifact } from "@/components/agent/AutomationArtifacts"
@@ -1136,34 +1137,32 @@ export function AgentFloatingAssistant() {
         onClose={() => setHistoryOpen(false)}
       >
         {sessions.length ? (
-          <List
-            dataSource={sessions}
-            renderItem={(item) => (
-              <List.Item
-                className="!items-start"
-                actions={[
-                  <Button key="restore" type="link" onClick={() => void restoreSession(item.id)}>
-                    继续对话
-                  </Button>,
-                ]}
+          <ul aria-label="历史会话列表" className="m-0 list-none p-0">
+            {sessions.map((item) => (
+              <li
+                key={item.id}
+                className="flex flex-wrap items-start gap-x-4 gap-y-1 border-b border-[var(--color-border)] py-3 last:border-b-0"
               >
-                <List.Item.Meta
-                  title={item.title || "未命名对话"}
-                  description={(
-                    <div className="space-y-1">
-                      <div className="line-clamp-2">{item.last_message_preview || "暂无消息摘要"}</div>
-                      <div className="text-xs text-[var(--color-text-tertiary)]">
-                        {item.channel === "feishu" ? "飞书" : "Web"} · {item.message_count} 条消息 · {new Date(item.updated_at).toLocaleString()}
-                      </div>
-                      {item.pending_confirmation_count > 0 && (
-                        <Tag color="warning">{item.pending_confirmation_count} 项待确认</Tag>
-                      )}
+                <div className="min-w-0 flex-1 basis-40 break-words">
+                  <div className="mb-1 text-sm font-medium text-[var(--color-text-primary)]">
+                    {item.title || "未命名对话"}
+                  </div>
+                  <div className="space-y-1 text-sm text-[var(--color-text-secondary)]">
+                    <div className="line-clamp-2">{item.last_message_preview || "暂无消息摘要"}</div>
+                    <div className="text-xs text-[var(--color-text-tertiary)]">
+                      {item.channel === "feishu" ? "飞书" : "Web"} · {item.message_count} 条消息 · {new Date(item.updated_at).toLocaleString()}
                     </div>
-                  )}
-                />
-              </List.Item>
-            )}
-          />
+                    {item.pending_confirmation_count > 0 && (
+                      <Tag color="warning">{item.pending_confirmation_count} 项待确认</Tag>
+                    )}
+                  </div>
+                </div>
+                <Button className="shrink-0" type="link" onClick={() => void restoreSession(item.id)}>
+                  继续对话
+                </Button>
+              </li>
+            ))}
+          </ul>
         ) : (
           !historyLoading && <Empty description="还没有历史会话" />
         )}

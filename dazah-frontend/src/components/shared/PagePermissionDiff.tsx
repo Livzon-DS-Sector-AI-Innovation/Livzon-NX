@@ -1,7 +1,8 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Alert, Table, Tag } from 'antd'
+import { Table, Tag } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import type { PageGrantChange, PageGrantChangeKind } from '@/lib/page-permission-editor'
 
 const changeKinds: Record<PageGrantChangeKind, { label: string; color: string }> = {
@@ -22,7 +23,7 @@ export function PagePermissionDiff({ changes, impactNote }: {
     return result
   }, {})
   return <div className="space-y-3">
-    <Alert type="warning" showIcon message={`即将调整 ${changes.length} 个页面的授权`}
+    <Alert type="warning" showIcon title={`即将调整 ${changes.length} 个页面授权；保存后立即生效，Livzon 访问范围将过期。`}
       description={<div className="space-y-2">
         <div>保存后立即生效，相关 Livzon 访问范围将过期。请重点核对扩大、收紧和撤销授权。</div>
         <div className="flex flex-wrap gap-2">{Object.entries(counts).map(([kind, count]) => {
@@ -31,6 +32,7 @@ export function PagePermissionDiff({ changes, impactNote }: {
         })}</div>
         {impactNote && <div>{impactNote}</div>}
       </div>} />
+    {impactNote && <div>{impactNote}</div>}
     <Table size="small" rowKey="pageKey" dataSource={changes} pagination={false}
       scroll={{ y: 360, x: 680 }} columns={[
         { title: '菜单页面', dataIndex: 'pageName', width: 190 },

@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, App, Button, Select, Skeleton, Space, Tag, Typography } from 'antd'
+import { App, Button, Select, Skeleton, Space, Tag, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import {
   getAgentMemoryTenantPolicy,
   saveAgentMemoryTenantPolicy,

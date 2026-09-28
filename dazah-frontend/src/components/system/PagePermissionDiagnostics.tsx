@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Alert, App, Button, Card, Select, Space, Tag, Typography } from "antd"
+import { App, Button, Card, Select, Space, Tag, Typography } from "antd"
+import Alert from "@/components/shared/PlatformNotice"
 import { simulatePagePermission, type PagePermissionSimulationOut } from "@/actions/admin"
 import {
   getUserPagePermissions,

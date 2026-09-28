@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { Alert, Card, Col, Row, Space, Statistic, Table, Tag, Typography } from 'antd'
+import { Card, Col, Row, Space, Statistic, Table, Tag, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { RightOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import ReactECharts from 'echarts-for-react'

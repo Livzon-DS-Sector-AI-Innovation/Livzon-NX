@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Alert, Card, Table } from 'antd'
+import { Card, Table } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import type { ColumnsType } from 'antd/es/table'
 import { getSalesPlanDetails } from '@/actions/production'
 import {

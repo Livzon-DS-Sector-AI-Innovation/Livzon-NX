@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { Steps, Card, Button, Space, Tag, App, Tabs, Alert } from 'antd'
+import { Steps, Card, Button, Space, Tag, App, Tabs } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { SaveOutlined, CheckCircleFilled, ClockCircleFilled } from '@ant-design/icons'
 import { ModuleDOE } from './ModuleDOE'
 import { ModuleImpurity } from './ModuleImpurity'

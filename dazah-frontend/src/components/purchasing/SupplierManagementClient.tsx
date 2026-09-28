@@ -1,17 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import {
-  Alert,
-  App,
-  Button,
-  Input,
-  Select,
-  Statistic,
-  Table,
-  Tag,
-  Upload,
-} from 'antd'
+import { App, Button, Input, Select, Statistic, Table, Tag, Upload } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import type { TableProps, UploadProps } from 'antd'
 import {
   InboxOutlined,

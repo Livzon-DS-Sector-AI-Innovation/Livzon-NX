@@ -1,9 +1,6 @@
 'use client'
 
-"use client"
-
-'use client'
-
+import PlatformNotice from '@/components/shared/PlatformNotice'
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import {
@@ -388,12 +385,8 @@ export default function HazardIdentificationDetailPage() {
             style={{ borderRadius: 12, border: '1px solid #e5e3df', flex: 1 }}
           >
             {reviewStatus === 'rejected' && record.ai_error_message && (
-              <div style={{
-                marginBottom: 12, padding: '8px 12px', background: '#fff2f0',
-                border: '1px solid #ffccc7', borderRadius: 8, fontSize: 13, color: '#e03131',
-              }}>
-                ⚠️ {record.ai_error_message}
-              </div>
+              <PlatformNotice type="error" style={{ marginBottom: 12 }} title="AI 结果已被驳回"
+                description={record.ai_error_message} />
             )}
             {hasOutput ? (
               <Descriptions size="small" column={1} bordered>

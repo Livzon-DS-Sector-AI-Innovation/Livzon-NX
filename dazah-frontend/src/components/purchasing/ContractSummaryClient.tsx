@@ -1,19 +1,8 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import {
-  Alert,
-  App,
-  Button,
-  Descriptions,
-  Drawer,
-  Empty,
-  Input,
-  Pagination,
-  Skeleton,
-  Space,
-  Tag,
-} from 'antd'
+import { App, Button, Descriptions, Drawer, Empty, Input, Pagination, Skeleton, Space, Tag } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import {
   DownloadOutlined,
   EyeOutlined,

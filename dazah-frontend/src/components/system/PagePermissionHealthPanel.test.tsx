@@ -44,10 +44,6 @@ const issues = [
     module_code: 'quality', page_key: 'quality:documents', page_name: '文件管理',
     remediation: 'remove_grant', severity: 'warning',
     target_id: 'user-1', target_name: '张三', target_type: 'user' },
-  { code: 'sensitive_without_expiry', detail: '高风险授权需要到期日', grant_version: 5,
-    module_code: 'hr', page_key: 'hr:contracts', page_name: '合同管理',
-    remediation: 'edit', severity: 'warning',
-    target_id: 'role-1', target_name: '人事角色', target_type: 'role' },
 ]
 
 beforeEach(() => {
@@ -57,8 +53,8 @@ beforeEach(() => {
   document.body.append(host)
   root = createRoot(host)
   mocks.health.mockResolvedValue({
-    checked_at: '2026-09-16T08:00:00Z', issue_count: 3,
-    error_count: 1, warning_count: 2, issues,
+    checked_at: '2026-09-16T08:00:00Z', issue_count: 2,
+    error_count: 1, warning_count: 1, issues,
   })
   mocks.roles.mockResolvedValue([{ id: 'role-1', name: '人事角色', code: 'hr', permissions: [] }])
   mocks.departments.mockResolvedValue([])
@@ -81,10 +77,34 @@ function rowFor(label: string) {
   return row!
 }
 
+it('renders health counts with severity colors without Statistic deprecation warnings', async () => {
+  const consoleError = vi.spyOn(console, 'error')
+  try {
+    await renderPanel()
+    const statistics = [...host.querySelectorAll('.ant-statistic')]
+    for (const [title, value, color] of [
+      ['问题总数', '2', ''],
+      ['错误', '1', '#cf1322'],
+      ['提醒', '1', '#d48806'],
+    ]) {
+      const statistic = statistics.find((item) =>
+        item.querySelector('.ant-statistic-title')?.textContent === title)
+      const content = statistic?.querySelector<HTMLElement>('.ant-statistic-content')
+      expect(content?.textContent).toBe(value)
+      expect(content?.style.color).toBe(color)
+    }
+    const warnings = consoleError.mock.calls.map((args) => args.map(String).join(' '))
+    expect(warnings.filter((warning) =>
+      warning.includes('[antd: Statistic]') && warning.includes('valueStyle'))).toEqual([])
+  } finally {
+    consoleError.mockRestore()
+  }
+})
+
 it('shows health findings and opens the matching role or user editor', async () => {
   await renderPanel()
-  expect(document.body.textContent).toContain('当前显示 3 条')
-  expect(document.body.textContent).toContain('高风险权限无期限')
+  expect(document.body.textContent).toContain('当前显示 2 条')
+  expect(document.body.textContent).not.toContain('到期状态')
 
   await act(async () => {
     rowFor('部门已失效').querySelector<HTMLButtonElement>('button')!.click()

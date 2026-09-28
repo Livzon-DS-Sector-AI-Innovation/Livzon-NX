@@ -1,5 +1,7 @@
 'use client'
 
+import PlatformNotice from '@/components/shared/PlatformNotice'
+
 import { qualityTokens } from './themeTokens'
 import { useState, useCallback } from 'react'
 import { App, Card, Button, Input, Space, List, Typography } from 'antd'
@@ -137,13 +139,9 @@ export function ReportEditor({
       }
     >
       {isViewingHistory && (
-        <div style={{ marginBottom: 16, padding: '8px 12px', background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <EyeOutlined />
-          <Text>正在查看历史版本 — {dayjs(viewingVersion!.editTime).format('YYYY-MM-DD HH:mm')}</Text>
-          <Button size="small" type="link" style={{ marginLeft: 'auto' }} onClick={() => setViewingVersion(null)}>
+        <PlatformNotice type="warning" className="mb-4" title={<><EyeOutlined /><Text>正在查看历史版本 — {dayjs(viewingVersion!.editTime).format('YYYY-MM-DD HH:mm')}</Text></>} action={<><Button size="small" type="link" style={{ marginLeft: 'auto' }} onClick={() => setViewingVersion(null)}>
             返回当前
-          </Button>
-        </div>
+          </Button></>} />
       )}
       <div style={{ display: 'flex' }}>
         <div style={{ flex: 1, minWidth: 0 }}>

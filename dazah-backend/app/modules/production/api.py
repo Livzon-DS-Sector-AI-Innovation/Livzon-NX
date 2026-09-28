@@ -12,6 +12,10 @@ from app.core.database import get_db
 from app.core.deps import CurrentUser, get_current_user
 from app.core.exceptions import NotFoundException
 from app.core.response import ApiResponse
+from app.modules.production.overview_visibility import (
+    require_overview_product_name,
+    require_overview_section,
+)
 from app.modules.production.schemas import (  # noqa: E402
     BatchCreate,
     BatchMaterialCreate,
@@ -265,6 +269,7 @@ async def get_plans(
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> Any:
     """获取生产计划列表"""
+    require_overview_product_name(product_name)
     date_from = date_to = None
     if month is not None:
         parsed = _parse_month_range(month)
@@ -322,6 +327,7 @@ async def get_plan(
     plan = await service.get_plan(plan_id)
     if not plan:
         return ApiResponse(code=404, message="计划不存在")
+    require_overview_product_name(plan.product_name)
     return ApiResponse(data=ProductionPlanResponse.model_validate(plan))
 
 
@@ -1010,6 +1016,7 @@ async def get_sales_plan_details(
     ),
     session: AsyncSession = Depends(get_db),
 ) -> Any:
+    require_overview_section("sales_plan")
     query = select(SalesPlanDetail).where(SalesPlanDetail.is_deleted.is_(False))
     count_q = select(func.count(SalesPlanDetail.id)).where(
         SalesPlanDetail.is_deleted.is_(False)

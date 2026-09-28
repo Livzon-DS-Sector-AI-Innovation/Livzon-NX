@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { App } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAuthStore } from '@/stores/auth'
+import { openNoticeDetails } from '@/components/shared/tests/notice-interactions'
 
 const { routerPushMock } = vi.hoisted(() => ({ routerPushMock: vi.fn() }))
 
@@ -253,8 +254,8 @@ describe('TraceabilityPage (201-3)', () => {
     expect(text).toContain('全程损耗漏斗')
     expect(text).toContain('全程收率')
     expect(text).toContain('段收率')
-    // 断链清单卡片
-    expect(text).toContain('断链清单')
+    // 提示正文保留风险与数量，规则入口展示完整断链清单。
+    expect(text).toContain('发现 1 处断链：投料无源头或回收粉标签')
     expect(text).toContain('DR-S1')
     // 分析面板 Tabs：收率分布
     expect(text).toContain('收率分布')
@@ -277,6 +278,8 @@ describe('TraceabilityPage (201-3)', () => {
     expect(lossText).toContain('按月平均收率')
     expect(lossText).toContain('未闭合投料')
     expect(lossText).toContain('DR-GB1')
+    await openNoticeDetails('发现 1 处断链')
+    expect(document.querySelector('.ant-modal')?.textContent).toContain('DR-S1（无源头）')
   })
 
   it('renders LossFunnelCard fallback when funnel layers are missing', async () => {

@@ -3,7 +3,8 @@
 import { useCallback, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { ArrowLeftOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Card, Descriptions, Space, Spin, Typography } from 'antd'
+import { App, Button, Card, Descriptions, Space, Spin, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchDeviation, fetchFeishuDeviationReportRecord } from '@/lib/api/client/quality'
 

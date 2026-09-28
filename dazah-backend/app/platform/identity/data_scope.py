@@ -47,6 +47,9 @@ current_page_actor: ContextVar[User | None] = ContextVar(
     "current_page_actor", default=None
 )
 current_page_key: ContextVar[str | None] = ContextVar("current_page_key", default=None)
+current_page_visible_sections: ContextVar[list[str] | None] = ContextVar(
+    "current_page_visible_sections", default=None
+)
 
 
 @dataclass

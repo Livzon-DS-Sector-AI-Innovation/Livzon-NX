@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Button, Alert, Divider } from 'antd'
+import { Button, Divider } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { BulbOutlined, ReloadOutlined } from '@ant-design/icons'
 import ReactMarkdown from 'react-markdown'
 import { fetchTurnoverAnalysis } from '@/lib/api/hr'

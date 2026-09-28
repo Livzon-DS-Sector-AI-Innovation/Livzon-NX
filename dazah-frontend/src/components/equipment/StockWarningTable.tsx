@@ -1,6 +1,7 @@
 'use client'
 
-import { Alert, Table } from 'antd'
+import { Table } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { WarningOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { StockWarning } from '@/types/equipment'

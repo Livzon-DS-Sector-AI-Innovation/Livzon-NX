@@ -2,21 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
-import {
-  Alert,
-  Button,
-  Col,
-  DatePicker,
-  Descriptions,
-  Form,
-  Input,
-  Modal,
-  Row,
-  Space,
-  Spin,
-  Typography,
-  Upload,
-} from 'antd'
+import { Button, Col, DatePicker, Descriptions, Form, Input, Modal, Row, Space, Spin, Typography, Upload } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { FileTextOutlined, RobotOutlined, UploadOutlined } from '@ant-design/icons'
 import type { UploadFile } from 'antd'
 

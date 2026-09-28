@@ -19,6 +19,9 @@ from app.platform.identity.quality_api_contract import QUALITY_REVIEWED_API_ROUT
 
 PAGE_PERMISSION_ORDER = ("access", "query", "operate")
 PAGE_PERMISSION_SET = frozenset(PAGE_PERMISSION_ORDER)
+PRODUCTION_OVERVIEW_VISIBLE_SECTIONS = frozenset(
+    {"MC", "LN", "DR", "FA", "LV", "MV", "TY", "FL", "sales_plan"}
+)
 PAGE_SCOPE_TYPES = frozenset(
     {"not_applicable", "department_tree", "departments", "all", "self",
      "production_fermentation", "production_extraction"}

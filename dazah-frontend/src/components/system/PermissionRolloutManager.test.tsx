@@ -59,6 +59,9 @@ it('shows automatic current result and no manual publication action', async () =
   await act(async () => button('查看接入详情').click())
   await act(async () => { await Promise.resolve() })
   expect(document.body.textContent).toContain('当前接入检查通过')
+  const rules = [...document.querySelectorAll<HTMLButtonElement>('[data-platform-notice] button')]
+    .find((button) => button.textContent?.includes('了解访问规则'))!
+  await act(async () => rules.click())
   expect(document.body.textContent).toContain('实际请求仍由后端逐次鉴权')
   expect(document.body.textContent).not.toContain('确认发布')
 })

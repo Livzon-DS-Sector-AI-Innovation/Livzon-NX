@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Alert, Card, Spin, Table, Tag, Typography } from 'antd'
+import { Card, Spin, Table, Tag, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { getProductionSummary } from '@/actions/production'
 import { PRODUCT_COLORS } from './product-colors'
 import type { ProductionSummaryRow } from '@/types/production'
@@ -117,7 +118,7 @@ function extractCell(
 }
 
 /** 生产汇总：五产线聚合播报（无缝跑马灯）+ 关键指标大表（跟随概览月份切换） */
-export default function ProductionSummary({ month }: { month: string }) {
+export default function ProductionSummary({ month, visibleCodes }: { month: string; visibleCodes?: readonly string[] }) {
   const [rows, setRows] = useState<ProductionSummaryRow[]>([])
   const [periodLabel, setPeriodLabel] = useState('')
   const [loading, setLoading] = useState(false)
@@ -149,7 +150,8 @@ export default function ProductionSummary({ month }: { month: string }) {
   }, [loadSummary])
 
   // 播报汇总：五条产线合并；内容复制两份做无缝循环（播完一份接第二份）
-  const mergedAlerts = rows.flatMap((r) =>
+  const visibleRows = visibleCodes ? rows.filter((row) => visibleCodes.includes(row.product_code)) : rows
+  const mergedAlerts = visibleRows.flatMap((r) =>
     (r.alerts || []).map((a) => ({
       ...a,
       product: r.product_name,
@@ -333,13 +335,13 @@ export default function ProductionSummary({ month }: { month: string }) {
           </Text>
         )}
         {error ? (
-          <Alert type="warning" showIcon message={error} />
+          <Alert type="warning" showIcon title={error} />
         ) : (
           <Spin spinning={loading}>
             <Table
               rowKey="product_code"
               columns={columns}
-              dataSource={rows}
+              dataSource={visibleRows}
               pagination={false}
               scroll={{ x: 1400 }}
               className="production-summary-table"

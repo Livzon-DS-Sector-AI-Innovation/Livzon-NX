@@ -2,14 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { PAGE_DATA_SCOPE_VISIBLE } from "@/lib/page-permission-editor"
-import { Alert, App, Button, Checkbox, Drawer, Input, Table, Tag, Typography } from "antd"
-import { AppstoreOutlined, PlusOutlined } from "@ant-design/icons"
+import { App, Button, Checkbox, ConfigProvider, Drawer, Input, Table, Tag, Typography } from "antd"
+import Alert from "@/components/shared/PlatformNotice"
+import { AppstoreOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons"
 import type { AdminUserItem, RoleItem } from "@/lib/api/client/admin"
 import { fetchAdminUsers, fetchDataScopes } from "@/lib/api/client/admin"
 import type { DepartmentItem } from "@/lib/api/server/admin"
 import { DataScopeConfig, type DataScopeSelection } from "./DataScopeConfig"
 import { assignUserRoles, deleteDataScope, saveUserDataScope } from "@/actions/admin"
 import UserModuleAccessDrawer, { type ModuleAccessUser } from "./UserModuleAccessDrawer"
+import styles from "./UserRoleManager.module.css"
 
 interface UserRoleManagerProps {
   initialRoles: RoleItem[]
@@ -154,6 +156,49 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
     })
   }
 
+  const permissionSummary = <div className="space-y-3 pt-2">
+    <Alert showIcon type={selectedSystemAdmin ? "warning" : "info"}
+      title={selectedSystemAdmin ? "系统管理员将拥有全部权限" : "多个角色的页面权限将合并生效"}
+      description="角色提供页面权限基线：基础权限与高风险操作取并集，数据范围按页面合并；已有用户页面覆盖仍优先于角色基线。" />
+    <div><Typography.Text strong>已选角色：</Typography.Text>{selectedRoleIds.length
+      ? initialRoles.filter((role) => selectedRoleSet.has(role.id)).map((role) => <Tag key={role.id}>{role.name}</Tag>)
+      : <Typography.Text type="secondary">未分配角色</Typography.Text>}</div>
+    <div><Typography.Text strong>新增角色：</Typography.Text>{addedRoles.length
+      ? addedRoles.map((role) => <Tag key={role.id} color="green">{role.name}</Tag>)
+      : <Typography.Text type="secondary">无</Typography.Text>}</div>
+    <div><Typography.Text strong>移除角色：</Typography.Text>{removedRoles.length
+      ? removedRoles.map((role) => <Tag key={role.id} color="red">{role.name}</Tag>)
+      : <Typography.Text type="secondary">无</Typography.Text>}</div>
+    {PAGE_DATA_SCOPE_VISIBLE && <div><Typography.Text strong>兼容部门范围：</Typography.Text>
+      {selectedSystemAdmin ? "系统管理员不受部门范围限制" : dataScope.scopeType === "all" ? "全部部门"
+        : dataScope.scopeType === "departments" ? dataScope.departmentNames.join("、") || "尚未选择部门" : "本部门 + 子部门"}
+    </div>}
+    <Typography.Paragraph type="secondary" className="mb-0">
+      此处预览角色与范围配置；具体页面的有效权限还取决于用户页面覆盖和页面权限规则。
+    </Typography.Paragraph>
+  </div>
+
+  const previewPermissions = () => modal.info({
+    title: `${editingUser?.name || "用户"} · 权限配置预览`,
+    width: 640,
+    centered: true,
+    icon: null,
+    okText: "返回编辑",
+    content: permissionSummary,
+  })
+
+  const showPermissionRules = () => modal.info({
+    title: "角色与数据范围规则",
+    width: 640,
+    centered: true,
+    icon: null,
+    okText: "我知道了",
+    content: <div>
+      <Typography.Text strong>角色决定页面权限基线</Typography.Text>
+      <p>多个普通角色会合并生效：页面基础权限和附加高风险操作取并集，页面数据范围按规则合并；用户页面覆盖优先。系统管理员拥有全部权限，普通管理员不能进入系统设置，两类管理员角色均单独选择。兼容部门范围仅用于尚未接入页面级数据范围的功能。</p>
+    </div>,
+  })
+
   const previewSave = () => {
     if (!hasChanges) { message.info("角色和兼容部门范围均未变化"); return }
     if (!reason.trim()) { message.warning("请填写本次授权调整原因"); return }
@@ -164,21 +209,29 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
     modal.confirm({
       title: `确认调整 ${editingUser?.name || "用户"} 的角色？`,
       width: 640,
+      centered: true,
+      icon: null,
       okText: "确认保存",
       cancelText: "继续检查",
       content: <div className="space-y-3 pt-2">
-        <Alert showIcon type={selectedSystemAdmin ? "warning" : "info"}
-          title={selectedSystemAdmin ? "系统管理员将拥有全部权限" : "多个角色的页面权限将合并生效"}
-          description="角色提供页面权限基线：基础权限与高风险操作取并集，数据范围按页面合并；已有用户页面覆盖仍优先于角色基线。" />
-        <div><Typography.Text strong>新增角色：</Typography.Text>{addedRoles.length
-          ? addedRoles.map((role) => <Tag key={role.id} color="green">{role.name}</Tag>)
-          : <Typography.Text type="secondary">无</Typography.Text>}</div>
-        <div><Typography.Text strong>移除角色：</Typography.Text>{removedRoles.length
-          ? removedRoles.map((role) => <Tag key={role.id} color="red">{role.name}</Tag>)
-          : <Typography.Text type="secondary">无</Typography.Text>}</div>
+        {permissionSummary}
         <div><Typography.Text strong>调整原因：</Typography.Text>{reason.trim()}</div>
       </div>,
       onOk: handleSave,
+    })
+  }
+
+  const closeAssign = () => {
+    if (saving) return
+    if (!hasChanges && !reason.trim()) { setDrawerOpen(false); return }
+    modal.confirm({
+      title: "放弃未保存的角色分配调整？",
+      centered: true,
+      icon: null,
+      content: <Alert showIcon type="warning" title="关闭后，本次角色、部门范围调整和授权原因将丢失。" />,
+      okText: "放弃更改",
+      cancelText: "继续编辑",
+      onOk: () => setDrawerOpen(false),
     })
   }
 
@@ -249,69 +302,92 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
       />
 
       <Drawer
-        title={editingUser ? `分配角色：${editingUser.name}` : "分配角色"}
+        rootClassName={styles.drawer}
+        title={<div>
+          <Typography.Title level={4} className={styles.title}>分配角色{editingUser ? ` · ${editingUser.name}` : ""}</Typography.Title>
+          <Typography.Text type="secondary" className={styles.subtitle}>为该账号配置角色及数据范围</Typography.Text>
+        </div>}
         size="min(620px, 100vw)"
+        placement="right"
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        footer={<div className="flex justify-end gap-2">
-          <Button onClick={() => setDrawerOpen(false)}>取消</Button>
-          <Button type="primary" loading={saving} disabled={!hasChanges} onClick={previewSave}>预览并保存</Button>
+        onClose={closeAssign}
+        closable={!saving}
+        mask={{ closable: !saving }}
+        footer={<div className={styles.footer}>
+          <Button disabled={saving} onClick={closeAssign}>取消</Button>
+          <Button className={styles.previewButton} disabled={saving} onClick={previewPermissions}>预览权限</Button>
+          <Button type="primary" loading={saving} disabled={!hasChanges} onClick={previewSave}>保存</Button>
         </div>}
       >
-        <Alert className="mb-4" showIcon type="info" title="角色决定页面权限基线"
-          description="多个普通角色会合并生效：页面基础权限和附加高风险操作取并集，页面数据范围按规则合并；用户页面覆盖优先。系统管理员拥有全部权限，与其他角色无需同时选择。" />
-        <div className="mb-4 rounded-lg border border-[var(--color-border)] p-3">
-          <Typography.Text strong>{editingUser?.name}</Typography.Text>
-          <Typography.Text type="secondary" className="ml-2">
-            {[editingUser?.department, editingUser?.position].filter(Boolean).join(" · ") || "未维护部门与岗位"}
-          </Typography.Text>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Tag color="blue">已选 {selectedRoleIds.length} 个角色</Tag>
+        <ConfigProvider componentDisabled={saving}>
+        <div className={styles.body}>
+        <Alert showIcon type="info" title="角色决定功能权限，部门范围决定可查看的数据范围。"
+          onLearnRules={showPermissionRules} />
+        <section aria-label="已选择的角色">
+          <div className={styles.sectionHeading}>
+            <Typography.Title level={5}>已选择 {selectedRoleIds.length} 个角色</Typography.Title>
             {!!addedRoles.length && <Tag color="green">新增 {addedRoles.length}</Tag>}
             {!!removedRoles.length && <Tag color="red">移除 {removedRoles.length}</Tag>}
           </div>
-        </div>
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <Typography.Text strong>手动角色</Typography.Text>
-          <Input.Search allowClear value={roleSearch} onChange={(event) => setRoleSearch(event.target.value)}
-            placeholder="搜索角色名称或编码" className="max-w-64" aria-label="搜索可分配角色" />
-        </div>
-        <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
-          {filteredRoles.map((role) => <label key={role.id}
-            className={`block cursor-pointer rounded-lg border p-3 transition-colors ${selectedRoleSet.has(role.id) ? "border-[var(--color-primary)] bg-[var(--color-surface)]" : "border-[var(--color-border)]"}`}>
-            <Checkbox checked={selectedRoleSet.has(role.id)} onChange={(event) => toggleRole(role, event.target.checked)}>
-              <Typography.Text strong>{role.code === "super_admin" ? "系统管理员" : role.name}</Typography.Text>
-            </Checkbox>
-            <div className="ml-6 mt-1">
-              <Typography.Text type="secondary" className="text-xs">{role.code}</Typography.Text>
-              <Typography.Paragraph type="secondary" className="mb-0 mt-1 text-xs">
+          <div className={styles.selectedRoles}>
+            {selectedRoleIds.map((id) => {
+              const role = initialRoles.find((item) => item.id === id) || editingUser?.roles.find((item) => item.id === id)
+              return <Tag key={id} className={styles.selectedRole} closable={!saving}
+                closeIcon={<button type="button" className={styles.removeRole} aria-label={`移除角色 ${role?.name || id}`} disabled={saving}>×</button>}
+                onClose={() => setSelectedRoleIds((current) => current.filter((roleId) => roleId !== id))}>
+                {role?.name || id}{role?.code ? ` · ${role.code}` : ""}
+              </Tag>
+            })}
+            {!selectedRoleIds.length && <Typography.Text type="secondary">尚未选择角色，请从下方添加。</Typography.Text>}
+          </div>
+        </section>
+        <section aria-label="添加角色">
+          <div className={styles.roleToolbar}>
+            <Typography.Title level={5}>添加角色</Typography.Title>
+            <Input allowClear prefix={<SearchOutlined />} value={roleSearch} onChange={(event) => setRoleSearch(event.target.value)}
+              placeholder="搜索角色或编码" className={styles.roleSearch} aria-label="搜索可分配角色" />
+          </div>
+          <div className={styles.roleList}>
+          {filteredRoles.map((role) => <div key={role.id} className={styles.roleRow} data-selected={selectedRoleSet.has(role.id)}>
+            <Checkbox className={styles.roleChoice} checked={selectedRoleSet.has(role.id)} onChange={(event) => toggleRole(role, event.target.checked)}>
+              <span className={styles.roleHeading}>
+                <Typography.Text strong>{role.code === "super_admin" ? "系统管理员" : role.name}</Typography.Text>
+                {role.code === "super_admin" && <Tag color="error">高风险</Tag>}
+              </span>
+              <Typography.Text type="secondary" className={styles.roleCode}>{role.code}</Typography.Text>
+              <Typography.Text type="secondary" className={styles.roleDescription}>
                 {role.code === "super_admin" ? "拥有全部模块、页面、普通操作和高风险操作权限。" : role.code === "ordinary_admin" ? "拥有业务管理员权限，但不能进入系统设置。" : role.description || "页面权限基线请在角色管理中查看和维护。"}
-              </Typography.Paragraph>
-            </div>
-          </label>)}
-          {!filteredRoles.length && <Typography.Text type="secondary">没有匹配的角色</Typography.Text>}
-        </div>
-        {selectedSystemAdmin && <Alert className="mt-3" showIcon type="warning"
-          title="当前选择将授予系统管理员权限" description="系统管理员拥有全部权限，选择后已自动取消其他普通角色。" />}
+              </Typography.Text>
+            </Checkbox>
+          </div>)}
+          {!filteredRoles.length && <div className={styles.emptyRoles}><Typography.Text type="secondary">没有匹配的角色，请调整搜索条件。</Typography.Text></div>}
+          </div>
+        </section>
+        {selectedSystemAdmin && <Alert showIcon type="warning"
+          title="将授予全部系统权限，已自动取消其他普通角色" description="系统管理员拥有全部权限，选择后已自动取消其他普通角色。" />}
 
-        {PAGE_DATA_SCOPE_VISIBLE && selectedSystemAdmin && <Alert className="mt-4" showIcon type="info"
+        {PAGE_DATA_SCOPE_VISIBLE && selectedSystemAdmin && <Alert showIcon type="info"
           title="系统管理员不受部门范围限制"
           description="当前兼容部门范围配置会保留但不参与鉴权；移除系统管理员角色后会重新生效。" />}
-        {PAGE_DATA_SCOPE_VISIBLE && !selectedSystemAdmin && <div className="mt-4">
-          <Typography.Text strong>兼容部门范围</Typography.Text>
-          <Typography.Paragraph type="secondary" className="mb-2 text-xs">
+        {PAGE_DATA_SCOPE_VISIBLE && !selectedSystemAdmin && <section aria-label="部门数据范围">
+          <Typography.Title level={5}>部门数据范围</Typography.Title>
+          <Typography.Paragraph type="secondary">
             仅用于尚未接入页面级数据范围的功能；已接入页面权限的页面，请通过列表中的“页面权限”配置数据范围。
           </Typography.Paragraph>
-          <div className="border rounded-md p-3">
             <DataScopeConfig
+              segmented
               departments={initialDepartments}
               value={dataScope}
               onChange={setDataScope}
             />
-          </div>
-        </div>}
-        <Input.TextArea className="mt-4" value={reason} onChange={(event) => setReason(event.target.value)}
+        </section>}
+        <section>
+        <label htmlFor="role-assignment-reason" className={styles.reasonLabel}>授权调整原因</label>
+        <Input.TextArea id="role-assignment-reason" value={reason} onChange={(event) => setReason(event.target.value)}
           maxLength={500} showCount placeholder="填写本次角色授权调整原因" aria-label="角色授权调整原因" />
+        </section>
+        </div>
+        </ConfigProvider>
       </Drawer>
 
       <UserModuleAccessDrawer

@@ -261,9 +261,13 @@ describe('LivzonTaskClient', () => {
   it('loads tasks and exercises details, schedules, dry-run, toggle, edit, and interaction forms', async () => {
     mount()
     await flush()
-    expect(container.textContent).toContain('Livzon Task')
+    expect(container.textContent).toContain('Livzon Agent Task')
     expect(container.textContent).toContain('填写请求 2')
+    act(() => findButton('定时任务')?.click())
+    await flush()
     expect(container.textContent).toContain('每 15 分钟执行')
+    act(() => findButton('自动化流程')?.click())
+    await flush()
 
     await act(async () => findButton('试运行')?.click())
     await flush()
@@ -296,6 +300,8 @@ describe('LivzonTaskClient', () => {
     await flush()
     expect(container.textContent).toContain('定时任务')
 
+    act(() => findButton('填写请求')?.click())
+    await flush()
     await act(async () => findExactButton('填写')?.click())
     await flush()
     expect(container.querySelector('[role="dialog"]')?.textContent).toContain('库存确认')
@@ -331,6 +337,8 @@ describe('LivzonTaskClient', () => {
     await flush()
     expect(ui.message.error).toHaveBeenCalledWith('加载失败')
 
+    act(() => findButton('填写请求')?.click())
+    await flush()
     await act(async () => findExactButton('填写')?.click())
     await flush()
     expect(container.querySelector('[role="dialog"]')?.textContent).toContain('库存确认')

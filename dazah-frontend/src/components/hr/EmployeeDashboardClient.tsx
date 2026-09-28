@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Alert, Button, Card, Space, Spin } from 'antd'
+import { Button, Card, Space, Spin } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { QrcodeOutlined, ReloadOutlined } from '@ant-design/icons'
 import {
   QueryClient,

@@ -4,7 +4,8 @@ import { usePagePermissions } from '@/hooks/usePagePermissions'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Alert, Button, Card, Input, InputNumber, Select, Space, Switch, TimePicker, Typography } from 'antd'
+import { App, Button, Card, Input, InputNumber, Select, Space, Switch, TimePicker, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import dayjs, { type Dayjs } from 'dayjs'
 
 import {

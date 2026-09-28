@@ -3,21 +3,8 @@
 import { qualityTokens } from './themeTokens'
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import {
-  Alert,
-  Card,
-  Col,
-  Empty,
-  InputNumber,
-  Modal,
-  Progress,
-  Row,
-  Select,
-  Space,
-  Spin,
-  Statistic,
-  Table,
-} from 'antd'
+import { Card, Col, Empty, InputNumber, Modal, Progress, Row, Select, Space, Spin, Statistic, Table } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import type { ColumnsType } from 'antd/es/table'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {

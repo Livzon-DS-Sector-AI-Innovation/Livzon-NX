@@ -323,6 +323,17 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
     },
   ]
 
+  const configTable = (
+    <Table scroll={{ x: 1000 }}
+      columns={columns}
+      dataSource={configs}
+      rowKey="id"
+      loading={loading}
+      size="middle"
+      pagination={false}
+    />
+  )
+
   return (
     <div style={{ maxWidth: 1300, margin: '0 auto', padding: embedded ? 0 : '24px' }}>
       <div
@@ -341,7 +352,7 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
         )}
           <Title level={3} style={{ margin: 0 }}>
             <SettingOutlined style={{ marginRight: 12 }} />
-            LLM 模型配置
+            {embedded ? '连接配置' : 'LLM 模型配置'}
           </Title>
           <Text style={{ fontSize: 14, color: '#666', marginTop: 8, display: 'block' }}>
             保存连接参数后，可单独测试连接或检测模型能力；同一时间仅一个配置生效。
@@ -361,16 +372,7 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
         </Space>
       </div>
 
-      <Card>
-        <Table scroll={{ x: 1000 }}
-          columns={columns}
-          dataSource={configs}
-          rowKey="id"
-          loading={loading}
-          size="middle"
-          pagination={false}
-        />
-      </Card>
+      {embedded ? configTable : <Card>{configTable}</Card>}
 
       <Modal
         title={editingConfig ? '编辑 LLM 配置' : '新建 LLM 配置'}

@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Alert, App, Button, Card, Checkbox, Collapse, Empty, Space, Tag, Typography } from 'antd'
+import { App, Button, Card, Checkbox, Collapse, Empty, Space, Tag, Typography } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { analyzeCapaAi } from '@/actions/quality-capa'
 import { analyzeChangeAi } from '@/actions/quality-change'
 import { analyzeDeviationAi, suggestDeviationCapaAi } from '@/actions/quality-deviation'

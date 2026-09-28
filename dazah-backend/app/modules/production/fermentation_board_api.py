@@ -18,6 +18,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.response import success_response
 from app.modules.production import fermentation_board_service as board
+from app.modules.production.overview_visibility import (
+    overview_visible_sections,
+    require_overview_section,
+)
 from app.platform.audit.service import record_audit_log
 from app.platform.identity.data_scope import (
     current_page_actor,
@@ -129,6 +133,7 @@ async def get_fermentation_board(
     product: str = Query("FA", description="产品代码（如 FA/MC/DR/LV/MV）"),
     current_user: CurrentUser = None,
 ) -> Any:
+    require_overview_section(product)
     has_ferm, has_extract = await _stage_permissions(db, current_user)
     now = datetime.now(BEIJING_TZ).replace(tzinfo=None)
     ref_date = date or now.date()
@@ -138,7 +143,7 @@ async def get_fermentation_board(
         # （27日～26日）覆盖所选日期时，提炼入库合计仍按该周期返回
         period_start, period_end = board.unified_accounting_period(now.date())
         unified_covers = period_start <= ref_date <= period_end
-        payload: dict[str, Any] = {
+        uncovered_payload: dict[str, Any] = {
             "covered": False,
             "period": None,
             "kpis": None,
@@ -153,7 +158,7 @@ async def get_fermentation_board(
             "extraction_ledger": [],
         }
         if unified_covers:
-            payload["period"] = {
+            uncovered_payload["period"] = {
                 "start": period_start.isoformat(),
                 "end": period_end.isoformat(),
                 "label": (
@@ -162,7 +167,7 @@ async def get_fermentation_board(
                 ),
             }
             if has_extract:
-                payload["extract_finished_inbound_kg"] = (
+                uncovered_payload["extract_finished_inbound_kg"] = (
                     await board.get_warehouse_finished_inbound_kg(
                         db,
                         product_code=product,
@@ -171,7 +176,7 @@ async def get_fermentation_board(
                     )
                 )
         return success_response(
-            data=payload,
+            data=uncovered_payload,
             message=f"尚未上传覆盖 {ref_date.isoformat()} 所在扎帐周期的排产 Excel",
         )
     # FA / DR / MP(及他汀 LV/MV，复用 MP 管线+103自然月块解析) 排产表
@@ -299,6 +304,11 @@ async def get_production_summary(
         today=now.date(),
         alert_now=now,
     )
+    visible = overview_visible_sections()
+    if visible is not None:
+        payload["rows"] = [
+            row for row in payload["rows"] if row["product_code"] in visible
+        ]
     return success_response(data=payload)
 
 
@@ -365,6 +375,7 @@ async def list_fermentation_batch_actuals(
     product: str = Query("FA", description="产品代码（如 FA/MC/DR/LV/MV）"),
     current_user: CurrentUser = None,
 ) -> Any:
+    require_overview_section(product)
     has_ferm, has_extract = await _stage_permissions(db, current_user)
     items = await board.list_batch_actuals(
         db,
@@ -399,6 +410,7 @@ async def upsert_fermentation_batch_actual(
     current_user: CurrentUser = None,
     product: str = Query("FA", description="产品代码（如 FA/MC/DR/LV/MV）"),
 ) -> Any:
+    require_overview_section(product)
     # 字段级工段权限：发酵字段组挂发酵权限，提炼成品挂提炼权限；
     # 仅请求中显式给出的字段参与更新，防止跨工段覆盖对方已录数据
     has_ferm, has_extract = await _stage_permissions(db, current_user)
@@ -446,6 +458,7 @@ async def remove_fermentation_batch_actual(
     item = await board.get_batch_actual(db, item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="批次产量记录不存在")
+    require_overview_section(item.product_code)
     await board.delete_batch_actual(
         db, item, deleted_by=current_user.id if current_user else None
     )
@@ -461,6 +474,7 @@ async def set_fermentation_month_capacity(
     current_user: CurrentUser = None,
     product: str = Query("FA", description="产品代码（如 FA/MC/DR/LV/MV）"),
 ) -> Any:
+    require_overview_section(product)
     has_ferm, _ = await _stage_permissions(db, current_user)
     if not has_ferm:
         raise HTTPException(status_code=403, detail="无发酵数据权限")
@@ -503,6 +517,9 @@ async def list_production_line_status(
     halted_codes = sorted(
         code for code, halted in halted_map.items() if halted
     )
+    visible = overview_visible_sections()
+    if visible is not None:
+        halted_codes = [code for code in halted_codes if code in visible]
     latest = await board.latest_line_halt_events(db, halted_codes)
     return success_response(
         data={
@@ -525,6 +542,11 @@ async def list_production_line_halt_events(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> Any:
+    visible = overview_visible_sections()
+    if visible is not None:
+        if product is None:
+            raise HTTPException(403, "生产管理概览中需指定可见产品")
+        require_overview_section(product)
     if product is not None and product not in board.PRODUCTION_LINE_CODES:
         raise HTTPException(status_code=400, detail=f"未知的产品代码：{product}")
     items = await board.list_line_halt_events(
@@ -545,6 +567,7 @@ async def set_production_line_status(
     current_user: CurrentUser = None,
     product: str = Query(..., description="产品代码（FA/MC/LN/DR/LV/MV/TY/FL）"),
 ) -> Any:
+    require_overview_section(product)
     if product not in board.PRODUCTION_LINE_CODES:
         raise HTTPException(status_code=400, detail=f"未知的产品代码：{product}")
     item = await board.set_line_halted(

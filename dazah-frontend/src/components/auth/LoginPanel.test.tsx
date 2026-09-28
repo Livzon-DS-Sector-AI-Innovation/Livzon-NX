@@ -107,7 +107,9 @@ describe('LoginPanel', () => {
 
       act(() => window.dispatchEvent(new Event('pageshow')))
       expect(feishuButton?.disabled).toBe(false)
-      expect(vi.getTimerCount()).toBe(0)
+      act(() => vi.advanceTimersByTime(12000))
+      expect(feishuButton?.disabled).toBe(false)
+      expect(container.querySelector('[role="alert"]')).toBeNull()
     } finally {
       act(() => root.unmount())
       container.remove()
@@ -123,7 +125,9 @@ describe('LoginPanel', () => {
     const root = createRoot(container)
     try {
       act(() => root.render(<LoginPanel nextPath="/quality" localLoginMode="disabled" error="access_denied" />))
-      const button = container.querySelector('button')!
+      const button = Array.from(container.querySelectorAll('button')).find(
+        (button) => button.textContent?.includes('使用飞书企业账号登录'),
+      )!
       act(() => { button.click(); button.click() })
       expect(container.querySelector('[role="alert"]')).toBeNull()
       act(() => vi.advanceTimersByTime(240))

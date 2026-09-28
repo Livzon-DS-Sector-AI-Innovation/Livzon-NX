@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect } from 'react'
-import { Alert, App, Button } from 'antd'
+import { App, Button } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { PlusOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { DeviationTable } from './DeviationTable'

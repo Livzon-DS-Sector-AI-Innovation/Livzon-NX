@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, Button, Space, Tag, Table, Form, Input, Select, App, Tabs, Alert, Row, Col, Statistic, Radio } from 'antd'
+import { Card, Button, Space, Tag, Table, Form, Input, Select, App, Tabs, Row, Col, Statistic, Radio } from 'antd'
+import Alert from '@/components/shared/PlatformNotice'
 import { CheckCircleOutlined, PlusOutlined, DeleteOutlined, ExperimentOutlined } from '@ant-design/icons'
 import type { CrystalFormStudy, CrystalFormRecord, CrystalFormType } from '@/types/rd'
 
