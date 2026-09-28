@@ -99,6 +99,10 @@
   border-radius: var(--ant-border-radius-lg);
 }
 
+.pageDetails {
+  padding-block: 8px;
+}
+
 .moduleTable:global(.ant-table-wrapper) :global(.ant-table-thead > tr > th) {
   background: var(--color-surface-soft);
 }

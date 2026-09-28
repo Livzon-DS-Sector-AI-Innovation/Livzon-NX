@@ -103,7 +103,7 @@ export function PagePermissionHealthPanel() {
   return <Card title="权限健康检查" size="small" extra={<Button size="small"
     icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>重新检查</Button>}>
     <Typography.Paragraph type="secondary">
-      检查失效页面和部门、无模块入口授权及冗余用户覆盖，并可直接定位或修复。
+      检查失效页面和部门及冗余用户覆盖，并可直接定位或修复。
     </Typography.Paragraph>
     {result && <><Space size="large" wrap className="mb-4">
       <Statistic title="问题总数" value={result.issue_count} />

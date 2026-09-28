@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import httpx
+import pytest
 
 from tools import dazah_platform
 
@@ -125,12 +126,14 @@ def test_describe_uses_operation_and_trusted_subject(monkeypatch) -> None:
     }
 
 
-def test_search_forwards_natural_language_and_preserves_backend_ranking(monkeypatch) -> None:
+@pytest.mark.parametrize("entries", [
+    [],
+    [{"operation": "agent.get_my_access_scope"}, {"operation": "quality.list_deviations"}],
+])
+def test_search_forwards_natural_language_and_preserves_backend_ranking(
+    monkeypatch, entries: list[dict[str, str]]
+) -> None:
     recorded: dict[str, object] = {}
-    entries = [
-        {"operation": "agent.get_my_access_scope"},
-        {"operation": "quality.list_deviations"},
-    ]
 
     class FakeResponse:
         status_code = 200
@@ -166,8 +169,55 @@ def test_search_forwards_natural_language_and_preserves_backend_ranking(monkeypa
     request_json = recorded["json"]
     assert request_json["query"] == "平台有哪些模块"
     assert request_json["limit"] == 2
+    assert request_json["trace_id"] == "00000000-0000-0000-0000-000000000002"
     assert request_json["subject"]["user_id"] == "00000000-0000-0000-0000-000000000001"
     assert json.loads(payload)["data"] == entries
+
+
+def test_catalog_is_refetched_after_effective_page_access_is_revoked(monkeypatch) -> None:
+    responses = iter([
+        [{"operation": "quality.list_deviations", "module": "quality"}],
+        [],
+    ])
+    subjects: list[dict[str, object]] = []
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self) -> dict[str, object]:
+            return {"data": next(responses)}
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args) -> None:
+            pass
+
+        async def post(self, url, json, headers):
+            assert str(url).endswith("/agent/tools/search")
+            subjects.append(json["subject"])
+            return FakeResponse()
+
+    monkeypatch.setenv("DAZAH_AGENT_TOOL_TOKEN", "contract-token")
+    monkeypatch.setattr(dazah_platform.httpx, "AsyncClient", FakeAsyncClient)
+    token = _bind_context()
+    try:
+        granted = asyncio.run(dazah_platform.dazah_tool("search", query="偏差"))
+        revoked = asyncio.run(dazah_platform.dazah_tool("search", query="偏差"))
+    finally:
+        dazah_platform.dazah_request_context.reset(token)
+
+    assert json.loads(granted)["data"] == [
+        {"operation": "quality.list_deviations", "module": "quality"}
+    ]
+    assert json.loads(revoked)["data"] == []
+    assert len(subjects) == 2
+    assert subjects[0] == subjects[1]
+    assert subjects[0]["user_id"] == "00000000-0000-0000-0000-000000000001"
 
 
 def test_quality_operation_is_forwarded_to_backend_catalog(monkeypatch) -> None:

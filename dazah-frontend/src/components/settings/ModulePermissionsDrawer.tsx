@@ -377,9 +377,6 @@ export default function ModulePermissionsDrawer({ user, open, onClose }: {
     {
       title: '最终状态', key: 'effective', width: 150,
       render: (_: unknown, definition: PagePermissionDefinitionOut) => {
-        if (!systemAdmin && !(user?.module_codes || []).includes(definition.module_code)) {
-          return <Tag color="warning">模块入口未开通</Tag>
-        }
         const permissions = editable[definition.page_key]?.permissions || []
         return <Tag color={permissions.length ? 'success' : 'default'}>{pagePermissionTierLabel(permissions)}</Tag>
       },
@@ -438,7 +435,7 @@ export default function ModulePermissionsDrawer({ user, open, onClose }: {
         <div><Title level={3} className="!m-0 !text-[22px]">
           {user?.name || '用户'}的页面权限
         </Title><Text className="mt-1 block text-[13px] text-[var(--color-steel)]">
-          权限以单个菜单页面为最小单元；一级模块入口需在“用户角色 → 模块访问”中单独开启。
+          权限以单个菜单页面为最小单元。
         </Text></div>
         <Space><Button disabled={saving || !result} onClick={() => setHistoryOpen(true)}>授权历史</Button>
           <Button disabled={saving} icon={<ReloadOutlined />} onClick={() => confirmDiscard(() => void load())} loading={loading}>刷新</Button></Space>
@@ -451,15 +448,13 @@ export default function ModulePermissionsDrawer({ user, open, onClose }: {
     </div>
     {systemAdmin && <Alert className="mb-4" type="info" showIcon title="系统管理员拥有全部权限，无需逐页配置；页面覆盖不会限制此身份。" />}
     <Alert className="mb-4" type="info" showIcon
-      title="角色提供基线，用户覆盖会完整替换单页基线"
-      description="保存后权限立即生效，无需经过权限接入检查。选择“用户覆盖”后，权限全部不勾选表示明确拒绝；恢复“角色基线”即可删除覆盖。高风险操作是“普通操作”之上的附加授权：勾选时自动启用普通操作，取消普通操作时一并撤销。" />
+      title={systemAdmin ? "角色提供基线，用户覆盖会完整替换单页基线"
+        : "模块入口随有效页面访问权限自动生效；用户覆盖会完整替换单页角色基线。"}
+      description="模块内至少一个页面具有有效访问权限时，模块入口自动开通；撤销最后一个可访问页面后，入口自动关闭，无需单独调整模块授权。系统管理员默认拥有全部模块访问权限。保存后页面配置立即生效，无需经过权限接入检查。选择“用户覆盖”后，权限全部不勾选表示明确拒绝；恢复“角色基线”即可删除覆盖。高风险操作是“普通操作”之上的附加授权：勾选时自动启用普通操作，取消普通操作时一并撤销。" />
     {errorMessage && <Alert className="mb-4" type="error" showIcon title={errorMessage} />}
     {!!scopeIssues.length && <Alert className="mb-4" type="warning" showIcon
       title="存在无法保存的数据范围" description={scopeIssues.slice(0, 3).join('；')} />}
     {loading ? <Skeleton active paragraph={{ rows: 10 }} /> : result?.user_id === user?.id && result?.definitions?.length ? <ConfigProvider componentDisabled={systemAdmin || saving}>
-      {!(systemAdmin || (user?.module_codes || []).includes(moduleCode)) && <Alert className="mb-4" type="warning" showIcon
-        title="当前用户尚未开通此模块入口"
-        description="页面权限可以先配置，但用户需要同时获得模块访问权限后才能进入这些页面。" />}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <Space wrap><Segmented value={moduleCode} onChange={(value) => setModuleCode(String(value))}
           options={modules.map((code) => ({ value: code, label: <span>{getPermissionModuleName(code)}{' '}

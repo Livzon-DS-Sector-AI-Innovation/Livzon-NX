@@ -227,7 +227,7 @@ const server = createServer(async (request, response) => {
       const permissions = pageTestToken === 'page-query' ? ['access', 'query']
         : pageTestToken === 'page-access' ? ['access'] : []
       response.end(JSON.stringify({ code: 200, data: { ...currentUser, role: 'user',
-        module_codes: ['procurement'], page_permission_rollouts: { procurement: 'enforced' },
+        module_codes: pageTestToken === 'page-query' ? [] : ['procurement'], page_permission_rollouts: { procurement: 'enforced' },
         page_permissions: [{ page_key: 'purchasing:supplier', module_code: 'procurement', permissions,
           sensitive_actions: [], source: 'user', data_scope: { scope_type: 'not_applicable' } }],
       } }))
@@ -274,6 +274,25 @@ const server = createServer(async (request, response) => {
     }
     response.end(JSON.stringify({ code: 200, data: [], meta: { total: 0, page: 1, page_size: 20 } }))
     return
+  }
+
+  if (authorization === 'Bearer effective-admin') {
+    const role = { id: 'role-effective', name: '员工查看角色', code: 'employee_reader', is_system: false, permissions: [], grant_version: 1 }
+    if (request.url?.startsWith('/api/v1/identity/admin/users')) {
+      const userId = '00000000-0000-0000-0000-000000000003'
+      const data = request.url.endsWith('/page-permissions') ? {
+        user_id: userId, grant_version: 1, user_grants: [], role_baseline: [],
+        grants: [{ page_key: 'hr:employees', module_code: 'hr', permissions: ['access', 'query'],
+          sensitive_actions: [], source: 'role', source_role_names: [role.name], data_scope: { scope_type: 'all' } }],
+        definitions: [{ page_key: 'hr:employees', module_code: 'hr', page_name: '员工管理', route_path: '/hr/employee-management', sensitive_actions: [], supported_scope_types: ['all'] }],
+      } : { total: 1, items: [{ id: userId, name: '权限测试员工', department: '质量保证', position: '专员', status: 'active', grant_version: 1, roles: [role] }] }
+      response.end(JSON.stringify({ code: 200, data }))
+      return
+    }
+    if (request.url?.startsWith('/api/v1/identity/admin/roles') || request.url?.startsWith('/api/v1/identity/departments')) {
+      response.end(JSON.stringify({ code: 200, data: request.url.includes('/roles') ? [role] : [] }))
+      return
+    }
   }
 
   if (authorization === 'Bearer matrix-admin' && request.url?.startsWith('/api/v1/identity/admin/roles')) {

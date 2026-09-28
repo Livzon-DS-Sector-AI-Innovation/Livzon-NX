@@ -3,8 +3,10 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { ConfigProvider } from 'antd'
 import type { RolePagePermissionsOut } from '@/actions/admin'
 import type { RoleItem } from '@/lib/api/client/admin'
+import { antdTheme } from '@/lib/antd-theme'
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(), preview: vi.fn(), replace: vi.fn(), confirm: vi.fn(), info: vi.fn(),
@@ -32,6 +34,143 @@ function deferred<T>() {
   const promise = new Promise<T>((done) => { resolve = done })
   return { promise, resolve }
 }
+
+it('explains that module entries follow final role and user page access', async () => {
+  mocks.get.mockResolvedValue(result('A'))
+  await show('A')
+  const notice = document.querySelector('[data-platform-notice="info"]')!
+  expect(notice.textContent).toContain('模块入口随有效页面访问权限自动生效')
+  await act(async () => notice.querySelector<HTMLButtonElement>('button')!.click())
+  expect(document.querySelector('.ant-modal-body')?.textContent).toContain('系统管理员默认拥有全部模块访问权限')
+  expect(document.querySelector('.ant-modal-body')?.textContent).toContain('撤销最后一个可访问页面后关闭入口')
+  expect(mocks.replace).not.toHaveBeenCalled()
+})
+
+it('opens as a right drawer and closes from the left mask when no edits are pending', async () => {
+  const onClose = vi.fn()
+  mocks.get.mockResolvedValue(result('A'))
+  await act(async () => root.render(createElement(RolePagePermissionsDrawer,
+    { role: role('A'), departments: [], open: true, onClose })))
+  expect(document.querySelector('.ant-drawer-right')).toBeTruthy()
+  expect(document.querySelector('.ant-modal')).toBeNull()
+  const mask = document.querySelector<HTMLElement>('.ant-drawer-mask')!
+  expect(mask).toBeTruthy()
+  await act(async () => mask.click())
+  expect(onClose).toHaveBeenCalledOnce()
+  expect(mocks.confirm).not.toHaveBeenCalled()
+})
+
+it('keeps edits after a mask click until discarding them is confirmed', async () => {
+  const onClose = vi.fn()
+  mocks.get.mockResolvedValue(result('A'))
+  await act(async () => root.render(createElement(RolePagePermissionsDrawer,
+    { role: role('A'), departments: [], open: true, onClose })))
+  await act(async () => button('展开全部菜单').click())
+  await act(async () => document.querySelector<HTMLInputElement>('[aria-label="权限档位"] input[value="query"]')!.click())
+  await act(async () => document.querySelector<HTMLElement>('.ant-drawer-mask')!.click())
+  expect(onClose).not.toHaveBeenCalled()
+  expect(document.querySelector<HTMLInputElement>('[aria-label="权限档位"] input[value="query"]')!.checked).toBe(true)
+  const confirmation = mocks.confirm.mock.lastCall![0] as { title: string; cancelText: string; onOk: () => void }
+  expect(confirmation.title).toBe('放弃未保存的角色授权？')
+  expect(confirmation.cancelText).toBe('继续编辑')
+  expect(confirmation).toEqual(expect.objectContaining({ centered: true, okText: '放弃更改' }))
+  await act(async () => confirmation.onOk())
+  expect(onClose).toHaveBeenCalledOnce()
+})
+
+it('opens overview details across the table and preserves selections when collapsed and reopened', async () => {
+  const data = result('A')
+  data.definitions = [{ page_key: 'production:overview', module_code: 'production', page_name: '生产管理概览',
+    route_path: '/production', supported_scope_types: ['all'],
+    sensitive_actions: [{ key: 'sync', name: '批次同步', category: 'integration_admin', description: '同步并更新批次数据' }] }]
+  data.grants = [{ page_key: 'production:overview', module_code: 'production', source: 'role',
+    permissions: ['access', 'query'], sensitive_actions: [], visible_sections: ['FA'], data_scope: { scope_type: 'all' } }]
+  mocks.get.mockResolvedValue(data)
+  await show('A')
+  const visible = document.querySelector('section[aria-label="页面内可见项"]')!
+  const sensitive = document.querySelector('section[aria-label="附加高风险操作"]')!
+  expect(visible.parentElement).toBe(sensitive.parentElement)
+  expect(visible.closest('.ant-table-cell')?.getAttribute('colspan')).toBe('4')
+  expect(document.body.textContent).toContain('同步并更新批次数据')
+  await act(async () => document.querySelector<HTMLInputElement>('input[value="sync"]')!.click())
+  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="折叠生产管理概览"]')!.click())
+  expect(document.querySelector('section[aria-label="页面内可见项"]')).toBeNull()
+  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="展开生产管理概览"]')!.click())
+  expect(document.querySelector<HTMLInputElement>('input[value="sync"]')!.checked).toBe(true)
+  expect(document.querySelector<HTMLInputElement>('input[value="FA"]')!.checked).toBe(true)
+  expect(document.querySelector<HTMLInputElement>('[aria-label="权限档位"] input[value="operate"]')!.checked).toBe(true)
+})
+
+it('disables batch controls for an empty search and restores them after clearing it', async () => {
+  mocks.get.mockResolvedValue(result('A'))
+  await show('A')
+  const input = document.querySelector<HTMLInputElement>('[aria-label="搜索角色页面权限"]')!
+  const searchFor = async (value: string) => act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await searchFor('不存在的菜单')
+  expect(document.body.textContent).toContain('当前筛选没有匹配页面')
+  expect(button('可查看').disabled).toBe(true)
+  expect(button('普通操作').disabled).toBe(true)
+  await searchFor('')
+  expect(button('可查看').disabled).toBe(false)
+  expect(button('普通操作').disabled).toBe(false)
+  expect(mocks.confirm).not.toHaveBeenCalled()
+})
+
+it('locks overview sections, risk actions and data scope while preview is pending', async () => {
+  const data = result('A')
+  data.definitions = [{ page_key: 'production:overview', module_code: 'production', page_name: '生产管理概览',
+    route_path: '/production', supported_scope_types: ['all', 'production_fermentation'],
+    sensitive_actions: [{ key: 'sync', name: '批次同步', category: 'integration_admin', description: '同步批次数据' }] }]
+  data.grants = [{ page_key: 'production:overview', module_code: 'production', source: 'role',
+    permissions: ['access', 'query'], data_scope: { scope_type: 'all' } }]
+  mocks.get.mockResolvedValue(data)
+  const pending = deferred<Awaited<ReturnType<typeof import('@/actions/admin').previewRolePagePermissions>>>()
+  mocks.preview.mockReturnValue(pending.promise)
+  await show('A')
+  await act(async () => document.querySelector<HTMLInputElement>('input[value="FA"]')!.click())
+  await act(async () => button('预览').click())
+  expect(document.querySelector<HTMLInputElement>('input[value="FA"]')!.disabled).toBe(true)
+  expect(document.querySelector<HTMLInputElement>('input[value="sync"]')!.disabled).toBe(true)
+  expect(document.querySelector<HTMLInputElement>('[aria-label="生产管理概览数据范围"]')!.disabled).toBe(true)
+  await act(async () => pending.resolve({ role_id: 'A', grant_version: 3, member_count: 0, affected_user_count: 0,
+    expanded_user_count: 0, restricted_user_count: 0, mixed_user_count: 0, users_with_overrides: 0 }))
+  expect(document.querySelector<HTMLInputElement>('input[value="FA"]')!.disabled).toBe(false)
+})
+
+it('renders menu group and page headings at 15px with separate permission keys', async () => {
+  mocks.get.mockResolvedValue(result('A'))
+  await show('A')
+  await act(async () => button('展开全部菜单').click())
+  const headings = [...document.querySelectorAll('h4')]
+  const group = headings.find((heading) => heading.textContent === '员工管理')
+  const page = headings.find((heading) => heading.textContent === '员工档案A')
+  expect(group).toBeTruthy()
+  expect(page).toBeTruthy()
+  for (const heading of [group!, page!]) {
+    expect(heading.style.fontSize).toBe('15px')
+  }
+  expect(page!.parentElement!.textContent).not.toContain('hr:employee-management:profile')
+  expect(document.body.textContent).toContain('hr:employee-management:profile')
+})
+
+it('keeps the requested 15px page heading size under a different theme and displays a long name in full', async () => {
+  const data = result('A')
+  const name = '生产数据汇总及批次追溯管理（用于检查长菜单页面标题换行）'
+  data.definitions = [{ page_key: 'production:overview', module_code: 'production',
+    page_name: name, route_path: '/production', supported_scope_types: ['all'] }]
+  mocks.get.mockResolvedValue(data)
+  await act(async () => root.render(createElement(ConfigProvider,
+    { theme: { ...antdTheme, token: { ...antdTheme.token, fontSizeXL: 24 } } },
+    createElement(RolePagePermissionsDrawer, { role: role('A'), departments: [], open: true, onClose: vi.fn() }))))
+  const heading = document.querySelector('h4')!
+  expect(heading.textContent).toBe(name)
+  expect(heading.style.fontSize).toBe('15px')
+  expect(heading.parentElement!.textContent).not.toContain('production:overview')
+  expect(document.querySelector<HTMLInputElement>('input[value="FA"]')!.disabled).toBe(true)
+})
 
 it('shows high risk actions and editable data scope without changing it on save', async () => {
   const data = result('A')
@@ -140,6 +279,7 @@ function button(label: string) {
 async function preview() {
   await act(async () => button('可查看').click())
   const batchConfirmation = mocks.confirm.mock.lastCall![0] as { onOk: () => Promise<void> | void }
+  expect(batchConfirmation).toEqual(expect.objectContaining({ centered: true, cancelText: '取消' }))
   await act(async () => { await batchConfirmation.onOk() })
   const input = document.querySelector<HTMLInputElement>('input[placeholder="填写角色授权调整原因"]')!
   await act(async () => {
@@ -149,6 +289,9 @@ async function preview() {
   await act(async () => button('保存').click())
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
   expect(mocks.confirm).toHaveBeenCalled()
+  expect(mocks.confirm.mock.lastCall![0]).toEqual(expect.objectContaining({
+    centered: true, okText: '确认保存', cancelText: '返回修改',
+  }))
   return mocks.confirm.mock.lastCall![0] as { onOk: () => Promise<void> | void }
 }
 
@@ -195,6 +338,10 @@ it('keeps edits and restores both buttons after a preview failure', async () => 
   expect(button('保存').disabled).toBe(false)
   expect(mocks.info).not.toHaveBeenCalled()
   expect(mocks.replace).not.toHaveBeenCalled()
+  await act(async () => button('重新加载').click())
+  expect(mocks.confirm.mock.lastCall![0]).toEqual(expect.objectContaining({
+    centered: true, title: '重新加载最新角色授权？', okText: '重新加载', cancelText: '继续编辑',
+  }))
 })
 
 it('disables both actions during preview and ignores a late preview for a previous role', async () => {

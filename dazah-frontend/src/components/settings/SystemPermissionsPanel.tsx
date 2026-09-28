@@ -30,7 +30,7 @@ export const SYSTEM_PERMISSION_PAGES = [
   {
     href: '/system/user-roles',
     title: '用户角色',
-    description: '为用户分配页面权限角色基线，并管理模块入口和用户页面覆盖。',
+    description: '为用户分配角色，模块入口随有效页面权限自动生效。',
   },
   {
     href: '/system/dept-roles',
