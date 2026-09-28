@@ -26,6 +26,16 @@ import {
   updateEmployeeTrainingMember,
 } from '@/actions/hr'
 
+/** 从后端错误响应体提取用户可读信息：统一响应是 {code,message}，FastAPI 原生校验是 {detail} */
+export function exportErrorMessage(err: unknown): string {
+  if (err && typeof err === 'object' && !Array.isArray(err)) {
+    const e = err as { message?: unknown; detail?: unknown }
+    if (typeof e.message === 'string' && e.message) return e.message
+    if (typeof e.detail === 'string' && e.detail) return e.detail
+  }
+  return '导出失败'
+}
+
 export default function EmployeeTrainingListClient() {
   const { message, modal } = App.useApp()
   // 部门
@@ -142,7 +152,7 @@ export default function EmployeeTrainingListClient() {
     const res = await fetch(url, { cache: 'no-store' })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-      throw new Error((err instanceof Error ? err.message : '') || err.detail || '导出失败')
+      throw new Error(exportErrorMessage(err))
     }
     const blob = await res.blob()
     const objectUrl = window.URL.createObjectURL(blob)
@@ -165,7 +175,7 @@ export default function EmployeeTrainingListClient() {
       )
       message.success('导出成功')
     } catch (e) {
-      message.error((e instanceof Error ? e.message : '') || '导出失败')
+      message.error(e instanceof Error && e.message ? e.message : exportErrorMessage(e))
     } finally {
       setExporting(false)
     }
@@ -187,7 +197,7 @@ export default function EmployeeTrainingListClient() {
       )
       message.success('导出成功')
     } catch (e) {
-      message.error((e instanceof Error ? e.message : '') || '导出失败')
+      message.error(e instanceof Error && e.message ? e.message : exportErrorMessage(e))
     } finally {
       setExportingZip(false)
     }
