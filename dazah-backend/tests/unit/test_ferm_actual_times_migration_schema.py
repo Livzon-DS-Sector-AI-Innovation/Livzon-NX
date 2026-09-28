@@ -28,7 +28,7 @@ def _load_migration() -> Any:
 
 def test_ferm_actual_times_migration_extends_current_head() -> None:
     migration = _load_migration()
-    assert migration.down_revision == "c9d400000057"
+    assert migration.down_revision == "c9d400000058"
     assert migration.revision == "d7e8f9a1b2c3"
 
 
