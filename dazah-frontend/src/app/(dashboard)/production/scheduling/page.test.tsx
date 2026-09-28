@@ -172,6 +172,58 @@ describe('SchedulingPage archive flow', () => {
     expect(actions.getScheduleExcelArchives).toHaveBeenCalledTimes(2)
   })
 
+  it('renders empty merge anchors so covered columns stay aligned', async () => {
+    // 他汀排产表场景：空锚点纵向合并（如倒罐罐序行上方）。锚点不占位时
+    // 被覆盖格移除后整行左移，29 日的罐序会错位显示到 27 日列。
+    actions.getScheduleExcelArchive.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: {
+        id: 'a-1',
+        file_name: '2026-09排产.xlsx',
+        sheet_name: '排产快照',
+        rows: [
+          ['H', '', 'a', 'b', 'c', 'd'],
+          ['L', 'v1', 'x', 'y', 'VALUE', 'z'],
+        ],
+        merges: [{ s: { r: 0, c: 1 }, e: { r: 1, c: 1 } }],
+        col_widths: [80, 80, 80, 80, 80, 80],
+        row_count: 2,
+        col_count: 6,
+        created_at: '2026-09-08T02:00:00+08:00',
+      },
+    })
+    await render()
+
+    const viewButton = Array.from(container.querySelectorAll('button')).find(
+      (b) => (b.textContent || '').includes('查看'),
+    )
+    expect(viewButton).toBeTruthy()
+    await act(async () => {
+      viewButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 60))
+    })
+
+    const tables = Array.from(container.querySelectorAll('table'))
+    const grid = tables[tables.length - 1]
+    const bodyRows: HTMLTableRowElement[] = Array.from(
+      grid.querySelectorAll('tbody tr'),
+    )
+    const valueRow = bodyRows.find((tr) =>
+      Array.from(tr.cells).some((c) => (c.textContent || '') === 'VALUE'),
+    )
+    expect(valueRow).toBeTruthy()
+    // 被覆盖格（rowSpan 0）不渲染：值行 6 列只剩 5 个 td，且覆盖值不显示
+    expect(valueRow?.cells.length).toBe(5)
+    expect(valueRow?.textContent || '').not.toContain('v1')
+
+    // 空锚点格必须带 rowSpan 占位：上一行的覆盖列在锚点行空出、整行左移
+    const headRow = bodyRows.find((tr) =>
+      Array.from(tr.cells).some((c) => (c.textContent || '') === 'H'),
+    )
+    expect(headRow?.cells[1]?.getAttribute('rowspan')).toBe('2')
+  })
+
   it('rejects files over 1MB locally without calling the backend', async () => {
     actions.uploadScheduleExcel.mockResolvedValue(UPLOAD_RESULT)
     await render()
