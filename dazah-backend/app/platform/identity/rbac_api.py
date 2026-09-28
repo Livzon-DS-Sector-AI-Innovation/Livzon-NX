@@ -2008,18 +2008,10 @@ async def simulate_page_permission(
     page_key = canonical_page_key(body.page_key)
     effective = next((item for item in grants if item.page_key == page_key), None)
     definition = get_page_definition(page_key)
-    module_allowed = bool(
-        definition
-        and (
-            settings.effective_module_access_mode == "all"
-            or await page_service.is_super_admin(db, user_id=user.id)
-            or await PermissionGrantRepository().has_module_view(
-                db,
-                user_id=user.id,
-                module_code=definition.module_code,
-            )
-        )
-    )
+    module_allowed = bool(definition and any(
+        item.module_code == definition.module_code and "access" in item.permissions
+        for item in grants
+    ))
     allowed = bool(
         module_allowed
         and effective is not None
@@ -2034,7 +2026,7 @@ async def simulate_page_permission(
     if definition is None:
         reason = "所选页面未登记或已失效"
     elif not module_allowed:
-        reason = "当前账号未获得所属模块访问权限"
+        reason = "当前模块没有可访问页面，模块入口未生效"
     elif allowed:
         reason = (
             "当前账号满足模块入口及所选页面授权条件；"

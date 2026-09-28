@@ -256,6 +256,75 @@ describe('user operation audit tab', () => {
     expect(content).not.toContain('本次为只读查询')
   })
 
+  it.each(['automations', 'business', 'feishu'] as const)('shows captured and historical details for %s', async (category) => {
+    const configurations = {
+      automations: {
+        action: 'list_agent_automations', method: 'GET', resource_type: 'agent_automation',
+        extra: { scope: 'platform', status: null },
+        new_value: { total: 1, page: 2, page_size: 20, items: [{ id: 'automation-1', name: '偏差日报' }] },
+        heading: '自动化查询条件', resultText: '偏差日报', missingText: '此记录未保存自动化查询结果',
+      },
+      business: {
+        action: 'search_agent_tools', method: 'POST', resource_type: 'agent_capability_search',
+        extra: { module: null, result_count: 0 },
+        new_value: { result_count: 1, items: [{ operation: 'quality.list_deviations' }] },
+        heading: '搜索条件', resultText: 'quality.list_deviations', missingText: '"result_count": 0',
+      },
+      feishu: {
+        action: 'restart_livzon_feishu_gateway', method: 'POST', resource_type: 'feishu_gateway',
+        extra: { status: 'connected', previous_reconnects: 2, gateway_reconnects: 3, config_version: 3 },
+        new_value: { status: 'connected', message: '飞书连接已恢复' },
+        heading: '交互结果', resultText: '飞书连接已恢复', missingText: '已记录摘要',
+      },
+    }
+    const configuration = configurations[category]
+    for (const hasSnapshot of [true, false]) {
+      const detail = {
+        id: `${category}-1`, category, created_at: '2026-09-28T08:00:00Z',
+        action: configuration.action, method: configuration.method, resource_type: configuration.resource_type,
+        new_value: hasSnapshot ? configuration.new_value : null,
+        extra: configuration.extra,
+        request_id: 'audit-trace', duration_ms: 0, ip_address: '127.0.0.1', user_agent: 'audit-client',
+      }
+      api.fetchGeneralAuditLogs.mockResolvedValue({ items: [detail], page: 1, page_size: 20, total: 1 })
+      api.fetchGeneralAuditLog.mockResolvedValue(detail)
+      await act(async () => root.render(createElement(App, null, createElement(GeneralAuditLogClient, { category }))))
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+      const view = Array.from(host.querySelectorAll('button')).find((button) => button.textContent?.includes('查看'))
+      await act(async () => view?.click())
+      const content = document.body.querySelector('.ant-drawer-body')?.textContent || ''
+      expect(content).toContain(configuration.heading)
+      expect(content).toContain(hasSnapshot ? configuration.resultText : configuration.missingText)
+      expect(content).toContain('audit-trace')
+      expect(content).toContain('0 ms')
+      expect(content).toContain('127.0.0.1')
+      expect(content).toContain('audit-client')
+      if (category === 'business') {
+        expect(content).not.toContain('变更前')
+        expect(content).not.toContain('变更后')
+        expect(content).toContain('本次为只读查询，未变更业务数据。')
+      }
+    }
+  })
+
+  it.each([
+    ['automations', 'list_agent_automations', '此记录未保存自动化查询结果'],
+    ['business', 'search_agent_tools', '此记录未保存搜索结果'],
+    ['feishu', 'restart_livzon_feishu_gateway', '此记录未保存交互结果'],
+  ] as const)('explains missing historical information in %s', async (category, action, emptyDescription) => {
+    const detail = { id: 'historical-1', category, action, created_at: '2026-09-22T08:00:00Z', extra: {} }
+    api.fetchGeneralAuditLogs.mockResolvedValue({ items: [detail], page: 1, page_size: 20, total: 1 })
+    api.fetchGeneralAuditLog.mockResolvedValue(detail)
+    await act(async () => root.render(createElement(App, null, createElement(GeneralAuditLogClient, { category }))))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+    const view = Array.from(host.querySelectorAll('button')).find((button) => button.textContent?.includes('查看'))
+    await act(async () => view?.click())
+    const content = document.body.querySelector('.ant-drawer-body')?.textContent || ''
+    expect(content).toContain(emptyDescription)
+    expect(content.match(/未采集/g)).toHaveLength(4)
+    expect(content).not.toContain('已记录摘要')
+  })
+
   it('shows Hermes Feishu outcome and external log ID', async () => {
     api.fetchGeneralAuditLogs.mockResolvedValue({
       items: [{
