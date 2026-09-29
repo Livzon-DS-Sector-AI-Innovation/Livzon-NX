@@ -97,9 +97,36 @@ export async function fetchEsgFilterOptions(
   return json.data || {}
 }
 
+function hrSettingsRequestOptions(): RequestInit {
+  // Production Nginx forwards /api directly to FastAPI, bypassing the Next.js
+  // proxy that derives page context. Shared reads must retain the actual caller.
+  return {
+    cache: 'no-store',
+    headers: typeof window !== 'undefined'
+      ? { 'X-Dazah-Page-Path': window.location.pathname }
+      : {},
+  }
+}
+
+async function parseHrSettingsError(
+  response: Response,
+  fallback = `请求失败: ${response.status}`,
+): Promise<Error> {
+  const body: unknown = await response.json().catch(() => null)
+  if (body && typeof body === 'object') {
+    if ('message' in body && typeof body.message === 'string' && body.message) {
+      return new Error(body.message)
+    }
+    if ('detail' in body && typeof body.detail === 'string' && body.detail) {
+      return new Error(body.detail)
+    }
+  }
+  return new Error(fallback)
+}
+
 async function unwrapHrResponse<T>(responseOrPromise: Response | Promise<Response>): Promise<T> {
   const response = await responseOrPromise
-  if (!response.ok) throw new Error(`请求失败: ${response.status}`)
+  if (!response.ok) throw await parseHrSettingsError(response)
   const json = await response.json()
   return (json.data ?? json) as T
 }
@@ -108,18 +135,18 @@ export async function fetchHrFeishuAppSettings(
   purpose: string = 'bitable',
 ): Promise<HrFeishuAppSettingsDetail> {
   return unwrapHrResponse(
-    fetch(`/api/v1/hr/feishu-settings/app?purpose=${purpose}`, { cache: 'no-store' }),
+    fetch(`/api/v1/hr/feishu-settings/app?purpose=${purpose}`, hrSettingsRequestOptions()),
   )
 }
 
 export async function fetchAllHrFeishuAppSettings(): Promise<HrFeishuAppSettingsDetail[]> {
   return unwrapHrResponse(
-    fetch('/api/v1/hr/feishu-settings/apps', { cache: 'no-store' }),
+    fetch('/api/v1/hr/feishu-settings/apps', hrSettingsRequestOptions()),
   )
 }
 
 export async function fetchHrFeishuEntitySettings(): Promise<HrFeishuEntitySettingItem[]> {
-  return unwrapHrResponse(fetch('/api/v1/hr/feishu-settings/entities', { cache: 'no-store' }))
+  return unwrapHrResponse(fetch('/api/v1/hr/feishu-settings/entities', hrSettingsRequestOptions()))
 }
 
 export async function fetchHrFeishuEntityTables(entityCode: string, appToken?: string): Promise<HrFeishuTableOption[]> {
@@ -127,7 +154,7 @@ export async function fetchHrFeishuEntityTables(entityCode: string, appToken?: s
   if (appToken?.trim()) params.set('app_token', appToken.trim())
   return unwrapHrResponse(fetch(
     `/api/v1/hr/feishu-settings/entities/${entityCode}/tables${params.size ? `?${params}` : ''}`,
-    { cache: 'no-store' }
+    hrSettingsRequestOptions(),
   ))
 }
 
@@ -140,7 +167,7 @@ export async function fetchHrFeishuEntityFieldMappingBundle(
   if (params?.table_id?.trim()) search.set('table_id', params.table_id.trim())
   return unwrapHrResponse(fetch(
     `/api/v1/hr/feishu-settings/entities/${entityCode}/field-mapping${search.size ? `?${search}` : ''}`,
-    { cache: 'no-store' }
+    hrSettingsRequestOptions(),
   ))
 }
 
@@ -160,8 +187,8 @@ export async function fetchEmailConfig(): Promise<{
     last_scan_at: string | null; last_fetched_count: number; last_fetch_status: string | null
   }
 }> {
-  const res = await fetch('/api/v1/hr/email/config', { cache: 'no-store' })
-  if (!res.ok) throw new Error('获取邮箱配置失败')
+  const res = await fetch('/api/v1/hr/email/config', hrSettingsRequestOptions())
+  if (!res.ok) throw await parseHrSettingsError(res, '获取邮箱配置失败')
   return res.json()
 }
 
