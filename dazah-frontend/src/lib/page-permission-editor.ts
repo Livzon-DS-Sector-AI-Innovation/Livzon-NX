@@ -1,5 +1,5 @@
 import type { components } from '@/types/generated/schema'
-import { PRODUCTION_OVERVIEW_SECTIONS, PRODUCTION_OVERVIEW_SECTION_KEYS } from '@/lib/production-overview-sections'
+import { productionPageSections } from '@/lib/production-overview-sections'
 import { getPermissionModuleName } from '@/lib/menu-config'
 
 export type PageLevel = 'access' | 'query' | 'operate'
@@ -102,8 +102,8 @@ function grantFacts(grant: PageEditorGrant, pageKey?: string): Set<string> {
   return new Set([
     ...grant.permissions.map((permission) => `permission:${permission}`),
     ...grant.sensitiveActions.map((action) => `action:${action}`),
-    ...(pageKey === 'production:overview'
-      ? (grant.visibleSections ?? PRODUCTION_OVERVIEW_SECTION_KEYS).map((section) => `section:${section}`)
+    ...(productionPageSections(pageKey).length
+      ? (grant.visibleSections ?? productionPageSections(pageKey).map((item) => item.key)).map((section) => `section:${section}`)
       : []),
   ])
 }
@@ -149,8 +149,8 @@ export function pageGrantChanges(
         ? '全部生产数据' : scopes[grant.scopeType] || '未配置范围') : '',
       PAGE_DATA_SCOPE_VISIBLE && grant.scopeType === 'departments' ? grant.departmentIds.map((id) => departmentNames.get(id) || '已失效部门').join('、') : '',
       ...grant.sensitiveActions.map((key) => definition.sensitive_actions?.find((action) => action.key === key)?.name || '已失效业务动作'),
-      definition.page_key === 'production:overview' ? `可见项：${grant.visibleSections == null ? '全部' : grant.visibleSections.map((key) =>
-        PRODUCTION_OVERVIEW_SECTIONS.find((item) => item.key === key)?.label || key,
+      productionPageSections(definition.page_key).length ? `可见项：${grant.visibleSections == null ? '全部' : grant.visibleSections.map((key) =>
+        productionPageSections(definition.page_key).find((item) => item.key === key)?.label || key,
       ).join('、') || '无'}` : '',
     ].filter(Boolean).join('；')
     return [{ pageKey: definition.page_key,

@@ -16,9 +16,9 @@ from app.platform.identity.page_permission_repository import PagePermissionRepos
 from app.platform.identity.page_policy import (
     PAGE_DEFINITIONS,
     PAGE_PERMISSION_SET,
+    PAGE_VISIBLE_SECTIONS,
     PAGES_BY_KEY,
     PAGES_BY_MODULE,
-    PRODUCTION_OVERVIEW_VISIBLE_SECTIONS,
     PageDefinition,
     api_bindings_for_module,
     api_route_catalog,
@@ -120,18 +120,18 @@ class PagePermissionService:
                 after_values = set(after.get("permissions") or []) | set(
                     after.get("sensitive_actions") or []
                 )
-                if page_key == "production:overview":
+                if page_key in PAGE_VISIBLE_SECTIONS:
                     before_sections = before.get("visible_sections")
                     after_sections = after.get("visible_sections")
                     before_values.update(
                         f"section:{item}" for item in (
-                            PRODUCTION_OVERVIEW_VISIBLE_SECTIONS
+                            PAGE_VISIBLE_SECTIONS[page_key]
                             if before_sections is None else before_sections
                         )
                     )
                     after_values.update(
                         f"section:{item}" for item in (
-                            PRODUCTION_OVERVIEW_VISIBLE_SECTIONS
+                            PAGE_VISIBLE_SECTIONS[page_key]
                             if after_sections is None else after_sections
                         )
                     )
@@ -462,8 +462,8 @@ class PagePermissionService:
                     f"{prefix}:action:{item}" for item in grant.sensitive_actions
                 )
                 sections = set(grant.visible_sections or [])
-                if grant.visible_sections is None and prefix == "production:overview":
-                    sections = set(PRODUCTION_OVERVIEW_VISIBLE_SECTIONS)
+                if grant.visible_sections is None and prefix in PAGE_VISIBLE_SECTIONS:
+                    sections = set(PAGE_VISIBLE_SECTIONS[prefix])
                 facts.update(
                     f"{prefix}:section:{item}" for item in sections
                 )
@@ -1006,16 +1006,17 @@ class PagePermissionService:
                 permissions = list(normalize_permissions([*permissions, "operate"]))
             visible_sections = grant.visible_sections
             if visible_sections is not None:
-                if page_key != "production:overview":
-                    raise HTTPException(400, "仅生产管理概览支持页面内可见项")
+                allowed_sections = PAGE_VISIBLE_SECTIONS.get(page_key)
+                if allowed_sections is None:
+                    raise HTTPException(400, "仅生产管理概览和排产计划支持页面内可见项")
                 unknown_sections = (
-                    set(visible_sections) - PRODUCTION_OVERVIEW_VISIBLE_SECTIONS
+                    set(visible_sections) - allowed_sections
                 )
                 if unknown_sections:
                     raise HTTPException(
                         400, f"未知页面内可见项：{', '.join(sorted(unknown_sections))}"
                     )
-                if set(visible_sections) == PRODUCTION_OVERVIEW_VISIBLE_SECTIONS:
+                if set(visible_sections) == allowed_sections:
                     visible_sections = None
             if grant.data_scope.scope_type not in definition.supported_scope_types:
                 raise HTTPException(

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   hasProductionPagePermission,
   hasProductionOverviewSection,
+  hasProductionSchedulingProduct,
   PRODUCTION_PAGE_KEYS,
 } from './useProductionPermissions'
 
@@ -13,6 +14,19 @@ const baseUser = {
 }
 
 describe('production page permissions', () => {
+  it('uses scheduling visibility independently of overview permissions', () => {
+    const grant = { page_key: PRODUCTION_PAGE_KEYS.scheduling,
+      permissions: ['access', 'query'] as const, visible_sections: ['LN'] }
+    const user = { ...baseUser, page_permissions: [grant] }
+    expect(hasProductionSchedulingProduct(user, 'LN')).toBe(true)
+    expect(hasProductionSchedulingProduct(user, 'MC')).toBe(false)
+    expect(hasProductionSchedulingProduct({ ...user, page_permissions: [{ ...grant, visible_sections: [] }] }, 'LN')).toBe(false)
+    expect(hasProductionSchedulingProduct({ ...user, page_permissions: [{ ...grant, visible_sections: null }] }, 'MC')).toBe(true)
+    expect(hasProductionSchedulingProduct({ ...user, page_permissions: [{ ...grant, permissions: ['access'] }] }, 'LN')).toBe(false)
+    expect(hasProductionSchedulingProduct({ ...baseUser, role: 'admin' }, 'TY')).toBe(true)
+    expect(hasProductionSchedulingProduct({ ...baseUser, role: 'admin' }, 'FL')).toBe(false)
+    expect(hasProductionSchedulingProduct(null, 'LN')).toBe(false)
+  })
   it('keeps the complete production page key set stable', () => {
     expect(Object.values(PRODUCTION_PAGE_KEYS)).toHaveLength(21)
     expect(new Set(Object.values(PRODUCTION_PAGE_KEYS)).size).toBe(21)

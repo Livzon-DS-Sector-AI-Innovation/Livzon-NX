@@ -13,7 +13,7 @@ import {
 import type { RoleItem } from "@/lib/api/client/admin"
 import type { DepartmentItem } from "@/lib/api/server/admin"
 import { getPermissionModuleName } from "@/lib/menu-config"
-import { PRODUCTION_OVERVIEW_SECTIONS, PRODUCTION_OVERVIEW_SECTION_KEYS } from "@/lib/production-overview-sections"
+import { productionPageSections } from "@/lib/production-overview-sections"
 import {
   PAGE_DATA_SCOPE_VISIBLE, pageGrantChanges, pagePermissionTier, pagePermissionTierLabel,
   pagePermissionTierOptions, pageScopeIssue, pageScopeSummary, permissionsForTier, type PagePermissionTier,
@@ -33,7 +33,7 @@ type Grant = {
   visibleSections: string[] | null
 }
 type PermissionRow = PermissionTreeNode & { depth: number; details?: boolean; canExpand?: boolean }
-const hasDetails = (node: PermissionTreeNode) => node.page_key === "production:overview" || !!node.definition?.sensitive_actions?.length
+const hasDetails = (node: PermissionTreeNode) => productionPageSections(node.page_key).length > 0 || !!node.definition?.sensitive_actions?.length
 const order: Level[] = ["access", "query", "operate"]
 const scopeNames: Record<string, string> = {
   not_applicable: "待接入数据范围", department_tree: "本部门及下级",
@@ -397,14 +397,14 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
       columns={([
         { title: "菜单页面", key: "page_name", width: 400,
           onCell: (node) => ({ colSpan: node.details ? 4 : 1 }), render: (_, node) => node.details ? <div className={styles.detailPanels}>
-          {node.page_key === 'production:overview' && <section className={styles.detailPanel} aria-label="页面内可见项">
+          {productionPageSections(node.page_key).length > 0 && <section className={styles.detailPanel} aria-label="页面内可见项">
             <div className={styles.panelHeading}><span className={styles.panelIcon}><EyeOutlined /></span><Typography.Text strong>页面内可见项</Typography.Text></div>
-            <Typography.Text type="secondary" className="block text-xs">产品勾选同时控制汇总数据；产销计划单独控制。</Typography.Text>
-            <Checkbox.Group className={styles.visibleSections} value={editable[node.page_key]?.visibleSections ?? PRODUCTION_OVERVIEW_SECTION_KEYS}
+            <Typography.Text type="secondary" className="block text-xs">{node.page_key === 'production:overview' ? '产品勾选同时控制汇总数据；产销计划单独控制。' : '勾选后可查看对应产品的排产计划，未勾选产品的入口与存档不可访问。'}</Typography.Text>
+            <Checkbox.Group className={styles.visibleSections} value={editable[node.page_key]?.visibleSections ?? productionPageSections(node.page_key).map((section) => section.key)}
               disabled={controlsDisabled || !editable[node.page_key]?.permissions.includes('query')}
               onChange={(values) => update(node.page_key, { visibleSections:
-                values.length === PRODUCTION_OVERVIEW_SECTION_KEYS.length ? null : values as string[] })}>
-              {PRODUCTION_OVERVIEW_SECTIONS.map((section) => <Checkbox key={section.key} value={section.key}>{section.label}</Checkbox>)}
+                values.length === productionPageSections(node.page_key).length ? null : values as string[] })}>
+              {productionPageSections(node.page_key).map((section) => <Checkbox key={section.key} value={section.key}>{section.label}</Checkbox>)}
             </Checkbox.Group>
           </section>}
           {!!node.definition?.sensitive_actions?.length && <section className={styles.detailPanel} aria-label="附加高风险操作">

@@ -5,7 +5,7 @@ import { App, Button, Checkbox, ConfigProvider, Drawer, Empty, Input, Radio, Seg
 import Alert from '@/components/shared/PlatformNotice'
 import { ReloadOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
 import { getPermissionModuleName } from '@/lib/menu-config'
-import { PRODUCTION_OVERVIEW_SECTIONS, PRODUCTION_OVERVIEW_SECTION_KEYS } from '@/lib/production-overview-sections'
+import { productionPageSections } from '@/lib/production-overview-sections'
 import {
   highRiskPageKeys, PAGE_DATA_SCOPE_VISIBLE, pageGrantChanges, pagePermissionTier,
   pageGrantChangeKind, pagePermissionTierLabel, pagePermissionTierOptions, permissionsForTier,
@@ -484,17 +484,18 @@ export default function ModulePermissionsDrawer({ user, open, onClose }: {
         size="middle" scroll={{ x: 1240, y: 520 }}
         locale={{ emptyText: search.trim() ? '当前筛选没有匹配页面' : '当前模块暂无可配置页面' }}
         expandable={{ expandedRowKeys: expandedKeys, onExpandedRowsChange: (keys) => setExpandedKeys(keys.map(String)),
-          rowExpandable: (definition) => Boolean(definition.sensitive_actions?.length) || definition.page_key === 'production:overview', expandedRowRender: (definition) => {
+          rowExpandable: (definition) => Boolean(definition.sensitive_actions?.length) || productionPageSections(definition.page_key).length > 0, expandedRowRender: (definition) => {
           const state = editable[definition.page_key]
           const actions = definition.sensitive_actions || []
-          return <div className="px-3 py-2">{definition.page_key === 'production:overview' && <div className="mb-3">
+          const sections = productionPageSections(definition.page_key)
+          return <div className="px-3 py-2">{sections.length > 0 && <div className="mb-3">
             <Text strong>页面内可见项</Text>
-            <Text type="secondary" className="ml-2 text-xs">产品勾选同时控制汇总数据；产销计划单独控制。</Text>
-            <Checkbox.Group className="mt-2 flex flex-wrap gap-3" value={state?.visibleSections ?? PRODUCTION_OVERVIEW_SECTION_KEYS}
+            <Text type="secondary" className="ml-2 text-xs">{definition.page_key === 'production:overview' ? '产品勾选同时控制汇总数据；产销计划单独控制。' : '勾选后可查看对应产品的排产计划，未勾选产品的入口与存档不可访问。'}</Text>
+            <Checkbox.Group className="mt-2 flex flex-wrap gap-3" value={state?.visibleSections ?? sections.map((section) => section.key)}
               disabled={systemAdmin || saving || state?.mode !== 'custom' || !state?.permissions.includes('query')}
               onChange={(values) => updateGrant(definition.page_key, { visibleSections:
-                values.length === PRODUCTION_OVERVIEW_SECTION_KEYS.length ? null : values as string[] })}>
-              {PRODUCTION_OVERVIEW_SECTIONS.map((section) => <Checkbox key={section.key} value={section.key}>{section.label}</Checkbox>)}
+                values.length === sections.length ? null : values as string[] })}>
+              {sections.map((section) => <Checkbox key={section.key} value={section.key}>{section.label}</Checkbox>)}
             </Checkbox.Group>
           </div>}{actions.length ? <><Space wrap size={6}>
             <Text strong>附加高风险操作</Text><Tag color="orange">依赖普通操作</Tag>

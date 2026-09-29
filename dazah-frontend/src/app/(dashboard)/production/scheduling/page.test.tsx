@@ -58,6 +58,8 @@ vi.mock('antd', async () => {
 })
 
 import { setProductionAdminForTest } from '@/test/production-auth'
+import { useAuthStore } from '@/stores/auth'
+import { useProductContextStore } from '@/stores/product-context'
 import SchedulingPage from './page'
 
 const ARCHIVE_SUMMARY = [
@@ -94,6 +96,7 @@ describe('SchedulingPage archive flow', () => {
 
   beforeEach(() => {
     setProductionAdminForTest()
+    useProductContextStore.getState().setProductCode('MC')
     permissionState.codes = []
     actions.getScheduleExcelArchives.mockResolvedValue({
       code: 200,
@@ -130,6 +133,39 @@ describe('SchedulingPage archive flow', () => {
     expect(text).toContain('301 行 × 5 列')
     expect(text).toContain('张工')
     expect(text).toContain('不设行数上限')
+  })
+
+  function setVisibleProducts(sections: string[] | null, permissions: ('access' | 'query')[] = ['access', 'query']) {
+    useAuthStore.getState().setUser({ id: 'scheduling-user', name: '排产用户', role: 'user',
+      page_permissions: [{ page_key: 'production:plan:scheduling', module_code: 'production',
+        source: 'user', permissions, visible_sections: sections, data_scope: { scope_type: 'all' } }] })
+  }
+
+  it('shows only authorized products and never queries a hidden restored product', async () => {
+    setVisibleProducts(['LN', 'TY'])
+    await render()
+    expect([...container.querySelectorAll('[data-testid^="nav-block:"]')].map((item) => item.getAttribute('data-testid')))
+      .toEqual(['nav-block:LN', 'nav-block:TY'])
+    expect(actions.getScheduleExcelArchives.mock.calls.every((call) => call[2] === 'LN')).toBe(true)
+    actions.getScheduleExcelArchives.mockClear()
+    await act(async () => { (container.querySelector('[data-testid="nav-block:TY"]') as HTMLElement).click() })
+    expect(actions.getScheduleExcelArchives).toHaveBeenCalledWith(1, 50, 'TY')
+  })
+
+  it.each([[], null])('does not load archives without visible products or query permission (%s)', async (sections) => {
+    setVisibleProducts(sections, sections === null ? ['access'] : ['access', 'query'])
+    await render()
+    expect(container.textContent).toContain('暂无可查看的排产产品')
+    expect(actions.getScheduleExcelArchives).not.toHaveBeenCalled()
+    expect(container.querySelector('.ant-upload')).toBeNull()
+  })
+
+  it('clears displayed archive data when product authorization is revoked', async () => {
+    await render()
+    expect(container.textContent).toContain('2026-09排产.xlsx')
+    await act(async () => { setVisibleProducts([]) })
+    expect(container.textContent).not.toContain('2026-09排产.xlsx')
+    expect(container.textContent).toContain('暂无可查看的排产产品')
   })
 
   it('shows the empty state when there are no archives', async () => {
