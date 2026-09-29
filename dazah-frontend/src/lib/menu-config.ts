@@ -895,12 +895,14 @@ function filterPageChildren(
   })
 }
 
-/** 模块入口按模块授权显示，模块内菜单始终按已保存的页面访问权限裁剪。 */
+/** 模块入口与菜单均由有效页面访问权限派生，旧模块授权不再限制入口。 */
 export function getAuthorizedPageMenus(
-  moduleCodes: string[] | undefined,
+  _moduleCodes: string[] | undefined,
   pagePermissions: PageAccessSummary[] | undefined,
 ): ModuleMenu[] {
-  const allowedModules = getAuthorizedModuleMenus(moduleCodes)
+  const allowedModules = getAuthorizedModuleMenus((pagePermissions || [])
+    .filter((grant) => grant.permissions?.includes("access"))
+    .map((grant) => grant.module_code))
   const allowedPageKeys = new Set(
     (pagePermissions || [])
       .filter((grant) => grant.permissions?.includes("access"))
@@ -936,7 +938,7 @@ export function getFirstAuthorizedModulePath(user: ModuleLandingAccess): string 
       if (nested) return nested
     }
   }
-  for (const moduleMenu of getAuthorizedModuleMenus(user.module_codes)) {
+  for (const moduleMenu of getAuthorizedPageMenus(user.module_codes, user.page_permissions)) {
     const path = firstAuthorizedPage(moduleMenu.children)
     if (path) return path
   }

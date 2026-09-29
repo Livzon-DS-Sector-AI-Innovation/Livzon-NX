@@ -98,6 +98,19 @@ it('opens assignment in a right drawer and cancels without saving', async () => 
   expect(mocks.saveScope).not.toHaveBeenCalled()
 })
 
+it('offers role assignment and read-only effective permissions with automatic module access', async () => {
+  await renderManager()
+  expect(host.textContent).toContain('只需分配角色；模块入口随有效页面访问权限自动生效')
+  const actions = [...host.querySelectorAll('.ant-table-tbody button')].map((item) => item.textContent?.trim())
+  expect(actions).toEqual(['分配角色', '有效权限'])
+  await act(async () => button('分配角色').click())
+  expect(document.querySelector('.ant-drawer-body')?.textContent).toContain('模块入口随有效页面访问权限自动生效')
+  await act(async () => button('预览权限').click())
+  await act(async () => root.render(mocks.info.mock.lastCall![0].content))
+  expect(host.textContent).toContain('模块入口随有效页面访问权限自动开通或关闭')
+  expect(mocks.assign).not.toHaveBeenCalled()
+})
+
 it('closes an unchanged assignment by clicking outside, but keeps it open for inside clicks', async () => {
   await renderManager()
   await act(async () => button('分配角色').click())
@@ -173,6 +186,8 @@ it('opens rules and a read-only preview without requiring changes or an audit re
   expect(rules.title).toBe('角色与数据范围规则')
   await act(async () => root.render(rules.content))
   expect(host.textContent).toContain('用户页面覆盖优先')
+  expect(host.textContent).toContain('撤销最后一个可访问页面后，入口自动关闭')
+  expect(host.textContent).toContain('系统管理员默认拥有全部模块访问权限')
   expect(host.textContent).toContain('尚未接入页面级数据范围')
   await renderManager()
   await act(async () => button('分配角色').click())
@@ -233,7 +248,7 @@ it('preserves input after a failed save and allows retrying', async () => {
 it('previews added roles and submits a versioned full replacement with a reason', async () => {
   await renderManager()
   await act(async () => button('分配角色').click())
-  expect(document.body.textContent).toContain('角色决定功能权限，部门范围决定可查看的数据范围。')
+  expect(document.body.textContent).toContain('模块入口随有效页面访问权限自动生效')
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain('分配角色 · QA部公用账号')
   await act(async () => roleCheckbox('体系QA').click())
   expect(document.body.textContent).toContain('新增 1')
@@ -258,6 +273,7 @@ it('keeps system administrator exclusive', async () => {
   expect(roleCheckbox('系统管理员').checked).toBe(true)
   expect(roleCheckbox('物料QA').checked).toBe(false)
   expect(document.body.textContent).toContain('已自动取消其他普通角色')
+  expect(document.querySelector('.ant-drawer-body')?.textContent).toContain('系统管理员默认拥有全部模块访问权限，无需单独开通')
   expect([...document.querySelectorAll('button')].some((item) => item.textContent?.includes('查看页面权限'))).toBe(false)
 })
 

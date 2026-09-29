@@ -44,11 +44,6 @@ async def test_http_enforcement_uses_exact_route_and_page_binding(monkeypatch):
         ]
 
     monkeypatch.setattr(PagePermissionService, "effective_grants", grants)
-    monkeypatch.setattr(
-        deps.PermissionGrantRepository,
-        "has_module_view",
-        AsyncMock(return_value=True),
-    )
     # Test an absent contract explicitly; the real employee route is now reviewed.
     monkeypatch.setattr(page_policy, "PAGE_API_BINDINGS", ())
     app = FastAPI()

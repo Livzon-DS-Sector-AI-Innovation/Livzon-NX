@@ -1,7 +1,8 @@
 "use client"
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
-import { App, Button, Checkbox, ConfigProvider, Drawer, Input, Radio, Segmented, Select, Space, Table, Tag, Typography } from "antd"
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
+import { App, Button, Checkbox, ConfigProvider, Drawer, Dropdown, Input, Radio, Segmented, Select, Space, Table, Tag, Tooltip, Typography, theme } from "antd"
+import { CloseOutlined, DownOutlined, EyeOutlined, FileTextOutlined, FolderFilled, HistoryOutlined, InfoCircleOutlined, RightOutlined, SearchOutlined, UpOutlined, WarningOutlined } from "@ant-design/icons"
 import Alert from "@/components/shared/PlatformNotice"
 import {
   getRolePagePermissions,
@@ -12,7 +13,7 @@ import {
 import type { RoleItem } from "@/lib/api/client/admin"
 import type { DepartmentItem } from "@/lib/api/server/admin"
 import { getPermissionModuleName } from "@/lib/menu-config"
-import { PRODUCTION_OVERVIEW_SECTIONS, PRODUCTION_OVERVIEW_SECTION_KEYS } from "@/lib/production-overview-sections"
+import { productionPageSections } from "@/lib/production-overview-sections"
 import {
   PAGE_DATA_SCOPE_VISIBLE, pageGrantChanges, pagePermissionTier, pagePermissionTierLabel,
   pagePermissionTierOptions, pageScopeIssue, pageScopeSummary, permissionsForTier, type PagePermissionTier,
@@ -21,6 +22,7 @@ import type { ColumnsType } from "antd/es/table"
 import { buildPermissionTree, filterAuthorizedTree, type PermissionTreeNode } from "./rolePagePermissionTree"
 import { PagePermissionDiff } from "@/components/shared/PagePermissionDiff"
 import { PagePermissionHistoryDrawer } from "@/components/shared/PagePermissionHistoryDrawer"
+import styles from "./RolePagePermissionsDrawer.module.css"
 
 type Level = "access" | "query" | "operate"
 type Grant = {
@@ -30,6 +32,8 @@ type Grant = {
   departmentIds: string[]
   visibleSections: string[] | null
 }
+type PermissionRow = PermissionTreeNode & { depth: number; details?: boolean; canExpand?: boolean }
+const hasDetails = (node: PermissionTreeNode) => productionPageSections(node.page_key).length > 0 || !!node.definition?.sensitive_actions?.length
 const order: Level[] = ["access", "query", "operate"]
 const scopeNames: Record<string, string> = {
   not_applicable: "待接入数据范围", department_tree: "本部门及下级",
@@ -67,6 +71,18 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
   onClose: () => void
 }) {
   const { message, modal } = App.useApp()
+  const { token } = theme.useToken()
+  const editorStyle = {
+    "--editor-primary": token.colorPrimary,
+    "--editor-primary-bg": token.colorPrimaryBg,
+    "--editor-primary-border": token.colorPrimaryBorder,
+    "--editor-surface": token.colorFillAlter,
+    "--editor-border": token.colorBorderSecondary,
+    "--editor-radius": `${token.borderRadius}px`,
+    "--editor-radius-lg": `${token.borderRadiusLG}px`,
+  } as CSSProperties
+  const tableArea = useRef<HTMLDivElement>(null)
+  const [tableHeight, setTableHeight] = useState(400)
   const loadVersion = useRef(0)
   const savingVersion = useRef<number | null>(null)
   const pendingIdempotencyKey = useRef<string | null>(null)
@@ -79,6 +95,7 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
   const [saving, setSaving] = useState(false)
   const [pendingAction, setPendingAction] = useState<"preview" | "save" | null>(null)
   const previewing = pendingAction !== null
+  const controlsDisabled = loading || saving || previewing || result?.role_id !== roleId
   const [errorMessage, setErrorMessage] = useState("")
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [authorizedOnly, setAuthorizedOnly] = useState(false)
@@ -105,7 +122,8 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
         if (next.role_id !== roleId) throw new Error("角色授权返回对象不一致，请重新加载")
         setResult(next)
         setEditable(editableState(next))
-        setExpandedKeys([])
+        setExpandedKeys((next.definitions || []).filter((definition) =>
+          definition.page_key === "production:overview" || definition.sensitive_actions?.length).map((definition) => definition.page_key))
         setAuthorizedOnly(false)
         setSensitiveOnly(false)
         setSearch("")
@@ -117,6 +135,14 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
     })
     return () => { loadVersion.current += 1 }
   }, [open, roleId, refreshVersion])
+
+  useEffect(() => {
+    const element = tableArea.current
+    if (!open || loading || !element || typeof ResizeObserver === "undefined") return
+    const observer = new ResizeObserver(() => setTableHeight(Math.max(180, element.clientHeight - 66)))
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [open, loading])
 
   const modules = useMemo(() => Array.from(new Set(
     (result?.definitions || []).map((definition) => definition.module_code),
@@ -131,8 +157,18 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
   }), [authorizedOnly, deferredSearch, editable, moduleDefinitions, sensitiveOnly])
   const tree = useMemo(() => buildPermissionTree(visibleDefinitions), [visibleDefinitions])
   const definitions = authorizedOnly ? filterAuthorizedTree(tree, editable) : tree
-  const allGroupKeys = (nodes: PermissionTreeNode[]): string[] => nodes.flatMap((node) =>
-    node.children?.length ? [node.page_key, ...allGroupKeys(node.children)] : [])
+  const allGroupKeys = (nodes: PermissionTreeNode[]): string[] => nodes.flatMap((node) => [
+    ...(node.children?.length || hasDetails(node) ? [node.page_key] : []), ...allGroupKeys(node.children || []),
+  ])
+  // Detail rows span the full virtual table, keeping both panels out of the menu-name column.
+  const rows: PermissionRow[] = []
+  const appendRows = (nodes: PermissionTreeNode[], depth = 0) => nodes.forEach((node) => {
+    rows.push({ ...node, children: undefined, depth, canExpand: !!node.children?.length || hasDetails(node) })
+    if (!expandedKeys.includes(node.page_key)) return
+    if (hasDetails(node)) rows.push({ ...node, children: undefined, depth, details: true })
+    appendRows(node.children || [], depth + 1)
+  })
+  appendRows(definitions)
   const update = (pageKey: string, patch: Partial<Grant>) => setEditable((current) => ({
     ...current, [pageKey]: { ...current[pageKey], ...patch },
   }))
@@ -153,7 +189,7 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
   }
   const close = () => {
     if (!changes.length) return onClose()
-    modal.confirm({ title: "放弃未保存的角色授权？", content: "当前更改尚未保存，继续后将丢失。",
+    modal.confirm({ centered: true, title: "放弃未保存的角色授权？", content: "当前更改尚未保存，继续后将丢失。",
       okText: "放弃更改", cancelText: "继续编辑", onOk: inCurrentSession(onClose) })
   }
   const roleGrants = () => Object.entries(editable).flatMap(([pageKey, grant]) =>
@@ -238,7 +274,7 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
         modal.info({ title: `${role.name}的页面权限预览`, width: 960, content, okText: "返回修改" })
         return
       }
-      modal.confirm({ title: `确认调整${role.name}的页面权限`, width: 960, content,
+      modal.confirm({ centered: true, title: `确认调整${role.name}的页面权限`, width: 960, content,
         okText: "确认保存", cancelText: "返回修改",
         onOk: inCurrentSession(save), onCancel: () => { pendingIdempotencyKey.current = null } })
     } catch (error) {
@@ -252,6 +288,7 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
     const targetKeys = visibleDefinitions.map((definition) => definition.page_key)
     if (!targetKeys.length) { message.info("当前筛选没有可调整的页面"); return }
     modal.confirm({
+      centered: true,
       title: `批量设为“${pagePermissionTierOptions.find((option) => option.value === tier)?.label}”？`,
       content: `将调整当前筛选结果中的 ${targetKeys.length} 个页面；筛选外页面保持不变。`,
       okText: `调整 ${targetKeys.length} 个页面`, cancelText: "取消",
@@ -276,6 +313,7 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
     if (!targetKeys.length) { message.info("当前筛选没有已授权的高风险动作"); return }
     const verb = "撤销"
     modal.confirm({
+      centered: true,
       title: `批量${verb}高风险权限？`,
       content: `将处理当前筛选结果中的 ${targetKeys.length} 个页面。`,
       okText: `确认${verb}`, cancelText: "取消",
@@ -292,90 +330,121 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
     })
   }
 
-  return <Drawer title={`${role?.name || "角色"} · 页面权限基线`} open={open} onClose={close}
-    extra={<Button onClick={() => setHistoryOpen(true)} disabled={!result}>授权历史</Button>}
-    loading={loading} size="min(1080px, 100vw)" footer={<div className="flex flex-col gap-3 sm:flex-row">
-      <Input disabled={loading || saving || previewing} value={reason} onChange={(event) => setReason(event.target.value)}
-        placeholder="填写角色授权调整原因" maxLength={500} />
-      <Space className="shrink-0 self-end">
-        <Button loading={pendingAction === "preview"} onClick={() => void previewChanges("preview")}
-          disabled={loading || saving || previewing || !result || result.role_id !== role?.id}>预览</Button>
-        <Button type="primary" loading={saving || pendingAction === "save"} onClick={() => void previewChanges("save")}
-          disabled={loading || saving || previewing || !result || result.role_id !== role?.id}>保存</Button>
-      </Space>
+  return <Drawer open={open} onClose={close} placement="right" size="min(1360px, 92vw)" mask={{ closable: true }}
+    rootClassName={styles.editor} rootStyle={editorStyle} closable={false}
+    classNames={{ section: styles.container, header: styles.header, body: styles.body, footer: styles.drawerFooter, mask: styles.mask }}
+    title={<div className={styles.heading}>
+      <Button type="text" icon={<CloseOutlined />} aria-label="关闭页面权限" onClick={close} />
+      <Typography.Title level={3} style={{ margin: 0, fontSize: token.fontSizeXL }}>{role?.name || "角色"} · 页面权限基线</Typography.Title>
+      <Button className={styles.historyButton} icon={<HistoryOutlined />} onClick={() => setHistoryOpen(true)} disabled={!result}>授权历史</Button>
+    </div>}
+    footer={<div className={styles.footer}>
+      <Input className={styles.reason} prefix={<FileTextOutlined />} showCount
+        aria-label="角色授权调整原因（必填）" disabled={loading || saving || previewing} value={reason}
+        onChange={(event) => setReason(event.target.value)} placeholder="填写角色授权调整原因" maxLength={500} />
+      <Button className={styles.footerButton} loading={pendingAction === "preview"} onClick={() => void previewChanges("preview")}
+        disabled={loading || saving || previewing || !result || result.role_id !== role?.id}>预览</Button>
+      <Button className={styles.footerButton} type="primary" loading={saving || pendingAction === "save"} onClick={() => void previewChanges("save")}
+        disabled={loading || saving || previewing || !result || result.role_id !== role?.id}>保存</Button>
     </div>}>
-    <Typography.Paragraph type="secondary">
-      这里只配置可访问模块内的菜单页面和基础权限档位，不会开启一级模块入口；高风险操作是“普通操作”之上的附加授权，勾选时会自动启用普通操作，取消普通操作时会一并撤销。用户有精确覆盖时，以用户覆盖为准。
-    </Typography.Paragraph>
+    <Alert className={styles.rulesNotice} title="模块入口随有效页面访问权限自动生效；高风险授权依赖普通操作。"
+      description="保存角色页面权限后，成员的模块入口按多个角色与用户页面覆盖的最终结果自动计算，无需单独开通模块。模块内至少一个页面可访问时开通入口；撤销最后一个可访问页面后关闭入口。用户有精确覆盖时，以用户覆盖为准。系统管理员默认拥有全部模块访问权限。高风险操作是“普通操作”之上的附加授权，勾选时会自动启用普通操作，取消普通操作时会一并撤销。" />
     {errorMessage && <Alert className="mb-4" type="error" showIcon title={errorMessage}
-      action={<Button size="small" onClick={() => modal.confirm({ title: "重新加载最新角色授权？",
+      action={<Button size="small" onClick={() => modal.confirm({ centered: true, title: "重新加载最新角色授权？",
         content: "刷新会放弃未保存的本地调整，请先核对需要保留的更改。", okText: "重新加载", cancelText: "继续编辑",
         onOk: inCurrentSession(() => { setLoading(true); setRefreshVersion((version) => version + 1) }),
       })}>重新加载</Button>} />}
     {!!scopeIssues.length && <Alert className="mb-4" type="warning" showIcon
       title="存在无法保存的数据范围" description={scopeIssues.slice(0, 3).join("；")} />}
-    <ConfigProvider componentDisabled={loading || saving || previewing || result?.role_id !== roleId}>
-    <div className="mb-4 overflow-x-auto"><Segmented value={moduleCode} onChange={(value) => setModuleCode(String(value))}
+    <ConfigProvider componentDisabled={controlsDisabled}>
+    <div className={styles.moduleNavigation}><Segmented className={styles.modules} value={moduleCode}
+      aria-label="业务模块" onChange={(value) => setModuleCode(String(value))}
       options={modules.map((code) => ({ value: code, label: getPermissionModuleName(code) }))} /></div>
-    <Space wrap className="mb-4">
-      <Checkbox checked={authorizedOnly} onChange={(event) => setAuthorizedOnly(event.target.checked)}>只看已授权页面</Checkbox>
-      <Checkbox checked={sensitiveOnly} onChange={(event) => setSensitiveOnly(event.target.checked)}>只看含高风险操作的页面</Checkbox>
-      <Input.Search allowClear className="max-w-64" placeholder="搜索页面名称或权限键" value={search}
-        aria-label="搜索角色页面权限" onChange={(event) => setSearch(event.target.value)} />
-      <Typography.Text type="secondary">批量调整当前筛选 {visibleDefinitions.length} 个页面：</Typography.Text>
-      {pagePermissionTierOptions.map(({ value, label }) => <Button key={value} size="small"
-        danger={value === 'none'} onClick={() => setVisiblePermission(value)}>
-        {label}
-      </Button>)}
-      <Button size="small" danger onClick={revokeVisibleSensitiveActions}>撤销高风险权限</Button>
-    </Space>
-    <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
-      <Typography.Text type={changes.length ? "warning" : "secondary"}>未保存调整 {changes.length} 个页面</Typography.Text>
-      <Typography.Text type="secondary">批量操作只影响当前筛选结果，筛选外页面保持不变。</Typography.Text>
+    <div className={styles.toolbar}>
+      <div className={styles.filters}>
+        <Checkbox checked={authorizedOnly} onChange={(event) => setAuthorizedOnly(event.target.checked)}>只看已授权页面</Checkbox>
+        <Checkbox checked={sensitiveOnly} onChange={(event) => setSensitiveOnly(event.target.checked)}>只看含高风险操作的页面</Checkbox>
+        <Input allowClear className={styles.search} prefix={<SearchOutlined />} placeholder="搜索页面名称或权限键" value={search}
+          aria-label="搜索角色页面权限" onChange={(event) => setSearch(event.target.value)} />
+      </div>
+      <div className={styles.batchActions}>
+        <Typography.Text type="secondary">批量调整当前筛选 {visibleDefinitions.length} 个页面：</Typography.Text>
+        {pagePermissionTierOptions.filter(({ value }) => value !== "operate").map(({ value, label }) =>
+          <Button key={value} className={value === "none" ? styles.clearButton : undefined}
+            disabled={controlsDisabled || !visibleDefinitions.length} onClick={() => setVisiblePermission(value)}>{label}</Button>)}
+        <Space.Compact className={styles.batchDropdown}>
+          <Button disabled={controlsDisabled || !visibleDefinitions.length} onClick={() => setVisiblePermission("operate")}>普通操作</Button>
+          <Dropdown disabled={controlsDisabled || !visibleDefinitions.length} menu={{ items: [
+            { key: "revoke", label: "撤销高风险权限", danger: true, onClick: revokeVisibleSensitiveActions },
+          ] }}>
+            <Button aria-label="更多批量权限操作" icon={<DownOutlined />} disabled={controlsDisabled || !visibleDefinitions.length} />
+          </Dropdown>
+        </Space.Compact>
+      </div>
     </div>
-    <div className="mb-3 flex flex-wrap items-center gap-3">
-      <Button size="small" onClick={() => setExpandedKeys(allGroupKeys(tree))}>展开全部菜单</Button>
-      <Button size="small" onClick={() => setExpandedKeys([])}>折叠全部菜单</Button>
+    <Alert className={styles.changesNotice} type={changes.length ? "warning" : "info"}
+      title={`未保存调整 ${changes.length} 个页面，批量操作只影响当前筛选结果，筛选外页面保持不变。`}
+      description="批量操作仅调整当前模块的筛选结果；所有更改在填写调整原因、预览影响并确认保存后生效。" />
+    <div className={styles.treeToolbar}>
+      <Button size="small" icon={<DownOutlined />} iconPlacement="end" onClick={() => setExpandedKeys(allGroupKeys(tree))}>展开全部菜单</Button>
+      <Button size="small" icon={<UpOutlined />} iconPlacement="end" onClick={() => setExpandedKeys([])}>折叠全部菜单</Button>
       <Typography.Text type="secondary">父级勾选或取消会递归应用到全部下级（含筛选隐藏项）；附加高风险操作需逐项授权。</Typography.Text>
     </div>
-    <Table<PermissionTreeNode> rowKey="page_key" dataSource={definitions} pagination={false} size="small"
-      virtual scroll={{ x: 980, y: 520 }} locale={{ emptyText: search.trim() ? "当前筛选没有匹配页面" : authorizedOnly ? "当前模块没有已授权页面" : "当前模块暂无可配置页面" }}
+    <div ref={tableArea} className={styles.tableArea}>
+    <Table<PermissionRow> className={styles.permissionTable} rowKey={(node) => `${node.page_key}${node.details ? ":details" : ""}`}
+      dataSource={rows} loading={loading} pagination={false} size="small" rowClassName={(node) => node.details ? styles.detailsRow : styles.menuRow}
+      virtual scroll={{ x: 1080, y: tableHeight }} locale={{ emptyText: search.trim() ? "当前筛选没有匹配页面" : authorizedOnly ? "当前模块没有已授权页面" : "当前模块暂无可配置页面" }}
       columns={([
-        { title: "菜单页面", key: "page_name", width: 420, render: (_, node) => <span>
-          <Typography.Text strong={Boolean(node.children?.length)}>{node.page_name}</Typography.Text>
-          {node.pageKeys.some((key) => changedPageKeys.has(key)) && <Tag color="orange" className="ml-2">未保存</Tag>}
-          {node.children?.length ? <Typography.Text type="secondary" className="ml-2">{node.pageKeys.length} 个页面</Typography.Text> : null}
-          {node.definition && <Typography.Text type="secondary" className="ml-2 text-xs">{node.page_key}</Typography.Text>}
-          {node.page_key === 'production:overview' && <div className="ml-6 my-2">
-            <Typography.Text strong>页面内可见项</Typography.Text>
-            <Typography.Text type="secondary" className="block text-xs">产品勾选同时控制汇总数据；产销计划单独控制。</Typography.Text>
-            <Checkbox.Group className="mt-2" value={editable[node.page_key]?.visibleSections ?? PRODUCTION_OVERVIEW_SECTION_KEYS}
-              disabled={!editable[node.page_key]?.permissions.includes('query')}
+        { title: "菜单页面", key: "page_name", width: 400,
+          onCell: (node) => ({ colSpan: node.details ? 4 : 1 }), render: (_, node) => node.details ? <div className={styles.detailPanels}>
+          {productionPageSections(node.page_key).length > 0 && <section className={styles.detailPanel} aria-label="页面内可见项">
+            <div className={styles.panelHeading}><span className={styles.panelIcon}><EyeOutlined /></span><Typography.Text strong>页面内可见项</Typography.Text></div>
+            <Typography.Text type="secondary" className="block text-xs">{node.page_key === 'production:overview' ? '产品勾选同时控制汇总数据；产销计划单独控制。' : '勾选后可查看对应产品的排产计划，未勾选产品的入口与存档不可访问。'}</Typography.Text>
+            <Checkbox.Group className={styles.visibleSections} value={editable[node.page_key]?.visibleSections ?? productionPageSections(node.page_key).map((section) => section.key)}
+              disabled={controlsDisabled || !editable[node.page_key]?.permissions.includes('query')}
               onChange={(values) => update(node.page_key, { visibleSections:
-                values.length === PRODUCTION_OVERVIEW_SECTION_KEYS.length ? null : values as string[] })}>
-              <Space wrap>{PRODUCTION_OVERVIEW_SECTIONS.map((section) => <Checkbox key={section.key} value={section.key}>{section.label}</Checkbox>)}</Space>
+                values.length === productionPageSections(node.page_key).length ? null : values as string[] })}>
+              {productionPageSections(node.page_key).map((section) => <Checkbox key={section.key} value={section.key}>{section.label}</Checkbox>)}
             </Checkbox.Group>
-          </div>}
-          {!!node.definition?.sensitive_actions?.length && <div className="ml-6 my-2">
-            <Space wrap size={6}>
-              <Typography.Text strong>附加高风险操作</Typography.Text>
+          </section>}
+          {!!node.definition?.sensitive_actions?.length && <section className={styles.detailPanel} aria-label="附加高风险操作">
+            <div className={styles.panelHeading}>
+              <span className={styles.panelIcon}><WarningOutlined /></span><Typography.Text strong>附加高风险操作</Typography.Text>
               <Tag color="orange">依赖普通操作</Tag>
-              <Typography.Text type="secondary">已选 {editable[node.page_key]?.sensitiveActions.length || 0}/{node.definition.sensitive_actions.length}</Typography.Text>
-            </Space>
+              <Typography.Text className={styles.selectedCount} type="secondary">已选 {editable[node.page_key]?.sensitiveActions.length || 0}/{node.definition.sensitive_actions.length}</Typography.Text>
+            </div>
             <Typography.Text type="secondary" className="block text-xs">勾选后自动启用普通操作；取消普通操作会同时撤销这些权限。</Typography.Text>
-            <Checkbox.Group className="mt-2" value={editable[node.page_key]?.sensitiveActions || []}
+            <Checkbox.Group className={styles.sensitiveActions} value={editable[node.page_key]?.sensitiveActions || []}
               onChange={(values) => update(node.page_key, {
                 sensitiveActions: values as string[],
                 permissions: values.length ? normalize(["operate"]) : editable[node.page_key]?.permissions || [],
-              })}><Space orientation="vertical">{node.definition.sensitive_actions.map((action) => <Checkbox key={action.key} value={action.key}
-                title={action.description}>{action.name}</Checkbox>)}</Space></Checkbox.Group>
-          </div>}
-        </span> },
-        { title: "权限档位", key: "permissions", width: 360, render: (_, node) => {
+              })}>{node.definition.sensitive_actions.map((action) => <Checkbox key={action.key} value={action.key} aria-label={action.name}>
+                <span className={styles.actionName}>{action.name}</span>
+                {action.description && <Typography.Text type="secondary" className={styles.actionDescription}>{action.description}</Typography.Text>}
+              </Checkbox>)}</Checkbox.Group>
+          </section>}
+        </div> : <div className={styles.menuIdentity} style={{ paddingInlineStart: node.depth * 24 }}>
+          {node.canExpand ? <Button className={styles.expandButton} size="small"
+            aria-label={`${expandedKeys.includes(node.page_key) ? "折叠" : "展开"}${node.page_name}`}
+            aria-expanded={expandedKeys.includes(node.page_key)} icon={expandedKeys.includes(node.page_key) ? <DownOutlined /> : <RightOutlined />}
+            onClick={() => setExpandedKeys((current) => current.includes(node.page_key)
+              ? current.filter((key) => key !== node.page_key) : [...current, node.page_key])} /> : <span className={styles.expandPlaceholder} />}
+          <FolderFilled className={styles.folderIcon} aria-hidden />
+          <div className={styles.pageContent}>
+            <div className={styles.pageHeader}>
+              <Typography.Title level={4} className={styles.pageTitle} style={{ margin: 0, fontSize: 15, lineHeight: token.lineHeightLG }}>{node.page_name}</Typography.Title>
+              {node.pageKeys.some((key) => changedPageKeys.has(key)) && <Tag color="orange">未保存</Tag>}
+              {!node.definition && <Typography.Text type="secondary">{node.pageKeys.length} 个页面</Typography.Text>}
+            </div>
+            {node.definition && <Typography.Text type="secondary" className={styles.pageKey} style={{ fontSize: token.fontSizeSM }}>{node.page_key}</Typography.Text>}
+          </div>
+        </div> },
+        { title: "权限档位", key: "permissions", width: 340, onCell: (node) => ({ colSpan: node.details ? 0 : 1 }), render: (_, node) => {
+          if (node.details) return null
           const tiers = new Set(node.pageKeys.map((key) => pagePermissionTier(editable[key]?.permissions || [])))
           const value = tiers.size === 1 ? [...tiers][0] : undefined
           return <Space wrap>
-            <Radio.Group size="small" optionType="button" buttonStyle="solid" value={value}
+            <Radio.Group className={styles.tiers} optionType="button" value={value}
               aria-label="权限档位" data-page-name={node.page_name}
               options={pagePermissionTierOptions.map(({ value: optionValue, label, description }) => ({
                 value: optionValue, label, title: description,
@@ -389,12 +458,16 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
             {!value && <Tag color="warning">混合档位</Tag>}
           </Space>
         } },
-        { title: "基线状态", key: "effective", width: 110, render: (_, node) => {
+        { title: "基线状态", key: "effective", width: 120, onCell: (node) => ({ colSpan: node.details ? 0 : 1 }), render: (_, node) => {
+          if (node.details) return null
           const labels = new Set(node.pageKeys.map((key) => pagePermissionTierLabel(editable[key]?.permissions || [])))
           return labels.size === 1 ? <Tag color={[...labels][0] === "无权限" ? "default" : "success"}>{[...labels][0]}</Tag>
             : <Tag color="warning">混合档位</Tag>
         } },
-        { title: "数据范围", key: "scope", render: (_, node) => {
+        { title: <Space size={6}>数据范围<Tooltip title="数据范围决定授权页面可查询的数据；指定部门时必须选择有效部门。"><InfoCircleOutlined tabIndex={0} /></Tooltip></Space>,
+          key: "scope", width: 220, onHeaderCell: () => ({ "aria-label": "数据范围" }),
+          onCell: (node) => ({ colSpan: node.details ? 0 : 1 }), render: (_, node) => {
+          if (node.details) return null
           const definition = node.definition
           if (!definition) return null
           const state = editable[definition.page_key]
@@ -402,21 +475,20 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
             state?.scopeType || "all", state?.departmentIds || [],
             new Map(departments.map((department) => [department.feishu_department_id, department.name])), definition.page_key,
           )}</Tag>
-          return <div className="flex gap-2"><Select className="min-w-40" value={state?.scopeType}
-            disabled={(!state?.permissions.length && !state?.sensitiveActions.length) ||
+          return <div className={styles.scopeControls}><Select aria-label={`${node.page_name}数据范围`} value={state?.scopeType}
+            disabled={controlsDisabled || (!state?.permissions.length && !state?.sensitiveActions.length) ||
               definition.supported_scope_types?.[0] === "not_applicable"}
             options={(definition.supported_scope_types || []).map((value) => ({ value, label: value === "all" && definition.page_key === "production:overview" ? "全部生产数据" : scopeNames[value] || value }))}
             onChange={(scopeType) => update(definition.page_key, { scopeType, departmentIds: [] })} />
-            {state?.scopeType === "departments" && <Select mode="multiple" className="min-w-56"
+            {state?.scopeType === "departments" && <Select mode="multiple" aria-label={`${node.page_name}指定部门`}
               value={state.departmentIds} options={departments.map((department) => ({
                 value: department.feishu_department_id, label: department.name,
               }))} status={pageScopeIssue(state.scopeType, state.departmentIds,
                 definition.supported_scope_types || [], activeDepartmentIds) ? "error" : undefined}
               onChange={(departmentIds) => update(definition.page_key, { departmentIds })} />}</div>
         } },
-      ] satisfies ColumnsType<PermissionTreeNode>)}
-      expandable={{ expandedRowKeys: expandedKeys, indentSize: 24,
-        onExpandedRowsChange: (keys) => setExpandedKeys(keys.map(String)) }} />
+      ] satisfies ColumnsType<PermissionRow>)} />
+    </div>
     </ConfigProvider>
     {role && result && <PagePermissionHistoryDrawer targetType="role" targetId={role.id}
       targetName={role.name} grantVersion={result.grant_version} open={historyOpen}

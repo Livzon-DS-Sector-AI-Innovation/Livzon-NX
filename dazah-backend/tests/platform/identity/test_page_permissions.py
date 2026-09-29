@@ -12,7 +12,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 from starlette.requests import Request
 
-from app.platform.identity import page_permissions, rbac
+from app.platform.identity import rbac
 from app.platform.identity.deps import require_module_view
 from app.platform.identity.page_permissions import PagePermissionService
 from app.platform.identity.page_policy import (
@@ -227,7 +227,7 @@ async def test_role_preview_uses_final_multi_source_grants_and_user_overrides(
     preview = await PagePermissionService(repo=repo).role_permissions_preview(
         None,
         role=role,
-        module_access_mode="all",
+        module_access_mode="roles",
         proposed_grants=[
             {
                 "page_key": "hr:employee-management:profile",
@@ -393,9 +393,12 @@ def test_overview_sections_are_validated_and_preserved() -> None:
         )
 
 
-def test_overview_visibility_change_is_audit_restriction() -> None:
+@pytest.mark.parametrize(
+    "page_key", ["production:overview", "production:plan:scheduling"]
+)
+def test_overview_visibility_change_is_audit_restriction(page_key: str) -> None:
     before = {
-        "page_key": "production:overview",
+        "page_key": page_key,
         "permissions": ["access", "query"],
         "sensitive_actions": [],
         "scope_type": "all",
@@ -408,8 +411,43 @@ def test_overview_visibility_change_is_audit_restriction() -> None:
     assert "页面内可见项" in change.summary
 
 
+def test_scheduling_product_visibility_validation() -> None:
+    service = PagePermissionService(repo=_PageRepo())  # type: ignore[arg-type]
+    grant = PageGrantInput(
+        page_key="production:plan:scheduling",
+        permissions=["access", "query"],
+        visible_sections=["TY", "LN", "LN"],
+        data_scope=PageDataScopeInput(scope_type="all"),
+    )
+    assert service.normalize_inputs([grant], allow_inherit=True)[0][
+        "visible_sections"
+    ] == ["LN", "TY"]
+    for sections, expected in (
+        ([], []),
+        (None, None),
+        (["MC", "LN", "DR", "FA", "LV", "MV", "TY"], None),
+    ):
+        normalized = service.normalize_inputs(
+            [grant.model_copy(update={"visible_sections": sections})],
+            allow_inherit=True,
+        )
+        assert normalized[0]["visible_sections"] == expected
+    for invalid in ("FL", "sales_plan", "SUMMARY", "invalid"):
+        with pytest.raises(HTTPException, match="未知页面内可见项"):
+            service.normalize_inputs(
+                [grant.model_copy(update={"visible_sections": [invalid]})],
+                allow_inherit=True,
+            )
+
+
 @pytest.mark.asyncio
-async def test_overview_visibility_role_merge_and_user_override(monkeypatch):
+@pytest.mark.parametrize(
+    "page_key,second_section",
+    [("production:overview", "sales_plan"), ("production:plan:scheduling", "LN")],
+)
+async def test_overview_visibility_role_merge_and_user_override(
+    monkeypatch, page_key, second_section
+):
     roles = [
         SimpleNamespace(id=uuid4(), code=f"role-{index}", name=f"角色{index}")
         for index in range(2)
@@ -417,22 +455,31 @@ async def test_overview_visibility_role_merge_and_user_override(monkeypatch):
     monkeypatch.setattr(rbac, "resolve_user_roles", AsyncMock(return_value=roles))
     role_grants = [
         SimpleNamespace(
-            role_id=role.id, page_key="production:overview",
-            permissions=["access", "query"], sensitive_actions=[],
-            visible_sections=[section], scope_type="all", department_ids=[],
+            role_id=role.id,
+            page_key=page_key,
+            permissions=["access", "query"],
+            sensitive_actions=[],
+            visible_sections=[section],
+            scope_type="all",
+            department_ids=[],
         )
-        for role, section in zip(roles, ("MC", "sales_plan"), strict=True)
+        for role, section in zip(roles, ("MC", second_section), strict=True)
     ]
     user = SimpleNamespace(id=uuid4(), role="user")
     repo = _PageRepo(role_grants=role_grants)
     service = PagePermissionService(repo=repo)  # type: ignore[arg-type]
     effective = await service.effective_grants(None, user=user)
-    assert effective[0].visible_sections == ["MC", "sales_plan"]
-    repo.user_grants = [SimpleNamespace(
-        page_key="production:overview", permissions=["access", "query"],
-        sensitive_actions=[], visible_sections=["FA"], scope_type="all",
-        department_ids=[],
-    )]
+    assert effective[0].visible_sections == sorted(["MC", second_section])
+    repo.user_grants = [
+        SimpleNamespace(
+            page_key=page_key,
+            permissions=["access", "query"],
+            sensitive_actions=[],
+            visible_sections=["FA"],
+            scope_type="all",
+            department_ids=[],
+        )
+    ]
     effective = await service.effective_grants(None, user=user)
     assert effective[0].visible_sections == ["FA"]
 
@@ -559,20 +606,12 @@ async def test_health_keeps_distinct_overview_visibility_override(monkeypatch):
     monkeypatch.setattr(
         rbac, "resolve_users_roles", AsyncMock(return_value={user.id: [role]})
     )
-    monkeypatch.setattr(
-        page_permissions, "get_settings",
-        lambda: SimpleNamespace(effective_module_access_mode="all"),
-    )
-    monkeypatch.setattr(
-        page_permissions.PermissionGrantRepository,
-        "list_module_access_by_user", AsyncMock(return_value={}),
-    )
     issues = (await PagePermissionService(repo=repo).permission_health(None)).issues
     assert not any(issue.code == "redundant_user_override" for issue in issues)
 
 
 @pytest.mark.asyncio
-async def test_health_missing_module_access_respects_access_mode(monkeypatch) -> None:
+async def test_health_no_longer_requires_separate_module_access(monkeypatch) -> None:
     user_id = uuid4()
     grant = SimpleNamespace(
         user_id=user_id,
@@ -587,24 +626,9 @@ async def test_health_missing_module_access_respects_access_mode(monkeypatch) ->
     user = SimpleNamespace(id=user_id, name="员工", role="user", grant_version=0)
     monkeypatch.setattr(repo, "list_users_by_ids", AsyncMock(return_value=[user]))
     monkeypatch.setattr(rbac, "resolve_users_roles", AsyncMock(return_value={}))
-    monkeypatch.setattr(
-        page_permissions.PermissionGrantRepository,
-        "list_module_access_by_user",
-        AsyncMock(return_value={}),
-    )
     service = PagePermissionService(repo=repo)
     monkeypatch.setattr(service, "effective_grants", AsyncMock(return_value=[]))
-    monkeypatch.setattr(
-        page_permissions, "get_settings",
-        lambda: SimpleNamespace(effective_module_access_mode="all"),
-    )
     assert not (await service.permission_health(None)).issues
-    monkeypatch.setattr(
-        page_permissions, "get_settings",
-        lambda: SimpleNamespace(effective_module_access_mode="roles"),
-    )
-    issues = (await service.permission_health(None)).issues
-    assert [issue.code for issue in issues] == ["missing_module_access"]
 
 
 @pytest.mark.asyncio
@@ -809,11 +833,6 @@ async def test_saved_page_policy_rejects_missing_or_insufficient_page_context(
             ]
 
     monkeypatch.setattr(deps, "PagePermissionService", _Service)
-    monkeypatch.setattr(
-        deps.PermissionGrantRepository,
-        "has_module_view",
-        AsyncMock(return_value=True),
-    )
     dependency = require_module_view("hr")
     user = SimpleNamespace(id=uuid4(), role="user")
     settings = SimpleNamespace(effective_module_access_mode="roles")
@@ -839,16 +858,11 @@ async def test_saved_page_policy_rejects_missing_or_insufficient_page_context(
 
 
 @pytest.mark.asyncio
-async def test_saved_page_grant_cannot_bypass_direct_module_access(
+async def test_saved_page_grant_opens_module_without_direct_module_access(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from app.platform.identity import deps
 
-    monkeypatch.setattr(
-        deps.PermissionGrantRepository,
-        "has_module_view",
-        AsyncMock(return_value=False),
-    )
     page_grants = AsyncMock(
         return_value=[
             EffectivePageGrantOut(
@@ -868,25 +882,21 @@ async def test_saved_page_grant_cannot_bypass_direct_module_access(
             "type": "http",
             "method": "GET",
             "path": "/api/v1/hr/employees",
+            "route": SimpleNamespace(path="/api/v1/hr/employees"),
             "headers": [(b"x-dazah-page-key", b"hr:employee-management:profile")],
         }
     )
 
-    with pytest.raises(HTTPException) as exc_info:
-        await dependency(
-            request,
-            SimpleNamespace(id=uuid4(), role="user"),
-            Any,  # type: ignore[arg-type]
-            SimpleNamespace(effective_module_access_mode="roles"),
-        )
-
-    assert exc_info.value.status_code == 403
-    assert exc_info.value.detail == "未获授权访问模块：hr"
-    page_grants.assert_not_awaited()
+    user = SimpleNamespace(id=uuid4(), role="user")
+    assert await dependency(
+        request, user, Any,  # type: ignore[arg-type]
+        SimpleNamespace(effective_module_access_mode="roles"),
+    ) is user
+    page_grants.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_permission_verification_reports_missing_module_access_first(
+async def test_permission_verification_derives_module_access_from_pages(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from app.platform.identity import rbac_api
@@ -934,8 +944,8 @@ async def test_permission_verification_reports_missing_module_access_first(
     )
     payload = json.loads(response.body)
 
-    assert payload["data"]["allowed"] is False
-    assert payload["data"]["reason"] == "当前账号未获得所属模块访问权限"
+    assert payload["data"]["allowed"] is True
+    assert "实际接口还需核对" in payload["data"]["reason"]
     allowed = await rbac_api.simulate_page_permission(
         PagePermissionSimulationRequest(
             user_id=user.id,

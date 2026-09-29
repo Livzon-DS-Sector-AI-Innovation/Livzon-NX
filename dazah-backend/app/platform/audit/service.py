@@ -249,7 +249,7 @@ class GeneralAuditLogService:
             user_agent=log.user_agent,
             extra=extra,
         )
-        if item.category == "permissions" and log.request_id:
+        if item.category != "operations" and log.request_id:
             operation = await db.scalar(
                 select(AuditLog)
                 .where(
@@ -270,6 +270,11 @@ class GeneralAuditLogService:
                     detail.duration_ms = operation.duration_ms
                 detail.ip_address = detail.ip_address or operation.ip_address
                 detail.user_agent = detail.user_agent or operation.user_agent
+                operation_extra = redact_sensitive(operation.extra) or {}
+                for key in ("request", "response"):
+                    if extra.get(key) is None and key in operation_extra:
+                        extra[key] = operation_extra[key]
+                detail.extra = extra
         return detail
 
     @staticmethod

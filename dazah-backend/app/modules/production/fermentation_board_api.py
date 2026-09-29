@@ -64,15 +64,32 @@ class ProductionLineStatusBody(BaseModel):
 class BatchActualBody(BaseModel):
     batch_no: str = Field(..., min_length=1, max_length=64, description="批次号")
     dump_date: date | None = Field(None, description="放罐日期")
+    inoculated_at: datetime | None = Field(
+        None, description="实际移种时刻（分钟精度）"
+    )
+    dumped_at: datetime | None = Field(
+        None, description="实际放罐时刻（分钟精度）"
+    )
     yield_kg: float | None = Field(None, ge=0, description="放罐产量(kg)")
     extract_kg: float | None = Field(None, ge=0, description="提炼成品产量(kg)")
     remark: str | None = Field(None, max_length=255, description="备注")
 
+    @field_validator("inoculated_at", "dumped_at", mode="after")
+    @classmethod
+    def truncate_to_minute(cls: Any, value: datetime | None) -> datetime | None:
+        # 实际时刻业务粒度为分钟，写入前统一截断秒与微秒
+        if value is None:
+            return None
+        return value.replace(second=0, microsecond=0)
+
 
 FERM_YIELD_PERMISSION = "production:fermentation-yield"
 EXTRACT_YIELD_PERMISSION = "production:extraction-yield"
-# 发酵产量组字段：放罐产量及发酵侧台账信息，整体挂发酵权限
-_FERM_FIELDS = frozenset({"dump_date", "yield_kg", "remark"})
+# 发酵产量组字段：放罐产量、实际移种/放罐时刻及发酵侧台账信息，
+# 整体挂发酵权限（实际时刻由罐状态「确认移种」与产量录入写入）
+_FERM_FIELDS = frozenset(
+    {"dump_date", "inoculated_at", "dumped_at", "yield_kg", "remark"}
+)
 
 
 async def _stage_permissions(
@@ -112,7 +129,8 @@ def _filter_actual_payload(
 ) -> dict[str, Any]:
     """按工段权限过滤批次产量字段：无权字段不出接口。"""
     if not has_ferm:
-        item.pop("yield_kg", None)
+        for key in ("yield_kg", "inoculated_at", "dumped_at"):
+            item.pop(key, None)
     if not has_extract:
         item.pop("extract_kg", None)
     return item
@@ -429,6 +447,8 @@ async def upsert_fermentation_batch_actual(
         db,
         batch_no=body.batch_no.strip(),
         dump_date=body.dump_date,
+        inoculated_at=body.inoculated_at,
+        dumped_at=body.dumped_at,
         yield_kg=body.yield_kg,
         extract_kg=body.extract_kg,
         remark=body.remark,

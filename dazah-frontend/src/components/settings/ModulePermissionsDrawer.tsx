@@ -5,7 +5,7 @@ import { App, Button, Checkbox, ConfigProvider, Drawer, Empty, Input, Radio, Seg
 import Alert from '@/components/shared/PlatformNotice'
 import { ReloadOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
 import { getPermissionModuleName } from '@/lib/menu-config'
-import { PRODUCTION_OVERVIEW_SECTIONS, PRODUCTION_OVERVIEW_SECTION_KEYS } from '@/lib/production-overview-sections'
+import { productionPageSections } from '@/lib/production-overview-sections'
 import {
   highRiskPageKeys, PAGE_DATA_SCOPE_VISIBLE, pageGrantChanges, pagePermissionTier,
   pageGrantChangeKind, pagePermissionTierLabel, pagePermissionTierOptions, permissionsForTier,
@@ -377,9 +377,6 @@ export default function ModulePermissionsDrawer({ user, open, onClose }: {
     {
       title: '最终状态', key: 'effective', width: 150,
       render: (_: unknown, definition: PagePermissionDefinitionOut) => {
-        if (!systemAdmin && !(user?.module_codes || []).includes(definition.module_code)) {
-          return <Tag color="warning">模块入口未开通</Tag>
-        }
         const permissions = editable[definition.page_key]?.permissions || []
         return <Tag color={permissions.length ? 'success' : 'default'}>{pagePermissionTierLabel(permissions)}</Tag>
       },
@@ -438,7 +435,7 @@ export default function ModulePermissionsDrawer({ user, open, onClose }: {
         <div><Title level={3} className="!m-0 !text-[22px]">
           {user?.name || '用户'}的页面权限
         </Title><Text className="mt-1 block text-[13px] text-[var(--color-steel)]">
-          权限以单个菜单页面为最小单元；一级模块入口需在“用户角色 → 模块访问”中单独开启。
+          权限以单个菜单页面为最小单元。
         </Text></div>
         <Space><Button disabled={saving || !result} onClick={() => setHistoryOpen(true)}>授权历史</Button>
           <Button disabled={saving} icon={<ReloadOutlined />} onClick={() => confirmDiscard(() => void load())} loading={loading}>刷新</Button></Space>
@@ -451,15 +448,13 @@ export default function ModulePermissionsDrawer({ user, open, onClose }: {
     </div>
     {systemAdmin && <Alert className="mb-4" type="info" showIcon title="系统管理员拥有全部权限，无需逐页配置；页面覆盖不会限制此身份。" />}
     <Alert className="mb-4" type="info" showIcon
-      title="角色提供基线，用户覆盖会完整替换单页基线"
-      description="保存后权限立即生效，无需经过权限接入检查。选择“用户覆盖”后，权限全部不勾选表示明确拒绝；恢复“角色基线”即可删除覆盖。高风险操作是“普通操作”之上的附加授权：勾选时自动启用普通操作，取消普通操作时一并撤销。" />
+      title={systemAdmin ? "角色提供基线，用户覆盖会完整替换单页基线"
+        : "模块入口随有效页面访问权限自动生效；用户覆盖会完整替换单页角色基线。"}
+      description="模块内至少一个页面具有有效访问权限时，模块入口自动开通；撤销最后一个可访问页面后，入口自动关闭，无需单独调整模块授权。系统管理员默认拥有全部模块访问权限。保存后页面配置立即生效，无需经过权限接入检查。选择“用户覆盖”后，权限全部不勾选表示明确拒绝；恢复“角色基线”即可删除覆盖。高风险操作是“普通操作”之上的附加授权：勾选时自动启用普通操作，取消普通操作时一并撤销。" />
     {errorMessage && <Alert className="mb-4" type="error" showIcon title={errorMessage} />}
     {!!scopeIssues.length && <Alert className="mb-4" type="warning" showIcon
       title="存在无法保存的数据范围" description={scopeIssues.slice(0, 3).join('；')} />}
     {loading ? <Skeleton active paragraph={{ rows: 10 }} /> : result?.user_id === user?.id && result?.definitions?.length ? <ConfigProvider componentDisabled={systemAdmin || saving}>
-      {!(systemAdmin || (user?.module_codes || []).includes(moduleCode)) && <Alert className="mb-4" type="warning" showIcon
-        title="当前用户尚未开通此模块入口"
-        description="页面权限可以先配置，但用户需要同时获得模块访问权限后才能进入这些页面。" />}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <Space wrap><Segmented value={moduleCode} onChange={(value) => setModuleCode(String(value))}
           options={modules.map((code) => ({ value: code, label: <span>{getPermissionModuleName(code)}{' '}
@@ -489,17 +484,18 @@ export default function ModulePermissionsDrawer({ user, open, onClose }: {
         size="middle" scroll={{ x: 1240, y: 520 }}
         locale={{ emptyText: search.trim() ? '当前筛选没有匹配页面' : '当前模块暂无可配置页面' }}
         expandable={{ expandedRowKeys: expandedKeys, onExpandedRowsChange: (keys) => setExpandedKeys(keys.map(String)),
-          rowExpandable: (definition) => Boolean(definition.sensitive_actions?.length) || definition.page_key === 'production:overview', expandedRowRender: (definition) => {
+          rowExpandable: (definition) => Boolean(definition.sensitive_actions?.length) || productionPageSections(definition.page_key).length > 0, expandedRowRender: (definition) => {
           const state = editable[definition.page_key]
           const actions = definition.sensitive_actions || []
-          return <div className="px-3 py-2">{definition.page_key === 'production:overview' && <div className="mb-3">
+          const sections = productionPageSections(definition.page_key)
+          return <div className="px-3 py-2">{sections.length > 0 && <div className="mb-3">
             <Text strong>页面内可见项</Text>
-            <Text type="secondary" className="ml-2 text-xs">产品勾选同时控制汇总数据；产销计划单独控制。</Text>
-            <Checkbox.Group className="mt-2 flex flex-wrap gap-3" value={state?.visibleSections ?? PRODUCTION_OVERVIEW_SECTION_KEYS}
+            <Text type="secondary" className="ml-2 text-xs">{definition.page_key === 'production:overview' ? '产品勾选同时控制汇总数据；产销计划单独控制。' : '勾选后可查看对应产品的排产计划，未勾选产品的入口与存档不可访问。'}</Text>
+            <Checkbox.Group className="mt-2 flex flex-wrap gap-3" value={state?.visibleSections ?? sections.map((section) => section.key)}
               disabled={systemAdmin || saving || state?.mode !== 'custom' || !state?.permissions.includes('query')}
               onChange={(values) => updateGrant(definition.page_key, { visibleSections:
-                values.length === PRODUCTION_OVERVIEW_SECTION_KEYS.length ? null : values as string[] })}>
-              {PRODUCTION_OVERVIEW_SECTIONS.map((section) => <Checkbox key={section.key} value={section.key}>{section.label}</Checkbox>)}
+                values.length === sections.length ? null : values as string[] })}>
+              {sections.map((section) => <Checkbox key={section.key} value={section.key}>{section.label}</Checkbox>)}
             </Checkbox.Group>
           </div>}{actions.length ? <><Space wrap size={6}>
             <Text strong>附加高风险操作</Text><Tag color="orange">依赖普通操作</Tag>

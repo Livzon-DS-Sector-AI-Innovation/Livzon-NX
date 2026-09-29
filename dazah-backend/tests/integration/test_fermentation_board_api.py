@@ -240,6 +240,8 @@ async def test_board_passes_actuals_to_build_board(
                     id="1",
                     batch_no="FA26232",
                     dump_date=None,
+                    inoculated_at=None,
+                    dumped_at=None,
                     yield_kg=88.5,
                     extract_kg=None,
                     remark=None,
@@ -342,6 +344,8 @@ async def test_batch_actuals_crud_endpoints(
         batch_no="FA26232",
         product_code="FA",
         dump_date=date(2026, 9, 9),
+        inoculated_at=datetime(2026, 9, 8, 21, 30),
+        dumped_at=None,
         yield_kg=100.0,
         extract_kg=None,
         remark="染菌批",
@@ -796,6 +800,8 @@ async def test_actuals_list_filters_stage_fields(
         id="x",
         batch_no="FA26232",
         dump_date=date(2026, 9, 9),
+        inoculated_at=datetime(2026, 9, 8, 21, 30),
+        dumped_at=datetime(2026, 9, 9, 10, 5),
         yield_kg=100.0,
         extract_kg=88.0,
         remark="染菌批",
@@ -806,12 +812,17 @@ async def test_actuals_list_filters_stage_fields(
     ferm_view = await auth_client.get(f"{API}/fermentation-batch-actuals")
     row = ferm_view.json()["data"][0]
     assert row["yield_kg"] == 100.0
+    assert row["inoculated_at"] == "2026-09-08T21:30:00"
+    assert row["dumped_at"] == "2026-09-09T10:05:00"
     assert "extract_kg" not in row
 
     stage_perms(["production:extraction-yield"])
     extract_view = await auth_client.get(f"{API}/fermentation-batch-actuals")
     row = extract_view.json()["data"][0]
     assert "yield_kg" not in row
+    # 实际时刻属发酵字段组，提炼岗不可见
+    assert "inoculated_at" not in row
+    assert "dumped_at" not in row
     assert row["extract_kg"] == 88.0
     assert row["batch_no"] == "FA26232"
 
@@ -853,6 +864,8 @@ async def test_upsert_passes_provided_fields_and_filters_response(
         id="x",
         batch_no="FA26234",
         dump_date=None,
+        inoculated_at=None,
+        dumped_at=None,
         yield_kg=None,
         extract_kg=88.0,
         remark=None,
@@ -1183,3 +1196,104 @@ async def test_set_line_status_records_reason_and_latest_events(
     data = listed.json()["data"]
     assert data["halted"] == ["LV"]
     assert data["latest_events"]["LV"]["reason"] == "转产"
+
+
+@pytest.mark.anyio
+async def test_upsert_inoculate_confirm_path(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+    stage_perms,
+) -> None:
+    """罐状态「确认移种」：仅批号 + 实际移种时刻即可保存（秒截断到分钟）。"""
+    saved = SimpleNamespace(
+        id="x",
+        batch_no="FA26232",
+        dump_date=None,
+        inoculated_at=datetime(2026, 9, 8, 21, 30),
+        dumped_at=None,
+        yield_kg=None,
+        extract_kg=None,
+        remark=None,
+    )
+    monkeypatch.setattr(board, "upsert_batch_actual", AsyncMock(return_value=saved))
+
+    stage_perms(["production:fermentation-yield"])
+    res = await auth_client.post(
+        f"{API}/fermentation-batch-actuals",
+        json={
+            "batch_no": "FA26232",
+            "inoculated_at": "2026-09-08T21:30:27.123",
+        },
+    )
+    assert res.status_code == 200
+    kwargs = board.upsert_batch_actual.call_args.kwargs
+    # 只显式给出实际移种时刻 → 部分更新不触碰产量/放罐日期
+    assert kwargs["provided_fields"] == {"inoculated_at"}
+    assert kwargs["inoculated_at"] == datetime(2026, 9, 8, 21, 30)
+    assert res.json()["data"]["inoculated_at"] == "2026-09-08T21:30:00"
+
+
+@pytest.mark.anyio
+async def test_upsert_rejects_actual_times_without_ferm_permission(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+    stage_perms,
+) -> None:
+    """实际移种/放罐时刻挂发酵权限：提炼岗写入 → 403 且不触达服务层。"""
+    monkeypatch.setattr(board, "upsert_batch_actual", AsyncMock())
+    stage_perms(["production:extraction-yield"])
+
+    denied_inoculate = await auth_client.post(
+        f"{API}/fermentation-batch-actuals",
+        json={"batch_no": "FA26234", "inoculated_at": "2026-09-08T21:30:00"},
+    )
+    assert denied_inoculate.status_code == 403
+    board.upsert_batch_actual.assert_not_called()
+
+    denied_dump = await auth_client.post(
+        f"{API}/fermentation-batch-actuals",
+        json={"batch_no": "FA26234", "dumped_at": "2026-09-09T10:00:00"},
+    )
+    assert denied_dump.status_code == 403
+    board.upsert_batch_actual.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_upsert_yield_entry_with_dumped_at(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+    stage_perms,
+) -> None:
+    """产量录入顺带实际放罐时刻：与发酵字段同组提交、秒截断。"""
+    saved = SimpleNamespace(
+        id="x",
+        batch_no="FA26232",
+        dump_date=date(2026, 9, 9),
+        inoculated_at=None,
+        dumped_at=datetime(2026, 9, 9, 10, 5),
+        yield_kg=100.0,
+        extract_kg=None,
+        remark=None,
+    )
+    monkeypatch.setattr(board, "upsert_batch_actual", AsyncMock(return_value=saved))
+
+    stage_perms(["production:fermentation-yield"])
+    res = await auth_client.post(
+        f"{API}/fermentation-batch-actuals",
+        json={
+            "batch_no": "FA26232",
+            "dump_date": "2026-09-09",
+            "yield_kg": 100.0,
+            "dumped_at": "2026-09-09T10:05:41",
+        },
+    )
+    assert res.status_code == 200
+    kwargs = board.upsert_batch_actual.call_args.kwargs
+    assert kwargs["provided_fields"] == {"dump_date", "yield_kg", "dumped_at"}
+    assert kwargs["dumped_at"] == datetime(2026, 9, 9, 10, 5)
+    data = res.json()["data"]
+    assert data["dumped_at"] == "2026-09-09T10:05:00"
+    assert data["yield_kg"] == 100.0

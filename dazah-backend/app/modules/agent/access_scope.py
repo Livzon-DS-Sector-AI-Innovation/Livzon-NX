@@ -14,16 +14,10 @@ from app.modules.agent.models import AgentAccessScopeSnapshot
 from app.modules.agent.schemas import AgentAccessScopeOut, AgentModuleScopeOut
 from app.platform.identity.models import User
 from app.platform.identity.page_permissions import PagePermissionService
-from app.platform.identity.permission_repository import PermissionGrantRepository
-from app.shared.module_registry import BUSINESS_MODULES, MODULES_BY_CODE
+from app.shared.module_registry import BUSINESS_MODULES
 
 
 class AgentAccessScopeService:
-    def __init__(
-        self, permission_repo: PermissionGrantRepository | None = None
-    ) -> None:
-        self.permission_repo = permission_repo or PermissionGrantRepository()
-
     async def synchronize(
         self,
         db: AsyncSession,
@@ -38,12 +32,6 @@ class AgentAccessScopeService:
         user = await db.get(User, user_id)
         if user is None or user.is_deleted:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "用户不存在")
-        grants = await self.permission_repo.list_grants(db, user_id=user_id)
-        grants_by_module = {
-            grant.module_code: grant
-            for grant in grants
-            if grant.status == "active" and grant.module_code in MODULES_BY_CODE
-        }
         specs = tool_registry.list()
         registry_version = self._registry_version(
             [spec.public_dict() for spec in specs]
@@ -52,11 +40,6 @@ class AgentAccessScopeService:
         page_grants_by_key = {grant.page_key: grant for grant in page_grants}
         modules = []
         for module in BUSINESS_MODULES:
-            module_grant = grants_by_module.get(module.code)
-            if module_grant is None or "module.view" not in set(
-                module_grant.permissions or []
-            ):
-                continue
             module_page_grants = [
                 grant
                 for grant in page_grants
@@ -106,11 +89,6 @@ class AgentAccessScopeService:
                 if spec.workflow_allowed and not spec.human_decision_required:
                     workflow_tool_names.append(spec.name)
                 continue
-            module_grant = grants_by_module.get(spec.module)
-            if module_grant is None or "module.view" not in set(
-                module_grant.permissions or []
-            ):
-                continue
             if not spec.page_keys:
                 continue
             required_permission = (
@@ -121,6 +99,7 @@ class AgentAccessScopeService:
             ]
             allowed_by_page = any(
                 grant is not None
+                and grant.module_code == spec.module
                 and required_permission in grant.permissions
                 and (
                     spec.sensitive_action is None
@@ -306,7 +285,7 @@ class AgentAccessScopeService:
 
         payload = json.dumps(
             {
-                "page_policy_version": 2,
+                "page_policy_version": 3,
                 "tools": public_specs,
                 "pages": [asdict(page) for page in PAGE_DEFINITIONS],
                 "api_bindings": [asdict(binding) for binding in PAGE_API_BINDINGS],

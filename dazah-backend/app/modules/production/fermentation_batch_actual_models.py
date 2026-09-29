@@ -6,9 +6,9 @@
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import Date, Float, Index, String, text
+from sqlalchemy import Date, DateTime, Float, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.shared.base_model import BaseModel
@@ -40,6 +40,12 @@ class FermentationBatchActual(BaseModel):
     )
     dump_date: Mapped[date | None] = mapped_column(
         Date(), nullable=True, comment="放罐日期"
+    )
+    inoculated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(), nullable=True, comment="实际移种时刻（分钟精度，秒恒为 0）"
+    )
+    dumped_at: Mapped[datetime | None] = mapped_column(
+        DateTime(), nullable=True, comment="实际放罐时刻（分钟精度，秒恒为 0）"
     )
     yield_kg: Mapped[float | None] = mapped_column(
         Float(), nullable=True, comment="放罐产量(kg)"

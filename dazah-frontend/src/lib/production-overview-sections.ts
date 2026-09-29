@@ -14,3 +14,13 @@ export const PRODUCTION_OVERVIEW_SECTION_KEYS = PRODUCTION_OVERVIEW_SECTIONS.map
 export const PRODUCTION_OVERVIEW_PRODUCT_CODES: string[] = PRODUCTION_OVERVIEW_SECTION_KEYS.filter(
   (key) => key !== 'sales_plan',
 )
+
+export const PRODUCTION_SCHEDULING_SECTIONS = PRODUCTION_OVERVIEW_SECTIONS.filter(
+  (item) => item.key !== 'FL' && item.key !== 'sales_plan',
+)
+
+export function productionPageSections(pageKey?: string) {
+  if (pageKey === 'production:overview') return PRODUCTION_OVERVIEW_SECTIONS
+  if (pageKey === 'production:plan:scheduling') return PRODUCTION_SCHEDULING_SECTIONS
+  return []
+}

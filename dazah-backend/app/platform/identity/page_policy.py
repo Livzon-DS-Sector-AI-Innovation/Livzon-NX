@@ -22,6 +22,11 @@ PAGE_PERMISSION_SET = frozenset(PAGE_PERMISSION_ORDER)
 PRODUCTION_OVERVIEW_VISIBLE_SECTIONS = frozenset(
     {"MC", "LN", "DR", "FA", "LV", "MV", "TY", "FL", "sales_plan"}
 )
+PAGE_VISIBLE_SECTIONS = {
+    "production:overview": PRODUCTION_OVERVIEW_VISIBLE_SECTIONS,
+    "production:plan:scheduling": PRODUCTION_OVERVIEW_VISIBLE_SECTIONS
+    - {"FL", "sales_plan"},
+}
 PAGE_SCOPE_TYPES = frozenset(
     {"not_applicable", "department_tree", "departments", "all", "self",
      "production_fermentation", "production_extraction"}

@@ -306,8 +306,10 @@ async def get_me(
     from app.platform.identity.page_permission_repository import (
         PagePermissionRepository,
     )
-    from app.platform.identity.page_permissions import PagePermissionService
-    from app.platform.identity.permission_repository import PermissionGrantRepository
+    from app.platform.identity.page_permissions import (
+        PagePermissionService,
+        module_codes_from_page_grants,
+    )
 
     response = UserResponse.model_validate(current_user)
     roles = await resolve_user_roles(db, current_user.id)
@@ -322,19 +324,10 @@ async def get_me(
         item.module_code: item.status for item in rollouts
     }
     is_super_admin = await page_service.is_super_admin(db, user_id=current_user.id)
-    if settings.effective_module_access_mode == "all":
-        response.module_codes = sorted(MODULES_BY_CODE)
-    elif is_super_admin:
+    if is_super_admin:
         response.module_codes = sorted(MODULES_BY_CODE)
     else:
-        grants = await PermissionGrantRepository().list_grants(
-            db, user_id=current_user.id
-        )
-        response.module_codes = sorted(
-            grant.module_code
-            for grant in grants
-            if "module.view" in set(grant.permissions or [])
-        )
+        response.module_codes = module_codes_from_page_grants(response.page_permissions)
     return success_response(data=response.model_dump())
 
 
@@ -1074,6 +1067,11 @@ async def restart_livzon_feishu_gateway(
             status_code=200,
             resource_type="feishu_gateway",
             action="restart_livzon_feishu_gateway",
+            request_id=current_audit_request_id.get(),
+            new_value=redact_sensitive(
+                data.model_dump(mode="json", exclude={"credential_version"}),
+                max_string_length=500,
+            ),
             extra={
                 "status": data.status,
                 "previous_reconnects": data.previous_reconnects,

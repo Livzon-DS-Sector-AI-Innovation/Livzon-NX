@@ -47,6 +47,13 @@ describe('page permission menu boundary', () => {
     expect(menus).toEqual([])
   })
 
+  it.each([undefined, [], ['quality']])('opens a module from pages regardless of legacy module grants: %j', (moduleCodes) => {
+    const grant = { page_key: 'hr:employee-management:profile', module_code: 'hr', permissions: ['access' as const] }
+    expect(getAuthorizedPageMenus(moduleCodes, [grant]).map((module) => module.moduleCode)).toEqual(['hr'])
+    expect(getFirstAuthorizedModulePath({ role: 'user', module_codes: moduleCodes, page_permissions: [grant] })).toBe('/hr/employee-management')
+    expect(getAuthorizedPageMenus(moduleCodes, [{ ...grant, permissions: [] }])).toEqual([])
+  })
+
   it('uses navigation order for the post-login module landing page', () => {
     expect(getFirstAuthorizedModulePath({
       role: 'user',
@@ -79,7 +86,6 @@ describe('page permission menu boundary', () => {
   it.each([
     {},
     { module_codes: ['production'] },
-    { module_codes: [], page_permissions: [{ page_key: 'production:overview', module_code: 'production', permissions: ['access' as const] }] },
     { module_codes: ['procurement'], page_permissions: [{ page_key: 'purchasing:settings', module_code: 'procurement', permissions: ['access' as const] }] },
     { module_codes: ['production'], page_permissions: [{ page_key: 'unknown', module_code: 'production', permissions: ['access' as const] }] },
     { module_codes: ['administration'], page_permissions: [{ page_key: 'admin:notice', module_code: 'administration', permissions: ['access' as const] }] },

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import time
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -12,7 +13,9 @@ from sqlalchemy.orm import aliased
 
 from app.core.config import Settings, get_settings
 from app.core.database import get_db
+from app.core.redaction import redact_sensitive
 from app.core.response import error_response, success_response
+from app.platform.audit.middleware import current_audit_request_id
 from app.platform.audit.models import AuditLog
 from app.platform.identity.deps import AdminUser, RequiredUser
 from app.platform.identity.models import User
@@ -194,9 +197,11 @@ def _audit_automation_query(
     action: str,
     resource_id: uuid.UUID | None = None,
     extra: dict[str, Any] | None = None,
+    new_value: dict[str, Any] | None = None,
 ) -> None:
     db.add(
         AuditLog(
+            request_id=current_audit_request_id.get(),
             user_id=user_id,
             method="GET",
             path="/api/v1/agent/automations",
@@ -204,7 +209,8 @@ def _audit_automation_query(
             resource_type="agent_automation",
             resource_id=resource_id,
             action=action,
-            extra=extra or {},
+            extra=redact_sensitive(extra or {}),
+            new_value=redact_sensitive(new_value, max_string_length=500),
         )
     )
 
@@ -505,7 +511,38 @@ async def list_automations(
         db,
         user_id=current_user.id,
         action="list_agent_automations",
-        extra={"scope": scope, "status": status_value},
+        extra={
+            "scope": scope,
+            "status": status_value,
+            "returned": len(result.items),
+            "request": {
+                "scope": scope,
+                "status": status_value,
+                "page": max(1, page),
+                "page_size": min(max(1, page_size), 100),
+            },
+        },
+        new_value={
+            "total": result.total,
+            "page": result.page,
+            "page_size": result.page_size,
+            "items": [
+                item.model_dump(
+                    mode="json",
+                    include={
+                        "id",
+                        "name",
+                        "status",
+                        "scope_type",
+                        "active_version_id",
+                        "last_run_id",
+                        "last_run_status",
+                        "last_run_at",
+                    },
+                )
+                for item in result.items
+            ],
+        },
     )
     return success_response(data=result.model_dump(mode="json"))
 
@@ -1312,25 +1349,57 @@ async def get_control_plane_runtime_overview(
 @router.post("/tools/search")
 async def search_tools(
     payload: AgentToolSearchRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     authorization: str | None = Header(default=None),
     settings: Settings = Depends(get_settings),
 ):
     require_service_token(settings.AGENT_TOOL_TOKEN, authorization)
+    started_at = time.monotonic()
     result = await ToolCatalogService().search(db, payload)
     db.add(
         AuditLog(
-            request_id=str(payload.trace_id),
+            request_id=current_audit_request_id.get() or str(payload.trace_id),
             user_id=payload.subject.user_id,
             method="POST",
             path="/api/v1/agent/tools/search",
             status_code=200,
             resource_type="agent_capability_search",
             action="search_agent_tools",
+            duration_ms=round((time.monotonic() - started_at) * 1000),
+            ip_address=request.client.host[:64] if request.client else None,
+            user_agent=request.headers.get("user-agent", "")[:500] or None,
+            new_value=redact_sensitive(
+                {
+                    "result_count": len(result),
+                    "items": [
+                        item.model_dump(
+                            mode="json",
+                            include={
+                                "operation",
+                                "module",
+                                "summary",
+                                "status",
+                                "risk_level",
+                                "write",
+                                "confirmation_required",
+                            },
+                        )
+                        for item in result
+                    ],
+                },
+                max_string_length=500,
+            ),
             extra={
                 "trace_id": str(payload.trace_id),
                 "module": payload.module,
                 "result_count": len(result),
+                "request": {
+                    "module": payload.module,
+                    "limit": payload.limit,
+                    "query_length": len(payload.query),
+                    "query_omitted": "搜索文本可能包含业务敏感信息，仅记录长度",
+                },
             },
         )
     )

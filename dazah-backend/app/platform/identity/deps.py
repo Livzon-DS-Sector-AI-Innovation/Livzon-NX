@@ -24,7 +24,6 @@ from app.platform.identity.page_policy import (
     get_page_definition,
     page_key_for_route,
 )
-from app.platform.identity.permission_repository import PermissionGrantRepository
 from app.platform.identity.repository import UserRepository
 
 
@@ -111,8 +110,7 @@ async def require_system_admin(
 def require_module_view(module_code: str) -> Callable[..., Awaitable[User]]:
     """Create a dependency enforcing the configured module access policy.
 
-    In ``all`` mode any authenticated user can enter business modules. In
-    ``roles`` mode module grants remain the authorization fact source. This
+    Module entries follow effective page access, including exact user overrides. This
     dependency is applied when each business router is mounted so it also
     protects routes that predate the identity subsystem and did not previously
     declare a user dependency.
@@ -155,13 +153,10 @@ def require_module_view(module_code: str) -> Callable[..., Awaitable[User]]:
                         {"scope_type": "all", "department_ids": []}
                     )
             return user
-        if (
-            settings.effective_module_access_mode != "all"
-            and not await PermissionGrantRepository().has_module_view(
-                db,
-                user_id=user.id,
-                module_code=module_code,
-            )
+        grants = await PagePermissionService().effective_grants(db, user=user)
+        if not any(
+            grant.module_code == module_code and "access" in grant.permissions
+            for grant in grants
         ):
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
@@ -219,7 +214,6 @@ def require_module_view(module_code: str) -> Callable[..., Awaitable[User]]:
                 status.HTTP_403_FORBIDDEN,
                 "当前页面不允许调用此业务接口",
             )
-        grants = await PagePermissionService().effective_grants(db, user=user)
         grant = next((item for item in grants if item.page_key == page_key), None)
         required_permission = binding.permission
         if grant is None or required_permission not in grant.permissions:

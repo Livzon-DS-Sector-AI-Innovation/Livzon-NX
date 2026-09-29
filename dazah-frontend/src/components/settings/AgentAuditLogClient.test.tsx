@@ -63,6 +63,48 @@ describe('Livzon conversation audit detail', () => {
     }
   })
 
+  it.each(['conversation', 'confirmations'] as const)('renders audit timelines without deprecated items.children warnings: %s', async (tab) => {
+    const session = (await api.fetchAgentAuditSessions()).items[0]
+    api.fetchAgentAuditSession.mockResolvedValue({
+      session, operations: [], context: null,
+      messages: tab === 'conversation' ? [
+        { id: 'message-1', role: 'user', content: '请查询偏差记录', created_at: '2026-09-22T08:00:00Z' },
+        { id: 'message-2', role: 'assistant', content: '已找到偏差记录', created_at: '2026-09-22T08:01:00Z' },
+      ] : [],
+      confirmations: tab === 'confirmations' ? [
+        { id: 'confirmation-1', operation: 'agent.run_automation', summary: '立即运行', status: 'executed', risk_level: 'high', created_at: '2026-09-22T08:00:00Z' },
+      ] : [],
+    })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await act(async () => root.render(createElement(App, null, createElement(AgentAuditLogClient))))
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+      const view = Array.from(host.querySelectorAll('button')).find((button) => button.textContent?.includes('查看'))
+      expect(view).toBeDefined()
+      await act(async () => view?.click())
+      if (tab === 'confirmations') {
+        const confirmationTab = Array.from(document.body.querySelectorAll<HTMLElement>('[role="tab"]')).find((item) => item.textContent?.includes('确认记录'))
+        expect(confirmationTab).toBeDefined()
+        await act(async () => confirmationTab?.click())
+      }
+
+      const timeline = document.body.querySelector('.ant-timeline')
+      expect(timeline).not.toBeNull()
+      if (tab === 'conversation') {
+        expect(timeline?.textContent).toContain('用户')
+        expect(timeline?.textContent).toContain('请查询偏差记录')
+        expect(timeline?.textContent).toContain('Livzon')
+        expect(timeline?.textContent).toContain('已找到偏差记录')
+      } else {
+        expect(timeline?.textContent).toContain('高风险')
+        expect(timeline?.textContent).toContain('agent.run_automation')
+      }
+      expect(consoleError.mock.calls.flat().join(' ')).not.toContain('[antd: Timeline]')
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
   it('shows Chinese tool descriptions while retaining original identifiers in detail', async () => {
     const session = (await api.fetchAgentAuditSessions()).items[0]
     api.fetchAgentAuditSession.mockResolvedValue({

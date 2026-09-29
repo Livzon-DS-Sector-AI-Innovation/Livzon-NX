@@ -4,7 +4,7 @@ from types import SimpleNamespace as _SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from fastapi import HTTPException, status
+from fastapi import HTTPException, Request, status
 
 from app.modules.agent import api
 from app.modules.agent.schemas import (
@@ -190,6 +190,7 @@ async def test_control_plane_tool_routes_delegate_and_enforce_admin(
         AgentToolSearchRequest.model_validate(
             {"query": "test", "subject": _subject(user_id)}
         ),
+        Request({"type": "http", "headers": []}),
         db,
         "Bearer token",
         settings,

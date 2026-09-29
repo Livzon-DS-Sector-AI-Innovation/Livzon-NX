@@ -11,15 +11,14 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
 from app.platform.identity.models import Role, User
 from app.platform.identity.page_permission_repository import PagePermissionRepository
 from app.platform.identity.page_policy import (
     PAGE_DEFINITIONS,
     PAGE_PERMISSION_SET,
+    PAGE_VISIBLE_SECTIONS,
     PAGES_BY_KEY,
     PAGES_BY_MODULE,
-    PRODUCTION_OVERVIEW_VISIBLE_SECTIONS,
     PageDefinition,
     api_bindings_for_module,
     api_route_catalog,
@@ -29,7 +28,6 @@ from app.platform.identity.page_policy import (
     page_api_catalog_gaps,
     tool_page_bindings,
 )
-from app.platform.identity.permission_repository import PermissionGrantRepository
 from app.platform.identity.schemas import (
     EffectivePageGrantOut,
     PageDataScopeInput,
@@ -55,6 +53,14 @@ from app.shared.module_registry import MODULES_BY_CODE
 REVIEW_PENDING_ROLLOUT_MODULES = frozenset(
     {"hr", "warehouse", "registration", "production"}
 )
+
+
+def module_codes_from_page_grants(grants: list[EffectivePageGrantOut]) -> list[str]:
+    """Derive module entries after role union and exact user overrides."""
+    return sorted({
+        grant.module_code for grant in grants
+        if "access" in grant.permissions and grant.module_code in MODULES_BY_CODE
+    })
 
 
 def _definition_out(item: PageDefinition) -> PagePermissionDefinitionOut:
@@ -114,18 +120,18 @@ class PagePermissionService:
                 after_values = set(after.get("permissions") or []) | set(
                     after.get("sensitive_actions") or []
                 )
-                if page_key == "production:overview":
+                if page_key in PAGE_VISIBLE_SECTIONS:
                     before_sections = before.get("visible_sections")
                     after_sections = after.get("visible_sections")
                     before_values.update(
                         f"section:{item}" for item in (
-                            PRODUCTION_OVERVIEW_VISIBLE_SECTIONS
+                            PAGE_VISIBLE_SECTIONS[page_key]
                             if before_sections is None else before_sections
                         )
                     )
                     after_values.update(
                         f"section:{item}" for item in (
-                            PRODUCTION_OVERVIEW_VISIBLE_SECTIONS
+                            PAGE_VISIBLE_SECTIONS[page_key]
                             if after_sections is None else after_sections
                         )
                     )
@@ -440,20 +446,12 @@ class PagePermissionService:
             for page_key in current_by_page.keys() | proposed_by_page.keys()
             if current_by_page.get(page_key) != proposed_by_page.get(page_key)
         }
-        changed_modules = {
-            definition.module_code
-            for page_key in changed_page_keys
-            if (definition := get_page_definition(page_key)) is not None
-        }
-
-        def effective_facts(
-            grants: list[EffectivePageGrantOut], allowed_modules: set[str]
-        ) -> set[str]:
+        def effective_facts(grants: list[EffectivePageGrantOut]) -> set[str]:
             facts: set[str] = set()
             for grant in grants:
                 if (
                     grant.page_key not in changed_page_keys
-                    or grant.module_code not in allowed_modules
+                    or "access" not in grant.permissions
                 ):
                     continue
                 prefix = grant.page_key
@@ -464,8 +462,8 @@ class PagePermissionService:
                     f"{prefix}:action:{item}" for item in grant.sensitive_actions
                 )
                 sections = set(grant.visible_sections or [])
-                if grant.visible_sections is None and prefix == "production:overview":
-                    sections = set(PRODUCTION_OVERVIEW_VISIBLE_SECTIONS)
+                if grant.visible_sections is None and prefix in PAGE_VISIBLE_SECTIONS:
+                    sections = set(PAGE_VISIBLE_SECTIONS[prefix])
                 facts.update(
                     f"{prefix}:section:{item}" for item in sections
                 )
@@ -499,13 +497,6 @@ class PagePermissionService:
         for grant in all_user_grants:
             user_grants_by_user.setdefault(grant.user_id, []).append(grant)
         active_keys = await self.repo.active_page_keys(db)
-        module_access_by_user = (
-            {user.id: set(changed_modules) for user in members}
-            if module_access_mode == "all"
-            else await PermissionGrantRepository().list_module_access_by_user(
-                db, user_ids=member_ids, module_codes=changed_modules
-            )
-        )
 
         member_count = len(members)
         users_with_overrides = 0
@@ -519,11 +510,6 @@ class PagePermissionService:
                 for item in overrides
             ):
                 users_with_overrides += 1
-            allowed_modules = (
-                set(changed_modules)
-                if getattr(user, "role", None) == "admin"
-                else module_access_by_user.get(user.id, set())
-            )
             before = effective_facts(
                 await self.effective_grants(
                     db,
@@ -533,7 +519,6 @@ class PagePermissionService:
                     prefetched_role_grants=all_role_grants,
                     prefetched_user_grants=overrides,
                 ),
-                allowed_modules,
             )
             after = effective_facts(
                 await self.effective_grants(
@@ -545,7 +530,6 @@ class PagePermissionService:
                     prefetched_role_grants=all_role_grants,
                     prefetched_user_grants=overrides,
                 ),
-                allowed_modules,
             )
             added = bool(after - before)
             removed = bool(before - after)
@@ -857,15 +841,6 @@ class PagePermissionService:
         }
         active_keys = await self.repo.active_page_keys(db)
         active_department_ids = set((await self.repo.department_labels(db)).keys())
-        module_codes = {
-            definition.module_code
-            for grant in user_grants
-            if (definition := get_page_definition(grant.page_key)) is not None
-        }
-        module_access = await PermissionGrantRepository().list_module_access_by_user(
-            db, user_ids=list(user_ids), module_codes=module_codes
-        )
-        enforce_module_access = get_settings().effective_module_access_mode == "roles"
         roles_by_user = await resolve_users_roles(db, list(users.values()))
         baseline_by_user: dict[UUID, dict[str, EffectivePageGrantOut]] = {}
         for user in users.values():
@@ -958,24 +933,6 @@ class PagePermissionService:
             target_user = users.get(user_grant.user_id)
             target_name = target_user.name if target_user else "已删除用户"
             inspect_common(user_grant, "user", user_grant.user_id, target_name)
-            definition = get_page_definition(user_grant.page_key)
-            if (
-                definition
-                and user_grant.permissions
-                and enforce_module_access
-                and definition.module_code
-                not in module_access.get(user_grant.user_id, set())
-                and getattr(target_user, "role", None) != "admin"
-            ):
-                add_issue(
-                    code="missing_module_access",
-                    severity="warning",
-                    target_type="user",
-                    target_id=user_grant.user_id,
-                    target_name=target_name,
-                    grant=user_grant,
-                    detail="页面已授权，但用户没有对应模块入口",
-                )
             baseline = baseline_by_user.get(user_grant.user_id, {}).get(
                 canonical_page_key(user_grant.page_key)
             )
@@ -1049,16 +1006,17 @@ class PagePermissionService:
                 permissions = list(normalize_permissions([*permissions, "operate"]))
             visible_sections = grant.visible_sections
             if visible_sections is not None:
-                if page_key != "production:overview":
-                    raise HTTPException(400, "仅生产管理概览支持页面内可见项")
+                allowed_sections = PAGE_VISIBLE_SECTIONS.get(page_key)
+                if allowed_sections is None:
+                    raise HTTPException(400, "仅生产管理概览和排产计划支持页面内可见项")
                 unknown_sections = (
-                    set(visible_sections) - PRODUCTION_OVERVIEW_VISIBLE_SECTIONS
+                    set(visible_sections) - allowed_sections
                 )
                 if unknown_sections:
                     raise HTTPException(
                         400, f"未知页面内可见项：{', '.join(sorted(unknown_sections))}"
                     )
-                if set(visible_sections) == PRODUCTION_OVERVIEW_VISIBLE_SECTIONS:
+                if set(visible_sections) == allowed_sections:
                     visible_sections = None
             if grant.data_scope.scope_type not in definition.supported_scope_types:
                 raise HTTPException(

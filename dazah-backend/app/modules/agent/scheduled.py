@@ -29,7 +29,7 @@ class AgentAccessScopeSyncGenerator(TaskGenerator):
     def __init__(self, batch_size: int = 100) -> None:
         self.batch_size = batch_size
         self.permission_repo = PermissionGrantRepository()
-        self.scope_service = AgentAccessScopeService(self.permission_repo)
+        self.scope_service = AgentAccessScopeService()
 
     async def find_due(self, session: Any) -> list[PermissionOutboxEvent]:
         now = datetime.now(UTC)

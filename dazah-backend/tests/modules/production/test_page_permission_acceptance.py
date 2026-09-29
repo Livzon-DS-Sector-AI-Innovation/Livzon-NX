@@ -17,6 +17,116 @@ from app.platform.identity.page_permissions import PagePermissionService
 from app.platform.identity.schemas import EffectivePageGrantOut, PageDataScopeInput
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("product", ["MC", "LN", "DR", "FA", "LV", "MV", "TY"])
+@pytest.mark.parametrize("restricted", [False, True])
+async def test_scheduling_visible_product_list(monkeypatch, product, restricted):
+    from app.modules.production import schedule_excel_api as schedule
+
+    app, _ = acceptance_app(
+        schedule.router,
+        monkeypatch,
+        "production:plan:scheduling",
+        visible_sections=[product] if restricted else None,
+    )
+    listing = AsyncMock(return_value=([], 0))
+    monkeypatch.setattr(schedule.schedule_excel_service, "list_archives", listing)
+    monkeypatch.setattr(
+        schedule.schedule_excel_service,
+        "list_history_fixes",
+        AsyncMock(return_value={}),
+    )
+    monkeypatch.setattr(
+        schedule.schedule_excel_service,
+        "count_history_fixes",
+        AsyncMock(return_value=0),
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            "/api/v1/production/schedule-excel",
+            params={"product": product},
+            headers={"X-Dazah-Page-Key": "production:plan:scheduling"},
+        )
+    assert response.status_code == 200
+    assert response.json()["data"] == []
+    assert listing.await_args.kwargs["product_code"] == product
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("sections", [["MC"], []])
+@pytest.mark.parametrize(
+    "operation", ["list", "upload", "detail", "download", "delete"]
+)
+async def test_scheduling_hidden_product_cannot_access_archives(
+    monkeypatch, sections, operation
+):
+    from app.modules.production import schedule_excel_api as schedule
+
+    app, _ = acceptance_app(
+        schedule.router,
+        monkeypatch,
+        "production:plan:scheduling",
+        actions=["delete", "bulk_import", "sensitive_export"],
+        visible_sections=sections,
+    )
+    archive = SimpleNamespace(product_code="LN")
+    listing = AsyncMock()
+    deleting = AsyncMock()
+    parsing = Mock()
+    serialization = Mock()
+    file_path = Mock()
+    monkeypatch.setattr(
+        schedule.schedule_excel_service, "get_archive", AsyncMock(return_value=archive)
+    )
+    monkeypatch.setattr(schedule.schedule_excel_service, "list_archives", listing)
+    monkeypatch.setattr(schedule.schedule_excel_service, "delete_archive", deleting)
+    monkeypatch.setattr(
+        schedule.schedule_excel_service, "parse_workbook_bytes", parsing
+    )
+    monkeypatch.setattr(
+        schedule.schedule_excel_service, "serialize_archive", serialization
+    )
+    monkeypatch.setattr(schedule, "_ensure_archive_file", file_path)
+    headers = {"X-Dazah-Page-Key": "production:plan:scheduling"}
+    path = f"/api/v1/production/schedule-excel/{uuid4()}"
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        if operation == "list":
+            response = await client.get(
+                "/api/v1/production/schedule-excel?product=LN", headers=headers
+            )
+        elif operation == "upload":
+            response = await client.post(
+                "/api/v1/production/schedule-excel?product=LN",
+                headers=headers,
+                files={
+                    "file": (
+                        "plan.xlsx",
+                        b"unused",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
+                },
+            )
+        elif operation == "delete":
+            response = await client.delete(path, headers=headers)
+        else:
+            # Query parameters cannot override the product persisted on the archive.
+            response = await client.get(
+                path + ("/file" if operation == "download" else "") + "?product=MC",
+                headers=headers,
+            )
+    assert response.status_code == 403
+    assert "该产品" in response.json()["detail"]
+    listing.assert_not_awaited()
+    deleting.assert_not_awaited()
+    parsing.assert_not_called()
+    serialization.assert_not_called()
+    file_path.assert_not_called()
+
+
 def acceptance_app(
     router, monkeypatch, page_key, actions=(), scope_type="all", visible_sections=None
 ):

@@ -134,7 +134,7 @@ async def test_required_user_and_admin_matrix() -> None:
 
 
 @pytest.mark.asyncio
-async def test_module_view_supports_all_mode_and_role_grants(monkeypatch) -> None:
+async def test_module_view_follows_effective_pages_in_both_modes(monkeypatch) -> None:
     module_dependency = deps.require_module_view("hr")
     request = Request(
         {
@@ -142,9 +142,7 @@ async def test_module_view_supports_all_mode_and_role_grants(monkeypatch) -> Non
             "method": "GET",
             "path": "/api/v1/hr/employees",
             "route": SimpleNamespace(path="/api/v1/hr/employees"),
-            "headers": [
-                (b"x-dazah-page-key", b"hr:employee-management:profile")
-            ],
+            "headers": [(b"x-dazah-page-key", b"hr:employee-management:profile")],
         }
     )
     monkeypatch.setattr(
@@ -181,20 +179,18 @@ async def test_module_view_supports_all_mode_and_role_grants(monkeypatch) -> Non
     role_mode: Any = SimpleNamespace(effective_module_access_mode="roles")
     result: Any = SimpleNamespace(scalar_one_or_none=lambda: None)
     session: Any = SimpleNamespace(execute=AsyncMock(return_value=result))
-    with pytest.raises(HTTPException) as missing:
-        await dependency(current_user=regular, db=session, settings=role_mode)
-    assert missing.value.status_code == 403
-
-    result.scalar_one_or_none = lambda: ["module.agent.read"]
-    with pytest.raises(HTTPException) as insufficient:
-        await dependency(current_user=regular, db=session, settings=role_mode)
-    assert insufficient.value.status_code == 403
-
-    result.scalar_one_or_none = lambda: ["module.view"]
     assert (
         await dependency(current_user=regular, db=session, settings=role_mode)
         is regular
     )
+    monkeypatch.setattr(
+        deps.PagePermissionService, "effective_grants", AsyncMock(return_value=[])
+    )
+    for mode in (role_mode, all_mode):
+        with pytest.raises(HTTPException) as missing:
+            await dependency(current_user=regular, db=session, settings=mode)
+        assert missing.value.status_code == 403
+    session.execute.assert_not_awaited()
     admin = _user(role="admin")
     assert await dependency(current_user=admin, db=session, settings=role_mode) is admin
 
