@@ -472,6 +472,20 @@ def test_quality_shared_read_routes_cover_sibling_pages():
     assert "quality:deviations:deviation-records" in binding.page_keys
     assert "quality:deviations:deviation-investigations" in binding.page_keys
 
+    # 按 record_id 细分的详情路由与列表共用跨页只读白名单
+    # （偏差工作台从报告记录带入详情），写操作仍限报告记录页。
+    detail_binding = page_policy.api_binding_for_route(
+        "GET", "/api/v1/quality/deviation-report-records/{record_id}"
+    )
+    assert detail_binding is not None
+    assert detail_binding.page_keys == binding.page_keys
+    assert "quality:deviations:deviation-workbench" in detail_binding.page_keys
+    update_binding = page_policy.api_binding_for_route(
+        "PUT", "/api/v1/quality/deviation-report-records/{record_id}"
+    )
+    assert update_binding is not None
+    assert update_binding.page_keys == ("quality:deviations:deviation-records",)
+
     binding = page_policy.api_binding_for_route(
         "GET", "/api/v1/quality/feishu/validations"
     )

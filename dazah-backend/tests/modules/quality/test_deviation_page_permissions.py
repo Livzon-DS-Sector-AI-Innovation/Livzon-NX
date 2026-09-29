@@ -613,3 +613,79 @@ async def test_batch_audit_failure_rolls_back_all_rows(db_session, monkeypatch):
             )
             == []
         )
+
+
+@pytest.mark.asyncio
+async def test_workbench_page_can_fetch_report_record_detail(db_session, monkeypatch):
+    """偏差工作台页带页面上下文请求报告记录详情不被跨页白名单拦截。"""
+    connection = await db_session.connection()
+    async with AsyncSession(
+        bind=connection,
+        join_transaction_mode="create_savepoint",
+        expire_on_commit=False,
+    ) as db:
+        suffix = uuid4().hex[:10]
+        user = User(
+            username="workbench-" + suffix,
+            name="工作台用户",
+            role="user",
+            status="active",
+            auth_source="local",
+        )
+        db.add(user)
+        await db.commit()
+
+        grant = EffectivePageGrantOut(
+            page_key="quality:deviations:deviation-workbench",
+            module_code="quality",
+            permissions=["access", "query", "operate"],
+            sensitive_actions=[],
+            data_scope=PageDataScopeInput(
+                scope_type="departments", department_ids=["test-department"]
+            ),
+            source="user",
+        )
+        app = _app(db, user, monkeypatch, grant)
+
+        from app.modules.quality.service import tracking_records
+
+        async def fake_detail(_db, record_id):
+            return {
+                "record_id": record_id,
+                "deviation_code": "PC-2609001",
+                "description": "详情内容",
+                "report_time": None,
+                "event_type": "偏差",
+                "products": ["霉酚酸"],
+                "batch_numbers": "B1",
+                "product_batch": "霉酚酸 / B1",
+                "department": "QC",
+                "reporter_name": "报告人",
+                "attachments": [],
+            }
+
+        monkeypatch.setattr(
+            tracking_records, "get_deviation_report_record_from_feishu", fake_detail
+        )
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.get(
+                "/api/v1/quality/deviation-report-records/rec-1",
+                headers={"X-Dazah-Page-Key": "quality:deviations:deviation-workbench"},
+            )
+        assert response.status_code == 200, response.text
+        assert response.json()["data"]["deviation_code"] == "PC-2609001"
+
+        # 写操作仍只授权报告记录页：工作台页 PUT 应被跨页白名单拒绝
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            write_response = await client.put(
+                "/api/v1/quality/deviation-report-records/rec-1",
+                headers={"X-Dazah-Page-Key": "quality:deviations:deviation-workbench"},
+                json={"description": "改", "products": ["霉酚酸"]},
+            )
+        assert write_response.status_code == 403
+        assert "当前页面不允许调用此业务接口" in write_response.text
