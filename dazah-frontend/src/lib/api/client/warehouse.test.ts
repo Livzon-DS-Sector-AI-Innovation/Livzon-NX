@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { fetchWarehouseInspectionProgressOverview } from './warehouse'
+import {
+  fetchWarehouseInspectionProgressOverview,
+  fetchWarehousePageFeishuConfigTables,
+} from './warehouse'
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -47,5 +50,39 @@ describe('warehouse client - inspection progress', () => {
     await expect(
       fetchWarehouseInspectionProgressOverview('raw', 30)
     ).rejects.toThrow('获取检验进度数据失败')
+  })
+})
+
+describe('warehouse client - page feishu config tables', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('fetches tables bundle with encoded app_token and returns data', async () => {
+    const tables = { app_token: 'AppRealToken', tables: [{ table_id: 'tbl1', name: '台账' }] }
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ code: 200, data: tables }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      fetchWarehousePageFeishuConfigTables('WikiBaseToken123')
+    ).resolves.toEqual(tables)
+    const url = String(fetchMock.mock.calls[0][0])
+    expect(url).toBe(
+      '/api/v1/warehouse/page-feishu-configs/tables?app_token=WikiBaseToken123',
+    )
+  })
+
+  it('throws backend message when tables request fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({ message: 'wiki 链接无法解析出 app_token' }, 400),
+      ),
+    )
+
+    await expect(fetchWarehousePageFeishuConfigTables('bad')).rejects.toThrow(
+      'wiki 链接无法解析出 app_token',
+    )
   })
 })

@@ -272,6 +272,20 @@ class WarehouseDashboardData(BaseModel):
     data: dict[str, Any]
 
 
+class WarehousePageFeishuTableOption(BaseModel):
+    """多维表格子表选项（按名称匹配用）"""
+
+    table_id: str
+    table_name: str
+
+
+class WarehousePageFeishuTablesBundle(BaseModel):
+    """多维表格子表列表（含解析后的 app_token，支持 /wiki/ 链接解析）"""
+
+    app_token: str
+    tables: list[WarehousePageFeishuTableOption]
+
+
 class WarehousePageFeishuConfig(BaseModel):
     """页面飞书多维表格配置（支持动态切换数据源）"""
 

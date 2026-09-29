@@ -15,10 +15,28 @@ describe('resolveFeishuUrlFill（HR 飞书设置网址填充）', () => {
     expect(resolveFeishuUrlFill('不是网址')).toEqual({ kind: 'invalid' })
   })
 
+  it('知识库（/wiki/）链接可填充：保留原始链接，由后端保存时解析', () => {
+    expect(
+      resolveFeishuUrlFill(
+        'https://xxx.feishu.cn/wiki/WikiToken123?table=tbl456',
+      ),
+    ).toEqual({
+      kind: 'full',
+      app_token: 'https://xxx.feishu.cn/wiki/WikiToken123?table=tbl456',
+      base_table_id: 'tbl456',
+      is_wiki: true,
+    })
+    expect(resolveFeishuUrlFill('https://xxx.feishu.cn/wiki/WikiToken123')).toEqual({
+      kind: 'partial',
+      app_token: 'https://xxx.feishu.cn/wiki/WikiToken123',
+      is_wiki: true,
+    })
+  })
+
   it('网址不含 table 参数时仅提取 App Token（子表可选）', () => {
     expect(
       resolveFeishuUrlFill('https://xxx.feishu.cn/base/bascn123'),
-    ).toEqual({ kind: 'partial', app_token: 'bascn123' })
+    ).toEqual({ kind: 'partial', app_token: 'bascn123', is_wiki: false })
   })
 
   it('完整子表链接同时提取 App Token 与 Table ID', () => {
@@ -30,6 +48,7 @@ describe('resolveFeishuUrlFill（HR 飞书设置网址填充）', () => {
       kind: 'full',
       app_token: 'bascn123',
       base_table_id: 'tbl456',
+      is_wiki: false,
     })
   })
 })

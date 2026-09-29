@@ -179,6 +179,15 @@ describe('migrated pure helper contracts', () => {
       app_token: 'app-token',
       table_id: 'tbl-1',
       view_id: null,
+      is_wiki: false,
+    })
+    expect(
+      parseFeishuBitableUrl('https://example.feishu.cn/wiki/wiki-node-token?table=tbl-2'),
+    ).toEqual({
+      app_token: 'https://example.feishu.cn/wiki/wiki-node-token?table=tbl-2',
+      table_id: 'tbl-2',
+      view_id: null,
+      is_wiki: true,
     })
     expect(parseFeishuBitableUrl('not-a-url')).toBeNull()
     expect(parseFeishuBaseUrl('https://example.feishu.cn/base/app-token')).toBe('app-token')

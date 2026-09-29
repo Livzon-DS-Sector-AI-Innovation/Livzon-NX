@@ -407,6 +407,8 @@ export interface WarehouseHardwareCostSummary {
 // ── 页面飞书配置 ────────────────────────────────────────────────
 
 export type WarehousePageFeishuConfig = components['schemas']['WarehousePageFeishuConfig']
+export type WarehousePageFeishuTableOption = components['schemas']['WarehousePageFeishuTableOption']
+export type WarehousePageFeishuTablesBundle = components['schemas']['WarehousePageFeishuTablesBundle']
 
 // ── 成品每月出入库数据 ────────────────────────────────────────────────
 

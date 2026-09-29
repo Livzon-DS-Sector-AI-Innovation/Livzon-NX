@@ -137,8 +137,10 @@ export interface FeishuDeviationReportRecordItem extends FeishuPageRecordBase {
   deviation_id?: string | null;
   deviation_code?: string | null;
   report_time?: string | null;
+  event_type?: string | null;
   description?: string | null;
-  report_document?: string | null;
+  products?: string[] | null;
+  batch_numbers?: string | null;
   product_batch?: string | null;
   product_name_batch?: string | null;
   department?: string | null;

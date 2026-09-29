@@ -296,9 +296,12 @@ export function DeviationWorkbenchPage({ initialRecordId }: { initialRecordId?: 
           setAffectedItems(record.product_name_batch || record.product_batch || '')
         }
       })
-      .catch(() => {
+      .catch((error) => {
         if (!cancelled) {
-          message.warning('未能获取报告记录详情（可能飞书未启用），可手动输入偏差内容')
+          const detail = error instanceof Error ? error.message : ''
+          message.warning(
+            `未能获取报告记录详情${detail ? `：${detail}` : '（可能飞书未启用）'}，可手动输入偏差内容`,
+          )
         }
       })
     return () => {
@@ -468,7 +471,10 @@ export function DeviationWorkbenchPage({ initialRecordId }: { initialRecordId?: 
     () =>
       (reportRecords?.items || []).map((item) => ({
         value: item.record_id || item.feishu_base_record_id || item.id,
-        label: `${item.deviation_code || ''}${item.product_batch ? `｜${item.product_batch}` : ''}｜${(item.description || '').slice(0, 24)}`,
+        label: [item.deviation_code, item.product_batch, item.description]
+          .filter((part) => (part || '').trim())
+          .map((part) => (part || '').trim())
+          .join('｜'),
       })),
     [reportRecords]
   )
@@ -853,6 +859,10 @@ export function DeviationWorkbenchPage({ initialRecordId }: { initialRecordId?: 
             style={{ width: '100%' }}
             options={reportRecordOptions}
             value={recordId || undefined}
+            // 选项超出下拉宽度时省略号截断，悬停通过 title 查看全文
+            optionRender={(option) => (
+              <span title={String(option.label ?? '')}>{option.label}</span>
+            )}
             onChange={(value) => {
               setRecordId(value)
               setRecordSelectOpen(false)

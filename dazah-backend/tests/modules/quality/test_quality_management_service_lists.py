@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import AppException
 from app.core.llm.encryption import decrypt_api_key
 from app.modules.quality import repository
 from app.modules.quality.models.capa import CAPA
@@ -388,8 +389,9 @@ async def test_get_deviation_report_record_list_reads_feishu_report_records(
                         datetime(2026, 7, 2, 10, 0, tzinfo=UTC).timestamp() * 1000
                     ),
                     "偏差内容": "洁净区压差异常",
-                    "偏差报告": "https://example.com/report-1.docx",
-                    "涉及产品名称/批号": "原料A/B-001",
+                    "事件类型": "偏差",
+                    "涉及产品": ["原料A"],
+                    "涉及批次": "B-001",
                     "部门": "质量部",
                     "报告人": [
                         {
@@ -462,8 +464,10 @@ async def test_get_deviation_report_record_list_reads_feishu_report_records(
     assert first_item["deviation_id"] == linked_deviation.id
     assert first_item["deviation_code"] == "DEV-20260701-0101"
     assert first_item["description"] == "洁净区压差异常"
-    assert first_item["report_document"] == "https://example.com/report-1.docx"
-    assert first_item["product_batch"] == "原料A/B-001"
+    assert first_item["event_type"] == "偏差"
+    assert first_item["products"] == ["原料A"]
+    assert first_item["batch_numbers"] == "B-001"
+    assert first_item["product_batch"] == "原料A / B-001"
     assert first_item["reporter_name"] == "报告人甲"
     assert first_item["reporters"] == [
         {
@@ -1448,9 +1452,24 @@ async def test_list_quality_feishu_tables_filters_by_base_table_id(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("feishu_error", "expected_detail_part"),
+    [
+        (
+            RuntimeError("invalid app_token"),
+            "读取飞书表列表失败：invalid app_token",
+        ),
+        (
+            RuntimeError("403 Forbidden: you do not have permission"),
+            "飞书应用无权访问该多维表格（403）",
+        ),
+    ],
+)
 async def test_list_quality_feishu_tables_wraps_feishu_errors(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
+    feishu_error: Exception,
+    expected_detail_part: str,
 ) -> None:
     await db_session.execute(text("DELETE FROM quality.quality_feishu_entity_settings"))
     await db_session.execute(text("DELETE FROM quality.quality_feishu_app_settings"))
@@ -1467,7 +1486,7 @@ async def test_list_quality_feishu_tables_wraps_feishu_errors(
 
     class FailingBitableClient:
         async def list_tables(self: Any, page_size: int = 100) -> list[dict[Any, Any]]:
-            raise RuntimeError("invalid app_token")
+            raise feishu_error
 
     def fake_build_bitable_client(
         *,
@@ -1483,12 +1502,15 @@ async def test_list_quality_feishu_tables_wraps_feishu_errors(
         fake_build_bitable_client,
     )
 
-    with pytest.raises(ValueError, match="读取飞书表列表失败：invalid app_token"):
+    with pytest.raises(AppException) as exc_info:
         await feishu_settings_service.list_quality_feishu_tables(
             db_session,
             "capa_plan_track",
             app_token="basc_override",
         )
+
+    assert exc_info.value.status_code == 502
+    assert expected_detail_part in str(exc_info.value.detail)
 
 
 @pytest.mark.anyio
@@ -1966,8 +1988,9 @@ async def test_ensure_deviation_from_report_record_creates_local_deviation(
                     "偏差编号": "PC-2607001",
                     "报告时间": int(now.timestamp() * 1000),
                     "偏差内容": "桥接测试偏差",
-                    "偏差报告": "飞书原始报告内容",
-                    "涉及产品名称/批号": "产品A/批号B001",
+                    "事件类型": "偏差",
+                    "涉及产品": ["产品A"],
+                    "涉及批次": "批号B001",
                     "部门": "质量部",
                     "报告人": [{"name": "报告人甲"}],
                 },
@@ -1990,8 +2013,9 @@ async def test_ensure_deviation_from_report_record_creates_local_deviation(
     assert deviation is not None
     assert deviation.feishu_base_record_id == "rec_report_bridge_001"
     assert deviation.description == "桥接测试偏差"
-    assert deviation.report_content == "飞书原始报告内容"
-    assert deviation.affected_items == "产品A/批号B001"
+    # 飞书表已无“偏差报告”字段，报告正文不再从报告记录回填
+    assert deviation.report_content is None
+    assert deviation.affected_items == "产品A / 批号B001"
 
 
 @pytest.mark.anyio

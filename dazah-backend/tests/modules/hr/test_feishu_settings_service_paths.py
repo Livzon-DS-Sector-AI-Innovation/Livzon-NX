@@ -323,3 +323,39 @@ async def test_entity_setting_update_and_missing_table_token(
         await service.update_hr_feishu_entity_setting(
             _Db([_Result(rows=[])]), "missing", UpdateHrFeishuEntitySettingRequest()
         )
+
+
+@pytest.mark.asyncio
+async def test_entity_setting_update_resolves_wiki_link(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """知识库（/wiki/）链接保存时自动解析为真正的 app_token，table_id 取自链接参数。"""
+    monkeypatch.setattr(service, "DEFAULT_HR_FEISHU_ENTITIES", [])
+    monkeypatch.setattr(
+        service,
+        "DEFAULT_HR_FEISHU_ENTITY_MAP",
+        {"employee": ("employee", "员工花名册", "人事台账", 1)},
+    )
+    row = _entity_row()
+    db = _Db([_Result(rows=[row]), _Result(row)])
+    monkeypatch.setattr(
+        service,
+        "get_hr_feishu_app_credentials",
+        AsyncMock(return_value=("cli_app", "secret")),
+    )
+    monkeypatch.setattr(
+        service,
+        "resolve_wiki_bitable_app_token",
+        AsyncMock(return_value="NIEJbSxylaHBp4shlPjcpVSzXn2e"),
+    )
+    wiki_url = (
+        "https://j0eukrlohu.feishu.cn/wiki/TeBUwZkJEiOPK2kKLxxcZ1SCnWg"
+        "?table=tblivbUvnYDjATiL"
+    )
+    updated = await service.update_hr_feishu_entity_setting(
+        db,
+        "employee",
+        UpdateHrFeishuEntitySettingRequest(app_token=wiki_url),
+    )
+    assert updated.app_token == "NIEJbSxylaHBp4shlPjcpVSzXn2e"
+    assert row.base_table_id == "tblivbUvnYDjATiL"

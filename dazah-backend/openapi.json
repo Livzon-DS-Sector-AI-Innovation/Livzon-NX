@@ -28991,6 +28991,17 @@
             ],
             "title": "Attachments"
           },
+          "batch_numbers": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Numbers"
+          },
           "department": {
             "anyOf": [
               {
@@ -29085,6 +29096,17 @@
             ],
             "title": "Deviation Id"
           },
+          "event_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Type"
+          },
           "feishu_base_record_id": {
             "anyOf": [
               {
@@ -29178,6 +29200,20 @@
               }
             ],
             "title": "Product Batch"
+          },
+          "products": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Products"
           },
           "qa_head_name": {
             "anyOf": [
@@ -29276,17 +29312,6 @@
               }
             ],
             "title": "Qas"
-          },
-          "report_document": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Report Document"
           },
           "report_status": {
             "anyOf": [
@@ -85984,6 +86009,47 @@
           "table_name"
         ],
         "title": "WarehousePageFeishuConfig",
+        "type": "object"
+      },
+      "WarehousePageFeishuTableOption": {
+        "description": "多维表格子表选项（按名称匹配用）",
+        "properties": {
+          "table_id": {
+            "title": "Table Id",
+            "type": "string"
+          },
+          "table_name": {
+            "title": "Table Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table_id",
+          "table_name"
+        ],
+        "title": "WarehousePageFeishuTableOption",
+        "type": "object"
+      },
+      "WarehousePageFeishuTablesBundle": {
+        "description": "多维表格子表列表（含解析后的 app_token，支持 /wiki/ 链接解析）",
+        "properties": {
+          "app_token": {
+            "title": "App Token",
+            "type": "string"
+          },
+          "tables": {
+            "items": {
+              "$ref": "#/components/schemas/WarehousePageFeishuTableOption"
+            },
+            "title": "Tables",
+            "type": "array"
+          }
+        },
+        "required": [
+          "app_token",
+          "tables"
+        ],
+        "title": "WarehousePageFeishuTablesBundle",
         "type": "object"
       },
       "WarehousePromptVersionApiResponse": {
@@ -220417,6 +220483,67 @@
           }
         },
         "summary": "获取页面飞书配置列表",
+        "tags": [
+          "仓储管理"
+        ]
+      }
+    },
+    "/api/v1/warehouse/page-feishu-configs/tables": {
+      "get": {
+        "description": "返回解析后的 app_token 与该多维表格的全部子表",
+        "operationId": "list_page_feishu_config_tables_api_v1_warehouse_page_feishu_configs_tables_get",
+        "parameters": [
+          {
+            "description": "多维表格 app_token、/base/ 链接或 /wiki/ 知识库链接",
+            "in": "query",
+            "name": "app_token",
+            "required": true,
+            "schema": {
+              "description": "多维表格 app_token、/base/ 链接或 /wiki/ 知识库链接",
+              "title": "App Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarehousePageFeishuTablesBundle"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "读取指定多维表格的子表列表（按名称匹配用，支持 /wiki/ 链接）",
         "tags": [
           "仓储管理"
         ]

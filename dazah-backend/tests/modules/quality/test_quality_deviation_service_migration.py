@@ -105,15 +105,17 @@ async def test_report_record_pull_maps_records_and_related_deviation(
             "fields": {
                 "偏差编号": "PC-2608001",
                 "偏差内容": "偏差内容",
-                "偏差报告": "报告链接",
-                "涉及产品名称/批号": "产品/B1",
+                "事件类型": "偏差",
+                "涉及产品": ["盐酸林可霉素", "霉酚酸"],
+                "涉及批次": "B1",
                 "部门": "质量部",
                 "报告人": [{"id": "ou_report", "name": "报告人"}],
+                "部门负责人": "曹威",
                 "部门负责人确认": "通过",
                 "QA确认": "待审",
                 "QA负责人确认": "待审",
                 "报告状态": "处理中",
-                "附件": [{"name": "调查.pdf", "url": "https://file"}],
+                "相关附件": [{"name": "调查.pdf", "url": "https://file"}],
             },
         }
     ]
@@ -139,6 +141,11 @@ async def test_report_record_pull_maps_records_and_related_deviation(
     assert result["items"][0]["deviation_code"] == "PC-2608001"
     assert result["items"][0]["report_status"] == "处理中"
     assert result["items"][0]["reporters"][0]["id"] == "ou_report"
+    assert result["items"][0]["event_type"] == "偏差"
+    assert result["items"][0]["products"] == ["盐酸林可霉素", "霉酚酸"]
+    assert result["items"][0]["batch_numbers"] == "B1"
+    assert result["items"][0]["product_batch"] == "盐酸林可霉素、霉酚酸 / B1"
+    assert result["items"][0]["department_head"] == "曹威"
 
     monkeypatch.setattr(
         sync.feishu_sync,
@@ -409,8 +416,9 @@ async def test_deviation_crud_and_report_record_upsert_paths(
         "fields": {
             "偏差编号": "PC-2608005",
             "偏差内容": "飞书偏差",
-            "偏差报告": "报告正文",
-            "涉及产品名称/批号": "产品/B2",
+            "事件类型": "偏差",
+            "涉及产品": ["盐酸林可霉素"],
+            "涉及批次": "B2",
             "部门": "质量部",
             "报告人": "张三",
             "报告时间": "2026-08-20T08:00:00Z",

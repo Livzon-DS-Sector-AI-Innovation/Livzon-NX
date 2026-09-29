@@ -3,7 +3,13 @@ import { afterEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ fetch: vi.fn(), revalidate: vi.fn() }))
 vi.mock('./quality-shared', () => ({ API_BASE_URL: 'http://backend.test', actionFetch: mocks.fetch }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidate }))
-import { batchDeleteDeviations, createDeviation, deleteDeviation, submitDeviation } from './quality-deviation'
+import {
+  batchDeleteDeviations,
+  createDeviation,
+  createDeviationReportRecord,
+  deleteDeviation,
+  submitDeviation,
+} from './quality-deviation'
 
 afterEach(() => vi.resetAllMocks())
 
@@ -44,4 +50,22 @@ it('does not report success or refresh caches after a rejected batch', async () 
   mocks.fetch.mockRejectedValue(new Error('偏差记录不在当前页面授权的部门范围内'))
   await expect(batchDeleteDeviations(['one', 'outside'])).rejects.toThrow('授权的部门范围')
   expect(mocks.revalidate).not.toHaveBeenCalled()
+})
+
+it('forwards the report record create contract with products and batch numbers', async () => {
+  const result = { id: 'record-9', code: 'BG-REC-001' }
+  mocks.fetch.mockResolvedValue(result)
+  const body = {
+    description: '报告记录偏差',
+    event_type: '产品质量偏差',
+    products: ['产品A', '产品B'],
+    batch_numbers: 'B1、B2',
+    reporter_open_id: 'reporter-id',
+  }
+  expect(await createDeviationReportRecord(body)).toEqual(result)
+  expect(mocks.fetch).toHaveBeenCalledWith(
+    'http://backend.test/api/v1/quality/deviation-report-records',
+    { method: 'POST', body: JSON.stringify(body) },
+  )
+  expect(mocks.revalidate).toHaveBeenCalled()
 })
