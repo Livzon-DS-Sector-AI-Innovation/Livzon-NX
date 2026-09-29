@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from app.core.exceptions import AppException
 from app.modules.quality.models.feishu_settings import (
     QualityFeishuAppSettings,
     QualityFeishuEntitySetting,
@@ -292,8 +293,121 @@ async def test_list_tables_and_field_mapping_bundle(
     )
     assert mapping.feishu_field == "CAPA编号"
 
-    with pytest.raises(ValueError, match="实体配置不存在"):
+    with pytest.raises(AppException, match="实体配置不存在"):
         await service.list_quality_feishu_tables(db, "unknown")
+
+
+@pytest.mark.anyio
+async def test_wiki_link_resolved_to_real_app_token_on_list_and_save(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """知识库（/wiki/）链接在读取子表和保存时都换算为真正的 app_token 存用。"""
+    db = _db()
+    app_model = _app_model()
+    entity = _entity_model()
+    wiki_url = (
+        "https://j0eukrlohu.feishu.cn/wiki/TeBUwZkJEiOPK2kKLxxcZ1SCnWg"
+        "?table=tblivbUvnYDjATiL"
+    )
+    client: Any = SimpleNamespace(
+        list_tables=AsyncMock(
+            return_value=[{"table_id": "tblivbUvnYDjATiL", "name": "台账"}]
+        )
+    )
+    built_tokens: list[str | None] = []
+    monkeypatch.setattr(
+        service,
+        "_ensure_quality_feishu_app_settings_seeded",
+        AsyncMock(return_value=app_model),
+    )
+    monkeypatch.setattr(
+        service,
+        "ensure_quality_feishu_entity_settings",
+        AsyncMock(return_value=[entity]),
+    )
+
+    def _record_build(**kwargs: Any) -> Any:
+        built_tokens.append(kwargs.get("app_token"))
+        return client
+
+    monkeypatch.setattr(service, "build_bitable_client", _record_build)
+    monkeypatch.setattr(service, "decrypt_api_key", lambda _: "secret")
+    monkeypatch.setattr(
+        service,
+        "resolve_wiki_bitable_app_token",
+        AsyncMock(return_value="NIEJbSxylaHBp4shlPjcpVSzXn2e"),
+    )
+
+    tables = await service.list_quality_feishu_tables(
+        db,
+        entity.entity_code,
+        wiki_url,
+    )
+    assert [item.table_id for item in tables] == ["tblivbUvnYDjATiL"]
+    # 传给 BitableClient 的是解析后的 app_token，不再是 wiki 链接或子域名
+    assert built_tokens == ["NIEJbSxylaHBp4shlPjcpVSzXn2e"]
+
+    # 保存：wiki 链接 → 存库 app_token 为解析结果，table_id 取自链接 ?table=
+    monkeypatch.setattr(
+        service,
+        "_get_entity_settings_model",
+        AsyncMock(return_value=entity),
+    )
+    monkeypatch.setattr(
+        service,
+        "_refresh_entity_data_after_save",
+        AsyncMock(return_value=entity),
+    )
+    update = UpdateQualityFeishuEntitySettingRequest(
+        app_token=wiki_url,
+        base_table_name=None,
+        base_table_id=None,
+        is_enabled=True,
+        enable_push_to_feishu=True,
+        enable_pull_from_feishu=False,
+        field_mappings=None,
+    )
+    await service.update_quality_feishu_entity_setting(
+        db,
+        entity.entity_code,
+        update,
+    )
+    assert entity.app_token == "NIEJbSxylaHBp4shlPjcpVSzXn2e"
+    assert entity.base_table_id == "tblivbUvnYDjATiL"
+
+
+@pytest.mark.anyio
+async def test_wiki_link_non_bitable_node_raises_business_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = _db()
+    app_model = _app_model()
+    entity = _entity_model()
+    monkeypatch.setattr(
+        service,
+        "_ensure_quality_feishu_app_settings_seeded",
+        AsyncMock(return_value=app_model),
+    )
+    monkeypatch.setattr(
+        service,
+        "ensure_quality_feishu_entity_settings",
+        AsyncMock(return_value=[entity]),
+    )
+    monkeypatch.setattr(service, "decrypt_api_key", lambda _: "secret")
+    from app.core.exceptions import AppException
+
+    monkeypatch.setattr(
+        service,
+        "resolve_wiki_bitable_app_token",
+        AsyncMock(side_effect=AppException(message="该知识库节点不是多维表格")),
+    )
+
+    with pytest.raises(AppException, match="不是多维表格"):
+        await service.list_quality_feishu_tables(
+            db,
+            entity.entity_code,
+            "https://example.feishu.cn/wiki/DocNode123?table=tbl1",
+        )
 
 
 @pytest.mark.anyio
@@ -499,3 +613,38 @@ def test_instrument_entities_seeded_unbound_and_pullable() -> None:
     # 页面可编辑：仪器实体不在 push-only 名单，默认双向开关开启
     for code in instrument_codes:
         assert service._get_default_sync_directions(code) == (True, True)
+
+
+@pytest.mark.anyio
+async def test_list_tables_maps_feishu_403_to_business_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """飞书应用无权访问多维表格（403）时返回可操作的业务错误，而不是 500。"""
+    db = _db()
+    app_model = _app_model()
+    entity = _entity_model()
+    client: Any = SimpleNamespace(
+        list_tables=AsyncMock(
+            side_effect=RuntimeError(
+                "Client error '403 Forbidden' for url "
+                "'https://open.feishu.cn/open-apis/bitable/v1/apps/x/tables'"
+            )
+        )
+    )
+    monkeypatch.setattr(
+        service,
+        "_ensure_quality_feishu_app_settings_seeded",
+        AsyncMock(return_value=app_model),
+    )
+    monkeypatch.setattr(
+        service,
+        "ensure_quality_feishu_entity_settings",
+        AsyncMock(return_value=[entity]),
+    )
+    monkeypatch.setattr(service, "build_bitable_client", lambda **_: client)
+    monkeypatch.setattr(service, "decrypt_api_key", lambda _: "secret")
+
+    with pytest.raises(AppException) as exc_info:
+        await service.list_quality_feishu_tables(db, entity.entity_code)
+    assert exc_info.value.status_code == 502
+    assert "403" in exc_info.value.message and "协作者" in exc_info.value.message

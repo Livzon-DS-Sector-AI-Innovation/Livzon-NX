@@ -61,6 +61,15 @@ def parse_bitable_url(value: str | None) -> BitableReference:
     )
 
 
+def extract_wiki_node_token(value: str | None) -> str | None:
+    """Extract the wiki node token if the value is or contains a Feishu wiki link."""
+    text = _clean_text(value)
+    if not text:
+        return None
+    match = re.search(r"/wiki/([A-Za-z0-9_-]+)", text)
+    return match.group(1) if match else None
+
+
 def normalize_app_token(value: str | None) -> str | None:
     """Extract a Bitable app_token from a URL, labelled text, or raw token."""
     text = _clean_text(value)
@@ -78,6 +87,10 @@ def normalize_app_token(value: str | None) -> str | None:
     )
     if label_match:
         return label_match.group(1)
+
+    # 链接（如 /wiki/）本身不含 app_token，禁止退化成链接里的域名或其他 token
+    if extract_wiki_node_token(text) or re.match(r"^https?://", text, re.IGNORECASE):
+        return None
 
     token_match = re.search(r"\b([A-Za-z0-9_-]{10,})\b", text)
     return token_match.group(1) if token_match else text
@@ -144,6 +157,55 @@ def resolve_bitable_reference(
         app_token=resolved_app_token,
         table_id=resolved_table_id,
     )
+
+
+async def resolve_wiki_bitable_app_token(
+    *,
+    app_id: str | None,
+    app_secret: str | None,
+    node_token: str,
+) -> str:
+    """Resolve a Feishu wiki node token into the Bitable app_token it points to."""
+    if not app_id or not app_secret:
+        raise AppException(
+            status_code=503,
+            message="飞书应用未配置，请先在对应模块设置中填写 App ID 与 App Secret",
+        )
+    token = await get_tenant_access_token(app_id, app_secret)
+    try:
+        async with httpx.AsyncClient(
+            base_url=OPEN_API_BASE_URL, timeout=15.0
+        ) as client:
+            resp = await client.get(
+                "/wiki/v2/spaces/get_node",
+                headers={"Authorization": f"Bearer {token}"},
+                params={"token": node_token, "obj_type": "wiki"},
+            )
+            resp.raise_for_status()
+            body = resp.json()
+    except Exception as exc:
+        raise AppException(
+            status_code=502,
+            message=f"解析飞书知识库节点失败：{exc}",
+        ) from exc
+
+    if body.get("code") != 0:
+        raise AppException(
+            status_code=502,
+            message=f"解析飞书知识库节点失败：{body.get('msg') or '飞书返回错误'}",
+        )
+    node = body.get("data", {}).get("node")
+    if not isinstance(node, dict):
+        raise AppException(status_code=502, message="飞书知识库节点响应缺少节点信息")
+    if node.get("obj_type") != "bitable":
+        raise AppException(
+            status_code=400,
+            message="该知识库节点不是多维表格，请粘贴多维表格节点的链接",
+        )
+    obj_token = str(node.get("obj_token") or "")
+    if not obj_token:
+        raise AppException(status_code=502, message="飞书知识库节点未返回多维表格标识")
+    return obj_token
 
 
 def build_bitable_client(

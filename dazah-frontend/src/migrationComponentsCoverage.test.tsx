@@ -168,10 +168,14 @@ vi.mock('@/lib/api/ai', () => ({
   generateOralExamQuestions: vi.fn(async () => ({ questions: [{ question: '口试问题', answer: '答案要点' }] })),
 }))
 vi.mock('docx-preview', () => ({ renderAsync: vi.fn(async () => undefined) }))
-vi.mock('@/lib/feishu-url', () => ({
-  parseFeishuBitableUrl: vi.fn((url: string) => ({ app_token: 'bascn-test', table_id: url.includes('?table=') ? 'tbl-test' : null, view_id: null })),
-  parseFeishuBaseUrl: vi.fn((url: string) => (url.includes('/base/') ? 'bascn-test' : null)),
-}))
+vi.mock('@/lib/feishu-url', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/feishu-url')>('@/lib/feishu-url')
+  return {
+    ...actual,
+    parseFeishuBitableUrl: vi.fn((url: string) => ({ app_token: 'bascn-test', table_id: url.includes('?table=') ? 'tbl-test' : null, view_id: null, is_wiki: false })),
+    parseFeishuBaseUrl: vi.fn((url: string) => (url.includes('/base/') ? 'bascn-test' : null)),
+  }
+})
 vi.mock('@/components/registration', () => ({
   AuthorizationLetterDashboard: () => createElement('div', null, '授权概览'),
   RegistrationSummaryHero: ({ children }: { children?: ReactNode }) => createElement('div', null, '注册总览', children),

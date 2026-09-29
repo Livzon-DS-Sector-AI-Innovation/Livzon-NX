@@ -242,7 +242,9 @@ export async function deleteDeviationInvestigationPushRecord(recordId: string): 
 
 export async function createDeviationReportRecord(data: {
   description: string
-  product_batch: string
+  event_type?: string
+  products: string[]
+  batch_numbers?: string
   reporter_open_id: string
 }): Promise<FeishuDeviationReportRecordItem | null> {
   const result = await actionFetch<FeishuDeviationReportRecordItem>(

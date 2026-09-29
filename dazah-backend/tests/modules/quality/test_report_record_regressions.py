@@ -25,6 +25,25 @@ def test_attachment_parser_preserves_file_token_without_temporary_url():
     ]
 
 
+def test_option_list_and_product_batch_join_helpers():
+    assert sync._normalize_option_list(None) is None
+    assert sync._normalize_option_list("") is None
+    assert sync._normalize_option_list([]) is None
+    assert sync._normalize_option_list("盐酸林可霉素") == ["盐酸林可霉素"]
+    assert sync._normalize_option_list(["霉酚酸", "盐酸林可霉素"]) == [
+        "霉酚酸",
+        "盐酸林可霉素",
+    ]
+    assert sync._normalize_option_list([{"text": "霉酚酸"}, None, " "]) == ["霉酚酸"]
+
+    assert sync._join_product_batch(None, None) is None
+    assert sync._join_product_batch(["霉酚酸"], None) == "霉酚酸"
+    assert sync._join_product_batch(None, "B-001") == "B-001"
+    assert sync._join_product_batch(["霉酚酸", "其它"], "B-001") == (
+        "霉酚酸、其它 / B-001"
+    )
+
+
 @pytest.mark.parametrize(
     "attachments",
     [
@@ -56,7 +75,11 @@ async def test_report_list_preserves_attachments(monkeypatch, attachments):
             return_value=[
                 {
                     "record_id": "record",
-                    "fields": {"偏差内容": "测试", "附件": attachments},
+                    "fields": {
+                        "偏差内容": "测试",
+                        "相关附件": attachments,
+                        "涉及产品": ["盐酸林可霉素"],
+                    },
                 },
             ]
         ),
@@ -93,7 +116,8 @@ async def test_edit_reporter_without_code_preserves_existing_attachments(
         {
             "deviation_code": code,
             "description": "测试",
-            "product_batch": "产品",
+            "products": ["产品"],
+            "batch_numbers": "B1",
             "reporter_open_id": "ou_new",
         },
     )
@@ -103,7 +127,9 @@ async def test_edit_reporter_without_code_preserves_existing_attachments(
         "union_id" if write_id.startswith("on_") else "open_id"
     )
     assert fields["部门"] == "QC"
-    assert "附件" not in fields
+    assert fields["涉及产品"] == ["产品"]
+    assert fields["涉及批次"] == "B1"
+    assert "相关附件" not in fields
     assert "偏差编号" not in fields
 
 
@@ -132,7 +158,7 @@ async def test_report_update_maps_feishu_connection_failure_to_503(monkeypatch):
             "record",
             {
                 "description": "测试",
-                "product_batch": "产品",
+                "products": ["产品"],
                 "reporter_open_id": "ou_reporter",
             },
         )
@@ -165,7 +191,7 @@ async def test_save_report_api_without_code(client, monkeypatch, failure):
         "/api/v1/quality/deviation-report-records/record",
         json={
             "description": "测试",
-            "product_batch": "产品",
+            "products": ["产品"],
             "reporter_open_id": "ou_reporter",
         },
     )
@@ -179,7 +205,7 @@ async def test_save_report_api_without_code(client, monkeypatch, failure):
         assert record.reporters == [{"id": "on_reporter"}]
         fields = update.await_args.args[3]
         assert "偏差编号" not in fields
-        assert "附件" not in fields
+        assert "相关附件" not in fields
     old_read.assert_not_awaited()
 
 
@@ -198,7 +224,7 @@ async def test_report_attachment_is_checked_against_its_record(monkeypatch):
         get_record=AsyncMock(
             return_value={
                 "record_id": "record",
-                "fields": {"附件": [{"file_token": "owned"}]},
+                "fields": {"相关附件": [{"file_token": "owned"}]},
             }
         )
     )

@@ -199,6 +199,8 @@ async def _build_deviation_report_record_items_from_feishu(
     )
     field_value = feishu_sync_service._get_mapped_field_value
     normalize_text = feishu_sync_service._normalize_text
+    normalize_option_list = feishu_sync_service._normalize_option_list
+    join_product_batch = feishu_sync_service._join_product_batch
     parse_datetime = feishu_sync_service._parse_feishu_datetime
     normalize_review_result = feishu_sync_service._normalize_review_result
     get_record_modified_at = feishu_sync_service._get_record_modified_at
@@ -221,18 +223,20 @@ async def _build_deviation_report_record_items_from_feishu(
         fields = record.get("fields") or {}
         deviation_code = normalize_text(field_value(report_entity, fields, "偏差编号"))
         linked_deviation = deviation_map.get(deviation_code) if deviation_code else None
+        products = normalize_option_list(
+            field_value(report_entity, fields, "涉及产品")
+        )
+        batch_numbers = normalize_text(field_value(report_entity, fields, "涉及批次"))
         item = DeviationReportRecordListItem(
             id=record.get("record_id", ""),
             deviation_id=linked_deviation.id if linked_deviation else None,
             deviation_code=deviation_code,
             report_time=parse_datetime(field_value(report_entity, fields, "报告时间")),
+            event_type=normalize_text(field_value(report_entity, fields, "事件类型")),
             description=normalize_text(field_value(report_entity, fields, "偏差内容")),
-            report_document=normalize_text(
-                field_value(report_entity, fields, "偏差报告")
-            ),
-            product_batch=normalize_text(
-                field_value(report_entity, fields, "涉及产品名称/批号")
-            ),
+            products=products,
+            batch_numbers=batch_numbers,
+            product_batch=join_product_batch(products, batch_numbers),
             department=normalize_text(field_value(report_entity, fields, "部门")),
             reporter_name=normalize_text(field_value(report_entity, fields, "报告人")),
             department_head=normalize_text(
@@ -273,7 +277,7 @@ async def _build_deviation_report_record_items_from_feishu(
             field_value(report_entity, fields, "报告人")
         )
         item["attachments"] = feishu_sync_service._parse_attachment_field(
-            field_value(report_entity, fields, "附件")
+            field_value(report_entity, fields, "相关附件")
         )
         item["department_heads"] = feishu_sync_service._parse_person_field(
             field_value(report_entity, fields, "部门负责人")
@@ -338,6 +342,8 @@ async def ensure_deviation_from_report_record(
     fields = record.get("fields") or {}
     field_value = feishu_sync_service._get_mapped_field_value
     normalize_text = feishu_sync_service._normalize_text
+    normalize_option_list = feishu_sync_service._normalize_option_list
+    join_product_batch = feishu_sync_service._join_product_batch
     parse_datetime = feishu_sync_service._parse_feishu_datetime
     get_record_modified_at = feishu_sync_service._get_record_modified_at
 
@@ -346,10 +352,9 @@ async def ensure_deviation_from_report_record(
         raise ValueError("飞书报告记录缺少偏差编号")
 
     description = normalize_text(field_value(report_entity, fields, "偏差内容"))
-    report_content = normalize_text(field_value(report_entity, fields, "偏差报告"))
-    product_batch = normalize_text(
-        field_value(report_entity, fields, "涉及产品名称/批号")
-    )
+    products = normalize_option_list(field_value(report_entity, fields, "涉及产品"))
+    batch_numbers = normalize_text(field_value(report_entity, fields, "涉及批次"))
+    product_batch = join_product_batch(products, batch_numbers)
     department = normalize_text(field_value(report_entity, fields, "部门"))
     reporter_name = normalize_text(field_value(report_entity, fields, "报告人"))
     report_time = parse_datetime(field_value(report_entity, fields, "报告时间"))
@@ -372,7 +377,6 @@ async def ensure_deviation_from_report_record(
         "department": department,
         "discovery_date": report_time,
         "description": description,
-        "report_content": report_content,
         "affected_items": product_batch,
         "discoverer": reporter_name,
     }
@@ -577,7 +581,8 @@ async def get_deviation_report_record_list(
             deviation_code=item.deviation_code,
             report_time=item.discovery_date,
             description=item.description,
-            report_document=item.report_content,
+            products=None,
+            batch_numbers=item.batch_number,
             product_batch=item.affected_items or item.batch_number,
             department=item.department,
             reporter_name=item.discoverer,

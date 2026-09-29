@@ -1318,7 +1318,10 @@ export async function fetchQualityFeishuEntityTables(
   const res = await fetch(
     `/api/v1/quality/feishu-settings/entities/${entityCode}/tables${query ? `?${query}` : ''}`
   )
-  if (!res.ok) throw new Error(`请求失败: ${res.status}`)
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.message ?? `请求失败: ${res.status}`)
+  }
   const json = await res.json()
   return json.data ?? json
 }

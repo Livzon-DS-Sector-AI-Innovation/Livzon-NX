@@ -25688,6 +25688,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/warehouse/page-feishu-configs/tables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 读取指定多维表格的子表列表（按名称匹配用，支持 /wiki/ 链接）
+         * @description 返回解析后的 app_token 与该多维表格的全部子表
+         */
+        get: operations["list_page_feishu_config_tables_api_v1_warehouse_page_feishu_configs_tables_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/warehouse/page-feishu-configs/{page_key}": {
         parameters: {
             query?: never;
@@ -37625,6 +37645,8 @@ export interface components {
             attachments?: {
                 [key: string]: unknown;
             }[] | null;
+            /** Batch Numbers */
+            batch_numbers?: string | null;
             /** Department */
             department?: string | null;
             /** Department Head */
@@ -37643,6 +37665,8 @@ export interface components {
             deviation_code?: string | null;
             /** Deviation Id */
             deviation_id?: string | null;
+            /** Event Type */
+            event_type?: string | null;
             /** Feishu Base Record Id */
             feishu_base_record_id?: string | null;
             /** Feishu Base Table Id */
@@ -37661,6 +37685,8 @@ export interface components {
             id: string;
             /** Product Batch */
             product_batch?: string | null;
+            /** Products */
+            products?: string[] | null;
             /** Qa Head Name */
             qa_head_name?: string | null;
             /** Qa Head Result */
@@ -37681,8 +37707,6 @@ export interface components {
             qas?: {
                 [key: string]: unknown;
             }[] | null;
-            /** Report Document */
-            report_document?: string | null;
             /** Report Status */
             report_status?: string | null;
             /** Report Time */
@@ -60242,6 +60266,26 @@ export interface components {
             table_name: string;
             /** View Id */
             view_id?: string | null;
+        };
+        /**
+         * WarehousePageFeishuTableOption
+         * @description 多维表格子表选项（按名称匹配用）
+         */
+        WarehousePageFeishuTableOption: {
+            /** Table Id */
+            table_id: string;
+            /** Table Name */
+            table_name: string;
+        };
+        /**
+         * WarehousePageFeishuTablesBundle
+         * @description 多维表格子表列表（含解析后的 app_token，支持 /wiki/ 链接解析）
+         */
+        WarehousePageFeishuTablesBundle: {
+            /** App Token */
+            app_token: string;
+            /** Tables */
+            tables: components["schemas"]["WarehousePageFeishuTableOption"][];
         };
         /** WarehousePromptVersionApiResponse */
         WarehousePromptVersionApiResponse: {
@@ -127115,6 +127159,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WarehousePageFeishuConfig"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_page_feishu_config_tables_api_v1_warehouse_page_feishu_configs_tables_get: {
+        parameters: {
+            query: {
+                /** @description 多维表格 app_token、/base/ 链接或 /wiki/ 知识库链接 */
+                app_token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WarehousePageFeishuTablesBundle"];
                 };
             };
             /** @description Validation Error */

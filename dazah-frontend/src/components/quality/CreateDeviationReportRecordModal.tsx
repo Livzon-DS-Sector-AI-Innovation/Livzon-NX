@@ -8,6 +8,21 @@ import { fetchQualityPersonDirectory } from '@/lib/api/client/quality'
 import { createDeviationReportRecord } from '@/actions/quality-deviation'
 import type { QualityPersonOption } from '@/types/quality'
 
+// 与偏差报告记录飞书表“涉及产品”（多选）和“事件类型”（单选）的选项保持一致；
+// 多选写入飞书不存在的选项时会自动追加，选项以飞书表为准。
+export const DEVIATION_PRODUCT_OPTIONS = [
+  '霉酚酸',
+  '盐酸林可霉素',
+  '2%氟苯尼考预混剂',
+  '5%芬苯达唑',
+  '美伐他汀',
+  '洛伐他汀',
+  '多拉菌素',
+  '其它',
+]
+
+export const DEVIATION_EVENT_TYPE_OPTIONS = ['偏差', '异常', 'OOS/OOT', '其他']
+
 interface CreateDeviationReportRecordModalProps {
   open: boolean
   onClose: () => void
@@ -16,7 +31,9 @@ interface CreateDeviationReportRecordModalProps {
 
 interface FormValues {
   description: string
-  product_batch: string
+  event_type: string
+  products: string[]
+  batch_numbers: string
   reporter_open_id: string
 }
 
@@ -65,7 +82,9 @@ export function CreateDeviationReportRecordModal({
       setSubmitting(true)
       await createDeviationReportRecord({
         description: values.description.trim(),
-        product_batch: values.product_batch.trim(),
+        event_type: values.event_type || '偏差',
+        products: values.products,
+        batch_numbers: values.batch_numbers.trim(),
         reporter_open_id: values.reporter_open_id,
       })
       message.success('偏差报告记录已创建')
@@ -93,7 +112,18 @@ export function CreateDeviationReportRecordModal({
       width={560}
       destroyOnHidden
     >
-      <Form form={form} layout="vertical">
+      <Form form={form} layout="vertical" initialValues={{ event_type: '偏差' }}>
+        <Form.Item
+          name="event_type"
+          label="事件类型"
+          rules={[{ required: true, message: '请选择事件类型' }]}
+        >
+          <Select
+            placeholder="请选择事件类型"
+            options={DEVIATION_EVENT_TYPE_OPTIONS.map((v) => ({ label: v, value: v }))}
+          />
+        </Form.Item>
+
         <Form.Item
           name="description"
           label="偏差内容"
@@ -108,11 +138,20 @@ export function CreateDeviationReportRecordModal({
         </Form.Item>
 
         <Form.Item
-          name="product_batch"
-          label="涉及产品名称/批号"
-          rules={[{ required: true, message: '请输入涉及产品名称/批号' }]}
+          name="products"
+          label="涉及产品"
+          rules={[{ required: true, message: '请选择涉及产品' }]}
         >
-          <Input placeholder="请输入涉及产品名称/批号" maxLength={255} />
+          <Select
+            mode="multiple"
+            placeholder="请选择涉及产品（可多选）"
+            options={DEVIATION_PRODUCT_OPTIONS.map((v) => ({ label: v, value: v }))}
+            maxTagCount="responsive"
+          />
+        </Form.Item>
+
+        <Form.Item name="batch_numbers" label="涉及批次">
+          <Input placeholder="请输入涉及批次" maxLength={255} />
         </Form.Item>
 
         <Form.Item

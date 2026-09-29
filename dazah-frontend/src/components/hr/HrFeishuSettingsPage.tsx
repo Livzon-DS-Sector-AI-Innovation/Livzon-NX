@@ -103,22 +103,24 @@ function getManualMappingFields(
 export type FeishuUrlFillOutcome =
   | { kind: 'empty' }
   | { kind: 'invalid' }
-  | { kind: 'partial'; app_token: string }
-  | { kind: 'full'; app_token: string; base_table_id: string }
+  | { kind: 'partial'; app_token: string; is_wiki?: boolean }
+  | { kind: 'full'; app_token: string; base_table_id: string; is_wiki?: boolean }
 
-/** 把粘贴的 Base 网址解析为填充动作：table 参数可选（缺失时仅填 App Token）。 */
+/** 把粘贴的 Base 网址解析为填充动作：table 参数可选（缺失时仅填 App Token）。
+ * 知识库（/wiki/）链接原样保留，由后端在保存/读取子表时解析为真正的 App Token。 */
 export function resolveFeishuUrlFill(url: string): FeishuUrlFillOutcome {
   const trimmed = url.trim()
   if (!trimmed) return { kind: 'empty' }
   const parsed = parseFeishuBitableUrl(trimmed)
   if (!parsed) return { kind: 'invalid' }
   if (!parsed.table_id) {
-    return { kind: 'partial', app_token: parsed.app_token }
+    return { kind: 'partial', app_token: parsed.app_token, is_wiki: parsed.is_wiki }
   }
   return {
     kind: 'full',
     app_token: parsed.app_token,
     base_table_id: parsed.table_id,
+    is_wiki: parsed.is_wiki,
   }
 }
 
@@ -414,20 +416,26 @@ export function HrFeishuSettingsPage() {
       return
     }
     if (outcome.kind === 'invalid') {
-      message.error('无法识别该网址，请检查格式')
+      message.error('无法识别该网址，请检查格式（支持 /base/ 链接和 /wiki/ 知识库链接）')
       return
     }
     if (outcome.kind === 'partial') {
       patchEntityDraft(fillUrlEntityCode, { app_token: outcome.app_token })
       message.warning(
-        '已填充 App Token；该网址未包含子表信息，请粘贴具体子表链接，或点击「读取表」选择子表',
+        outcome.is_wiki
+          ? '已识别知识库链接，保存时将自动解析为多维表格 App Token；该链接未包含子表信息，可粘贴具体子表链接，或点击「读取表」选择子表'
+          : '已填充 App Token；该网址未包含子表信息，请粘贴具体子表链接，或点击「读取表」选择子表',
       )
     } else {
       patchEntityDraft(fillUrlEntityCode, {
         app_token: outcome.app_token,
         base_table_id: outcome.base_table_id,
       })
-      message.success('已填充 App Token 和 Table ID，请确认后点击保存')
+      message.success(
+        outcome.is_wiki
+          ? '已识别知识库链接和子表，保存时将自动解析为多维表格 App Token，请确认后点击保存'
+          : '已填充 App Token 和 Table ID，请确认后点击保存',
+      )
     }
     setFillUrlEntityCode(null)
     setFillUrlValue('')

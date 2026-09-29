@@ -318,12 +318,21 @@ async def get_deviation_report_record_from_feishu(
         fields = record.get("fields") or {}
         modified_at = get_record_modified_at(record)
         created_at = parse_datetime(record.get("created_time")) or modified_at
+        products = feishu_sync_service._normalize_option_list(
+            field_value(entity, fields, "涉及产品")
+        )
+        batch_numbers = normalize_text(field_value(entity, fields, "涉及批次"))
         return {
-            "deviation_code": normalize_text(field_value(entity, fields, "偏差编号")),
+            "deviation_code": normalize_text(
+                field_value(entity, fields, "偏差编号")
+            ),
             "description": normalize_text(field_value(entity, fields, "偏差内容")),
             "report_time": parse_datetime(field_value(entity, fields, "报告时间")),
-            "product_batch": normalize_text(
-                field_value(entity, fields, "涉及产品名称/批号")
+            "event_type": normalize_text(field_value(entity, fields, "事件类型")),
+            "products": products,
+            "batch_numbers": batch_numbers,
+            "product_batch": feishu_sync_service._join_product_batch(
+                products, batch_numbers
             ),
             "department": normalize_text(field_value(entity, fields, "部门")),
             "reporter_name": normalize_text(field_value(entity, fields, "报告人")),
@@ -349,7 +358,9 @@ async def get_deviation_report_record_from_feishu(
             "qa_result": _normalize_checkbox_result(
                 field_value(entity, fields, "QA确认")
             ),
-            "qa_reviewed_at": parse_datetime(field_value(entity, fields, "QA确认时间")),
+            "qa_reviewed_at": parse_datetime(
+                field_value(entity, fields, "QA确认时间")
+            ),
             "qa_head_name": normalize_text(field_value(entity, fields, "QA负责人")),
             "qa_heads": feishu_sync_service._parse_person_field(
                 field_value(entity, fields, "QA负责人")
@@ -360,9 +371,11 @@ async def get_deviation_report_record_from_feishu(
             "qa_head_reviewed_at": parse_datetime(
                 field_value(entity, fields, "QA负责人确认时间")
             ),
-            "report_status": normalize_text(field_value(entity, fields, "报告状态")),
+            "report_status": normalize_text(
+                field_value(entity, fields, "报告状态")
+            ),
             "attachments": feishu_sync_service._parse_attachment_field(
-                field_value(entity, fields, "附件")
+                field_value(entity, fields, "相关附件")
             ),
             "record_id": record_id,
             "feishu_base_table_id": entity.table_id,
@@ -894,6 +907,8 @@ async def get_deviation_report_record_list_from_feishu(
     )
     field_value = feishu_sync_service._get_mapped_field_value
     normalize_text = feishu_sync_service._normalize_text
+    normalize_option_list = feishu_sync_service._normalize_option_list
+    join_product_batch = feishu_sync_service._join_product_batch
     parse_datetime = feishu_sync_service._parse_feishu_datetime
     get_record_modified_at = feishu_sync_service._get_record_modified_at
 
@@ -903,6 +918,8 @@ async def get_deviation_report_record_list_from_feishu(
         modified_at = get_record_modified_at(record)
         created_at = parse_datetime(record.get("created_time")) or modified_at
         record_id = str(record.get("record_id") or "")
+        products = normalize_option_list(field_value(entity, fields, "涉及产品"))
+        batch_numbers = normalize_text(field_value(entity, fields, "涉及批次"))
         items.append(
             {
                 "deviation_code": normalize_text(
@@ -910,9 +927,10 @@ async def get_deviation_report_record_list_from_feishu(
                 ),
                 "description": normalize_text(field_value(entity, fields, "偏差内容")),
                 "report_time": parse_datetime(field_value(entity, fields, "报告时间")),
-                "product_batch": normalize_text(
-                    field_value(entity, fields, "涉及产品名称/批号")
-                ),
+                "event_type": normalize_text(field_value(entity, fields, "事件类型")),
+                "products": products,
+                "batch_numbers": batch_numbers,
+                "product_batch": join_product_batch(products, batch_numbers),
                 "department": normalize_text(field_value(entity, fields, "部门")),
                 "reporter_name": normalize_text(field_value(entity, fields, "报告人")),
                 "reporters": feishu_sync_service._parse_person_field(
@@ -954,7 +972,7 @@ async def get_deviation_report_record_list_from_feishu(
                     field_value(entity, fields, "报告状态")
                 ),
                 "attachments": feishu_sync_service._parse_attachment_field(
-                    field_value(entity, fields, "附件")
+                    field_value(entity, fields, "相关附件")
                 ),
                 "record_id": record_id,
                 "feishu_base_table_id": entity.table_id,

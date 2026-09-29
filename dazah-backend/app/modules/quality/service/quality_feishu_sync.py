@@ -292,6 +292,36 @@ def _normalize_text(value: Any) -> str | None:
     return str(value).strip() or None
 
 
+def _normalize_option_list(value: Any) -> list[str] | None:
+    """解析飞书单选/多选字段值为选项列表（兼容 str / list[str] / list[dict]）。"""
+    if value in (None, "", []):
+        return None
+    if isinstance(value, str):
+        normalized = value.strip()
+        return [normalized] if normalized else None
+    if isinstance(value, list):
+        options: list[str] = []
+        for item in value:
+            if isinstance(item, dict):
+                text = _normalize_text(item)
+            else:
+                text = str(item).strip() if item is not None else ""
+            if text:
+                options.append(text)
+        return options or None
+    normalized_text = _normalize_text(value)
+    return [normalized_text] if normalized_text else None
+
+
+def _join_product_batch(
+    products: list[str] | None,
+    batch_numbers: str | None,
+) -> str | None:
+    """把“涉及产品”多选与“涉及批次”文本拼成单列展示值。"""
+    product_text = "、".join(products) if products else None
+    return " / ".join(part for part in (product_text, batch_numbers) if part) or None
+
+
 def _parse_person_field(value: Any) -> list[dict[str, str]] | None:
     "解析飞书人员字段（[{id,name,en_name,ava"
     "tar_url,...}]）为 [{name, avatar"

@@ -13,7 +13,11 @@ import {
   SecurityScanOutlined,
 } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { parseFeishuBaseUrl, parseFeishuBitableUrl } from '@/lib/feishu-url'
+import {
+  matchFeishuTableByName,
+  parseFeishuBaseUrl,
+  parseFeishuBitableUrl,
+} from '@/lib/feishu-url'
 import { pullQualityRecordsFromFeishu, testQualityFeishuAppSettings, testQualityFeishuEntitySetting, updateQualityFeishuAppSettings, updateQualityFeishuEntitySetting } from '@/actions/quality'
 import { fetchQualityFeishuAppSettings, fetchQualityFeishuEntityFieldMappingBundle, fetchQualityFeishuEntitySettings, fetchQualityFeishuEntityTables, formatQualityFeishuTestSummary, formatQualitySyncSummary } from '@/lib/api/client/quality'
 import type {
@@ -130,18 +134,15 @@ function getManualMappingFields(
   })
 }
 
-/** 按名称匹配子表：优先精确匹配（实体名/已配置表名 === 子表名），其次包含匹配 */
-function matchTableForEntity(
+/** 按名称匹配子表（共享匹配器，归一化后精确/包含匹配），导出供测试 */
+export function matchTableForEntity(
   entity: QualityFeishuEntitySettingItem,
   tables: QualityFeishuTableOption[]
 ): QualityFeishuTableOption | undefined {
-  const names = [entity.entity_name, entity.base_table_name].filter(Boolean) as string[]
-  if (names.length === 0) return undefined
-  // 1. 精确匹配
-  const exact = tables.find((t) => names.includes(t.table_name))
-  if (exact) return exact
-  // 2. 包含匹配（实体名包含在子表名中，或子表名包含在实体名中）
-  return tables.find((t) => names.some((n) => t.table_name.includes(n) || n.includes(t.table_name)))
+  return matchFeishuTableByName(
+    [entity.entity_name, entity.base_table_name],
+    tables,
+  )
 }
 
 export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boolean }) {
@@ -470,13 +471,15 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
     }
     const parsed = parseFeishuBitableUrl(url)
     if (!parsed) {
-      message.error('无法识别该网址，请检查格式')
+      message.error('无法识别该网址，请检查格式（支持 /base/ 链接和 /wiki/ 知识库链接）')
       return
     }
     if (!parsed.table_id) {
       patchEntityDraft(fillUrlEntityCode, { app_token: parsed.app_token })
       message.warning(
-        '已填充 App Token；该网址未包含子表信息，请粘贴具体子表链接，或使用「读取表」选择子表',
+        parsed.is_wiki
+          ? '已识别知识库链接，保存时将自动解析为多维表格 App Token；该链接未包含子表信息，可粘贴具体子表链接，或使用「读取表」选择子表'
+          : '已填充 App Token；该网址未包含子表信息，请粘贴具体子表链接，或使用「读取表」选择子表',
       )
       setFillUrlEntityCode(null)
       setFillUrlValue('')
@@ -486,7 +489,11 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
       app_token: parsed.app_token,
       base_table_id: parsed.table_id,
     })
-    message.success('已填充 App Token 和 Table ID，请确认后点击保存')
+    message.success(
+      parsed.is_wiki
+        ? '已识别知识库链接和子表，保存时将自动解析为多维表格 App Token，请确认后点击保存'
+        : '已填充 App Token 和 Table ID，请确认后点击保存',
+    )
     setFillUrlEntityCode(null)
     setFillUrlValue('')
   }, [fillUrlEntityCode, fillUrlValue, message, patchEntityDraft])
@@ -692,7 +699,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
         />
         {parsed && (
           <span className="text-[12px] text-green-600">
-            ✓ {parsed.app_token}
+            ✓ {parsed.is_wiki ? '知识库链接（保存时自动解析 App Token）' : parsed.app_token}
             {parsed.table_id ? ` / ${parsed.table_id}` : '（未识别到子表，请用「按名称匹配」）'}
           </span>
         )}
@@ -1182,10 +1189,10 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
         cancelText="取消"
       >
         <div className="mb-2 text-[13px] text-gray-500">
-          粘贴飞书多维表格网址（https://xxx.feishu.cn/base/xxx?table=xxx），自动填充本行的 App Token 和 Table ID。
+          粘贴飞书多维表格网址（https://xxx.feishu.cn/base/xxx?table=xxx 或知识库链接 /wiki/xxx?table=xxx），自动填充本行的 App Token 和 Table ID；知识库链接会在保存时自动解析为真正的 App Token。
         </div>
         <Input
-          placeholder="https://xxx.feishu.cn/base/bascnxxx?table=tblxxx"
+          placeholder="https://xxx.feishu.cn/base/bascnxxx?table=tblxxx 或 /wiki/xxx?table=tblxxx"
           value={fillUrlValue}
           onChange={(e) => setFillUrlValue(e.target.value)}
           onPressEnter={() => void handleFillFromUrl()}

@@ -23,7 +23,11 @@ from app.modules.hr.schemas import (
 )
 from app.platform.integrations.feishu.auth import FeishuAuth
 from app.platform.integrations.feishu.bitable import BitableClient
-from app.platform.integrations.feishu.utils import resolve_bitable_reference
+from app.platform.integrations.feishu.utils import (
+    extract_wiki_node_token,
+    resolve_bitable_reference,
+    resolve_wiki_bitable_app_token,
+)
 
 logger = logging.getLogger(__name__)
 _settings = get_settings()
@@ -378,6 +382,24 @@ async def get_hr_feishu_app_credentials(
     return app_id, app_secret
 
 
+async def _resolve_hr_wiki_app_token(
+    db: AsyncSession, raw_app_token: str | None
+) -> str | None:
+    """知识库（/wiki/）链接自动解析为多维表格 app_token；其余输入原样返回。"""
+    node_token = extract_wiki_node_token(raw_app_token)
+    if not node_token:
+        return (raw_app_token or "").strip() or None
+    app_id, app_secret = await get_hr_feishu_app_credentials(db)
+    try:
+        return await resolve_wiki_bitable_app_token(
+            app_id=app_id, app_secret=app_secret, node_token=node_token
+        )
+    except AppException:
+        raise
+    except Exception as exc:
+        raise AppException(message=f"解析知识库多维表格失败：{exc}") from exc
+
+
 async def try_get_hr_feishu_app_credentials(
     db: AsyncSession, purpose: str = HR_FEISHU_PURPOSE_BITABLE
 ) -> tuple[str, str] | None:
@@ -594,6 +616,9 @@ async def list_hr_feishu_tables(
         resolved_app_token = prefill["app_token"]
     if not resolved_app_token:
         raise ValueError("未配置 App Token，请先填写或从环境变量预填")
+    resolved_app_token = await _resolve_hr_wiki_app_token(db, resolved_app_token)
+    if not resolved_app_token:
+        raise ValueError("未配置 App Token，请先填写或从环境变量预填")
 
     client = BitableClient(
         app_token=resolved_app_token,
@@ -647,6 +672,10 @@ async def get_hr_feishu_entity_field_mapping_bundle(
     feishu_fields: list[HrFeishuFieldOption] = []
     if resolved_app_token and resolved_table_id:
         app_id, app_secret = await get_hr_feishu_app_credentials(db)
+        resolved_app_token = (
+            await _resolve_hr_wiki_app_token(db, resolved_app_token)
+            or resolved_app_token
+        )
         try:
             client = BitableClient(
                 app_token=resolved_app_token,
@@ -692,12 +721,16 @@ async def update_hr_feishu_entity_setting(
     if not row:
         raise ValueError(f"实体配置 {entity_code} 不存在")
 
-    # 支持直接粘贴多维表格链接，自动拆出 app_token / table_id
+    # 支持直接粘贴多维表格链接，自动拆出 app_token / table_id；
+    # 知识库（/wiki/）链接的 token 是节点 token，保存前换成真正的 app_token
     reference = resolve_bitable_reference(
         app_token=data.app_token,
         table_id=data.base_table_id,
     )
-    row.app_token = reference.app_token
+    if extract_wiki_node_token(data.app_token):
+        row.app_token = await _resolve_hr_wiki_app_token(db, data.app_token)
+    else:
+        row.app_token = reference.app_token
     row.base_table_name = data.base_table_name
     row.base_table_id = reference.table_id
     row.feishu_form_url = (
