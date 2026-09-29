@@ -1344,6 +1344,11 @@ def _quality_remaining_api_bindings() -> tuple[PageApiBinding, ...]:
         parts = suffix.split("/")
         first = parts[0]
         second = parts[1] if len(parts) > 1 else ""
+        if method == "GET" and first == "deviation-report-records":
+            # 详情/附件按 record_id 细分路径，无法命中上面的精确键共享表；
+            # 偏差工作台从报告记录带入详情，读取与列表共用同一组跨页白名单。
+            # 新增/编辑/删除等写操作仍按 direct 限定报告记录页。
+            return shared_read_pages["deviation-report-records"]
         if first == "changes" and parts[-1] == "action-plans":
             return change_plans
         direct = {
