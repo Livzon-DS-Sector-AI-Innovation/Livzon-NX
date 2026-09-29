@@ -1002,7 +1002,7 @@ describe('ProductionHomePage (fermentation board)', () => {
     await render()
     const text = (container.textContent || '') + (document.body.textContent || '')
     expect(text).toContain('FA26229')
-    expect(text).toContain('平均产量 30750.0 kg')
+    expect(text).toContain('平均产量 30750.00 kg')
   })
 
   async function openHistoryDrawer() {
