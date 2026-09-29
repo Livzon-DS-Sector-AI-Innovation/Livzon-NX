@@ -20,8 +20,14 @@ import type {
 } from '@/types/production'
 import BoardNavBlocks from '@/components/production/board-nav-blocks'
 import { useProductContextStore } from '@/stores/product-context'
+import { useAuthStore } from '@/stores/auth'
+import { PRODUCTION_SCHEDULING_SECTIONS } from '@/lib/production-overview-sections'
 import { usePermission } from '@/hooks/usePermission'
-import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
+import {
+  hasProductionSchedulingProduct,
+  PRODUCTION_PAGE_KEYS,
+  useProductionPermissions,
+} from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
 const { Dragger } = Upload
@@ -88,6 +94,32 @@ function fileDownloadUrl(archiveId: string) {
 }
 
 export default function SchedulingPage() {
+  const user = useAuthStore((state) => state.user)
+  const selectedProduct = useProductContextStore((state) => state.productCode)
+  const { authorizationKey } = useProductionPermissions(PRODUCTION_PAGE_KEYS.scheduling)
+  const visibleProducts = PRODUCTION_SCHEDULING_SECTIONS.filter(
+    (item) => hasProductionSchedulingProduct(user, item.key),
+  )
+  const hideCodes = useMemo(() => [
+    ...SCHEDULING_HIDE_CODES,
+    ...PRODUCTION_SCHEDULING_SECTIONS.filter(
+      (item) => !hasProductionSchedulingProduct(user, item.key),
+    ).map((item) => item.key),
+  ], [user])
+  const productCode = visibleProducts.find((item) => item.key === selectedProduct)?.key
+    ?? visibleProducts[0]?.key
+  if (!productCode) return (
+    <div className="p-6">
+      <Alert type="warning" showIcon title="暂无可查看的排产产品，请联系管理员配置页面权限。" />
+    </div>
+  )
+  return <SchedulingContent key={`${productCode}:${authorizationKey}`} productCode={productCode} hideCodes={hideCodes} />
+}
+
+function SchedulingContent({ productCode, hideCodes }: {
+  productCode: string
+  hideCodes: readonly string[]
+}) {
   const { message } = App.useApp()
   const [archives, setArchives] = useState<ScheduleExcelArchive[]>([])
   const [loadingList, setLoadingList] = useState(false)
@@ -110,8 +142,6 @@ export default function SchedulingPage() {
   const { canDelete, canBulkImport, canExport } = useProductionPermissions(
     PRODUCTION_PAGE_KEYS.scheduling,
   )
-
-  const productCode = useProductContextStore((s) => s.productCode)
 
   const reloadList = useCallback(async () => {
     setLoadingList(true)
@@ -386,7 +416,7 @@ export default function SchedulingPage() {
         />
       </Card>
     )
-  }, [active, loadingActive])
+  }, [active, loadingActive, canExport])
 
   const listColumns = [
     {
@@ -457,7 +487,7 @@ export default function SchedulingPage() {
 
   return (
     <div className="p-6">
-      <BoardNavBlocks hideCodes={SCHEDULING_HIDE_CODES} />
+      <BoardNavBlocks hideCodes={hideCodes} />
       <style>{`
         .scheduling-table .ant-table-cell {
           padding: 6px 8px !important;

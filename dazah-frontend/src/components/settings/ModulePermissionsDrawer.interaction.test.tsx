@@ -82,6 +82,32 @@ it('auto-expands high risk pages without granting actions and displays editable 
   })] }))
 })
 
+it('edits and saves the seven scheduling products independently', async () => {
+  const pageKey = 'production:plan:scheduling'
+  const data: UserPagePermissionsOut = { ...result('A'),
+    definitions: [{ page_key: pageKey, module_code: 'production', page_name: '排产计划',
+      route_path: '/production/scheduling', supported_scope_types: ['all'],
+      sensitive_actions: [{ key: 'delete', name: '删除存档', category: 'destructive', description: '删除存档' }] }],
+    custom_page_keys: [pageKey],
+    grants: [{ page_key: pageKey, module_code: 'production', source: 'user',
+      permissions: ['access', 'query'], data_scope: { scope_type: 'all' }, visible_sections: null }],
+  }
+  mocks.get.mockResolvedValue(data)
+  mocks.replace.mockResolvedValue({ ok: true, data })
+  await show('A')
+  expect(document.body.textContent).toContain('页面内可见项')
+  const codes = ['MC', 'LN', 'DR', 'FA', 'LV', 'MV', 'TY']
+  for (const code of codes) expect(document.querySelector<HTMLInputElement>(`input[value="${code}"]`)?.checked).toBe(true)
+  expect(document.querySelector('input[value="FL"]')).toBeNull()
+  expect(document.querySelector('input[value="sales_plan"]')).toBeNull()
+  await act(async () => document.querySelector<HTMLInputElement>('input[value="LN"]')!.click())
+  const confirmation = await preview()
+  await act(async () => { await confirmation.onOk() })
+  expect(mocks.replace).toHaveBeenCalledWith('A', expect.objectContaining({
+    grants: [expect.objectContaining({ page_key: pageKey, visible_sections: codes.filter((code) => code !== 'LN') })],
+  }))
+})
+
 it('saves a high risk user override without an expiry', async () => {
   const data = result('A')
   data.definitions![0].sensitive_actions = [{ key: 'delete', name: '删除员工档案', category: 'destructive', description: '删除员工记录' }]

@@ -393,9 +393,12 @@ def test_overview_sections_are_validated_and_preserved() -> None:
         )
 
 
-def test_overview_visibility_change_is_audit_restriction() -> None:
+@pytest.mark.parametrize(
+    "page_key", ["production:overview", "production:plan:scheduling"]
+)
+def test_overview_visibility_change_is_audit_restriction(page_key: str) -> None:
     before = {
-        "page_key": "production:overview",
+        "page_key": page_key,
         "permissions": ["access", "query"],
         "sensitive_actions": [],
         "scope_type": "all",
@@ -408,8 +411,43 @@ def test_overview_visibility_change_is_audit_restriction() -> None:
     assert "页面内可见项" in change.summary
 
 
+def test_scheduling_product_visibility_validation() -> None:
+    service = PagePermissionService(repo=_PageRepo())  # type: ignore[arg-type]
+    grant = PageGrantInput(
+        page_key="production:plan:scheduling",
+        permissions=["access", "query"],
+        visible_sections=["TY", "LN", "LN"],
+        data_scope=PageDataScopeInput(scope_type="all"),
+    )
+    assert service.normalize_inputs([grant], allow_inherit=True)[0][
+        "visible_sections"
+    ] == ["LN", "TY"]
+    for sections, expected in (
+        ([], []),
+        (None, None),
+        (["MC", "LN", "DR", "FA", "LV", "MV", "TY"], None),
+    ):
+        normalized = service.normalize_inputs(
+            [grant.model_copy(update={"visible_sections": sections})],
+            allow_inherit=True,
+        )
+        assert normalized[0]["visible_sections"] == expected
+    for invalid in ("FL", "sales_plan", "SUMMARY", "invalid"):
+        with pytest.raises(HTTPException, match="未知页面内可见项"):
+            service.normalize_inputs(
+                [grant.model_copy(update={"visible_sections": [invalid]})],
+                allow_inherit=True,
+            )
+
+
 @pytest.mark.asyncio
-async def test_overview_visibility_role_merge_and_user_override(monkeypatch):
+@pytest.mark.parametrize(
+    "page_key,second_section",
+    [("production:overview", "sales_plan"), ("production:plan:scheduling", "LN")],
+)
+async def test_overview_visibility_role_merge_and_user_override(
+    monkeypatch, page_key, second_section
+):
     roles = [
         SimpleNamespace(id=uuid4(), code=f"role-{index}", name=f"角色{index}")
         for index in range(2)
@@ -417,22 +455,31 @@ async def test_overview_visibility_role_merge_and_user_override(monkeypatch):
     monkeypatch.setattr(rbac, "resolve_user_roles", AsyncMock(return_value=roles))
     role_grants = [
         SimpleNamespace(
-            role_id=role.id, page_key="production:overview",
-            permissions=["access", "query"], sensitive_actions=[],
-            visible_sections=[section], scope_type="all", department_ids=[],
+            role_id=role.id,
+            page_key=page_key,
+            permissions=["access", "query"],
+            sensitive_actions=[],
+            visible_sections=[section],
+            scope_type="all",
+            department_ids=[],
         )
-        for role, section in zip(roles, ("MC", "sales_plan"), strict=True)
+        for role, section in zip(roles, ("MC", second_section), strict=True)
     ]
     user = SimpleNamespace(id=uuid4(), role="user")
     repo = _PageRepo(role_grants=role_grants)
     service = PagePermissionService(repo=repo)  # type: ignore[arg-type]
     effective = await service.effective_grants(None, user=user)
-    assert effective[0].visible_sections == ["MC", "sales_plan"]
-    repo.user_grants = [SimpleNamespace(
-        page_key="production:overview", permissions=["access", "query"],
-        sensitive_actions=[], visible_sections=["FA"], scope_type="all",
-        department_ids=[],
-    )]
+    assert effective[0].visible_sections == sorted(["MC", second_section])
+    repo.user_grants = [
+        SimpleNamespace(
+            page_key=page_key,
+            permissions=["access", "query"],
+            sensitive_actions=[],
+            visible_sections=["FA"],
+            scope_type="all",
+            department_ids=[],
+        )
+    ]
     effective = await service.effective_grants(None, user=user)
     assert effective[0].visible_sections == ["FA"]
 

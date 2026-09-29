@@ -19,6 +19,10 @@ from app.core.response import paginated_response, success_response
 from app.core.upload_security import validate_upload_metadata
 from app.modules.production import schedule_excel_service
 from app.platform.audit.service import record_audit_log
+from app.platform.identity.data_scope import (
+    current_page_key,
+    current_page_visible_sections,
+)
 from app.platform.identity.deps import CurrentUser
 from app.shared.module_api import create_module_router
 from app.shared.module_registry import MODULES_BY_CODE
@@ -34,6 +38,16 @@ _MAX_UPLOAD_BYTES = 1024 * 1024  # 1MB（排产表通常几十 KB，与前端上
 _UPLOAD_SUB_DIR = "schedule_excel"
 # 以新文件修正历史列（覆盖冻结规则）所需的细粒度权限
 SCHEDULE_ARCHIVE_PERMISSION = "production:schedule-archive"
+
+
+def _require_visible_product(product_code: str) -> None:
+    sections = current_page_visible_sections.get()
+    if (
+        current_page_key.get() == "production:plan:scheduling"
+        and sections is not None
+        and product_code not in sections
+    ):
+        raise HTTPException(403, "未获授权访问排产计划中的该产品")
 
 
 def _original_upload_dir() -> Path:
@@ -68,6 +82,7 @@ async def upload_schedule_excel(
         "", max_length=255, description="历史修正原因（修正时必填）"
     ),
 ) -> Any:
+    _require_visible_product(product)
     if allow_history_fix:
         if current_user is None:
             raise HTTPException(
@@ -171,6 +186,7 @@ async def list_schedule_excel_archives(
     db: AsyncSession = Depends(get_db),
     product: str = Query("FA", min_length=1, max_length=32, description="产品代码"),
 ) -> Any:
+    _require_visible_product(product)
     items, total = await schedule_excel_service.list_archives(
         db, page=page, page_size=page_size, product_code=product
     )
@@ -207,6 +223,7 @@ async def get_schedule_excel_archive(
     archive = await schedule_excel_service.get_archive(db, archive_id)
     if archive is None:
         raise HTTPException(status_code=404, detail="存档记录不存在")
+    _require_visible_product(archive.product_code)
     created_by_name = await schedule_excel_service.get_user_name(
         db, archive.created_by
     )
@@ -228,6 +245,7 @@ async def download_schedule_excel_file(
     archive = await schedule_excel_service.get_archive(db, archive_id)
     if archive is None:
         raise HTTPException(status_code=404, detail="存档记录不存在")
+    _require_visible_product(archive.product_code)
     path = _ensure_archive_file(archive.original_path)
     return FileResponse(
         path,
@@ -249,6 +267,7 @@ async def delete_schedule_excel_archive(
     archive = await schedule_excel_service.get_archive(db, archive_id)
     if archive is None:
         raise HTTPException(status_code=404, detail="存档记录不存在")
+    _require_visible_product(archive.product_code)
     await schedule_excel_service.delete_archive(
         db, archive, deleted_by=current_user.id if current_user else None
     )

@@ -1,6 +1,7 @@
 'use client'
 
 import { useAuthStore, type AuthUser } from '@/stores/auth'
+import { PRODUCTION_SCHEDULING_SECTIONS } from '@/lib/production-overview-sections'
 
 /**
  * Stable page identities shared by production routes and the backend page
@@ -72,6 +73,17 @@ export function hasProductionOverviewSection(
   const grant = user.page_permissions?.find((item) => item.page_key === PRODUCTION_PAGE_KEYS.overview)
   return Boolean(grant?.permissions?.includes('query') &&
     (grant.visible_sections == null || grant.visible_sections.includes(section)))
+}
+
+export function hasProductionSchedulingProduct(
+  user: ProductionPermissionUser | null | undefined,
+  productCode: string,
+): boolean {
+  if (!PRODUCTION_SCHEDULING_SECTIONS.some((item) => item.key === productCode)) return false
+  if (!hasProductionPagePermission(user, PRODUCTION_PAGE_KEYS.scheduling, 'query')) return false
+  if (user?.role === 'admin') return true
+  const grant = user?.page_permissions?.find((item) => item.page_key === PRODUCTION_PAGE_KEYS.scheduling)
+  return grant?.visible_sections == null || grant.visible_sections.includes(productCode)
 }
 
 /** Pure form used by pages and tests; the server remains the final authority. */

@@ -101,6 +101,29 @@ it('opens overview details across the table and preserves selections when collap
   expect(document.querySelector<HTMLInputElement>('[aria-label="权限档位"] input[value="operate"]')!.checked).toBe(true)
 })
 
+it('configures and saves exactly seven scheduling product visibility items', async () => {
+  const pageKey = 'production:plan:scheduling'
+  const data = result('A')
+  data.definitions = [{ page_key: pageKey, module_code: 'production', page_name: '排产计划',
+    route_path: '/production/scheduling', supported_scope_types: ['all'] }]
+  data.grants = [{ page_key: pageKey, module_code: 'production', source: 'role',
+    permissions: ['access', 'query'], visible_sections: null, data_scope: { scope_type: 'all' } }]
+  mocks.get.mockResolvedValue(data)
+  mocks.replace.mockResolvedValue({ ok: true, data })
+  await show('A')
+  await act(async () => button('展开全部菜单').click())
+  const visible = document.querySelector('section[aria-label="页面内可见项"]')!
+  const codes = ['MC', 'LN', 'DR', 'FA', 'LV', 'MV', 'TY']
+  expect([...visible.querySelectorAll<HTMLInputElement>('input')].map((input) => input.value)).toEqual(codes)
+  expect([...visible.querySelectorAll<HTMLInputElement>('input')].every((input) => input.checked)).toBe(true)
+  await act(async () => visible.querySelector<HTMLInputElement>('input[value="MC"]')!.click())
+  const confirmation = await preview()
+  await act(async () => { await confirmation.onOk() })
+  expect(mocks.replace).toHaveBeenCalledWith('A', expect.objectContaining({
+    grants: [expect.objectContaining({ page_key: pageKey, visible_sections: codes.filter((code) => code !== 'MC') })],
+  }))
+})
+
 it('disables batch controls for an empty search and restores them after clearing it', async () => {
   mocks.get.mockResolvedValue(result('A'))
   await show('A')

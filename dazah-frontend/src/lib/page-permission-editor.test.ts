@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import type { components } from '@/types/generated/schema'
+import { productionPageSections } from './production-overview-sections'
 import {
   changePageLevels, highRiskPageKeys, pageGrantChanges, pagePermissionTier,
   pageGrantChangeKind, pagePermissionTierLabel, permissionsForTier, type PageEditorGrant,
@@ -84,6 +85,21 @@ it('distinguishes explicit denial from an inherited empty grant', () => {
     { [definition.page_key]: { ...empty, mode: 'custom' } }, new Map())
   expect(changes[0].after).toContain('用户覆盖；无权限')
 })
+it('previews scheduling product visibility as a restriction or expansion', () => {
+  const pageKey = 'production:plan:scheduling'
+  expect(productionPageSections(pageKey).map((item) => item.label)).toEqual([
+    '霉酚酸', '林可', '多拉菌素', 'L-苯丙氨酸', '洛伐他汀', '美伐他汀', 'L-色氨酸',
+  ])
+  const all = { ...before, visibleSections: null }
+  const restricted = { ...before, visibleSections: ['LN', 'MC'] }
+  expect(pageGrantChangeKind(all, restricted, pageKey)).toBe('restrict')
+  expect(pageGrantChangeKind(restricted, all, pageKey)).toBe('expand')
+  const page = { ...definition, page_key: pageKey, module_code: 'production', page_name: '排产计划' }
+  const changes = pageGrantChanges([page], { [pageKey]: all }, { [pageKey]: restricted }, new Map())
+  expect(changes[0].before).toContain('可见项：全部')
+  expect(changes[0].after).toContain('可见项：林可、霉酚酸')
+})
+
 it('removes dependent rights when query or access is unchecked', () => {
   expect(changePageLevels(['access', 'query', 'operate'], ['access', 'operate'])).toEqual(['access'])
   expect(changePageLevels(['access', 'query', 'operate'], ['query', 'operate'])).toEqual([])
