@@ -1294,16 +1294,27 @@ export async function fetchQualitySyncConflicts(params?: {
   return { items: json.data || [], total: json.meta?.total || 0 }
 }
 
+function qualityFeishuSettingsRequestOptions(): RequestInit {
+  // Production Nginx forwards /api directly to FastAPI, bypassing the Next.js
+  // proxy that derives page context. Preserve the actual caller for shared reads.
+  return {
+    cache: 'no-store',
+    headers: typeof window !== 'undefined'
+      ? { 'X-Dazah-Page-Path': window.location.pathname }
+      : {},
+  }
+}
+
 export async function fetchQualityFeishuAppSettings(): Promise<QualityFeishuAppSettingsDetail> {
-  const res = await fetch('/api/v1/quality/feishu-settings/app')
-  if (!res.ok) throw new Error(`请求失败: ${res.status}`)
+  const res = await fetch('/api/v1/quality/feishu-settings/app', qualityFeishuSettingsRequestOptions())
+  if (!res.ok) throw await parseError(res)
   const json = await res.json()
   return json.data ?? json
 }
 
 export async function fetchQualityFeishuEntitySettings(): Promise<QualityFeishuEntitySettingItem[]> {
-  const res = await fetch('/api/v1/quality/feishu-settings/entities')
-  if (!res.ok) throw new Error(`请求失败: ${res.status}`)
+  const res = await fetch('/api/v1/quality/feishu-settings/entities', qualityFeishuSettingsRequestOptions())
+  if (!res.ok) throw await parseError(res)
   const json = await res.json()
   return json.data ?? json
 }
@@ -1316,9 +1327,10 @@ export async function fetchQualityFeishuEntityTables(
   if (appToken?.trim()) searchParams.set('app_token', appToken.trim())
   const query = searchParams.toString()
   const res = await fetch(
-    `/api/v1/quality/feishu-settings/entities/${entityCode}/tables${query ? `?${query}` : ''}`
+    `/api/v1/quality/feishu-settings/entities/${entityCode}/tables${query ? `?${query}` : ''}`,
+    qualityFeishuSettingsRequestOptions(),
   )
-  if (!res.ok) throw new Error(`请求失败: ${res.status}`)
+  if (!res.ok) throw await parseError(res)
   const json = await res.json()
   return json.data ?? json
 }
@@ -1335,9 +1347,10 @@ export async function fetchQualityFeishuEntityFieldMappingBundle(
   if (params?.table_id?.trim()) searchParams.set('table_id', params.table_id.trim())
   const query = searchParams.toString()
   const res = await fetch(
-    `/api/v1/quality/feishu-settings/entities/${entityCode}/field-mapping${query ? `?${query}` : ''}`
+    `/api/v1/quality/feishu-settings/entities/${entityCode}/field-mapping${query ? `?${query}` : ''}`,
+    qualityFeishuSettingsRequestOptions(),
   )
-  if (!res.ok) throw new Error(`请求失败: ${res.status}`)
+  if (!res.ok) throw await parseError(res)
   const json = await res.json()
   return json.data ?? json
 }
