@@ -2922,6 +2922,14 @@ def _warehouse_api_bindings() -> tuple[PageApiBinding, ...]:
             "warehouse.page_mapping",
         ),
         (
+            "GET",
+            "/page-feishu-configs/tables",
+            settings_page,
+            "query",
+            None,
+            "warehouse.page_mapping",
+        ),
+        (
             "PUT",
             "/page-feishu-configs/{page_key}",
             settings_page,
