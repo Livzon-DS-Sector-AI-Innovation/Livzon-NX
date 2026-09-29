@@ -57,7 +57,7 @@ import type {
 
 const { Title, Text } = Typography
 
-const REFRESH_INTERVAL_MS = 5 * 60 * 1000
+const REFRESH_INTERVAL_MS = 30 * 1000
 
 // 提炼计划产量卡的下拉选择记忆（按月份存 {月份: "车间|产品"}），刷新后恢复
 const PLAN_SELECTION_STORAGE_KEY = 'dazah.production.plan-card.selection'
@@ -1041,7 +1041,7 @@ export default function ProductionDashboard() {
                     silent: true,
                     lineStyle: { color: '#fa8c16' },
                     label: {
-                      formatter: `平均产量 ${trendAvg.toFixed(1)} kg`,
+                      formatter: `平均产量 ${trendAvg.toFixed(2)} kg`,
                       position: 'insideEndTop',
                     },
                     data: [{ yAxis: trendAvg }],
@@ -1178,9 +1178,6 @@ export default function ProductionDashboard() {
           </Space>
           <Space size={16}>
             <SystemClock />
-            {!isSummaryView && !isHalted && (
-              <Text type="secondary">数据刷新：5 分钟</Text>
-            )}
             {!isSummaryView && !isHalted && (
               <>
                 {!isFlView && (

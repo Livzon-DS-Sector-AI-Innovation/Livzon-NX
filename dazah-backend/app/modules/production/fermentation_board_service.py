@@ -850,6 +850,7 @@ def _apply_batch_actual_times(
       实际放罐 − 有效移种；未到的未来值忽略，维持排产推演。
     - 提前移种：待进罐行录了已到的实际移种时刻时翻转为运行中，按实际
       时刻起算培养时长（录入入口限制在排产移种日当天，见前端按钮条件）。
+      倒罐目的罐（turn_in）的待进罐行除外：同批号实际移种属于来源罐。
     - KPI 计数在调用方先于本函数完成，不受状态翻转影响。
     """
     for row in tanks:
@@ -870,7 +871,10 @@ def _apply_batch_actual_times(
             if actual_dump is None and actual.get("dumped_at"):
                 actual_dump = _parse_board_time(actual["dumped_at"])
         effective_inoculate = _parse_board_time(row.get("inoculate_at"))
-        if actual_inoculate is not None:
+        # 倒罐目的罐的待进罐行：同批号的实际移种时刻属于来源罐（B 罐），
+        # 本行进罐时刻仍按排产倒罐时刻展示，不被来源罐的实际值提前覆盖
+        turn_in_pending = bool(row.get("turn_in")) and row.get("status") == "idle"
+        if actual_inoculate is not None and not turn_in_pending:
             row["inoculate_actual_at"] = actual_inoculate.isoformat()
             row["inoculate_at"] = actual_inoculate.isoformat()
             effective_inoculate = actual_inoculate
@@ -896,10 +900,12 @@ def _apply_batch_actual_times(
                     )
         elif (
             row.get("status") == "idle"
+            and not row.get("turn_in")
             and actual_inoculate is not None
             and actual_inoculate <= now
         ):
             # 提前移种：实际移种时刻已到而排产时刻未到 → 按实际翻运行中
+            # （倒罐目的罐除外：其待进罐行继承来源批批号，实际移种属于来源罐）
             row["status"] = "running"
             row["batch_no"] = row["batch_nos"][0] if row["batch_nos"] else None
             row["cultured_hours"] = round(
@@ -2722,6 +2728,33 @@ def _ferm_events(days: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return events
 
 
+def collect_ferm_events(rows: list[list[Any]]) -> list[dict[str, Any]]:
+    """全表各周期块的发酵罐移种事件（按移种时间升序）。
+
+    上周期末移种、本周期放罐的在制批次只出现在上一周期块的发酵罐行，
+    罐状态需跨块取事件才能覆盖（与 collect_dump_dates 同口径）；
+    同批号跨块重复出现时保留最早移种时刻。
+    """
+    events: dict[str, dict[str, Any]] = {}
+    for index, row in enumerate(rows):
+        if not row:
+            continue
+        span = parse_period_title(str(row[0]))
+        if not span:
+            continue
+        block = {
+            "start_row": index,
+            "start": span[0],
+            "end": span[1],
+            "label": "",
+        }
+        for event in _ferm_events(parse_block(rows, block)["days"]):
+            known = events.get(event["batch_no"])
+            if known is None or event["start"] < known["start"]:
+                events[event["batch_no"]] = event
+    return sorted(events.values(), key=lambda ev: (ev["start"], ev["batch_no"]))
+
+
 def _seed_events(days: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """种子接种事件（每天 20:00）。"""
     events: list[dict[str, Any]] = []
@@ -2773,7 +2806,9 @@ def build_board(
     }
 
     # ── 罐状态 ──
-    ferm_events = _ferm_events(days)
+    # 移种事件取全表（含上一周期块）：周期末移种、次周期放罐的在制批次
+    # 不在当前块发酵罐行里，只按当前块取会把它从罐状态上漏掉
+    ferm_events = collect_ferm_events(rows)
     tanks: list[dict[str, Any]] = []
     for tank_no in FERMENT_TANKS:
         maint = maint_by_tank.get(tank_no)
@@ -2957,7 +2992,8 @@ def build_board(
     tank_running_batches = {
         t["batch_no"] for t in tanks if t["status"] == "running"
     }
-    ferm_starts = {ev["batch_no"]: ev["start"] for ev in _ferm_events(days)}
+    # 移种时间回查用全表事件：上周期块移种、本周期放罐的批次也能取到
+    ferm_starts = {ev["batch_no"]: ev["start"] for ev in ferm_events}
     running_count = 0
     pending_count = 0
     for item in days:
@@ -3106,12 +3142,13 @@ def build_board(
                     ),
                 }
             )
-    # 检修与计划冲突：检修罐在块内有移种计划
+    # 检修与计划冲突：检修罐仍有未来移种计划（事件已全表化，
+    # 过滤掉历史批次，避免上一周期的移种记录误报冲突）
     for tank_no, maint in maint_by_tank.items():
         conflict = [
             ev["batch_no"]
             for ev in ferm_events
-            if ev["tank_no"] == tank_no
+            if ev["tank_no"] == tank_no and ev["start"] > now
         ]
         if conflict:
             alerts.append(
