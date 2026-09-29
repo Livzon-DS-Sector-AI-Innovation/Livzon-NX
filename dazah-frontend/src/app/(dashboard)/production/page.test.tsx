@@ -128,8 +128,8 @@ const BOARD = {
   ],
   trend: null,
   dumped_batches: [
-    { batch_no: 'FA26231', dump_date: '2026-09-08' },
-    { batch_no: 'FA26230', dump_date: '2026-09-07' },
+    { batch_no: 'FA26231', dump_date: '2026-09-08', dump_plan_at: '2026-09-08T10:00:00' },
+    { batch_no: 'FA26230', dump_date: '2026-09-07', dump_plan_at: '2026-09-07T10:00:00' },
   ],
   extraction_ledger: [
     {
@@ -354,7 +354,7 @@ describe('ProductionHomePage (fermentation board)', () => {
     expect(optionText).toContain('FA26230（2026-09-07）')
     expect(optionText).not.toContain('FA26231（2026-09-08）')
 
-    // 选中批次后自动带出计划放罐日期
+    // 选中批次后自动带出排产放罐时刻（含默认 10:00 时分）
     const option = Array.from(document.body.querySelectorAll('.ant-select-item-option')).find(
       (o) => o.textContent?.includes('FA26230'),
     ) as HTMLElement
@@ -365,7 +365,7 @@ describe('ProductionHomePage (fermentation board)', () => {
     const inputValues = Array.from(document.querySelectorAll('.ant-modal input')).map(
       (i) => (i as HTMLInputElement).value,
     )
-    expect(inputValues).toContain('2026-09-07')
+    expect(inputValues).toContain('2026-09-07 10:00')
   })
 
   it('renders recent planned batches and the alert ticker', async () => {
@@ -1074,7 +1074,9 @@ describe('ProductionHomePage (fermentation board)', () => {
     expect(actions.upsertFermentationBatchActual).toHaveBeenCalledWith(
       {
         batch_no: 'FA26230',
+        // 单一「放罐时间」控件：选批次默认带出排产放罐时刻，未改动直接保存
         dump_date: '2026-09-07',
+        dumped_at: '2026-09-07T10:00:00',
         yield_kg: null,
         remark: null,
       },
@@ -1087,7 +1089,14 @@ describe('ProductionHomePage (fermentation board)', () => {
     actions.getFermentationBatchActuals.mockResolvedValue({
       code: 200,
       data: [
-        { id: 'a-1', batch_no: 'FA26231', dump_date: '2026-09-08', yield_kg: 100, remark: '染菌批' },
+        {
+          id: 'a-1',
+          batch_no: 'FA26231',
+          dump_date: '2026-09-08',
+          dumped_at: '2026-09-08T09:30:00',
+          yield_kg: 100,
+          remark: '染菌批',
+        },
       ],
     })
     actions.upsertFermentationBatchActual.mockResolvedValue({
@@ -1130,7 +1139,14 @@ describe('ProductionHomePage (fermentation board)', () => {
       await new Promise((r) => setTimeout(r, 200))
     })
     expect(actions.upsertFermentationBatchActual).toHaveBeenCalledWith(
-      expect.objectContaining({ batch_no: 'FA26231', yield_kg: 105, remark: '复检合格' }),
+      expect.objectContaining({
+        batch_no: 'FA26231',
+        yield_kg: 105,
+        remark: '复检合格',
+        // 放罐时间回填原实际时刻，未改动原样保存
+        dump_date: '2026-09-08',
+        dumped_at: '2026-09-08T09:30:00',
+      }),
       'FA',
     )
   })
@@ -1375,9 +1391,9 @@ describe('ProductionHomePage (fermentation board)', () => {
       option.click()
       await new Promise((r) => setTimeout(r, 120))
     })
-    // 手动打开放罐日期面板并改选 9 日
+    // 手动打开放罐时间面板并改选 9 日（时刻保留默认带出的 10:00）
     const dateInput = Array.from(document.body.querySelectorAll('.ant-modal input')).find(
-      (i) => (i as HTMLInputElement).placeholder?.includes('放罐日期'),
+      (i) => (i as HTMLInputElement).placeholder?.includes('放罐时间'),
     ) as HTMLElement
     // antd：mousedown 需落在 .ant-picker 根元素上才会打开面板
     const pickerRoot = dateInput.closest('.ant-picker') as HTMLElement
@@ -1396,12 +1412,24 @@ describe('ProductionHomePage (fermentation board)', () => {
       ;(targetCell!.querySelector('.ant-picker-cell-inner') as HTMLElement | null)?.click()
       await new Promise((r) => setTimeout(r, 120))
     })
+    // 带 showTime 的面板点日期仅选中，需点「确定」应用（时刻保留默认 10:00）
+    const okCellBtn = document.body.querySelector(
+      '.ant-picker-dropdown .ant-picker-ok button',
+    ) as HTMLElement | null
+    expect(okCellBtn).toBeTruthy()
+    await act(async () => {
+      okCellBtn!.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
     await act(async () => {
       modalOkBtn().click()
       await new Promise((r) => setTimeout(r, 200))
     })
     expect(actions.upsertFermentationBatchActual).toHaveBeenCalledWith(
-      expect.objectContaining({ dump_date: '2026-09-09' }),
+      expect.objectContaining({
+        dump_date: '2026-09-09',
+        dumped_at: '2026-09-09T10:00:00',
+      }),
       'FA',
     )
   })
@@ -2048,5 +2076,172 @@ describe('ProductionHomePage (fermentation board)', () => {
     expect(text).toContain('790,000')
     expect(text).toContain('203车间 L-苯丙氨酸')
     expect(text).not.toContain('45,200')
+  })
+
+  it('confirms inoculate time from a running tank and refreshes', async () => {
+    actions.upsertFermentationBatchActual.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: null,
+    })
+    await render()
+    const confirmBtn = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent?.includes('确认移种'),
+    ) as HTMLElement | undefined
+    expect(confirmBtn).toBeTruthy()
+    await act(async () => {
+      confirmBtn!.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const bodyText = document.body.textContent || ''
+    expect(bodyText).toContain('确认移种：302A')
+    expect(bodyText).toContain('批次号：FA26234')
+    // 默认当前时刻（分钟精度）直接保存；仅提交批号与实际移种时刻
+    await act(async () => {
+      modalOkBtn().click()
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    expect(actions.upsertFermentationBatchActual).toHaveBeenCalledTimes(1)
+    const [payload, product] = actions.upsertFermentationBatchActual.mock.calls[0]
+    expect(payload).toEqual({
+      batch_no: 'FA26234',
+      inoculated_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00$/),
+    })
+    expect(product).toBe('FA')
+    expect(actions.getFermentationBoard).toHaveBeenCalledTimes(2)
+    expect(document.body.textContent || '').toContain('302A 已记录实际移种时刻')
+  })
+
+  it('hides inoculate confirm for turn-in tanks and dumped rows', async () => {
+    actions.getFermentationBoard.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: {
+        ...BOARD,
+        tanks: [
+          ...BOARD.tanks,
+          {
+            // 他汀倒罐目的罐：移种继承来源批，不提供确认移种
+            tank_no: '301A',
+            status: 'running',
+            batch_no: 'MV-26069/070',
+            batch_nos: ['MV-26069', 'MV-26070'],
+            turn_in: true,
+            inoculate_at: '2026-09-01T16:00:00',
+            cultured_hours: 160,
+            cycle_hours: 280,
+            dump_at: '2026-09-12T16:00:00',
+            note: '运行中（09-06 09:00自303B、305B倒罐）',
+          },
+        ],
+      },
+    })
+    await render()
+    const confirmBtns = Array.from(container.querySelectorAll('button')).filter(
+      (b) => b.textContent?.includes('确认移种'),
+    )
+    // 仅常规移种的 302A 提供；301A（turn_in）不提供
+    expect(confirmBtns).toHaveLength(1)
+  })
+
+  it('shows inoculate confirm on idle tanks scheduled today only', async () => {
+    const d = new Date()
+    const p = (n: number) => String(n).padStart(2, '0')
+    const today = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+    const d2 = new Date(d.getTime() + 24 * 3600 * 1000)
+    const tomorrow = `${d2.getFullYear()}-${p(d2.getMonth() + 1)}-${p(d2.getDate())}`
+    actions.getFermentationBoard.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: {
+        ...BOARD,
+        tanks: [
+          ...BOARD.tanks,
+          {
+            // 待进罐：排产移种就在今天 → 提前移种可当场确认
+            tank_no: '309A',
+            status: 'idle',
+            batch_no: null,
+            batch_nos: ['FA26240'],
+            inoculate_at: `${today}T21:00:00`,
+            cultured_hours: null,
+            cycle_hours: null,
+            dump_at: null,
+            note: `预计${today.slice(5)} 21:00移种FA26240`,
+          },
+          {
+            // 待进罐：排产移种在明天 → 不提供确认入口
+            tank_no: '310A',
+            status: 'idle',
+            batch_no: null,
+            batch_nos: ['FA26241'],
+            inoculate_at: `${tomorrow}T21:00:00`,
+            cultured_hours: null,
+            cycle_hours: null,
+            dump_at: null,
+            note: `预计${tomorrow.slice(5)} 21:00移种FA26241`,
+          },
+        ],
+      },
+    })
+    await render()
+    const confirmBtns = Array.from(container.querySelectorAll('button')).filter(
+      (b) => b.textContent?.includes('确认移种'),
+    )
+    // 302A（运行中）+ 309A（当天待进罐）；310A（明天）不提供
+    expect(confirmBtns).toHaveLength(2)
+
+    // 当天待进罐的确认弹窗取排产批号（batch_no 为空、batch_nos 有值）
+    await act(async () => {
+      confirmBtns[1]!.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    expect(document.body.textContent || '').toContain('确认移种：309A')
+    expect(document.body.textContent || '').toContain('批次号：FA26240')
+  })
+
+  it('hides inoculate confirm in past-period read-only view', async () => {
+    actions.getFermentationBoard.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: { ...BOARD, is_current_period: false },
+    })
+    await render()
+    const buttons = Array.from(container.querySelectorAll('button'))
+    expect(buttons.some((b) => b.textContent?.includes('确认移种'))).toBe(false)
+    expect(buttons.some((b) => b.textContent?.includes('标记检修'))).toBe(false)
+  })
+
+  it('shows actual-time source badge and edit label once confirmed', async () => {
+    actions.getFermentationBoard.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: {
+        ...BOARD,
+        tanks: [
+          {
+            ...BOARD.tanks[0],
+            inoculate_at: '2026-09-06T23:30:00',
+            inoculate_plan_at: '2026-09-06T21:00:00',
+            inoculate_actual_at: '2026-09-06T23:30:00',
+          },
+          ...BOARD.tanks.slice(1),
+        ],
+      },
+    })
+    await render()
+    // 来源角标：移种时间旁的「实」（悬停展示计划/实际/偏差）
+    expect(container.querySelector('[data-testid="actual-time-mark"]')).toBeTruthy()
+    // 已确认过的行按钮切换为「改移种时间」，检修按钮仍在
+    const buttons = Array.from(container.querySelectorAll('button'))
+    expect(
+      buttons.some((b) => b.textContent?.includes('改移种时间')),
+    ).toBe(true)
+    expect(buttons.some((b) => b.textContent?.includes('标记检修'))).toBe(true)
+  })
+
+  it('does not render actual-time marks when no actual times recorded', async () => {
+    await render()
+    expect(container.querySelector('[data-testid="actual-time-mark"]')).toBe(null)
   })
 })

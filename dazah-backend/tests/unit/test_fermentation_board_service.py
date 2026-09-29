@@ -267,7 +267,11 @@ async def test_build_board_merges_batch_actuals() -> None:
     assert payload["recent"][0]["remark"] == "染菌批"
     # 已放罐批次清单：窗口已结束的批次按日期升序（供产量录入下拉）
     assert payload["dumped_batches"] == [
-        {"batch_no": "FA-PREV", "dump_date": "2026-08-27"}
+        {
+            "batch_no": "FA-PREV",
+            "dump_date": "2026-08-27",
+            "dump_plan_at": "2026-08-27T10:00:00",
+        }
     ]
     # FA-PREV 已录产量 → 计入已完成；FA26231/FA26232 不在本周期块内
     payload_kpis = payload["kpis"]
@@ -715,7 +719,11 @@ def test_build_dr_board_tanks_and_kpis() -> None:
     recent = payload["recent"]
     assert recent and recent[0]["batch_no"] == "DR-2617"
     assert payload["dumped_batches"] == [
-        {"batch_no": "DR-2617", "dump_date": "2026-09-03"}
+        {
+            "batch_no": "DR-2617",
+            "dump_date": "2026-09-03",
+            "dump_plan_at": "2026-09-03T10:00:00",
+        }
     ]
     # 播报：B305 罐 DR-2619 9/18 放罐（9/15 时点剩 68h）→ 预放罐提醒；
     # 中试-2622 9/25 待进罐；备注标签'备注'不再作为播报内容
@@ -806,9 +814,11 @@ def test_build_dr_board_pilot_batch_kpi_and_trend() -> None:
     assert payload["trend"]["outputs"] == [100.5, 88.0]
     assert payload["trend"]["avg_yield_kg"] == 94.25
     # 产量录入下拉仍含中试批
-    assert {"batch_no": "ZS-007", "dump_date": "2026-09-10"} in payload[
-        "dumped_batches"
-    ]
+    assert {
+        "batch_no": "ZS-007",
+        "dump_date": "2026-09-10",
+        "dump_plan_at": "2026-09-10T10:00:00",
+    } in payload["dumped_batches"]
 
     # 中试批漏录产量同样触发待录提醒
     no_pilot_yield = [a for a in actuals if a["batch_no"] != "ZS-007"]
@@ -1575,3 +1585,375 @@ async def test_next_period_coverage_alert_windows(monkeypatch) -> None:
         is None
     )
     assert calls == [(date(2026, 10, 27), "FA")]
+
+
+# ═══════════════════ 实际移种/放罐时刻（计划/实际分离） ═══════════════════
+
+
+def _tank(payload: dict, tank_no: str) -> dict:
+    return {t["tank_no"]: t for t in payload["tanks"]}[tank_no]
+
+
+def test_apply_batch_actual_times_edges() -> None:
+    """后处理边界：无实际值行不动、未来实际放罐忽略、date-only 行可解析。"""
+    now = datetime(2026, 9, 15, 12, 0)
+    running_plain = {
+        "tank_no": "A307",
+        "status": "running",
+        "batch_no": "MC-26245",
+        "inoculate_at": "2026-09-08T14:00:00",
+        "cultured_hours": 166.0,
+        "cycle_hours": 186.0,
+        "dump_at": "2026-09-16T08:00:00",
+        "note": "运行中",
+    }
+    running_future_dump = {
+        **running_plain,
+        "tank_no": "A306",
+        "batch_no": "MC-26246",
+    }
+    dr_date_only = {
+        "tank_no": "B402",
+        "status": "running",
+        "batch_no": "DR-26036",
+        "inoculate_at": "2026-09-09",
+        "cultured_hours": 6 * 24,
+        "cycle_hours": 350.0,
+        "dump_at": "2026-09-24",
+        "note": "运行中",
+    }
+    rows = board._apply_batch_actual_times(
+        [running_plain, running_future_dump, dr_date_only],
+        {
+            # 未来实际放罐（晚于 now）：忽略，维持排产推演
+            "MC-26246": {"dumped_at": "2026-09-18T08:00:00"},
+        },
+        now,
+    )
+    plain, future, dr = rows
+    # 无实际值：字段语义不变，仅补 plan/actual/batch_nos/turn_in 元数据
+    assert plain["inoculate_at"] == "2026-09-08T14:00:00"
+    assert plain["inoculate_plan_at"] == "2026-09-08T14:00:00"
+    assert plain["inoculate_actual_at"] is None
+    assert plain["dump_plan_at"] == "2026-09-16T08:00:00"
+    assert plain["dump_actual_at"] is None
+    assert plain["cultured_hours"] == 166.0
+    assert plain["batch_nos"] == ["MC-26245"]
+    assert plain["turn_in"] is False
+    # 未来实际放罐：状态与 dump_at 均维持排产
+    assert future["status"] == "running"
+    assert future["dump_at"] == "2026-09-16T08:00:00"
+    assert future["dump_actual_at"] == "2026-09-18T08:00:00"
+    # DR date-only 行：plan 原样保留、cultured 不重算
+    assert dr["inoculate_plan_at"] == "2026-09-09"
+    assert dr["cultured_hours"] == 6 * 24
+
+
+@pytest.mark.anyio
+async def test_build_board_actual_inoculate_overrides_running_display() -> None:
+    """FA：实际移种覆盖展示与已培养时长，预估放罐保持排产值。"""
+    rows = _mini_rows()
+    now = datetime(2026, 8, 28, 12, 0)
+    payload = board.build_board(
+        rows,
+        [],
+        now,
+        actuals=[
+            {
+                "batch_no": "FA-M0",
+                "inoculated_at": "2026-08-27T23:30:00",
+            }
+        ],
+    )
+    assert payload is not None
+    tank = _tank(payload, "302A")
+    assert tank["status"] == "running"
+    assert tank["inoculate_at"] == "2026-08-27T23:30:00"
+    assert tank["inoculate_plan_at"] == "2026-08-27T21:00:00"
+    assert tank["inoculate_actual_at"] == "2026-08-27T23:30:00"
+    # 8/27 23:30 → 8/28 12:00 = 12.5h（计划口径为 15.0h）
+    assert tank["cultured_hours"] == pytest.approx(12.5)
+    # 预估放罐不随实际移种顺延，恒为排产值
+    assert tank["dump_at"].isoformat() == "2026-08-30T10:00:00"
+    assert tank["dump_plan_at"] == "2026-08-30T10:00:00"
+    assert tank["dump_actual_at"] is None
+    assert tank["batch_nos"] == ["FA-M0"]
+    # KPI 计数口径不动
+    assert payload["kpis"]["running"] == 1
+
+
+@pytest.mark.anyio
+async def test_build_board_actual_dump_flips_running_to_dumped() -> None:
+    """FA：实际放罐时刻已到 → 状态翻已放罐、时长冻结、播报不再预告放罐。"""
+    rows = _mini_rows()
+    # 8/29 12:00 距排产放罐（8/30 10:00）22h：无实际值时应有预放罐播报
+    now = datetime(2026, 8, 29, 12, 0)
+    baseline = board.build_board(rows, [], now)
+    assert baseline is not None
+    assert any(
+        "302A" in a["text"] and "距预估放罐" in a["text"]
+        for a in baseline["alerts"]
+    )
+
+    payload = board.build_board(
+        rows,
+        [],
+        now,
+        actuals=[{"batch_no": "FA-M0", "dumped_at": "2026-08-28T09:00:00"}],
+    )
+    assert payload is not None
+    tank = _tank(payload, "302A")
+    assert tank["status"] == "dumped"
+    assert tank["dump_at"] == "2026-08-28T09:00:00"
+    assert tank["dump_actual_at"] == "2026-08-28T09:00:00"
+    assert tank["dump_plan_at"] == "2026-08-30T10:00:00"
+    # 培养时长冻结在实际放罐：8/27 21:00 → 8/28 09:00 = 12h
+    assert tank["cultured_hours"] == pytest.approx(12.0)
+    assert tank["note"] == "已放罐（实际 08-28 09:00）"
+    # 实际已放罐的批次不再播预放罐预告
+    assert not any(
+        "302A" in a["text"] and "距预估放罐" in a["text"]
+        for a in payload["alerts"]
+    )
+    # KPI 仍按排产窗口口径（第一期不动）
+    assert payload["kpis"]["running"] == 1
+
+
+@pytest.mark.anyio
+async def test_build_board_dumped_batches_include_dump_day_arrivals() -> None:
+    """FA 产量录入下拉：排产放罐日当天即放行（提前放罐可录），未到日不放行。"""
+    rows = _mini_rows()
+    # 8/30 08:00：排产放罐 10:00 窗口未结束，但放罐日已到 → FA-M0 放行
+    payload = board.build_board(rows, [], datetime(2026, 8, 30, 8, 0))
+    assert payload is not None
+    assert {b["batch_no"] for b in payload["dumped_batches"]} == {
+        "FA-PREV",
+        "FA-M0",
+    }
+    # 8/29 12:00：FA-M0 放罐日未到且窗口未结束 → 不放行
+    payload = board.build_board(rows, [], datetime(2026, 8, 29, 12, 0))
+    assert payload is not None
+    assert {b["batch_no"] for b in payload["dumped_batches"]} == {"FA-PREV"}
+
+
+@pytest.mark.anyio
+async def test_missing_dump_alert_anchors_actual_dump_time() -> None:
+    """漏录提醒锚点：有实际放罐时刻按实际起算（早放罐早提醒），KPI 不动。"""
+    rows = _mini_rows()
+    # FA-PREV 排产放罐 8/27 10:00（窗口终点 12:00）；实际 8/27 02:00 放罐。
+    # now = 8/28 03:30：实际锚点已超 24h → 触发待录；排产锚点仅 15.5h → 不触发
+    now = datetime(2026, 8, 28, 3, 30)
+    actuals = [{"batch_no": "FA-PREV", "dumped_at": "2026-08-27T02:00:00"}]
+
+    baseline = board.build_board(rows, [], now)
+    assert baseline is not None
+    assert not any(
+        a["text"].startswith("【待录】") for a in baseline["alerts"]
+    )
+    assert baseline["kpis"]["yield_pending"] == 1
+
+    payload = board.build_board(rows, [], now, actuals=actuals)
+    assert payload is not None
+    assert any(a["text"].startswith("【待录】") for a in payload["alerts"])
+    # KPI 待录段仍按排产窗口口径
+    assert payload["kpis"]["yield_pending"] == 1
+
+
+@pytest.mark.anyio
+async def test_build_board_early_inoculate_flips_idle_to_running() -> None:
+    """FA：排产移种未到但已录实际移种时刻（提前移种）→ 待进罐翻运行中。"""
+    rows = _mini_rows()
+    # 303A 排产 8/28 21:00 移种 FA-M1；now 8/28 12:00 仍为待进罐
+    now = datetime(2026, 8, 28, 12, 0)
+    baseline = board.build_board(rows, [], now)
+    assert baseline is not None
+    assert _tank(baseline, "303A")["status"] == "idle"
+
+    payload = board.build_board(
+        rows,
+        [],
+        now,
+        actuals=[{"batch_no": "FA-M1", "inoculated_at": "2026-08-28T09:00:00"}],
+    )
+    assert payload is not None
+    tank = _tank(payload, "303A")
+    assert tank["status"] == "running"
+    assert tank["batch_no"] == "FA-M1"
+    assert tank["inoculate_at"] == "2026-08-28T09:00:00"
+    assert tank["inoculate_plan_at"] == "2026-08-28T21:00:00"
+    # 8/28 09:00 → 12:00 = 3h（按实际时刻起算）
+    assert tank["cultured_hours"] == pytest.approx(3.0)
+    assert tank["note"] == "运行中（提前移种，按实际时刻）"
+    # 待进罐行带排产批号与放罐计划，供确认入口与展示使用
+    assert tank["batch_nos"] == ["FA-M1"]
+    # KPI 口径不动：FA-M1 无本周期放罐计划，不计入运行中
+    assert payload["kpis"]["running"] == 1
+
+
+@pytest.mark.anyio
+async def test_statin_early_inoculate_flips_idle_to_running() -> None:
+    """他汀：B 罐待进罐录已到实际移种时刻 → 翻运行中按实际计时。"""
+    rows = _statin_rows()
+    # 305B 排产 6/11 19:00 移种 LV-26016；now 6/10 10:00 为待进罐
+    now = datetime(2026, 6, 10, 10, 0)
+    payload = board.build_mp_board(
+        rows,
+        [],
+        now,
+        actuals=[{"batch_no": "LV-26016", "inoculated_at": "2026-06-10T08:00:00"}],
+        product="LV",
+    )
+    assert payload is not None
+    b305 = _tank(payload, "305B")
+    assert b305["status"] == "running"
+    assert b305["batch_no"] == "LV-26016"
+    # 6/10 08:00 → 10:00 = 2h
+    assert b305["cultured_hours"] == pytest.approx(2.0)
+    assert b305["note"] == "运行中（提前移种，按实际时刻）"
+    # 未来实际移种（未到）不翻转：303B 预告 7/1 批无实际值维持待进罐
+    assert _tank(payload, "303B")["status"] == "idle"
+
+
+@pytest.mark.anyio
+async def test_build_dr_board_actual_times_override_and_flip() -> None:
+    """DR：实际移种精到分钟重算时长；实际放罐翻转已放罐；KPI 不动。"""
+    rows = _dr_rows()
+    now = datetime(2026, 9, 15, 12, 0)
+
+    payload = board.build_dr_board(
+        rows,
+        [],
+        now,
+        actuals=[{"batch_no": "DR-26036", "inoculated_at": "2026-09-09T05:30:00"}],
+    )
+    assert payload is not None
+    b402 = _tank(payload, "B402")
+    assert b402["status"] == "running"
+    assert b402["inoculate_at"] == "2026-09-09T05:30:00"
+    assert b402["inoculate_plan_at"] == "2026-09-09"
+    # 9/9 05:30 → 9/15 12:00 = 150.5h（计划口径 6*24=144h）
+    assert b402["cultured_hours"] == pytest.approx(150.5)
+    # 预估放罐保持排产（B402 晚于移种的下一次放罐计划 = DR-26035 的 9/20）
+    assert b402["dump_at"] == "2026-09-20"
+    assert b402["dump_plan_at"] == "2026-09-20"
+    assert payload["kpis"]["running"] == 2
+
+    payload = board.build_dr_board(
+        rows,
+        [],
+        now,
+        actuals=[{"batch_no": "DR-26036", "dumped_at": "2026-09-15T08:00:00"}],
+    )
+    assert payload is not None
+    b402 = _tank(payload, "B402")
+    assert b402["status"] == "dumped"
+    assert b402["dump_at"] == "2026-09-15T08:00:00"
+    assert b402["dump_plan_at"] == "2026-09-20"
+    # 实际放罐 − 排产移种（9/9 零点折算）= 152h
+    assert b402["cultured_hours"] == pytest.approx(152.0)
+    assert b402["note"] == "已放罐（实际 09-15 08:00）"
+    # KPI 仍按排产日期口径
+    assert payload["kpis"]["running"] == 2
+    assert payload["kpis"]["month_done_planned"] == 1
+
+
+@pytest.mark.anyio
+async def test_statin_actual_times_turn_in_and_inheritance() -> None:
+    """他汀：turn_in/batch_nos 字段、301A 继承来源批实际移种、实际放罐翻转。"""
+    rows = _statin_rows()
+
+    # B 罐运行行：正常移种 → turn_in False；批次展开列表
+    payload = board.build_mp_board(
+        rows, [], datetime(2026, 6, 6, 8, 0), actuals=[], product="LV"
+    )
+    assert payload is not None
+    b303 = _tank(payload, "303B")
+    assert b303["turn_in"] is False
+    assert b303["batch_nos"] == ["MV-26069"]
+
+    # 301A 倒罐目的罐运行行：turn_in True、合并批号展开
+    payload = board.build_mp_board(
+        rows, [], datetime(2026, 6, 6, 10, 0), actuals=[], product="LV"
+    )
+    assert payload is not None
+    a301 = _tank(payload, "301A")
+    assert a301["status"] == "running"
+    assert a301["turn_in"] is True
+    assert a301["batch_nos"] == ["MV-26069", "MV-26070"]
+
+    # 来源批确认实际移种后，301A 的移种时间/时长继承实际值
+    payload = board.build_mp_board(
+        rows,
+        [],
+        datetime(2026, 6, 6, 10, 0),
+        actuals=[{"batch_no": "MV-26069", "inoculated_at": "2026-06-01T18:00:00"}],
+        product="LV",
+    )
+    assert payload is not None
+    a301 = _tank(payload, "301A")
+    assert a301["inoculate_at"] == "2026-06-01T18:00:00"
+    assert a301["inoculate_actual_at"] == "2026-06-01T18:00:00"
+    # 6/1 18:00 → 6/6 10:00 = 112h（计划口径 114h）
+    assert a301["cultured_hours"] == pytest.approx(112.0)
+
+    # 放罐窗口内录了实际放罐时刻 → 直接翻已放罐，时长冻结
+    payload = board.build_mp_board(
+        rows,
+        [],
+        datetime(2026, 6, 12, 17, 0),
+        actuals=[
+            {
+                "batch_no": "MV-26069",
+                "inoculated_at": "2026-06-01T16:00:00",
+                "dumped_at": "2026-06-12T15:00:00",
+            }
+        ],
+        product="LV",
+    )
+    assert payload is not None
+    a301 = _tank(payload, "301A")
+    assert a301["status"] == "dumped"
+    assert a301["dump_at"] == "2026-06-12T15:00:00"
+    assert a301["dump_plan_at"] == "2026-06-12T16:00:00"
+    # 实际放罐 − 实际移种：6/1 16:00 → 6/12 15:00 = 263h
+    assert a301["cultured_hours"] == pytest.approx(263.0)
+
+
+@pytest.mark.anyio
+async def test_build_mp_board_mc_actual_times() -> None:
+    """MC（101）：实际移种/放罐经共享后处理生效，行带 plan/actual 元数据。"""
+    rows = _mp_rows()
+    now = datetime(2026, 9, 15, 12, 0)
+    payload = board.build_mp_board(
+        rows,
+        [],
+        now,
+        actuals=[{"batch_no": "MC-26245", "inoculated_at": "2026-09-08T18:30:00"}],
+    )
+    assert payload is not None
+    a307 = _tank(payload, "A307")
+    assert a307["status"] == "running"
+    assert a307["inoculate_at"] == "2026-09-08T18:30:00"
+    assert a307["inoculate_plan_at"] == "2026-09-08T14:00:00"
+    # 9/8 18:30 → 9/15 12:00 = 161.5h（计划口径 166h）
+    assert a307["cultured_hours"] == pytest.approx(161.5)
+    assert a307["dump_at"] == "2026-09-16T08:00:00"
+
+    # 已放罐行（A302）录实际放罐 → 展示实际值并重算冻结时长
+    payload = board.build_mp_board(
+        rows,
+        [],
+        now,
+        actuals=[
+            {"batch_no": "MC-26244", "dumped_at": "2026-09-06T06:30:00"}
+        ],
+    )
+    assert payload is not None
+    a302 = _tank(payload, "A302")
+    assert a302["status"] == "dumped"
+    assert a302["dump_at"] == "2026-09-06T06:30:00"
+    assert a302["dump_actual_at"] == "2026-09-06T06:30:00"
+    # 实际放罐 − 排产移种（8/30 14:00 → 9/6 06:30）= 160.5h
+    assert a302["cultured_hours"] == pytest.approx(160.5)
+    # KPI 不动
+    assert payload["kpis"]["running"] == 1

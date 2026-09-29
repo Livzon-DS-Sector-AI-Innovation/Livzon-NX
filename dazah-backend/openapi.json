@@ -9775,6 +9775,19 @@
             "description": "放罐日期",
             "title": "Dump Date"
           },
+          "dumped_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "实际放罐时刻（分钟精度）",
+            "title": "Dumped At"
+          },
           "extract_kg": {
             "anyOf": [
               {
@@ -9787,6 +9800,19 @@
             ],
             "description": "提炼成品产量(kg)",
             "title": "Extract Kg"
+          },
+          "inoculated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "实际移种时刻（分钟精度）",
+            "title": "Inoculated At"
           },
           "remark": {
             "anyOf": [

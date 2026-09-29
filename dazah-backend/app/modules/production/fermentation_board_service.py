@@ -23,7 +23,7 @@ from datetime import date, datetime, time, timedelta
 from functools import partial
 from typing import Any, cast
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.production.fermentation_batch_actual_models import (
@@ -804,6 +804,121 @@ def _append_kpi_alerts(
                 )
 
 
+def _parse_board_time(value: Any) -> datetime | None:
+    """罐行时间字段（datetime 对象或 ISO 串，含仅日期）→ datetime。"""
+    if isinstance(value, datetime):
+        return value
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return datetime.fromisoformat(value.strip())
+    except ValueError:
+        return None
+
+
+def _iso_board_time(value: Any) -> str | None:
+    """罐行时间字段归一为 ISO 串（FA 管线内存中是 datetime 对象）。"""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value if isinstance(value, str) else None
+
+
+def _missing_dump_anchor(
+    batch_no: str,
+    schedule_anchor: datetime,
+    actual_by_batch: dict[str, dict[str, Any]],
+) -> datetime:
+    """漏录提醒锚点：有实际放罐时刻按实际，否则按排产窗口终点。"""
+    actual = actual_by_batch.get(batch_no) or {}
+    parsed = _parse_board_time(actual.get("dumped_at"))
+    return parsed or schedule_anchor
+
+
+def _apply_batch_actual_times(
+    tanks: list[dict[str, Any]],
+    actual_by_batch: dict[str, dict[str, Any]],
+    now: datetime,
+) -> list[dict[str, Any]]:
+    """罐状态行按批次实际移种/放罐时刻做「实际优先、排产兜底」后处理。
+
+    - inoculate_at / dump_at 保持「有效值」语义：有实际值时替换展示；
+      排产值恒保留在 *_plan_at、实际值在 *_actual_at，供前端角标与偏差。
+    - 运行中/放罐中行：已培养时长在实际移种时刻存在时按实际重算，
+      无实际值时保持各管线原口径不动；预估放罐不随实际移种顺延，
+      dump_at 恒为排产值。
+    - 实际放罐时刻已到（<= now）时行状态翻转为已放罐，培养时长冻结为
+      实际放罐 − 有效移种；未到的未来值忽略，维持排产推演。
+    - 提前移种：待进罐行录了已到的实际移种时刻时翻转为运行中，按实际
+      时刻起算培养时长（录入入口限制在排产移种日当天，见前端按钮条件）。
+    - KPI 计数在调用方先于本函数完成，不受状态翻转影响。
+    """
+    for row in tanks:
+        batch_no = row.get("batch_no")
+        batch_nos = row.get("batch_nos") or ([batch_no] if batch_no else [])
+        row.setdefault("batch_nos", batch_nos)
+        row.setdefault("turn_in", False)
+        row["inoculate_plan_at"] = _iso_board_time(row.get("inoculate_at"))
+        row["dump_plan_at"] = _iso_board_time(row.get("dump_at"))
+        row["inoculate_actual_at"] = None
+        row["dump_actual_at"] = None
+        actual_inoculate = None
+        actual_dump = None
+        for no in row["batch_nos"]:
+            actual = actual_by_batch.get(no) or {}
+            if actual_inoculate is None and actual.get("inoculated_at"):
+                actual_inoculate = _parse_board_time(actual["inoculated_at"])
+            if actual_dump is None and actual.get("dumped_at"):
+                actual_dump = _parse_board_time(actual["dumped_at"])
+        effective_inoculate = _parse_board_time(row.get("inoculate_at"))
+        if actual_inoculate is not None:
+            row["inoculate_actual_at"] = actual_inoculate.isoformat()
+            row["inoculate_at"] = actual_inoculate.isoformat()
+            effective_inoculate = actual_inoculate
+        if actual_dump is not None:
+            row["dump_actual_at"] = actual_dump.isoformat()
+        if row.get("status") in ("running", "dumping"):
+            if actual_inoculate is not None and effective_inoculate <= now:
+                row["cultured_hours"] = round(
+                    (now - effective_inoculate).total_seconds() / 3600, 1
+                )
+            if actual_dump is not None and actual_dump <= now:
+                row["status"] = "dumped"
+                row["dump_at"] = actual_dump.isoformat()
+                row["note"] = f"已放罐（实际 {actual_dump:%m-%d %H:%M}）"
+                if (
+                    effective_inoculate is not None
+                    and effective_inoculate <= actual_dump
+                ):
+                    row["cultured_hours"] = round(
+                        (actual_dump - effective_inoculate).total_seconds()
+                        / 3600,
+                        1,
+                    )
+        elif (
+            row.get("status") == "idle"
+            and actual_inoculate is not None
+            and actual_inoculate <= now
+        ):
+            # 提前移种：实际移种时刻已到而排产时刻未到 → 按实际翻运行中
+            row["status"] = "running"
+            row["batch_no"] = row["batch_nos"][0] if row["batch_nos"] else None
+            row["cultured_hours"] = round(
+                (now - actual_inoculate).total_seconds() / 3600, 1
+            )
+            row["note"] = "运行中（提前移种，按实际时刻）"
+        elif row.get("status") == "dumped" and actual_dump is not None:
+            row["dump_at"] = actual_dump.isoformat()
+            if (
+                effective_inoculate is not None
+                and effective_inoculate <= actual_dump
+            ):
+                row["cultured_hours"] = round(
+                    (actual_dump - effective_inoculate).total_seconds() / 3600,
+                    1,
+                )
+    return tanks
+
+
 def build_dr_board(
     rows: list[list[Any]],
     maintenance: list[dict[str, Any]],
@@ -875,7 +990,14 @@ def build_dr_board(
     )
     # 已放罐未录产量批次（供漏录提醒；DR 排产无放罐时刻，按当日零点折算）
     missing_dumps = [
-        (b["batch_no"], datetime.combine(b["dump"], time(0, 0)))
+        (
+            b["batch_no"],
+            _missing_dump_anchor(
+                b["batch_no"],
+                datetime.combine(b["dump"], time(0, 0)),
+                actual_by_batch,
+            ),
+        )
         for b in done_all
         if not actual_by_batch.get(b["batch_no"], {}).get("yield_kg")
     ]
@@ -993,6 +1115,9 @@ def build_dr_board(
             }
         )
 
+    # 实际移种/放罐时刻优先展示（KPI 已按排产批次口径算完，不受影响）
+    tanks = _apply_batch_actual_times(tanks, actual_by_batch, now)
+
     # ── KPI / 最近完成 / 录入下拉 ──
     # 产量口径含中试批（累积进总产量）；批次计数口径见上方 formal_batches
     with_yield = [
@@ -1034,7 +1159,12 @@ def build_dr_board(
         for b in done_all[:12]
     ]
     dumped_batches = [
-        {"batch_no": b["batch_no"], "dump_date": b["dump"].isoformat()}
+        {
+            "batch_no": b["batch_no"],
+            "dump_date": b["dump"].isoformat(),
+            # DR 排产无放罐时刻，默认值按放罐日 10:00 折算（录入时可改）
+            "dump_plan_at": datetime.combine(b["dump"], time(10, 0)).isoformat(),
+        }
         for b in done_all
         if b["dump"]
     ]
@@ -1743,6 +1873,10 @@ def _statin_tanks(
                     "batch_no": _compact_statin_batch_nos(
                         [x["batch_no"] for x in running]
                     ),
+                    # 合并展示前的展开批号（actuals 匹配与确认移种主批号）
+                    "batch_nos": [x["batch_no"] for x in running],
+                    # 倒罐目的罐（301A）：移种继承来源批，不提供确认移种
+                    "turn_in": seg["kind"] == "turn",
                     "inoculate_at": _iso(seg["inoculate"]),
                     "cultured_hours": _cultured(seg),
                     "cycle_hours": _cycle(seg),
@@ -1784,6 +1918,8 @@ def _statin_tanks(
                     "batch_no": _compact_statin_batch_nos(
                         [x["batch_no"] for x in dumping]
                     ),
+                    "batch_nos": [x["batch_no"] for x in dumping],
+                    "turn_in": False,
                     "inoculate_at": _iso(seg["inoculate"]),
                     "cultured_hours": _cultured(seg),
                     "cycle_hours": _cycle(seg),
@@ -1808,11 +1944,14 @@ def _statin_tanks(
                 "tank_no": tank_no,
                 "status": "idle",
                 "batch_no": None,
+                "batch_nos": [x["batch_no"] for x in group],
+                "turn_in": seg["kind"] == "turn",
                 "inoculate_at": _iso(seg["start"]),
                 "inoculate_mark": None,
                 "cultured_hours": None,
                 "cycle_hours": None,
-                "dump_at": None,
+                # 待进罐带上排产放罐时刻，供「确认移种」（提前移种）使用
+                "dump_at": _iso(seg.get("dump")),
                 "note": None,
             }
             if seg["kind"] == "turn":
@@ -1849,6 +1988,8 @@ def _statin_tanks(
                     "batch_no": _compact_statin_batch_nos(
                         [s["batch_no"] for s in group]
                     ),
+                    "batch_nos": [s["batch_no"] for s in group],
+                    "turn_in": False,
                     "inoculate_at": _iso(seg["inoculate"]),
                     # 已放罐：培养时长冻结在放罐时刻（= 计划总周期）
                     "cultured_hours": cycle,
@@ -1926,7 +2067,12 @@ def build_mp_board(
     )
     # 已放罐未录产量批次（供漏录提醒；与 KPI 的产量真值语义一致）
     missing_dumps = [
-        (b["batch_no"], b["dump"] + DUMP_WINDOW)
+        (
+            b["batch_no"],
+            _missing_dump_anchor(
+                b["batch_no"], b["dump"] + DUMP_WINDOW, actual_by_batch
+            ),
+        )
         for b in done
         if not actual_by_batch.get(b["batch_no"], {}).get("yield_kg")
     ]
@@ -2064,6 +2210,9 @@ def build_mp_board(
 
     tanks.sort(key=_tank_order)
 
+    # 实际移种/放罐时刻优先展示（KPI 已按排产批次口径算完，不受影响）
+    tanks = _apply_batch_actual_times(tanks, actual_by_batch, now)
+
     with_yield = [
         b
         for b in done
@@ -2122,7 +2271,12 @@ def build_mp_board(
         for b in done[:12]
     ]
     dumped_batches = [
-        {"batch_no": b["batch_no"], "dump_date": b["dump"].date().isoformat()}
+        {
+            "batch_no": b["batch_no"],
+            "dump_date": b["dump"].date().isoformat(),
+            # 排产放罐时刻（MP/他汀有精确时刻；产量录入弹窗的默认值）
+            "dump_plan_at": b["dump"].isoformat(),
+        }
         for b in done
         if b["dump"]
     ]
@@ -2701,15 +2855,22 @@ def build_board(
                     next_event = event
                     break
             if next_event:
+                # 待进罐：带上批次与排产放罐时刻，供「确认移种」（提前移种）使用
+                next_dump_day = dump_map.get(next_event["batch_no"])
                 tanks.append(
                     {
                         "tank_no": tank_no,
                         "status": "idle",
                         "batch_no": None,
+                        "batch_nos": [next_event["batch_no"]],
                         "inoculate_at": next_event["start"],
                         "cultured_hours": None,
                         "cycle_hours": None,
-                        "dump_at": None,
+                        "dump_at": (
+                            datetime.combine(next_dump_day, time(10, 0))
+                            if next_dump_day
+                            else None
+                        ),
                         "note": (
                             f"预计{next_event['start'].strftime('%m-%d %H:%M')}"
                             f"移种{next_event['batch_no']}"
@@ -2776,7 +2937,16 @@ def build_board(
         yield_kg = (actual_by_batch.get(item["dump_batch"]) or {}).get("yield_kg")
         if yield_kg is None:
             month_yield_pending += 1
-            missing_dumps.append((item["dump_batch"], dump_at + DUMP_WINDOW))
+            missing_dumps.append(
+                (
+                    item["dump_batch"],
+                    _missing_dump_anchor(
+                        item["dump_batch"],
+                        dump_at + DUMP_WINDOW,
+                        actual_by_batch,
+                    ),
+                )
+            )
         else:
             month_done_with_yield += 1
             month_done_yield_kg = (month_done_yield_kg or 0) + float(yield_kg)
@@ -2892,20 +3062,29 @@ def build_board(
         if not item["dump_batch"] or item["dump_batch"] in seen_batches:
             continue
         dump_at = datetime.combine(item["date"], item["dump_time"] or time(10, 0))
-        if dump_at + DUMP_WINDOW <= now:
+        # 放罐窗口已结束，或排产放罐日已到（提前放罐当天即可录产量）
+        if dump_at + DUMP_WINDOW <= now or item["date"] <= now.date():
             seen_batches.add(item["dump_batch"])
             dumped_batches.append(
                 {
                     "batch_no": item["dump_batch"],
                     "dump_date": item["date"].isoformat(),
+                    # 排产放罐时刻（产量录入弹窗的默认值）
+                    "dump_plan_at": dump_at.isoformat(),
                 }
             )
+
+    # 实际移种/放罐时刻优先展示（KPI 已按排产批次口径算完，不受影响）
+    tanks = _apply_batch_actual_times(tanks, actual_by_batch, now)
 
     # ─ 告警 ──
     alerts: list[dict[str, Any]] = []
     for tank in tanks:
         if tank["status"] == "running" and tank["dump_at"]:
-            remain_h = int((tank["dump_at"] - now).total_seconds() // 3600)
+            dump_at = _parse_board_time(tank["dump_at"])
+            if dump_at is None:
+                continue
+            remain_h = int((dump_at - now).total_seconds() // 3600)
             # 播报只提醒 24h 内将要放罐的批次
             if 0 < remain_h <= 24:
                 alerts.append(
@@ -3361,6 +3540,10 @@ def serialize_batch_actual(item: FermentationBatchActual) -> dict[str, Any]:
         "id": str(item.id),
         "batch_no": item.batch_no,
         "dump_date": item.dump_date.isoformat() if item.dump_date else None,
+        "inoculated_at": (
+            item.inoculated_at.isoformat() if item.inoculated_at else None
+        ),
+        "dumped_at": item.dumped_at.isoformat() if item.dumped_at else None,
         "yield_kg": item.yield_kg,
         "extract_kg": item.extract_kg,
         "remark": item.remark,
@@ -3373,15 +3556,29 @@ async def list_batch_actuals(
     period_end: date | None = None,
     product_code: str = "FA",
 ) -> list[FermentationBatchActual]:
-    """按放罐日期列出批次产量；传入周期边界时仅返回该周期内的记录。"""
+    """按放罐日期列出批次产量；传入周期边界时仅返回该周期内的记录。
+
+    dump_date 为空的记录（仅「确认移种」、尚未录产量/放罐日期的在罐批）
+    不受周期过滤：看板按批次号匹配行，历史排产中无此批号时自然无效。
+    """
     stmt = select(FermentationBatchActual).where(
         FermentationBatchActual.is_deleted.is_(False),
         FermentationBatchActual.product_code == product_code,
     )
     if period_start is not None:
-        stmt = stmt.where(FermentationBatchActual.dump_date >= period_start)
+        stmt = stmt.where(
+            or_(
+                FermentationBatchActual.dump_date >= period_start,
+                FermentationBatchActual.dump_date.is_(None),
+            )
+        )
     if period_end is not None:
-        stmt = stmt.where(FermentationBatchActual.dump_date <= period_end)
+        stmt = stmt.where(
+            or_(
+                FermentationBatchActual.dump_date <= period_end,
+                FermentationBatchActual.dump_date.is_(None),
+            )
+        )
     stmt = stmt.order_by(
         FermentationBatchActual.dump_date.desc().nullslast(),
         FermentationBatchActual.batch_no.desc(),
@@ -3395,6 +3592,8 @@ async def upsert_batch_actual(
     *,
     batch_no: str,
     dump_date: date | None = None,
+    inoculated_at: datetime | None = None,
+    dumped_at: datetime | None = None,
     yield_kg: float | None = None,
     extract_kg: float | None = None,
     remark: str | None = None,
@@ -3410,6 +3609,8 @@ async def upsert_batch_actual(
     """
     fields = provided_fields or {
         "dump_date",
+        "inoculated_at",
+        "dumped_at",
         "yield_kg",
         "extract_kg",
         "remark",
@@ -3426,6 +3627,8 @@ async def upsert_batch_actual(
         item = FermentationBatchActual(
             batch_no=batch_no,
             dump_date=dump_date if "dump_date" in fields else None,
+            inoculated_at=inoculated_at if "inoculated_at" in fields else None,
+            dumped_at=dumped_at if "dumped_at" in fields else None,
             yield_kg=yield_kg if "yield_kg" in fields else None,
             extract_kg=extract_kg if "extract_kg" in fields else None,
             remark=remark if "remark" in fields else None,
@@ -3436,6 +3639,10 @@ async def upsert_batch_actual(
     else:
         if "dump_date" in fields:
             item.dump_date = dump_date
+        if "inoculated_at" in fields:
+            item.inoculated_at = inoculated_at
+        if "dumped_at" in fields:
+            item.dumped_at = dumped_at
         if "yield_kg" in fields:
             item.yield_kg = yield_kg
         if "extract_kg" in fields:
