@@ -82,6 +82,7 @@ from app.modules.warehouse.schemas import (
 from app.platform.identity.data_scope import DepartmentScope, current_page_key
 from app.platform.integrations.feishu.bitable import BitableClient
 from app.platform.integrations.feishu.client import FeishuClient
+from app.platform.integrations.feishu.utils import extract_wiki_node_token
 
 logger = logging.getLogger(__name__)
 
@@ -3399,10 +3400,76 @@ class WarehouseService:
             or item.get("feishu_outbound_form_url")
         }
 
+    async def _resolve_page_app_token(self, feishu_config: Any, raw: str) -> str:
+        """把 /wiki/ 知识库链接解析为真正的多维表格 app_token；其余输入原样返回。"""
+        node_token = extract_wiki_node_token(str(raw or ""))
+        if not node_token:
+            return (raw or "").strip()
+        try:
+            node = await self._build_feishu_client(
+                feishu_config, node_token
+            ).get_wiki_node(node_token)
+        except AppException:
+            raise
+        except Exception as exc:
+            raise AppException(
+                message=f"解析知识库节点失败：{self._exception_message(exc)}"
+            ) from exc
+        if str(node.get("obj_type") or "") != "bitable":
+            raise AppException(
+                message="该知识库节点不是多维表格，请粘贴多维表格节点的链接"
+            )
+        obj_token = str(node.get("obj_token") or "")
+        if not obj_token:
+            raise AppException(message="飞书知识库节点未返回多维表格标识")
+        return obj_token
+
+    async def list_page_feishu_config_tables(
+        self, raw_app_token: str
+    ) -> tuple[str, list[dict[str, Any]]]:
+        """读取多维表格（支持 /wiki/ 链接）的子表列表，返回解析后 app_token 与子表。"""
+        feishu_config = await self.repo.get_active_feishu_config()
+        if feishu_config is None:
+            raise AppException(
+                message="请先保存仓储飞书应用配置（App ID 与 App Secret）"
+            )
+        app_token = await self._resolve_page_app_token(feishu_config, raw_app_token)
+        if not app_token:
+            raise AppException(message="请先粘贴多维表格链接或 App Token")
+        client = self._build_feishu_client(feishu_config, app_token)
+        try:
+            raw_tables = await client.list_tables(page_size=100)
+        except AppException:
+            raise
+        except Exception as exc:
+            raise AppException(
+                message=f"读取子表列表失败：{self._exception_message(exc)}"
+            ) from exc
+        tables = [
+            {
+                "table_id": str(item.get("table_id") or ""),
+                "table_name": str(item.get("name") or ""),
+            }
+            for item in raw_tables
+            if item.get("table_id") and item.get("name")
+        ]
+        return app_token, tables
+
     async def update_page_feishu_config(
         self, page_key: str, config: dict[str, Any]
     ) -> None:
-        """更新页面飞书配置"""
+        """更新页面飞书配置；知识库（/wiki/）链接自动解析为真正的 app_token 后存库"""
+        config = dict(config)
+        node_token = extract_wiki_node_token(str(config.get("app_token") or ""))
+        if node_token:
+            feishu_config = await self.repo.get_active_feishu_config()
+            if feishu_config is None:
+                raise AppException(
+                    message="请先保存仓储飞书应用配置（App ID 与 App Secret）"
+                )
+            config["app_token"] = await self._resolve_page_app_token(
+                feishu_config, str(config.get("app_token") or "")
+            )
         await self.repo.upsert_page_feishu_config(config)
         # 清除该页缓存
         self._invalidate_page_cache(page_key)

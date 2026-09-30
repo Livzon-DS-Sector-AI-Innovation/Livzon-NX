@@ -37,7 +37,9 @@ from app.modules.quality.service.quality_feishu_material_groups import (
 from app.platform.integrations.feishu.auth import FeishuAuth
 from app.platform.integrations.feishu.utils import (
     build_bitable_client,
+    extract_wiki_node_token,
     resolve_bitable_reference,
+    resolve_wiki_bitable_app_token,
 )
 
 logger = logging.getLogger(__name__)
@@ -705,14 +707,21 @@ QUALITY_FEISHU_ENTITY_ENV_PREFILLS: dict[str, dict[str, str]] = {
 }
 
 QUALITY_FEISHU_SYSTEM_FIELDS: dict[str, list[tuple[str, str, str]]] = {
+    # 偏差报告记录表（tblCOAyR4D05kDqx）2026-09 结构：
+    # - 原“涉及产品名称/批号”文本列拆分为“涉及产品”（多选）与“涉及批次”（文本）；
+    # - 原“附件”更名为“相关附件”；
+    # - “部门负责人”改为按报告人+部门从联系人表查找的 lookup 引用字段，只读；
+    # - 新增“事件类型”（偏差/异常/OOS\/OOT/其他）。
     "deviation_report_record": [
         ("偏差编号", "偏差编号", "both"),
         ("报告时间", "报告时间", "both"),
+        ("事件类型", "事件类型", "both"),
         ("偏差内容", "偏差内容", "both"),
-        ("涉及产品名称/批号", "涉及产品名称/批号", "both"),
+        ("涉及产品", "涉及产品", "both"),
+        ("涉及批次", "涉及批次", "both"),
         ("部门", "部门", "both"),
         ("报告人", "报告人", "both"),
-        ("部门负责人", "部门负责人", "both"),
+        ("部门负责人", "部门负责人", "pull"),
         ("部门负责人确认", "部门负责人确认", "both"),
         ("部门负责人确认时间", "部门负责人确认时间", "both"),
         ("QA", "QA", "both"),
@@ -722,7 +731,7 @@ QUALITY_FEISHU_SYSTEM_FIELDS: dict[str, list[tuple[str, str, str]]] = {
         ("QA负责人确认", "QA负责人确认", "both"),
         ("QA负责人确认时间", "QA负责人确认时间", "both"),
         ("报告状态", "报告状态", "both"),
-        ("附件", "附件", "both"),
+        ("相关附件", "相关附件", "both"),
     ],
     "deviation_investigation_push_record": [
         ("偏差编号", "偏差编号", "both"),
@@ -1084,6 +1093,28 @@ def _build_entity_setting_item(
     )
 
 
+async def _resolve_quality_app_token(
+    app_model: QualityFeishuAppSettings | None,
+    raw_app_token: str | None,
+) -> str | None:
+    """知识库（/wiki/）链接自动解析为多维表格 app_token；其余输入原样返回。"""
+    node_token = extract_wiki_node_token(raw_app_token)
+    if not node_token:
+        return (raw_app_token or "").strip() or None
+    if not app_model:
+        raise AppException(message="请先保存飞书应用信息")
+    try:
+        return await resolve_wiki_bitable_app_token(
+            app_id=app_model.app_id,
+            app_secret=decrypt_api_key(app_model.app_secret),
+            node_token=node_token,
+        )
+    except AppException:
+        raise
+    except Exception as exc:
+        raise AppException(message=f"解析知识库多维表格失败：{exc}") from exc
+
+
 async def _refresh_entity_data_after_save(
     db: AsyncSession,
     entity_code: str,
@@ -1415,11 +1446,14 @@ async def list_quality_feishu_tables(
     row_map = {row.entity_code: row for row in rows}
     model = row_map.get(entity_code)
     if model is None and entity_code not in DEFAULT_QUALITY_FEISHU_ENTITY_MAP:
-        raise ValueError("质量飞书实体配置不存在")
+        raise AppException(status_code=404, message="质量飞书实体配置不存在")
 
     resolved_app_token = (app_token or "").strip() or (
         model.app_token if model else None
     )
+    if not resolved_app_token:
+        raise AppException(message="请先填写当前实体的 App Token")
+    resolved_app_token = await _resolve_quality_app_token(app_model, resolved_app_token)
     if not resolved_app_token:
         raise AppException(message="请先填写当前实体的 App Token")
 
@@ -1431,7 +1465,20 @@ async def list_quality_feishu_tables(
     try:
         tables = await client.list_tables(page_size=100)
     except Exception as exc:
-        raise ValueError(f"读取飞书表列表失败：{exc}") from exc
+        detail = _sanitize_feishu_error_message(str(exc))
+        if "403" in detail or "forbidden" in detail.lower():
+            raise AppException(
+                status_code=502,
+                message=(
+                    "飞书应用无权访问该多维表格（403）：请在飞书中把本模块配置的应用"
+                    "添加为该多维表格（或其所在知识库空间）的协作者并授予读取权限，"
+                    "或检查应用是否具备多维表格读取权限后重试。"
+                    f"详情：{detail}"
+                ),
+            ) from exc
+        raise AppException(
+            status_code=502, message=f"读取飞书表列表失败：{detail}"
+        ) from exc
     return [
         QualityFeishuTableOption(
             table_id=item.get("table_id", ""),
@@ -1477,6 +1524,12 @@ async def get_quality_feishu_entity_field_mapping_bundle(
     app_model = await _ensure_quality_feishu_app_settings_seeded(db)
     if not app_model:
         raise AppException(message="请先保存飞书应用信息")
+    effective_app_token = await _resolve_quality_app_token(
+        app_model, resolved_app_token
+    )
+    if not effective_app_token:
+        raise AppException(message="请先填写当前实体的 App Token")
+    resolved_app_token = effective_app_token
 
     client = build_bitable_client(
         app_token=resolved_app_token,
@@ -1532,7 +1585,15 @@ async def update_quality_feishu_entity_setting(
             app_token=data.app_token,
             table_id=data.base_table_id,
         )
-        model.app_token = reference.app_token
+        if extract_wiki_node_token(data.app_token):
+            # 知识库链接的 token 是节点 token，保存前换成真正的多维表格 app_token
+            app_model = await _ensure_quality_feishu_app_settings_seeded(db)
+            resolved_app_token = await _resolve_quality_app_token(
+                app_model, data.app_token
+            )
+        else:
+            resolved_app_token = reference.app_token
+        model.app_token = resolved_app_token
         model.base_table_name = (
             data.base_table_name.strip() if data.base_table_name else None
         )

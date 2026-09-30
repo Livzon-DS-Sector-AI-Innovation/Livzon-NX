@@ -53,7 +53,8 @@ beforeEach(() => {
   localStorage.clear()
   mocks.update.mockReset().mockResolvedValue({})
   mocks.list.mockReset().mockResolvedValue({ items: [{
-    id: 'record', record_id: 'record', deviation_code: null, description: '测试', product_batch: '产品',
+    id: 'record', record_id: 'record', deviation_code: null, description: '测试',
+    event_type: '偏差', products: ['产品'], batch_numbers: null, product_batch: '产品',
     reporters: [{ name: '原报告人', id: 'ou_old' }],
     department_head_result: 'approved', qa_result: null, qa_head_result: 'approved',
     attachments: [
@@ -86,7 +87,7 @@ it('shows attachments in both the list and details with the narrower columns', a
   await renderPage()
   expect(Array.from(container.querySelectorAll('th')).map(el => el.textContent)).toEqual([...feishuColumnLayouts.deviationReport, '操作'])
   const widths = Array.from(container.querySelectorAll('col')).map(col => col.style.width)
-  expect(widths.slice(0, 8)).toEqual(['107px', '180px', '280px', '220px', '200px', '93px', '107px', '140px'])
+  expect(widths.slice(0, 8)).toEqual(['107px', '180px', '100px', '280px', '220px', '200px', '93px', '107px'])
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 40)) })
   expect(container.querySelector('img[alt="照片.png"]')).toBeTruthy()
   expect(mocks.fetch).toHaveBeenCalledWith(
@@ -113,13 +114,19 @@ it('saves a new reporter without asking for a deviation code or report document'
   await renderPage()
   await clickButton('编辑')
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 40)) })
-  const input = document.querySelector<HTMLInputElement>('[role="dialog"] input[role="combobox"]')!
+  const input = document.querySelector<HTMLInputElement>('#reporter_open_id')!
   await act(async () => input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
   const option = Array.from(document.querySelectorAll('.ant-select-item-option')).find(el => el.textContent === '新报告人')!
   expect(option).toBeTruthy()
   await act(async () => option.dispatchEvent(new MouseEvent('click', { bubbles: true })))
   await clickButton('保存')
-  expect(mocks.update).toHaveBeenCalledWith('record', { description: '测试', product_batch: '产品', reporter_open_id: 'ou_new' })
+  expect(mocks.update).toHaveBeenCalledWith('record', {
+    description: '测试',
+    event_type: '偏差',
+    products: ['产品'],
+    batch_numbers: '',
+    reporter_open_id: 'ou_new',
+  })
 })
 it('retains the edit dialog and entered values after save failure', async () => {
   mocks.update.mockRejectedValue(new Error('保存失败，请重试'))

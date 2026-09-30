@@ -12,6 +12,7 @@ import type {
   WarehouseInspectionOverview,
   WarehouseMaterialPageQueryParams,
   WarehousePageFeishuConfig,
+  WarehousePageFeishuTablesBundle,
   WarehouseRecordDetail,
   WarehouseTrendAnomalyItem,
   WarehouseTrendProductLineItem,
@@ -51,6 +52,21 @@ export async function fetchWarehouseInspectionProgressOverview(
 export async function fetchWarehousePageFeishuConfigs(): Promise<WarehousePageFeishuConfig[]> {
   const res = await fetch('/api/v1/warehouse/page-feishu-configs')
   if (!res.ok) throw new Error('获取页面飞书配置失败')
+  const body = await res.json()
+  return body.data
+}
+
+/** 读取指定多维表格（支持 /wiki/ 链接）的子表列表，返回解析后的 app_token 与全部子表 */
+export async function fetchWarehousePageFeishuConfigTables(
+  appToken: string
+): Promise<WarehousePageFeishuTablesBundle> {
+  const res = await fetch(
+    `/api/v1/warehouse/page-feishu-configs/tables?app_token=${encodeURIComponent(appToken)}`
+  )
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.message ?? `读取子表列表失败: ${res.status}`)
+  }
   const body = await res.json()
   return body.data
 }

@@ -3,10 +3,12 @@
 测试页面飞书配置管理的 CRUD 操作和缓存清除逻辑。
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.core.exceptions import AppException
 from app.modules.warehouse.service import WarehouseService
 
 
@@ -139,3 +141,139 @@ async def test_update_page_feishu_config_clears_cache() -> None:
 
     # 验证缓存已清除
     assert "product-inbound-monthly" not in service._page_cache
+
+
+@pytest.mark.asyncio
+async def test_update_page_feishu_config_resolves_wiki_link() -> None:
+    """知识库（/wiki/）链接在保存页面配置时自动解析为真正的 app_token"""
+    service = await _make_service()
+
+    saved: dict = {}
+
+    class _Repo:
+        async def get_active_feishu_config(self) -> object:
+            return SimpleNamespace(app_id="cli_app", encrypted_app_secret="enc")
+
+        async def upsert_page_feishu_config(self, config: dict) -> None:
+            saved.update(config)
+
+    service.repo = _Repo()  # type: ignore[assignment]
+    client = SimpleNamespace(
+        get_wiki_node=AsyncMock(
+            return_value={
+                "obj_type": "bitable",
+                "obj_token": "NIEJbSxylaHBp4shlPjcpVSzXn2e",
+            }
+        )
+    )
+    with patch.object(
+        WarehouseService,
+        "_build_feishu_client",
+        new=lambda self, config, token: client,
+    ):
+        await service.update_page_feishu_config(
+            "product-inbound-monthly",
+            {
+                "page_key": "product-inbound-monthly",
+                "app_token": (
+                    "https://j0eukrlohu.feishu.cn/wiki/TeBUwZkJEiOPK2kKLxxcZ1SCnWg"
+                    "?table=tblivbUvnYDjATiL"
+                ),
+                "table_id": "tblivbUvnYDjATiL",
+                "table_name": "新表名",
+                "view_id": None,
+            },
+        )
+
+    assert saved["app_token"] == "NIEJbSxylaHBp4shlPjcpVSzXn2e"
+    client.get_wiki_node.assert_awaited_once_with("TeBUwZkJEiOPK2kKLxxcZ1SCnWg")
+
+
+@pytest.mark.asyncio
+async def test_update_page_feishu_config_rejects_non_bitable_wiki_node() -> None:
+    """知识库节点不是多维表格时返回明确业务错误，不落库"""
+    service = await _make_service()
+
+    class _Repo:
+        async def get_active_feishu_config(self) -> object:
+            return SimpleNamespace(app_id="cli_app", encrypted_app_secret="enc")
+
+        async def upsert_page_feishu_config(self, config: dict) -> None:
+            raise AssertionError("不应在节点类型不匹配时落库")
+
+    service.repo = _Repo()  # type: ignore[assignment]
+    client = SimpleNamespace(
+        get_wiki_node=AsyncMock(
+            return_value={"obj_type": "doc", "obj_token": "doxcn123"}
+        )
+    )
+    with patch.object(
+        WarehouseService,
+        "_build_feishu_client",
+        new=lambda self, config, token: client,
+    ):
+        with pytest.raises(AppException, match="不是多维表格"):
+            await service.update_page_feishu_config(
+                "product-inbound-monthly",
+                {
+                    "page_key": "product-inbound-monthly",
+                    "app_token": "https://example.feishu.cn/wiki/DocNode123",
+                    "table_id": "tbl1",
+                    "table_name": "文档节点",
+                    "view_id": None,
+                },
+            )
+
+
+@pytest.mark.asyncio
+async def test_list_page_feishu_config_tables_resolves_wiki_and_lists() -> None:
+    """读子表接口：wiki 链接解析为真正 app_token，并返回规范化子表列表"""
+    service = await _make_service()
+
+    class _Repo:
+        async def get_active_feishu_config(self) -> object:
+            return SimpleNamespace(app_id="cli_app", encrypted_app_secret="enc")
+
+    service.repo = _Repo()  # type: ignore[assignment]
+    client = SimpleNamespace(
+        get_wiki_node=AsyncMock(
+            return_value={
+                "obj_type": "bitable",
+                "obj_token": "NIEJbSxylaHBp4shlPjcpVSzXn2e",
+            }
+        ),
+        list_tables=AsyncMock(
+            return_value=[
+                {"table_id": "blkSTe791W95CdeO", "name": "原辅料进出台账"},
+                {"table_id": "", "name": "invalid"},
+                {"table_id": "blk2", "name": ""},
+            ]
+        ),
+    )
+    with patch.object(
+        WarehouseService,
+        "_build_feishu_client",
+        new=lambda self, config, token: client,
+    ):
+        resolved, tables = await service.list_page_feishu_config_tables(
+            "https://j0eukrlohu.feishu.cn/wiki/TeBUwZkJEiOPK2kKLxxcZ1SCnWg"
+        )
+
+    assert resolved == "NIEJbSxylaHBp4shlPjcpVSzXn2e"
+    assert tables == [
+        {"table_id": "blkSTe791W95CdeO", "table_name": "原辅料进出台账"}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_list_page_feishu_config_tables_requires_config() -> None:
+    """未保存仓储飞书应用配置时返回明确业务错误"""
+    service = await _make_service()
+
+    class _Repo:
+        async def get_active_feishu_config(self) -> None:
+            return None
+
+    service.repo = _Repo()  # type: ignore[assignment]
+    with pytest.raises(AppException, match="请先保存仓储飞书应用配置"):
+        await service.list_page_feishu_config_tables("bascn123")

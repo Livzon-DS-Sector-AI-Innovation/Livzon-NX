@@ -168,10 +168,14 @@ vi.mock('@/lib/api/ai', () => ({
   generateOralExamQuestions: vi.fn(async () => ({ questions: [{ question: '口试问题', answer: '答案要点' }] })),
 }))
 vi.mock('docx-preview', () => ({ renderAsync: vi.fn(async () => undefined) }))
-vi.mock('@/lib/feishu-url', () => ({
-  parseFeishuBitableUrl: vi.fn((url: string) => ({ app_token: 'bascn-test', table_id: url.includes('?table=') ? 'tbl-test' : null, view_id: null })),
-  parseFeishuBaseUrl: vi.fn((url: string) => (url.includes('/base/') ? 'bascn-test' : null)),
-}))
+vi.mock('@/lib/feishu-url', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/feishu-url')>('@/lib/feishu-url')
+  return {
+    ...actual,
+    parseFeishuBitableUrl: vi.fn((url: string) => ({ app_token: 'bascn-test', table_id: url.includes('?table=') ? 'tbl-test' : null, view_id: null, is_wiki: false })),
+    parseFeishuBaseUrl: vi.fn((url: string) => (url.includes('/base/') ? 'bascn-test' : null)),
+  }
+})
 vi.mock('@/components/registration', () => ({
   AuthorizationLetterDashboard: () => createElement('div', null, '授权概览'),
   RegistrationSummaryHero: ({ children }: { children?: ReactNode }) => createElement('div', null, '注册总览', children),
@@ -869,6 +873,17 @@ describe('migrated component coverage', () => {
     await setInput('input[placeholder*="https://xxx.feishu.cn/base"]', 'https://example.feishu.cn/base/bascn-filled?table=tbl-filled')
     queryElement<HTMLButtonElement>(rendered.container, '[role="dialog"] button:last-of-type')?.click()
     await settle()
+    // 知识库链接：完整子表与仅根链接两种填充提示
+    buttons('URL填充')[0]?.click()
+    await settle()
+    await setInput('input[placeholder*="https://xxx.feishu.cn/base"]', 'https://example.feishu.cn/wiki/WikiTokenFilled?table=tbl-wiki')
+    queryElement<HTMLButtonElement>(rendered.container, '[role="dialog"] button:last-of-type')?.click()
+    await settle()
+    buttons('URL填充')[0]?.click()
+    await settle()
+    await setInput('input[placeholder*="https://xxx.feishu.cn/base"]', 'https://example.feishu.cn/wiki/WikiTokenNoTable')
+    queryElement<HTMLButtonElement>(rendered.container, '[role="dialog"] button:last-of-type')?.click()
+    await settle()
     buttons('字段对齐')[0]?.click()
     await settle()
     const mappingSelect = rendered.container.querySelector('select[aria-label="请选择飞书字段"]') as HTMLSelectElement | null
@@ -1484,6 +1499,17 @@ describe('migrated component coverage', () => {
     button('URL填充')?.click()
     await settle()
     await setInput(rendered.container.querySelector('input[placeholder*="https://xxx.feishu.cn/base"]'), 'https://example.feishu.cn/base/bascn-filled?table=tbl-filled')
+    Array.from(rendered.container.querySelectorAll('button')).find((item) => item.textContent === '确定')?.click()
+    await settle()
+    // 知识库链接填充：app_token 保留原链，保存时由后端解析（含/不含子表两种提示）
+    button('URL填充')?.click()
+    await settle()
+    await setInput(rendered.container.querySelector('input[placeholder*="https://xxx.feishu.cn/base"]'), 'https://example.feishu.cn/wiki/WikiTokenFilled?table=tbl-wiki')
+    Array.from(rendered.container.querySelectorAll('button')).find((item) => item.textContent === '确定')?.click()
+    await settle()
+    button('URL填充')?.click()
+    await settle()
+    await setInput(rendered.container.querySelector('input[placeholder*="https://xxx.feishu.cn/base"]'), 'https://example.feishu.cn/wiki/WikiTokenNoTable')
     Array.from(rendered.container.querySelectorAll('button')).find((item) => item.textContent === '确定')?.click()
     await settle()
     button('字段对齐')?.click()

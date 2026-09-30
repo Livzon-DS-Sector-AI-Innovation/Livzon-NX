@@ -62,6 +62,15 @@ def _parse_datetime_like(value: Any) -> datetime | None:
     return feishu_sync_service._parse_feishu_datetime(value)
 
 
+def _normalize_products(value: Any) -> list[str]:
+    """把提交的涉及产品规范化为非空选项列表（str 视为单个选项）。"""
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item or "").strip()]
+
+
 def _serialize_report_record_alias(item: dict[str, Any]) -> dict[str, Any]:
     next_item = dict(item)
     next_item["record_id"] = (
@@ -249,18 +258,20 @@ async def create_deviation_report_record(
 ) -> dict[str, Any]:
     """创建偏差报告记录到飞书多维表格。
 
-    只需填写偏差内容、涉及产品名称/批号、报告人。
+    只需填写偏差内容、涉及产品、涉及批次、事件类型、报告人。
     偏差编号自动生成（PC-YYMM###），报告时间为提交时间，
-    部门根据报告人从人员目录中自动填充。
+    部门根据报告人从人员目录中自动填充，报告状态初始为 draft。
     """
     description = str(payload.get("description") or "").strip()
-    product_batch = str(payload.get("product_batch") or "").strip()
+    products = _normalize_products(payload.get("products"))
+    batch_numbers = str(payload.get("batch_numbers") or "").strip()
+    event_type = str(payload.get("event_type") or "").strip() or "偏差"
     reporter_open_id = str(payload.get("reporter_open_id") or "").strip()
 
     if not description:
         raise AppException(message="偏差内容不能为空")
-    if not product_batch:
-        raise AppException(message="涉及产品名称/批号不能为空")
+    if not products:
+        raise AppException(message="涉及产品不能为空")
     if not reporter_open_id:
         raise AppException(message="报告人不能为空")
 
@@ -293,11 +304,14 @@ async def create_deviation_report_record(
     fields: dict[str, Any] = {
         "偏差编号": deviation_code,
         "报告时间": feishu_sync_service._to_ms_timestamp(now),
+        "事件类型": event_type,
         "偏差内容": description,
-        "涉及产品名称/批号": product_batch,
+        "涉及产品": products,
         "部门": department,
-        "报告状态": "待确认",
+        "报告状态": "draft",
     }
+    if batch_numbers:
+        fields["涉及批次"] = batch_numbers
     if reporter_user_value:
         fields["报告人"] = reporter_user_value
 
@@ -316,7 +330,7 @@ async def _build_report_record_fields(
     db: AsyncSession,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
-    """构建偏差报告记录的飞书可编辑字段（偏差内容、涉及产品名称/批号、报告人、附件）。
+    """构建偏差报告记录的飞书可编辑字段（偏差内容、事件类型、涉及产品、涉及批次、报告人、相关附件）。
 
     只写入用户可编辑字段，不覆盖确认流程字段（部门负责人、QA、报告状态等）。
     """
@@ -325,14 +339,19 @@ async def _build_report_record_fields(
     )
 
     description = str(payload.get("description") or "").strip()
-    product_batch = str(payload.get("product_batch") or "").strip()
+    batch_numbers = str(payload.get("batch_numbers") or "").strip()
+    event_type = str(payload.get("event_type") or "").strip()
     reporter_open_id = str(payload.get("reporter_open_id") or "").strip()
     reporter_name = str(payload.get("reporter_name") or "").strip()
 
-    fields: dict[str, Any] = {
-        "偏差内容": description,
-        "涉及产品名称/批号": product_batch,
-    }
+    fields: dict[str, Any] = {"偏差内容": description}
+    if "products" in payload:
+        # 编辑弹窗提交全部字段：空列表/空值写 [] 以清空飞书多选
+        fields["涉及产品"] = _normalize_products(payload.get("products"))
+    if batch_numbers:
+        fields["涉及批次"] = batch_numbers
+    if event_type:
+        fields["事件类型"] = event_type
 
     department = str(payload.get("department") or "").strip() or None
     reporter_user_value = None
@@ -360,7 +379,7 @@ async def _build_report_record_fields(
         fields["报告人"] = reporter_user_value
 
     if payload.get("attachments") is not None:
-        fields["附件"] = payload["attachments"]
+        fields["相关附件"] = payload["attachments"]
 
     return fields
 
@@ -398,7 +417,8 @@ async def update_deviation_report_record(
         "id": record_id,
         "record_id": record_id,
         "description": str(payload.get("description") or "").strip() or None,
-        "product_batch": str(payload.get("product_batch") or "").strip() or None,
+        "products": _normalize_products(payload.get("products")),
+        "batch_numbers": str(payload.get("batch_numbers") or "").strip() or None,
         "department": fields.get("部门"),
         "reporters": fields.get("报告人"),
         "feishu_sync_status": "synced",

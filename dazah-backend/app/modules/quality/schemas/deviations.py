@@ -136,8 +136,11 @@ class DeviationReportRecordListItem(BaseModel):
     deviation_id: uuid.UUID | None = None
     deviation_code: str | None = None
     report_time: datetime | None = None
+    event_type: str | None = None
     description: str | None = None
-    report_document: str | None = None
+    products: list[str] | None = None
+    batch_numbers: str | None = None
+    # 兼容单列展示：由“涉及产品”多选与“涉及批次”拼接而成
     product_batch: str | None = None
     department: str | None = None
     reporter_name: str | None = None

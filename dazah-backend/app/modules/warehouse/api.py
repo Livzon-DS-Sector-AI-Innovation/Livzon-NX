@@ -44,6 +44,8 @@ from app.modules.warehouse.schemas import (
     WarehouseInspectionOverview,
     WarehouseInspectionOverviewApiResponse,
     WarehousePageFeishuConfig,
+    WarehousePageFeishuTableOption,
+    WarehousePageFeishuTablesBundle,
     WarehousePromptVersionApiResponse,
     WarehousePromptVersionInput,
     WarehousePromptVersionListApiResponse,
@@ -679,6 +681,32 @@ async def get_inspection_progress_ai_analysis(
         )
     data = await run_inspection_ai_analysis(db, scope, days=days, force=force)
     return success_response(data=data)
+
+
+@router.get(
+    "/page-feishu-configs/tables",
+    summary="读取指定多维表格的子表列表（按名称匹配用，支持 /wiki/ 链接）",
+    response_model=WarehousePageFeishuTablesBundle,
+)
+async def list_page_feishu_config_tables(
+    app_token: str = Query(
+        ..., description="多维表格 app_token、/base/ 链接或 /wiki/ 知识库链接"
+    ),
+    service: WarehouseService = Depends(get_warehouse_service),
+) -> Any:
+    """返回解析后的 app_token 与该多维表格的全部子表"""
+    resolved, tables = await service.list_page_feishu_config_tables(app_token)
+    return success_response(
+        data=WarehousePageFeishuTablesBundle(
+            app_token=resolved,
+            tables=[
+                WarehousePageFeishuTableOption(
+                    table_id=item["table_id"], table_name=item["table_name"]
+                )
+                for item in tables
+            ],
+        )
+    )
 
 
 @router.get(

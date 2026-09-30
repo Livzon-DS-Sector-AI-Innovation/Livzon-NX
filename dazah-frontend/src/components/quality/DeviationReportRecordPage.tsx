@@ -11,6 +11,10 @@ import Alert from '@/components/shared/PlatformNotice'
 import type { ColumnsType } from 'antd/es/table'
 import { ReloadOutlined } from '@ant-design/icons'
 import { ConfirmFlagFromResult } from './ConfirmFlag'
+import {
+  DEVIATION_EVENT_TYPE_OPTIONS,
+  DEVIATION_PRODUCT_OPTIONS,
+} from './CreateDeviationReportRecordModal'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { pullQualityRecordsFromFeishu } from '@/actions/quality'
 import { deleteDeviationReportRecord, updateDeviationReportRecord } from '@/actions/quality-deviation'
@@ -30,6 +34,7 @@ const COLUMN_WIDTH_STORAGE_KEY = 'quality-deviation-report-record-table-column-w
 const defaultColumnWidths: Record<string, number> = {
   deviation_code: 107,
   report_time: 180,
+  event_type: 100,
   description: 280,
   product_batch: 220,
   department: 93,
@@ -41,6 +46,7 @@ const defaultColumnWidths: Record<string, number> = {
 const minColumnWidths: Record<string, number> = {
   deviation_code: 100,
   report_time: 150,
+  event_type: 90,
   description: 220,
   product_batch: 160,
   department: 80,
@@ -73,7 +79,9 @@ function formatReportStatus(value: string | null | undefined): string {
 
 interface EditFormValues {
   description: string
-  product_batch: string
+  event_type: string
+  products: string[]
+  batch_numbers: string
   reporter_open_id?: string
 }
 
@@ -121,7 +129,9 @@ function EditDeviationRecordModal({
     const matched = reporterId ? contacts.some((c) => c.open_id === reporterId) : false
     form.setFieldsValue({
       description: record.description || '',
-      product_batch: record.product_batch || record.product_name_batch || '',
+      event_type: record.event_type || '偏差',
+      products: record.products || [],
+      batch_numbers: record.batch_numbers || '',
       reporter_open_id: matched ? reporterId : undefined,
     })
   }, [record, contacts, form])
@@ -132,7 +142,9 @@ function EditDeviationRecordModal({
       setSubmitting(true)
       await updateDeviationReportRecord(record.record_id || record.id, {
         description: values.description.trim(),
-        product_batch: values.product_batch.trim(),
+        event_type: values.event_type || '偏差',
+        products: values.products || [],
+        batch_numbers: (values.batch_numbers || '').trim(),
         reporter_open_id: values.reporter_open_id,
       })
       message.success('偏差报告记录已更新')
@@ -159,6 +171,16 @@ function EditDeviationRecordModal({
     >
       <Form form={form} layout="vertical">
         <Form.Item
+          name="event_type"
+          label="事件类型"
+          rules={[{ required: true, message: '请选择事件类型' }]}
+        >
+          <Select
+            placeholder="请选择事件类型"
+            options={DEVIATION_EVENT_TYPE_OPTIONS.map((v) => ({ label: v, value: v }))}
+          />
+        </Form.Item>
+        <Form.Item
           name="description"
           label="偏差内容"
           rules={[{ required: true, message: '请输入偏差内容' }]}
@@ -171,11 +193,19 @@ function EditDeviationRecordModal({
           />
         </Form.Item>
         <Form.Item
-          name="product_batch"
-          label="涉及产品名称/批号"
-          rules={[{ required: true, message: '请输入涉及产品名称/批号' }]}
+          name="products"
+          label="涉及产品"
+          rules={[{ required: true, message: '请选择涉及产品' }]}
         >
-          <Input placeholder="请输入涉及产品名称/批号" maxLength={255} />
+          <Select
+            mode="multiple"
+            placeholder="请选择涉及产品（可多选）"
+            options={DEVIATION_PRODUCT_OPTIONS.map((v) => ({ label: v, value: v }))}
+            maxTagCount="responsive"
+          />
+        </Form.Item>
+        <Form.Item name="batch_numbers" label="涉及批次">
+          <Input placeholder="请输入涉及批次" maxLength={255} />
         </Form.Item>
         <Form.Item
           name="reporter_open_id"
@@ -423,6 +453,13 @@ export function DeviationReportRecordPage({
       render: (value: string | null | undefined) => formatDateTime(value),
     },
     {
+      title: '事件类型',
+      dataIndex: 'event_type',
+      key: 'event_type',
+      width: defaultColumnWidths.event_type,
+      render: (value: string | null | undefined) => formatBaseText(value),
+    },
+    {
       title: '偏差内容',
       dataIndex: 'description',
       key: 'description',
@@ -430,7 +467,7 @@ export function DeviationReportRecordPage({
       render: (value: string | null) => formatBaseText(value),
     },
     {
-      title: '涉及产品名称/批号',
+      title: '涉及产品/批次',
       dataIndex: 'product_batch',
       key: 'product_batch',
       width: 220,
@@ -571,11 +608,21 @@ export function DeviationReportRecordPage({
             <Descriptions.Item label="报告时间">
               {formatDateTime(detailRecord.report_time)}
             </Descriptions.Item>
+            <Descriptions.Item label="事件类型">
+              {formatBaseText(detailRecord.event_type)}
+            </Descriptions.Item>
             <Descriptions.Item label="偏差内容">
               {formatBaseText(detailRecord.description)}
             </Descriptions.Item>
-            <Descriptions.Item label="涉及产品名称/批号">
-              {formatBaseText(detailRecord.product_batch || detailRecord.product_name_batch)}
+            <Descriptions.Item label="涉及产品">
+              {formatBaseText(
+                detailRecord.products?.length
+                  ? detailRecord.products.join('、')
+                  : null,
+              )}
+            </Descriptions.Item>
+            <Descriptions.Item label="涉及批次">
+              {formatBaseText(detailRecord.batch_numbers)}
             </Descriptions.Item>
             <Descriptions.Item label="部门">
               {formatBaseText(detailRecord.department)}

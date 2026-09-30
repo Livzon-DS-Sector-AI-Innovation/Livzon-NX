@@ -105,7 +105,8 @@ async def test_deviation_report_create_update_delete_uses_shared_entity_pipeline
             "record_id": "report-1",
             "deviation_code": "PC-260801",
             "description": "偏差内容",
-            "product_batch": "产品A/批次1",
+            "products": ["产品A"],
+            "batch_numbers": "批次1",
         }
     )
     monkeypatch.setattr(pages, "_create_entity_record", create_entity)
@@ -115,7 +116,9 @@ async def test_deviation_report_create_update_delete_uses_shared_entity_pipeline
         SimpleNamespace(),
         {
             "description": " 偏差内容 ",
-            "product_batch": "产品A/批次1",
+            "event_type": "偏差",
+            "products": ["产品A"],
+            "batch_numbers": "批次1",
             "reporter_open_id": "ou-reporter",
         },
     )
@@ -123,16 +126,20 @@ async def test_deviation_report_create_update_delete_uses_shared_entity_pipeline
     fields = create_entity.await_args.args[2]
     assert fields["部门"] == "质量部"
     assert fields["报告人"] == [{"id": "ou-1"}]
+    assert fields["事件类型"] == "偏差"
+    assert fields["涉及产品"] == ["产品A"]
+    assert fields["涉及批次"] == "批次1"
+    assert fields["报告状态"] == "draft"
 
     with pytest.raises(AppException):
         await pages.create_deviation_report_record(
             SimpleNamespace(),
-            {"description": "", "product_batch": "批次", "reporter_open_id": "ou"},
+            {"description": "", "products": ["批次"], "reporter_open_id": "ou"},
         )
     with pytest.raises(AppException):
         await pages.create_deviation_report_record(
             SimpleNamespace(),
-            {"description": "内容", "product_batch": "", "reporter_open_id": "ou"},
+            {"description": "内容", "products": [], "reporter_open_id": "ou"},
         )
 
     update_entity = AsyncMock()
@@ -142,7 +149,9 @@ async def test_deviation_report_create_update_delete_uses_shared_entity_pipeline
         "report-1",
         {
             "description": "新内容",
-            "product_batch": "产品A/批次2",
+            "event_type": "偏差",
+            "products": ["产品A"],
+            "batch_numbers": "批次2",
             "reporter_name": "张三",
             "attachments": [{"name": "附件.pdf"}],
         },
@@ -152,7 +161,7 @@ async def test_deviation_report_create_update_delete_uses_shared_entity_pipeline
         "deviation_report_record",
         "report-1",
     )
-    assert update_entity.await_args.args[3]["附件"] == [{"name": "附件.pdf"}]
+    assert update_entity.await_args.args[3]["相关附件"] == [{"name": "附件.pdf"}]
 
     monkeypatch.setattr(pages, "_delete_entity_record", AsyncMock())
     await pages.delete_deviation_report_record(SimpleNamespace(), "report-1")

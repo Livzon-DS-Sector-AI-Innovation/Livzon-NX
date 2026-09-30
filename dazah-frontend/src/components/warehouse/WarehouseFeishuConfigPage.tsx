@@ -5,9 +5,12 @@ import { useQueryClient } from '@tanstack/react-query'
 import { App, Button, Card, Collapse, Form, Input, Space, Table, Tag } from 'antd'
 import { EditOutlined, LinkOutlined, SaveOutlined } from '@ant-design/icons'
 import type { WarehousePageFeishuConfig } from '@/types/warehouse'
-import { fetchWarehousePageFeishuConfigs } from '@/lib/api/client/warehouse'
+import {
+  fetchWarehousePageFeishuConfigTables,
+  fetchWarehousePageFeishuConfigs,
+} from '@/lib/api/client/warehouse'
 import { updateWarehousePageFeishuConfigAction } from '@/actions/warehouse'
-import { parseFeishuBitableUrl } from '@/lib/feishu-url'
+import { matchFeishuTableByName, parseFeishuBitableUrl } from '@/lib/feishu-url'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
 
 interface WarehouseFeishuConfigPageProps {
@@ -99,7 +102,7 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
   }
 
   // 刷新配置列表，并让依赖表单链接的其他页面（台账登记按钮/首页快捷卡）同步
-  const refreshConfigs = async () => {
+  const refreshConfigs = useCallback(async () => {
     try {
       const updated = await fetchWarehousePageFeishuConfigs()
       setConfigs(updated)
@@ -108,7 +111,7 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
     }
     queryClient.invalidateQueries({ queryKey: ['warehouse-page-form-links'] })
     queryClient.invalidateQueries({ queryKey: ['warehouse-home-quick-form-links'] })
-  }
+  }, [queryClient])
 
   // 按 app_token 动态分组（不依赖写死的 Base 清单，换 Base 后照常分组）
   const groupedConfigs = useMemo(() => {
@@ -213,7 +216,118 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
         },
       })
     },
-    [canSync, groupUrlInputs, groupedConfigs, message, modal],
+    [canSync, groupUrlInputs, groupedConfigs, message, modal, refreshConfigs],
+  )
+
+  /** 按名称匹配：粘贴 Base/wiki 链接 → 读取全部子表 → 按页面名称分配各自的子表 */
+  const handleAutoMatchTables = useCallback(
+    async (baseName: string) => {
+      if (!canSync) return
+      const url = groupUrlInputs[baseName]?.trim()
+      if (!url) {
+        message.warning('请先粘贴多维表格网址')
+        return
+      }
+      const parsed = parseFeishuBitableUrl(url)
+      const appTokenInput = parsed?.app_token ?? ''
+      if (!appTokenInput) {
+        message.error('无法识别该网址，请检查格式')
+        return
+      }
+      const group = groupedConfigs.find((g) => g.base === baseName)
+      if (!group || group.items.length === 0) return
+
+      setBatchLoading(true)
+      let appToken = ''
+      let tables: Array<{ table_id: string; table_name: string }> = []
+      try {
+        const bundle = await fetchWarehousePageFeishuConfigTables(appTokenInput)
+        appToken = bundle.app_token
+        tables = bundle.tables
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : '读取子表列表失败')
+        return
+      } finally {
+        setBatchLoading(false)
+      }
+      if (tables.length === 0) {
+        message.warning('该多维表格下未读取到子表，请确认链接是否正确')
+        return
+      }
+
+      const matched = group.items
+        .map((item) => ({
+          item,
+          table: matchFeishuTableByName([item.table_name, item.page_key], tables),
+        }))
+        .filter((entry): entry is {
+          item: WarehousePageFeishuConfig
+          table: { table_id: string; table_name: string }
+        } => Boolean(entry.table))
+      const unmatched = group.items.filter(
+        (item) => !matched.some((entry) => entry.item.page_key === item.page_key),
+      )
+      if (matched.length === 0) {
+        message.warning('没有页面能按名称匹配到子表，请检查页面名称与子表名称是否对应')
+        return
+      }
+
+      modal.confirm({
+        title: `按名称匹配确认（${baseName}）`,
+        content: (
+          <div>
+            <p>
+              将为 <b>{matched.length}</b> 个页面分别绑定「{appToken}」下各自的子表
+              {unmatched.length > 0 ? `，${unmatched.length} 个页面未匹配保持不变` : ''}：
+            </p>
+            <ul className="mt-1 max-h-52 overflow-auto text-[13px]">
+              {matched.map(({ item, table }) => (
+                <li key={item.page_key}>
+                  {item.table_name} → {table.table_name}（{table.table_id}）
+                </li>
+              ))}
+            </ul>
+          </div>
+        ),
+        okText: '确认更新',
+        cancelText: '取消',
+        onOk: async () => {
+          setBatchLoading(true)
+          const results = await Promise.allSettled(
+            matched.map(({ item, table }) =>
+              updateWarehousePageFeishuConfigAction(item.page_key, {
+                app_token: appToken,
+                table_id: table.table_id,
+                table_name: item.table_name,
+                view_id: item.view_id,
+                // 按名称匹配只换数据源，保留各页面已配置的表单链接
+                feishu_inbound_form_url: item.feishu_inbound_form_url,
+                feishu_outbound_form_url: item.feishu_outbound_form_url,
+              }),
+            ),
+          )
+          setBatchLoading(false)
+          const okCount = results.filter((r) => r.status === 'fulfilled').length
+          const failCount = results.filter((r) => r.status === 'rejected').length
+          await refreshConfigs()
+          setGroupUrlInputs((prev) => {
+            const next = { ...prev }
+            delete next[baseName]
+            return next
+          })
+          if (failCount === 0) {
+            message.success(
+              unmatched.length > 0
+                ? `已匹配并更新 ${okCount} 个页面，${unmatched.length} 个未匹配保持不变`
+                : `已按名称匹配并更新 ${okCount} 个页面`,
+            )
+          } else {
+            message.warning(`更新完成：成功 ${okCount} 个，失败 ${failCount} 个`)
+          }
+        },
+      })
+    },
+    [canSync, groupUrlInputs, groupedConfigs, message, modal, refreshConfigs],
   )
 
   const renderColumns = () => {
@@ -356,7 +470,7 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
         <Input
           size="small"
           style={{ width: 420 }}
-          placeholder="粘贴子表链接（含 ?table= 参数），批量填充本组 app_token 和 table_id"
+          placeholder="粘贴多维表格链接（Base/wiki 根链接或子表链接）：「按名称匹配」自动分配各页面子表，「批量更新」整组指向同一子表"
           value={urlValue}
           onChange={(e) =>
             setGroupUrlInputs((prev) => ({ ...prev, [base]: e.target.value }))
@@ -366,10 +480,18 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
         />
         {parsed && (
           <span className="text-[12px] text-green-600">
-            ✓ {parsed.app_token}
+            ✓ {parsed.is_wiki ? '知识库链接（保存时自动解析 App Token）' : parsed.app_token}
             {parsed.table_id ? ` / ${parsed.table_id}` : '（未识别到子表，请粘贴子表链接）'}
           </span>
         )}
+        <Button
+          size="small"
+          onClick={() => void handleAutoMatchTables(base)}
+          loading={batchLoading}
+          disabled={!canSync || !urlValue.trim()}
+        >
+          按名称匹配
+        </Button>
         <Button
           size="small"
           type="primary"
