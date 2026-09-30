@@ -954,3 +954,37 @@ async def test_auto_offboard_creates_when_no_existing_record(
     assert "1127002" in deleted_calls
 
 
+
+
+@pytest.mark.asyncio
+async def test_sync_accepts_long_qualification_type(
+    db_session: AsyncSession, mock_feishu, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """职称自由文本可超过32字（生产曾因 VARCHAR(32) 逐条回拉失败），放宽到64后整批成功。"""
+    long_title = "机械工程师、二级建造师（机电、市政）、智慧消防工程师、发明专利证书"
+    assert 32 < len(long_title) <= 64
+
+    async def fake_long_records(self, table_id: str, **kwargs):
+        return [
+            {
+                "record_id": "rec_long_title",
+                "fields": {
+                    "姓名": "王五",
+                    "工号": 1003,
+                    "在职状态": "离职",
+                    "最后工作日": 1700000000000,
+                    "职称": long_title,
+                },
+            }
+        ]
+
+    monkeypatch.setattr(BitableClient, "search_records", fake_long_records)
+    await _seed_entity_setting(db_session)
+    svc = OffboardingRecordService(db_session)
+    stats = await svc.sync_from_feishu()
+
+    assert stats["failed"] == 0
+    assert stats["created"] == 1
+    rec = await svc.repo.get_by_feishu_record_id("rec_long_title")
+    assert rec is not None
+    assert rec.qualification_type == long_title
