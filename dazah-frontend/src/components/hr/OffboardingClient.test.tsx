@@ -19,6 +19,7 @@ vi.mock('./OffboardingForm', () => ({ default: () => null }))
 vi.mock('./OffboardingDetailDrawer', () => ({ default: () => null }))
 
 import OffboardingClient from './OffboardingClient'
+import { updateOffboardingRecord } from '@/actions/hr'
 import type { OffboardingRecord } from '@/types/hr'
 
 const record = { id: 'record-1', name: '测试员工', employee_number: 'TEST-001' } as OffboardingRecord
@@ -36,6 +37,7 @@ describe('offboarding production reads', () => {
     container?.remove()
     vi.unstubAllGlobals()
     vi.clearAllMocks()
+    vi.useRealTimers()
   })
 
   async function mount(initialRecords: OffboardingRecord[] = []) {
@@ -56,6 +58,44 @@ describe('offboarding production reads', () => {
       cache: 'no-store', headers: { 'X-Dazah-Page-Path': '/hr/offboarding' },
     })
     expect(container.textContent).toContain('TEST-001')
+  })
+
+  it('derives read-only employment status from the last working day instead of saved status', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 8, 30, 23, 59, 59))
+    const records = [
+      { ...record, id: 'past', offboarding_date: '2026-09-29', status: '在职' },
+      { ...record, id: 'today', offboarding_date: '2026-09-30', status: '离职' },
+      { ...record, id: 'future', offboarding_date: '2026-10-01', status: '离职' },
+      { ...record, id: 'missing', status: '离职' },
+      { ...record, id: 'invalid', offboarding_date: '2026-02-30', status: '离职' },
+    ]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(200, records)))
+    await mount()
+    const statusCell = (id: string) => container.querySelector(`tr[data-row-key="${id}"]`)?.querySelectorAll('td')[7]
+    expect(statusCell('past')?.textContent).toBe('离职')
+    expect(statusCell('today')?.textContent).toBe('在职')
+    expect(statusCell('future')?.textContent).toBe('在职')
+    expect(statusCell('missing')?.textContent).toBe('-')
+    expect(statusCell('invalid')?.textContent).toBe('-')
+    await act(async () => (statusCell('past')?.querySelector('.ant-tag') as HTMLElement)?.click())
+    expect(statusCell('past')?.querySelector('.ant-select')).toBeNull()
+    expect(updateOffboardingRecord).not.toHaveBeenCalled()
+  })
+
+  it('updates status across midnight while the page stays open and when focus returns', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+    vi.setSystemTime(new Date(2026, 8, 30, 23, 59, 30))
+    const datedRecord = { ...record, offboarding_date: '2026-09-30', status: '离职' }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(200, [datedRecord])))
+    await mount()
+    const statusCell = () => container.querySelector('tr[data-row-key="record-1"]')?.querySelectorAll('td')[7]
+    expect(statusCell()?.textContent).toBe('在职')
+    await act(async () => vi.advanceTimersByTime(60_000))
+    expect(statusCell()?.textContent).toBe('离职')
+    vi.setSystemTime(new Date(2026, 8, 30, 12))
+    await act(async () => window.dispatchEvent(new Event('focus')))
+    expect(statusCell()?.textContent).toBe('在职')
   })
 
   it('shows a persistent failure instead of empty data and recovers on retry', async () => {
