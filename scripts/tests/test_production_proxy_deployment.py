@@ -29,14 +29,21 @@ def test_nginx_injects_page_context_from_referer() -> None:
     ):
         config = template.read_text(encoding="utf-8")
 
-        assert "map $http_referer $dazah_page_path" in config
-        # 无 Referer 时头为空：nginx 对空值 proxy_set_header 不发送，保持 fail-closed
+        assert 'map "$scheme://$http_host|$http_referer" $dazah_referer_page_path' in config
+        assert "map $http_x_dazah_page_path $dazah_page_path" in config
+        assert "default $http_x_dazah_page_path;" in config
+        assert "'' $dazah_referer_page_path;" in config
+        # 显式上下文与同源 Referer 均缺失时不发送页面路径头。
         assert "default '';" in config
         # 只取 path，剥离 query 与 fragment，与 proxy.ts 的 URL 解析一致
         assert "(/[^?#]*)" in config
         # 注入必须位于 server 级：location 内出现任何 proxy_set_header 都会
         # 整组覆盖继承，/api/ 自身不能声明（否则丢失 Host/X-Forwarded-*）
-        assert "proxy_set_header X-Dazah-Page-Path $dazah_page_path;" in config
+        header = "proxy_set_header X-Dazah-Page-Path $dazah_page_path;"
+        assert config.count(header) == 1
+        backend_server = config.index("client_max_body_size 100m;")
+        assert backend_server < config.index(header) < config.index("location /api/ {")
+        assert "proxy_set_header X-Dazah-Page-Key" not in config
 
 
 def test_deploy_recreates_nginx_and_runs_proxy_smoke_checks() -> None:

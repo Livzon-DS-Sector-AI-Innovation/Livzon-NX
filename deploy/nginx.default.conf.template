@@ -3,13 +3,18 @@ map $http_upgrade $connection_upgrade {
     '' close;
 }
 
-# 页面上下文：从同源 Referer 提取页面路径并注入 X-Dazah-Page-Path，与前端
-# proxy.ts 的注入逻辑一致（后端页面权限体系据此解析 page_key 放行共享业务
-# 接口）。无 Referer（API 客户端、服务端直连）时变量为空，nginx 不发送该头，
-# 保持后端 fail-closed 行为不变。
-map $http_referer $dazah_page_path {
+# 页面上下文只选择后端鉴权规则，不授予权限。保留调用方显式页面路径，
+# 缺失时才从同源 Referer 提取路径并剥离 query/fragment。来源比较包含
+# scheme、Host 和端口；两者均缺失时不发送该头，后端继续拒绝无上下文请求。
+map "$scheme://$http_host|$http_referer" $dazah_referer_page_path {
     default '';
-    ~^[a-zA-Z][a-zA-Z0-9+.\-]*://[^/]+(/[^?#]*) $1;
+    "~*^(https?://[^|/]+)[|]\\1(/[^?#]*)" $2;
+    "~*^(https?://[^|/]+)[|]\\1(?:[?#].*)?$" /;
+}
+
+map $http_x_dazah_page_path $dazah_page_path {
+    default $http_x_dazah_page_path;
+    '' $dazah_referer_page_path;
 }
 
 # nginx 1.27 open-source supports periodically resolving upstream members when
