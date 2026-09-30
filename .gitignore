@@ -142,6 +142,9 @@ Hermes-Lite/cache/
 **/.dsh-install/
 .playwright-mcp/
 .zcode-regtest-shots/
+.zcodeignore
+.v2c/
+.video_agent/
 
 # Local dev overrides and regenerable runtime data
 compose.dev.local.yml
