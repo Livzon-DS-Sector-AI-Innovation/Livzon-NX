@@ -11,6 +11,7 @@ import { getUserErrorMessage } from '@/lib/user-error'
 import PlatformNotice from '@/components/shared/PlatformNotice'
 import OffboardingForm from './OffboardingForm'
 import OffboardingDetailDrawer from './OffboardingDetailDrawer'
+import { getOffboardingEmploymentStatus } from './offboardingStatus'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
 
 interface OffboardingClientProps {
@@ -41,6 +42,17 @@ export default function OffboardingClient({
   const [searchKeyword, setSearchKeyword] = useState('')
   const [editingCell, setEditingCell] = useState<{ recordId: string; field: string } | null>(null)
   const [editingReason, setEditingReason] = useState('')
+  const [today, setToday] = useState(() => dayjs().format('YYYY-MM-DD'))
+
+  useEffect(() => {
+    const refreshDate = () => setToday(dayjs().format('YYYY-MM-DD'))
+    const timer = window.setInterval(refreshDate, 60_000)
+    window.addEventListener('focus', refreshDate)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refreshDate)
+    }
+  }, [])
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -149,12 +161,6 @@ export default function OffboardingClient({
     { label: '合同到期', value: '合同到期' },
     { label: '退休', value: '退休' },
     { label: '其他', value: '其他' },
-  ]
-
-  // 在职状态选项（页面内联切换；选「离职」触发员工档案转抄）
-  const statusOptions = [
-    { label: '在职', value: '在职' },
-    { label: '离职', value: '离职' },
   ]
 
   // 离职原因选项（可下拉选择或手动输入；HR 自动转离职的特殊原因不在此列）
@@ -272,26 +278,11 @@ export default function OffboardingClient({
       dataIndex: 'status',
       key: 'status',
       width: 90,
-      render: (status: string, record: OffboardingRecord) => {
-        const s = status || record.employee?.status || ''
-        if (editingCell?.recordId === record.id && editingCell?.field === 'status') {
-          return (
-            <Select
-              value={s}
-              options={statusOptions}
-              onChange={(value) => handleCellSave(record.id, 'status', value)}
-              onBlur={handleCellCancel}
-              autoFocus
-              style={{ width: '100%' }}
-              size="small"
-            />
-          )
-        }
+      render: (_: unknown, record: OffboardingRecord) => {
+        const s = getOffboardingEmploymentStatus(record.offboarding_date, today)
         return (
           <Tag
             color={s === '离职' ? 'red' : s === '在职' ? 'green' : 'default'}
-            onClick={() => handleCellEdit(record.id, 'status')}
-            className="cursor-pointer hover:opacity-80"
           >
             {s || '-'}
           </Tag>
