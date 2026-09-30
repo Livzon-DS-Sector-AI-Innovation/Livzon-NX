@@ -47,7 +47,9 @@ function selectApis(
 
 async function invokeApis(entries: Array<[string, AsyncApi]>): Promise<void> {
   for (const [, api] of entries) {
-    const args = Array.from({ length: api.length }, () => 'demo')
+    const args = api === warehouseClientApi.fetchWarehouseRecordDetail
+      ? ['inbound-ledger', 'demo']
+      : Array.from({ length: api.length }, () => 'demo')
     await api(...args)
   }
 }
@@ -100,6 +102,10 @@ describe('migrated module browser API contracts', () => {
     expect(requestedUrls.some((url) => url.startsWith('/api/v1/quality/'))).toBe(true)
     expect(requestedUrls.some((url) => url.startsWith('/api/v1/registration/'))).toBe(true)
     expect(requestedUrls.some((url) => url.startsWith('/api/v1/warehouse/'))).toBe(true)
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/v1/warehouse/material-pages/inbound-ledger/records/demo',
+      { headers: { 'X-Dazah-Page-Key': 'warehouse:materials:inbound-ledger' } },
+    )
   })
 
   it('surfaces protected API failures instead of returning placeholder data', async () => {
