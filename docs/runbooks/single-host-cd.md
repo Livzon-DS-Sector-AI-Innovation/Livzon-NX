@@ -111,7 +111,8 @@ Redis 容器上限 192 MiB，数据集上限 128 MiB，使用 `noeviction` 保�
    验证与正式迁移均执行明确目标，不执行隐含的 `upgrade head`。详见剩余验收执行单。
 8. 04:30 后不开始切换。进入维护模式，等待请求排空，停止应用写入源，完成部署前备份。
 9. 单独执行迁移并核对 revision；再按后端、Hermes、前端顺序启动，重建 Nginx。
-10. 容器、依赖及容器内 readiness probe 通过后开放流量，观察 5 分钟，记录成功 SHA。
+10. 容器、依赖、健康接口、容器内 readiness probe、同路由的 loopback 代理探针、
+    迁移版本校验全部通过后开放流量，观察 5 分钟，记录成功 SHA。
 
 `compose.release.yml` 只写入校验后的 image ID。服务器原有入口、数据卷、密钥及配置
 不由仓库 Compose 无条件覆盖。`compose.single-host.yml` 是受控资源覆盖层。
@@ -138,6 +139,8 @@ Runner 与备份、发布、巡检服务统一加入 `dazah-control.slice`，总
 2. 安装提供的 systemd units；`dazah-build` 按需启动，不设开机常驻。
 3. 使用 `stage_site.py` 从当前 Nginx 文件生成候选，不覆盖当前文件。
    `nginx-capacity.conf` 在 http 上下文加载；普通 API 加限流，MCP 限制连接数。
+   当前目录须安装 `nginx-maintenance.conf`、`nginx-capacity.conf`、
+   `migration-policy.json`，并使用包含维护挂载的 edge Compose；维护守卫独立于容量守卫。
    在隔离 nginx 容器执行 `nginx -t` 后才应用候选和资源 overlay。
 4. 验证维护标记 `/var/lib/dazah-cd/public/maintenance` 生效、排空探针可用。
 5. 首次受控发布、应用回退、迁移失败及中断恢复演练通过。

@@ -1,0 +1,9 @@
+[Unit]
+Description=Dazah automatic maintenance gate on service unavailability
+After=docker.service
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/dazah/control/controller.py traffic-guard
+UMask=0077
+TimeoutStartSec=90
+MemoryMax=128M

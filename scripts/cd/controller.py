@@ -343,17 +343,78 @@ class Controller:
                 self.compose("exec", "-T", "redis", "redis-cli", "ping")
                 self.compose("exec", "-T", "minio", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/ready")
                 self.compose("exec", "-T", "nginx", "nginx", "-t")
-                self.compose("exec", "-T", "nginx", "wget", "-q", "--spider", "http://frontend:3000/login")
+                self.compose("exec", "-T", "nginx", "wget", "-Y", "off", "-q", "--spider", "http://frontend:3000/login")
+                self.compose("exec", "-T", "app", ".venv/bin/python", "-c",
+                             "from urllib.request import urlopen; assert urlopen('http://127.0.0.1:8000/health', timeout=5).status == 200")
+                self.compose("exec", "-T", "hermes-lite", "python", "-c",
+                             "from urllib.request import urlopen; assert urlopen('http://127.0.0.1:8100/health', timeout=5).status == 200")
+                for route in ("health", "login"):
+                    self.compose("exec", "-T", "nginx", "wget", "-Y", "off", "-q", "--spider",
+                                 f"http://127.0.0.1:8090/{route}")
                 probe = Path(__file__).with_name("readiness.py").read_text()
                 self.compose("exec", "-T", "app", ".venv/bin/python", "-c", probe, timeout=20)
+                self.verify_schema()
                 return
             time.sleep(5)
         raise Refused("application readiness timeout")
 
+    def verify_schema(self) -> None:
+        heads = self.compose("exec", "-T", "app", ".venv/bin/python", "-c",
+                             "from alembic.config import Config; from alembic.script import ScriptDirectory; "
+                             "print('\\n'.join(ScriptDirectory.from_config(Config('alembic.ini')).get_heads()))").splitlines()
+        before = self.revision()
+        if len(heads) != 1 or not re.fullmatch(r"[A-Za-z0-9_]+", before):
+            raise Refused("schema must have one code head and one database revision")
+        policy = read_json(self.current / "migration-policy.json", {})
+        if before != heads[0] and before != migration_target(policy, heads[0], before):
+            raise Refused("database revision does not match the reviewed deployment target")
+
+    def maintenance_on(self) -> None:
+        (self.state_dir / "traffic-guard-owned").unlink(missing_ok=True)
+        self.maintenance(True)
+        self.event("maintenance_enabled")
+
+    def maintenance_off(self) -> None:
+        self.wait_ready()
+        self.maintenance(False)
+        self.event("maintenance_disabled_after_verification")
+
+    def traffic_guard(self) -> None:
+        """Close on unavailability; only reopen gates owned by this observer."""
+        marker = self.state_dir / "public" / "maintenance"
+        owned = self.state_dir / "traffic-guard-owned"
+        try:
+            inventory = self.containers()
+            ready = all(self.healthy(inventory.get(s, {})) for s in (*DEPS, *APPS, "nginx"))
+            ready = ready and inventory.get("migrate", {}).get("state") != "running"
+        except (Refused, OSError, ValueError, subprocess.TimeoutExpired):
+            ready = False
+        if not ready:
+            with lock(Path("/var/lock/dazah-deploy.lock")):
+                if not marker.exists():
+                    owned.touch()
+                    self.maintenance(True)
+                    self.event("traffic_guard_closed")
+            return
+        if not owned.exists():
+            return
+        with lock(Path("/var/lock/dazah-deploy.lock")):
+            # Ownership and deployment blockers may change before lock acquisition.
+            if not owned.exists():
+                return
+            if read_json(self.state_file, {}).get("phase") in UNSAFE_PHASES:
+                return
+            if any(record.get("blocked") for record in read_json(self.state_dir / "watchdog.json", {}).values()):
+                return
+            self.wait_ready(timeout=15)
+            self.maintenance(False)
+            owned.unlink(missing_ok=True)
+            self.event("traffic_guard_reopened")
+
     def drain(self) -> None:
         end = time.monotonic() + 120
         while time.monotonic() < end:
-            status = self.compose("exec", "-T", "nginx", "wget", "-qO-", "http://127.0.0.1:8089/status")
+            status = self.compose("exec", "-T", "nginx", "wget", "-Y", "off", "-qO-", "http://127.0.0.1:8089/status")
             match = re.search(r"Reading:\s+(\d+) Writing:\s+(\d+)", status)
             if match and sum(map(int, match.groups())) <= 1:
                 return
@@ -375,7 +436,8 @@ class Controller:
             service: {"image": image, "pull_policy": "never"} for service, image in images.items()}})
 
     def site_checksums(self) -> dict:
-        names = ("compose.yml", "compose.edge.yml", "compose.single-host.yml", ".env", "nginx.default.conf")
+        names = ("compose.yml", "compose.edge.yml", "compose.single-host.yml", ".env", "nginx.default.conf",
+                 "nginx-maintenance.conf", "nginx-capacity.conf", "migration-policy.json")
         return {name: digest(self.current / name) for name in names if (self.current / name).is_file()}
 
     def deploy(self, sha: str, manifest: dict) -> None:
@@ -1010,7 +1072,8 @@ def lock(path: Path):
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["backup", "drill", "watchdog", "schedule", "status", "mount-check"])
+    parser.add_argument("action", choices=["backup", "drill", "watchdog", "schedule", "status", "mount-check",
+                                         "verify", "drain", "traffic-guard", "maintenance-on", "maintenance-off"])
     parser.add_argument("--config", default="/etc/dazah-cd/config.json")
     args = parser.parse_args()
     os.umask(0o077)
@@ -1024,11 +1087,15 @@ def main() -> int:
         if args.action == "mount-check":
             controller.mount_check()
             return 0
+        if args.action in ("verify", "drain", "traffic-guard"):
+            {"verify": controller.wait_ready, "drain": controller.drain,
+             "traffic-guard": controller.traffic_guard}[args.action]()
+            return 0
         with lock(Path("/var/lock/dazah-deploy.lock")):
             if args.action == "status":
                 controller.event("status", state=read_json(controller.state_file, {}), enabled=controller.config.get("enabled", False))
             else:
-                getattr(controller, args.action)()
+                getattr(controller, args.action.replace("-", "_"))()
         return 0
     except Exception as exc:
         # Network/OS exceptions can contain URLs or subprocess details.

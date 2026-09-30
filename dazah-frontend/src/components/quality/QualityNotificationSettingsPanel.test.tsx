@@ -13,6 +13,7 @@ const qualityActions = vi.hoisted(() => ({
 
 const apiClient = vi.hoisted(() => ({
   searchChangeActionPlanPersons: vi.fn(),
+  searchQualityPersonOptions: vi.fn(),
   fetchQaPersonOptions: vi.fn(),
 }))
 
@@ -92,6 +93,7 @@ describe('QualityNotificationSettingsPanel', () => {
       is_enabled: false,
     })
     apiClient.searchChangeActionPlanPersons.mockResolvedValue([])
+    apiClient.searchQualityPersonOptions.mockResolvedValue([])
     apiClient.fetchQaPersonOptions.mockResolvedValue([])
     container = document.createElement('div')
     document.body.appendChild(container)
@@ -283,6 +285,84 @@ describe('QualityNotificationSettingsPanel', () => {
     ])
     await renderPanel()
     expect(apiClient.fetchQaPersonOptions).toHaveBeenCalled()
+  })
+
+  async function searchRecipient(name: string, index = 0) {
+    const input = container.querySelectorAll<HTMLInputElement>('.ant-select input')[index]
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, name)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 350))
+    })
+  }
+
+  it.each([
+    ['兜底接收人', 0],
+    ['第一条产品线接收人', 1],
+    ['第一条产品线QA', 2],
+    ['第二条产品线接收人', 3],
+    ['第二条产品线QA', 4],
+    ['首推接收人', 5],
+  ])('%s supports typing a name to search the HR directory', async (_, index) => {
+    apiClient.searchQualityPersonOptions.mockResolvedValue([{ open_id: 'ou_search', name: '搜索人员' }])
+    await renderPanel()
+    await searchRecipient('搜索', Number(index))
+    expect(apiClient.searchQualityPersonOptions).toHaveBeenCalledWith('搜索')
+    expect(document.body.querySelector('.ant-select-dropdown')?.textContent).toContain('搜索人员')
+  })
+
+  it('filters unrelated QA preload candidates while searching', async () => {
+    apiClient.fetchQaPersonOptions.mockResolvedValue([{ open_id: 'ou_qa', name: '王五' }])
+    apiClient.searchQualityPersonOptions.mockResolvedValue([{ open_id: 'ou_hr', name: '张三' }])
+    await renderPanel()
+    await searchRecipient('张', 2)
+    const popup = document.body.querySelector('.ant-select-dropdown')
+    expect(popup?.textContent).toContain('张三')
+    expect(popup?.textContent).not.toContain('王五')
+  })
+
+  it('explains when no active user matches the searched name', async () => {
+    await renderPanel()
+    await searchRecipient('查无此人', 1)
+    expect(document.body.querySelector('.ant-select-dropdown')?.textContent).toContain('未找到匹配的在职人员')
+    expect(container.textContent).toContain('陈连平')
+  })
+
+  it('searches recipients in the HR-backed directory and displays their names', async () => {
+    apiClient.searchQualityPersonOptions.mockResolvedValue([{ open_id: 'ou_hr', name: '张三' }])
+    await renderPanel()
+    await searchRecipient('张')
+    expect(apiClient.searchQualityPersonOptions).toHaveBeenCalledWith('张')
+    expect(apiClient.searchChangeActionPlanPersons).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('张三')
+  })
+
+  it('reports search failures while retaining configured recipients', async () => {
+    apiClient.searchQualityPersonOptions.mockRejectedValue(new Error('无权限查询人员'))
+    await renderPanel()
+    await searchRecipient('张')
+    expect(document.body.textContent).toContain('人员搜索失败：无权限查询人员')
+    expect(container.textContent).toContain('兜底人')
+  })
+
+  it('ignores an old search response after the keyword is cleared', async () => {
+    let finishSearch!: (people: { open_id: string; name: string }[]) => void
+    apiClient.searchQualityPersonOptions.mockReturnValue(new Promise((resolve) => {
+      finishSearch = resolve
+    }))
+    await renderPanel()
+    await searchRecipient('张')
+    await searchRecipient('')
+    await act(async () => finishSearch([{ open_id: 'ou_old', name: '过期搜索结果' }]))
+    expect(document.body.textContent).not.toContain('过期搜索结果')
+    expect(container.textContent).toContain('兜底人')
+  })
+
+  it('reports QA preload errors instead of treating them as empty candidates', async () => {
+    apiClient.fetchQaPersonOptions.mockRejectedValue(new Error('联系人尚未同步'))
+    await renderPanel()
+    expect(document.body.textContent).toContain('QA 人员加载失败：联系人尚未同步')
   })
 
   it('saves the trend alert card and reports success', async () => {

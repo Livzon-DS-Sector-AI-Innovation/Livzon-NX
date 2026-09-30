@@ -4,6 +4,7 @@ import {
   fetchAnomalyAnalysisStatus,
   fetchQualityPersonDirectory,
   fetchQualityPersonOptions,
+  searchQualityPersonOptions,
   fetchValidationFormLinks,
   fetchValidationPersonOptions,
   fetchAnomalyDashboard,
@@ -26,6 +27,30 @@ function jsonResponse(body: unknown, status = 200) {
     headers: { 'content-type': 'application/json' },
   })
 }
+
+describe('quality settings recipient search', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('searches the HR-backed directory with a trimmed name and bounded limit', async () => {
+    const people = [{ open_id: 'ou_hr', name: '张三', department: 'QA' }]
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: people }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(searchQualityPersonOptions(' 张三 ', 20)).resolves.toEqual(people)
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/quality/person-options?keyword=%E5%BC%A0%E4%B8%89&limit=20',
+    )
+  })
+
+  it('returns no candidates for an unmatched name', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ data: [] })))
+    await expect(searchQualityPersonOptions('不存在')).resolves.toEqual([])
+  })
+
+  it('preserves permission and unsynced-directory errors', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ message: '无权限查询人员' }, 403)))
+    await expect(searchQualityPersonOptions('张')).rejects.toThrow('无权限查询人员')
+  })
+})
 
 describe('quality client - qc validation', () => {
   afterEach(() => {

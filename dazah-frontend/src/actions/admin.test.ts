@@ -15,12 +15,13 @@ import { createRole } from './admin'
 
 describe('system permission server actions', () => {
   it('replaces manual roles with an authorization version and audit reason', async () => {
-    const request = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { message: '角色分配已更新' } })))
+    const request = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { message: '角色分配已更新', grant_version: 8 } })))
     vi.stubGlobal('fetch', request)
-    await adminActions.assignUserRoles('user-1', ['role-1', 'role-2'], {
+    const result = await adminActions.assignUserRoles('user-1', ['role-1', 'role-2'], {
       expectedGrantVersion: 7,
       reason: '岗位职责调整',
     })
+    expect(result).toEqual({ ok: true, data: { message: '角色分配已更新', grant_version: 8 } })
     expect(request).toHaveBeenCalledWith(expect.stringContaining('/users/user-1/roles'), expect.objectContaining({
       method: 'POST', body: JSON.stringify({
         role_ids: ['role-1', 'role-2'], mode: 'replace', expected_grant_version: 7, reason: '岗位职责调整',
@@ -36,7 +37,23 @@ describe('system permission server actions', () => {
       JSON.stringify({ detail }), { status },
     )))
     await expect(adminActions.assignUserRoles('user-1', ['role-admin']))
-      .rejects.toThrow(detail)
+      .resolves.toEqual({ ok: false, status, message: detail })
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
+
+  it('returns safe scope failures instead of throwing server exceptions', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Internal Server Error', { status: 500 })))
+    await expect(adminActions.saveUserDataScope('user-1', 'all', []))
+      .resolves.toEqual({ ok: false, status: 500, message: '权限服务暂时不可用，请稍后重试' })
+    await expect(adminActions.deleteDataScope('scope-1'))
+      .resolves.toEqual({ ok: false, status: 500, message: '权限服务暂时不可用，请稍后重试' })
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
+
+  it('returns a connection failure for a role request without exposing server details', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('internal connection details')))
+    await expect(adminActions.assignUserRoles('user-1', ['role-1']))
+      .resolves.toEqual({ ok: false, status: 503, message: '暂时无法连接权限服务，请刷新确认是否已保存' })
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
 
