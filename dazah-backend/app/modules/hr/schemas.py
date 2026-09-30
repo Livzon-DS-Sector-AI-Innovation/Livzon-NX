@@ -476,6 +476,9 @@ class EmployeeUpdate(BaseModel):
 class EmployeeResponse(EmployeeBase):
     model_config = ConfigDict(from_attributes=True)
 
+    # Historical/synchronized records can contain multiple titles. Preserve
+    # their full text on reads; create/update schemas retain storage limits.
+    qualification_type: str | None = Field(None, description="职称类型")
     id: UUID
     feishu_open_id: str | None = None
     feishu_record_id: str | None = None
@@ -1033,6 +1036,8 @@ class OffboardingRecordUpdate(BaseModel):
 class OffboardingRecordResponse(OffboardingRecordBase):
     model_config = ConfigDict(from_attributes=True)
 
+    # Read existing qualification text without imposing the write-side limit.
+    qualification_type: str | None = Field(None, description="职称")
     id: UUID
     employee: EmployeeResponse | None = None
     created_at: datetime | None = None

@@ -4,7 +4,10 @@ import { useState, useCallback, useEffect } from 'react'
 import { App, Button, Select, Input } from 'antd'
 import { PlusOutlined, SearchOutlined, SyncOutlined } from '@ant-design/icons'
 import { Employee } from '@/types/hr'
-import { fetchEmployeesAction, syncFromFeishuAction } from '@/actions/hr'
+import { syncFromFeishuAction } from '@/actions/hr'
+import { fetchEmployees, HrListReadError } from '@/lib/api/hr'
+import { getUserErrorMessage } from '@/lib/user-error'
+import PlatformNotice from '@/components/shared/PlatformNotice'
 import { fetchEmployeeDepartments } from '@/lib/api/client/hr'
 import { useHrStore } from '@/stores/hr'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
@@ -17,7 +20,7 @@ interface EmployeeProfileClientProps {
   initialEmployees: Employee[]
   initialTotal: number
   initialDepartment?: string
-  fetchAction?: typeof fetchEmployeesAction
+  fetchAction?: typeof fetchEmployees
 }
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -39,6 +42,8 @@ export default function EmployeeProfileClient({
     'hr:employee-management:profile',
   )
   const [syncing, setSyncing] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
   const [employees, setEmployees] = useState<Employee[]>(initialEmployees)
   const [total, setTotal] = useState(initialTotal)
   const [page, setPage] = useState(1)
@@ -58,9 +63,10 @@ export default function EmployeeProfileClient({
   const debouncedSearchKeyword = useDebounce(searchKeyword, 300)
   const debouncedPosition = useDebounce(filterPosition, 300)
 
-  const doFetch = fetchAction || fetchEmployeesAction
+  const doFetch = fetchAction || fetchEmployees
 
   const loadData = useCallback(async () => {
+    setLoading(true)
     try {
       const res = await doFetch({
         keyword: debouncedSearchKeyword || undefined,
@@ -74,10 +80,17 @@ export default function EmployeeProfileClient({
         page_size: pageSize })
       setEmployees(res.data)
       setTotal(res.meta?.total || 0)
+      setLoadError(null)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '加载数据失败')
+      setLoadError(getUserErrorMessage(err, '员工档案加载失败，请稍后重试'))
+      if (err instanceof HrListReadError && [401, 403].includes(err.status)) {
+        setEmployees([])
+        setTotal(0)
+      }
+    } finally {
+      setLoading(false)
     }
-  }, [debouncedSearchKeyword, filterDepartment, filterSubDepartment, filterStatus, filterGender, filterLevel, debouncedPosition, page, pageSize, doFetch, message])
+  }, [debouncedSearchKeyword, filterDepartment, filterSubDepartment, filterStatus, filterGender, filterLevel, debouncedPosition, page, pageSize, doFetch])
 
   const loadDepartments = useCallback(async () => {
     try {
@@ -248,7 +261,11 @@ export default function EmployeeProfileClient({
         />
       </div>
 
-      <EmployeeTable
+      {loadError && <PlatformNotice type="error" title={loadError}
+        description="员工档案查询未成功。临时故障时保留上次加载的记录；登录失效或权限不足时清空记录，请重新登录或联系管理员。恢复后可重试。"
+        action={<Button loading={loading} onClick={loadData}>重试</Button>} />}
+
+      {(!loadError || employees.length > 0) && <EmployeeTable
         employees={employees}
         total={total}
         page={page}
@@ -259,7 +276,7 @@ export default function EmployeeProfileClient({
         onView={handleView}
         canEdit={canEditHr}
         canDelete={canDelete}
-      />
+      />}
 
       <EmployeeForm
         open={formOpen}

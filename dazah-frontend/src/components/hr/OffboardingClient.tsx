@@ -5,7 +5,10 @@ import { App, Button, Table, Space, Popconfirm, Input, Tag, Tooltip, Select, Aut
 import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined, EyeOutlined, SyncOutlined, FileTextOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { OffboardingRecord } from '@/types/hr'
-import { fetchOffboardingRecordsAction, deleteOffboardingRecord, syncOffboardingFromFeishuAction, updateOffboardingRecord, generateOffboardingCertificateAction } from '@/actions/hr'
+import { deleteOffboardingRecord, syncOffboardingFromFeishuAction, updateOffboardingRecord, generateOffboardingCertificateAction } from '@/actions/hr'
+import { fetchOffboardingRecords, HrListReadError } from '@/lib/api/hr'
+import { getUserErrorMessage } from '@/lib/user-error'
+import PlatformNotice from '@/components/shared/PlatformNotice'
 import OffboardingForm from './OffboardingForm'
 import OffboardingDetailDrawer from './OffboardingDetailDrawer'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
@@ -33,6 +36,7 @@ export default function OffboardingClient({
   const [viewingRecord, setViewingRecord] = useState<OffboardingRecord | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [editingCell, setEditingCell] = useState<{ recordId: string; field: string } | null>(null)
@@ -41,18 +45,23 @@ export default function OffboardingClient({
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetchOffboardingRecordsAction({
+      const res = await fetchOffboardingRecords({
         keyword: searchKeyword || undefined,
         page,
         page_size: pageSize })
       setRecords(res.data)
       setTotal(res.meta?.total || 0)
+      setLoadError(null)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '加载数据失败')
+      setLoadError(getUserErrorMessage(err, '离职记录加载失败，请稍后重试'))
+      if (err instanceof HrListReadError && [401, 403].includes(err.status)) {
+        setRecords([])
+        setTotal(0)
+      }
     } finally {
       setLoading(false)
     }
-  }, [searchKeyword, page, pageSize, message])
+  }, [searchKeyword, page, pageSize])
 
   const handlePageChange = (newPage: number, newPageSize: number) => {
     setPage(newPage)
@@ -435,11 +444,16 @@ export default function OffboardingClient({
         />
       </div>
 
+      {loadError && <PlatformNotice type="error" title={loadError}
+        description="离职记录查询未成功。临时故障时保留上次加载的记录；登录失效或权限不足时清空记录，请重新登录或联系管理员。恢复后可重试。"
+        action={<Button loading={loading} onClick={loadData}>重试</Button>} />}
+
       <Table
         columns={columns}
         dataSource={records}
         rowKey="id"
         loading={loading}
+        locale={loadError ? { emptyText: '离职记录未加载成功' } : undefined}
         pagination={{
           current: page,
           pageSize,
