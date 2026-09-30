@@ -1,4 +1,5 @@
 import os
+import json
 import re
 import shutil
 import subprocess
@@ -93,3 +94,83 @@ check_release_store
     result = subprocess.run(["bash", "-c", shell], capture_output=True, text=True)
     assert result.returncode == expected_status
     assert (marker.read_text() if marker.exists() else "") == expected_checks
+
+
+@pytest.mark.skipif(os.name == "nt" or shutil.which("bash") is None, reason="Linux shell guard")
+@pytest.mark.parametrize("verified", [False, True])
+def test_failed_verification_cannot_remove_maintenance_marker(tmp_path, verified):
+    script = (ROOT / "scripts/deploy-production-remote.sh").read_text(encoding="utf-8")
+    function = re.search(r"maintenance_off\(\) \{.*?\n\}", script, re.DOTALL).group()
+    public = tmp_path / "public"
+    public.mkdir()
+    marker = public / "maintenance"
+    marker.touch()
+    shell = f'''
+MAINTENANCE_DIR='{public}'
+CONTROL_SCRIPT=unused
+require_file() {{ return 0; }}
+python3() {{ return {0 if verified else 1}; }}
+log() {{ :; }}
+{function}
+maintenance_off
+'''
+    result = subprocess.run(["bash", "-c", shell], capture_output=True, text=True)
+    assert result.returncode == (0 if verified else 1)
+    assert marker.exists() is not verified
+
+
+def test_release_bundles_gate_and_checks_before_reopening():
+    wrapper = (ROOT / "scripts/deploy-production.ps1").read_text(encoding="utf-8")
+    remote = (ROOT / "scripts/deploy-production-remote.sh").read_text(encoding="utf-8")
+    for file in ("nginx-maintenance.conf", "nginx-capacity.conf", "migration-policy.json"):
+        assert file in wrapper
+    for action in ("deploy_version", "rollback_version"):
+        function = re.search(rf"{action}\(\) \{{.*?\n\}}", remote, re.DOTALL).group()
+        assert function.index("validate_maintenance_release") < function.index("maintenance_on")
+        assert function.index("maintenance_on") < function.index("quiesce_and_migrate")
+        assert function.index("maintenance_off") < function.index("write_success_marker")
+
+
+@pytest.mark.skipif(os.name == "nt" or shutil.which("bash") is None, reason="Linux shell guard")
+@pytest.mark.parametrize("head,before,approved,expected", [
+    ("same", "same", False, 0),
+    ("new", "old", False, 1),
+    ("new", "old", True, 0),
+    ("new\nother", "old", True, 1),
+])
+def test_migration_preconditions_block_writers_before_unapproved_change(tmp_path, head, before, approved, expected):
+    script = (ROOT / "scripts/deploy-production-remote.sh").read_text(encoding="utf-8")
+    function = re.search(r"quiesce_and_migrate\(\) \{.*?\n\}", script, re.DOTALL).group()
+    policy = {"transitions": [{"from_revision": "old", "to_revision": "new", "backward_compatible": approved,
+                              "review_reference": "test review"}]}
+    (tmp_path / "migration-policy.json").write_text(json.dumps(policy))
+    revision = tmp_path / "revision"
+    revision.write_text(before)
+    calls = tmp_path / "calls"
+    shell = f'''
+ROOT_DIR='{tmp_path}'
+CONTROL_SCRIPT='{ROOT / "scripts/cd/controller.py"}'
+require_file() {{ return 0; }}
+check_nginx() {{ return 0; }}
+fail() {{ return 1; }}
+curl() {{ printf '503'; }}
+python3() {{ if [[ "$1" == "$CONTROL_SCRIPT" && "$2" == drain ]]; then return 0; fi; command python3 "$@"; }}
+compose() {{
+ if [[ "$1" == exec ]]; then cat '{revision}'; return 0; fi
+ if [[ "$*" == *--entrypoint* ]]; then printf '%s' '{head}'; return 0; fi
+ printf '%s\\n' "$*" >> '{calls}'
+ if [[ "$1" == run ]]; then printf '%s' "${{@: -1}}" > '{revision}'; fi
+}}
+{function}
+quiesce_and_migrate
+'''
+    result = subprocess.run(["bash", "-c", shell], capture_output=True, text=True)
+    assert result.returncode == expected, result.stderr
+    operations = calls.read_text() if calls.exists() else ""
+    if expected:
+        assert operations == ""
+        assert revision.read_text() == before
+    else:
+        assert "stop --timeout 120 hermes-lite app frontend" in operations
+        assert f"migrate .venv/bin/alembic upgrade {head}" in operations
+        assert revision.read_text() == head

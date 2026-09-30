@@ -30,6 +30,8 @@ def test_keeps_routing_and_protects_api_and_streams():
     assert "proxy_buffering off;" in value
     assert value.count("nginx/dazah-server-guard.conf") == 1
     assert value.count("nginx/dazah-api-guard.conf") == 1
+    assert value.count("nginx/dazah-maintenance.conf") == 1
+    assert "listen 127.0.0.1:8090;" in value
     with pytest.raises(ValueError, match="already guarded"):
         site.guarded_config(value)
 
@@ -46,14 +48,19 @@ def test_actual_nginx_stream_capacity_and_maintenance(tmp_path):
     stub, gateway = prefix + "-stub", prefix + "-nginx"
     created = []
     def run(*args, **kwargs):
-        return subprocess.run(["docker", *args], check=True, capture_output=True, text=True, timeout=45, **kwargs)
+        result = subprocess.run(["docker", *args], capture_output=True, text=True, encoding="utf-8", timeout=45, **kwargs)
+        assert result.returncode == 0, result.stderr
+        return result
     (tmp_path / "server.py").write_text('''from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 import time
 class Handler(BaseHTTPRequestHandler):
- def do_GET(self):
+ def do_HEAD(self):
   self.send_response(200); self.end_headers()
+ def do_GET(self):
+  self.send_response(200); self.send_header('Content-Type','text/html'); self.end_headers()
   if self.path.endswith('/chat/stream') or self.path.startswith('/mcp/'):
    self.wfile.write(b'data: ready\\n\\n'); self.wfile.flush(); time.sleep(5)
+  elif self.path=='/login': self.wfile.write(b'<!doctype html><html><body>login</body></html>')
   else: self.wfile.write(b'ok')
  def log_message(self, *args): pass
 ThreadingHTTPServer(('0.0.0.0',8000),Handler).serve_forever()
@@ -66,6 +73,11 @@ ThreadingHTTPServer(('0.0.0.0',8000),Handler).serve_forever()
         proxy_read_timeout 300s;
     }
     location /mcp/ {
+        proxy_pass http://stub:8000;
+    }
+    location / {
+        proxy_set_header Accept-Encoding $dazah_frontend_encoding;
+        sub_filter '</body>' '<script src="/__dazah_maintenance_watch.js"></script></body>';
         proxy_pass http://stub:8000;
     }
 }
@@ -83,6 +95,7 @@ ThreadingHTTPServer(('0.0.0.0',8000),Handler).serve_forever()
             "-v", f"{tmp_path}:/run/dazah:ro",
             "-v", f"{root / 'deploy/single-host/nginx-capacity.conf'}:/etc/nginx/conf.d/capacity.conf:ro",
             "-v", f"{root / 'deploy/single-host/nginx-server-guard.conf'}:/etc/nginx/dazah-server-guard.conf:ro",
+            "-v", f"{root / 'deploy/nginx-maintenance.conf'}:/etc/nginx/dazah-maintenance.conf:ro",
             "-v", f"{root / 'deploy/single-host/nginx-api-guard.conf'}:/etc/nginx/dazah-api-guard.conf:ro", "nginx:1.27-alpine")
         created.append(gateway)
         run("exec", gateway, "nginx", "-t")
@@ -115,8 +128,20 @@ def burst(_):
 with concurrent.futures.ThreadPoolExecutor(max_workers=20) as pool:
  statuses=list(pool.map(burst,range(200)))
 assert 429 in statuses and set(statuses) <= {200,429}, set(statuses)
+c,r=call('/login'); assert r.status==200; assert b'/__dazah_maintenance_watch.js' in r.read(); c.close()
+c,r=call('/__dazah_maintenance_status'); assert r.status==204; c.close()
+c,r=call('/__dazah_maintenance_watch.js'); assert r.status==200; assert b'location.replace' in r.read(); c.close()
 pathlib.Path('/fixture/maintenance').touch()
-c,r=call('/api/ping'); assert r.status==503; assert r.getheader('Retry-After')=='60'; c.close()
+for method in ('GET','POST','PUT','PATCH','DELETE','OPTIONS','HEAD'):
+ for path in ('/', '/login','/api/ping','/uploads/file','/mcp/stream','/health','/_next/static/app.js'):
+  c=http.client.HTTPConnection('gateway',80,timeout=10)
+  c.request(method,path,headers={'X-Dazah-Maintenance-Bypass':'1','X-Forwarded-For':'127.0.0.1'})
+  r=c.getresponse(); assert r.status==503,(method,path,r.status)
+  assert r.getheader('Retry-After')=='15'; assert r.getheader('Cache-Control')=='no-store'
+  assert r.getheader('X-Dazah-Maintenance')=='1'
+  body=r.read()
+  if method!='HEAD': assert '系统维护中'.encode() in body
+  c.close()
 pathlib.Path('/fixture/maintenance').unlink()
 time.sleep(3)
 c,r=call('/api/ping'); assert r.status==200; c.close()
@@ -124,6 +149,10 @@ print('SSE capacity, ordinary API independence, maintenance and recovery passed'
 '''
         result = run("exec", "-i", "--user", "0", stub, ".venv/bin/python", "-", input=driver)
         assert "maintenance and recovery passed" in result.stdout
+        # Loopback probe uses the very same routing while the public gate is closed.
+        (tmp_path / "maintenance").touch()
+        run("exec", gateway, "wget", "-Y", "off", "-q", "--spider", "http://127.0.0.1:8090/login")
+        (tmp_path / "maintenance").unlink()
     finally:
         for name in reversed(created):
             subprocess.run(["docker", "rm", "-f", name], capture_output=True, timeout=30)

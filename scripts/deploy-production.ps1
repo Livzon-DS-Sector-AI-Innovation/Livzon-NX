@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Position = 0)]
-  [ValidateSet('Build', 'Deploy', 'Rollback', 'Status', 'Verify', 'Help')]
+  [ValidateSet('Build', 'Deploy', 'Rollback', 'Status', 'Verify', 'MaintenanceOn', 'MaintenanceOff', 'Help')]
   [string]$Action = 'Help',
 
   [Parameter(Position = 1)]
@@ -255,6 +255,9 @@ function Prepare-Release {
     Set-Content -LiteralPath "$TarPath.sha256" -Encoding ascii -NoNewline
   Copy-Item -LiteralPath $ComposeFile -Destination (Join-Path $releaseDir 'compose.yml')
   Copy-Item -LiteralPath (Join-Path $Root 'deploy/compose.edge.yml') -Destination (Join-Path $releaseDir 'compose.edge.yml')
+  Copy-Item -LiteralPath (Join-Path $Root 'deploy/nginx-maintenance.conf') -Destination (Join-Path $releaseDir 'nginx-maintenance.conf')
+  Copy-Item -LiteralPath (Join-Path $Root 'deploy/migration-policy.json') -Destination (Join-Path $releaseDir 'migration-policy.json')
+  Copy-Item -LiteralPath (Join-Path $Root 'deploy/single-host/nginx-capacity.conf') -Destination (Join-Path $releaseDir 'nginx-capacity.conf')
   $nginxTemplate = Get-Content -Raw -LiteralPath (Join-Path $Root 'deploy/nginx.default.conf.template')
   $nginxConfig = $nginxTemplate.Replace('__PUBLIC_HOST__', $PublicHost)
   $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
@@ -281,6 +284,9 @@ function Upload-Release([string]$ReleaseDir) {
       'compose.yml',
       'compose.edge.yml',
       'nginx.default.conf',
+      'nginx-maintenance.conf',
+      'migration-policy.json',
+      'nginx-capacity.conf',
       'deploy-production.sh'
     )) {
     Invoke-Scp (Join-Path $ReleaseDir $name) "$staging/"
@@ -406,6 +412,8 @@ try {
     }
     'Status' { Remote-Action 'status' '' }
     'Verify' { Remote-Action 'verify' '' }
+    'MaintenanceOn' { Remote-Action 'maintenance-on' '' }
+    'MaintenanceOff' { Remote-Action 'maintenance-off' '' }
     default { Show-Help }
   }
 }

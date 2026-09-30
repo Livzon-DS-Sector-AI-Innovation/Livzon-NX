@@ -662,3 +662,135 @@ def test_offline_policy_rejects_untrusted_ownership(uid, mode, symlink):
 
 def test_without_migration_hold_target_is_source_head():
     assert cd.migration_target({}, "head_revision", "old") == "head_revision"
+
+
+@pytest.mark.parametrize("heads,revision", [("head", "old"), ("head\nother", "head"), ("head", "head\nother")])
+def test_schema_mismatch_keeps_manual_gate_closed(tmp_path, monkeypatch, heads, revision):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    control.maintenance(True)
+    monkeypatch.setattr(control, "compose", lambda *a, **kw: heads)
+    monkeypatch.setattr(control, "revision", lambda: revision)
+    monkeypatch.setattr(control, "wait_ready", lambda: control.verify_schema())
+    with pytest.raises(cd.Refused):
+        control.maintenance_off()
+    assert (control.state_dir / "public" / "maintenance").exists()
+
+
+def test_schema_respects_only_reviewed_hold(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    monkeypatch.setattr(control, "compose", lambda *a, **kw: "source")
+    monkeypatch.setattr(control, "revision", lambda: "held")
+    cd.atomic_json(control.current / "migration-policy.json", {"deployment_hold": {
+        "source_head": "source", "target_revision": "held", "allowed_from_revisions": ["held"], "review_reference": "review"}})
+    control.verify_schema()
+    monkeypatch.setattr(control, "compose", lambda *a, **kw: "later")
+    with pytest.raises(cd.Refused):
+        control.verify_schema()
+
+
+@pytest.mark.parametrize("service", [*cd.DEPS, *cd.APPS, "nginx"])
+def test_traffic_guard_closes_on_missing_service_and_verifies_before_reopening(tmp_path, monkeypatch, service):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    inventory = {s: {"state": "running", "health": "healthy"} for s in (*cd.DEPS, *cd.APPS, "nginx")}
+    del inventory[service]
+    monkeypatch.setattr(control, "containers", lambda: inventory)
+    monkeypatch.setattr(cd, "lock", lambda _: contextlib.nullcontext())
+    control.traffic_guard()
+    marker = control.state_dir / "public" / "maintenance"
+    assert marker.exists()
+    inventory[service] = {"state": "running", "health": "healthy"}
+    monkeypatch.setattr(control, "wait_ready", lambda **kw: (_ for _ in ()).throw(cd.Refused("probe failed")))
+    with pytest.raises(cd.Refused):
+        control.traffic_guard()
+    assert marker.exists()
+    monkeypatch.setattr(control, "wait_ready", lambda **kw: None)
+    control.traffic_guard()
+    assert not marker.exists()
+
+
+def test_traffic_guard_never_reopens_manual_or_failed_deployment(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    monkeypatch.setattr(cd, "lock", lambda _: contextlib.nullcontext())
+    monkeypatch.setattr(control, "containers", lambda: {s: {"state": "running", "health": "healthy"} for s in (*cd.DEPS, *cd.APPS, "nginx")})
+    monkeypatch.setattr(control, "wait_ready", lambda **kw: pytest.fail("manual gate belongs to operator"))
+    control.maintenance_on()
+    control.traffic_guard()
+    owned = control.state_dir / "traffic-guard-owned"
+    owned.touch()
+    cd.atomic_json(control.state_file, {"phase": "recovery_required"})
+    control.traffic_guard()
+    assert (control.state_dir / "public" / "maintenance").exists()
+    control.maintenance_on()
+    assert not owned.exists()
+
+
+def test_readiness_includes_health_proxy_and_schema_before_opening(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    monkeypatch.setattr(control, "containers", lambda: {s: {"state": "running", "health": "healthy"} for s in (*cd.DEPS, *cd.APPS, "nginx")})
+    calls = []
+    monkeypatch.setattr(control, "compose", lambda *a, **kw: calls.append(a) or "")
+    monkeypatch.setattr(control, "verify_schema", lambda: calls.append(("schema",)))
+    cd.Controller.wait_ready(control)
+    assert calls[-1] == ("schema",)
+    for path in ("health", "login"):
+        assert any(f"http://127.0.0.1:8090/{path}" in args for args in calls)
+    assert any("hermes-lite" in args and "8100/health" in " ".join(args) for args in calls)
+
+
+def test_traffic_guard_closes_on_unknown_docker_state(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    monkeypatch.setattr(cd, "lock", lambda _: contextlib.nullcontext())
+    monkeypatch.setattr(control, "containers", lambda: (_ for _ in ()).throw(cd.Refused("docker unavailable")))
+    control.traffic_guard()
+    assert (control.state_dir / "public" / "maintenance").exists()
+
+
+def test_traffic_guard_closes_while_migration_container_runs(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    monkeypatch.setattr(cd, "lock", lambda _: contextlib.nullcontext())
+    inventory = {s: {"state": "running", "health": "healthy"} for s in (*cd.DEPS, *cd.APPS, "nginx", "migrate")}
+    monkeypatch.setattr(control, "containers", lambda: inventory)
+    control.traffic_guard()
+    assert (control.state_dir / "public" / "maintenance").exists()
+
+
+@pytest.mark.parametrize("change", ["manual", "deployment", "watchdog"])
+def test_traffic_guard_rechecks_gate_owner_and_blockers_after_lock(tmp_path, monkeypatch, change):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    control.maintenance(True)
+    (control.state_dir / "traffic-guard-owned").touch()
+    monkeypatch.setattr(control, "containers", lambda: {
+        s: {"state": "running", "health": "healthy"} for s in (*cd.DEPS, *cd.APPS, "nginx")})
+    monkeypatch.setattr(control, "wait_ready", lambda **kw: pytest.fail("gate ownership or blocker changed"))
+
+    @contextlib.contextmanager
+    def changed_before_lock(_):
+        if change == "manual":
+            control.maintenance_on()
+        elif change == "deployment":
+            cd.atomic_json(control.state_file, {"phase": "migrating"})
+        else:
+            cd.atomic_json(control.state_dir / "watchdog.json", {"app": {"blocked": True}})
+        yield
+
+    monkeypatch.setattr(cd, "lock", changed_before_lock)
+    control.traffic_guard()
+    assert (control.state_dir / "public" / "maintenance").exists()
+
+
+def test_traffic_guard_does_not_claim_manual_gate_created_before_close_lock(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    monkeypatch.setattr(control, "containers", lambda: {})
+    locked = []
+
+    @contextlib.contextmanager
+    def manual_gate_before_lock(_):
+        locked.append(True)
+        control.maintenance_on()
+        yield
+
+    monkeypatch.setattr(cd, "lock", manual_gate_before_lock)
+    control.traffic_guard()
+    assert locked
+    assert (control.state_dir / "public" / "maintenance").exists()
+    assert not (control.state_dir / "traffic-guard-owned").exists()

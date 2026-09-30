@@ -33,6 +33,7 @@ upstream frontend_upstream {
 }
 
 server {
+    include /etc/nginx/dazah-maintenance.conf;
     listen 80;
     listen [::]:80;
     server_name __PUBLIC_HOST__;
@@ -49,6 +50,7 @@ server {
 }
 
 server {
+    include /etc/nginx/dazah-maintenance.conf;
     listen 443 ssl;
     listen [::]:443 ssl;
     server_name __PUBLIC_HOST__;
@@ -60,6 +62,7 @@ server {
     ssl_session_timeout 1d;
     ssl_session_tickets off;
 
+    listen 127.0.0.1:8090;
     client_max_body_size 100m;
 
     proxy_set_header Host $host;
@@ -101,6 +104,10 @@ server {
 
     location / {
         proxy_pass http://frontend_upstream;
+        proxy_set_header Accept-Encoding $dazah_frontend_encoding;
+        gzip on;
+        sub_filter_once on;
+        sub_filter '</body>' '<script src="/__dazah_maintenance_watch.js"></script></body>';
         proxy_http_version 1.1;
         # Keep the public host visible to Next.js Server Actions.
         proxy_set_header Host $host;

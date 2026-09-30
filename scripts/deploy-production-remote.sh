@@ -17,6 +17,27 @@ LOCK_FILE="${DAZAH_DEPLOY_LOCK:-/var/lock/dazah-deploy.lock}"
 ENV_FILE="$ROOT_DIR/.env"
 COMPOSE_FILE="$ROOT_DIR/compose.yml"
 EDGE_COMPOSE_FILE="$ROOT_DIR/compose.edge.yml"
+MAINTENANCE_DIR="/var/lib/dazah-cd/public"
+CONTROL_SCRIPT="$ROOT_DIR/../control/controller.py"
+
+maintenance_on() {
+  mkdir -p "$MAINTENANCE_DIR"
+  chmod 755 "$MAINTENANCE_DIR"
+  touch "$MAINTENANCE_DIR/maintenance"
+  chmod 644 "$MAINTENANCE_DIR/maintenance"
+  rm -f "$MAINTENANCE_DIR/../traffic-guard-owned"
+  log "维护模式已开启；失败或中断时保持关闭业务流量"
+}
+
+maintenance_off() {
+  require_file "$CONTROL_SCRIPT"
+  python3 "$CONTROL_SCRIPT" verify || return 1
+  rm -f "$MAINTENANCE_DIR/maintenance"
+  rm -f "$MAINTENANCE_DIR/../traffic-guard-owned"
+  log "全部就绪检查通过，维护模式已关闭"
+}
+
+trap 'if [[ -f "$MAINTENANCE_DIR/maintenance" ]]; then log "操作未完成，维护模式保持开启" >&2; fi' ERR
 
 log() {
   printf '[dazah-deploy] %s\n' "$*"
@@ -69,6 +90,9 @@ compose() {
   if [[ -f "$EDGE_COMPOSE_FILE" ]]; then
     args+=(--file "$EDGE_COMPOSE_FILE")
   fi
+  for overlay in compose.single-host.yml compose.release.yml; do
+    if [[ -f "$ROOT_DIR/$overlay" ]]; then args+=(--file "$ROOT_DIR/$overlay"); fi
+  done
   docker compose "${args[@]}" "$@"
 }
 
@@ -105,7 +129,7 @@ backup_current_files() {
   mkdir -p "$backup_path"
   chmod 700 "$BACKUP_DIR" "$backup_path"
 
-  for name in .env compose.yml compose.edge.yml nginx.default.conf; do
+  for name in .env compose.yml compose.edge.yml nginx.default.conf nginx-maintenance.conf nginx-capacity.conf migration-policy.json; do
     if [[ -f "$ROOT_DIR/$name" ]]; then
       cp -p "$ROOT_DIR/$name" "$backup_path/$name"
     fi
@@ -118,7 +142,7 @@ backup_current_files() {
 restore_backup() {
   local backup_path="$1"
   [[ -d "$backup_path" ]] || return 1
-  for name in .env compose.yml compose.edge.yml nginx.default.conf; do
+  for name in .env compose.yml compose.edge.yml nginx.default.conf nginx-maintenance.conf nginx-capacity.conf migration-policy.json; do
     if [[ -f "$backup_path/$name" ]]; then
       cp -p "$backup_path/$name" "$ROOT_DIR/$name"
     else
@@ -133,7 +157,7 @@ restore_after_failed_change() {
   log "部署失败，恢复部署前的配置文件"
   restore_backup "$backup_path" || log "WARNING: 配置恢复失败，请检查 $backup_path"
   if compose config --quiet >/dev/null 2>&1; then
-    compose up -d --remove-orphans >/dev/null 2>&1 || \
+    compose up -d --no-deps app hermes-lite frontend >/dev/null 2>&1 || \
       log "WARNING: 旧版本容器未能自动恢复，请执行 status 检查"
     if [[ -f "$EDGE_COMPOSE_FILE" ]]; then
       recreate_nginx >/dev/null 2>&1 || \
@@ -203,6 +227,9 @@ stage_release_compose() {
   if [[ -f "$release_path/nginx.default.conf" ]]; then
     install -m 0644 "$release_path/nginx.default.conf" "$ROOT_DIR/nginx.default.conf"
   fi
+  for name in nginx-maintenance.conf nginx-capacity.conf migration-policy.json; do
+    if [[ -f "$release_path/$name" ]]; then install -m 0644 "$release_path/$name" "$ROOT_DIR/$name"; fi
+  done
 }
 
 verify_compose_images() {
@@ -214,6 +241,41 @@ verify_compose_images() {
       return 1
     fi
   done < <(compose config --images)
+}
+
+validate_maintenance_release() {
+  local release_path="$1" name
+  [[ ! -f "$ROOT_DIR/compose.release.yml" ]] || { fail "受 CD 控制的镜像应通过控制器发布"; return 1; }
+  for name in nginx-maintenance.conf nginx-capacity.conf migration-policy.json; do
+    require_file "$release_path/$name"
+  done
+  grep -q 'include /etc/nginx/dazah-maintenance.conf;' "$release_path/nginx.default.conf" \
+    && grep -q 'listen 127.0.0.1:8090;' "$release_path/nginx.default.conf" \
+    && grep -q '/run/dazah:ro' "$release_path/compose.edge.yml" \
+    || { fail "发布包缺少维护入口，拒绝覆盖当前代理"; return 1; }
+}
+
+quiesce_and_migrate() {
+  # Refuse legacy packages without a working public gate before stopping writers.
+  local code heads before target status
+  require_file "$ROOT_DIR/nginx-maintenance.conf"
+  require_file "$ROOT_DIR/migration-policy.json"
+  check_nginx || return 1
+  status="$(curl --silent --insecure --output /dev/null --write-out '%{http_code}' --max-time 5 https://127.0.0.1/health || true)"
+  if [[ "$status" != 503 ]]; then
+    status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 http://127.0.0.1/health || true)"
+  fi
+  [[ "$status" == 503 ]] || { fail "维护入口未生效，拒绝停止应用"; return 1; }
+  python3 "$CONTROL_SCRIPT" drain || return 1
+  before="$(compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select version_num from alembic_version order by version_num"')" || return 1
+  heads="$(compose run --rm --no-deps --entrypoint .venv/bin/python migrate -c "from alembic.config import Config; from alembic.script import ScriptDirectory; print('\\n'.join(ScriptDirectory.from_config(Config('alembic.ini')).get_heads()))")" || return 1
+  [[ "$heads" =~ ^[A-Za-z0-9_]+$ && "$before" =~ ^[A-Za-z0-9_]+$ ]] || { fail "迁移 head 或数据库版本不唯一"; return 1; }
+  code='import importlib.util,json,sys; from pathlib import Path; s=importlib.util.spec_from_file_location("cd",sys.argv[1]); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); p=json.loads(Path(sys.argv[2]).read_text()); h,b=sys.argv[3:5]; t=h if h==b else m.migration_target(p,h,b); assert t==b or any(x.get("from_revision")==b and x.get("to_revision")==t and x.get("backward_compatible") is True and x.get("review_reference") for x in p.get("transitions",[])), "migration approval required"; print(t)'
+  target="$(python3 -c "$code" "$CONTROL_SCRIPT" "$ROOT_DIR/migration-policy.json" "$heads" "$before" 2>/dev/null)" || { fail "迁移缺少兼容性审批，维护模式保持开启"; return 1; }
+  compose stop --timeout 120 hermes-lite app frontend || return 1
+  compose run --rm --no-deps migrate .venv/bin/alembic upgrade "$target" || return 1
+  before="$(compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select version_num from alembic_version order by version_num"')" || return 1
+  [[ "$before" == "$target" ]] || { fail "迁移后版本不一致"; return 1; }
 }
 
 wait_for_healthy() {
@@ -283,7 +345,14 @@ verify_proxy_routes() {
     deadline=$((SECONDS + 30))
     verified=0
     while (( SECONDS < deadline )); do
+      for url in "http://127.0.0.1:8090/$path"; do
+        if [[ -f "$MAINTENANCE_DIR/maintenance" ]]; then
+          if compose exec -T nginx wget -Y off -q --spider "$url"; then verified=1; break; fi
+          continue
+        fi
+      done
       for url in "http://127.0.0.1/$path" "https://127.0.0.1/$path"; do
+        if (( verified == 1 )); then break; fi
         if curl --fail --silent --show-error --location --insecure --max-time 5 \
           "$url" >/dev/null; then
           verified=1
@@ -323,9 +392,13 @@ deploy_version() {
   require_file "$ENV_FILE"
   require_file "$COMPOSE_FILE"
 
+  validate_maintenance_release "$release_path" || return 1
+
   previous_version="$(current_version)"
   backup_path="$(backup_current_files "$previous_version")"
   release_tar="$(resolve_release_tar "$version" "$release_path" || true)"
+  require_file "$CONTROL_SCRIPT"
+  maintenance_on
 
   if ! load_release_images "$version" "$release_tar"; then
     restore_after_failed_change "$backup_path"
@@ -345,7 +418,8 @@ deploy_version() {
     restore_after_failed_change "$backup_path"
     return 1
   fi
-  if ! compose up -d --remove-orphans; then
+  if ! quiesce_and_migrate; then return 1; fi
+  if ! compose up -d --no-deps app hermes-lite frontend; then
     restore_after_failed_change "$backup_path"
     return 1
   fi
@@ -358,6 +432,7 @@ deploy_version() {
     return 1
   fi
 
+  maintenance_off || return 1
   write_success_marker "$version" "$backup_path"
   log "部署成功: $version"
   compose ps
@@ -375,9 +450,13 @@ rollback_version() {
   require_file "$ENV_FILE"
   require_file "$COMPOSE_FILE"
 
+  validate_maintenance_release "$release_path" || return 1
+
   previous_version="$(current_version)"
   backup_path="$(backup_current_files "$previous_version")"
   release_tar="$(resolve_release_tar "$version" "$release_path" || true)"
+  require_file "$CONTROL_SCRIPT"
+  maintenance_on
 
   if ! load_release_images "$version" "$release_tar"; then
     restore_after_failed_change "$backup_path"
@@ -393,7 +472,8 @@ rollback_version() {
     restore_after_failed_change "$backup_path"
     return 1
   fi
-  if ! compose up -d --remove-orphans; then
+  if ! quiesce_and_migrate; then return 1; fi
+  if ! compose up -d --no-deps app hermes-lite frontend; then
     restore_after_failed_change "$backup_path"
     return 1
   fi
@@ -405,6 +485,7 @@ rollback_version() {
     return 1
   fi
 
+  maintenance_off || return 1
   write_success_marker "$version" "$backup_path"
   log "回滚成功: $previous_version -> $version"
   log "注意：回滚只切换应用镜像和 Compose 配置，不会自动回滚数据库迁移"
@@ -431,6 +512,8 @@ verify() {
   wait_for_healthy
   check_nginx
   verify_proxy_routes
+  require_file "$CONTROL_SCRIPT"
+  python3 "$CONTROL_SCRIPT" verify
   log "验证成功: $(current_version)"
 }
 
@@ -441,6 +524,8 @@ usage() {
   deploy-production.sh rollback <version> [release-directory]
   deploy-production.sh status
   deploy-production.sh verify
+  deploy-production.sh maintenance-on
+  deploy-production.sh maintenance-off
 
 发布目录默认位于 /opt/dazah/releases/<version>。
 EOF
@@ -461,6 +546,12 @@ case "$action" in
     ;;
   verify)
     verify
+    ;;
+  maintenance-on)
+    maintenance_on
+    ;;
+  maintenance-off)
+    maintenance_off
     ;;
   *)
     usage

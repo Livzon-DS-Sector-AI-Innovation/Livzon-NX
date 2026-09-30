@@ -139,8 +139,77 @@ Digest 或 lock 文件变化时，依赖层才需要重新构建。
 ```
 
 `Verify` 会检查容器健康、Nginx 配置，以及通过 Nginx 访问 `/health` 和
-`/login` 的完整代理链路。代理检查失败时，部署流程不会标记成功，并会恢复
-部署前配置。
+`/login` 的完整代理链路。代理检查失败时，部署流程不会标记成功；维护模式保持
+开启，修复后通过完整验证才恢复访问。
+
+## 维护模式（2026-09-30）
+
+正式入口统一挂载 `/var/lib/dazah-cd/public`。维护标记存在时，HTTP 和 HTTPS
+在 server 层阻断所有路由及请求方法，返回中文维护界面、503、`Retry-After: 15`
+和 `Cache-Control: no-store`；请求不会转发给业务服务。维护页每 15 秒检查恢复
+状态，恢复后进入登录页，不自动重放原有写请求。正常 HTML 页面注入同源状态
+检测脚本，每 5 秒通过只读标记探针自动切换维护界面；探针不访问业务服务。
+后台标签页恢复可见时立即检查。首次安装前已打开的页面需刷新一次才能加载检测。
+已发出的请求需先排空，不能把响应阻断理解为撤销已完成的业务操作；切换页面可能
+丢失尚未提交的表单，计划维护应预留保存时间。
+
+新发布包必须包含维护配置、排空探针配置及迁移策略；缺少这些文件的旧包会被拒绝，
+应重新生成新版本发布包，不能修改已有不可变版本。Deploy/Rollback 自动开启维护，
+确认代理已返回 503，再排空请求、停止应用写入源、执行经过审查的迁移目标，随后
+启动应用。开启维护后的失败和中断保留维护状态，不因配置恢复而自动开放流量。
+有 `compose.release.yml` 的站点由 CD 控制器发布，手工发布脚本拒绝覆盖其固定镜像。
+
+解除维护必须通过所有依赖和应用容器状态、后端与 Hermes `/health`、内部依赖
+readiness、Nginx 配置及 `/health`、`/login` 代理路由、唯一代码 head 与数据库
+revision 检查。内部探针通过容器 loopback 的 8090 端口使用同一套路由；该端口
+不映射到宿主机，公开 URL 和请求头无法绕过维护。迁移策略中已审查的临时 hold
+只适用于其精确源码 head 和允许的数据库 revision，不能用于忽略任意版本漂移。
+本次维护功能安装只读取迁移版本，不执行正式库迁移。
+
+手工重建前后使用同一维护入口：
+
+```bash
+sudo /opt/dazah/current/deploy-production.sh maintenance-on
+# 执行已授权的维护操作；不要使用 down -v。
+sudo /opt/dazah/current/deploy-production.sh maintenance-off
+```
+
+```powershell
+.\scripts\deploy-production.ps1 MaintenanceOn -Server 192.168.40.251 -SshUser livzon
+.\scripts\deploy-production.ps1 MaintenanceOff -Server 192.168.40.251 -SshUser livzon
+```
+
+`dazah-traffic-guard.timer` 每次检查结束后约 2 秒再次检测。发现依赖、应用、代理
+容器缺失或不健康，或者迁移容器运行时，自动开启维护；只在完整检查通过后解除
+自己开启的维护。人工/发布开启的维护、失败发布状态和 watchdog blocked 状态
+不会被巡检解除。巡检不启动或重启业务容器，不启用 CD/watchdog 的发布和恢复。
+绕过维护入口直接执行 Docker 操作存在检测间隔；计划操作必须先开启维护。
+单节点 Nginx 自身重建/停止期间无法提供维护页面，连接会短暂中断；如需此时仍
+持续展示页面，需要独立于被重建栈的外层代理。
+
+服务器已安装并启用维护巡检，正式入口已验证 98 个 HTTP/HTTPS 路由与方法组合
+均被阻断，解除后 `/health` 和 `/login` 正常。当前业务镜像和数据库未变更，
+CD/watchdog timer 继续关闭。安装备份位于
+`/opt/dazah/backups/maintenance-20260930-082231`（初始安装）和
+`/opt/dazah/backups/maintenance-observer-20260930-082752`（页面检测），只包含本次替换的部署配置和
+控制程序，不包含生产环境文件。回退此功能前先停止维护巡检，恢复备份配置并
+重建 Nginx；回退会失去自动维护保护。
+
+验证记录：
+
+- 在无网络、工作区只读挂载的 `dazah/backend:cd-verify-dev` 开发镜像内执行
+  `/app/.venv/bin/python -m pytest -p no:cacheprovider scripts/tests/test_cd_controller.py scripts/tests/test_cd_stage_site.py scripts/tests/test_production_proxy_deployment.py scripts/tests/test_maintenance_browser.py -q`：
+  106 passed、2 skipped。跳过的是显式 Docker 集成和该镜像缺少 Node 的浏览器脚本验证，均在下项单独执行。
+- 本机设置 `RUN_CD_CONTAINER_TESTS=1`，执行
+  `python -m pytest scripts/tests/test_cd_stage_site.py scripts/tests/test_maintenance_browser.py -q`：
+  5 passed，含真实隔离 Nginx、流式容量、HTML 脚本注入、维护阻断和恢复，以及 Node 状态切换验证。
+- `bash -n scripts/deploy-production-remote.sh`（通过隔离开发容器执行）、PowerShell
+  Parser、`git diff --check`：通过。测试影响策略对本次 controller/stage_site 未提交
+  改动与对应测试的映射检查通过；没有执行 Git 提交，提交历史门禁需在提交时再运行。
+- 服务器 `python3 /opt/dazah/control/controller.py verify`：通过；当前唯一源码 head
+  与数据库 revision 均为 `d7e8f9a1b2c3`，维护标记已关闭，巡检 timer active。
+- 未对正式数据库执行迁移、破坏性故障演练或业务全量测试；本次只修改代理和部署
+  控制层。未修改 OpenAPI、环境变量或业务镜像，后续生成发布包会增加维护配置文件。
 
 ## 服务器端直接操作
 

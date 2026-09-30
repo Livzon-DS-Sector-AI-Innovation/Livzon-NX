@@ -28,6 +28,7 @@ async def get_person_options(
     keyword: str | None = None,
     limit: int = 500,
     departments: list[str] | None = None,
+    department_keywords: tuple[str, ...] = (),
 ) -> list[dict[str, Any]]:
     """人员选择器候选：人事管理-飞书联系人目录（hr_feishu_members）。
 
@@ -35,7 +36,7 @@ async def get_person_options(
     做中文/拼音本地过滤。departments 给定时只返回这些部门（精确匹配）的
     在职人员——质量检验表单的人员字段按部门收敛候选（QC/AI创新部）。
     """
-    from sqlalchemy import func, select
+    from sqlalchemy import func, or_, select
 
     from app.modules.hr.models import HrFeishuMember
 
@@ -68,6 +69,16 @@ async def get_person_options(
         query = query.where(HrFeishuMember.name.ilike(f"%{normalized}%"))
     if normalized_departments:
         query = query.where(HrFeishuMember.department.in_(normalized_departments))
+    if department_keywords:
+        # 在聚合前按部门筛选，避免 min(department) 选到兼属的非 QA 部门。
+        query = query.where(
+            or_(
+                *(
+                    HrFeishuMember.department.contains(item)
+                    for item in department_keywords
+                )
+            )
+        )
     rows = (await db.execute(query)).all()
     if not rows:
         total = (
@@ -194,7 +205,9 @@ async def get_qa_reminder_recipients(db: AsyncSession) -> list[dict[str, Any]]:
     从人员目录中筛选部门名含 QA/质量保证 的在职人员，按 open_id 去重，
     提供 open_id/name/department/enterprise_email 供邮件与飞书提醒使用。
     """
-    options = await get_person_options(db, limit=5000)
+    options = await get_person_options(
+        db, limit=5000, department_keywords=_QA_DEPARTMENT_KEYWORDS
+    )
     recipients: dict[str, dict[str, Any]] = {}
     for option in options:
         open_id = str(option.get("open_id") or "").strip()
