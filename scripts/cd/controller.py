@@ -66,6 +66,73 @@ def digest(path: Path) -> str:
     return checksum.hexdigest()
 
 
+def archive_directory(source: Path, target: Path, *, timeout: int = 600) -> int:
+    """Retry a changing online file set, but accept only a successful, readable tar."""
+    deadline = time.monotonic() + timeout
+    for attempt in range(1, 4):
+        remaining = max(1, int(deadline - time.monotonic()))
+        try:
+            command(["tar", "-czf", str(target), "-C", str(source), "."], timeout=remaining)
+        except Refused as exc:
+            if str(exc) != "operation failed: tar, exit=1":
+                raise
+            if attempt == 3 or deadline - time.monotonic() <= 2:
+                raise Refused("backup archive changed during all attempts") from exc
+            time.sleep(2)
+            continue
+        command(["tar", "-tzf", str(target)], timeout=max(1, int(deadline - time.monotonic())),
+                output=subprocess.DEVNULL)
+        return attempt
+    raise Refused("backup archive did not complete")
+
+
+def verified_backup_manifest(path: Path) -> dict | None:
+    """Incomplete, corrupt or linked backups must never qualify for retention deletion."""
+    try:
+        manifest_path = path / "manifest.json"
+        if path.is_symlink() or manifest_path.is_symlink() or not manifest_path.is_file():
+            return None
+        manifest = read_json(manifest_path)
+        if not isinstance(manifest, dict) or manifest.get("kind") not in ("daily", "predeploy"):
+            return None
+        files = manifest.get("files")
+        if not isinstance(files, dict) or not {"database.dump", "config.tar.gz", "redis.rdb"} <= files.keys():
+            return None
+        for name, expected in files.items():
+            if not isinstance(name, str) or Path(name).name != name:
+                return None
+            file = path / name
+            if (file.is_symlink() or not file.is_file() or not isinstance(expected, str)
+                    or not re.fullmatch(r"[a-f0-9]{64}", expected) or digest(file) != expected):
+                return None
+        if not (path / "database.dump").stat().st_size:
+            return None
+        return manifest
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def protected_release_versions(current: Path) -> set[str]:
+    """Read only public deployment metadata, never the production environment file."""
+    marker = current.parent / "backups" / "deploy" / "last-success"
+    versions = set()
+    if marker.is_symlink() or not marker.is_file():
+        return versions
+    record = dict(line.split("=", 1) for line in marker.read_text().splitlines() if "=" in line)
+    version = record.get("version", "")
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,80}", version):
+        versions.add(version)
+    backup = Path(record.get("backup", ""))
+    if (backup.is_absolute() and not backup.is_symlink()
+            and backup.resolve().parent == marker.parent.resolve()):
+        prior = backup / "current-version"
+        if prior.is_file() and not prior.is_symlink():
+            version = prior.read_text().strip()
+            if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,80}", version):
+                versions.add(version)
+    return versions
+
+
 def restore_archive(archive: Path, target: Path) -> None:
     """Restore only inside a new root-private drill directory, never into live volumes."""
     target.mkdir(mode=0o700)
@@ -463,6 +530,7 @@ class Controller:
             command(["docker", "exec", inventory["redis"]["id"], "rm", "-f", redis_snapshot])
         # Persistent file stores. Online copies are explicitly not a cross-store snapshot.
         volumes: list[str] = []
+        archive_attempts = {}
         for service in ("app", "hermes-lite", "minio", "redis"):
             if service not in inventory:
                 raise Refused("persistent service missing")
@@ -473,13 +541,19 @@ class Controller:
                     if not source.is_relative_to("/var/lib/docker/volumes"):
                         raise Refused("unrecognized volume location")
                     volumes.append(str(source))
-                    command(["tar", "-czf", str(target / f"{mount['Name']}.tar.gz"),
-                             "-C", str(source), "."], timeout=600)
-        command(["tar", "-czf", str(target / "config.tar.gz"), "-C", str(self.current), "."], timeout=120)
+                    filename = f"{mount['Name']}.tar.gz"
+                    archive_attempts[filename] = archive_directory(source, target / filename)
+        archive_attempts["config.tar.gz"] = archive_directory(self.current, target / "config.tar.gz", timeout=120)
         files = {p.name: digest(p) for p in target.iterdir() if p.is_file()}
         if not (target / "database.dump").stat().st_size:
             raise Refused("empty database backup")
+        references = [command(["docker", "inspect", "--format", "{{.Config.Image}}", inventory[s]["id"]]) for s in APPS]
+        tagged = [ref for ref in references
+                  if re.fullmatch(r"dazah/(backend|frontend|hermes-lite):[A-Za-z0-9][A-Za-z0-9._-]{0,80}", ref)]
+        versions = {ref.rsplit(":", 1)[1] for ref in tagged}
+        release_version = next(iter(versions)) if len(versions) == 1 and len(tagged) == len(APPS) else None
         atomic_json(target / "manifest.json", {"kind": kind, "files": files,
+                    "release_version": release_version, "archive_attempts": archive_attempts,
                     "database_revision": self.revision(),
                     "consistency": "writers_stopped" if kind == "predeploy" else "online_independent_copies",
                     "images": {s: command(["docker", "inspect", "--format", "{{.Image}}", inventory[s]["id"]]) for s in (*APPS, *DEPS)},
@@ -494,18 +568,25 @@ class Controller:
         root = self.data / "backups"
         state = read_json(self.state_file, {})
         protected = {state.get("backup"), state.get("previous_backup")}
-        daily = sorted((p for p in root.glob("daily-*") if not p.is_symlink()
-                        and (p / "manifest.json").is_file()), reverse=True)
-        before = sorted((p for p in root.glob("predeploy-*") if not p.is_symlink()
-                         and (p / "manifest.json").is_file()), reverse=True)
+        manifests = {p: manifest for p in (*root.glob("daily-*"), *root.glob("predeploy-*"))
+                     if (manifest := verified_backup_manifest(p)) is not None}
+        daily = sorted((p for p in manifests if p.name.startswith("daily-")), reverse=True)
+        before = sorted((p for p in manifests if p.name.startswith("predeploy-")), reverse=True)
         weeks = {}
+        months = {}
         for path in daily:
             try:
                 date = dt.datetime.strptime(path.name[6:14], "%Y%m%d").date()
             except ValueError:
                 continue
             weeks.setdefault(date.isocalendar()[:2], path)
-        keep = set(daily[:7] + list(weeks.values())[:4] + before[:3])
+            months.setdefault((date.year, date.month), path)
+        keep = set(daily[:7] + list(weeks.values())[:4] + list(months.values())[:6] + before[:3])
+        for version in protected_release_versions(self.current):
+            match = next((p for p in sorted(manifests, reverse=True)
+                          if manifests[p].get("release_version") == version), None)
+            if match is not None:
+                keep.add(match)
         for path in (*daily, *before):
             if path in keep or str(path) in protected:
                 continue

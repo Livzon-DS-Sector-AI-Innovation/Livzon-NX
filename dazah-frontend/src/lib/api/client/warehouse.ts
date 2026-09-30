@@ -18,6 +18,7 @@ import type {
   WarehouseTrendSummary,
 } from '@/types/warehouse'
 import { normalizeWarehouseDashboard } from '@/lib/warehouse-dashboard'
+import { getModuleByKey, getPageKeyByPath, type SubMenuItem } from '@/lib/menu-config'
 
 export async function fetchWarehouseDashboard(
   group: WarehouseDashboardGroup,
@@ -148,17 +149,40 @@ export async function fetchWarehouseMaterialPage(
   return body.data as WarehouseFeishuMaterialPageData
 }
 
+function getWarehouseRecordPermissionPageKey(pageKey: string): string | undefined {
+  function findPage(items: SubMenuItem[]): string | undefined {
+    for (const item of items) {
+      if (item.feishuPageKey === pageKey && item.path) {
+        return getPageKeyByPath(item.path)
+      }
+      const nested = item.children && findPage(item.children)
+      if (nested) return nested
+    }
+  }
+  return findPage(getModuleByKey('warehouse')?.children ?? [])
+}
+
 export async function fetchWarehouseRecordDetail(
   pageKey: string,
   recordId: string,
   timeoutMs?: number
 ): Promise<WarehouseRecordDetail> {
+  // 仪表盘下钻仍停留在原页面，Referer 无法代表记录所属台账。
+  // 复用菜单的稳定页面身份，后端继续校验该页面的查询权限和数据范围。
+  const permissionPageKey = getWarehouseRecordPermissionPageKey(pageKey)
+  if (!permissionPageKey) {
+    throw new Error('仓储记录所属页面未登记，无法获取详情')
+  }
   const res = await fetch(
     `/api/v1/warehouse/material-pages/${pageKey}/records/${recordId}`,
     {
+      headers: { 'X-Dazah-Page-Key': permissionPageKey },
       ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
     }
   )
+  if (res.status === 403) {
+    throw new Error('无权查看该仓储记录详情，请确认所属台账的查询权限和数据范围')
+  }
   if (!res.ok) {
     throw new Error('获取仓储记录详情失败')
   }

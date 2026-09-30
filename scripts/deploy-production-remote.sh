@@ -51,6 +51,15 @@ validate_version() {
     || die "版本号不合法: $version"
 }
 
+check_release_store() {
+  if [[ "$RELEASE_DIR" == /data/dazah/releases \
+     || "$(readlink "$RELEASE_DIR" 2>/dev/null || true)" == /data/dazah/releases \
+     || "$(readlink -f "$RELEASE_DIR" 2>/dev/null || true)" == /data/dazah/releases ]]; then
+    require_file "$ROOT_DIR/../control/controller.py"
+    python3 "$ROOT_DIR/../control/controller.py" mount-check
+  fi
+}
+
 compose() {
   local args=(
     --project-name "$COMPOSE_PROJECT"
@@ -310,6 +319,7 @@ deploy_version() {
   local backup_path
 
   validate_version "$version"
+  check_release_store
   require_file "$ENV_FILE"
   require_file "$COMPOSE_FILE"
 
@@ -361,6 +371,7 @@ rollback_version() {
   local backup_path
 
   validate_version "$version"
+  check_release_store
   require_file "$ENV_FILE"
   require_file "$COMPOSE_FILE"
 
