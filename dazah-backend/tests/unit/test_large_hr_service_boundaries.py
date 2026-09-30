@@ -547,6 +547,17 @@ async def test_onboarding_and_departure_sync_boundaries(monkeypatch: Any) -> Any
     ):
         repo: Any = AsyncMock()
         bitable: Any = AsyncMock()
+
+        class _Savepoint:
+            """同步按 savepoint 逐条入库（self.repo.session.begin_nested()）。"""
+
+            async def __aenter__(self) -> Any:
+                return self
+
+            async def __aexit__(self, *_args: Any) -> None:
+                return None
+
+        repo.session = SimpleNamespace(begin_nested=lambda: _Savepoint())
         service = _bare(service_type, repo=repo, bitable=bitable)
         record_id = uuid4()
         repo.get_by_id.return_value = None
