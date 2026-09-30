@@ -222,6 +222,12 @@ def _parse_date(value: Any) -> date | None:
     return None
 
 
+def _date_text(value: Any) -> str | None:
+    """Parse Feishu date value and render as ISO text for VARCHAR columns."""
+    parsed = _parse_date(value)
+    return parsed.isoformat() if parsed else None
+
+
 def _parse_contract_date(value: Any) -> date | None:
     """Parse contract end date from Feishu text array or string formats."""
     text = _extract_text(value)
@@ -2566,136 +2572,138 @@ class OffboardingRecordService:
 
         for rec in raw_records:
             try:
-                fields = rec.get("fields", {})
-                rid = rec.get("record_id", "")
-                if not rid:
-                    stats["failed"] += 1
-                    continue
+                async with self.session.begin_nested():
+                    fields = rec.get("fields", {})
+                    rid = rec.get("record_id", "")
+                    if not rid:
+                        stats["failed"] += 1
+                        continue
 
-                feishu_record_ids.add(rid)
+                    feishu_record_ids.add(rid)
 
-                def gt(key: str) -> Any:
-                    return fields.get(key)
+                    def gt(key: str) -> Any:
+                        return fields.get(key)
 
-                # Try to resolve employee_id from employee_number
-                emp_no = _extract_text(gt("工号"))
-                employee_id = None
-                emp = None
-                if emp_no:
-                    emp = await self.employee_repo.get_by_employee_number(emp_no)
+                    # Try to resolve employee_id from employee_number
+                    emp_no = _extract_text(gt("工号"))
+                    employee_id = None
+                    emp = None
+                    if emp_no:
+                        emp = await self.employee_repo.get_by_employee_number(emp_no)
+                        if emp:
+                            employee_id = emp.id
+
+                    _birth = _parse_birth_date(gt("出生年月"))
+                    _age = _extract_age(gt("年龄"))
+
+                    # 飞书离职表未维护出生年月/年龄（或为空）时，
+                    # 回退到员工档案（权威来源），
+                    # 保证离职台账与员工档案一致，避免飞书拉取后丢字段
                     if emp:
-                        employee_id = emp.id
+                        emp_birth_year = getattr(emp, "birth_year", None)
+                        if _birth is None and emp_birth_year:
+                            _birth = date(
+                                emp_birth_year,
+                                getattr(emp, "birth_month", None) or 1,
+                                getattr(emp, "birth_day", None) or 1,
+                            )
+                        emp_age = getattr(emp, "age", None)
+                        if _age is None and emp_age is not None:
+                            _age = emp_age
 
-                _birth = _parse_birth_date(gt("出生年月"))
-                _age = _extract_age(gt("年龄"))
+                    data = {
+                        "feishu_record_id": rid,
+                        "employee_id": employee_id,
+                        "seq_number": _extract_number(gt("序号")),
+                        "employee_number": emp_no,
+                        "name": _extract_text(gt("姓名")),
+                        "domain_account": _extract_text(gt("域账户")),
+                        "gender": _extract_text(gt("性别")),
+                        "birth_year": _birth.year if _birth else None,
+                        "birth_month": _birth.month if _birth else None,
+                        "birth_day": _birth.day if _birth else None,
+                        "age": _age,
+                        "ethnic_group": _extract_text(gt("民族")),
+                        "native_place": _extract_text(gt("籍贯")),
+                        "political_status": _extract_text(gt("政治面貌")),
+                        "marital_status": _extract_text(gt("婚姻状况")),
+                        "health_status": _extract_text(gt("健康状况")),
+                        "household_type": _extract_text(gt("户口类别")),
+                        "status_category": _extract_text(gt("人员类别")),
+                        "id_card": _extract_text(gt("身份证号码")),
+                        "id_card_expiry": _extract_text(gt("身份证有效期截止日期")),
+                        "current_address": _extract_text(gt("现家庭住址")),
+                        "phone": _extract_text(gt("联系电话")),
+                        "email": _extract_text(gt("电子邮箱")),
+                        "emergency_contact_name": _extract_text(gt("紧急联系人")),
+                        "emergency_contact_phone": _extract_text(gt("紧急联系人电话")),
+                        "emergency_contact_relation": _extract_text(gt("与本人关系")),
+                        "department": _extract_text(gt("一级部门")),
+                        "sub_department": _extract_text(gt("二级部门")),
+                        "position": _extract_text(gt("职位/岗位")),
+                        "level": _extract_text(gt("职级")),
+                        "employment_type": _extract_text(gt("人员就业方式")),
+                        "probation_status": _extract_text(gt("转正状态")),
+                        "probation_effective_date": _parse_date(gt("转正生效日期")),
+                        "hire_date": _parse_date(gt("入职日期")),
+                        "work_start_date": _parse_date(gt("参加工作时间")),
+                        "factory_entry_date": _parse_date(gt("进入本公司时间")),
+                        "work_years": _extract_text(gt("工龄"))
+                        or _extract_text(gt("工作年限")),
+                        "offboarding_date": _parse_date(gt("最后工作日")),
+                        "offboarding_type": _extract_text(gt("离职类型")) or "辞职",
+                        "reason": _extract_text(gt("离职原因")),
+                        # 在职状态与交接状态联动：飞书离职表无「交接状态」字段。
+                        # 仅在飞书「在职状态」明确为离职时写离职；否则返回 None，
+                        # 保留本地已手动维护的在职状态（不被飞书空值或误值覆盖）。
+                        "status": (
+                            "离职" if _extract_text(gt("在职状态")) == "离职" else None
+                        ),
+                        "education": _extract_text(gt("学历")),
+                        "degree": _extract_text(gt("学位")),
+                        "major": _extract_text(gt("专业")),
+                        "school": _extract_text(gt("毕业院校")),
+                        "graduation_date": _parse_date(gt("毕业时间")),
+                        "qualification_type": _extract_text(gt("职称")),
+                        "qualifications": gt("技能证书")
+                        if isinstance(gt("技能证书"), list)
+                        else None,
+                        "certificate_number": _extract_text(gt("证书编号")),
+                        "certificate_review_date": _parse_date(gt("技能证书复审时间")),
+                        "contract_start_date": _parse_date(gt("首次签订合同日期")),
+                        "contract_end_date": _parse_date(gt("首次签订合同截止日期")),
+                        "contract_end_2": _extract_text(gt("合同截止日期2")),
+                        "contract_end_3": _extract_text(gt("合同截止日期3")),
+                        "contract_end_4": _extract_text(gt("合同截止日期4")),
+                        "contract_end_5": _extract_text(gt("合同截止日期5")),
+                        "contract_start_2": _parse_date(gt("第二次续签合同日期")),
+                        # contract_start_3..6 的本地列为 VARCHAR，日期需转 ISO 文本
+                        "contract_start_3": _date_text(gt("第三次续签合同日期")),
+                        "contract_start_4": _date_text(gt("第四次续签合同日期")),
+                        "contract_start_5": _date_text(gt("第五次续签合同日期")),
+                        "contract_start_6": _date_text(gt("第六次续签合同日期")),
+                        "work_experience_1": _extract_text(gt("工作经验一")),
+                        "work_experience_2": _extract_text(gt("工作经验二")),
+                        "work_experience_3": _extract_text(gt("工作经验三")),
+                        "work_experience_4": _extract_text(gt("工作经验四")),
+                        "archive_number": _extract_text(gt("档案号")),
+                        "notes": _extract_text(gt("备注")),
+                        "feishu_synced_at": date.today(),
+                    }
 
-                # 飞书离职表未维护出生年月/年龄（或为空）时，
-                # 回退到员工档案（权威来源），
-                # 保证离职台账与员工档案一致，避免飞书拉取后丢字段
-                if emp:
-                    emp_birth_year = getattr(emp, "birth_year", None)
-                    if _birth is None and emp_birth_year:
-                        _birth = date(
-                            emp_birth_year,
-                            getattr(emp, "birth_month", None) or 1,
-                            getattr(emp, "birth_day", None) or 1,
-                        )
-                    emp_age = getattr(emp, "age", None)
-                    if _age is None and emp_age is not None:
-                        _age = emp_age
-
-                data = {
-                    "feishu_record_id": rid,
-                    "employee_id": employee_id,
-                    "seq_number": _extract_number(gt("序号")),
-                    "employee_number": emp_no,
-                    "name": _extract_text(gt("姓名")),
-                    "domain_account": _extract_text(gt("域账户")),
-                    "gender": _extract_text(gt("性别")),
-                    "birth_year": _birth.year if _birth else None,
-                    "birth_month": _birth.month if _birth else None,
-                    "birth_day": _birth.day if _birth else None,
-                    "age": _age,
-                    "ethnic_group": _extract_text(gt("民族")),
-                    "native_place": _extract_text(gt("籍贯")),
-                    "political_status": _extract_text(gt("政治面貌")),
-                    "marital_status": _extract_text(gt("婚姻状况")),
-                    "health_status": _extract_text(gt("健康状况")),
-                    "household_type": _extract_text(gt("户口类别")),
-                    "status_category": _extract_text(gt("人员类别")),
-                    "id_card": _extract_text(gt("身份证号码")),
-                    "id_card_expiry": _extract_text(gt("身份证有效期截止日期")),
-                    "current_address": _extract_text(gt("现家庭住址")),
-                    "phone": _extract_text(gt("联系电话")),
-                    "email": _extract_text(gt("电子邮箱")),
-                    "emergency_contact_name": _extract_text(gt("紧急联系人")),
-                    "emergency_contact_phone": _extract_text(gt("紧急联系人电话")),
-                    "emergency_contact_relation": _extract_text(gt("与本人关系")),
-                    "department": _extract_text(gt("一级部门")),
-                    "sub_department": _extract_text(gt("二级部门")),
-                    "position": _extract_text(gt("职位/岗位")),
-                    "level": _extract_text(gt("职级")),
-                    "employment_type": _extract_text(gt("人员就业方式")),
-                    "probation_status": _extract_text(gt("转正状态")),
-                    "probation_effective_date": _parse_date(gt("转正生效日期")),
-                    "hire_date": _parse_date(gt("入职日期")),
-                    "work_start_date": _parse_date(gt("参加工作时间")),
-                    "factory_entry_date": _parse_date(gt("进入本公司时间")),
-                    "work_years": _extract_text(gt("工龄"))
-                    or _extract_text(gt("工作年限")),
-                    "offboarding_date": _parse_date(gt("最后工作日")),
-                    "offboarding_type": _extract_text(gt("离职类型")) or "辞职",
-                    "reason": _extract_text(gt("离职原因")),
-                    # 在职状态与交接状态联动：飞书离职表无「交接状态」字段。
-                    # 仅在飞书「在职状态」明确为离职时写离职；否则返回 None，
-                    # 保留本地已手动维护的在职状态（不被飞书空值或误值覆盖）。
-                    "status": (
-                        "离职" if _extract_text(gt("在职状态")) == "离职" else None
-                    ),
-                    "education": _extract_text(gt("学历")),
-                    "degree": _extract_text(gt("学位")),
-                    "major": _extract_text(gt("专业")),
-                    "school": _extract_text(gt("毕业院校")),
-                    "graduation_date": _parse_date(gt("毕业时间")),
-                    "qualification_type": _extract_text(gt("职称")),
-                    "qualifications": gt("技能证书")
-                    if isinstance(gt("技能证书"), list)
-                    else None,
-                    "certificate_number": _extract_text(gt("证书编号")),
-                    "certificate_review_date": _parse_date(gt("技能证书复审时间")),
-                    "contract_start_date": _parse_date(gt("首次签订合同日期")),
-                    "contract_end_date": _parse_date(gt("首次签订合同截止日期")),
-                    "contract_end_2": _extract_text(gt("合同截止日期2")),
-                    "contract_end_3": _extract_text(gt("合同截止日期3")),
-                    "contract_end_4": _extract_text(gt("合同截止日期4")),
-                    "contract_end_5": _extract_text(gt("合同截止日期5")),
-                    "contract_start_2": _parse_date(gt("第二次续签合同日期")),
-                    "contract_start_3": _parse_date(gt("第三次续签合同日期")),
-                    "contract_start_4": _parse_date(gt("第四次续签合同日期")),
-                    "contract_start_5": _parse_date(gt("第五次续签合同日期")),
-                    "contract_start_6": _parse_date(gt("第六次续签合同日期")),
-                    "work_experience_1": _extract_text(gt("工作经验一")),
-                    "work_experience_2": _extract_text(gt("工作经验二")),
-                    "work_experience_3": _extract_text(gt("工作经验三")),
-                    "work_experience_4": _extract_text(gt("工作经验四")),
-                    "archive_number": _extract_text(gt("档案号")),
-                    "notes": _extract_text(gt("备注")),
-                    "feishu_synced_at": date.today(),
-                }
-
-                # Upsert by feishu_record_id（飞书为主，但空值不覆盖本地已有值，
-                # 避免清掉本地手动维护的在职状态、域账号、职务等）
-                existing = await self.repo.get_by_feishu_record_id(rid)
-                if existing:
-                    for key, value in data.items():
-                        if key != "id" and value not in (None, ""):
-                            setattr(existing, key, value)
-                    stats["updated"] += 1
-                else:
-                    create_data = {k: v for k, v in data.items() if v not in (None, "")}
-                    record = OffboardingRecord(**create_data)
-                    self.session.add(record)
-                    stats["created"] += 1
+                    # Upsert by feishu_record_id（飞书为主，但空值不覆盖本地已有值，
+                    # 避免清掉本地手动维护的在职状态、域账号、职务等）
+                    existing = await self.repo.get_by_feishu_record_id(rid)
+                    if existing:
+                        for key, value in data.items():
+                            if key != "id" and value not in (None, ""):
+                                setattr(existing, key, value)
+                        stats["updated"] += 1
+                    else:
+                        create_data = {k: v for k, v in data.items() if v not in (None, "")}
+                        record = OffboardingRecord(**create_data)
+                        self.session.add(record)
+                        stats["created"] += 1
             except Exception:
                 logger.exception(
                     "Failed to sync offboarding record %s", rec.get("record_id")
@@ -3096,39 +3104,45 @@ class PositionTransferRecordService:
         # 1. 飞书有 → upsert 本地
         for rec in raw_records:
             try:
-                fields = rec.get("fields", {})
-                rid = rec.get("record_id", "")
-                data = {
-                    "feishu_record_id": rid,
-                    "employee_name": _extract_text(fields.get("申请人", "")),
-                    "department_before": _extract_text(fields.get("原部门", "")),
-                    "original_position": _extract_text(fields.get("原职位", "")),
-                    "effective_date": _parse_date(fields.get("生效日期")),
-                    "apply_department": _extract_text(fields.get("申请部门", "")),
-                    "apply_position": _extract_text(fields.get("申请职位", "")),
-                    "contact_phone": _extract_text(fields.get("联系电话", "")),
-                    "applicant_confirmation_text": _extract_text(
-                        fields.get("申请人确认说明", "")
-                    ),
-                    "applicant_signature": _extract_text(fields.get("申请人签名", "")),
-                    "applicant_confirmation_date": _parse_date(
-                        fields.get("申请人确认日期")
-                    ),
-                    "approval_status": "已通过",  # 飞书同步的记录默认为已通过
-                    "feishu_synced_at": date.today(),
-                }
-                # 以飞书为主：不过滤空值，空值也覆盖本地旧值
-                existing = await self.repo.get_by_feishu_record_id(rid) if rid else None
-                if existing:
-                    for k, v in data.items():
-                        if k != "id":
-                            setattr(existing, k, v)
-                    await self.repo.update(existing)
-                    stats["updated"] += 1
-                else:
-                    record = PositionTransferRecord(**data)
-                    await self.repo.create(record)
-                    stats["created"] += 1
+                async with self.session.begin_nested():
+                    fields = rec.get("fields", {})
+                    rid = rec.get("record_id", "")
+                    # 2026-09 新版岗位调动台账为简化台账结构（姓名/部门前后/
+                    # 岗位前后/调动日期），不再包含审批流确认字段
+                    data = {
+                        "feishu_record_id": rid,
+                        "seq_number": _extract_number(fields.get("序号")),
+                        "employee_name": _extract_text(fields.get("姓名", "")),
+                        "department_before": _extract_text(fields.get("一级部门", "")),
+                        "sub_department_before": _extract_text(
+                            fields.get("二级部门", "")
+                        ),
+                        "original_position": _extract_text(fields.get("岗位", "")),
+                        "apply_department": _extract_text(
+                            fields.get("一级部门（变动后）", "")
+                        ),
+                        "sub_department_after": _extract_text(
+                            fields.get("二级部门（变动后）", "")
+                        ),
+                        "apply_position": _extract_text(
+                            fields.get("岗位（变动后）", "")
+                        ),
+                        "effective_date": _parse_date(fields.get("岗位调动日期")),
+                        "approval_status": "已通过",  # 飞书同步的记录默认为已通过
+                        "feishu_synced_at": date.today(),
+                    }
+                    # 以飞书为主：不过滤空值，空值也覆盖本地旧值
+                    existing = await self.repo.get_by_feishu_record_id(rid) if rid else None
+                    if existing:
+                        for k, v in data.items():
+                            if k != "id":
+                                setattr(existing, k, v)
+                        await self.repo.update(existing)
+                        stats["updated"] += 1
+                    else:
+                        record = PositionTransferRecord(**data)
+                        await self.repo.create(record)
+                        stats["created"] += 1
             except Exception:
                 logger.exception(
                     "Failed to sync position transfer record %s", rec.get("record_id")
@@ -4153,23 +4167,24 @@ class _LegacyFeishuRecordService:
         stats = {"created": 0, "updated": 0, "failed": 0, "total": len(raw_records)}
         for record in raw_records:
             try:
-                data = await self._parse_feishu_record(record)
-                data["feishu_synced_at"] = date.today()
-                record_id = data.get("feishu_record_id")
-                if not record_id:
-                    stats["failed"] += 1
-                    continue
-                await self.repo.upsert_by_feishu_record_id(data)
-                existing = await self.repo.get_by_feishu_record_id(record_id)
-                recently_created = (
-                    existing
-                    and existing.created_at
-                    and (
-                        datetime.utcnow() - existing.created_at.replace(tzinfo=None)
-                    ).total_seconds()
-                    < 60
-                )
-                stats["created" if recently_created else "updated"] += 1
+                async with self.repo.session.begin_nested():
+                    data = await self._parse_feishu_record(record)
+                    data["feishu_synced_at"] = date.today()
+                    record_id = data.get("feishu_record_id")
+                    if not record_id:
+                        stats["failed"] += 1
+                        continue
+                    await self.repo.upsert_by_feishu_record_id(data)
+                    existing = await self.repo.get_by_feishu_record_id(record_id)
+                    recently_created = (
+                        existing
+                        and existing.created_at
+                        and (
+                            datetime.utcnow() - existing.created_at.replace(tzinfo=None)
+                        ).total_seconds()
+                        < 60
+                    )
+                    stats["created" if recently_created else "updated"] += 1
             except Exception:
                 logger.exception(
                     "Failed to sync legacy HR record %s", record.get("record_id")

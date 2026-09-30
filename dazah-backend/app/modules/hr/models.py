@@ -152,7 +152,7 @@ class Employee(BaseModel):
         JSON, nullable=True, comment="职称／职业资格（多选）"
     )
     qualification_type: Mapped[str | None] = mapped_column(
-        String(32), nullable=True, comment="职称类型"
+        String(64), nullable=True, comment="职称类型"
     )
     certificate_number: Mapped[str | None] = mapped_column(
         String(64), nullable=True, comment="证书编号"
@@ -559,7 +559,7 @@ class OffboardingRecord(BaseModel):
 
     # ─── Qualifications ───
     qualification_type: Mapped[str | None] = mapped_column(
-        String(32), nullable=True, comment="职称"
+        String(64), nullable=True, comment="职称"
     )
     qualifications: Mapped[list[str] | None] = mapped_column(
         JSON, nullable=True, comment="技能证书"
