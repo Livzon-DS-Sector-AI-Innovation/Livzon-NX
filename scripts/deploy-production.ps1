@@ -271,6 +271,9 @@ function Upload-Release([string]$ReleaseDir) {
   Write-Step "上传发布包到服务器"
   $staging = "/tmp/dazah-release-$Version"
   $sudo = if ($NoSudo) { '' } else { 'sudo ' }
+  # A unified archive store must resolve to the operator-validated data disk.
+  $archiveGuard = "if test '$RemoteRelease' = /data/dazah/releases || ${sudo}readlink $RemoteRelease 2>/dev/null | grep -qx /data/dazah/releases || ${sudo}readlink -f $RemoteRelease 2>/dev/null | grep -qx /data/dazah/releases; then ${sudo}python3 $RemoteRoot/control/controller.py mount-check || exit 1; fi"
+  Invoke-Ssh $archiveGuard
   Invoke-Ssh "${sudo}rm -rf $staging; ${sudo}mkdir -p $staging; ${sudo}chown $SshUser`:$SshUser $staging"
   foreach ($name in @(
       "dazah-$Version.tar",
@@ -282,7 +285,7 @@ function Upload-Release([string]$ReleaseDir) {
     )) {
     Invoke-Scp (Join-Path $ReleaseDir $name) "$staging/"
   }
-  Invoke-Ssh "if ${sudo}test -e $RemoteRelease/$Version; then echo '远端版本目录已存在，拒绝覆盖' >&2; exit 1; fi; ${sudo}mkdir -p $RemoteRelease/$Version; ${sudo}mv $staging/* $RemoteRelease/$Version/; ${sudo}rmdir $staging; ${sudo}install -m 0755 $RemoteRelease/$Version/deploy-production.sh $RemoteCurrent/deploy-production.sh"
+  Invoke-Ssh "$archiveGuard; if ${sudo}test -e $RemoteRelease/$Version; then echo '远端版本目录已存在，拒绝覆盖' >&2; exit 1; fi; ${sudo}mkdir -p $RemoteRelease/$Version; ${sudo}mv $staging/* $RemoteRelease/$Version/; ${sudo}rmdir $staging; ${sudo}install -m 0755 $RemoteRelease/$Version/deploy-production.sh $RemoteCurrent/deploy-production.sh"
 }
 
 function Deploy-Remote {

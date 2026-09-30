@@ -55,6 +55,10 @@ Windows 本地需要安装并可直接调用：
 10. 强制重建 Nginx，使单文件挂载重新绑定到本次发布的配置；
 11. 检查 Nginx 配置，并通过 HTTPS 实际访问 `/health` 和 `/login`。
 
+192.168.40.251 的 `/opt/dazah/releases` 链接到 `/data/dazah/releases`，上述上传路径
+保持可用，实际归档位于数据盘。上传、发布和回退均验证数据盘 UUID 与挂载身份；
+数据盘异常时停止操作，避免向系统盘的空挂载目录写入发布包。
+
 构建缓存要求：固定使用持久的 `dazah-builder`，不要执行全量 builder prune；后端
 uv、前端 pnpm/Next.js 和 Hermes uv 依赖均使用 BuildKit cache mount。只有基础镜像
 Digest 或 lock 文件变化时，依赖层才需要重新构建。

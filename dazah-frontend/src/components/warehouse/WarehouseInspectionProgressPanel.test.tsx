@@ -148,6 +148,7 @@ describe('WarehouseInspectionProgressPanel', () => {
     act(() => root.unmount())
     client.clear()
     container.remove()
+    vi.unstubAllGlobals()
     vi.restoreAllMocks()
   })
 
@@ -246,6 +247,68 @@ describe('WarehouseInspectionProgressPanel', () => {
     expect(text).toContain('成品')
     expect(text).toContain('分段平均时长')
     expect(text).toContain('待验→结果')
+  })
+
+  it.each([
+    { scope: 'raw' as const, pageKey: 'inbound-ledger', permissionPageKey: 'warehouse:materials:inbound-ledger' },
+    { scope: 'product' as const, pageKey: 'product-detail-lovastatin', permissionPageKey: 'warehouse:product-inventory:product-details:product-detail-lovastatin' },
+  ])('loads a $scope Top 5 batch with its target page context', async ({ scope, pageKey, permissionPageKey }) => {
+    const actualApi = await vi.importActual<typeof import('@/lib/api/client/warehouse')>(
+      '@/lib/api/client/warehouse',
+    )
+    apiClient.fetchWarehouseRecordDetail.mockImplementation(actualApi.fetchWarehouseRecordDetail)
+    apiClient.fetchWarehouseInspectionProgressOverview.mockResolvedValue({
+      ...OVERVIEW,
+      scope,
+      oldest_pending: [{ ...OVERVIEW.oldest_pending[0], page_key: pageKey }],
+    })
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      code: 200,
+      data: { ...RECORD_DETAIL, record_id: 'rec-pending' },
+    }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await mount(scope)
+    const row = Array.from(container.querySelectorAll('tr')).find((tr) =>
+      tr.textContent?.includes('YL-300'),
+    )
+    expect(row).toBeDefined()
+    click(row as Element)
+    await settle()
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/warehouse/material-pages/${pageKey}/records/rec-pending`,
+      { headers: { 'X-Dazah-Page-Key': permissionPageKey } },
+    )
+    const text = visibleText(document.body)
+    expect(text).toContain('批次记录详情')
+    expect(text).toContain('检验进度周期')
+    expect(text).toContain('待验中')
+  })
+
+  it.each([
+    [403, '无权查看该仓储记录详情，请确认所属台账的查询权限和数据范围'],
+    [502, '获取仓储记录详情失败'],
+  ])('shows the detail error for HTTP %s without displaying batch data', async (status, reason) => {
+    const actualApi = await vi.importActual<typeof import('@/lib/api/client/warehouse')>(
+      '@/lib/api/client/warehouse',
+    )
+    apiClient.fetchWarehouseRecordDetail.mockImplementation(actualApi.fetchWarehouseRecordDetail)
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await mount()
+    const row = Array.from(container.querySelectorAll('tr')).find((tr) =>
+      tr.textContent?.includes('YL-300'),
+    )
+    expect(row).toBeDefined()
+    click(row as Element)
+    await settle()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const text = visibleText(document.body)
+    expect(text).toContain(`详情加载失败：${reason}`)
+    expect(text).not.toContain('总时长')
   })
 
   it('renders nothing when the overview request fails', async () => {

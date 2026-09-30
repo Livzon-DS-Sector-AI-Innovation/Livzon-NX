@@ -373,7 +373,7 @@ def test_retention_preserves_recovery_points_and_unfinished_backups(tmp_path, mo
     for day in range(1, 16):
         path = root / f"daily-202609{day:02d}T010000Z"
         path.mkdir()
-        cd.atomic_json(path / "manifest.json", {"kind": "daily", "files": {}})
+        write_backup_manifest(path)
         paths.append(path)
     unfinished = root / "daily-20260801T010000Z"
     unfinished.mkdir()
@@ -382,6 +382,181 @@ def test_retention_preserves_recovery_points_and_unfinished_backups(tmp_path, mo
     assert paths[0].exists() and unfinished.exists()
     assert all(path.exists() for path in paths[-7:])
     assert not paths[1].exists()
+
+
+def write_backup_manifest(path, *, version=None):
+    files = {}
+    for name in ("database.dump", "config.tar.gz", "redis.rdb"):
+        file = path / name
+        file.write_bytes(b"isolated backup test fixture")
+        files[name] = cd.digest(file)
+    cd.atomic_json(path / "manifest.json", {"kind": "daily", "files": files, "release_version": version})
+
+
+def test_online_archive_retries_changed_files_and_checks_readability(tmp_path, monkeypatch):
+    calls = []
+    target = tmp_path / "files.tar.gz"
+
+    def run(args, **kwargs):
+        calls.append((args, kwargs))
+        if args[1] == "-czf":
+            target.write_bytes(b"incomplete" if len(calls) == 1 else b"completed")
+            if len(calls) == 1:
+                raise cd.Refused("operation failed: tar, exit=1")
+        return ""
+
+    monkeypatch.setattr(cd, "command", run)
+    monkeypatch.setattr(cd.time, "sleep", lambda _: None)
+    assert cd.archive_directory(tmp_path, target) == 2
+    assert target.read_bytes() == b"completed"
+    assert [args[1] for args, _ in calls] == ["-czf", "-czf", "-tzf"]
+    assert calls[-1][1]["output"] == cd.subprocess.DEVNULL
+    assert all(0 < options["timeout"] <= 600 for _, options in calls)
+
+
+@pytest.mark.parametrize("reason,expected_attempts", [
+    ("operation failed: tar, exit=1", 3),
+    ("operation failed: tar, exit=2", 1),
+])
+def test_archive_never_accepts_failed_tar(tmp_path, monkeypatch, reason, expected_attempts):
+    attempts = []
+
+    def run(args, **kwargs):
+        attempts.append(args)
+        raise cd.Refused(reason)
+
+    monkeypatch.setattr(cd, "command", run)
+    monkeypatch.setattr(cd.time, "sleep", lambda _: None)
+    with pytest.raises(cd.Refused):
+        cd.archive_directory(tmp_path, tmp_path / "files.tar.gz")
+    assert len(attempts) == expected_attempts
+
+
+@pytest.mark.parametrize("archive_failure", [False, True])
+def test_backup_completes_manifest_only_after_all_archives(tmp_path, monkeypatch, archive_failure):
+    control = cd.Controller({"data_root": str(tmp_path), "current": str(tmp_path / "current"),
+                             "state_dir": str(tmp_path / "state")})
+    inventory = {s: {"id": s, "state": "running", "health": "healthy"} for s in (*cd.APPS, *cd.DEPS)}
+    monkeypatch.setattr(control, "mount_check", lambda: None)
+    monkeypatch.setattr(control, "containers", lambda: inventory)
+    monkeypatch.setattr(control, "revision", lambda: "revision")
+    monkeypatch.setattr(control, "prune_backups", lambda: None)
+    monkeypatch.setattr(cd.shutil, "disk_usage", lambda _: SimpleNamespace(free=11 * 1024**3))
+
+    def run(args, **kwargs):
+        if args[1:3] == ["exec", "db"]:
+            kwargs["output"].write(b"database")
+        elif args[1] == "cp":
+            Path(args[-1]).write_bytes(b"redis")
+        elif "{{json .Mounts}}" in args:
+            return json.dumps([{"Type": "volume", "Source": "/var/lib/docker/volumes/fixture/_data", "Name": "fixture"}])
+        elif "{{.Config.Image}}" in args:
+            return {"app": "dazah/backend:release", "frontend": "dazah/frontend:release",
+                    "hermes-lite": "dazah/hermes-lite:release"}[args[-1]]
+        elif "{{.Image}}" in args:
+            return "sha256:" + "a" * 64
+        return ""
+
+    def archive(source, target, **kwargs):
+        if archive_failure:
+            raise cd.Refused("backup archive changed during all attempts")
+        target.write_bytes(b"archive")
+        return 2
+
+    monkeypatch.setattr(cd, "command", run)
+    monkeypatch.setattr(cd, "archive_directory", archive)
+    if archive_failure:
+        with pytest.raises(cd.Refused):
+            control.backup()
+        assert not list((tmp_path / "backups").glob("*/manifest.json"))
+    else:
+        backup = control.backup()
+        manifest = cd.verified_backup_manifest(backup)
+        assert manifest["release_version"] == "release"
+        assert manifest["archive_attempts"] == {"fixture.tar.gz": 2, "config.tar.gz": 2}
+        assert manifest["database_revision"] == "revision"
+
+
+def test_archive_rejects_corrupt_output_and_exhausted_time(tmp_path, monkeypatch):
+    def run(args, **kwargs):
+        if args[1] == "-tzf":
+            raise cd.Refused("operation failed: tar, exit=2")
+        return ""
+
+    monkeypatch.setattr(cd, "command", run)
+    with pytest.raises(cd.Refused, match="exit=2"):
+        cd.archive_directory(tmp_path, tmp_path / "files.tar.gz")
+
+    attempts = []
+    monkeypatch.setattr(cd.time, "monotonic", iter([0, 1, 599]).__next__)
+    monkeypatch.setattr(cd, "command", lambda *a, **k: attempts.append(a) or (_ for _ in ()).throw(cd.Refused("operation failed: tar, exit=1")))
+    with pytest.raises(cd.Refused, match="changed during all attempts"):
+        cd.archive_directory(tmp_path, tmp_path / "files.tar.gz")
+    assert len(attempts) == 1
+
+
+def test_retention_keeps_monthly_and_current_previous_release_points(tmp_path, monkeypatch):
+    current = tmp_path / "opt" / "dazah" / "current"
+    current.mkdir(parents=True)
+    control = cd.Controller({"data_root": str(tmp_path / "data"), "current": str(current),
+                             "state_dir": str(tmp_path / "state")})
+    monkeypatch.setattr(control, "mount_check", lambda: None)
+    root = control.data / "backups"
+    root.mkdir(parents=True)
+    paths = {}
+    dates = [f"2026{month:02d}01" for month in range(1, 9)] + [f"202609{day:02d}" for day in range(15, 30)]
+    for date in dates:
+        path = root / f"daily-{date}T010000Z"
+        path.mkdir()
+        write_backup_manifest(path, version={"20260101": "current", "20260201": "previous"}.get(date))
+        paths[date] = path
+    marker = current.parent / "backups" / "deploy" / "last-success"
+    prior = marker.parent / "prior"
+    prior.mkdir(parents=True)
+    (prior / "current-version").write_text("previous\n")
+    marker.write_text(f"version=current\nbackup={prior}\n")
+    control.prune_backups()
+    assert all(paths[f"202609{day:02d}"].exists() for day in range(23, 30))
+    assert all(paths[f"2026{month:02d}01"].exists() for month in range(4, 9))
+    assert paths["20260101"].exists() and paths["20260201"].exists()
+    assert not paths["20260301"].exists()
+
+
+@pytest.mark.parametrize("damage", ["checksum", "traversal", "missing", "invalid_json", "empty_database"])
+def test_corrupt_backups_never_qualify_for_retention_deletion(tmp_path, monkeypatch, damage):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    monkeypatch.setattr(control, "mount_check", lambda: None)
+    path = tmp_path / "backups" / "daily-20200101T010000Z"
+    path.mkdir(parents=True)
+    write_backup_manifest(path)
+    manifest = cd.read_json(path / "manifest.json")
+    if damage == "checksum":
+        (path / "config.tar.gz").write_bytes(b"corrupt")
+    elif damage == "traversal":
+        manifest["files"]["../outside"] = "0" * 64
+        cd.atomic_json(path / "manifest.json", manifest)
+    elif damage == "missing":
+        (path / "redis.rdb").unlink()
+    elif damage == "invalid_json":
+        (path / "manifest.json").write_text("invalid")
+    else:
+        (path / "database.dump").write_bytes(b"")
+        manifest["files"]["database.dump"] = cd.digest(path / "database.dump")
+        cd.atomic_json(path / "manifest.json", manifest)
+    assert cd.verified_backup_manifest(path) is None
+    control.prune_backups()
+    assert path.exists()
+
+
+def test_deployment_metadata_does_not_follow_arbitrary_backup_path(tmp_path):
+    current = tmp_path / "current"
+    marker = tmp_path / "backups" / "deploy" / "last-success"
+    marker.parent.mkdir(parents=True)
+    unrelated = tmp_path / "outside"
+    unrelated.mkdir()
+    (unrelated / "current-version").write_text("must-not-be-protected")
+    marker.write_text(f"version=current\nbackup={unrelated}\n")
+    assert cd.protected_release_versions(current) == {"current"}
 
 
 def test_complete_backup_references_protect_old_release(tmp_path, monkeypatch):
