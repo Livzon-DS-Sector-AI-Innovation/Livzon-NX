@@ -111,6 +111,7 @@ server {
             "docker", "run", "--detach", "--rm", "--name", name,
             "--publish", f"127.0.0.1::{port}",
             "--mount", f"type=bind,source={configuration},target=/etc/nginx/conf.d/default.conf,readonly",
+            "--mount", f"type=bind,source={ROOT / 'deploy/nginx-maintenance.conf'},target=/etc/nginx/dazah-maintenance.conf,readonly",
             "--mount", f"type=bind,source={certificates},target=/etc/letsencrypt/live/example.test,readonly",
             IMAGE,
         )
