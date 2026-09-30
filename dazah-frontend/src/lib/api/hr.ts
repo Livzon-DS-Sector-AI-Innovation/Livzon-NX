@@ -1,3 +1,4 @@
+import { getUserErrorMessage } from '@/lib/user-error'
 import {
   EmployeeListResponse,
   EmployeeResponse,
@@ -108,6 +109,31 @@ function hrSettingsRequestOptions(): RequestInit {
   }
 }
 
+export class HrListReadError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message)
+  }
+}
+
+async function readHrList<T extends { data: unknown[]; meta?: { total: number } }>(url: string, fallback: string): Promise<T> {
+  const response = await fetch(url, hrSettingsRequestOptions())
+  if (!response.ok) {
+    // Do not expose upstream diagnostics or turn an expected HTTP failure into
+    // a production Server Action exception with a redacted React message.
+    const message = response.status >= 500
+      ? fallback
+      : getUserErrorMessage(null, fallback, response.status)
+    throw new HrListReadError(message, response.status)
+  }
+  const payload: T = await response.json().catch(() => {
+    throw new HrListReadError(fallback, 502)
+  })
+  if (!payload || !Array.isArray(payload.data) || (payload.meta && !Number.isFinite(payload.meta.total))) {
+    throw new HrListReadError(fallback, 502)
+  }
+  return payload
+}
+
 async function parseHrSettingsError(
   response: Response,
   fallback = `请求失败: ${response.status}`,
@@ -195,24 +221,28 @@ export async function fetchEmailConfig(): Promise<{
 export async function fetchEmployees(
   params?: {
     department?: string
+    sub_department?: string
     status?: string
     keyword?: string
+    gender?: string
+    level?: string
+    position?: string
     page?: number
     page_size?: number
   }
 ): Promise<EmployeeListResponse> {
   const searchParams = new URLSearchParams()
   if (params?.department) searchParams.set('department', params.department)
+  if (params?.sub_department) searchParams.set('sub_department', params.sub_department)
   if (params?.status) searchParams.set('status', params.status)
   if (params?.keyword) searchParams.set('keyword', params.keyword)
+  if (params?.gender) searchParams.set('gender', params.gender)
+  if (params?.level) searchParams.set('level', params.level)
+  if (params?.position) searchParams.set('position', params.position)
   searchParams.set('page', String(params?.page || 1))
   searchParams.set('page_size', String(params?.page_size || 20))
 
-  const res = await fetch(`/api/v1/hr/employees?${searchParams.toString()}`, {
-    cache: 'no-store',
-  })
-  if (!res.ok) throw new Error('获取员工列表失败')
-  return res.json()
+  return readHrList(`/api/v1/hr/employees?${searchParams.toString()}`, '员工档案加载失败，请稍后重试')
 }
 
 export async function fetchEmployeeById(id: string): Promise<EmployeeResponse> {
@@ -285,11 +315,7 @@ export async function fetchOffboardingRecords(
   searchParams.set('page', String(params?.page || 1))
   searchParams.set('page_size', String(params?.page_size || 20))
 
-  const res = await fetch(`/api/v1/hr/offboarding-records?${searchParams.toString()}`, {
-    cache: 'no-store',
-  })
-  if (!res.ok) throw new Error('获取离职记录失败')
-  return res.json()
+  return readHrList(`/api/v1/hr/offboarding-records?${searchParams.toString()}`, '离职记录加载失败，请稍后重试')
 }
 
 export async function fetchOnboardingRecords(
