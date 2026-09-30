@@ -960,7 +960,7 @@ async def test_auto_offboard_creates_when_no_existing_record(
 async def test_sync_accepts_long_qualification_type(
     db_session: AsyncSession, mock_feishu, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """职称自由文本可超过32字（生产曾因 VARCHAR(32) 逐条回拉失败），放宽到64后整批成功。"""
+    """职称自由文本可超过32字（生产曾因 VARCHAR(32) 逐条回拉失败），放宽后整批成功。"""
     long_title = "机械工程师、二级建造师（机电、市政）、智慧消防工程师、发明专利证书"
     assert 32 < len(long_title) <= 64
 

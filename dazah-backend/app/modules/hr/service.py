@@ -2700,7 +2700,11 @@ class OffboardingRecordService:
                                 setattr(existing, key, value)
                         stats["updated"] += 1
                     else:
-                        create_data = {k: v for k, v in data.items() if v not in (None, "")}
+                        create_data = {
+                            k: v
+                            for k, v in data.items()
+                            if v not in (None, "")
+                        }
                         record = OffboardingRecord(**create_data)
                         self.session.add(record)
                         stats["created"] += 1
@@ -3132,7 +3136,11 @@ class PositionTransferRecordService:
                         "feishu_synced_at": date.today(),
                     }
                     # 以飞书为主：不过滤空值，空值也覆盖本地旧值
-                    existing = await self.repo.get_by_feishu_record_id(rid) if rid else None
+                    existing = (
+                        await self.repo.get_by_feishu_record_id(rid)
+                        if rid
+                        else None
+                    )
                     if existing:
                         for k, v in data.items():
                             if k != "id":
