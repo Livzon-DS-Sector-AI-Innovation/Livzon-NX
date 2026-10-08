@@ -55,6 +55,17 @@ async def _dispose_app_engine_pools() -> AsyncIterator[None]:
     时显式 dispose，保证池连接不跨测试累积。
     """
     yield
+    # Background jobs must release their sockets in the event loop that created
+    # them before the next test reuses the application Redis client.
+    import asyncio
+
+    from app.core.jobs import _running_tasks
+
+    tasks = list(_running_tasks)
+    for task in tasks:
+        task.cancel()
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
     try:
         from app.core.database import engine
 

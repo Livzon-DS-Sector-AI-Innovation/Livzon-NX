@@ -11,6 +11,7 @@ const deps = vi.hoisted(() => ({
 vi.mock('next/cache', () => ({ revalidatePath: deps.revalidatePath }))
 vi.mock('next/headers', () => ({
   cookies: vi.fn(async () => ({ get: () => undefined })),
+  headers: vi.fn(async () => new Headers()),
 }))
 vi.mock('@/lib/auth', () => ({ getAuthHeaders: deps.getAuthHeaders }))
 vi.mock('@/lib/server-api', () => ({
