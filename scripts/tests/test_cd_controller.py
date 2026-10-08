@@ -229,12 +229,12 @@ def test_countdown_keeps_traffic_open_until_notice_has_elapsed(tmp_path, monkeyp
 
     def wait(seconds):
         assert not (control.state_dir / "public" / "maintenance").exists()
-        assert cd.read_json(control.state_dir / "public" / "status.json") == {"phase": "announced", "starts_at": 1300}
+        assert cd.read_json(control.state_dir / "public" / "status.json") == {"phase": "announced", "starts_at": 1180}
         elapsed[0] += seconds
 
     monkeypatch.setattr(cd.time, "sleep", wait)
     cd.Controller.announce(control)
-    assert elapsed[0] == 300
+    assert elapsed[0] == 180
     assert phases == ["normal"]
 
 

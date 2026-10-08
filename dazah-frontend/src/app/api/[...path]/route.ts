@@ -134,6 +134,6 @@ async function proxyRequest(request: NextRequest) {
 
   console.error('Proxy error:', lastError instanceof Error ? lastError.name : 'UnknownError')
   const message = ['GET', 'HEAD', 'OPTIONS'].includes(request.method) ? '服务暂时不可用，请稍后重试' :
-    '操作结果暂不可确认，请查询操作结果并核对业务记录，不要重复提交'
+    '请求响应中断，请先查看业务记录确认是否已保存，不要重复提交'
   return NextResponse.json({ error: message, message }, { status: 502 })
 }

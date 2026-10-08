@@ -18,7 +18,7 @@ param(
   [string]$ReuseUnchangedFrom,
   [string]$ReleaseRoot,
   [ValidateRange(0, 3600)]
-  [int]$NoticeSeconds = 300,
+  [int]$NoticeSeconds = 180,
   [switch]$SkipUpload,
   [switch]$SkipDeploy,
   [switch]$NoSudo

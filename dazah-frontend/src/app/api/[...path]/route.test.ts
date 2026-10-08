@@ -33,7 +33,9 @@ describe('API proxy user feedback', () => {
       method: 'POST', body: '{}', headers: { 'X-Dazah-Operation-ID': 'fixture-operation' },
     }))
     expect(response.status).toBe(502)
-    expect((await response.json()).message).toContain('不要重复提交')
+    const data = await response.json()
+    expect(data.message).toContain('不要重复提交')
+    expect(data.message).not.toContain('查询操作结果')
     expect(fetcher).toHaveBeenCalledTimes(1)
     expect(new Headers(fetcher.mock.calls[0][1].headers).get('X-Dazah-Operation-ID')).toBe('fixture-operation')
   })
