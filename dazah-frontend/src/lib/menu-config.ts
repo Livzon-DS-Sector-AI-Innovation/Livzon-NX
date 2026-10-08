@@ -952,7 +952,7 @@ function collectPageRoutes(
   return items.flatMap((item) => {
     const pageKey = `${parentKey}:${item.key}`
     return [
-      ...(item.path ? [{ pageKey, path: item.path }] : []),
+      ...(!item.children?.length && item.path ? [{ pageKey, path: item.path }] : []),
       ...(item.children ? collectPageRoutes(item.children, pageKey) : []),
     ]
   })
@@ -962,6 +962,20 @@ function collectPageRoutes(
 // aliases. Directory nodes are not permission pages, so their entry route
 // must explicitly inherit a stable leaf page identity.
 const pageRouteAliases: Record<string, string> = {
+  "/quality/deviations": "quality:deviations:deviation-ledger",
+  "/quality/capas": "quality:capas:capa-ledger",
+  "/quality/complaints": "quality:complaints:complaint-ledger",
+  "/quality/inspection": "quality:inspection:inspection-finished:inspection-finished-mpa",
+  "/quality/inspection/items": "quality:inspection:inspection-items:inspection-items-inventory",
+  "/quality/inspection/instruments": "quality:inspection:inspection-instruments:inspection-instruments-equipment",
+  "/quality/inspection/finished": "quality:inspection:inspection-finished:inspection-finished-mpa",
+  "/quality/oos-oot": "quality:oos-oot:oos-ledger",
+  "/quality/product-quality": "quality:product-quality:product-quality-mfn",
+  "/quality/anomaly-report": "quality:anomaly-report:anomaly-report-ledger",
+  "/quality/return-recalls": "quality:return-recalls:return-application",
+  "/quality/suppliers": "quality:suppliers:supplier-qualification",
+  "/quality/change": "quality:change:change-ledger",
+  "/quality/validation": "quality:validation:validation-plans",
   "/hr/employee-management": "hr:employee-management:profile",
   "/hr/contracts": "hr:contracts:contracts-ledger",
   "/hr/training": "hr:training:annual-plan",
@@ -1012,4 +1026,39 @@ export function getPageKeyByPath(pathname: string): string | undefined {
   })
   return candidates.sort((left, right) => right.path.length - left.path.length)[0]
     ?.pageKey
+}
+
+/** 目录首页使用其数据所属页面权限；部分授权时进入首个可查询的子页面。 */
+export function getAuthorizedDirectoryEntryPath(
+  pathname: string,
+  pagePermissions: PageAccessSummary[] | undefined,
+): string | undefined {
+  const normalized = pathname.replace(/\/$/, '') || '/'
+  const queryable = new Set((pagePermissions || [])
+    .filter((grant) => grant.permissions?.includes('access') && grant.permissions.includes('query'))
+    .map((grant) => grant.page_key))
+  function find(items: SubMenuItem[]): SubMenuItem | undefined {
+    for (const item of items) {
+      if (item.disabled || item.adminOnly) continue
+      if (item.children?.length && item.path === normalized) return item
+      const nested = item.children && find(item.children)
+      if (nested) return nested
+    }
+  }
+  const directory = find(moduleMenus.flatMap((module) => module.children))
+  if (!directory) return undefined
+  const primary = getPageKeyByPath(normalized)
+  if (primary && queryable.has(primary)) return normalized
+  function first(items: SubMenuItem[]): string | undefined {
+    for (const item of items) {
+      if (item.disabled || item.adminOnly) continue
+      if (!item.children?.length && item.path) {
+        const key = getPageKeyByPath(item.path.split('?')[0])
+        if (key && queryable.has(key)) return item.path
+      }
+      const nested = item.children && first(item.children)
+      if (nested) return nested
+    }
+  }
+  return first(directory.children || [])
 }

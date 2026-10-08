@@ -1,6 +1,7 @@
 "use client"
 
-import { previewChangeImport, confirmChangeImport } from "@/actions/quality-change"
+import { previewChangeImport, confirmChangeImport } from "@/actions/quality-import"
+import { unwrapServerActionResult } from "@/lib/server-action-result"
 import { ImportPreviewDrawer } from "./ImportPreviewDrawer"
 
 interface ChangeImportDrawerProps {
@@ -34,9 +35,9 @@ export function ChangeImportDrawer({ isOpen, onClose, onSuccess, changeType = 't
       fileInputId="change-file-input"
       templateDownloadUrl="/api/v1/quality/changes/export"
       templateFilename="技术变更台账_模板.docx"
-      previewAction={(formData) => previewChangeImport(formData, changeType)}
-      confirmAction={(formData, skipDuplicates, updateExisting) =>
-        confirmChangeImport(formData, skipDuplicates, updateExisting, changeType)
+      previewAction={async (formData) => unwrapServerActionResult(await previewChangeImport(formData, changeType))}
+      confirmAction={async (formData, skipDuplicates, updateExisting) =>
+        unwrapServerActionResult(await confirmChangeImport(formData, skipDuplicates, updateExisting, changeType))
       }
       skipSuffix=""
       closeDelayMs={1500}

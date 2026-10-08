@@ -4,7 +4,8 @@ import PlatformNotice from '@/components/shared/PlatformNotice'
 
 import { useEffect, useRef, useState } from "react"
 import { Checkbox } from "antd"
-import { confirmDeviationImport, previewDeviationImport } from "@/actions/quality"
+import { confirmLegacyDeviationImport as confirmDeviationImport, previewLegacyDeviationImport as previewDeviationImport } from "@/actions/quality-import"
+import { unwrapServerActionResult } from "@/lib/server-action-result"
 
 interface DeviationImportDrawerProps {
   isOpen: boolean
@@ -69,7 +70,7 @@ export function DeviationImportDrawer({ isOpen, onClose, onSuccess }: DeviationI
     try {
       const formData = new FormData()
       formData.append("file", file)
-      setPreview(await previewDeviationImport(formData))
+      setPreview(unwrapServerActionResult(await previewDeviationImport(formData)))
     } catch (err) {
       setErrorMsg((err instanceof Error ? err.message : '') || "预览失败")
     } finally {
@@ -84,10 +85,10 @@ export function DeviationImportDrawer({ isOpen, onClose, onSuccess }: DeviationI
     try {
       const formData = new FormData()
       formData.append("file", file)
-      const d = await confirmDeviationImport(formData, {
+      const d = unwrapServerActionResult(await confirmDeviationImport(formData, {
         skipDuplicates,
         updateExisting,
-      })
+      }))
       let msg = `导入完成：${d.success_count} 条成功`
       if (d.update_count > 0) msg += `，${d.update_count} 条已更新`
       if (d.skip_count > 0) msg += `，${d.skip_count} 条跳过（重复）`

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation"
 import { headers } from "next/headers"
 import { getModuleByKey, getPageKeyByPath } from "@/lib/menu-config"
 import '@/lib/dayjs-config'
+import MaintenanceBoundary from '@/components/shared/MaintenanceBoundary'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,7 +34,7 @@ export default async function DashboardLayout({
 
   return (
     <AntdProvider>
-      <AppShell user={user}>{guardedChildren}</AppShell>
+      <MaintenanceBoundary><AppShell user={user}>{guardedChildren}</AppShell></MaintenanceBoundary>
     </AntdProvider>
   )
 }

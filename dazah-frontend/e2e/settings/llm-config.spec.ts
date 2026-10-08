@@ -1,6 +1,9 @@
 import { expect, test, type Page } from '@playwright/test'
 
 async function openLLMSettings(page: Page) {
+  await page.context().addCookies([{ name: 'auth_token', value: 'e2e-admin', url: 'http://127.0.0.1:3200' }])
+  // The isolated frontend fixture has no Nginx; model its normal status endpoint.
+  await page.route('**/__dazah_maintenance_status', route => route.fulfill({ status: 204 }))
   await page.goto('/settings?auth_token=e2e-admin')
   await page.waitForLoadState('networkidle')
   const llmTab = page.getByRole('link', { name: 'LLM 模型配置', exact: true })

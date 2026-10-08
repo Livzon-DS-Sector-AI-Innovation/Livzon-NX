@@ -13,6 +13,7 @@ from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
 from zoneinfo import ZoneInfo
 
+import httpx
 from fastapi import HTTPException
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -76,6 +77,7 @@ from app.modules.warehouse.schemas import (
     WarehouseFeishuFieldResponse,
     WarehouseFeishuMaterialPageResponse,
     WarehouseFeishuRawRecordResponse,
+    WarehouseFeishuTableSyncResult,
     WarehouseRecordDetailResponse,
     WarehouseRecordFieldValue,
 )
@@ -3838,10 +3840,20 @@ class WarehouseService:
                 message="飞书数据入口发现失败，请检查配置和入口权限"
             ) from exc
 
+    async def sync_discovered_feishu_table(
+        self, table_pk: UUID, *, trigger_type: str = "scheduled"
+    ) -> WarehouseFeishuTableSyncResult:
+        """Sync a directory database ID within the active module configuration."""
+
+        config = await self._get_active_feishu_config_or_raise()
+        table = await self._get_table_by_id_or_raise(table_pk, config_id=config.id)
+        return await self._sync_feishu_table(config, table, trigger_type=trigger_type)
+
     async def _sync_feishu_table(
         self, config: Any, table: Any, *, trigger_type: str = "manual"
-    ) -> Any:
+    ) -> WarehouseFeishuTableSyncResult:
         table_pk = table.id
+        config_id = config.id
         table.sync_status = "syncing"
         table.sync_error = None
         await self.repo.session.commit()
@@ -3852,15 +3864,20 @@ class WarehouseService:
                 ),
                 timeout=WAREHOUSE_FEISHU_TABLE_SYNC_TIMEOUT_SECONDS,
             )
-        except TimeoutError as exc:
+        except Exception as exc:
             await self.repo.session.rollback()
             if table_pk:
-                table = await self._get_table_by_id_or_raise(table_pk)
+                table = await self._get_table_by_id_or_raise(
+                    table_pk, config_id=config_id
+                )
             table.sync_status = "failed"
+            timed_out = isinstance(exc, TimeoutError)
             table.sync_error = (
                 "同步超过 "
                 f"{WAREHOUSE_FEISHU_TABLE_SYNC_TIMEOUT_SECONDS:g} 秒未完成，"
                 "已自动标记失败"
+                if timed_out
+                else "仓储飞书目录同步失败，请检查应用权限与表格访问权限后重试"
             )
             if table_pk:
                 await self.repo.fail_running_sync_runs(
@@ -3869,11 +3886,15 @@ class WarehouseService:
                     completed_at=datetime.now(UTC),
                 )
             await self.repo.session.commit()
-            raise AppException(message=table.sync_error) from exc
+            if not isinstance(exc, (TimeoutError, RuntimeError, httpx.HTTPError)):
+                raise
+            raise AppException(
+                status_code=504 if timed_out else 502, message=table.sync_error
+            ) from exc
 
     async def _sync_feishu_table_snapshot(
         self, config: Any, table: Any, *, trigger_type: str = "manual"
-    ) -> Any:
+    ) -> WarehouseFeishuTableSyncResult:
         """Refresh the former table-directory compatibility record.
 
         The migrated material-page mirror remains the source of truth for page

@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
 }))
 
-vi.mock('next/headers', () => ({ cookies: mocks.cookies }))
+vi.mock('next/headers', () => ({ cookies: mocks.cookies, headers: vi.fn().mockResolvedValue(new Headers({ 'X-Dazah-Operation-ID': 'fixture-operation' })) }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 
 import { analyzeRegulatoryDocument, analyzeRegulatoryDocuments, manualSyncRegulatoryTracker, markDocumentRead, testRegulatoryTrackerNotificationSettings } from './regulatory-tracker'
@@ -41,7 +41,7 @@ describe('regulatory tracker server actions', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       expect.stringContaining('/api/v1/regulatory-documents/doc%2F1/read'),
-      expect.objectContaining({ method: 'PATCH' }),
+      expect.objectContaining({ method: 'PATCH', headers: expect.objectContaining({ 'X-Dazah-Operation-ID': 'fixture-operation' }) }),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,

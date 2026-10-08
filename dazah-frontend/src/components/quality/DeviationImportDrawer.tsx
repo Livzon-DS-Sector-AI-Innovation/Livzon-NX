@@ -1,6 +1,7 @@
 "use client"
 
-import { previewDeviationImport, confirmDeviationImport } from "@/actions/quality-deviation"
+import { previewDeviationImport, confirmDeviationImport } from "@/actions/quality-import"
+import { unwrapServerActionResult } from "@/lib/server-action-result"
 import { ImportPreviewDrawer } from "./ImportPreviewDrawer"
 
 interface DeviationImportDrawerProps {
@@ -26,8 +27,8 @@ export function DeviationImportDrawer({ isOpen, onClose, onSuccess }: DeviationI
       fileInputId="deviation-file-input"
       templateDownloadUrl="/api/v1/quality/deviations/export"
       templateFilename="偏差台账_模板.docx"
-      previewAction={previewDeviationImport}
-      confirmAction={confirmDeviationImport}
+      previewAction={async (formData) => unwrapServerActionResult(await previewDeviationImport(formData))}
+      confirmAction={async (formData, skip, update) => unwrapServerActionResult(await confirmDeviationImport(formData, skip, update))}
     />
   )
 }

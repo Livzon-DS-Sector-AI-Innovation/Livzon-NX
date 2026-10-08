@@ -154,7 +154,7 @@ require_file() {{ return 0; }}
 check_nginx() {{ return 0; }}
 fail() {{ return 1; }}
 curl() {{ printf '503'; }}
-python3() {{ if [[ "$1" == "$CONTROL_SCRIPT" && "$2" == drain ]]; then return 0; fi; command python3 "$@"; }}
+python3() {{ if [[ "$1" == "$CONTROL_SCRIPT" && ( "$2" == drain || "$2" == resume-work ) ]]; then printf '%s\n' "$2" >> '{calls}'; return 0; fi; command python3 "$@"; }}
 compose() {{
  if [[ "$1" == exec ]]; then cat '{revision}'; return 0; fi
  if [[ "$*" == *--entrypoint* ]]; then printf '%s' '{head}'; return 0; fi
@@ -168,9 +168,10 @@ quiesce_and_migrate
     assert result.returncode == expected, result.stderr
     operations = calls.read_text() if calls.exists() else ""
     if expected:
-        assert operations == ""
+        assert operations == "drain\n"
         assert revision.read_text() == before
     else:
         assert "stop --timeout 120 hermes-lite app frontend" in operations
         assert f"migrate .venv/bin/alembic upgrade {head}" in operations
         assert revision.read_text() == head
+        assert operations.index("upgrade") < operations.index("resume-work")

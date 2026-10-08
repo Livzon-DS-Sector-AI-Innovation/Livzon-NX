@@ -18,6 +18,7 @@ ENV_FILE="$ROOT_DIR/.env"
 COMPOSE_FILE="$ROOT_DIR/compose.yml"
 EDGE_COMPOSE_FILE="$ROOT_DIR/compose.edge.yml"
 MAINTENANCE_DIR="/var/lib/dazah-cd/public"
+NOTICE_SECONDS="${4:-300}"
 CONTROL_SCRIPT="$ROOT_DIR/../control/controller.py"
 
 maintenance_on() {
@@ -32,7 +33,9 @@ maintenance_on() {
 maintenance_off() {
   require_file "$CONTROL_SCRIPT"
   python3 "$CONTROL_SCRIPT" verify || return 1
+  python3 "$CONTROL_SCRIPT" open-work --lock-held || return 1
   rm -f "$MAINTENANCE_DIR/maintenance"
+  rm -f "$MAINTENANCE_DIR/status.json"
   rm -f "$MAINTENANCE_DIR/../traffic-guard-owned"
   log "全部就绪检查通过，维护模式已关闭"
 }
@@ -52,6 +55,8 @@ die() {
   fail "$*"
   exit 1
 }
+
+[[ "$NOTICE_SECONDS" =~ ^[0-9]+$ && "$NOTICE_SECONDS" -le 3600 ]] || die "维护预告时间必须为 0 至 3600 秒"
 
 if [[ "${EUID}" -ne 0 && "${DAZAH_ALLOW_UNPRIVILEGED:-0}" != "1" ]]; then
   exec sudo -E bash "$0" "$@"
@@ -157,6 +162,7 @@ restore_after_failed_change() {
   log "部署失败，恢复部署前的配置文件"
   restore_backup "$backup_path" || log "WARNING: 配置恢复失败，请检查 $backup_path"
   if compose config --quiet >/dev/null 2>&1; then
+    python3 "$CONTROL_SCRIPT" resume-work --lock-held || return 1
     compose up -d --no-deps app hermes-lite frontend >/dev/null 2>&1 || \
       log "WARNING: 旧版本容器未能自动恢复，请执行 status 检查"
     if [[ -f "$EDGE_COMPOSE_FILE" ]]; then
@@ -266,7 +272,7 @@ quiesce_and_migrate() {
     status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 http://127.0.0.1/health || true)"
   fi
   [[ "$status" == 503 ]] || { fail "维护入口未生效，拒绝停止应用"; return 1; }
-  python3 "$CONTROL_SCRIPT" drain || return 1
+  python3 "$CONTROL_SCRIPT" drain --lock-held || return 1
   before="$(compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select version_num from alembic_version order by version_num"')" || return 1
   heads="$(compose run --rm --no-deps --entrypoint .venv/bin/python migrate -c "from alembic.config import Config; from alembic.script import ScriptDirectory; print('\\n'.join(ScriptDirectory.from_config(Config('alembic.ini')).get_heads()))")" || return 1
   [[ "$heads" =~ ^[A-Za-z0-9_]+$ && "$before" =~ ^[A-Za-z0-9_]+$ ]] || { fail "迁移 head 或数据库版本不唯一"; return 1; }
@@ -276,6 +282,7 @@ quiesce_and_migrate() {
   compose run --rm --no-deps migrate .venv/bin/alembic upgrade "$target" || return 1
   before="$(compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select version_num from alembic_version order by version_num"')" || return 1
   [[ "$before" == "$target" ]] || { fail "迁移后版本不一致"; return 1; }
+  python3 "$CONTROL_SCRIPT" resume-work --lock-held || return 1
 }
 
 wait_for_healthy() {
@@ -398,6 +405,7 @@ deploy_version() {
   backup_path="$(backup_current_files "$previous_version")"
   release_tar="$(resolve_release_tar "$version" "$release_path" || true)"
   require_file "$CONTROL_SCRIPT"
+  python3 "$CONTROL_SCRIPT" announce --notice-seconds "$NOTICE_SECONDS" --lock-held || return 1
   maintenance_on
 
   if ! load_release_images "$version" "$release_tar"; then
@@ -456,6 +464,7 @@ rollback_version() {
   backup_path="$(backup_current_files "$previous_version")"
   release_tar="$(resolve_release_tar "$version" "$release_path" || true)"
   require_file "$CONTROL_SCRIPT"
+  python3 "$CONTROL_SCRIPT" announce --notice-seconds "$NOTICE_SECONDS" --lock-held || return 1
   maintenance_on
 
   if ! load_release_images "$version" "$release_tar"; then

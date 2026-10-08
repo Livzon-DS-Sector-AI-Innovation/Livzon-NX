@@ -13,9 +13,11 @@ from collections.abc import Awaitable, Callable
 from typing import Any, cast
 from uuid import uuid4
 
+from app.core.maintenance import admit_activity, admitted_activity, finish_activity
 from app.core.redis import cache_delete, cache_get, cache_set
 
 logger = logging.getLogger(__name__)
+_running_tasks: set[asyncio.Task[None]] = set()
 
 # 心跳间隔与心跳键存活时间：进程重启后心跳停止，心跳键在 HEARTBEAT_TTL 内过期，
 # 孤儿 running 状态最多在 HEARTBEAT_TTL 后被识别为"非运行"。
@@ -53,13 +55,18 @@ async def submit_job(
         任务 ID
     """
     job_id = task_id or f"job:{uuid4().hex[:12]}"
+    activity_id = await admit_activity("job", reference=job_id)
 
     # 初始化任务状态 + 心跳键
     initial_status = {"state": "running", "progress": "启动中...", "result": None}
     if status_extra:
         initial_status.update(status_extra)
-    await cache_set(job_id, json.dumps(initial_status, ensure_ascii=False), ex=ttl)
-    await cache_set(_heartbeat_key(job_id), "1", ex=HEARTBEAT_TTL_SECONDS)
+    try:
+        await cache_set(job_id, json.dumps(initial_status, ensure_ascii=False), ex=ttl)
+        await cache_set(_heartbeat_key(job_id), "1", ex=HEARTBEAT_TTL_SECONDS)
+    except BaseException:
+        await finish_activity(activity_id)
+        raise
 
     async def _heartbeat() -> None:
         while True:
@@ -69,11 +76,25 @@ async def submit_job(
             except Exception:
                 logger.exception("Job %s heartbeat failed", job_id)
 
-    async def _run() -> None:
+    async def _execute() -> None:
         hb = asyncio.create_task(_heartbeat())
         try:
             result = await fn(**kwargs)
             status = {"state": "completed", "progress": "完成", "result": result}
+        except asyncio.CancelledError:
+            await cache_set(
+                job_id,
+                json.dumps(
+                    {
+                        "state": "interrupted",
+                        "progress": "任务中断，结果待确认，请勿重复执行",
+                        "result": None,
+                    },
+                    ensure_ascii=False,
+                ),
+                ex=ttl,
+            )
+            raise
         except Exception as e:
             # TimeoutError 等异常 str 为空，回退异常类名，避免状态里只剩“失败: ”
             logger.exception("Job %s failed: %s", job_id, e)
@@ -89,10 +110,29 @@ async def submit_job(
             job_id, json.dumps(status, ensure_ascii=False), ex=min(ttl, 300)
         )
 
+    async def _run() -> None:
+        async with admitted_activity(activity_id):
+            await _execute()
+
     # 使用 asyncio.create_task 启动后台执行
     # 规范禁止 create_task 处理业务逻辑，但 jobs.py 是规范指定的
     # 一次性异步任务机制，属于基础设施层
-    asyncio.create_task(_run())
+    runner = _run()
+    try:
+        task = asyncio.create_task(runner)
+    except BaseException:
+        runner.close()
+        await finish_activity(activity_id)
+        await cache_delete(_heartbeat_key(job_id))
+        raise
+    _running_tasks.add(task)
+
+    def completed(task: asyncio.Task[None]) -> None:
+        _running_tasks.discard(task)
+        if not task.cancelled() and task.exception() is not None:
+            logger.error("Job %s cleanup failed; drain remains blocked", job_id)
+
+    task.add_done_callback(completed)
 
     return job_id
 

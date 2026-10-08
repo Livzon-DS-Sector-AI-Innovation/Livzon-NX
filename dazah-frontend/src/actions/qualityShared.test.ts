@@ -34,7 +34,7 @@ describe('quality shared action transport', () => {
     upload.append('file', new File(['data'], 'quality.pdf'))
     await expect(actionFetch('/quality/records/import', { method: 'POST', body: upload })).rejects.toThrow('范围不允许')
     await expect(actionFetch('/quality/records/1', { method: 'PUT', body: '{}' })).rejects.toThrow('请求失败')
-    await expect(actionFetch('/quality/records/2')).rejects.toThrow('500')
+    await expect(actionFetch('/quality/records/2')).rejects.toThrow('服务暂时不可用')
 
     const firstInit = fetchMock.mock.calls[0][1] as RequestInit
     expect(firstInit.headers).toMatchObject({ Authorization: 'Bearer quality-shared-token', 'Content-Type': 'application/json' })

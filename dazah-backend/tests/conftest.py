@@ -61,6 +61,11 @@ async def _dispose_app_engine_pools() -> AsyncIterator[None]:
         await engine.dispose()
     except Exception:  # noqa: BLE001 —— 清理失败不应影响测试结果
         pass
+    # Request admission uses Redis directly and must not reuse sockets owned
+    # by a previous pytest event loop. This closes connections, not Redis data.
+    from app.core.redis import redis_client
+
+    await redis_client.aclose()
 
 
 @pytest.fixture

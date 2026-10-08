@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock
 
 import pytest
@@ -13,6 +14,15 @@ import app.modules.quality.api.inspection_feishu_crud as crud_api
 @pytest.fixture(autouse=True)
 def _short_delays(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(crud_api, "_FORMULA_LAG_REFRESH_DELAYS", (0.0, 0.0))
+    monkeypatch.setattr(
+        crud_api, "admit_activity", AsyncMock(return_value="fixture-mirror")
+    )
+
+    @asynccontextmanager
+    async def admitted(_identifier):
+        yield
+
+    monkeypatch.setattr(crud_api, "admitted_activity", admitted)
     crud_api._MIRROR_REFRESH_TASKS.clear()
     yield
     crud_api._MIRROR_REFRESH_TASKS.clear()
@@ -29,9 +39,7 @@ async def test_instrument_write_through_schedules_delayed_refresh(
         "qc_instr_cal_external", "rec_formula_lag"
     )
     # 等待调度出来的补刷任务执行完毕
-    await asyncio.gather(
-        *list(crud_api._MIRROR_REFRESH_TASKS), return_exceptions=True
-    )
+    await asyncio.gather(*list(crud_api._MIRROR_REFRESH_TASKS), return_exceptions=True)
 
     # 初始写穿 + 2 次延迟补刷（补公式列迟到值）
     assert sync_mock.await_count == 3

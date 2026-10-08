@@ -2,7 +2,7 @@
 
 import { getServerApiBaseUrl } from '@/lib/server-api'
 import { revalidatePath } from 'next/cache'
-import { getServerToken } from '@/lib/auth'
+import { getAuthHeaders } from '@/lib/auth'
 import {
   CreateInspectionRouteInput, UpdateInspectionRouteInput,
   CreateInspectionTaskInput, EquipmentCheckResult,
@@ -19,7 +19,7 @@ async function actionFetch<T>(url: string, options?: RequestInit): Promise<T | n
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${await getServerToken()}`,
+      ...await getAuthHeaders(),
       ...options?.headers,
     },
   })
@@ -110,10 +110,11 @@ export async function submitEquipmentCheck(taskId: string, equipmentId: string, 
 
 // ==================== 照片 ====================
 export async function uploadInspectionPhoto(taskId: string, equipmentId: string, formData: FormData) {
-  const token = await getServerToken()
+  const headers = await getAuthHeaders()
+  delete headers['Content-Type']
   const response = await fetch(`${BASE}/tasks/${taskId}/equipments/${equipmentId}/photos`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers,
     body: formData,
   })
   if (!response.ok) {
@@ -143,10 +144,11 @@ export async function submitRouteCheck(taskId: string, data: RouteCheckSubmitInp
 
 // 任务级照片上传（线路巡检用）
 export async function uploadTaskPhoto(taskId: string, formData: FormData) {
-  const token = await getServerToken()
+  const headers = await getAuthHeaders()
+  delete headers['Content-Type']
   const response = await fetch(`${BASE}/tasks/${taskId}/photos`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers,
     body: formData,
   })
   if (!response.ok) {

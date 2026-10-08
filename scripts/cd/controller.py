@@ -332,7 +332,61 @@ class Controller:
             # nginx runs unprivileged inside its container; marker contains no data.
             os.chmod(marker, 0o644)
         else:
+            if marker.exists():
+                self.business_phase("draining")
+                self.wait_work_finished()
+            self.business_phase("normal")
             marker.unlink(missing_ok=True)
+            (self.state_dir / "public" / "status.json").unlink(missing_ok=True)
+
+    def business_phase(self, phase: str) -> None:
+        code = "import asyncio,sys; from app.core.maintenance import set_release_phase; asyncio.run(set_release_phase(sys.argv[1]))"
+        self.compose("exec", "-T", "app", ".venv/bin/python", "-c", code, phase, timeout=15)
+
+    def resume_work(self) -> None:
+        """Permit bootstrap work while the public gate stays closed."""
+        code = "import asyncio; from app.core.maintenance import set_release_phase; asyncio.run(set_release_phase('starting'))"
+        self.compose("run", "--rm", "--no-deps", "--entrypoint", ".venv/bin/python", "migrate", "-c", code)
+
+    def open_work(self) -> None:
+        self.wait_ready()
+        self.business_phase("draining")
+        self.wait_work_finished()
+        self.business_phase("normal")
+
+    def wait_work_finished(self, timeout: int = 120) -> None:
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            code = "import asyncio; from app.core.maintenance import drain_report; print(asyncio.run(drain_report()))"
+            report = json.loads(self.compose("exec", "-T", "app", ".venv/bin/python", "-c", code, timeout=15))
+            if report.get("active") == 0:
+                return
+            time.sleep(3)
+        raise Refused("unfinished business work blocks reopening; maintenance remains closed")
+
+    def announce(self, seconds: int | None = None) -> None:
+        seconds = self.config.get("maintenance_notice_seconds", 300) if seconds is None else seconds
+        if isinstance(seconds, bool) or not isinstance(seconds, int) or not 0 <= seconds <= 3600:
+            raise Refused("maintenance notice must be between 0 and 3600 seconds")
+        if (self.state_dir / "public" / "maintenance").exists():
+            return
+        # Capability check happens before publishing a promise to users.
+        self.business_phase("normal")
+        path = self.state_dir / "public" / "status.json"
+        atomic_json(path, {"phase": "announced", "starts_at": int(time.time()) + seconds})
+        os.chmod(path, 0o644)
+        self.event("maintenance_announced", notice_seconds=seconds)
+        deadline = time.monotonic() + seconds
+        try:
+            while time.monotonic() < deadline:
+                inventory = self.containers()
+                if not all(self.healthy(inventory.get(s, {})) for s in (*DEPS, *APPS, "nginx")):
+                    self.maintenance(True)
+                    raise Refused("service became unavailable during maintenance notice")
+                time.sleep(min(3, max(0, deadline - time.monotonic())))
+        except BaseException:
+            path.unlink(missing_ok=True)
+            raise
 
     def wait_ready(self, timeout=180) -> None:
         end = time.monotonic() + timeout
@@ -372,6 +426,7 @@ class Controller:
     def maintenance_on(self) -> None:
         (self.state_dir / "traffic-guard-owned").unlink(missing_ok=True)
         self.maintenance(True)
+        self.business_phase("draining")
         self.event("maintenance_enabled")
 
     def maintenance_off(self) -> None:
@@ -412,14 +467,18 @@ class Controller:
             self.event("traffic_guard_reopened")
 
     def drain(self) -> None:
+        self.business_phase("draining")
         end = time.monotonic() + 120
         while time.monotonic() < end:
             status = self.compose("exec", "-T", "nginx", "wget", "-Y", "off", "-qO-", "http://127.0.0.1:8089/status")
             match = re.search(r"Reading:\s+(\d+) Writing:\s+(\d+)", status)
             if match and sum(map(int, match.groups())) <= 1:
-                return
+                code = "import asyncio; from app.core.maintenance import drain_report; print(asyncio.run(drain_report()))"
+                report = json.loads(self.compose("exec", "-T", "app", ".venv/bin/python", "-c", code, timeout=15))
+                if report.get("active") == 0:
+                    return
             time.sleep(3)
-        raise Refused("active requests did not drain")
+        raise Refused("active requests or business tasks did not drain; maintenance remains closed")
 
     def revision(self) -> str:
         # Only schema revision is returned; no connection settings or row data.
@@ -440,7 +499,7 @@ class Controller:
                  "nginx-maintenance.conf", "nginx-capacity.conf", "migration-policy.json")
         return {name: digest(self.current / name) for name in names if (self.current / name).is_file()}
 
-    def deploy(self, sha: str, manifest: dict) -> None:
+    def deploy(self, sha: str, manifest: dict, *, enforce_window: bool = False) -> None:
         self.mount_check()
         if shutil.disk_usage("/").free < 20 * 1024**3 or shutil.disk_usage(self.data).free < 50 * 1024**3:
             raise Refused("disk headroom insufficient for release switch")
@@ -462,11 +521,16 @@ class Controller:
             previous[service] = command(["docker", "inspect", "--format", "{{.Image}}", inventory[service]["id"]])
         previous["migrate"] = previous["app"]
         atomic_json(self.state_dir / "previous-images.json", previous)
+        self.announce()
+        if enforce_window and not in_window(dt.datetime.now(dt.timezone.utc), switch=True):
+            (self.state_dir / "public" / "status.json").unlink(missing_ok=True)
+            raise Refused("switch cutoff reached during maintenance notice")
         self.phase("quiescing", candidate_sha=sha, previous_revision=before, traffic_opened=False)
         self.maintenance(True)
         migrated = False
+        # Failure to drain must not restart containers or reopen traffic.
+        self.drain()
         try:
-            self.drain()
             self.compose("stop", "--timeout", "120", "hermes-lite", "app", "frontend", timeout=400)
             self.phase("backup")
             backup = self.backup("predeploy")
@@ -475,6 +539,7 @@ class Controller:
             self.compose("config", "--quiet")
         except Exception:
             self.release_overlay(previous)
+            self.resume_work()
             self.compose("up", "-d", "--no-deps", *APPS)
             self.compose("up", "-d", "--no-deps", "--force-recreate", "nginx")
             self.wait_ready()
@@ -488,6 +553,7 @@ class Controller:
                 raise Refused("migration revision verification failed")
             migrated = True
             self.phase("starting")
+            self.resume_work()
             for service in APPS:
                 self.compose("up", "-d", "--no-deps", service)
             self.compose("up", "-d", "--no-deps", "--force-recreate", "nginx")
@@ -832,7 +898,7 @@ class Controller:
         if not in_window(dt.datetime.now(dt.timezone.utc), switch=True):
             raise Refused("switch cutoff reached")
         self.verify_candidate(candidate)
-        self.deploy(sha, manifest)
+        self.deploy(sha, manifest, enforce_window=True)
 
     def build(self, candidate: dict) -> None:
         sha = self.verify_candidate(candidate)
@@ -1073,8 +1139,10 @@ def lock(path: Path):
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=["backup", "drill", "watchdog", "schedule", "status", "mount-check",
-                                         "verify", "drain", "traffic-guard", "maintenance-on", "maintenance-off"])
+                                         "verify", "drain", "traffic-guard", "maintenance-on", "maintenance-off", "announce", "resume-work", "open-work"])
     parser.add_argument("--config", default="/etc/dazah-cd/config.json")
+    parser.add_argument("--notice-seconds", type=int, default=None)
+    parser.add_argument("--lock-held", action="store_true", help="Called by the deployment helper which already owns the release lock")
     args = parser.parse_args()
     os.umask(0o077)
     config_path = Path(args.config)
@@ -1087,13 +1155,15 @@ def main() -> int:
         if args.action == "mount-check":
             controller.mount_check()
             return 0
-        if args.action in ("verify", "drain", "traffic-guard"):
-            {"verify": controller.wait_ready, "drain": controller.drain,
+        if args.action in ("verify", "traffic-guard"):
+            {"verify": controller.wait_ready,
              "traffic-guard": controller.traffic_guard}[args.action]()
             return 0
-        with lock(Path("/var/lock/dazah-deploy.lock")):
+        with (contextlib.nullcontext() if args.lock_held else lock(Path("/var/lock/dazah-deploy.lock"))):
             if args.action == "status":
                 controller.event("status", state=read_json(controller.state_file, {}), enabled=controller.config.get("enabled", False))
+            elif args.action == "announce":
+                controller.announce(args.notice_seconds)
             else:
                 getattr(controller, args.action.replace("-", "_"))()
         return 0

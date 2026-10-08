@@ -37,4 +37,16 @@ describe('quality action request boundary', () => {
       }),
     )
   })
+
+  it('classifies public authorization failures and hides server failure bodies', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: '未获得当前高风险业务动作授权' }), { status: 403 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'private database parameters' }), { status: 500 })))
+    await expect(actionFetch('/api/v1/quality/changes/import/confirm')).rejects.toMatchObject({
+      status: 403, message: '未获得当前高风险业务动作授权',
+    })
+    await expect(actionFetch('/api/v1/quality/changes/import/confirm')).rejects.toMatchObject({
+      status: 500, message: '服务暂时不可用，请稍后重试',
+    })
+  })
 })

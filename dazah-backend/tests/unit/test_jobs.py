@@ -14,6 +14,7 @@ async def test_submit_job_persists_optional_status_metadata(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     cache_set = AsyncMock()
+    monkeypatch.setattr(jobs, "admit_activity", AsyncMock(return_value="fixture-job"))
     monkeypatch.setattr(jobs, "cache_set", cache_set)
     monkeypatch.setattr(jobs, "cache_delete", AsyncMock())
     created: list[Coroutine[Any, Any, Any]] = []
@@ -21,6 +22,9 @@ async def test_submit_job_persists_optional_status_metadata(
     class _Task:
         def cancel(self) -> None:
             return None
+
+        def add_done_callback(self, callback) -> None:
+            jobs._running_tasks.discard(self)
 
     def create_task(coro: Coroutine[Any, Any, Any]) -> _Task:
         created.append(coro)

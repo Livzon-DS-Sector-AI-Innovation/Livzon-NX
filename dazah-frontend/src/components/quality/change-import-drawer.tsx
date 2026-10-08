@@ -4,7 +4,8 @@ import PlatformNotice from '@/components/shared/PlatformNotice'
 
 import { useEffect, useRef, useState } from "react"
 import { Checkbox } from "antd"
-import { confirmChangeImport, previewChangeImport } from "@/actions/quality"
+import { confirmLegacyChangeImport as confirmChangeImport, previewLegacyChangeImport as previewChangeImport } from "@/actions/quality-import"
+import { unwrapServerActionResult } from "@/lib/server-action-result"
 
 interface ChangeImportDrawerProps {
   isOpen: boolean
@@ -81,7 +82,7 @@ export function ChangeImportDrawer({ isOpen, onClose, onSuccess }: ChangeImportD
     try {
       const formData = new FormData()
       formData.append("file", file)
-      setPreview(await previewChangeImport(formData))
+      setPreview(unwrapServerActionResult(await previewChangeImport(formData)))
     } catch (err) {
       setErrorMsg((err instanceof Error ? err.message : '') || "预览失败")
     } finally {
@@ -99,10 +100,10 @@ export function ChangeImportDrawer({ isOpen, onClose, onSuccess }: ChangeImportD
     try {
       const formData = new FormData()
       formData.append("file", file)
-      const d = await confirmChangeImport(formData, {
+      const d = unwrapServerActionResult(await confirmChangeImport(formData, {
         skipDuplicates,
         updateExisting,
-      })
+      }))
       let msg = `导入完成：${d.success_count} 条成功`
       if (d.update_count > 0) msg += `，${d.update_count} 条已更新`
       if (d.skip_count > 0) msg += `，${d.skip_count} 条跳过`

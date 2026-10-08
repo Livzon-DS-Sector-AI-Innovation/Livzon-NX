@@ -428,6 +428,7 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://dazah_ci:dazah_ci_test@localhost:5432/dazah_ci_test
       TEST_DATABASE_URL: postgresql+asyncpg://dazah_ci:dazah_ci_test@localhost:5432/dazah_ci_test
       REDIS_URL: redis://localhost:6379/0
+      MAINTENANCE_TEST_REDIS_URL: redis://localhost:6379/15
       SECRET_KEY: ci-only-secret-key
       ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
       FRONTEND_URL: http://localhost:3000

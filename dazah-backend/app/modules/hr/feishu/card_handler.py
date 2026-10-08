@@ -4,9 +4,11 @@
 卡片更新同样使用人事模块自己的飞书凭证（模块独立，不影响平台登录应用）。
 """
 
-import asyncio
 import logging
 from typing import Any
+
+from app.core.jobs import submit_job
+from app.core.maintenance import MaintenanceActiveError, business_activity
 
 logger = logging.getLogger(__name__)
 
@@ -14,10 +16,22 @@ logger = logging.getLogger(__name__)
 async def handle_card_action(event: dict[str, Any]) -> dict[str, Any] | None:
     """人事应用长连接的 card.action.trigger 分发器。"""
     action_value = event.get("event", {}).get("action", {}).get("value", {})
-    if action_value.get("module") == "hr_contract_approval":
-        return await _handle_hr_contract_approval(event, action_value)
-    if action_value.get("module") == "position_transfer_approval":
-        return await _handle_position_transfer_approval(event, action_value)
+    if action_value.get("module") in {
+        "hr_contract_approval",
+        "position_transfer_approval",
+    }:
+        try:
+            async with business_activity("event"):
+                if action_value["module"] == "hr_contract_approval":
+                    return await _handle_hr_contract_approval(event, action_value)
+                return await _handle_position_transfer_approval(event, action_value)
+        except MaintenanceActiveError:
+            return {
+                "toast": {
+                    "type": "warning",
+                    "content": "系统维护中，本次审批未受理，请恢复后重试",
+                }
+            }
     return None
 
 
@@ -120,7 +134,7 @@ async def _handle_position_transfer_approval(
     )
 
     # 防重复
-    from app.core.redis import cache_get, cache_set
+    from app.core.redis import cache_delete, cache_get, cache_set
 
     approval_key = f"hr:position_transfer:{record_id}:{node}:{action}"
     already = await cache_get(approval_key)
@@ -131,9 +145,17 @@ async def _handle_position_transfer_approval(
     # 先标记（防重入），再异步执行
     await cache_set(approval_key, "1", ex=86400 * 7)
 
-    asyncio.create_task(
-        _do_position_transfer_approval(action, record_id, node, signer, form_value)
-    )
+    try:
+        await submit_job(
+            lambda: _do_position_transfer_approval(
+                action, record_id, node, signer, form_value
+            )
+        )
+    except Exception:
+        # No worker was admitted; an old claim must not suppress the next
+        # approval attempt for seven days after a release-barrier failure.
+        await cache_delete(approval_key)
+        raise
 
     toast_type = "success" if action == "approve" else "warning"
     toast_content = "已通过" if action == "approve" else "已拒绝"

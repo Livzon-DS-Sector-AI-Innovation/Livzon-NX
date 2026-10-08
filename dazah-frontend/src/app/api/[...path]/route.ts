@@ -126,9 +126,14 @@ async function proxyRequest(request: NextRequest) {
       return nextResponse
     } catch (error) {
       lastError = error
+      // A missing acknowledgement can follow a committed write. Trying another
+      // backend automatically could repeat the operation without a receipt.
+      if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method)) break
     }
   }
 
-  console.error('Proxy error:', lastError)
-  return NextResponse.json({ error: '服务暂时不可用，请稍后重试', message: '服务暂时不可用，请稍后重试' }, { status: 502 })
+  console.error('Proxy error:', lastError instanceof Error ? lastError.name : 'UnknownError')
+  const message = ['GET', 'HEAD', 'OPTIONS'].includes(request.method) ? '服务暂时不可用，请稍后重试' :
+    '操作结果暂不可确认，请查询操作结果并核对业务记录，不要重复提交'
+  return NextResponse.json({ error: message, message }, { status: 502 })
 }
