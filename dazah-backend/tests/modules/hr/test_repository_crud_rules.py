@@ -289,8 +289,18 @@ async def test_employee_repository_upsert_delete_maps_groups_and_distinct_values
     assert await repo.get_distinct_values("department", keyword="张") == ["质量部"]
 
 
+def _current_quarter_end() -> date:
+    """当前季度最后一天：Q4 直接取年末，避免 month=13 越界（与 repository 口径一致）。"""
+    today = date.today()
+    q_start_month = ((today.month - 1) // 3) * 3 + 1
+    if q_start_month == 10:
+        return date(today.year, 12, 31)
+    return date(today.year, q_start_month + 3, 1) - timedelta(days=1)
+
+
 @pytest.mark.anyio
 async def test_employee_statistics_assemble_all_distributions() -> None:
+    quarter_end = _current_quarter_end()
     emp = SimpleNamespace(
         employee_number="E001",
         name="张三",
@@ -298,7 +308,7 @@ async def test_employee_statistics_assemble_all_distributions() -> None:
         position="QA",
         status="在职",
         is_deleted=False,
-        contract_end_date=date(2026, 9, 1),
+        contract_end_date=quarter_end,
         contract_end_2=None,
         contract_end_3=None,
         contract_end_4=None,
@@ -328,6 +338,7 @@ async def test_employee_statistics_assemble_all_distributions() -> None:
 @pytest.mark.anyio
 async def test_employee_statistics_parses_string_contract_end_5() -> None:
     """合同到期取 6 个合同字段最晚非空日期：contract_end_5 为字符串时需解析。"""
+    quarter_end = _current_quarter_end()
     emp = SimpleNamespace(
         employee_number="E002",
         name="李四",
@@ -335,11 +346,11 @@ async def test_employee_statistics_parses_string_contract_end_5() -> None:
         position="QA",
         status="在职",
         is_deleted=False,
-        contract_end_date=date(2026, 8, 1),
+        contract_end_date=quarter_end - timedelta(days=60),
         contract_end_2=None,
         contract_end_3=None,
         contract_end_4=None,
-        contract_end_5="2026/09/15",
+        contract_end_5=quarter_end.strftime("%Y/%m/%d"),
         contract_end_6=None,
     )
     results = [
@@ -354,7 +365,10 @@ async def test_employee_statistics_parses_string_contract_end_5() -> None:
     stats = await repository.EmployeeRepository(session).get_stats({"质量部"})
     assert stats["contract_expiring_count"] == 1
     assert stats["contract_expiring_list"][0]["employee_number"] == "E002"
-    assert stats["contract_expiring_list"][0]["contract_end_date"] == "2026-09-15"
+    assert (
+        stats["contract_expiring_list"][0]["contract_end_date"]
+        == quarter_end.isoformat()
+    )
     assert stats["contract_expiring_list"][0]["contract_sequence"] == 5
 
 
