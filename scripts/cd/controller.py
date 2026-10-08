@@ -365,7 +365,7 @@ class Controller:
         raise Refused("unfinished business work blocks reopening; maintenance remains closed")
 
     def announce(self, seconds: int | None = None) -> None:
-        seconds = self.config.get("maintenance_notice_seconds", 300) if seconds is None else seconds
+        seconds = self.config.get("maintenance_notice_seconds", 180) if seconds is None else seconds
         if isinstance(seconds, bool) or not isinstance(seconds, int) or not 0 <= seconds <= 3600:
             raise Refused("maintenance notice must be between 0 and 3600 seconds")
         if (self.state_dir / "public" / "maintenance").exists():

@@ -10,6 +10,13 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_manual_release_defaults_to_three_minute_notice() -> None:
+    local = (ROOT / "scripts/deploy-production.ps1").read_text(encoding="utf-8")
+    remote = (ROOT / "scripts/deploy-production-remote.sh").read_text(encoding="utf-8")
+    assert re.search(r"\[int\]\$NoticeSeconds\s*=\s*180\b", local)
+    assert 'NOTICE_SECONDS="${4:-180}"' in remote
+
+
 def test_nginx_uses_dynamic_docker_dns_for_application_upstreams() -> None:
     config = (ROOT / "deploy/nginx.default.conf.template").read_text(encoding="utf-8")
 

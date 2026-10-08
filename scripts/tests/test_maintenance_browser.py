@@ -49,3 +49,14 @@ def test_templates_attach_observer_only_to_frontend_html_routes():
         assert config.count("sub_filter '</body>'") == 1
         assert "proxy_set_header Accept-Encoding $dazah_frontend_encoding;" in config
         assert "proxy_set_header Host $host;" in frontend
+
+
+def test_release_notice_requires_finishing_work_and_has_no_reconciliation_entry():
+    config = (ROOT / "deploy/nginx-maintenance.conf").read_text(encoding="utf-8")
+    assert "3 分钟内更新" in config
+    assert "然后停止操作" in config
+    assert "核对操作结果" not in config
+    assert "确认操作结果" not in config
+    assert '<div class="brand">工厂管理平台</div>' in config
+    assert '<div class="brand">DAZAH</div>' not in config
+    assert 'if ($dazah_maintenance = 1) { return 503; }' in config

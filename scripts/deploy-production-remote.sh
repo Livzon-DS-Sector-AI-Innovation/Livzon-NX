@@ -18,7 +18,7 @@ ENV_FILE="$ROOT_DIR/.env"
 COMPOSE_FILE="$ROOT_DIR/compose.yml"
 EDGE_COMPOSE_FILE="$ROOT_DIR/compose.edge.yml"
 MAINTENANCE_DIR="/var/lib/dazah-cd/public"
-NOTICE_SECONDS="${4:-300}"
+NOTICE_SECONDS="${4:-180}"
 CONTROL_SCRIPT="$ROOT_DIR/../control/controller.py"
 
 maintenance_on() {
