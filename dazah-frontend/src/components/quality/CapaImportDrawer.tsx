@@ -1,6 +1,7 @@
 "use client"
 
-import { previewCapaImport, confirmCapaImport } from "@/actions/quality-capa"
+import { previewCapaImport, confirmCapaImport } from "@/actions/quality-import"
+import { unwrapServerActionResult } from "@/lib/server-action-result"
 import { ImportPreviewDrawer } from "./ImportPreviewDrawer"
 
 interface CapaImportDrawerProps {
@@ -25,8 +26,8 @@ export function CapaImportDrawer({ isOpen, onClose, onSuccess }: CapaImportDrawe
       fileInputId="capa-file-input"
       templateDownloadUrl="/api/v1/quality/capas/export"
       templateFilename="CAPA登记汇总表_模板.docx"
-      previewAction={previewCapaImport}
-      confirmAction={confirmCapaImport}
+      previewAction={async (formData) => unwrapServerActionResult(await previewCapaImport(formData))}
+      confirmAction={async (formData, skip, update) => unwrapServerActionResult(await confirmCapaImport(formData, skip, update))}
     />
   )
 }

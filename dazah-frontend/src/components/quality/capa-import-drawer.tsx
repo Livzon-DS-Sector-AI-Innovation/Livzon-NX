@@ -4,7 +4,8 @@ import PlatformNotice from '@/components/shared/PlatformNotice'
 
 import { useEffect, useRef, useState } from "react"
 import { Checkbox } from "antd"
-import { confirmCapaImport, previewCapaImport } from "@/actions/quality"
+import { confirmLegacyCapaImport as confirmCapaImport, previewLegacyCapaImport as previewCapaImport } from "@/actions/quality-import"
+import { unwrapServerActionResult } from "@/lib/server-action-result"
 
 interface CapaImportDrawerProps {
   isOpen: boolean
@@ -68,7 +69,7 @@ export function CapaImportDrawer({ isOpen, onClose, onSuccess }: CapaImportDrawe
     try {
       const formData = new FormData()
       formData.append("file", file)
-      setPreview(await previewCapaImport(formData))
+      setPreview(unwrapServerActionResult(await previewCapaImport(formData)))
     } catch (err) {
       setErrorMsg((err instanceof Error ? err.message : '') || "预览失败")
     } finally {
@@ -83,10 +84,10 @@ export function CapaImportDrawer({ isOpen, onClose, onSuccess }: CapaImportDrawe
     try {
       const formData = new FormData()
       formData.append("file", file)
-      const d = await confirmCapaImport(formData, {
+      const d = unwrapServerActionResult(await confirmCapaImport(formData, {
         skipDuplicates,
         updateExisting,
-      })
+      }))
       let msg = `导入完成：${d.success_count} 条成功`
       if (d.update_count > 0) msg += `，${d.update_count} 条已更新`
       if (d.skip_count > 0) msg += `，${d.skip_count} 条跳过（重复）`

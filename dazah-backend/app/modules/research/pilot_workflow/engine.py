@@ -141,7 +141,7 @@ async def start_workflow(workflow_id: uuid.UUID) -> None:
 
 async def approve_step(workflow_id: uuid.UUID) -> dict[str, Any]:
     """确认当前步骤，异步执行下一步。返回执行结果信息。"""
-    import asyncio
+    from app.core.jobs import submit_job
 
     async with async_session_factory() as session:
         # 获取工作流
@@ -209,7 +209,7 @@ async def approve_step(workflow_id: uuid.UUID) -> dict[str, Any]:
         await session.commit()
 
         # 在后台异步执行下一步
-        asyncio.create_task(_execute_next_step_async(workflow_id, next_idx))
+        await submit_job(lambda: _execute_next_step_async(workflow_id, next_idx))
 
         return {
             "status": "running",

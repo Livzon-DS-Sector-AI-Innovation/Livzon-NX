@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import uuid
 from datetime import datetime
 from types import SimpleNamespace as _SimpleNamespace
@@ -415,21 +414,17 @@ async def test_deviation_workflow_batch_and_auto_fill(
         flush=AsyncMock(),
     )
 
-    created_coroutines: list[Any] = []
-
-    def _capture_task(coro: Any) -> Any:
-        created_coroutines.append(coro)
-        coro.close()
-        return Mock()
-
-    monkeypatch.setattr(asyncio, "create_task", _capture_task)
+    submit = AsyncMock()
+    monkeypatch.setattr("app.core.jobs.submit_job", submit)
     assert await service.submit_for_review(
         db,
         deviation_id,
         str(user_id),
     ) == {"success": True}
     assert deviation.status == "pending_ai_analysis"
-    assert created_coroutines
+    submit.assert_awaited_once_with(
+        service._trigger_ai_analysis, deviation_id=deviation_id, user_id=str(user_id)
+    )
 
     assert await service.complete_ai_analysis(
         db,

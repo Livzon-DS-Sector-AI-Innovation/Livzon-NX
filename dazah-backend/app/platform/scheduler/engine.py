@@ -9,6 +9,7 @@ from datetime import datetime
 
 from app.core.config import get_settings
 from app.core.database import async_session_factory
+from app.core.maintenance import MaintenanceActiveError, business_activity
 from app.platform.scheduler.registry import (
     SchedulerRegistry,
     TaskDefinition,
@@ -124,9 +125,15 @@ class SchedulerEngine:
         logger.debug("Running task: %s", task.name)
 
         try:
-            coro = task.coro()
-            await asyncio.wait_for(coro, timeout=task.timeout_seconds)
+            async with business_activity("scheduler"):
+                coro = task.coro()
+                await asyncio.wait_for(coro, timeout=task.timeout_seconds)
             logger.debug("Task completed: %s", task.name)
+        except MaintenanceActiveError:
+            if last is None:
+                self._last_run.pop(task.name, None)
+            else:
+                self._last_run[task.name] = last
         except TimeoutError:
             logger.error(
                 "Task '%s' timed out after %ds",
@@ -159,7 +166,10 @@ class SchedulerEngine:
         logger.debug("Running generator: %s", gen.name)
 
         try:
-            async with async_session_factory() as session:
+            async with (
+                business_activity("scheduler"),
+                async_session_factory() as session,
+            ):
                 items = await asyncio.wait_for(
                     gen.find_due(session),
                     timeout=gen.timeout_seconds,
@@ -190,6 +200,11 @@ class SchedulerEngine:
                     gen.name,
                     len(items),
                 )
+        except MaintenanceActiveError:
+            if last is None:
+                self._last_run.pop(gen.name, None)
+            else:
+                self._last_run[gen.name] = last
         except TimeoutError:
             logger.error(
                 "Generator '%s' find_due timed out after %ds",

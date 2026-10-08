@@ -5,6 +5,34 @@ import { proxy } from './proxy'
 vi.mock('@/lib/server-api', () => ({ getServerApiBaseUrl: () => 'http://backend.test' }))
 afterEach(() => vi.unstubAllGlobals())
 
+function qualityMe(pageKey: string, permissions = ['access', 'query', 'operate']) {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(JSON.stringify({ data: {
+    role: 'user', page_permissions: [{ page_key: pageKey, module_code: 'quality', permissions }],
+  } }))))
+}
+
+it('renders the deviation dashboard using its saved ledger grant', async () => {
+  qualityMe('quality:deviations:deviation-ledger')
+  const result = await proxy(new NextRequest('http://frontend.test/quality/deviations'))
+  expect(result.headers.get('x-middleware-next')).toBe('1')
+  expect(result.headers.get('x-middleware-request-x-dazah-page-path')).toBe('/quality/deviations')
+  expect((await proxy(new NextRequest('http://frontend.test/quality/deviations/records'))).status).toBe(403)
+})
+
+it('directs a partially authorized directory to its queryable child without granting dashboard data', async () => {
+  qualityMe('quality:deviations:deviation-records')
+  const result = await proxy(new NextRequest('http://frontend.test/quality/deviations'))
+  expect(result.headers.get('location')).toBe('http://frontend.test/quality/deviations/records')
+  expect((await proxy(new NextRequest('http://frontend.test/quality/deviations', { method: 'POST' }))).status).toBe(403)
+})
+
+it('does not turn directory visibility or access-only grants into query authorization', async () => {
+  qualityMe('quality:deviations:deviation-ledger', ['access'])
+  expect((await proxy(new NextRequest('http://frontend.test/quality/deviations'))).status).toBe(403)
+  qualityMe('quality:capas:capa-ledger')
+  expect((await proxy(new NextRequest('http://frontend.test/quality/deviations'))).status).toBe(403)
+})
+
 function me(permissions: string[], status = 'enforced', role = 'user') {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: {
     role, module_codes: ['hr'], page_permission_rollouts: { hr: status },

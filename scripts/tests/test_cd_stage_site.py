@@ -99,7 +99,7 @@ ThreadingHTTPServer(('0.0.0.0',8000),Handler).serve_forever()
             "-v", f"{root / 'deploy/single-host/nginx-api-guard.conf'}:/etc/nginx/dazah-api-guard.conf:ro", "nginx:1.27-alpine")
         created.append(gateway)
         run("exec", gateway, "nginx", "-t")
-        driver = '''import concurrent.futures, http.client, pathlib, time
+        driver = '''import concurrent.futures, http.client, pathlib, time, json
 def call(path):
  c=http.client.HTTPConnection('gateway',80,timeout=10); c.request('GET',path)
  return c,c.getresponse()
@@ -130,10 +130,12 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=20) as pool:
 assert 429 in statuses and set(statuses) <= {200,429}, set(statuses)
 c,r=call('/login'); assert r.status==200; assert b'/__dazah_maintenance_watch.js' in r.read(); c.close()
 c,r=call('/__dazah_maintenance_status'); assert r.status==204; c.close()
-c,r=call('/__dazah_maintenance_watch.js'); assert r.status==200; assert b'location.replace' in r.read(); c.close()
+c,r=call('/__dazah_maintenance_watch.js'); assert r.status==200; assert b'location.replace' not in r.read(); c.close()
+pathlib.Path('/fixture/status.json').write_text(json.dumps({'phase':'announced','starts_at':2000}))
+c,r=call('/__dazah_maintenance_status'); assert r.status==200; assert json.loads(r.read())=={'phase':'announced','starts_at':2000}; c.close()
 pathlib.Path('/fixture/maintenance').touch()
 for method in ('GET','POST','PUT','PATCH','DELETE','OPTIONS','HEAD'):
- for path in ('/', '/login','/api/ping','/uploads/file','/mcp/stream','/health','/_next/static/app.js'):
+ for path in ('/', '/login','/api/ping','/uploads/file','/mcp/stream','/health','/_next/static/app.js','/__dazah_maintenance_status'):
   c=http.client.HTTPConnection('gateway',80,timeout=10)
   c.request(method,path,headers={'X-Dazah-Maintenance-Bypass':'1','X-Forwarded-For':'127.0.0.1'})
   r=c.getresponse(); assert r.status==503,(method,path,r.status)
@@ -143,6 +145,7 @@ for method in ('GET','POST','PUT','PATCH','DELETE','OPTIONS','HEAD'):
   if method!='HEAD': assert '系统维护中'.encode() in body
   c.close()
 pathlib.Path('/fixture/maintenance').unlink()
+pathlib.Path('/fixture/status.json').unlink()
 time.sleep(3)
 c,r=call('/api/ping'); assert r.status==200; c.close()
 print('SSE capacity, ordinary API independence, maintenance and recovery passed')

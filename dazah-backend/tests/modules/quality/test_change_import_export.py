@@ -6,14 +6,14 @@ from datetime import date
 
 import pytest
 from docx import Document
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.quality.models.change_control import ChangeControl
 from app.modules.quality.service import quality_import_export as ie_service
 
 
-def build_change_docx() -> bytes:
+def build_change_docx(change_code: str = "BG-2026-001") -> bytes:
     doc = Document()
     table = doc.add_table(rows=2, cols=10)
     headers = [
@@ -32,7 +32,7 @@ def build_change_docx() -> bytes:
         table.cell(0, index).text = header
     values = [
         "1",
-        "BG-2026-001",
+        change_code,
         "质量部",
         "反应釜",
         "更换搅拌电机",
@@ -53,34 +53,43 @@ def build_change_docx() -> bytes:
 async def test_confirm_change_import_updates_existing_row(
     db_session: AsyncSession,
 ) -> None:
-    db_session.add(
-        ChangeControl(
-            id=uuid.uuid4(),
-            serial_number="1",
-            change_code="BG-2026-001",
-            applicant_department="旧部门",
-            change_object="旧对象",
-            change_content="旧内容",
-            change_level="三级",
-            application_date=date(2026, 6, 1),
+    change_code = f"BG-test-{uuid.uuid4().hex}"
+    try:
+        db_session.add(
+            ChangeControl(
+                id=uuid.uuid4(),
+                serial_number="1",
+                change_code=change_code,
+                applicant_department="旧部门",
+                change_object="旧对象",
+                change_content="旧内容",
+                change_level="三级",
+                application_date=date(2026, 6, 1),
+            )
         )
-    )
-    await db_session.commit()
+        await db_session.commit()
 
-    result = await ie_service.confirm_change_import(
-        db_session,
-        build_change_docx(),
-        skip_duplicates=False,
-        update_existing=True,
-    )
+        result = await ie_service.confirm_change_import(
+            db_session,
+            build_change_docx(change_code),
+            skip_duplicates=False,
+            update_existing=True,
+        )
 
-    updated = await db_session.scalar(
-        select(ChangeControl).where(ChangeControl.change_code == "BG-2026-001")
-    )
-    assert result["update_count"] == 1
-    assert updated is not None
-    assert updated.applicant_department == "质量部"
-    assert updated.change_level == "二级"
+        updated = await db_session.scalar(
+            select(ChangeControl).where(ChangeControl.change_code == change_code)
+        )
+        assert result["update_count"] == 1
+        assert updated is not None
+        assert updated.applicant_department == "质量部"
+        assert updated.change_level == "二级"
+
+    finally:
+        await db_session.rollback()
+        await db_session.execute(
+            delete(ChangeControl).where(ChangeControl.change_code == change_code)
+        )
+        await db_session.commit()
 
 
 @pytest.mark.anyio

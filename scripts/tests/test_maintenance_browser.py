@@ -17,18 +17,20 @@ def test_observer_transitions_only_on_explicit_maintenance_and_skips_hidden_tabs
 const vm=require("node:vm"), assert=require("node:assert/strict");
 const source=JSON.parse(process.argv[2]);
 (async()=>{
- let tick,visible,requests=0,replaced=[],response={status:204,headers:{get:()=>null}};
- const document={hidden:false,addEventListener:(event,fn)=>{assert.equal(event,"visibilitychange");visible=fn}};
- const context={document,location:{replace:path=>replaced.push(path)},
+ let tick,visible,requests=0,events=[],response={status:204,headers:{get:()=>null}};
+ const document={hidden:false,querySelector:()=>({}),addEventListener:(event,fn)=>{assert.equal(event,"visibilitychange");visible=fn}};
+ const context={document,window:{dispatchEvent:event=>events.push(event.detail)},CustomEvent:class{constructor(type,options){assert.equal(type,"dazah:maintenance");this.detail=options.detail}},
+  location:{replace:()=>{throw new Error("must preserve existing page")}},Number,
   setInterval:(fn,ms)=>{assert.equal(ms,5000);tick=fn},
-  fetch:async(path,options)=>{assert.equal(path,"/__dazah_maintenance_status");assert.equal(options.method,"HEAD");assert.equal(options.cache,"no-store");requests++;return response}};
+  fetch:async(path,options)=>{assert.equal(path,"/__dazah_maintenance_status");assert.equal(options.cache,"no-store");requests++;return response}};
  vm.runInNewContext(source,context);await new Promise(setImmediate);
- assert.deepEqual(replaced,[]);
- response={status:503,headers:{get:()=>null}};await tick();assert.deepEqual(replaced,[]);
+ assert.equal(events.at(-1).phase,"normal");
+ let previous=events.length;response={status:503,headers:{get:()=>null}};await tick();assert.equal(events.length,previous);
+ response={status:200,headers:{get:()=>null},json:async()=>({phase:"announced",starts_at:1234})};await tick();assert.equal(events.at(-1).phase,"announced");
  response={status:503,headers:{get:()=>"1"}};
  document.hidden=true;let prior=requests;await tick();assert.equal(requests,prior);
- document.hidden=false;await visible();assert.deepEqual(replaced,["/__dazah_maintenance"]);
- context.fetch=async()=>{throw new Error("offline")};await tick();assert.equal(replaced.length,1);
+ document.hidden=false;await visible();assert.equal(events.at(-1).phase,"maintenance");
+ context.fetch=async()=>{throw new Error("offline")};await tick();assert.equal(events.at(-1).phase,"maintenance");
  console.log("maintenance observer passed");
 })().catch(error=>{console.error(error);process.exit(1)});
 '''

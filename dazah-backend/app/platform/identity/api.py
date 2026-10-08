@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from datetime import datetime
 from urllib.parse import urlencode
@@ -1192,7 +1191,11 @@ async def trigger_sync_departments(
 
     app_id = config.app_id if config else None
     app_secret = decrypt_secret(config.encrypted_app_secret) if config else None
-    asyncio.create_task(sync_departments(root_id, app_id=app_id, app_secret=app_secret))
+    from app.core.jobs import submit_job
+
+    await submit_job(
+        lambda: sync_departments(root_id, app_id=app_id, app_secret=app_secret)
+    )
     logger.info("Department sync triggered for root=%s", root_id)
     return success_response(
         data={"message": "组织架构同步已触发", "root_dept_id": root_id},
@@ -1224,7 +1227,11 @@ async def trigger_sync_members(
 
     app_id = config.app_id if config else None
     app_secret = decrypt_secret(config.encrypted_app_secret) if config else None
-    asyncio.create_task(sync_members(target_id, app_id=app_id, app_secret=app_secret))
+    from app.core.jobs import submit_job
+
+    await submit_job(
+        lambda: sync_members(target_id, app_id=app_id, app_secret=app_secret)
+    )
     logger.info("Member sync triggered for target=%s", target_id)
     return success_response(
         data={"message": "成员同步已触发", "target_dept_id": target_id},

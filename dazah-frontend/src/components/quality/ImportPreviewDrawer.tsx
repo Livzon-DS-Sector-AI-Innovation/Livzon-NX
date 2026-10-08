@@ -4,12 +4,20 @@ import PlatformNotice from '@/components/shared/PlatformNotice'
 
 import { useState, useRef } from "react"
 import { Checkbox } from "antd"
+import { getUserErrorMessage } from '@/lib/user-error'
+
+export interface ImportPreviewResult {
+  total_rows: number
+  valid_rows: number
+  error_rows?: { row_number: number; error_message: string }[]
+}
 
 export interface ImportResultCounts {
   success_count: number
   update_count: number
   skip_count: number
   error_count: number
+  error_details?: { row: number; error: string }[]
 }
 
 interface ImportPreviewDrawerProps {
@@ -27,7 +35,7 @@ interface ImportPreviewDrawerProps {
   /** 模板下载文件名 */
   templateFilename: string
   /** 预览 action */
-  previewAction: (formData: FormData) => Promise<any>
+  previewAction: (formData: FormData) => Promise<ImportPreviewResult>
   /** 确认导入 action */
   confirmAction: (
     formData: FormData,
@@ -59,7 +67,8 @@ export function ImportPreviewDrawer({
   closeDelayMs = 2000,
 }: ImportPreviewDrawerProps) {
   const [file, setFile] = useState<File | null>(null)
-  const [preview, setPreview] = useState<any>(null)
+  const [preview, setPreview] = useState<ImportPreviewResult | null>(null)
+  const [rowErrors, setRowErrors] = useState<{ row: number; error: string }[]>([])
   const [previewing, setPreviewing] = useState(false)
   const [importing, setImporting] = useState(false)
   const [errorMsg, setErrorMsg] = useState("")
@@ -75,6 +84,7 @@ export function ImportPreviewDrawer({
     setImporting(false)
     setErrorMsg("")
     setSuccessMsg("")
+    setRowErrors([])
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
@@ -93,6 +103,8 @@ export function ImportPreviewDrawer({
     setErrorMsg("")
     setFile(selected)
     setPreview(null)
+    setSuccessMsg("")
+    setRowErrors([])
   }
 
   async function handlePreview() {
@@ -105,7 +117,7 @@ export function ImportPreviewDrawer({
       const data = await previewAction(formData)
       setPreview(data)
     } catch (err) {
-      setErrorMsg((err instanceof Error ? err.message : '') || "预览失败")
+      setErrorMsg(getUserErrorMessage(err, "预览失败，请稍后重试"))
     } finally {
       setPreviewing(false)
     }
@@ -115,6 +127,8 @@ export function ImportPreviewDrawer({
     if (!file) { setErrorMsg("请先选择文件"); return }
     setImporting(true)
     setErrorMsg("")
+    setSuccessMsg("")
+    setRowErrors([])
     try {
       const formData = new FormData()
       formData.append("file", file)
@@ -124,9 +138,16 @@ export function ImportPreviewDrawer({
       if (d.skip_count > 0) msg += `，${d.skip_count} 条跳过${skipSuffix}`
       if (d.error_count > 0) msg += `，${d.error_count} 条失败`
       setSuccessMsg(msg)
+      if (d.error_count > 0) {
+        setRowErrors(d.error_details ?? [])
+        setErrorMsg("部分数据未导入，请查看失败行，修正文档后重新预览；已成功的数据已保存")
+        if (d.success_count > 0 || d.update_count > 0) onSuccess()
+        setPreview(null)
+        return
+      }
       setTimeout(() => { handleClose(); onSuccess() }, closeDelayMs)
     } catch (err) {
-      setErrorMsg((err instanceof Error ? err.message : '') || "导入失败")
+      setErrorMsg(getUserErrorMessage(err, "导入失败，请先刷新核对是否已保存"))
     } finally {
       setImporting(false)
     }
@@ -185,19 +206,22 @@ export function ImportPreviewDrawer({
             {errorMsg && <PlatformNotice type="error" title={<>{errorMsg}</>} />}
             {successMsg && <PlatformNotice type="success" title={<>{successMsg}</>} />}
 
+            {rowErrors.map((rowError, index) => (
+              <PlatformNotice key={index} type="error" title={`第${rowError.row}行：${rowError.error}`} />
+            ))}
             {preview && (
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold text-gray-900">导入预览</h3>
                 <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
                   <div className="flex justify-between"><span className="text-gray-500">总行数</span><span className="font-medium">{preview.total_rows}</span></div>
                   <div className="flex justify-between"><span className="text-gray-500">可导入</span><span className="font-bold text-green-700">{preview.valid_rows}</span></div>
-                  {preview.error_rows?.length > 0 && (
+                  {preview.error_rows && preview.error_rows.length > 0 && (
                     <div className="flex justify-between"><span className="text-gray-500">错误/重复行</span><span className="font-bold text-red-600">{preview.error_rows.length}</span></div>
                   )}
                 </div>
-                {preview.error_rows?.length > 0 && (
+                {preview.error_rows && preview.error_rows.length > 0 && (
                   <div className="max-h-40 overflow-y-auto">
-                    {preview.error_rows.map((e: any, i: number) => (
+                    {preview.error_rows.map((e, i) => (
                       <PlatformNotice type="error" key={i} title={<>第{e.row_number}行: {e.error_message}</>} />
                     ))}
                   </div>

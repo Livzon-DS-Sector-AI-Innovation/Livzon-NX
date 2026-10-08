@@ -46,7 +46,7 @@ class WarehouseFeishuDailySyncGenerator(TaskGenerator):
         return []
 
     async def execute_one(self, session: Any, item: Any) -> None:
-        await WarehouseService(session).sync_feishu_table(
+        await WarehouseService(session).sync_discovered_feishu_table(
             UUID(str(item)), trigger_type="scheduled"
         )
 

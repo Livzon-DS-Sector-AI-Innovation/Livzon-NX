@@ -754,10 +754,28 @@ PAGE_ROUTE_ALIASES = {
     "/hr/new/offboarding": "hr:offboarding",
     "/hr/new/departure": "hr:offboarding",
     "/hr/new/departments": "hr:departments",
-    "/quality/change": "quality:change:change-ledger",
+    "/quality/deviations": "quality:deviations:deviation-ledger",
+    "/quality/capas": "quality:capas:capa-ledger",
+    "/quality/complaints": "quality:complaints:complaint-ledger",
+    "/quality/inspection": (
+        "quality:inspection:inspection-finished:inspection-finished-mpa"
+    ),
+    "/quality/inspection/items": (
+        "quality:inspection:inspection-items:inspection-items-inventory"
+    ),
     "/quality/inspection/instruments": (
         "quality:inspection:inspection-instruments:inspection-instruments-equipment"
     ),
+    "/quality/inspection/finished": (
+        "quality:inspection:inspection-finished:inspection-finished-mpa"
+    ),
+    "/quality/oos-oot": "quality:oos-oot:oos-ledger",
+    "/quality/product-quality": "quality:product-quality:product-quality-mfn",
+    "/quality/anomaly-report": "quality:anomaly-report:anomaly-report-ledger",
+    "/quality/return-recalls": "quality:return-recalls:return-application",
+    "/quality/suppliers": "quality:suppliers:supplier-qualification",
+    "/quality/change": "quality:change:change-ledger",
+    "/quality/validation": "quality:validation:validation-plans",
     "/warehouse/materials/dashboard": "warehouse:materials:raw-summary",
     "/warehouse/hardware/dashboard": "warehouse:hardware:hardware-hardware-summary",
     "/warehouse/product/dashboard": "warehouse:product-inventory:product-summary",

@@ -62,7 +62,7 @@ async def test_warehouse_daily_scheduler_selects_due_tables(monkeypatch: Any) ->
     )
     service: Any = SimpleNamespace(
         repo=repo,
-        sync_feishu_table=AsyncMock(),
+        sync_discovered_feishu_table=AsyncMock(),
         execute_analysis_run=AsyncMock(),
     )
     monkeypatch.setattr(
@@ -74,7 +74,9 @@ async def test_warehouse_daily_scheduler_selects_due_tables(monkeypatch: Any) ->
     daily = warehouse_scheduler.WarehouseFeishuDailySyncGenerator()
     assert await daily.find_due(object()) == [str(due_id)]
     await daily.execute_one(object(), str(due_id))
-    service.sync_feishu_table.assert_awaited_once()
+    service.sync_discovered_feishu_table.assert_awaited_once_with(
+        due_id, trigger_type="scheduled"
+    )
 
     analysis = warehouse_scheduler.WarehouseFeishuAnalysisGenerator()
     assert await analysis.find_due(object()) == [str(due_id)]

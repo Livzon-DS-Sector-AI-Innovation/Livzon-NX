@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getAuthorizedDirectoryEntryPath,
   getFirstAuthorizedModulePath,
   getAuthorizedPageMenus,
   getPageKeyByPath,
@@ -8,6 +9,61 @@ import {
 } from './menu-config'
 
 describe('page permission menu boundary', () => {
+  it('resolves every enabled directory entry to a grantable leaf identity', () => {
+    const leaves = new Set<string>()
+    const directories: string[] = []
+    function walk(items: typeof moduleMenus[number]['children'], parent: string) {
+      for (const item of items) {
+        if (item.disabled || item.adminOnly) continue
+        const key = `${parent}:${item.key}`
+        if (item.children?.length) {
+          if (item.path) directories.push(item.path)
+          walk(item.children, key)
+        } else if (item.path) leaves.add(key)
+      }
+    }
+    for (const entry of moduleMenus) walk(entry.children, entry.key)
+    for (const path of directories) {
+      expect(leaves.has(getPageKeyByPath(path) ?? ''), path).toBe(true)
+    }
+  })
+  it('opens every enabled directory with its queryable descendant grants', () => {
+    function walk(items: typeof moduleMenus[number]['children'], moduleCode: string) {
+      for (const item of items) {
+        if (item.disabled || item.adminOnly) continue
+        if (item.children?.length) {
+          if (item.path) {
+            const primary = getPageKeyByPath(item.path)!
+            const grants = [{ page_key: primary, module_code: moduleCode, permissions: ['access', 'query'] as Array<'access' | 'query'> }]
+            expect(getAuthorizedDirectoryEntryPath(item.path, grants), item.path).toBe(item.path)
+            expect(getAuthorizedDirectoryEntryPath(item.path, []), item.path).toBeUndefined()
+            function check(children: typeof items) {
+              for (const child of children) {
+                if (child.disabled || child.adminOnly) continue
+                if (child.children?.length) check(child.children)
+                else if (child.path) {
+                  const key = getPageKeyByPath(child.path.split('?')[0])!
+                  const leafGrant = [{ ...grants[0], page_key: key }]
+                  expect(getAuthorizedDirectoryEntryPath(item.path, leafGrant), child.path)
+                    .toBe(key === primary ? item.path : child.path)
+                }
+              }
+            }
+            check(item.children)
+          }
+          walk(item.children, moduleCode)
+        }
+      }
+    }
+    for (const entry of moduleMenus) walk(entry.children, entry.moduleCode)
+    expect(getAuthorizedDirectoryEntryPath('/quality/deviations/not-a-page', [{
+      page_key: 'quality:deviations:deviation-records', module_code: 'quality', permissions: ['access', 'query'],
+    }])).toBeUndefined()
+  })
+  it('uses the deviation ledger permission for the deviation dashboard, preserving sibling identities', () => {
+    expect(getPageKeyByPath('/quality/deviations')).toBe('quality:deviations:deviation-ledger')
+    expect(getPageKeyByPath('/quality/deviations/records')).toBe('quality:deviations:deviation-records')
+  })
   it('resolves the HR contract landing URL to its grantable leaf', () => {
     expect(getPageKeyByPath('/hr/contracts')).toBe('hr:contracts:contracts-ledger')
   })

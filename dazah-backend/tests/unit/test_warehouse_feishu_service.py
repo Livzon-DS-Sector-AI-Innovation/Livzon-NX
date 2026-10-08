@@ -211,8 +211,9 @@ async def test_sync_feishu_table_marks_failed_when_sync_timeout(
     )
     service.repo = cast(Any, FakeRepo)()
 
-    async def fake_get_table(table_pk: Any) -> Any:
+    async def fake_get_table(table_pk: Any, *, config_id: Any = None) -> Any:
         assert table_pk == table_id
+        assert config_id == config.id
         return table
 
     async def slow_snapshot(_config: Any, _table: Any, *, trigger_type: Any) -> Any:

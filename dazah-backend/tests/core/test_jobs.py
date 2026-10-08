@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -37,6 +39,13 @@ def fake_cache(monkeypatch: pytest.MonkeyPatch) -> _FakeCache:
     monkeypatch.setattr(jobs, "cache_set", cache.set)
     monkeypatch.setattr(jobs, "cache_get", cache.get)
     monkeypatch.setattr(jobs, "cache_delete", cache.delete)
+    monkeypatch.setattr(jobs, "admit_activity", AsyncMock(return_value="fixture-job"))
+
+    @asynccontextmanager
+    async def admitted(_identifier):
+        yield
+
+    monkeypatch.setattr(jobs, "admitted_activity", admitted)
     return cache
 
 

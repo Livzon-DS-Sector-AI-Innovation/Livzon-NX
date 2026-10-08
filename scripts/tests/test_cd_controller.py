@@ -198,6 +198,9 @@ def deployment_control(tmp_path, monkeypatch):
     from types import SimpleNamespace
     monkeypatch.setattr(cd.shutil, "disk_usage", lambda _: SimpleNamespace(free=100 * 1024**3))
     monkeypatch.setattr(control, "drain", lambda: None)
+    monkeypatch.setattr(control, "announce", lambda: None)
+    monkeypatch.setattr(control, "business_phase", lambda phase: None)
+    monkeypatch.setattr(control, "wait_work_finished", lambda: None)
     monkeypatch.setattr(control, "wait_ready", lambda **kw: None)
     monkeypatch.setattr(control, "revision", lambda: "old")
     monkeypatch.setattr(control, "backup", lambda kind: tmp_path / "backup")
@@ -213,6 +216,93 @@ def test_site_configuration_drift_refuses_before_maintenance(tmp_path, monkeypat
     with pytest.raises(cd.Refused, match="configuration changed"):
         control.deploy("a" * 40, manifest)
     assert not (control.state_dir / "public" / "maintenance").exists()
+
+
+def test_countdown_keeps_traffic_open_until_notice_has_elapsed(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    phases, elapsed = [], [0]
+    monkeypatch.setattr(control, "business_phase", phases.append)
+    monkeypatch.setattr(cd.time, "time", lambda: 1000)
+    monkeypatch.setattr(cd.time, "monotonic", lambda: elapsed[0])
+    monkeypatch.setattr(control, "containers", lambda: {
+        s: {"state": "running", "health": "healthy"} for s in (*cd.APPS, *cd.DEPS, "nginx")})
+
+    def wait(seconds):
+        assert not (control.state_dir / "public" / "maintenance").exists()
+        assert cd.read_json(control.state_dir / "public" / "status.json") == {"phase": "announced", "starts_at": 1300}
+        elapsed[0] += seconds
+
+    monkeypatch.setattr(cd.time, "sleep", wait)
+    cd.Controller.announce(control)
+    assert elapsed[0] == 300
+    assert phases == ["normal"]
+
+
+def test_notice_dependency_failure_closes_gate_and_clears_countdown(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    monkeypatch.setattr(control, "containers", lambda: {})
+    with pytest.raises(cd.Refused, match="unavailable during"):
+        cd.Controller.announce(control, 300)
+    assert (control.state_dir / "public" / "maintenance").exists()
+    assert not (control.state_dir / "public" / "status.json").exists()
+
+
+def test_notice_cannot_extend_unattended_switch_past_cutoff(tmp_path, monkeypatch):
+    control, manifest = deployment_control(tmp_path, monkeypatch)
+    monkeypatch.setattr(cd, "in_window", lambda *a, **k: False)
+    with pytest.raises(cd.Refused, match="cutoff reached during"):
+        control.deploy("a" * 40, manifest, enforce_window=True)
+    assert not (control.state_dir / "public" / "maintenance").exists()
+
+
+@pytest.mark.parametrize("seconds", [-1, 3601, True, "300"])
+def test_invalid_notice_refused_before_announcement(tmp_path, monkeypatch, seconds):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    with pytest.raises(cd.Refused, match="notice"):
+        cd.Controller.announce(control, seconds)
+    assert not (control.state_dir / "public" / "status.json").exists()
+
+
+def test_drain_waits_for_business_work_after_nginx_becomes_idle(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    phases, reports, elapsed = [], iter([2, 1, 0]), [0]
+    monkeypatch.setattr(control, "business_phase", phases.append)
+    monkeypatch.setattr(cd.time, "monotonic", lambda: elapsed[0])
+    monkeypatch.setattr(cd.time, "sleep", lambda seconds: elapsed.__setitem__(0, elapsed[0] + seconds))
+
+    def compose(*args, **kwargs):
+        if "nginx" in args:
+            return "Reading: 0 Writing: 1 Waiting: 8"
+        return json.dumps({"active": next(reports)})
+
+    monkeypatch.setattr(control, "compose", compose)
+    cd.Controller.drain(control)
+    assert phases == ["draining"]
+    assert elapsed[0] == 6
+
+
+def test_undrained_tasks_never_stop_restart_or_reopen_apps(tmp_path, monkeypatch):
+    control, manifest = deployment_control(tmp_path, monkeypatch)
+    calls = []
+    monkeypatch.setattr(control, "compose", lambda *a, **kw: calls.append(a))
+    monkeypatch.setattr(control, "drain", lambda: (_ for _ in ()).throw(cd.Refused("business work did not drain")))
+    with pytest.raises(cd.Refused, match="did not drain"):
+        control.deploy("a" * 40, manifest)
+    assert calls == []
+    assert (control.state_dir / "public" / "maintenance").exists()
+    assert cd.read_json(control.state_file)["traffic_opened"] is False
+
+
+def test_unfinished_bootstrap_or_interrupted_work_prevents_reopening(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    control.maintenance(True)
+    phases = []
+    monkeypatch.setattr(control, "business_phase", phases.append)
+    monkeypatch.setattr(control, "wait_work_finished", lambda: (_ for _ in ()).throw(cd.Refused("unfinished business work")))
+    with pytest.raises(cd.Refused, match="unfinished"):
+        control.maintenance_off()
+    assert phases == ["draining"]
+    assert (control.state_dir / "public" / "maintenance").exists()
 
 
 def test_backup_failure_restores_apps_before_reopening(tmp_path, monkeypatch):
