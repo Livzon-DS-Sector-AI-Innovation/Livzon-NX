@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  getServerToken: vi.fn().mockResolvedValue('server-token'),
+  getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: 'Bearer server-token', 'X-Dazah-Operation-ID': 'fixture-operation' }),
   revalidatePath: vi.fn(),
 }))
 
-vi.mock('@/lib/auth', () => ({ getServerToken: mocks.getServerToken }))
+vi.mock('@/lib/auth', () => ({ getAuthHeaders: mocks.getAuthHeaders }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 
 import { createCategory, createEquipment, deleteCategory, updateWorkOrder } from './equipment'
@@ -36,7 +36,7 @@ describe('equipment actions', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify(payload),
-        headers: expect.objectContaining({ Authorization: 'Bearer server-token' }),
+        headers: expect.objectContaining({ Authorization: 'Bearer server-token', 'X-Dazah-Operation-ID': 'fixture-operation' }),
       }),
     )
   })

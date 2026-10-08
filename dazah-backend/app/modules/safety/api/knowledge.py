@@ -1,6 +1,7 @@
 """Safety API — knowledge endpoints."""
 
 import uuid
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Query, Response, UploadFile
@@ -249,18 +250,17 @@ def _guess_content_type(filename: str) -> str:
 
 
 def _local_attachment_response(
-    path,
+    path: Path,
     filename: str,
     *,
     inline: bool,
     content_type: str | None = None,
 ) -> Response:
-    from pathlib import Path as _Path
     from urllib.parse import quote
 
     from fastapi.responses import FileResponse
 
-    media_type = content_type or _guess_content_type(_Path(path).name)
+    media_type = content_type or _guess_content_type(Path(path).name)
     disposition = "inline" if inline else "attachment"
     return FileResponse(
         path,

@@ -1,5 +1,6 @@
 """Unit tests for the shared scheduler primitives and execution engine."""
 
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace as _SimpleNamespace
 from typing import Any
@@ -20,6 +21,15 @@ from app.platform.scheduler.registry import (
 from app.platform.scheduler.strategies import is_due
 
 SimpleNamespace: Any = _SimpleNamespace
+
+
+@pytest.fixture(autouse=True)
+def isolated_admission(monkeypatch):
+    @asynccontextmanager
+    async def activity(_kind):
+        yield
+
+    monkeypatch.setattr(engine_module, "business_activity", activity)
 
 
 async def _noop() -> None:

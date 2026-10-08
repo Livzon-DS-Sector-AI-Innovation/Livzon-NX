@@ -767,17 +767,17 @@ async def push_contract_expiring_notify(
             start_date = date_type.fromisoformat(start_str)
             end_date = date_type.fromisoformat(end_str)
         else:
-            from datetime import datetime, timedelta
+            from datetime import timedelta
 
             now = datetime.now()
             q = (now.month - 1) // 3
             start_date = date_type(now.year, q * 3 + 1, 1)
-            # Q4（q=3）时下季度首月为 13 月越界，直接取年末
-            # （与 repository 统计口径一致）
-            if q == 3:
-                end_date = date_type(now.year, 12, 31)
-            else:
-                end_date = date_type(now.year, q * 3 + 4, 1) - timedelta(days=1)
+            next_quarter = (
+                date_type(now.year + 1, 1, 1)
+                if q == 3
+                else date_type(now.year, q * 3 + 4, 1)
+            )
+            end_date = next_quarter - timedelta(days=1)
 
         async with async_session_factory() as session:
             from app.modules.hr.service import EmployeeService

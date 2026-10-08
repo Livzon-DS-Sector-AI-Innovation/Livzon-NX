@@ -2,6 +2,7 @@
 
 import { getServerApiBaseUrl, getBackendFallbackUrls } from '@/lib/server-api'
 import { getAuthHeaders } from '@/lib/auth'
+import { ActionRequestError } from '@/lib/server-action-result'
 import { revalidatePath } from 'next/cache'
 import {
   CreateDeviationRequest,
@@ -171,7 +172,7 @@ async function actionFetch<T>(url: string, options?: RequestInit): Promise<T | n
   })
   if (!response.ok) {
     const errorBody = await response.text().catch(() => '')
-    throw new Error(getActionErrorMessage(errorBody, response))
+    throw new ActionRequestError(response.status, response.status >= 500 ? '服务暂时不可用，请稍后重试' : getActionErrorMessage(errorBody, response))
   }
   if (response.status === 204) return null
   const result = await response.json()
@@ -352,7 +353,7 @@ async function actionFetchForm<T>(url: string, formData: FormData): Promise<T | 
   })
   if (!response.ok) {
     const errorBody = await response.text().catch(() => '')
-    throw new Error(getActionErrorMessage(errorBody, response))
+    throw new ActionRequestError(response.status, response.status >= 500 ? '服务暂时不可用，请稍后重试' : getActionErrorMessage(errorBody, response))
   }
   const result = await response.json()
   return unwrapActionResponse<T>(result)
@@ -462,7 +463,7 @@ export async function uploadDeviationAiSessionAttachment(deviationId: string, fo
   )
   if (!response.ok) {
     const errorBody = await response.text().catch(() => '')
-    throw new Error(getActionErrorMessage(errorBody, response))
+    throw new ActionRequestError(response.status, response.status >= 500 ? '服务暂时不可用，请稍后重试' : getActionErrorMessage(errorBody, response))
   }
   const result = await response.json()
   const data = unwrapActionResponse<DeviationAiSession>(result)

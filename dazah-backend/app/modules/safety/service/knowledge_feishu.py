@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 import mimetypes
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +27,9 @@ from app.modules.safety.feishu.bitable_client import SafetyBitableClient
 from app.modules.safety.feishu.runtime_config import SafetyFeishuConfigError
 from app.modules.safety.models import SafetyKnowledgeArticle
 from app.platform.integrations.feishu.attachment_cache import get_attachment_cache
+
+if TYPE_CHECKING:
+    from app.modules.safety.models import SafetyFeishuAppSettings
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +151,7 @@ def _build_article_values(fields: dict[str, Any]) -> dict[str, Any]:
     return values
 
 
-async def _get_settings_model(db: AsyncSession):
+async def _get_settings_model(db: AsyncSession) -> SafetyFeishuAppSettings | None:
     from app.modules.safety.models import SafetyFeishuAppSettings
 
     result = await db.execute(
@@ -162,7 +165,7 @@ async def _get_settings_model(db: AsyncSession):
 
 async def _mark_knowledge_sync(
     db: AsyncSession,
-    settings_model,
+    settings_model: SafetyFeishuAppSettings,
     status: str,
     error: str | None,
 ) -> None:
@@ -224,7 +227,8 @@ async def sync_knowledge_from_feishu(db: AsyncSession) -> KnowledgeSyncResult:
 
     for item in records:
         record_id = str(item.get("record_id") or "").strip()
-        fields = item.get("fields") if isinstance(item.get("fields"), dict) else {}
+        raw_fields = item.get("fields")
+        fields: dict[str, Any] = raw_fields if isinstance(raw_fields, dict) else {}
         if not record_id:
             result["failed"] += 1
             continue

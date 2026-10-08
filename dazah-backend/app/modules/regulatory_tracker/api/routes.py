@@ -1,6 +1,5 @@
 """Regulatory Tracker API routes."""
 
-import asyncio
 import logging
 import time
 import uuid
@@ -187,7 +186,9 @@ async def trigger_manual_sync(
             "data": _sync_task_state,
         }
 
-    asyncio.create_task(_run_sync_background(recent_days))
+    from app.core.jobs import submit_job
+
+    await submit_job(lambda: _run_sync_background(recent_days))
     return {
         "code": 200,
         "message": "success",
@@ -383,9 +384,7 @@ async def mark_document_read(
 @router.get("/sync-jobs", summary="同步任务列表")
 async def list_sync_jobs(
     page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(
-        20, ge=1, le=100, alias="pageSize", description="每页条数"
-    ),
+    page_size: int = Query(20, ge=1, le=100, alias="pageSize", description="每页条数"),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """

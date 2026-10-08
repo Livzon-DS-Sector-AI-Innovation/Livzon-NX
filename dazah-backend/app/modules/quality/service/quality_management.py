@@ -223,9 +223,7 @@ async def _build_deviation_report_record_items_from_feishu(
         fields = record.get("fields") or {}
         deviation_code = normalize_text(field_value(report_entity, fields, "偏差编号"))
         linked_deviation = deviation_map.get(deviation_code) if deviation_code else None
-        products = normalize_option_list(
-            field_value(report_entity, fields, "涉及产品")
-        )
+        products = normalize_option_list(field_value(report_entity, fields, "涉及产品"))
         batch_numbers = normalize_text(field_value(report_entity, fields, "涉及批次"))
         item = DeviationReportRecordListItem(
             id=record.get("record_id", ""),
@@ -1511,10 +1509,9 @@ async def submit_for_review(
     deviation.updated_by = uuid.UUID(user_id) if user_id != "system" else None
     await db.flush()
 
-    # Trigger AI analysis asynchronously
-    import asyncio
+    from app.core.jobs import submit_job
 
-    asyncio.create_task(_trigger_ai_analysis(deviation_id, user_id))
+    await submit_job(_trigger_ai_analysis, deviation_id=deviation_id, user_id=user_id)
 
     return {"success": True}
 

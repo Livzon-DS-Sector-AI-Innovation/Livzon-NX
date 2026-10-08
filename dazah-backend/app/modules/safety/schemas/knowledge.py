@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -55,8 +56,8 @@ class SafetyKnowledgeArticleResponse(SafetyKnowledgeArticleBase):
 
     id: uuid.UUID
     feishu_record_id: str | None = None
-    feishu_attachments: list[dict] | None = None
-    local_attachments: list[dict] | None = None
+    feishu_attachments: list[dict[str, Any]] | None = None
+    local_attachments: list[dict[str, Any]] | None = None
     created_at: datetime
     updated_at: datetime
 

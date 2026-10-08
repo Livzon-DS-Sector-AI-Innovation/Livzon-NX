@@ -1,6 +1,5 @@
 """Safety business workflows."""
 
-import asyncio
 import json
 import logging
 import os
@@ -11,6 +10,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.jobs import submit_job
 from app.core.llm import LLMOutputError, llm_client
 from app.modules.safety.feishu.notification import send_user_card
 from app.modules.safety.feishu.runtime_config import (
@@ -389,7 +389,7 @@ class _SafetyCoreService:
 
         # 整改回复后，异步通知一级复核人（部门负责人）
         if updated:
-            asyncio.create_task(_send_verify_notification(updated, 1))
+            await submit_job(lambda: _send_verify_notification(updated, 1))
 
         return updated
 
@@ -472,9 +472,9 @@ class _SafetyCoreService:
         if updated and action == "approved":
             if level == 1 and is_general:
                 # 一般隐患：跳过二级，直接通知三级
-                asyncio.create_task(_send_verify_notification(updated, 3))
+                await submit_job(lambda: _send_verify_notification(updated, 3))
             elif level < 3:
-                asyncio.create_task(_send_verify_notification(updated, level + 1))
+                await submit_job(lambda: _send_verify_notification(updated, level + 1))
 
         return updated
 
@@ -503,7 +503,7 @@ class _SafetyCoreService:
 
         # 重新整改回复后，异步通知一级复核人
         if updated:
-            asyncio.create_task(_send_verify_notification(updated, 1))
+            await submit_job(lambda: _send_verify_notification(updated, 1))
 
         return updated
 

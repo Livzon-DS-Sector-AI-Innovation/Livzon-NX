@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import async_session_factory, get_db
 from app.core.deps import CurrentUser
 from app.core.exceptions import AppException
+from app.core.maintenance import admit_activity, admitted_activity, finish_activity
 from app.core.response import success_response
 from app.modules.quality.api.deps import (
     QUALITY_QA_SCOPE_PERMISSIONS,
@@ -90,13 +91,23 @@ async def _refresh_record_mirror_later(
             )
 
 
-def _schedule_record_mirror_refresh(entity_code: str, record_id: str) -> None:
+async def _schedule_record_mirror_refresh(entity_code: str, record_id: str) -> None:
     """仪器实体写入飞书后调度后台延迟补刷（持强引用防止任务被 GC）。"""
-    task = asyncio.create_task(
-        _refresh_record_mirror_later(
-            entity_code, record_id, _FORMULA_LAG_REFRESH_DELAYS
-        )
-    )
+    activity = await admit_activity("job")
+
+    async def refresh() -> None:
+        async with admitted_activity(activity):
+            await _refresh_record_mirror_later(
+                entity_code, record_id, _FORMULA_LAG_REFRESH_DELAYS
+            )
+
+    runner = refresh()
+    try:
+        task = asyncio.create_task(runner)
+    except BaseException:
+        runner.close()
+        await finish_activity(activity)
+        raise
     _MIRROR_REFRESH_TASKS.add(task)
     task.add_done_callback(_MIRROR_REFRESH_TASKS.discard)
 
@@ -129,7 +140,7 @@ async def _maybe_refresh_entity_mirror(
         ):
             await _sync_single_record_to_mirror(entity_code, record_id, deleted=deleted)
             if not deleted and entity_code in INSTRUMENT_MIRROR_ENTITIES:
-                _schedule_record_mirror_refresh(entity_code, record_id)
+                await _schedule_record_mirror_refresh(entity_code, record_id)
             return
         in_scope = (
             entity_code in ITEMS_MIRROR_PAGES

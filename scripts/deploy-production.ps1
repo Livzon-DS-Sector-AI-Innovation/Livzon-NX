@@ -17,6 +17,8 @@ param(
   [string]$BuildProxy,
   [string]$ReuseUnchangedFrom,
   [string]$ReleaseRoot,
+  [ValidateRange(0, 3600)]
+  [int]$NoticeSeconds = 180,
   [switch]$SkipUpload,
   [switch]$SkipDeploy,
   [switch]$NoSudo
@@ -297,10 +299,10 @@ function Upload-Release([string]$ReleaseDir) {
 function Deploy-Remote {
   Write-Step "执行服务器部署"
   if ($NoSudo) {
-    Invoke-Ssh "DAZAH_ALLOW_UNPRIVILEGED=1 DAZAH_DEPLOY_LOCK=$RemoteCurrent/dazah-deploy.lock bash $RemoteScript deploy $Version $RemoteRelease/$Version"
+    Invoke-Ssh "DAZAH_ALLOW_UNPRIVILEGED=1 DAZAH_DEPLOY_LOCK=$RemoteCurrent/dazah-deploy.lock bash $RemoteScript deploy $Version $RemoteRelease/$Version $NoticeSeconds"
   }
   else {
-    Invoke-Ssh "sudo $RemoteScript deploy $Version $RemoteRelease/$Version"
+    Invoke-Ssh "sudo $RemoteScript deploy $Version $RemoteRelease/$Version $NoticeSeconds"
   }
 }
 
@@ -355,7 +357,7 @@ function Deploy-Action {
 function Remote-Action([string]$RemoteAction, [string]$TargetVersion) {
   Require-Command ssh
   $arguments = if ($TargetVersion) {
-    "$RemoteAction $TargetVersion $RemoteRelease/$TargetVersion"
+    "$RemoteAction $TargetVersion $RemoteRelease/$TargetVersion $NoticeSeconds"
   }
   else {
     $RemoteAction

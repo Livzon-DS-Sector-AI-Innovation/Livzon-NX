@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 
-vi.mock('@/lib/server-api', () => ({ getBackendFallbackUrls: () => ['http://backend.test'] }))
+vi.mock('@/lib/server-api', () => ({ getBackendFallbackUrls: () => ['http://backend.test', 'http://fallback.test'] }))
 
-import { GET } from './route'
+import { GET, POST } from './route'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -24,6 +24,29 @@ describe('API proxy user feedback', () => {
     const response = await GET(new NextRequest('http://localhost/api/v1/example'))
     expect(response.status).toBe(502)
     expect((await response.json()).message).toBe('服务暂时不可用，请稍后重试')
+  })
+
+  it('never retries a write on another backend after a lost acknowledgement', async () => {
+    const fetcher = vi.fn().mockRejectedValue(new Error('fixture lost response after commit'))
+    vi.stubGlobal('fetch', fetcher)
+    const response = await POST(new NextRequest('http://localhost/api/v1/equipment/work-orders', {
+      method: 'POST', body: '{}', headers: { 'X-Dazah-Operation-ID': 'fixture-operation' },
+    }))
+    expect(response.status).toBe(502)
+    const data = await response.json()
+    expect(data.message).toContain('不要重复提交')
+    expect(data.message).not.toContain('查询操作结果')
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(new Headers(fetcher.mock.calls[0][1].headers).get('X-Dazah-Operation-ID')).toBe('fixture-operation')
+  })
+
+  it('can still use a fallback backend for safe reads', async () => {
+    const fetcher = vi.fn().mockRejectedValueOnce(new Error('fixture unavailable')).mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: [] }), { headers: { 'Content-Type': 'application/json' } }),
+    )
+    vi.stubGlobal('fetch', fetcher)
+    expect((await GET(new NextRequest('http://localhost/api/v1/example'))).status).toBe(200)
+    expect(fetcher).toHaveBeenCalledTimes(2)
   })
 
   it('translates validation details while keeping field locations', async () => {

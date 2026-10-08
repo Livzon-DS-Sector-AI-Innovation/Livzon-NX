@@ -2,7 +2,7 @@
 
 import { getServerApiBaseUrl } from '@/lib/server-api'
 import { revalidatePath } from 'next/cache'
-import { getServerToken } from '@/lib/auth'
+import { getAuthHeaders } from '@/lib/auth'
 import type {
   CreateRoleInput, UpdateRoleInput, AddPersonnelInput,
   AssignRolesInput, AssignCategoriesInput,
@@ -15,7 +15,7 @@ async function actionFetch<T>(url: string, options?: RequestInit): Promise<T | n
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${await getServerToken()}`,
+      ...await getAuthHeaders(),
       ...options?.headers,
     },
   })

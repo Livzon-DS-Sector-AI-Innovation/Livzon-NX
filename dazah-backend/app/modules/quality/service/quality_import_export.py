@@ -7,16 +7,32 @@ from datetime import UTC, date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Any
+from zipfile import BadZipFile
 
+from docx import Document
+from docx.document import Document as WordDocument
 from docx.oxml.ns import qn
+from sqlalchemy import String
+from sqlalchemy.exc import DataError, DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import AppException
 from app.modules.quality import repository as repo
-from app.modules.quality.models import Deviation
+from app.modules.quality.models import CAPA, ChangeControl, Deviation
 from app.modules.quality.service import deviation_cause_analysis
 from app.platform.identity.data_scope import DepartmentScope
 
 logger = logging.getLogger(__name__)
+
+
+def _read_import_document(content: bytes) -> WordDocument:
+    try:
+        return Document(BytesIO(content))
+    except (BadZipFile, KeyError, ValueError, SyntaxError) as exc:
+        raise AppException(
+            status_code=422,
+            message="无法解析 Word 文档，请使用有效的 .docx 模板重新上传",
+        ) from exc
 
 
 # 偏差登记表导出模板（与桌面《2026年偏差登记表.docx》一致），
@@ -222,15 +238,64 @@ def _change_row_to_data(
     }
 
 
+def _import_field_errors(
+    row_data: dict[str, str],
+    model: type[ChangeControl] | type[CAPA] | type[Deviation],
+    fields: dict[str, str],
+) -> list[str]:
+    """Validate bounded strings against model limits; never truncate."""
+    errors = []
+    for label, field in fields.items():
+        column_type = model.__table__.columns[field].type
+        value = row_data.get(label, "")
+        if (
+            isinstance(column_type, String)
+            and column_type.length
+            and len(value) > column_type.length
+        ):
+            errors.append(
+                f"{label}不能超过{column_type.length}个字符（当前{len(value)}个）"
+            )
+    return errors
+
+
+def _import_database_error_message(error: DBAPIError) -> str | None:
+    # asyncpg maps some SQLSTATE 22 errors to DBAPIError rather than DataError.
+    sqlstate = str(getattr(error.orig, "sqlstate", "") or "")
+    if isinstance(error, IntegrityError) or sqlstate.startswith("23"):
+        return "编号已存在或数据关联冲突，请刷新后核对"
+    if isinstance(error, DataError) or sqlstate.startswith("22"):
+        return "字段格式或长度不符合要求，请核对模板"
+    return None
+
+
+_CHANGE_IMPORT_FIELDS = {
+    "序号": "serial_number",
+    "变更控制号": "change_code",
+    "变更申请部门": "applicant_department",
+    "变更对象": "change_object",
+    "变更等级": "change_level",
+}
+_CAPA_IMPORT_FIELDS = {
+    "CAPA编号": "capa_code",
+    "事件部门": "department",
+    "涉及产品": "affected_product",
+    "来源编号": "source_code",
+    "QA质量员/日期": "qa_confirmer",
+}
+_DEVIATION_IMPORT_FIELDS = {
+    "偏差编号": "deviation_code",
+    "事件部门": "department",
+}
+
+
 async def preview_change_import(
     db: AsyncSession,
     file_content: bytes,
     change_type: str = "technical",
 ) -> dict[str, Any]:
     """Preview change control import from Word docx."""
-    import docx
-
-    doc = docx.Document(BytesIO(file_content))
+    doc = _read_import_document(file_content)
     if not doc.tables:
         return {
             "headers": [],
@@ -254,7 +319,7 @@ async def preview_change_import(
             continue
 
         change_code = row_data.get("变更控制号", "")
-        errors = []
+        errors = _import_field_errors(row_data, ChangeControl, _CHANGE_IMPORT_FIELDS)
         if not change_code:
             errors.append("变更控制号不能为空")
         else:
@@ -289,9 +354,7 @@ async def confirm_change_import(
     change_type: str = "technical",
 ) -> dict[str, Any]:
     """Confirm change control import from Word docx."""
-    import docx
-
-    doc = docx.Document(BytesIO(file_content))
+    doc = _read_import_document(file_content)
     if not doc.tables:
         return {
             "success_count": 0,
@@ -319,41 +382,60 @@ async def confirm_change_import(
             continue
 
         try:
-            change_code = row_data.get("变更控制号", "")
-            if not change_code:
-                error_count += 1
-                error_details.append({"row": row_idx, "error": "变更控制号为空"})
-                continue
-
-            # 查找记录（包含软删除记录，避免唯一约束冲突）
-            existing = await repo.get_change_by_code_include_deleted(db, change_code)
-            data = _change_row_to_data(row_data, change_type)
-            if existing:
-                if existing.is_deleted:
-                    # 软删除记录：恢复并更新（重新启用该记录，避免唯一约束冲突）
-                    existing.is_deleted = False
-                    existing.deleted_by = None
-                    existing.deleted_at = None
-                    existing.change_type = change_type
-                    await repo.update_change(db, existing, data)
-                    update_count += 1
-                elif update_existing:
-                    await repo.update_change(db, existing, data)
-                    update_count += 1
-                elif skip_duplicates:
-                    skip_count += 1
-                else:
+            async with db.begin_nested():
+                validation_errors = _import_field_errors(
+                    row_data, ChangeControl, _CHANGE_IMPORT_FIELDS
+                )
+                if validation_errors:
                     error_count += 1
                     error_details.append(
-                        {"row": row_idx, "error": f"变更控制号已存在: {change_code}"}
+                        {"row": row_idx, "error": "; ".join(validation_errors)}
                     )
-                continue
+                    continue
+                change_code = row_data.get("变更控制号", "")
+                if not change_code:
+                    error_count += 1
+                    error_details.append({"row": row_idx, "error": "变更控制号为空"})
+                    continue
 
-            await repo.create_change(db, data)
-            success_count += 1
-        except Exception as e:
+                # 查找记录（包含软删除记录，避免唯一约束冲突）
+                existing = await repo.get_change_by_code_include_deleted(
+                    db, change_code
+                )
+                data = _change_row_to_data(row_data, change_type)
+                if existing:
+                    if existing.is_deleted:
+                        # 软删除记录：恢复并更新（重新启用该记录，避免唯一约束冲突）
+                        existing.is_deleted = False
+                        existing.deleted_by = None
+                        existing.deleted_at = None
+                        existing.change_type = change_type
+                        await repo.update_change(db, existing, data)
+                        update_count += 1
+                    elif update_existing:
+                        await repo.update_change(db, existing, data)
+                        update_count += 1
+                    elif skip_duplicates:
+                        skip_count += 1
+                    else:
+                        error_count += 1
+                        error_details.append(
+                            {
+                                "row": row_idx,
+                                "error": f"变更控制号已存在: {change_code}",
+                            }
+                        )
+                    continue
+
+                await repo.create_change(db, data)
+                success_count += 1
+        except DBAPIError as exc:
+            # The savepoint has rolled back only this row; previous rows remain valid.
+            message = _import_database_error_message(exc)
+            if message is None:
+                raise
             error_count += 1
-            error_details.append({"row": row_idx, "error": str(e)})
+            error_details.append({"row": row_idx, "error": message})
 
     await db.commit()
 
@@ -458,9 +540,7 @@ async def preview_capa_import(
     file_content: bytes,
 ) -> dict[str, Any]:
     """Preview CAPA import from Word docx."""
-    import docx
-
-    doc = docx.Document(BytesIO(file_content))
+    doc = _read_import_document(file_content)
     if not doc.tables:
         return {
             "valid_rows": 0,
@@ -479,7 +559,7 @@ async def preview_capa_import(
             _clean_text(headers[i]): _clean_text(row.cells[i].text)
             for i in range(len(headers))
         }
-        errors = []
+        errors = _import_field_errors(row_data, CAPA, _CAPA_IMPORT_FIELDS)
 
         capa_code = row_data.get("CAPA编号", "")
         if not capa_code:
@@ -516,9 +596,7 @@ async def confirm_capa_import(
     """Confirm CAPA import from Word docx with deduplication."""
     import re
 
-    import docx
-
-    doc = docx.Document(BytesIO(file_content))
+    doc = _read_import_document(file_content)
     if not doc.tables:
         return {
             "success_count": 0,
@@ -541,80 +619,107 @@ async def confirm_capa_import(
             for i in range(len(headers))
         }
         try:
-            capa_code = row_data.get("CAPA编号", "")
-            if not capa_code:
-                error_count += 1
-                error_details.append({"row": row_idx, "error": "CAPA编号为空"})
-                continue
-
-            existing = await repo.get_capa_by_code(db, capa_code)
-            if existing:
-                if update_existing:
-                    # Update existing record
-                    qa_info = row_data.get("QA质量员/日期", "")
-                    qa_confirmer = None
-                    qa_confirm_date = None
-                    if qa_info:
-                        match = re.match(
-                            r"([^\d]+)(\d{4}[\.\-/]\d{2}[\.\-/]\d{2})", qa_info
-                        )
-                        if match:
-                            qa_confirmer = match.group(1).strip()
-                            qa_confirm_date = _parse_date(match.group(2))
-                        else:
-                            qa_confirmer = qa_info
-
-                    update_data = {
-                        "title": row_data.get("CAPA简述", ""),
-                        "source_code": row_data.get("来源编号", ""),
-                        "department": row_data.get("事件部门", ""),
-                        "affected_product": row_data.get("涉及产品", ""),
-                        "evaluation_result": row_data.get("CAPA效果评估", ""),
-                        "closure_date": _parse_date(row_data.get("关闭日期", "")),
-                        "qa_confirmer": qa_confirmer,
-                        "qa_confirm_date": qa_confirm_date,
-                    }
-                    await repo.update_capa(db, existing, update_data)
-                    update_count += 1
-                elif skip_duplicates:
-                    skip_count += 1
-                else:
+            async with db.begin_nested():
+                validation_errors = _import_field_errors(
+                    row_data, CAPA, _CAPA_IMPORT_FIELDS
+                )
+                if validation_errors:
                     error_count += 1
                     error_details.append(
-                        {"row": row_idx, "error": f"CAPA编号已存在: {capa_code}"}
+                        {"row": row_idx, "error": "; ".join(validation_errors)}
                     )
-                continue
+                    continue
+                capa_code = row_data.get("CAPA编号", "")
+                if not capa_code:
+                    error_count += 1
+                    error_details.append({"row": row_idx, "error": "CAPA编号为空"})
+                    continue
 
-            # Parse QA质量员/日期 (format: "杨小芹2026.03.11")
-            qa_info = row_data.get("QA质量员/日期", "")
-            qa_confirmer = None
-            qa_confirm_date = None
-            if qa_info:
-                match = re.match(r"([^\d]+)(\d{4}[\.\-/]\d{2}[\.\-/]\d{2})", qa_info)
-                if match:
-                    qa_confirmer = match.group(1).strip()
-                    qa_confirm_date = _parse_date(match.group(2))
-                else:
-                    qa_confirmer = qa_info
+                existing = await repo.get_capa_by_code(
+                    db, capa_code, include_deleted=True
+                )
+                if existing:
+                    if existing.is_deleted:
+                        error_count += 1
+                        error_details.append(
+                            {
+                                "row": row_idx,
+                                "error": "CAPA编号已被已删除记录占用，请核对编号",
+                            }
+                        )
+                        continue
+                    if update_existing:
+                        # Update existing record
+                        qa_info = row_data.get("QA质量员/日期", "")
+                        qa_confirmer = None
+                        qa_confirm_date = None
+                        if qa_info:
+                            match = re.match(
+                                r"([^\d]+)(\d{4}[\.\-/]\d{2}[\.\-/]\d{2})", qa_info
+                            )
+                            if match:
+                                qa_confirmer = match.group(1).strip()
+                                qa_confirm_date = _parse_date(match.group(2))
+                            else:
+                                qa_confirmer = qa_info
 
-            data = {
-                "capa_code": capa_code,
-                "title": row_data.get("CAPA简述", ""),
-                "source_code": row_data.get("来源编号", ""),
-                "department": row_data.get("事件部门", ""),
-                "affected_product": row_data.get("涉及产品", ""),
-                "evaluation_result": row_data.get("CAPA效果评估", ""),
-                "closure_date": _parse_date(row_data.get("关闭日期", "")),
-                "qa_confirmer": qa_confirmer,
-                "qa_confirm_date": qa_confirm_date,
-                "status": "draft",
-            }
+                        update_data = {
+                            "title": row_data.get("CAPA简述", ""),
+                            "source_code": row_data.get("来源编号", ""),
+                            "department": row_data.get("事件部门", ""),
+                            "affected_product": row_data.get("涉及产品", ""),
+                            "evaluation_result": row_data.get("CAPA效果评估", ""),
+                            "closure_date": _parse_date(row_data.get("关闭日期", "")),
+                            "qa_confirmer": qa_confirmer,
+                            "qa_confirm_date": qa_confirm_date,
+                        }
+                        await repo.update_capa(db, existing, update_data)
+                        update_count += 1
+                    elif skip_duplicates:
+                        skip_count += 1
+                    else:
+                        error_count += 1
+                        error_details.append(
+                            {"row": row_idx, "error": f"CAPA编号已存在: {capa_code}"}
+                        )
+                    continue
 
-            await repo.create_capa(db, data)
-            success_count += 1
-        except Exception as e:
+                # Parse QA质量员/日期 (format: "杨小芹2026.03.11")
+                qa_info = row_data.get("QA质量员/日期", "")
+                qa_confirmer = None
+                qa_confirm_date = None
+                if qa_info:
+                    match = re.match(
+                        r"([^\d]+)(\d{4}[\.\-/]\d{2}[\.\-/]\d{2})", qa_info
+                    )
+                    if match:
+                        qa_confirmer = match.group(1).strip()
+                        qa_confirm_date = _parse_date(match.group(2))
+                    else:
+                        qa_confirmer = qa_info
+
+                data = {
+                    "capa_code": capa_code,
+                    "title": row_data.get("CAPA简述", ""),
+                    "source_code": row_data.get("来源编号", ""),
+                    "department": row_data.get("事件部门", ""),
+                    "affected_product": row_data.get("涉及产品", ""),
+                    "evaluation_result": row_data.get("CAPA效果评估", ""),
+                    "closure_date": _parse_date(row_data.get("关闭日期", "")),
+                    "qa_confirmer": qa_confirmer,
+                    "qa_confirm_date": qa_confirm_date,
+                    "status": "draft",
+                }
+
+                await repo.create_capa(db, data)
+                success_count += 1
+        except DBAPIError as exc:
+            # The savepoint has rolled back only this row; previous rows remain valid.
+            message = _import_database_error_message(exc)
+            if message is None:
+                raise
             error_count += 1
-            error_details.append({"row": row_idx, "error": str(e)})
+            error_details.append({"row": row_idx, "error": message})
 
     await db.commit()
 
@@ -817,9 +922,7 @@ async def preview_deviation_import(
     file_content: bytes,
 ) -> dict[str, Any]:
     """Preview Deviation import from Word docx."""
-    import docx
-
-    doc = docx.Document(BytesIO(file_content))
+    doc = _read_import_document(file_content)
     if not doc.tables:
         return {
             "valid_rows": 0,
@@ -838,7 +941,7 @@ async def preview_deviation_import(
             _clean_text(headers[i]): _clean_text(row.cells[i].text)
             for i in range(len(headers))
         }
-        errors = []
+        errors = _import_field_errors(row_data, Deviation, _DEVIATION_IMPORT_FIELDS)
 
         deviation_code = row_data.get("偏差编号", "")
         if not deviation_code:
@@ -873,9 +976,7 @@ async def confirm_deviation_import(
     update_existing: bool = False,
 ) -> dict[str, Any]:
     """Confirm Deviation import from Word docx with deduplication."""
-    import docx
-
-    doc = docx.Document(BytesIO(file_content))
+    doc = _read_import_document(file_content)
     if not doc.tables:
         return {
             "success_count": 0,
@@ -899,50 +1000,67 @@ async def confirm_deviation_import(
             for i in range(len(headers))
         }
         try:
-            deviation_code = row_data.get("偏差编号", "")
-            if not deviation_code:
-                error_count += 1
-                error_details.append({"row": row_idx, "error": "偏差编号为空"})
-                continue
-
-            existing = await repo.get_deviation_by_code_include_deleted(
-                db, deviation_code
-            )
-            if existing:
-                if existing.is_deleted:
-                    # 软删除记录：恢复并更新（重新启用该记录，避免唯一约束冲突）
-                    existing.is_deleted = False
-                    existing.deleted_by = None
-                    existing.deleted_at = None
-                    await repo.update_deviation(
-                        db, existing, _build_deviation_row_fields(row_data)
-                    )
-                    affected.append(existing)
-                    update_count += 1
-                elif update_existing:
-                    # Update existing record
-                    await repo.update_deviation(
-                        db, existing, _build_deviation_row_fields(row_data)
-                    )
-                    affected.append(existing)
-                    update_count += 1
-                elif skip_duplicates:
-                    skip_count += 1
-                else:
+            async with db.begin_nested():
+                validation_errors = _import_field_errors(
+                    row_data, Deviation, _DEVIATION_IMPORT_FIELDS
+                )
+                if validation_errors:
                     error_count += 1
                     error_details.append(
-                        {"row": row_idx, "error": f"偏差编号已存在: {deviation_code}"}
+                        {"row": row_idx, "error": "; ".join(validation_errors)}
                     )
-                continue
+                    continue
+                deviation_code = row_data.get("偏差编号", "")
+                if not deviation_code:
+                    error_count += 1
+                    error_details.append({"row": row_idx, "error": "偏差编号为空"})
+                    continue
 
-            data = _build_deviation_row_fields(row_data)
-            data["deviation_code"] = deviation_code
-            deviation = await repo.create_deviation(db, data)
-            affected.append(deviation)
-            success_count += 1
-        except Exception as e:
+                existing = await repo.get_deviation_by_code_include_deleted(
+                    db, deviation_code
+                )
+                if existing:
+                    if existing.is_deleted:
+                        # 软删除记录：恢复并更新（重新启用该记录，避免唯一约束冲突）
+                        existing.is_deleted = False
+                        existing.deleted_by = None
+                        existing.deleted_at = None
+                        await repo.update_deviation(
+                            db, existing, _build_deviation_row_fields(row_data)
+                        )
+                        affected.append(existing)
+                        update_count += 1
+                    elif update_existing:
+                        # Update existing record
+                        await repo.update_deviation(
+                            db, existing, _build_deviation_row_fields(row_data)
+                        )
+                        affected.append(existing)
+                        update_count += 1
+                    elif skip_duplicates:
+                        skip_count += 1
+                    else:
+                        error_count += 1
+                        error_details.append(
+                            {
+                                "row": row_idx,
+                                "error": f"偏差编号已存在: {deviation_code}",
+                            }
+                        )
+                    continue
+
+                data = _build_deviation_row_fields(row_data)
+                data["deviation_code"] = deviation_code
+                deviation = await repo.create_deviation(db, data)
+                affected.append(deviation)
+                success_count += 1
+        except DBAPIError as exc:
+            # The savepoint has rolled back only this row; previous rows remain valid.
+            message = _import_database_error_message(exc)
+            if message is None:
+                raise
             error_count += 1
-            error_details.append({"row": row_idx, "error": str(e)})
+            error_details.append({"row": row_idx, "error": message})
 
     await db.commit()
 

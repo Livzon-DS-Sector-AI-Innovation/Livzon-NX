@@ -206,6 +206,7 @@ async def test_workflow_submit_complete_batch_and_resubmit_transitions(
     deviation = _deviation(status="draft")
     db = _Db(deviation)
     monkeypatch.setattr(service, "_trigger_ai_analysis", AsyncMock())
+    monkeypatch.setattr("app.core.jobs.submit_job", AsyncMock())
     assert await service.submit_for_review(db, deviation.id, str(uuid4())) == {
         "success": True
     }

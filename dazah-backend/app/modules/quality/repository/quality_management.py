@@ -250,10 +250,16 @@ async def get_capa_by_id(db: AsyncSession, capa_id: uuid.UUID) -> CAPA | None:
     return result.scalar_one_or_none()
 
 
-async def get_capa_by_code(db: AsyncSession, capa_code: str) -> CAPA | None:
-    result = await db.execute(
-        select(CAPA).where(CAPA.capa_code == capa_code, CAPA.is_deleted.is_(False))
-    )
+async def get_capa_by_code(
+    db: AsyncSession,
+    capa_code: str,
+    *,
+    include_deleted: bool = False,
+) -> CAPA | None:
+    query = select(CAPA).where(CAPA.capa_code == capa_code)
+    if not include_deleted:
+        query = query.where(CAPA.is_deleted.is_(False))
+    result = await db.execute(query)
     return result.scalar_one_or_none()
 
 

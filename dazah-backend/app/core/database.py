@@ -1,14 +1,18 @@
 from collections.abc import AsyncGenerator
+from contextlib import AbstractAsyncContextManager
+from types import TracebackType
 
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import get_settings
+from app.core.maintenance import admit_activity, admitted_activity
 from app.shared.module_registry import BUSINESS_SCHEMAS
 
 settings = get_settings()
 
 _search_path = "public,identity,core," + ",".join(BUSINESS_SCHEMAS)
+
 
 # 测试环境（APP_ENV=test）使用 NullPool：pytest 每个测试运行在独立事件循环上，
 # QueuePool 的长连接会绑定到已关闭的循环，Linux 上孤儿连接不被及时回收，
@@ -36,9 +40,42 @@ engine = create_async_engine(
     **_build_engine_kwargs(settings.APP_ENV),
 )
 
+
+class MaintenanceSession(AsyncSession):
+    """Include legacy DB-backed background work in the release barrier."""
+
+    async def __aenter__(self) -> "MaintenanceSession":
+        self._maintenance_context: AbstractAsyncContextManager[None] = (
+            admitted_activity(await admit_activity("database-task"))
+        )
+        await self._maintenance_context.__aenter__()
+        try:
+            await super().__aenter__()
+        except BaseException as exc:
+            await self._maintenance_context.__aexit__(type(exc), exc, exc.__traceback__)
+            raise
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        # Session exit closes/rolls back outstanding transactions before the
+        # drain barrier can declare the work finished.
+        try:
+            await super().__aexit__(exc_type, exc_value, traceback)
+        except BaseException as exc:
+            await self._maintenance_context.__aexit__(type(exc), exc, exc.__traceback__)
+            raise
+        else:
+            await self._maintenance_context.__aexit__(exc_type, exc_value, traceback)
+
+
 async_session_factory = async_sessionmaker(
     engine,
-    class_=AsyncSession,
+    class_=MaintenanceSession,
     expire_on_commit=False,
 )
 

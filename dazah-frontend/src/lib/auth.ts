@@ -15,6 +15,8 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
   const token = cookieStore.get('auth_token')?.value
   const rawCookie = requestHeaders.get('cookie')
   const pagePath = requestHeaders.get('X-Dazah-Page-Path')
+  const operationId = requestHeaders.get('X-Dazah-Operation-ID')
+  if (operationId) authHeaders['X-Dazah-Operation-ID'] = operationId
   if (pagePath) authHeaders['X-Dazah-Page-Path'] = pagePath
   const rawToken = rawCookie?.match(/(?:^|;\s*)auth_token=([^;]+)/)?.[1]
 

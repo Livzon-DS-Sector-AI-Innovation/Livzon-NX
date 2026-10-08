@@ -4,6 +4,7 @@ import logging
 import os
 import uuid
 from pathlib import Path
+from typing import Any
 
 from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -98,7 +99,7 @@ class KnowledgeService:
 
         article_dir = Path(KNOWLEDGE_UPLOAD_DIR) / str(article_id)
         article_dir.mkdir(parents=True, exist_ok=True)
-        saved: list[dict] = []
+        saved: list[dict[str, Any]] = []
         for file in files:
             original_name = (file.filename or "attachment").strip() or "attachment"
             ext = os.path.splitext(original_name)[1].lower()
@@ -172,7 +173,7 @@ class KnowledgeService:
 
     async def get_local_attachment_meta(
         self, article_id: uuid.UUID, token: str
-    ) -> dict:
+    ) -> dict[str, Any]:
         """读取附件快照元信息（展示名/大小），并完成属主校验。"""
         article = await self.repo.get_knowledge_article_by_id(article_id)
         if article is None:

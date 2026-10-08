@@ -25023,6 +25023,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/operations/{operation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询本人操作的处理结果 */
+        get: operations["get_operation_result_api_v1_system_operations__operation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/uploads/{module}/{object_key}": {
         parameters: {
             query?: never;
@@ -48182,6 +48199,22 @@ export interface components {
          * @enum {string}
          */
         OperationLevel: "special" | "grade1" | "grade2" | "not_applicable";
+        /** OperationReceipt */
+        OperationReceipt: {
+            /** Http Status */
+            http_status?: number | null;
+            /** Method */
+            method: string;
+            /** Path */
+            path: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "unknown" | "completed" | "rejected";
+            /** Updated At */
+            updated_at: number;
+        };
         /**
          * OperationRegulationCreate
          * @description 创建安全操作规程
@@ -48263,6 +48296,16 @@ export interface components {
              * @description 操规状态
              */
             status?: string | null;
+        };
+        /** OperationResult */
+        OperationResult: {
+            /**
+             * Operation Id
+             * Format: uuid
+             */
+            operation_id: string;
+            /** Receipts */
+            receipts: components["schemas"]["OperationReceipt"][];
         };
         /** OralExamExportRequest */
         OralExamExportRequest: {
@@ -126047,6 +126090,39 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     }[];
+                };
+            };
+        };
+    };
+    get_operation_result_api_v1_system_operations__operation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

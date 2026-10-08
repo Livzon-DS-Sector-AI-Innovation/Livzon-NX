@@ -1,4 +1,5 @@
 import { getAuthHeaders } from '@/lib/auth'
+import { ActionRequestError } from '@/lib/server-action-result'
 
 export const API_BASE_URL =
   process.env.API_BASE_URL ||
@@ -23,7 +24,7 @@ export async function actionFetch<T>(url: string, options?: RequestInit): Promis
       if (errorJson.detail) errorMessage = typeof errorJson.detail === 'string' ? errorJson.detail : JSON.stringify(errorJson.detail)
       else if (errorJson.message) errorMessage = errorJson.message
     } catch {}
-    throw new Error(errorMessage)
+    throw new ActionRequestError(response.status, response.status >= 500 ? '服务暂时不可用，请稍后重试' : errorMessage)
   }
   if (response.status === 204) return null
   const result = await response.json()
