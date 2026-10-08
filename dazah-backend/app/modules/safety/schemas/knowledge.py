@@ -2,22 +2,28 @@
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.modules.safety.schemas.enums import (
-    KnowledgeCategory,
-)
-
 
 class SafetyKnowledgeArticleBase(BaseModel):
-    """安全知识库文章基础模式"""
+    """安全知识库文章基础模式（严格对齐 EHS 法规库多维表格字段）"""
 
-    title: str = Field(..., max_length=255, description="文章标题")
-    summary: str | None = Field(None, description="摘要")
-    content: str | None = Field(None, description="正文内容")
-    tags: str | None = Field(None, max_length=500, description="标签（逗号分隔）")
-    category: KnowledgeCategory = Field(KnowledgeCategory.OTHER, description="分类")
+    title: str = Field(..., max_length=255, description="法律法规及标准名称")
+    article_no: str | None = Field(None, max_length=100, description="法规编号")
+    regulation_category: str | None = Field(
+        None, max_length=64, description="法规类别"
+    )
+    source: str | None = Field(None, max_length=255, description="颁布机关")
+    promulgation_date: datetime | None = Field(None, description="颁布修订日期")
+    implement_date: datetime | None = Field(None, description="实施日期")
+    regulation_status: str | None = Field(
+        None, max_length=50, description="法规状态"
+    )
+    regulation_link: str | None = Field(None, description="法规链接")
+    summary: str | None = Field(None, description="核心要点总结")
+    notes: str | None = Field(None, description="备注")
 
 
 class SafetyKnowledgeArticleCreate(SafetyKnowledgeArticleBase):
@@ -29,24 +35,29 @@ class SafetyKnowledgeArticleCreate(SafetyKnowledgeArticleBase):
 class SafetyKnowledgeArticleUpdate(BaseModel):
     """更新知识库文章"""
 
-    title: str | None = Field(None, max_length=255, description="文章标题")
-    summary: str | None = Field(None, description="摘要")
-    content: str | None = Field(None, description="正文内容")
-    tags: str | None = Field(None, max_length=500, description="标签（逗号分隔）")
-    category: KnowledgeCategory | None = Field(None, description="分类")
-    status: str | None = Field(None, max_length=32, description="状态")
+    title: str | None = Field(None, max_length=255, description="法律法规及标准名称")
+    article_no: str | None = Field(None, max_length=100, description="法规编号")
+    regulation_category: str | None = Field(
+        None, max_length=64, description="法规类别"
+    )
+    source: str | None = Field(None, max_length=255, description="颁布机关")
+    promulgation_date: datetime | None = Field(None, description="颁布修订日期")
+    implement_date: datetime | None = Field(None, description="实施日期")
+    regulation_status: str | None = Field(
+        None, max_length=50, description="法规状态"
+    )
+    regulation_link: str | None = Field(None, description="法规链接")
+    summary: str | None = Field(None, description="核心要点总结")
+    notes: str | None = Field(None, description="备注")
 
 
 class SafetyKnowledgeArticleResponse(SafetyKnowledgeArticleBase):
     """安全知识库文章响应"""
 
     id: uuid.UUID
-    status: str
-    view_count: int = 0
-    attachment_path: str | None = None
-    attachment_original_name: str | None = None
-    created_by: uuid.UUID | None = None
-    updated_by: uuid.UUID | None = None
+    feishu_record_id: str | None = None
+    feishu_attachments: list[dict[str, Any]] | None = None
+    local_attachments: list[dict[str, Any]] | None = None
     created_at: datetime
     updated_at: datetime
 

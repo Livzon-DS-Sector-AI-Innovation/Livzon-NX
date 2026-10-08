@@ -10,10 +10,12 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
 from app.core.jobs import submit_job
 from app.core.llm import LLMOutputError, llm_client
 from app.modules.safety.feishu.notification import send_user_card
+from app.modules.safety.feishu.runtime_config import (
+    load_safety_feishu_runtime_config,
+)
 from app.modules.safety.models import (
     Accident,
     Contractor,
@@ -773,6 +775,23 @@ def _bitable_field_for_level(level: int) -> str:
     )
 
 
+def _view_record_button(bitable_url: str) -> dict[str, Any]:
+    """构建「查看飞书表格记录」按钮；未配置绑定时展示禁用按钮而非空链接。"""
+    if bitable_url:
+        return {
+            "tag": "button",
+            "text": {"tag": "plain_text", "content": "📋 查看飞书表格记录"},
+            "type": "default",
+            "url": bitable_url,
+        }
+    return {
+        "tag": "button",
+        "text": {"tag": "plain_text", "content": "📋 查看飞书表格记录"},
+        "type": "default",
+        "disabled": True,
+    }
+
+
 async def _build_verify_card_content(
     hazard: HazardReport,
     level: int,
@@ -793,13 +812,15 @@ async def _build_verify_card_content(
     level_labels = {1: "（部门负责人）", 2: "（分管领导）", 3: "（检查人员）"}
     level_text = level_labels.get(level, f"{level}级")
 
-    settings = get_settings()
-    bitable_file_token = settings.SAFETY_FEISHU_BITABLE_APP_TOKEN
-    bitable_table_id = settings.SAFETY_FEISHU_BITABLE_HAZARD_TABLE_ID
+    feishu_config = await load_safety_feishu_runtime_config()
+    bitable_file_token = feishu_config.bitable_app_token if feishu_config else ""
+    bitable_table_id = (
+        feishu_config.bitable_hazard_table_id if feishu_config else ""
+    )
     bitable_url = (
         f"https://www.feishu.cn/base/{bitable_file_token}"
         f"?table={bitable_table_id}&record={hazard.feishu_record_id}"
-        if hazard.feishu_record_id
+        if hazard.feishu_record_id and bitable_file_token
         else ""
     )
 
@@ -970,12 +991,7 @@ async def _build_verify_card_content(
                             },
                         },
                     },
-                    {
-                        "tag": "button",
-                        "text": {"tag": "plain_text", "content": "📋 查看飞书表格记录"},
-                        "type": "default",
-                        "url": bitable_url,
-                    },
+                    _view_record_button(bitable_url),
                 ],
             }
         )
@@ -992,12 +1008,7 @@ async def _build_verify_card_content(
                         "type": "default",
                         "disabled": True,
                     },
-                    {
-                        "tag": "button",
-                        "text": {"tag": "plain_text", "content": "📋 查看飞书表格记录"},
-                        "type": "default",
-                        "url": bitable_url,
-                    },
+                    _view_record_button(bitable_url),
                 ],
             }
         )
@@ -1176,13 +1187,15 @@ async def _send_rectification_notification(hazard: HazardReport) -> None:
                 person.open_id,
             )
 
-        settings = get_settings()
-        bitable_file_token = settings.SAFETY_FEISHU_BITABLE_APP_TOKEN
-        bitable_table_id = settings.SAFETY_FEISHU_BITABLE_HAZARD_TABLE_ID
+        feishu_config = await load_safety_feishu_runtime_config()
+        bitable_file_token = feishu_config.bitable_app_token if feishu_config else ""
+        bitable_table_id = (
+            feishu_config.bitable_hazard_table_id if feishu_config else ""
+        )
         bitable_url = (
             f"https://www.feishu.cn/base/{bitable_file_token}"
             f"?table={bitable_table_id}&record={hazard.feishu_record_id}"
-            if hazard.feishu_record_id
+            if hazard.feishu_record_id and bitable_file_token
             else ""
         )
 

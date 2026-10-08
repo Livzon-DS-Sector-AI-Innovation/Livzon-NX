@@ -26,7 +26,7 @@ class ChangeControl(BaseModel):
     serial_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
     change_code: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     applicant_department: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    change_object: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    change_object: Mapped[str | None] = mapped_column(Text, nullable=True)
     change_content: Mapped[str | None] = mapped_column(Text, nullable=True)
     impact_assessment: Mapped[str | None] = mapped_column(Text, nullable=True)
     change_level: Mapped[str | None] = mapped_column(String(50), nullable=True)
