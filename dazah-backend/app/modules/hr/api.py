@@ -772,7 +772,8 @@ async def push_contract_expiring_notify(
             now = datetime.now()
             q = (now.month - 1) // 3
             start_date = date_type(now.year, q * 3 + 1, 1)
-            # Q4（q=3）时下季度首月为 13 月越界，直接取年末（与 repository 统计口径一致）
+            # Q4（q=3）时下季度首月为 13 月越界，直接取年末
+            # （与 repository 统计口径一致）
             if q == 3:
                 end_date = date_type(now.year, 12, 31)
             else:

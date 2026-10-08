@@ -290,7 +290,7 @@ async def test_employee_repository_upsert_delete_maps_groups_and_distinct_values
 
 
 def _current_quarter_end() -> date:
-    """当前季度最后一天：Q4 直接取年末，避免 month=13 越界（与 repository 口径一致）。"""
+    """当前季度最后一天：Q4 直接取年末，避免 month=13 越界。"""
     today = date.today()
     q_start_month = ((today.month - 1) // 3) * 3 + 1
     if q_start_month == 10:
