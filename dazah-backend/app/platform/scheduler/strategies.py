@@ -7,6 +7,7 @@ and cron-expression evaluation.
 from __future__ import annotations
 
 from datetime import datetime, time
+from zoneinfo import ZoneInfo
 
 from croniter import croniter  # type: ignore[import-untyped]
 
@@ -24,9 +25,21 @@ def is_due(
         schedule: Scheduling parameters.
         last_run: The last time the task was attempted (or None for first run).
         now: Current time; defaults to ``datetime.now()`` in the local timezone.
+
+    ``now`` and *last_run* are normalised to ``schedule.timezone`` before
+    evaluation so FIXED_TIME/CRON fire in business local time even when the
+    host clock runs UTC (e.g. containers). Interval arithmetic is unaffected
+    (aware datetimes compare as absolute instants).
     """
     if now is None:
         now = datetime.now().astimezone()
+
+    tz_name = (schedule.timezone or "").strip()
+    if tz_name:
+        tz = ZoneInfo(tz_name)
+        now = now.astimezone(tz)
+        if last_run is not None and last_run.tzinfo is not None:
+            last_run = last_run.astimezone(tz)
 
     match schedule.strategy:
         case ScheduleStrategy.CRON:
