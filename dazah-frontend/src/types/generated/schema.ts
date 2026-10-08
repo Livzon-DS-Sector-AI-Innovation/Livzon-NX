@@ -22755,6 +22755,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/safety/feishu-settings/app": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 获取安全模块飞书应用配置
+         * @description 返回当前配置（App Secret 仅掩码回显）。
+         */
+        get: operations["get_safety_feishu_app_settings_api_v1_safety_feishu_settings_app_get"];
+        /**
+         * 保存安全模块飞书应用配置
+         * @description 保存应用凭证与隐患多维表格绑定；Secret 加密存储。
+         */
+        put: operations["save_safety_feishu_app_settings_api_v1_safety_feishu_settings_app_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/feishu-settings/app/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 测试安全模块飞书应用连接
+         * @description 用已保存凭证换取 tenant_access_token 验证连通性并记录结果。
+         */
+        post: operations["test_safety_feishu_app_settings_api_v1_safety_feishu_settings_app_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/safety/feishu/ws/restart": {
         parameters: {
             query?: never;
@@ -23299,6 +23343,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/safety/knowledge-articles/feishu/records/{record_id}/attachments/{file_token}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 下载知识库飞书附件
+         * @description 按附件快照校验后经安全应用凭证代理下载（平台缓存加速）。
+         */
+        get: operations["download_knowledge_attachment_api_v1_safety_knowledge_articles_feishu_records__record_id__attachments__file_token__content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/knowledge-articles/feishu/records/{record_id}/attachments/{file_token}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 在线预览知识库飞书附件
+         * @description 浏览器内联预览（PDF/图片直接打开，其余类型回退为下载）。
+         */
+        get: operations["preview_knowledge_attachment_api_v1_safety_knowledge_articles_feishu_records__record_id__attachments__file_token__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/knowledge-articles/feishu/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 从 EHS 法规库多维表格同步知识库
+         * @description 全量拉取 EHS 法规库并按 feishu_record_id upsert 本地镜像。
+         */
+        post: operations["sync_knowledge_from_feishu_api_v1_safety_knowledge_articles_feishu_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/safety/knowledge-articles/{article_id}": {
         parameters: {
             query?: never;
@@ -23327,7 +23431,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/safety/knowledge-articles/{article_id}/archive": {
+    "/api/v1/safety/knowledge-articles/{article_id}/attachments": {
         parameters: {
             query?: never;
             header?: never;
@@ -23337,17 +23441,17 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * 归档知识库文章
-         * @description 归档文章（已发布→已归档）
+         * 为本地文档上传附件（支持多文件）
+         * @description 镜像文档附件请在飞书多维表格维护；本端点仅服务本地创建的文档。
          */
-        post: operations["archive_knowledge_article_api_v1_safety_knowledge_articles__article_id__archive_post"];
+        post: operations["upload_knowledge_attachments_api_v1_safety_knowledge_articles__article_id__attachments_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/safety/knowledge-articles/{article_id}/publish": {
+    "/api/v1/safety/knowledge-articles/{article_id}/attachments/{token}": {
         parameters: {
             query?: never;
             header?: never;
@@ -23356,31 +23460,51 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        post?: never;
         /**
-         * 发布知识库文章
-         * @description 发布文章（草稿→已发布）
+         * 删除本地文档附件
+         * @description 删除附件快照与磁盘文件。
          */
-        post: operations["publish_knowledge_article_api_v1_safety_knowledge_articles__article_id__publish_post"];
+        delete: operations["delete_knowledge_attachment_api_v1_safety_knowledge_articles__article_id__attachments__token__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/knowledge-articles/{article_id}/attachments/{token}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 下载本地文档附件
+         * @description 校验属主后返回文件流（attachment）。
+         */
+        get: operations["download_knowledge_local_attachment_api_v1_safety_knowledge_articles__article_id__attachments__token__content_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/safety/knowledge-articles/{article_id}/upload": {
+    "/api/v1/safety/knowledge-articles/{article_id}/attachments/{token}/preview": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
         /**
-         * 上传知识库文章附件
-         * @description 上传知识库文章附件
+         * 在线预览本地文档附件
+         * @description PDF/图片浏览器内联预览，其余类型回退为下载。
          */
-        post: operations["upload_knowledge_article_attachment_api_v1_safety_knowledge_articles__article_id__upload_post"];
+        get: operations["preview_knowledge_local_attachment_api_v1_safety_knowledge_articles__article_id__attachments__token__preview_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -28467,6 +28591,42 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[SafetyFeishuAppSettingsDetail] */
+        ApiResponseEnvelope_SafetyFeishuAppSettingsDetail_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["SafetyFeishuAppSettingsDetail"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[SafetyFeishuSettingsTestResult] */
+        ApiResponseEnvelope_SafetyFeishuSettingsTestResult_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["SafetyFeishuSettingsTestResult"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[SupplierOut] */
         ApiResponseEnvelope_SupplierOut_: {
             /**
@@ -31379,10 +31539,10 @@ export interface components {
             /** File */
             file: string;
         };
-        /** Body_upload_knowledge_article_attachment_api_v1_safety_knowledge_articles__article_id__upload_post */
-        Body_upload_knowledge_article_attachment_api_v1_safety_knowledge_articles__article_id__upload_post: {
-            /** File */
-            file: string;
+        /** Body_upload_knowledge_attachments_api_v1_safety_knowledge_articles__article_id__attachments_post */
+        Body_upload_knowledge_attachments_api_v1_safety_knowledge_articles__article_id__attachments_post: {
+            /** Files */
+            files: string[];
         };
         /** Body_upload_label_verification_video_api_v1_production_label_verifications_upload_video_post */
         Body_upload_label_verification_video_api_v1_production_label_verifications_upload_video_post: {
@@ -44660,12 +44820,6 @@ export interface components {
             id: string;
         };
         /**
-         * KnowledgeCategory
-         * @description 安全知识库分类枚举
-         * @enum {string}
-         */
-        KnowledgeCategory: "laws_regulations" | "standards" | "management_systems" | "accident_cases" | "emergency_plans" | "sds" | "training_materials" | "other";
-        /**
          * KnowledgeCategoryCreate
          * @description 新增知识分类。
          */
@@ -53323,33 +53477,114 @@ export interface components {
             status?: string | null;
         };
         /**
+         * SafetyFeishuAppSettingsDetail
+         * @description 飞书应用配置回显（Secret 仅返回掩码）。
+         */
+        SafetyFeishuAppSettingsDetail: {
+            /**
+             * App Id
+             * @default
+             */
+            app_id: string;
+            /**
+             * App Secret Masked
+             * @default
+             */
+            app_secret_masked: string;
+            /** Bitable App Token */
+            bitable_app_token?: string | null;
+            /** Bitable Hazard Table Id */
+            bitable_hazard_table_id?: string | null;
+            /**
+             * Is Enabled
+             * @default true
+             */
+            is_enabled: boolean;
+            /** Knowledge App Token */
+            knowledge_app_token?: string | null;
+            /** Knowledge Last Sync Error */
+            knowledge_last_sync_error?: string | null;
+            /** Knowledge Last Sync Status */
+            knowledge_last_sync_status?: string | null;
+            /** Knowledge Last Synced At */
+            knowledge_last_synced_at?: string | null;
+            /** Knowledge Table Id */
+            knowledge_table_id?: string | null;
+            /** Last Test Error */
+            last_test_error?: string | null;
+            /** Last Test Status */
+            last_test_status?: string | null;
+            /** Last Tested At */
+            last_tested_at?: string | null;
+        };
+        /**
+         * SafetyFeishuSettingsTestResult
+         * @description 飞书应用连接测试结果。
+         */
+        SafetyFeishuSettingsTestResult: {
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /** Message */
+            message: string;
+            /** Success */
+            success: boolean;
+        };
+        /**
          * SafetyKnowledgeArticleCreate
          * @description 创建知识库文章
          */
         SafetyKnowledgeArticleCreate: {
             /**
-             * @description 分类
-             * @default other
+             * Article No
+             * @description 法规编号
              */
-            category: components["schemas"]["KnowledgeCategory"];
+            article_no?: string | null;
             /**
-             * Content
-             * @description 正文内容
+             * Implement Date
+             * @description 实施日期
              */
-            content?: string | null;
+            implement_date?: string | null;
+            /**
+             * Notes
+             * @description 备注
+             */
+            notes?: string | null;
+            /**
+             * Promulgation Date
+             * @description 颁布修订日期
+             */
+            promulgation_date?: string | null;
+            /**
+             * Regulation Category
+             * @description 法规类别
+             */
+            regulation_category?: string | null;
+            /**
+             * Regulation Link
+             * @description 法规链接
+             */
+            regulation_link?: string | null;
+            /**
+             * Regulation Status
+             * @description 法规状态
+             */
+            regulation_status?: string | null;
+            /**
+             * Source
+             * @description 颁布机关
+             */
+            source?: string | null;
             /**
              * Summary
-             * @description 摘要
+             * @description 核心要点总结
              */
             summary?: string | null;
             /**
-             * Tags
-             * @description 标签（逗号分隔）
-             */
-            tags?: string | null;
-            /**
              * Title
-             * @description 文章标题
+             * @description 法律法规及标准名称
              */
             title: string;
         };
@@ -53358,31 +53593,54 @@ export interface components {
          * @description 更新知识库文章
          */
         SafetyKnowledgeArticleUpdate: {
-            /** @description 分类 */
-            category?: components["schemas"]["KnowledgeCategory"] | null;
             /**
-             * Content
-             * @description 正文内容
+             * Article No
+             * @description 法规编号
              */
-            content?: string | null;
+            article_no?: string | null;
             /**
-             * Status
-             * @description 状态
+             * Implement Date
+             * @description 实施日期
              */
-            status?: string | null;
+            implement_date?: string | null;
+            /**
+             * Notes
+             * @description 备注
+             */
+            notes?: string | null;
+            /**
+             * Promulgation Date
+             * @description 颁布修订日期
+             */
+            promulgation_date?: string | null;
+            /**
+             * Regulation Category
+             * @description 法规类别
+             */
+            regulation_category?: string | null;
+            /**
+             * Regulation Link
+             * @description 法规链接
+             */
+            regulation_link?: string | null;
+            /**
+             * Regulation Status
+             * @description 法规状态
+             */
+            regulation_status?: string | null;
+            /**
+             * Source
+             * @description 颁布机关
+             */
+            source?: string | null;
             /**
              * Summary
-             * @description 摘要
+             * @description 核心要点总结
              */
             summary?: string | null;
             /**
-             * Tags
-             * @description 标签（逗号分隔）
-             */
-            tags?: string | null;
-            /**
              * Title
-             * @description 文章标题
+             * @description 法律法规及标准名称
              */
             title?: string | null;
         };
@@ -58251,6 +58509,35 @@ export interface components {
             title?: string | null;
             /** Unit */
             unit?: string | null;
+        };
+        /**
+         * UpdateSafetyFeishuAppSettingsRequest
+         * @description 保存飞书应用配置。
+         *
+         *     app_secret 留空或传回掩码值表示保持当前 Secret 不变；
+         *     首次保存（尚无存量配置）时必须提供明文 Secret。
+         */
+        UpdateSafetyFeishuAppSettingsRequest: {
+            /** App Id */
+            app_id: string;
+            /**
+             * App Secret
+             * @default
+             */
+            app_secret: string;
+            /** Bitable App Token */
+            bitable_app_token?: string | null;
+            /** Bitable Hazard Table Id */
+            bitable_hazard_table_id?: string | null;
+            /**
+             * Is Enabled
+             * @default true
+             */
+            is_enabled: boolean;
+            /** Knowledge App Token */
+            knowledge_app_token?: string | null;
+            /** Knowledge Table Id */
+            knowledge_table_id?: string | null;
         };
         /** UpdateSolidMaterialInspectionRequest */
         UpdateSolidMaterialInspectionRequest: {
@@ -120648,6 +120935,103 @@ export interface operations {
             };
         };
     };
+    get_safety_feishu_app_settings_api_v1_safety_feishu_settings_app_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SafetyFeishuAppSettingsDetail_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_safety_feishu_app_settings_api_v1_safety_feishu_settings_app_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSafetyFeishuAppSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SafetyFeishuAppSettingsDetail_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_safety_feishu_app_settings_api_v1_safety_feishu_settings_app_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SafetyFeishuSettingsTestResult_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     restart_feishu_ws_api_v1_safety_feishu_ws_restart_post: {
         parameters: {
             query?: never;
@@ -121716,9 +122100,8 @@ export interface operations {
             query?: {
                 page?: number;
                 page_size?: number;
-                category?: string | null;
-                status?: string | null;
                 keyword?: string | null;
+                regulation_status?: string | null;
             };
             header?: never;
             path?: never;
@@ -121762,6 +122145,105 @@ export interface operations {
                 "application/json": components["schemas"]["SafetyKnowledgeArticleCreate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_knowledge_attachment_api_v1_safety_knowledge_articles_feishu_records__record_id__attachments__file_token__content_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_knowledge_attachment_api_v1_safety_knowledge_articles_feishu_records__record_id__attachments__file_token__preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_knowledge_from_feishu_api_v1_safety_knowledge_articles_feishu_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -121886,73 +122368,7 @@ export interface operations {
             };
         };
     };
-    archive_knowledge_article_api_v1_safety_knowledge_articles__article_id__archive_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                article_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    publish_knowledge_article_api_v1_safety_knowledge_articles__article_id__publish_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                article_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upload_knowledge_article_attachment_api_v1_safety_knowledge_articles__article_id__upload_post: {
+    upload_knowledge_attachments_api_v1_safety_knowledge_articles__article_id__attachments_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -121965,7 +122381,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_upload_knowledge_article_attachment_api_v1_safety_knowledge_articles__article_id__upload_post"];
+                "multipart/form-data": components["schemas"]["Body_upload_knowledge_attachments_api_v1_safety_knowledge_articles__article_id__attachments_post"];
             };
         };
         responses: {
@@ -121976,6 +122392,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_knowledge_attachment_api_v1_safety_knowledge_articles__article_id__attachments__token__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+                token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_knowledge_local_attachment_api_v1_safety_knowledge_articles__article_id__attachments__token__content_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+                token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_knowledge_local_attachment_api_v1_safety_knowledge_articles__article_id__attachments__token__preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+                token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

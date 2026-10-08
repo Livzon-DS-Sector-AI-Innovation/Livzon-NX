@@ -91,6 +91,11 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
                 children=[
                     _n("ai-workflow", "AI工作流配置", "/safety/ai-workflow-config"),
                     _n("scheduled-tasks", "定时任务", "/safety/scheduled-tasks"),
+                    _n(
+                        "safety-feishu-settings",
+                        "飞书设置",
+                        "/safety/settings/feishu",
+                    ),
                 ],
             ),
             _n(

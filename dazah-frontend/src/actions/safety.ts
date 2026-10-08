@@ -71,6 +71,11 @@ import type {
   OhHealthExamFormData,
   OhHealthExamQueryParams,
 } from '@/types/safety'
+import type { components } from '@/types/generated/schema'
+
+type SafetyFeishuAppSettingsDetail = components['schemas']['SafetyFeishuAppSettingsDetail']
+type SafetyFeishuSettingsTestResult = components['schemas']['SafetyFeishuSettingsTestResult']
+type UpdateSafetyFeishuAppSettingsRequest = components['schemas']['UpdateSafetyFeishuAppSettingsRequest']
 
 const API_BASE = serverApiUrl('')
 
@@ -135,7 +140,6 @@ export async function getChecks(params: SafetyCheckQueryParams = {}) {
   const searchParams = new URLSearchParams()
   if (params.page) searchParams.set('page', String(params.page))
   if (params.page_size) searchParams.set('page_size', String(params.page_size))
-  if (params.status) searchParams.set('status', params.status)
   if (params.check_type) searchParams.set('check_type', params.check_type)
   if (params.department) searchParams.set('department', params.department)
 
@@ -202,7 +206,6 @@ export async function getHazards(params: HazardReportQueryParams = {}) {
   const searchParams = new URLSearchParams()
   if (params.page) searchParams.set('page', String(params.page))
   if (params.page_size) searchParams.set('page_size', String(params.page_size))
-  if (params.status) searchParams.set('status', params.status)
   if (params.rectification_status) searchParams.set('rectification_status', params.rectification_status)
   if (params.overall_status) searchParams.set('overall_status', params.overall_status)
   if (params.hazard_type) searchParams.set('hazard_type', params.hazard_type)
@@ -352,7 +355,6 @@ export async function getAccidents(params: AccidentQueryParams = {}) {
   const searchParams = new URLSearchParams()
   if (params.page) searchParams.set('page', String(params.page))
   if (params.page_size) searchParams.set('page_size', String(params.page_size))
-  if (params.status) searchParams.set('status', params.status)
   if (params.accident_type) searchParams.set('accident_type', params.accident_type)
   if (params.accident_level) searchParams.set('accident_level', params.accident_level)
   if (params.department) searchParams.set('department', params.department)
@@ -464,7 +466,6 @@ export async function getContractors(params: ContractorQueryParams = {}) {
   const searchParams = new URLSearchParams()
   if (params.page) searchParams.set('page', String(params.page))
   if (params.page_size) searchParams.set('page_size', String(params.page_size))
-  if (params.status) searchParams.set('status', params.status)
   if (params.qualification_type) searchParams.set('qualification_type', params.qualification_type)
   if (params.training_status) searchParams.set('training_status', params.training_status)
   if (params.keyword) searchParams.set('keyword', params.keyword)
@@ -574,7 +575,6 @@ export async function getTrainings(params: SafetyTrainingQueryParams = {}) {
   const searchParams = new URLSearchParams()
   if (params.page) searchParams.set('page', String(params.page))
   if (params.page_size) searchParams.set('page_size', String(params.page_size))
-  if (params.status) searchParams.set('status', params.status)
   if (params.training_type) searchParams.set('training_type', params.training_type)
   if (params.department) searchParams.set('department', params.department)
 
@@ -876,7 +876,6 @@ export async function getRegulations(params: OperationRegulationQueryParams = {}
   if (params.page_size) searchParams.set('page_size', String(params.page_size))
   if (params.position) searchParams.set('position', params.position)
   if (params.keyword) searchParams.set('keyword', params.keyword)
-  if (params.status) searchParams.set('status', params.status)
 
   const queryString = searchParams.toString()
   const endpoint = `/safety/regulations${queryString ? `?${queryString}` : ''}`
@@ -1173,7 +1172,6 @@ export async function getPersonnelList(params: SpecialOperationPersonnelQueryPar
   const searchParams = new URLSearchParams()
   if (params.page) searchParams.set('page', String(params.page))
   if (params.page_size) searchParams.set('page_size', String(params.page_size))
-  if (params.status) searchParams.set('status', params.status)
   if (params.certificate_type) searchParams.set('certificate_type', params.certificate_type)
   if (params.department) searchParams.set('department', params.department)
   if (params.keyword) searchParams.set('keyword', params.keyword)
@@ -1219,7 +1217,6 @@ export async function getPermitList(params: SpecialOperationPermitQueryParams = 
   const searchParams = new URLSearchParams()
   if (params.page) searchParams.set('page', String(params.page))
   if (params.page_size) searchParams.set('page_size', String(params.page_size))
-  if (params.status) searchParams.set('status', params.status)
   if (params.operation_type) searchParams.set('operation_type', params.operation_type)
   if (params.operation_level) searchParams.set('operation_level', params.operation_level)
   if (params.keyword) searchParams.set('keyword', params.keyword)
@@ -1319,8 +1316,7 @@ export async function getKnowledgeArticles(params: SafetyKnowledgeArticleQueryPa
   const searchParams = new URLSearchParams()
   if (params.page) searchParams.set('page', String(params.page))
   if (params.page_size) searchParams.set('page_size', String(params.page_size))
-  if (params.category) searchParams.set('category', params.category)
-  if (params.status) searchParams.set('status', params.status)
+  if (params.regulation_status) searchParams.set('regulation_status', params.regulation_status)
   if (params.keyword) searchParams.set('keyword', params.keyword)
   const queryString = searchParams.toString()
   const endpoint = `/safety/knowledge-articles${queryString ? '?' + queryString : ''}`
@@ -1353,16 +1349,41 @@ export async function deleteKnowledgeArticle(id: string) {
   return response
 }
 
-export async function publishKnowledgeArticle(id: string) {
-  const response = await fetchApi<SafetyKnowledgeArticle>(`/safety/knowledge-articles/${id}/publish`, { method: 'POST' })
-  revalidatePath('/safety/knowledge-base')
-  return response
+
+export async function uploadKnowledgeAttachments(id: string, files: File[]) {
+  if (!files.length) return { code: 200, data: null }
+  const formData = new FormData()
+  files.forEach((file) => formData.append('files', file))
+  const authHeaders = await getAuthHeaders()
+  const { 'Content-Type': _, ...uploadHeaders } = authHeaders
+  const response = await fetch(
+    `${API_BASE}/safety/knowledge-articles/${id}/attachments`,
+    {
+      method: 'POST',
+      headers: { ...uploadHeaders, 'X-Dazah-Page-Key': 'safety:regulation-info:knowledge-base' },
+      body: formData,
+    }
+  )
+  return response.json()
 }
 
-export async function archiveKnowledgeArticle(id: string) {
-  const response = await fetchApi<SafetyKnowledgeArticle>(`/safety/knowledge-articles/${id}/archive`, { method: 'POST' })
-  revalidatePath('/safety/knowledge-base')
-  return response
+export async function deleteKnowledgeAttachment(id: string, token: string) {
+  const res = await fetchApi<SafetyKnowledgeArticle>(
+    `/safety/knowledge-articles/${id}/attachments/${token}`,
+    {
+      method: 'DELETE',
+      headers: { 'X-Dazah-Page-Key': 'safety:regulation-info:knowledge-base' },
+    }
+  )
+  return res
+}
+
+export async function syncSafetyKnowledge() {
+  const res = await fetchApi<Record<string, number | string>>('/safety/knowledge-articles/feishu/sync', {
+    method: 'POST',
+    headers: { 'X-Dazah-Page-Key': 'safety:regulation-info:knowledge-base' },
+  })
+  return res
 }
 
 // ==================== 八大特殊作业报备 Actions ====================
@@ -1572,7 +1593,6 @@ export async function getEhsChanges(params: EhsChangeQueryParams = {}) {
   const searchParams = new URLSearchParams()
   if (params.page) searchParams.set('page', String(params.page))
   if (params.page_size) searchParams.set('page_size', String(params.page_size))
-  if (params.status) searchParams.set('status', params.status)
   if (params.change_type) searchParams.set('change_type', params.change_type)
   if (params.change_grade) searchParams.set('change_grade', params.change_grade)
   if (params.change_duration) searchParams.set('change_duration', params.change_duration)
@@ -1702,7 +1722,6 @@ export async function getOhHazardMonitors(params: OhHazardMonitorQueryParams = {
   const searchParams = new URLSearchParams()
   if (params.page) searchParams.set('page', String(params.page))
   if (params.page_size) searchParams.set('page_size', String(params.page_size))
-  if (params.status) searchParams.set('status', params.status)
   if (params.detection_type) searchParams.set('detection_type', params.detection_type)
   if (params.workplace) searchParams.set('workplace', params.workplace)
   if (params.keyword) searchParams.set('keyword', params.keyword)
@@ -1809,7 +1828,6 @@ export async function getOhHealthExams(params: OhHealthExamQueryParams = {}) {
   const searchParams = new URLSearchParams()
   if (params.page) searchParams.set('page', String(params.page))
   if (params.page_size) searchParams.set('page_size', String(params.page_size))
-  if (params.status) searchParams.set('status', params.status)
   if (params.exam_type) searchParams.set('exam_type', params.exam_type)
   if (params.department) searchParams.set('department', params.department)
   if (params.keyword) searchParams.set('keyword', params.keyword)
@@ -1986,6 +2004,44 @@ export async function previewCard(data: CardPreviewRequest) {
   const res = await fetchApi<CardPreviewResponse>('/safety/scheduled-tasks/preview-card', {
     method: 'POST',
     body: JSON.stringify(data),
+  })
+  return res
+}
+
+// ============ Feishu Settings ============
+
+export async function getSafetyFeishuSettings() {
+  const res = await fetchApi<SafetyFeishuAppSettingsDetail>('/safety/feishu-settings/app', {
+    headers: { 'X-Dazah-Page-Key': 'safety:system-config:safety-feishu-settings' },
+  })
+  return res
+}
+
+export async function saveSafetyFeishuSettings(data: UpdateSafetyFeishuAppSettingsRequest) {
+  const res = await fetchApi<SafetyFeishuAppSettingsDetail>('/safety/feishu-settings/app', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+    headers: { 'X-Dazah-Page-Key': 'safety:system-config:safety-feishu-settings' },
+  })
+  return res
+}
+
+export async function testSafetyFeishuSettings() {
+  const res = await fetchApi<SafetyFeishuSettingsTestResult>('/safety/feishu-settings/app/test', {
+    method: 'POST',
+    headers: { 'X-Dazah-Page-Key': 'safety:system-config:safety-feishu-settings' },
+  })
+  return res
+}
+
+export async function getSafetyFeishuWsStatus() {
+  const res = await fetchApi<Record<string, unknown>>('/safety/feishu/ws/status')
+  return res
+}
+
+export async function restartSafetyFeishuWs() {
+  const res = await fetchApi<Record<string, unknown>>('/safety/feishu/ws/restart', {
+    method: 'POST',
   })
   return res
 }

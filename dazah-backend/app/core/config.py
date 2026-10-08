@@ -80,12 +80,6 @@ class Settings(BaseSettings):
     FEISHU_SYNC_ROOT_DEPT_ID: str = ""  # 部门同步的根部门 ID（API 触发）
     FEISHU_SYNC_MEMBER_DEPT_ID: str = ""  # 成员同步的目标部门 ID（每日 00:00）
 
-    # Feishu 安全模块机器人（独立应用凭证）
-    SAFETY_FEISHU_APP_ID: str = ""
-    SAFETY_FEISHU_APP_SECRET: str = ""
-    SAFETY_FEISHU_BITABLE_APP_TOKEN: str = ""
-    SAFETY_FEISHU_BITABLE_HAZARD_TABLE_ID: str = ""
-
     # Feishu 设备模块交互机器人（独立应用凭证）
     EQUIPMENT_FEISHU_APP_ID: str = ""
     EQUIPMENT_FEISHU_APP_SECRET: str = ""
@@ -171,6 +165,7 @@ class Settings(BaseSettings):
 
     # Feishu 附件字节缓存（质量模块附件代理下载共用）
     # 缓存层故障自动降级到原链路，关闭后等同原行为。
+    # 平台级飞书附件字节缓存（质量/安全等模块共用；历史命名带 QUALITY 前缀）
     QUALITY_ATTACHMENT_CACHE_ENABLED: bool = True
     QUALITY_ATTACHMENT_CACHE_DIR: str = "./data/feishu-attachment-cache"
     QUALITY_ATTACHMENT_CACHE_MAX_MEMORY_MB: int = 500

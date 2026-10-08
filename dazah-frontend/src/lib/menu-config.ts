@@ -163,6 +163,7 @@ export const moduleMenus: ModuleMenu[] = [
         children: [
           { key: "ai-workflow", label: "AI工作流配置", path: "/safety/ai-workflow-config" },
           { key: "scheduled-tasks", label: "定时任务", path: "/safety/scheduled-tasks" },
+          { key: "safety-feishu-settings", label: "飞书设置", path: "/safety/settings/feishu" },
         ],
       },
       // ── 作业安全 ──

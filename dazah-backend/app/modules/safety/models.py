@@ -1546,12 +1546,46 @@ class SpecialOperationPermit(BaseModel):
 
 
 class SafetyKnowledgeArticle(BaseModel):
-    """安全知识库文章表"""
+    """安全知识库文章表（含 EHS 法规库多维表格镜像字段）"""
 
     __tablename__ = "knowledge_articles"
-    __table_args__ = {"schema": "safety"}
+    __table_args__ = (
+        Index(
+            "uq_knowledge_articles_feishu_record_active",
+            "feishu_record_id",
+            unique=True,
+            postgresql_where=text(
+                "is_deleted = false AND feishu_record_id IS NOT NULL"
+            ),
+        ),
+        {"schema": "safety"},
+    )
 
-    title: Mapped[str] = mapped_column(String(255), nullable=False, comment="文章标题")
+    title: Mapped[str] = mapped_column(
+        String(255), nullable=False, comment="文章标题"
+    )
+    article_no: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="法规编号"
+    )
+    regulation_category: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, comment="法规类别（飞书原始值）"
+    )
+    source: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="颁布机关"
+    )
+    promulgation_date: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="颁布修订日期"
+    )
+    implement_date: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="实施日期"
+    )
+    regulation_status: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, comment="法规状态（如 现行有效）"
+    )
+    regulation_link: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="法规链接"
+    )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
     summary: Mapped[str | None] = mapped_column(Text, nullable=True, comment="摘要")
     content: Mapped[str | None] = mapped_column(Text, nullable=True, comment="正文内容")
     tags: Mapped[str | None] = mapped_column(
@@ -1579,6 +1613,21 @@ class SafetyKnowledgeArticle(BaseModel):
     )
     attachment_original_name: Mapped[str | None] = mapped_column(
         String(255), nullable=True, comment="附件原始文件名"
+    )
+    feishu_record_id: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, comment="飞书多维表格 record_id（镜像唯一键）"
+    )
+    feishu_attachments: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        default=list,
+        comment="飞书附件快照 [{file_token,name,size}]",
+    )
+    local_attachments: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        default=list,
+        comment="本地附件快照 [{token,name,size}]（镜像行附件在飞书维护）",
     )
 
 
@@ -2528,3 +2577,57 @@ class HazardRevisionRecord(BaseModel):
         UUID(as_uuid=True), nullable=True, comment="关联的危害归档ID"
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
+
+
+class SafetyFeishuAppSettings(BaseModel):
+    """安全模块飞书应用配置（单一事实源存数据库，Web 设置页维护）。
+
+    app_secret 使用 app.core.llm.encryption 加密存储；回显仅返回掩码。
+    """
+
+    __tablename__ = "feishu_app_settings"
+    __table_args__ = {"schema": "safety"}
+
+    app_id: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="飞书应用 App ID"
+    )
+    app_secret: Mapped[str] = mapped_column(
+        Text, nullable=False, comment="飞书应用 App Secret（加密存储）"
+    )
+    bitable_app_token: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="隐患多维表格 app_token"
+    )
+    bitable_hazard_table_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="隐患多维表格 table_id"
+    )
+    knowledge_app_token: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="EHS 法规库多维表格 app_token"
+    )
+    knowledge_table_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="EHS 法规库多维表格 table_id"
+    )
+    is_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+        comment="是否启用安全模块飞书集成",
+    )
+    knowledge_last_sync_status: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, comment="知识库最近同步状态: success/failed"
+    )
+    knowledge_last_sync_error: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="知识库最近同步错误信息"
+    )
+    knowledge_last_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="知识库最近同步时间"
+    )
+    last_test_status: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, comment="最近连接测试状态: success/failed"
+    )
+    last_test_error: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="最近连接测试错误信息"
+    )
+    last_tested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="最近连接测试时间"
+    )
