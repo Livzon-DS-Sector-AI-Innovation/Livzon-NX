@@ -14,6 +14,7 @@ class SafetyFeishuAppSettingsDetail(BaseModel):
     bitable_hazard_table_id: str | None = None
     knowledge_app_token: str | None = None
     knowledge_table_id: str | None = None
+    radar_scan_enabled: bool = True
     radar_notify_enabled: bool = False
     radar_notify_chat_ids: list[str] = Field(default_factory=list)
     radar_notify_user_ids: list[str] = Field(default_factory=list)
@@ -39,6 +40,7 @@ class UpdateSafetyFeishuAppSettingsRequest(BaseModel):
     bitable_hazard_table_id: str | None = Field(default=None, max_length=100)
     knowledge_app_token: str | None = Field(default=None, max_length=100)
     knowledge_table_id: str | None = Field(default=None, max_length=100)
+    radar_scan_enabled: bool = True
     radar_notify_enabled: bool = False
     radar_notify_chat_ids: list[str] = Field(default_factory=list)
     radar_notify_user_ids: list[str] = Field(default_factory=list)

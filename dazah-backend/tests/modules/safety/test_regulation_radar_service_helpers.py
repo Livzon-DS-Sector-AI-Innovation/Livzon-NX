@@ -32,6 +32,18 @@ def _response(
     )
 
 
+@pytest.fixture(autouse=True)
+async def _clean_settings_rows(db_session):
+    """设置表在多个用例间共享，测试后清空，避免残留影响「无配置」类断言。"""
+    from sqlalchemy import delete
+
+    from app.modules.safety.models import SafetyFeishuAppSettings
+
+    yield
+    await db_session.execute(delete(SafetyFeishuAppSettings))
+    await db_session.commit()
+
+
 def _item(**overrides: Any) -> CrawledRegulation:
     base: dict[str, Any] = {
         "site_code": "mem_tzgg",
@@ -477,11 +489,13 @@ async def test_update_settings_persists_radar_notify_targets(
         UpdateSafetyFeishuAppSettingsRequest(
             app_id="cli_radar",
             app_secret="plain-secret",
+            radar_scan_enabled=True,
             radar_notify_enabled=True,
             radar_notify_chat_ids=["oc_a", "oc_b"],
             radar_notify_user_ids=["ou_a"],
         ),
     )
+    assert detail.radar_scan_enabled is True
     assert detail.radar_notify_enabled is True
     assert detail.radar_notify_chat_ids == ["oc_a", "oc_b"]
     assert detail.radar_notify_user_ids == ["ou_a"]
@@ -491,9 +505,11 @@ async def test_update_settings_persists_radar_notify_targets(
         db_session,
         UpdateSafetyFeishuAppSettingsRequest(
             app_id="cli_radar",
+            radar_scan_enabled=False,
             radar_notify_chat_ids=["oc_only"],
         ),
     )
+    assert trimmed.radar_scan_enabled is False
     assert trimmed.radar_notify_chat_ids == ["oc_only"]
     assert trimmed.radar_notify_user_ids == ["ou_a"]
 

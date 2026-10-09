@@ -71,6 +71,7 @@ export default function FeishuSettingsPage({
     bitable_hazard_table_id: initialSettings?.bitable_hazard_table_id || null,
     knowledge_app_token: initialSettings?.knowledge_app_token || null,
     knowledge_table_id: initialSettings?.knowledge_table_id || null,
+    radar_scan_enabled: initialSettings?.radar_scan_enabled ?? true,
     radar_notify_enabled: initialSettings?.radar_notify_enabled ?? false,
     radar_notify_chat_ids: initialSettings?.radar_notify_chat_ids ?? [],
     radar_notify_user_ids: initialSettings?.radar_notify_user_ids ?? [],
@@ -99,6 +100,7 @@ export default function FeishuSettingsPage({
     setSaving(true)
     const payload: UpdateSafetyFeishuAppSettingsRequest = {
       ...form,
+      radar_scan_enabled: form.radar_scan_enabled,
       radar_notify_chat_ids: notifyChatIdsText
         .split(/[,，\n]/)
         .map((s) => s.trim())
@@ -129,6 +131,7 @@ export default function FeishuSettingsPage({
     try {
       const saveRes = await saveSafetyFeishuSettings({
         ...form,
+        radar_scan_enabled: form.radar_scan_enabled,
         radar_notify_chat_ids: notifyChatIdsText
           .split(/[,，\n]/)
           .map((s) => s.trim())
@@ -257,6 +260,7 @@ export default function FeishuSettingsPage({
           <Space size={12} wrap>
             <Typography.Text>启用飞书集成</Typography.Text>
             <Switch
+              aria-label="启用飞书集成"
               checked={form.is_enabled}
               onChange={(checked) =>
                 setForm((current) => ({ ...current, is_enabled: checked }))
@@ -320,8 +324,25 @@ export default function FeishuSettingsPage({
       <Card title="法规雷达通知（扫描结果推送到飞书）">
         <Space orientation="vertical" size={12} style={{ display: 'flex' }}>
           <Space size={12} wrap>
+            <Typography.Text>自动扫描（每周一 08:00）</Typography.Text>
+            <Switch
+              aria-label="自动扫描法规"
+              checked={form.radar_scan_enabled}
+              onChange={(checked) =>
+                setForm((current) => ({
+                  ...current,
+                  radar_scan_enabled: checked,
+                }))
+              }
+            />
+            <Typography.Text type="secondary">
+              关闭后定时任务不再自动扫描（手动「立即扫描」仍可用）
+            </Typography.Text>
+          </Space>
+          <Space size={12} wrap>
             <Typography.Text>启用扫描结果通知</Typography.Text>
             <Switch
+              aria-label="推送扫描结果通知"
               checked={form.radar_notify_enabled}
               onChange={(checked) =>
                 setForm((current) => ({

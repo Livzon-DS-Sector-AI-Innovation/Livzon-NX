@@ -29,7 +29,22 @@ class SafetyRegulationRadarGenerator(TaskGenerator):
     timeout_seconds = 1800
 
     async def find_due(self, session: Any) -> list[Any]:
-        # 无条件触发：雷达是数据发现底座，不受通知开关控制
+        # 尊重设置页的「自动扫描」开关（safety.feishu_app_settings.radar_scan_enabled）
+        from sqlalchemy import select
+
+        from app.modules.safety.models import SafetyFeishuAppSettings
+
+        row = (
+            await session.execute(
+                select(SafetyFeishuAppSettings)
+                .where(SafetyFeishuAppSettings.is_deleted.is_(False))
+                .order_by(SafetyFeishuAppSettings.updated_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if row is None or not row.radar_scan_enabled:
+            logger.info("法规雷达自动扫描已关闭（radar_scan_enabled=false），本轮跳过")
+            return []
         return [True]
 
     async def execute_one(self, session: Any, item: Any) -> None:
