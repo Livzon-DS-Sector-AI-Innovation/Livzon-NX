@@ -2652,6 +2652,13 @@ class SafetyFeishuAppSettings(BaseModel):
     last_tested_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, comment="最近连接测试时间"
     )
+    radar_scan_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+        comment="是否启用法规雷达自动扫描（每周一 08:00）",
+    )
     radar_notify_enabled: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,

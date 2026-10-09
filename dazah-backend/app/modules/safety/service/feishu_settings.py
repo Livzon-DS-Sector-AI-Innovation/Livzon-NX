@@ -104,6 +104,7 @@ def _build_detail(
         bitable_hazard_table_id=model.bitable_hazard_table_id,
         knowledge_app_token=model.knowledge_app_token,
         knowledge_table_id=model.knowledge_table_id,
+        radar_scan_enabled=model.radar_scan_enabled,
         radar_notify_enabled=model.radar_notify_enabled,
         radar_notify_chat_ids=list(model.radar_notify_chat_ids or []),
         radar_notify_user_ids=list(model.radar_notify_user_ids or []),
@@ -146,6 +147,7 @@ async def update_safety_feishu_app_settings(
                 bitable_hazard_table_id=_clean_optional(data.bitable_hazard_table_id),
                 knowledge_app_token=_clean_optional(data.knowledge_app_token),
                 knowledge_table_id=_clean_optional(data.knowledge_table_id),
+                radar_scan_enabled=data.radar_scan_enabled,
                 radar_notify_enabled=data.radar_notify_enabled,
                 radar_notify_chat_ids=list(data.radar_notify_chat_ids or []),
                 radar_notify_user_ids=list(data.radar_notify_user_ids or []),
@@ -170,6 +172,8 @@ async def update_safety_feishu_app_settings(
                 model.knowledge_app_token = _clean_optional(data.knowledge_app_token)
             if "knowledge_table_id" in data.model_fields_set:
                 model.knowledge_table_id = _clean_optional(data.knowledge_table_id)
+            if "radar_scan_enabled" in data.model_fields_set:
+                model.radar_scan_enabled = data.radar_scan_enabled
             if "radar_notify_enabled" in data.model_fields_set:
                 model.radar_notify_enabled = data.radar_notify_enabled
             if "radar_notify_chat_ids" in data.model_fields_set:

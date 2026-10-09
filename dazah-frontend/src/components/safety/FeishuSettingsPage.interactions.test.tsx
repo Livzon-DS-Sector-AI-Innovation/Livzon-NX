@@ -75,10 +75,17 @@ vi.mock('antd', async () => {
   const Input = Object.assign((props: AnyProps) => textInput(props), {
     Password: (props: AnyProps) => textInput(props, { type: 'password' }),
   })
-  const Switch = ({ checked, onChange }: AnyProps) =>
+  const Switch = ({
+    checked,
+    onChange,
+    id,
+    'aria-label': ariaLabel,
+  }: AnyProps) =>
     createElement('input', {
       type: 'checkbox',
       checked: Boolean(checked),
+      id,
+      'aria-label': ariaLabel,
       ref: (node: HTMLInputElement | null) => {
         if (!node) return
         node.onchange = () => (onChange as CheckedHandler)?.(node.checked)
@@ -358,11 +365,10 @@ describe('FeishuSettingsPage interactions', () => {
 
     setInput(rendered.container, '飞书群 chat_id', 'oc_group1, oc_group2')
     setInput(rendered.container, '个人 open_id', 'ou_group9')
-    const switches = Array.from(
-      rendered.container.querySelectorAll('input[type="checkbox"]')
-    ) as HTMLInputElement[]
-    // 页面共两个开关：0=启用飞书集成，1=启用扫描结果通知
-    const notifySwitch = switches[1]
+    const notifySwitch = rendered.container.querySelector(
+      'input[aria-label="推送扫描结果通知"]'
+    ) as HTMLInputElement | null
+    if (!notifySwitch) throw new Error('未找到通知开关')
     act(() => {
       notifySwitch.checked = true
       notifySwitch.dispatchEvent(new Event('change', { bubbles: true }))
@@ -425,5 +431,29 @@ describe('FeishuSettingsPage interactions', () => {
 
     expect(mocks.testRadarNotify).not.toHaveBeenCalled()
     expect(mocks.message.warning).toHaveBeenCalledWith('请先填写飞书应用 App ID')
+  })
+
+  it('keeps the auto-scan switch in the save payload', async () => {
+    rendered = renderPage({ initialSettings: settingsDetail, initialWsStatus: null })
+    await settle()
+
+    const scanSwitch = rendered.container.querySelector(
+      'input[aria-label="自动扫描法规"]'
+    ) as HTMLInputElement | null
+    if (!scanSwitch) throw new Error('未找到自动扫描开关')
+    // 默认开启（未配置过时按 true 处理）
+    expect(scanSwitch.checked).toBe(true)
+
+    act(() => {
+      scanSwitch.checked = false
+      scanSwitch.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await settle()
+
+    act(() => findButton(rendered!.container, '保存配置')?.click())
+    await settle()
+    expect(mocks.saveSafetyFeishuSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ radar_scan_enabled: false })
+    )
   })
 })

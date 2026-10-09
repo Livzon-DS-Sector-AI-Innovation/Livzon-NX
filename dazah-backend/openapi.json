@@ -66980,6 +66980,11 @@
             },
             "title": "Radar Notify User Ids",
             "type": "array"
+          },
+          "radar_scan_enabled": {
+            "default": true,
+            "title": "Radar Scan Enabled",
+            "type": "boolean"
           }
         },
         "title": "SafetyFeishuAppSettingsDetail",
@@ -80853,6 +80858,11 @@
             },
             "title": "Radar Notify User Ids",
             "type": "array"
+          },
+          "radar_scan_enabled": {
+            "default": true,
+            "title": "Radar Scan Enabled",
+            "type": "boolean"
           }
         },
         "required": [

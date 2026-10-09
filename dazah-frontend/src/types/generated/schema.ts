@@ -53645,6 +53645,11 @@ export interface components {
             radar_notify_enabled: boolean;
             /** Radar Notify User Ids */
             radar_notify_user_ids?: string[];
+            /**
+             * Radar Scan Enabled
+             * @default true
+             */
+            radar_scan_enabled: boolean;
         };
         /**
          * SafetyFeishuSettingsTestResult
@@ -58676,6 +58681,11 @@ export interface components {
             radar_notify_enabled: boolean;
             /** Radar Notify User Ids */
             radar_notify_user_ids?: string[];
+            /**
+             * Radar Scan Enabled
+             * @default true
+             */
+            radar_scan_enabled: boolean;
         };
         /** UpdateSolidMaterialInspectionRequest */
         UpdateSolidMaterialInspectionRequest: {

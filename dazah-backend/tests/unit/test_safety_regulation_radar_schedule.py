@@ -20,12 +20,42 @@ def test_generator_contract_is_weekly_cron_in_shanghai() -> None:
     assert generator.timeout_seconds == 1800
 
 
+class _FakeSession:
+    """只回放 find_due 需要的查询结果，避免触碰真实设置表。"""
+
+    def __init__(self, row: Any) -> None:
+        self._row = row
+
+    async def execute(self, *_args: Any, **_kwargs: Any) -> Any:
+        row = self._row
+
+        class _Result:
+            def scalar_one_or_none(self) -> Any:
+                return row
+
+        return _Result()
+
+
 @pytest.mark.anyio
-async def test_find_due_is_unconditional(monkeypatch: Any) -> None:
-    """雷达是数据发现底座，不受通知开关影响，每周期固定返回一个待办项。"""
+async def test_find_due_respects_scan_switch() -> None:
+    """自动扫描开关关闭或尚未保存配置时跳过；开启时每周期返回一个待办项。"""
+    from types import SimpleNamespace
+
     generator = scheduled.SafetyRegulationRadarGenerator()
 
-    assert await generator.find_due(object()) == [True]
+    # 尚无配置行：跳过（没有任何可写入的目标）
+    assert await generator.find_due(_FakeSession(None)) == []
+    # 设置了但开关关闭：跳过
+    assert (
+        await generator.find_due(
+            _FakeSession(SimpleNamespace(radar_scan_enabled=False))
+        )
+        == []
+    )
+    # 开关开启：返回单个待办项
+    assert await generator.find_due(
+        _FakeSession(SimpleNamespace(radar_scan_enabled=True))
+    ) == [True]
 
 
 @pytest.mark.anyio
