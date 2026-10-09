@@ -2,11 +2,17 @@
 
 import { useCallback, useState } from 'react'
 
-import { ApiOutlined, SaveOutlined, SecurityScanOutlined } from '@ant-design/icons'
-import { App, Button, Card, Input, Space, Switch, Tag, Typography } from 'antd'
+import {
+  ApiOutlined,
+  SaveOutlined,
+  SecurityScanOutlined,
+  SendOutlined,
+} from '@ant-design/icons'
+import { App, Button, Card, Input, Space, Switch, Tabs, Tag, Typography } from 'antd'
 
 import {
   getSafetyFeishuSettings,
+  testRadarNotify,
   getSafetyFeishuWsStatus,
   restartSafetyFeishuWs,
   saveSafetyFeishuSettings,
@@ -65,8 +71,18 @@ export default function FeishuSettingsPage({
     bitable_hazard_table_id: initialSettings?.bitable_hazard_table_id || null,
     knowledge_app_token: initialSettings?.knowledge_app_token || null,
     knowledge_table_id: initialSettings?.knowledge_table_id || null,
+    radar_notify_enabled: initialSettings?.radar_notify_enabled ?? false,
+    radar_notify_chat_ids: initialSettings?.radar_notify_chat_ids ?? [],
+    radar_notify_user_ids: initialSettings?.radar_notify_user_ids ?? [],
     is_enabled: initialSettings?.is_enabled ?? true,
   })
+  const [notifyChatIdsText, setNotifyChatIdsText] = useState(
+    (initialSettings?.radar_notify_chat_ids ?? []).join('\n')
+  )
+  const [notifyUserIdsText, setNotifyUserIdsText] = useState(
+    (initialSettings?.radar_notify_user_ids ?? []).join('\n')
+  )
+  const [notifyTesting, setNotifyTesting] = useState(false)
   const [wsStatus, setWsStatus] = useState<WsStatus | null>(
     (initialWsStatus as WsStatus | null) ?? null
   )
@@ -81,7 +97,18 @@ export default function FeishuSettingsPage({
       return
     }
     setSaving(true)
-    const res = await saveSafetyFeishuSettings(form)
+    const payload: UpdateSafetyFeishuAppSettingsRequest = {
+      ...form,
+      radar_notify_chat_ids: notifyChatIdsText
+        .split(/[,，\n]/)
+        .map((s) => s.trim())
+        .filter(Boolean),
+      radar_notify_user_ids: notifyUserIdsText
+        .split(/[,，\n]/)
+        .map((s) => s.trim())
+        .filter(Boolean),
+    }
+    const res = await saveSafetyFeishuSettings(payload)
     setSaving(false)
     if (res.code === 200 && res.data) {
       message.success('飞书配置已保存')
@@ -90,7 +117,47 @@ export default function FeishuSettingsPage({
     } else {
       message.error(res.message || '保存失败')
     }
-  }, [form, message, settings])
+  }, [form, message, settings, notifyChatIdsText, notifyUserIdsText])
+
+  const handleTestNotify = useCallback(async () => {
+    // 先保存当前通知配置，再发测试卡片
+    if (!form.app_id.trim()) {
+      message.warning('请先填写飞书应用 App ID')
+      return
+    }
+    setNotifyTesting(true)
+    try {
+      const saveRes = await saveSafetyFeishuSettings({
+        ...form,
+        radar_notify_chat_ids: notifyChatIdsText
+          .split(/[,，\n]/)
+          .map((s) => s.trim())
+          .filter(Boolean),
+        radar_notify_user_ids: notifyUserIdsText
+          .split(/[,，\n]/)
+          .map((s) => s.trim())
+          .filter(Boolean),
+      })
+      if (saveRes.code !== 200) {
+        message.error(saveRes.message || '保存配置失败')
+        return
+      }
+      setSettings(saveRes.data ?? null)
+      const res = await testRadarNotify()
+      if (res.code === 200 && res.data) {
+        const d = res.data as { sent?: number; errors?: string[] }
+        if ((d.sent ?? 0) > 0) {
+          message.success(`测试通知已发送（${d.sent} 个目标）`)
+        } else {
+          message.error((d.errors ?? []).join('；') || '发送失败')
+        }
+      } else {
+        message.error(res.message || '测试发送失败')
+      }
+    } finally {
+      setNotifyTesting(false)
+    }
+  }, [form, message, notifyChatIdsText, notifyUserIdsText])
 
   const handleTest = useCallback(async () => {
     setTesting(true)
@@ -137,6 +204,14 @@ export default function FeishuSettingsPage({
           'App Secret 加密存储，仅在保存时写入，页面只回显掩码；隐患多维表格绑定用于台账双向同步与卡片链接。'
         }
       />
+      <Tabs
+        defaultActiveKey="bitable"
+        items={[
+          {
+            key: 'bitable',
+            label: '应用与多维表格',
+            children: (
+              <Space orientation="vertical" size={16} style={{ display: 'flex' }}>
       <Card
         title="飞书应用信息"
         extra={
@@ -235,7 +310,72 @@ export default function FeishuSettingsPage({
           </Typography.Text>
         </Space>
       </Card>
-
+      </Space>
+            ),
+          },
+          {
+            key: 'notify',
+            label: '通知设置',
+            children: (
+      <Card title="法规雷达通知（扫描结果推送到飞书）">
+        <Space orientation="vertical" size={12} style={{ display: 'flex' }}>
+          <Space size={12} wrap>
+            <Typography.Text>启用扫描结果通知</Typography.Text>
+            <Switch
+              checked={form.radar_notify_enabled}
+              onChange={(checked) =>
+                setForm((current) => ({
+                  ...current,
+                  radar_notify_enabled: checked,
+                }))
+              }
+            />
+            <Typography.Text type="secondary">
+              开启后，每次扫描发现新法规/修订时，自动推送卡片到下方群和个人
+            </Typography.Text>
+          </Space>
+          <Space.Compact block>
+            <Button disabled style={{ cursor: 'default', width: 140 }}>
+              群 chat_id
+            </Button>
+            <Input
+              value={notifyChatIdsText}
+              placeholder="飞书群 chat_id，多个用英文逗号分隔（oc_ 开头）"
+              onChange={(event) => setNotifyChatIdsText(event.target.value)}
+            />
+          </Space.Compact>
+          <Space.Compact block>
+            <Button disabled style={{ cursor: 'default', width: 140 }}>
+              个人 open_id
+            </Button>
+            <Input
+              value={notifyUserIdsText}
+              placeholder="个人 open_id，多个用英文逗号分隔（ou_ 开头）"
+              onChange={(event) => setNotifyUserIdsText(event.target.value)}
+            />
+          </Space.Compact>
+          <Typography.Text type="secondary">
+            需先把本应用的机器人拉进目标群；个人通知发给 open_id 对应的用户。
+            修改后请先「保存配置」，再点「发送测试通知」验证。
+          </Typography.Text>
+          <div>
+            <Button
+              icon={<SendOutlined />}
+              onClick={() => void handleTestNotify()}
+              loading={notifyTesting}
+            >
+              发送测试通知
+            </Button>
+          </div>
+        </Space>
+      </Card>
+            ),
+          },
+          {
+            key: 'radar',
+            label: '法规雷达',
+            children: (
+              <Space orientation="vertical" size={16} style={{ display: 'flex' }}>
       <Card title="EHS 法规库绑定（安全知识库）">
         <Space orientation="vertical" size={12} style={{ display: 'flex' }}>
           <Space.Compact block>
@@ -305,6 +445,11 @@ export default function FeishuSettingsPage({
           </Typography.Text>
         </Space>
       </Card>
+      </Space>
+            ),
+          },
+        ]}
+      />
     </Space>
   )
 }

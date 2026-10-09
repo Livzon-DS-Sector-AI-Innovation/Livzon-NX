@@ -66961,6 +66961,25 @@
               }
             ],
             "title": "Last Tested At"
+          },
+          "radar_notify_chat_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Radar Notify Chat Ids",
+            "type": "array"
+          },
+          "radar_notify_enabled": {
+            "default": false,
+            "title": "Radar Notify Enabled",
+            "type": "boolean"
+          },
+          "radar_notify_user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Radar Notify User Ids",
+            "type": "array"
           }
         },
         "title": "SafetyFeishuAppSettingsDetail",
@@ -80815,6 +80834,25 @@
               }
             ],
             "title": "Knowledge Table Id"
+          },
+          "radar_notify_chat_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Radar Notify Chat Ids",
+            "type": "array"
+          },
+          "radar_notify_enabled": {
+            "default": false,
+            "title": "Radar Notify Enabled",
+            "type": "boolean"
+          },
+          "radar_notify_user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Radar Notify User Ids",
+            "type": "array"
           }
         },
         "required": [
@@ -210262,6 +210300,239 @@
           }
         },
         "summary": "从 EHS 法规库多维表格同步知识库",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/knowledge-articles/radar/notify/test": {
+      "post": {
+        "description": "向已配置的群/个人发送一条测试卡片，验证通知目标配置。",
+        "operationId": "test_regulation_radar_notify_api_v1_safety_knowledge_articles_radar_notify_test_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "测试法规雷达通知发送",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/knowledge-articles/radar/run": {
+      "post": {
+        "description": "扫描官方栏目页，发现新法规与已修订法规。dry_run 只出报告不写入。",
+        "operationId": "run_regulation_radar_api_v1_safety_knowledge_articles_radar_run_post",
+        "parameters": [
+          {
+            "description": "干跑：只比对不写入飞书表",
+            "in": "query",
+            "name": "dry_run",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "干跑：只比对不写入飞书表",
+              "title": "Dry Run",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "手动执行法规雷达扫描",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/knowledge-articles/radar/runs": {
+      "get": {
+        "description": "返回最近的扫描批次（新的在前）。",
+        "operationId": "list_regulation_radar_runs_api_v1_safety_knowledge_articles_radar_runs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "查询法规雷达扫描批次",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/knowledge-articles/radar/runs/{run_id}": {
+      "get": {
+        "operationId": "get_regulation_radar_run_api_v1_safety_knowledge_articles_radar_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "查询法规雷达扫描批次详情",
         "tags": [
           "安全管理"
         ]

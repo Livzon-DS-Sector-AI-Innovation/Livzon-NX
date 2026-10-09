@@ -63,3 +63,36 @@ class SafetyKnowledgeArticleResponse(SafetyKnowledgeArticleBase):
 
     class Config:
         from_attributes = True
+
+
+class RegulationRadarRunSummary(BaseModel):
+    """法规雷达扫描批次摘要。"""
+
+    id: uuid.UUID
+    started_at: datetime
+    finished_at: datetime | None = None
+    status: str
+    trigger: str
+    dry_run: bool = False
+    sites_total: int = 0
+    sites_failed: int = 0
+    found_count: int = 0
+    new_count: int = 0
+    revised_count: int = 0
+    link_fixed_count: int = 0
+    skipped_count: int = 0
+    failed_count: int = 0
+    error_message: str | None = None
+    is_acknowledged: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+class RegulationRadarRunDetail(RegulationRadarRunSummary):
+    """法规雷达扫描批次详情（含全部明细）。"""
+
+    items: list[dict[str, Any]] | None = None
+
+    class Config:
+        from_attributes = True

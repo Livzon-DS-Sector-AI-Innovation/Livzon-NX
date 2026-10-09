@@ -15,6 +15,7 @@ from app.modules.safety.feishu.runtime_config import load_safety_feishu_runtime_
 logger = logging.getLogger(__name__)
 
 BITABLE_BASE = "https://open.feishu.cn/open-apis/bitable/v1"
+DRIVE_UPLOAD_URL = "https://open.feishu.cn/open-apis/drive/v1/medias/upload_all"
 
 
 class SafetyBitableClient:
@@ -135,6 +136,101 @@ class SafetyBitableClient:
                 record_id,
                 list(fields.keys()),
             )
+            return True
+
+    async def create_record(
+        self,
+        fields: dict[str, Any],
+        table_id: str | None = None,
+    ) -> str | None:
+        """新增一条记录，成功返回 record_id，失败返回 None。"""
+        if not fields:
+            return None
+        token = await self._token()
+        async with httpx.AsyncClient(timeout=15) as http:
+            resp = await http.post(
+                self._record_url(table_id),
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json; charset=utf-8",
+                },
+                json={"fields": fields},
+            )
+            data = resp.json()
+            if data.get("code") != 0:
+                logger.error(
+                    "Bitable create_record 失败: code=%s msg=%s fields=%s",
+                    data.get("code"),
+                    data.get("msg"),
+                    list(fields.keys()),
+                )
+                return None
+            record_id = (data.get("data") or {}).get("record", {}).get("record_id")
+            logger.info(
+                "Bitable create_record 成功: record_id=%s fields=%s",
+                record_id,
+                list(fields.keys()),
+            )
+            return str(record_id) if record_id else None
+
+    async def upload_media(
+        self,
+        file_bytes: bytes,
+        file_name: str,
+        parent_type: str = "bitable_file",
+    ) -> str | None:
+        """上传附件到多维表格，成功返回 file_token，失败返回 None。"""
+        if not file_bytes:
+            return None
+        token = await self._token()
+        async with httpx.AsyncClient(timeout=120) as http:
+            resp = await http.post(
+                DRIVE_UPLOAD_URL,
+                headers={"Authorization": f"Bearer {token}"},
+                data={
+                    "file_name": file_name,
+                    "parent_type": parent_type,
+                    "size": str(len(file_bytes)),
+                },
+                files={"file": (file_name, file_bytes)},
+            )
+            data = resp.json()
+            if data.get("code") != 0:
+                logger.error(
+                    "Bitable upload_media 失败: file=%s code=%s msg=%s",
+                    file_name,
+                    data.get("code"),
+                    data.get("msg"),
+                )
+                return None
+            file_token = (data.get("data") or {}).get("file_token")
+            logger.info(
+                "Bitable upload_media 成功: file=%s token=%s", file_name, file_token
+            )
+            return file_token
+
+    async def delete_record(
+        self,
+        record_id: str,
+        table_id: str | None = None,
+    ) -> bool:
+        """删除单条记录（用于回滚误写入的批次）。"""
+        token = await self._token()
+        async with httpx.AsyncClient(timeout=15) as http:
+            resp = await http.delete(
+                self._record_url(table_id, record_id),
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            data = resp.json()
+            if data.get("code") != 0:
+                logger.error(
+                    "Bitable delete_record 失败: record_id=%s code=%s msg=%s",
+                    record_id,
+                    data.get("code"),
+                    data.get("msg"),
+                )
+                return False
+            logger.info("Bitable delete_record 成功: record_id=%s", record_id)
             return True
 
     async def download_attachment(

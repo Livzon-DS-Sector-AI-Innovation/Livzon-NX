@@ -11,12 +11,14 @@ const mocks = vi.hoisted(() => ({
   testSafetyFeishuSettings: vi.fn(),
   getSafetyFeishuWsStatus: vi.fn(),
   restartSafetyFeishuWs: vi.fn(),
+  testRadarNotify: vi.fn(),
 }))
 
 vi.mock('@/actions/safety', () => ({
   getSafetyFeishuSettings: mocks.getSafetyFeishuSettings,
   saveSafetyFeishuSettings: mocks.saveSafetyFeishuSettings,
   testSafetyFeishuSettings: mocks.testSafetyFeishuSettings,
+  testRadarNotify: mocks.testRadarNotify,
   getSafetyFeishuWsStatus: mocks.getSafetyFeishuWsStatus,
   restartSafetyFeishuWs: mocks.restartSafetyFeishuWs,
 }))
@@ -35,6 +37,7 @@ vi.mock('@ant-design/icons', () => {
     ApiOutlined: Icon,
     SecurityScanOutlined: Icon,
     SaveOutlined: Icon,
+    SendOutlined: Icon,
   }
 })
 
@@ -86,6 +89,14 @@ vi.mock('antd', async () => {
     App: { useApp: () => ({ message: mocks.message }) },
     Button,
     Card: Box,
+    Tabs: ({ items }: { items?: { key: string; children?: ReactNode }[] }) =>
+      createElement(
+        'div',
+        null,
+        ...((items ?? []) as { key: string; children?: ReactNode }[]).map((item) =>
+          createElement('div', { key: item.key }, item.children)
+        ),
+      ),
     Input,
     Space: Object.assign(Box, { Compact: Box }),
     Switch,
@@ -163,6 +174,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.getSafetyFeishuSettings.mockResolvedValue({ code: 200, data: settingsDetail })
   mocks.getSafetyFeishuWsStatus.mockResolvedValue({ code: 200, data: { connected: true } })
+  mocks.saveSafetyFeishuSettings.mockResolvedValue({ code: 200, data: settingsDetail })
+  mocks.testRadarNotify.mockResolvedValue({ code: 200, data: { sent: 2, errors: [] } })
 })
 
 afterEach(() => {
@@ -337,5 +350,80 @@ describe('FeishuSettingsPage interactions', () => {
     expect(mocks.saveSafetyFeishuSettings).toHaveBeenCalledWith(
       expect.objectContaining({ knowledge_app_token: 'bascnNew', is_enabled: false })
     )
+  })
+
+  it('keeps radar notify targets in the save payload', async () => {
+    rendered = renderPage({ initialSettings: settingsDetail, initialWsStatus: null })
+    await settle()
+
+    setInput(rendered.container, '飞书群 chat_id', 'oc_group1, oc_group2')
+    setInput(rendered.container, '个人 open_id', 'ou_group9')
+    const switches = Array.from(
+      rendered.container.querySelectorAll('input[type="checkbox"]')
+    ) as HTMLInputElement[]
+    // 页面共两个开关：0=启用飞书集成，1=启用扫描结果通知
+    const notifySwitch = switches[1]
+    act(() => {
+      notifySwitch.checked = true
+      notifySwitch.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await settle()
+
+    act(() => findButton(rendered!.container, '保存配置')?.click())
+    await settle()
+
+    const payload = mocks.saveSafetyFeishuSettings.mock.calls.at(-1)?.[0] as {
+      radar_notify_enabled?: boolean
+      radar_notify_chat_ids?: string[]
+      radar_notify_user_ids?: string[]
+    }
+    expect(payload.radar_notify_enabled).toBe(true)
+    expect(payload.radar_notify_chat_ids).toEqual(['oc_group1', 'oc_group2'])
+    expect(payload.radar_notify_user_ids).toEqual(['ou_group9'])
+  })
+
+  it('sends a radar notify test after saving the current targets', async () => {
+    rendered = renderPage({ initialSettings: settingsDetail, initialWsStatus: null })
+    await settle()
+
+    act(() => findButton(rendered!.container, '发送测试通知')?.click())
+    await settle()
+
+    expect(mocks.saveSafetyFeishuSettings).toHaveBeenCalled()
+    expect(mocks.testRadarNotify).toHaveBeenCalled()
+    expect(mocks.message.success).toHaveBeenCalledWith('测试通知已发送（2 个目标）')
+
+    // 无有效目标：sent=0 时展示后端错误明细
+    mocks.testRadarNotify.mockResolvedValueOnce({ code: 200, data: { sent: 0, errors: ['未配置通知目标'] } })
+    act(() => findButton(rendered!.container, '发送测试通知')?.click())
+    await settle()
+    expect(mocks.message.error).toHaveBeenCalledWith('未配置通知目标')
+
+    // 接口失败分支
+    mocks.testRadarNotify.mockResolvedValueOnce({ code: 500, message: '飞书不可用' })
+    act(() => findButton(rendered!.container, '发送测试通知')?.click())
+    await settle()
+    expect(mocks.message.error).toHaveBeenCalledWith('飞书不可用')
+
+    // 保存失败时不再发测试通知
+    mocks.saveSafetyFeishuSettings.mockResolvedValueOnce({ code: 500, message: '凭证无效' })
+    act(() => findButton(rendered!.container, '发送测试通知')?.click())
+    await settle()
+    expect(mocks.message.error).toHaveBeenCalledWith('凭证无效')
+  })
+
+  it('requires app id before sending a radar notify test', async () => {
+    rendered = renderPage({
+      initialSettings: { ...settingsDetail, app_id: '' },
+      initialWsStatus: null,
+    })
+    await settle()
+
+    setInput(rendered.container, 'App ID', '')
+    act(() => findButton(rendered!.container, '发送测试通知')?.click())
+    await settle()
+
+    expect(mocks.testRadarNotify).not.toHaveBeenCalled()
+    expect(mocks.message.warning).toHaveBeenCalledWith('请先填写飞书应用 App ID')
   })
 })

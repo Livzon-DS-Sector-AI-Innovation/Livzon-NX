@@ -12,6 +12,8 @@ from app.core.database import get_db
 from app.core.deps import CurrentUser, get_current_user
 from app.core.response import ApiResponse
 from app.modules.safety.schemas import (
+    RegulationRadarRunDetail,
+    RegulationRadarRunSummary,
     SafetyKnowledgeArticleCreate,
     SafetyKnowledgeArticleResponse,
     SafetyKnowledgeArticleUpdate,
@@ -19,6 +21,7 @@ from app.modules.safety.schemas import (
 from app.modules.safety.service import (
     KnowledgeService,
     knowledge_feishu,
+    regulation_radar,
 )
 
 knowledge_router = APIRouter()
@@ -321,3 +324,99 @@ async def preview_knowledge_local_attachment(
         inline=inline,
         content_type=content_type if inline else "application/octet-stream",
     )
+
+
+# ── EHS 法规雷达 ──
+
+
+def _run_summary(model: Any) -> RegulationRadarRunSummary:
+    return RegulationRadarRunSummary.model_validate(model)
+
+
+@knowledge_router.post(
+    "/knowledge-articles/radar/run",
+    response_model=ApiResponse,
+    summary="手动执行法规雷达扫描",
+)
+async def run_regulation_radar(
+    dry_run: bool = Query(False, description="干跑：只比对不写入飞书表"),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> Any:
+    """扫描官方栏目页，发现新法规与已修订法规。dry_run 只出报告不写入。"""
+    result = await regulation_radar.run_radar(
+        db, dry_run=dry_run, trigger="manual"
+    )
+    return ApiResponse(data=result)
+
+
+@knowledge_router.get(
+    "/knowledge-articles/radar/runs",
+    response_model=ApiResponse,
+    summary="查询法规雷达扫描批次",
+)
+async def list_regulation_radar_runs(
+    limit: int = Query(10, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> Any:
+    """返回最近的扫描批次（新的在前）。"""
+    from sqlalchemy import select
+
+    from app.modules.safety.models import RegulationRadarRun
+
+    rows = (
+        await db.execute(
+            select(RegulationRadarRun)
+            .where(RegulationRadarRun.is_deleted.is_(False))
+            .order_by(RegulationRadarRun.started_at.desc())
+            .limit(limit)
+        )
+    ).scalars().all()
+    return ApiResponse(
+        data=[_run_summary(r).model_dump(mode="json") for r in rows],
+        meta={"total": len(rows)},
+    )
+
+
+@knowledge_router.get(
+    "/knowledge-articles/radar/runs/{run_id}",
+    response_model=ApiResponse,
+    summary="查询法规雷达扫描批次详情",
+)
+async def get_regulation_radar_run(
+    run_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> Any:
+    from sqlalchemy import select
+
+    from app.modules.safety.models import RegulationRadarRun
+
+    row = (
+        await db.execute(
+            select(RegulationRadarRun).where(
+                RegulationRadarRun.id == run_id,
+                RegulationRadarRun.is_deleted.is_(False),
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return ApiResponse(code=404, message="扫描批次不存在")
+    detail = RegulationRadarRunDetail.model_validate(row)
+    return ApiResponse(data=detail.model_dump(mode="json"))
+
+
+
+@knowledge_router.post(
+    "/knowledge-articles/radar/notify/test",
+    response_model=ApiResponse,
+    summary="测试法规雷达通知发送",
+)
+async def test_regulation_radar_notify(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> Any:
+    """向已配置的群/个人发送一条测试卡片，验证通知目标配置。"""
+    result = await regulation_radar.send_test_notification(db)
+    return ApiResponse(data=result)

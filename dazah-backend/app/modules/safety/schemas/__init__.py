@@ -180,6 +180,8 @@ __all__ = [
     "SafetyFeishuSettingsTestResult",
     "SafetyKnowledgeArticleBase",
     "SafetyKnowledgeArticleCreate",
+    "RegulationRadarRunDetail",
+    "RegulationRadarRunSummary",
     "SafetyKnowledgeArticleResponse",
     "SafetyKnowledgeArticleUpdate",
     "SafetyTrainingBase",
@@ -395,6 +397,8 @@ from app.modules.safety.schemas.hazards import (
     VerifyLevelRequest,
 )
 from app.modules.safety.schemas.knowledge import (
+    RegulationRadarRunDetail,
+    RegulationRadarRunSummary,
     SafetyKnowledgeArticleBase,
     SafetyKnowledgeArticleCreate,
     SafetyKnowledgeArticleResponse,

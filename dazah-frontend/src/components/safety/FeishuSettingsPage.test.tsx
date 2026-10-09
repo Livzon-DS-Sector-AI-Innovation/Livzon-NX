@@ -12,6 +12,7 @@ vi.mock('@/actions/safety', () => ({
   getSafetyFeishuSettings: vi.fn(async () => ({ code: 200, data: null })),
   saveSafetyFeishuSettings: vi.fn(async () => ({ code: 200, data: null })),
   testSafetyFeishuSettings: vi.fn(async () => ({ code: 200, data: null })),
+  testRadarNotify: vi.fn(async () => ({ code: 200, data: { sent: 1 } })),
   getSafetyFeishuWsStatus: vi.fn(async () => ({ code: 200, data: null })),
   restartSafetyFeishuWs: vi.fn(async () => ({ code: 200, data: null })),
 }))
@@ -21,6 +22,7 @@ vi.mock('@ant-design/icons', () => {
   return {
     ApiOutlined: Icon,
     ArrowUpOutlined: Icon,
+    SendOutlined: Icon,
     ReloadOutlined: Icon,
     SaveOutlined: Icon,
     SecurityScanOutlined: Icon,
@@ -54,6 +56,14 @@ vi.mock('antd', async () => {
     App: { useApp: () => ({ message: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }) },
     Button: Box,
     Card: Box,
+    Tabs: ({ items }: { items?: { key: string; children?: ReactNode }[] }) =>
+      createElement(
+        'div',
+        null,
+        ...((items ?? []) as { key: string; children?: ReactNode }[]).map((item) =>
+          createElement('div', { key: item.key }, item.children)
+        ),
+      ),
     Input: Object.assign(Box, { Password: Box }),
     Modal: Box,
     Space: Object.assign(Box, { Compact: Box }),

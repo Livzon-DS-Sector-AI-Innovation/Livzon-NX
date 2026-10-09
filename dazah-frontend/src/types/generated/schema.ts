@@ -23403,6 +23403,83 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/safety/knowledge-articles/radar/notify/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 测试法规雷达通知发送
+         * @description 向已配置的群/个人发送一条测试卡片，验证通知目标配置。
+         */
+        post: operations["test_regulation_radar_notify_api_v1_safety_knowledge_articles_radar_notify_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/knowledge-articles/radar/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 手动执行法规雷达扫描
+         * @description 扫描官方栏目页，发现新法规与已修订法规。dry_run 只出报告不写入。
+         */
+        post: operations["run_regulation_radar_api_v1_safety_knowledge_articles_radar_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/knowledge-articles/radar/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 查询法规雷达扫描批次
+         * @description 返回最近的扫描批次（新的在前）。
+         */
+        get: operations["list_regulation_radar_runs_api_v1_safety_knowledge_articles_radar_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/knowledge-articles/radar/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询法规雷达扫描批次详情 */
+        get: operations["get_regulation_radar_run_api_v1_safety_knowledge_articles_radar_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/safety/knowledge-articles/{article_id}": {
         parameters: {
             query?: never;
@@ -53559,6 +53636,15 @@ export interface components {
             last_test_status?: string | null;
             /** Last Tested At */
             last_tested_at?: string | null;
+            /** Radar Notify Chat Ids */
+            radar_notify_chat_ids?: string[];
+            /**
+             * Radar Notify Enabled
+             * @default false
+             */
+            radar_notify_enabled: boolean;
+            /** Radar Notify User Ids */
+            radar_notify_user_ids?: string[];
         };
         /**
          * SafetyFeishuSettingsTestResult
@@ -58581,6 +58667,15 @@ export interface components {
             knowledge_app_token?: string | null;
             /** Knowledge Table Id */
             knowledge_table_id?: string | null;
+            /** Radar Notify Chat Ids */
+            radar_notify_chat_ids?: string[];
+            /**
+             * Radar Notify Enabled
+             * @default false
+             */
+            radar_notify_enabled: boolean;
+            /** Radar Notify User Ids */
+            radar_notify_user_ids?: string[];
         };
         /** UpdateSolidMaterialInspectionRequest */
         UpdateSolidMaterialInspectionRequest: {
@@ -122282,6 +122377,137 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_regulation_radar_notify_api_v1_safety_knowledge_articles_radar_notify_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_regulation_radar_api_v1_safety_knowledge_articles_radar_run_post: {
+        parameters: {
+            query?: {
+                /** @description 干跑：只比对不写入飞书表 */
+                dry_run?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_regulation_radar_runs_api_v1_safety_knowledge_articles_radar_runs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_regulation_radar_run_api_v1_safety_knowledge_articles_radar_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
             cookie?: {
                 auth_token?: string | null;
             };

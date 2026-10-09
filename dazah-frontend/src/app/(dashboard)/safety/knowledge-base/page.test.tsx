@@ -24,6 +24,9 @@ const mocks = vi.hoisted(() => {
     updateKnowledgeArticle: vi.fn(),
     deleteKnowledgeArticle: vi.fn(),
     syncSafetyKnowledge: vi.fn(),
+    getRadarRuns: vi.fn(),
+    getRadarRunDetail: vi.fn(),
+    runRadarScan: vi.fn(),
     store: {
       articles: [] as Record<string, unknown>[],
       articleTotal: 0,
@@ -47,7 +50,23 @@ vi.mock('@/actions/safety', () => ({
   updateKnowledgeArticle: mocks.updateKnowledgeArticle,
   deleteKnowledgeArticle: mocks.deleteKnowledgeArticle,
   syncSafetyKnowledge: mocks.syncSafetyKnowledge,
+  getRadarRuns: mocks.getRadarRuns,
+  getRadarRunDetail: mocks.getRadarRunDetail,
+  runRadarScan: mocks.runRadarScan,
 }))
+
+vi.mock('@/components/shared/PlatformNotice', async () => {
+  const { createElement } = await import('react')
+  return {
+    default: ({ title, action, showRulesLink }: Record<string, unknown>) =>
+      createElement(
+        'div',
+        { 'data-notice': 'true', 'data-show-rules-link': String(showRulesLink) },
+        title as ReactNode,
+        action as ReactNode
+      ),
+  }
+})
 
 vi.mock('@/stores/safety', () => ({ useSafetyStore: () => mocks.store }))
 
@@ -75,12 +94,14 @@ vi.mock('antd', async () => {
   const Box = ({ children, title, extra }: AnyProps) =>
     createElement('div', null, title as ReactNode, extra as ReactNode, children as ReactNode)
   const Text = ({ children }: AnyProps) => createElement('span', null, children as ReactNode)
-  const Button = ({ children, onClick, disabled }: AnyProps) =>
-    createElement(
-      'button',
-      { type: 'button', disabled: Boolean(disabled), onClick: onClick as never },
-      children as ReactNode
-    )
+  const Button = ({ children, onClick, disabled, href }: AnyProps) =>
+    href
+      ? createElement('a', { href: href as string }, children as ReactNode)
+      : createElement(
+          'button',
+          { type: 'button', disabled: Boolean(disabled), onClick: onClick as never },
+          children as ReactNode
+        )
   const Input = Object.assign(
     ({ value, onChange, onPressEnter, placeholder }: AnyProps) =>
       createElement('input', {
@@ -288,6 +309,12 @@ let openSpy: ReturnType<typeof vi.spyOn>
 
 beforeEach(() => {
   mocks.getKnowledgeArticles.mockResolvedValue({ code: 200, data: [article()], meta: { total: 1 } })
+  mocks.getRadarRuns.mockResolvedValue({ code: 200, data: [] })
+  mocks.getRadarRunDetail.mockResolvedValue({ code: 200, data: { id: 'run-1', items: [] } })
+  mocks.runRadarScan.mockResolvedValue({
+    code: 200,
+    data: { status: 'success', new_count: 0, revised_count: 0 },
+  })
   mocks.store.articles = [article()]
   mocks.store.articleTotal = 1
   openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
@@ -552,5 +579,130 @@ describe('safety knowledge base page', () => {
       await retryConfig.onOk()
     })
     expect(mocks.message.error).toHaveBeenCalledWith('被引用')
+  })
+})
+
+const radarRun = {
+  id: 'run-1',
+  status: 'success',
+  started_at: '2026-10-06T08:00:00.000Z',
+  new_count: 2,
+  revised_count: 1,
+  failed_count: 0,
+  dry_run: false,
+}
+
+function radarNotice(container: HTMLElement): HTMLElement | null {
+  return container.querySelector('[data-notice="true"]')
+}
+
+describe('regulation radar banner', () => {
+  it('renders the latest non-dry-run summary without the rules link', async () => {
+    mocks.getRadarRuns.mockResolvedValue({
+      code: 200,
+      data: [radarRun, { ...radarRun, id: 'run-dry', dry_run: true }],
+    })
+    rendered = renderPage()
+    await settle()
+
+    expect(mocks.getRadarRuns).toHaveBeenCalledWith(10)
+    const notice = radarNotice(rendered.container)
+    expect(notice).not.toBeNull()
+    expect(notice?.getAttribute('data-show-rules-link')).toBe('false')
+    expect(notice?.textContent).toContain('法规雷达')
+    expect(notice?.textContent).toContain('发现新法规 2 部、已修订 1 部')
+  })
+
+  it('hides the banner when only dry-run history exists', async () => {
+    mocks.getRadarRuns.mockResolvedValue({
+      code: 200,
+      data: [{ ...radarRun, id: 'run-dry', dry_run: true }],
+    })
+    rendered = renderPage()
+    await settle()
+
+    expect(radarNotice(rendered.container)).toBeNull()
+  })
+
+  it('runs a scan through the confirm dialog and refreshes data', async () => {
+    mocks.getRadarRuns.mockResolvedValue({ code: 200, data: [radarRun] })
+    mocks.runRadarScan.mockResolvedValue({
+      code: 200,
+      data: { status: 'success', new_count: 3, revised_count: 0 },
+    })
+    rendered = renderPage()
+    await settle()
+
+    act(() => findButton(rendered!.container, '立即扫描')?.click())
+    const confirmConfig = mocks.modal.confirm.mock.calls.at(-1)?.[0] as {
+      title: string
+      onOk: () => Promise<void>
+    }
+    expect(confirmConfig.title).toContain('立即扫描法规动态')
+
+    await act(async () => {
+      await confirmConfig.onOk()
+    })
+    expect(mocks.runRadarScan).toHaveBeenCalledWith(false)
+    expect(mocks.message.success).toHaveBeenCalledWith('扫描完成（success）：新增 3 部、修订 0 部')
+    // 扫描后刷新批次与列表
+    expect(mocks.getRadarRuns.mock.calls.length).toBeGreaterThan(1)
+  })
+
+  it('reports scan failures with the backend message', async () => {
+    mocks.getRadarRuns.mockResolvedValue({ code: 200, data: [radarRun] })
+    mocks.runRadarScan.mockResolvedValue({ code: 500, message: '抓取源站失败' })
+    rendered = renderPage()
+    await settle()
+
+    act(() => findButton(rendered!.container, '立即扫描')?.click())
+    const confirmConfig = mocks.modal.confirm.mock.calls.at(-1)?.[0] as {
+      onOk: () => Promise<void>
+    }
+    await act(async () => {
+      await confirmConfig.onOk()
+    })
+    expect(mocks.message.error).toHaveBeenCalledWith('抓取源站失败')
+  })
+
+  it('opens the run detail with action tags, handles empty and failure results', async () => {
+    mocks.getRadarRuns.mockResolvedValue({ code: 200, data: [radarRun] })
+    mocks.getRadarRunDetail.mockResolvedValueOnce({
+      code: 200,
+      data: {
+        ...radarRun,
+        items: [
+          { action: 'new', name: '新法规A', url: 'https://example.com/a' },
+          { action: 'revised', name: '法规B', old_date: '2020-01-01', new_date: '2026-01-01' },
+          { action: 'obsolete', name: '法规C', reason: '已被替代' },
+        ],
+      },
+    })
+    rendered = renderPage()
+    await settle()
+
+    act(() => findButton(rendered!.container, '查看明细')?.click())
+    await settle()
+    expect(mocks.getRadarRunDetail).toHaveBeenCalledWith('run-1')
+    const markup = rendered.container.innerHTML
+    expect(markup).toContain('新增')
+    expect(markup).toContain('已修订')
+    expect(markup).toContain('已废止')
+    expect(markup).toContain('https://example.com/a')
+    expect(markup).toContain('2020-01-01 → 2026-01-01')
+    expect(markup).toContain('已被替代')
+
+    mocks.getRadarRunDetail.mockResolvedValueOnce({
+      code: 200,
+      data: { ...radarRun, items: [] },
+    })
+    act(() => findButton(rendered!.container, '查看明细')?.click())
+    await settle()
+    expect(rendered.container.innerHTML).toContain('本批次无明细')
+
+    mocks.getRadarRunDetail.mockResolvedValueOnce({ code: 500, message: '明细读取失败' })
+    act(() => findButton(rendered!.container, '查看明细')?.click())
+    await settle()
+    expect(mocks.message.error).toHaveBeenCalledWith('明细读取失败')
   })
 })

@@ -1378,6 +1378,64 @@ export async function deleteKnowledgeAttachment(id: string, token: string) {
   return res
 }
 
+const RADAR_PAGE_KEY = 'safety:regulation-info:knowledge-base'
+
+export async function getRadarRuns(limit = 10) {
+  const res = await fetchApi<Record<string, unknown>[]>(
+    `/safety/knowledge-articles/radar/runs?limit=${limit}`,
+    { headers: { 'X-Dazah-Page-Key': RADAR_PAGE_KEY } },
+  )
+  return res
+}
+
+export interface RadarRunDetail {
+  id: string
+  status: string
+  started_at: string
+  items?: {
+    action: string
+    name: string
+    date?: string
+    old_date?: string
+    new_date?: string
+    url?: string
+    site?: string
+    reason?: string
+    new_standard_no?: string
+  }[] | null
+  error_message?: string | null
+}
+
+export async function testRadarNotify() {
+  const res = await fetchApi<{ sent: number; errors?: string[] }>(
+    '/safety/knowledge-articles/radar/notify/test',
+    {
+      method: 'POST',
+      headers: { 'X-Dazah-Page-Key': 'safety:system-config:safety-feishu-settings' },
+    },
+  )
+  return res
+}
+
+export async function getRadarRunDetail(runId: string) {
+  const res = await fetchApi<RadarRunDetail>(
+    `/safety/knowledge-articles/radar/runs/${runId}`,
+    { headers: { 'X-Dazah-Page-Key': RADAR_PAGE_KEY } },
+  )
+  return res
+}
+
+export async function runRadarScan(dryRun = false) {
+  const res = await fetchApi<Record<string, unknown>>(
+    `/safety/knowledge-articles/radar/run?dry_run=${dryRun}`,
+    {
+      method: 'POST',
+      headers: { 'X-Dazah-Page-Key': RADAR_PAGE_KEY },
+    },
+  )
+  return res
+}
+
 export async function syncSafetyKnowledge() {
   const res = await fetchApi<Record<string, number | string>>('/safety/knowledge-articles/feishu/sync', {
     method: 'POST',
