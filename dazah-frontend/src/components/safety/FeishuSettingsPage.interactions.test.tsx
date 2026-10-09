@@ -11,12 +11,14 @@ const mocks = vi.hoisted(() => ({
   testSafetyFeishuSettings: vi.fn(),
   getSafetyFeishuWsStatus: vi.fn(),
   restartSafetyFeishuWs: vi.fn(),
+  testRadarNotify: vi.fn(),
 }))
 
 vi.mock('@/actions/safety', () => ({
   getSafetyFeishuSettings: mocks.getSafetyFeishuSettings,
   saveSafetyFeishuSettings: mocks.saveSafetyFeishuSettings,
   testSafetyFeishuSettings: mocks.testSafetyFeishuSettings,
+  testRadarNotify: mocks.testRadarNotify,
   getSafetyFeishuWsStatus: mocks.getSafetyFeishuWsStatus,
   restartSafetyFeishuWs: mocks.restartSafetyFeishuWs,
 }))
@@ -35,6 +37,7 @@ vi.mock('@ant-design/icons', () => {
     ApiOutlined: Icon,
     SecurityScanOutlined: Icon,
     SaveOutlined: Icon,
+    SendOutlined: Icon,
   }
 })
 
@@ -86,6 +89,14 @@ vi.mock('antd', async () => {
     App: { useApp: () => ({ message: mocks.message }) },
     Button,
     Card: Box,
+    Tabs: ({ items }: { items?: { key: string; children?: ReactNode }[] }) =>
+      createElement(
+        'div',
+        null,
+        ...((items ?? []) as { key: string; children?: ReactNode }[]).map((item) =>
+          createElement('div', { key: item.key }, item.children)
+        ),
+      ),
     Input,
     Space: Object.assign(Box, { Compact: Box }),
     Switch,

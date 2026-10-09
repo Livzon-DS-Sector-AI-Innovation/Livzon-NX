@@ -290,6 +290,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_registry.register_generator(ResumeFolderScanner())
     scheduler_registry.register_generator(MailFetchScanner())
 
+    # ── 安全模块法规雷达（每周一 08:00） ──
+    try:
+        from app.modules.safety.scheduled import SafetyRegulationRadarGenerator
+
+        scheduler_registry.register_generator(SafetyRegulationRadarGenerator())
+    except Exception:
+        logger.exception("注册安全模块法规雷达调度任务失败")
+
     # ── 法规跟踪三阶段流水线（00:10 抓取 / 02:00 AI 分析 / 10:00 推送） ──
     try:
         from app.modules.regulatory_tracker.scheduled import (

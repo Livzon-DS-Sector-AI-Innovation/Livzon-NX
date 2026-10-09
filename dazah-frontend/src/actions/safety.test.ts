@@ -204,7 +204,8 @@ describe('safety feishu settings actions', () => {
     const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { app_id: 'cli_x' } }))
     vi.stubGlobal('fetch', fetchMock)
 
-    const payload = { app_id: 'cli_x', app_secret: 'secret', is_enabled: true }
+    const payload = { app_id: 'cli_x', app_secret: 'secret',
+      radar_notify_enabled: false, is_enabled: true }
     await saveSafetyFeishuSettings(payload)
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/safety/feishu-settings/app`,

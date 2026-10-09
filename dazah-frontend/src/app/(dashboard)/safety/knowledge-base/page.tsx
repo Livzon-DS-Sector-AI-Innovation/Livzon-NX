@@ -31,6 +31,7 @@ import {
   FilePdfOutlined,
   LinkOutlined,
 } from '@ant-design/icons'
+import PlatformNotice from '@/components/shared/PlatformNotice'
 import { useSafetyStore } from '@/stores/safety'
 import {
   uploadKnowledgeAttachments,
@@ -41,7 +42,11 @@ import {
   updateKnowledgeArticle,
   deleteKnowledgeArticle,
   syncSafetyKnowledge,
+  getRadarRuns,
+  getRadarRunDetail,
+  runRadarScan,
 } from '@/actions/safety'
+import type { RadarRunDetail } from '@/actions/safety'
 import type {
   SafetyKnowledgeArticle,
   SafetyKnowledgeArticleFormData,
@@ -148,12 +153,40 @@ function AttachmentActions({ article }: { article: SafetyKnowledgeArticle }) {
   )
 }
 
+interface RadarRunSummary {
+  id: string
+  started_at: string
+  finished_at?: string | null
+  status: string
+  dry_run: boolean
+  new_count: number
+  revised_count: number
+  link_fixed_count: number
+  failed_count: number
+  is_acknowledged: boolean
+  items?: {
+    action: string
+    name: string
+    date?: string
+    old_date?: string
+    new_date?: string
+    url?: string
+    site?: string
+  }[] | null
+  error_message?: string | null
+}
+
 export default function KnowledgeBasePage() {
   const { message, modal } = App.useApp()
   const [form] = Form.useForm()
   const [editForm] = Form.useForm()
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [radarRun, setRadarRun] = useState<RadarRunSummary | null>(null)
+  const [radarDetail, setRadarDetail] = useState(false)
+  const [radarRunning, setRadarRunning] = useState(false)
+  const [radarItems, setRadarItems] = useState<RadarRunDetail['items']>([])
+  const [radarDetailLoading, setRadarDetailLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
   const [detailVisible, setDetailVisible] = useState(false)
   const [editingRecord, setEditingRecord] = useState<SafetyKnowledgeArticle | null>(null)
@@ -199,6 +232,56 @@ export default function KnowledgeBasePage() {
     // 关键词仅在点击查询时生效，避免输入过程触发请求（loadData 依赖刻意省略）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [articleQueryParams.page, articleQueryParams.page_size, regulationStatusFilter])
+
+  const openRadarDetail = async () => {
+    if (!radarRun) return
+    setRadarDetail(true)
+    setRadarDetailLoading(true)
+    try {
+      const res = await getRadarRunDetail(radarRun.id)
+      if (res.code === 200 && res.data) {
+        setRadarItems(res.data.items ?? [])
+      } else {
+        message.error(res.message || '获取明细失败')
+      }
+    } finally {
+      setRadarDetailLoading(false)
+    }
+  }
+
+  const loadRadarRuns = async () => {
+    const res = await getRadarRuns(10)
+    if (res.code === 200 && Array.isArray(res.data)) {
+      const runs = res.data as unknown as RadarRunSummary[]
+      setRadarRun(runs.find((r) => !r.dry_run) ?? null)
+    }
+  }
+
+  useEffect(() => {
+    void loadRadarRuns()
+  }, [])
+
+  const handleRunRadar = async () => {
+    modal.confirm({
+      title: '立即扫描法规动态？',
+      content: '将抓取生态环境部、应急管理部、市场监管总局等官方栏目页，发现新法规后自动写入飞书法规库。',
+      onOk: async () => {
+        setRadarRunning(true)
+        try {
+          const res = await runRadarScan(false)
+          if (res.code === 200 && res.data) {
+            const d = res.data as { new_count?: number; revised_count?: number; status?: string }
+            message.success(`扫描完成（${d.status}）：新增 ${d.new_count ?? 0} 部、修订 ${d.revised_count ?? 0} 部`)
+            await Promise.all([loadRadarRuns(), loadData()])
+          } else {
+            message.error(res.message || '扫描失败')
+          }
+        } finally {
+          setRadarRunning(false)
+        }
+      },
+    })
+  }
 
   const handleSearch = () => {
     setArticleQueryParams({ page: 1 })
@@ -522,6 +605,24 @@ export default function KnowledgeBasePage() {
 
   return (
     <div className="p-6">
+      {radarRun && (
+        <PlatformNotice
+          type="info"
+          style={{ marginBottom: 16 }}
+          title={
+            `🔔 法规雷达 · 上次扫描 ${radarRun.started_at.slice(5, 16).replace('T', ' ')}：` +
+            `发现新法规 ${radarRun.new_count} 部、已修订 ${radarRun.revised_count} 部` +
+            (radarRun.failed_count ? `、失败 ${radarRun.failed_count} 条` : '')
+          }
+          showRulesLink={false}
+          action={
+            <Space size={4}>
+              <Button type="link" size="small" onClick={() => void openRadarDetail()}>查看明细</Button>
+              <Button type="link" size="small" onClick={() => void handleRunRadar()} loading={radarRunning}>立即扫描</Button>
+            </Space>
+          }
+        />
+      )}
       <Card
         title="安全知识库（EHS 法规数据库）"
         extra={
@@ -605,6 +706,40 @@ export default function KnowledgeBasePage() {
               <div className="whitespace-pre-wrap">{detailRecord.notes || '-'}</div>
             </Descriptions.Item>
           </Descriptions>
+        )}
+      </Modal>
+
+      <Modal
+        title={`法规雷达扫描明细 · ${radarRun?.started_at.slice(0, 10) ?? ''}`}
+        open={radarDetail}
+        width={760}
+        onCancel={() => setRadarDetail(false)}
+        footer={<Button onClick={() => setRadarDetail(false)}>关闭</Button>}
+      >
+        {radarDetailLoading ? (
+          <Text type="secondary">加载中…</Text>
+        ) : (radarItems ?? []).length === 0 ? (
+          <Text type="secondary">本批次无明细</Text>
+        ) : (
+          <Space direction="vertical" size={10} style={{ display: 'flex' }}>
+            {(radarItems ?? []).map((it, idx) => (
+              <div key={`${it.action}-${idx}`}>
+                <Tag color={it.action === 'new' ? 'green' : it.action === 'revised' || it.action === 'obsolete' ? 'orange' : 'default'}>
+                  {it.action === 'new' ? '新增' : it.action === 'revised' ? '已修订' : it.action === 'obsolete' ? '已废止' : it.action}
+                </Tag>
+                {it.name}
+                {it.url ? (
+                  <Button type="link" size="small" href={it.url} target="_blank" rel="noopener noreferrer">
+                    原文
+                  </Button>
+                ) : null}
+                {it.reason ? <Text type="secondary">{it.reason}</Text> : null}
+                {it.action === 'revised' && (it.old_date || it.new_date) ? (
+                  <Text type="secondary">　{it.old_date ?? ''} → {it.new_date ?? ''}</Text>
+                ) : null}
+              </div>
+            ))}
+          </Space>
         )}
       </Modal>
     </div>

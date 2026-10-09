@@ -10,6 +10,8 @@ export interface PlatformNoticeProps extends AlertProps {
   /** A page may reuse an existing rule dialog. This callback must not write data. */
   onLearnRules?: () => void
   rulesDisabled?: boolean
+  /** 数据提醒类提示可关闭「了解访问规则」入口；默认保持原行为 */
+  showRulesLink?: boolean
 }
 
 /** Platform-wide notices keep the summary visible and open complete details on demand. */
@@ -23,6 +25,7 @@ export default function PlatformNotice({
   style,
   onLearnRules,
   rulesDisabled = false,
+  showRulesLink = true,
   ...alertProps
 }: PlatformNoticeProps) {
   const [rulesOpen, setRulesOpen] = useState(false)
@@ -42,10 +45,12 @@ export default function PlatformNotice({
       title={<span className={styles.summary}>{heading}</span>}
       action={<div className={styles.actions}>
         {action}
-        <Button type="link" className={styles.rulesButton} style={{ color: colors.color }}
-          disabled={rulesDisabled} onClick={onLearnRules || (() => setRulesOpen(true))}>
-          了解访问规则 <ArrowUpOutlined rotate={45} aria-hidden />
-        </Button>
+        {showRulesLink && (
+          <Button type="link" className={styles.rulesButton} style={{ color: colors.color }}
+            disabled={rulesDisabled} onClick={onLearnRules || (() => setRulesOpen(true))}>
+            了解访问规则 <ArrowUpOutlined rotate={45} aria-hidden />
+          </Button>
+        )}
       </div>} />
     <Modal title="访问规则与提示说明" open={rulesOpen} centered width={640} destroyOnHidden
       onCancel={() => setRulesOpen(false)}
