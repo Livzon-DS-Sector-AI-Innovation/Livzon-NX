@@ -15,12 +15,16 @@ import {
   getChecks,
   getHazard,
   getKnowledgeArticles,
+  getRadarRunDetail,
+  getRadarRuns,
   getSafetyFeishuSettings,
   getSafetyFeishuWsStatus,
   restartSafetyFeishuWs,
+  runRadarScan,
   saveSafetyFeishuSettings,
   submitCheck,
   syncSafetyKnowledge,
+  testRadarNotify,
   testSafetyFeishuSettings,
   uploadKnowledgeAttachments,
 } from './safety'
@@ -245,6 +249,73 @@ describe('safety feishu settings actions', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/safety/feishu/ws/restart`,
       expect.objectContaining({ method: 'POST' }),
+    )
+  })
+})
+
+describe('regulation radar actions', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('lists radar runs with the knowledge page key and limit', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getRadarRuns(5)
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/safety/knowledge-articles/radar/runs?limit=5`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'X-Dazah-Page-Key': KNOWLEDGE_PAGE_KEY }),
+      }),
+    )
+  })
+
+  it('loads a single radar run detail', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { id: 'run-1' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getRadarRunDetail('run-1')
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/safety/knowledge-articles/radar/runs/run-1`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'X-Dazah-Page-Key': KNOWLEDGE_PAGE_KEY }),
+      }),
+    )
+  })
+
+  it('starts a radar scan and forwards the dry-run flag', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { status: 'success' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await runRadarScan(true)
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/safety/knowledge-articles/radar/run?dry_run=true`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'X-Dazah-Page-Key': KNOWLEDGE_PAGE_KEY }),
+      }),
+    )
+
+    await runRadarScan()
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/safety/knowledge-articles/radar/run?dry_run=false`,
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
+  it('sends the radar notify test with the settings page key', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { sent: 1 } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await testRadarNotify()
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/safety/knowledge-articles/radar/notify/test`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'X-Dazah-Page-Key': SETTINGS_PAGE_KEY }),
+      }),
     )
   })
 })
