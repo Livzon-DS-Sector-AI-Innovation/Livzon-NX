@@ -150,8 +150,8 @@ async def _load_settings(db: AsyncSession) -> SafetyFeishuAppSettings:
         row.knowledge_table_id or ""
     ).strip():
         raise AppException(
-        message="请先在 飞书设置 中配置 EHS 法规库的 App Token 与 Table ID"
-    )
+            message="请先在 飞书设置 中配置 EHS 法规库的 App Token 与 Table ID"
+        )
     return row
 
 
@@ -723,8 +723,6 @@ async def _create_in_table(
                 fields["实施日期"] = int(impl.timestamp() * 1000)
             except ValueError:
                 pass
-        if analysis.get("summary"):
-            fields["核心要点总结"] = analysis["summary"]
         if analysis.get("summary"):
             fields["核心要点总结"] = analysis["summary"]
     elif item.site_name.startswith("应急管理部"):
