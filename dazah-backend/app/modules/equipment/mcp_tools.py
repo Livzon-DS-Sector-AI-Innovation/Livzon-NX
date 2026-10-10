@@ -17,11 +17,6 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.equipment.models.inspection_route_location import (
-    RouteEquipmentTemplate,
-    RouteLocation,
-    RouteLocationEquipment,
-)
 from app.modules.equipment.models.inspection_template import (
     InspectionTemplateItem,
 )
@@ -98,12 +93,8 @@ def _wo_to_dict(wo: Any) -> dict[str, Any]:
 
 def _it_to_dict(task: Any) -> dict[str, Any]:
     """InspectionTask ORM → 字典"""
-    route = task.route
     eq_count = 0
-    if route and route.locations_rel:
-        for loc in route.locations_rel:
-            eq_count += len([e for e in (loc.equipments or []) if not e.is_deleted])
-    elif task.equipment_ids:
+    if task.equipment_ids:
         eq_count = len(task.equipment_ids)
     elif task.equipment_id:
         eq_count = 1
@@ -113,8 +104,6 @@ def _it_to_dict(task: Any) -> dict[str, Any]:
         "task_no": task.task_no,
         "plan_type": task.plan_type,
         "status": task.status,
-        "route_name": task.route.name if task.route else "",
-        "route_id": str(task.route.id) if task.route else "",
         "equipment_name": task.equipment.name if task.equipment else "",
         "equipment_count": eq_count,
         "planned_time": task.planned_time.isoformat() if task.planned_time else "",
@@ -125,46 +114,13 @@ def _it_to_dict(task: Any) -> dict[str, Any]:
 
 
 async def _get_template_item_map(db: AsyncSession, task: Any) -> dict[str, str]:
-    """根据任务类型获取模板检查项的 item_name → template_item_id 映射。
+    """获取模板检查项的 item_name → template_item_id 映射。
 
-    线路巡检：从路线 → 地点 → 设备 → 模板绑定获取（可能多个模板合并）
-    设备巡检：从 task.equipment_templates 或 task.template_ids 获取
+    从 task.equipment_templates 或 task.template_ids 获取。
     """
     name_to_id: dict[str, str] = {}
 
-    if task.route_id:
-        # 线路巡检：从路线地点设备绑定获取所有模板项
-        loc_stmt = select(RouteLocation).where(
-            RouteLocation.route_id == task.route_id,
-            RouteLocation.is_deleted == False,  # noqa: E712
-        )
-        locs = (await db.execute(loc_stmt)).scalars().all()
-
-        seen_tids: set[uuid.UUID] = set()
-        for loc in locs:
-            eq_stmt = select(RouteLocationEquipment).where(
-                RouteLocationEquipment.route_location_id == loc.id,
-                RouteLocationEquipment.is_deleted == False,  # noqa: E712
-            )
-            eqs = (await db.execute(eq_stmt)).scalars().all()
-            for eq in eqs:
-                tpl_stmt = select(RouteEquipmentTemplate).where(
-                    RouteEquipmentTemplate.route_equipment_id == eq.id,
-                    RouteEquipmentTemplate.is_deleted == False,  # noqa: E712
-                )
-                tpls = (await db.execute(tpl_stmt)).scalars().all()
-                for tpl in tpls:
-                    if tpl.template_id not in seen_tids:
-                        seen_tids.add(tpl.template_id)
-                        item_stmt = select(InspectionTemplateItem).where(
-                            InspectionTemplateItem.template_id == tpl.template_id,
-                            InspectionTemplateItem.is_deleted == False,  # noqa: E712
-                        )
-                        items = (await db.execute(item_stmt)).scalars().all()
-                        for item_ in items:
-                            name_to_id[item_.item_name] = str(item_.id)
-
-    elif task.equipment_templates:
+    if task.equipment_templates:
         # 新方式：从设备-模板映射聚合所有唯一模板
         equipment_seen_tids: set[uuid.UUID] = set()
         for tpl_ids in task.equipment_templates.values():
@@ -380,16 +336,11 @@ async def submit_inspection(
                 f"检查项 '{item_name}' 结果为异常，必须填写 actual_value 或 remark"
             )
 
-    # 加载模板项映射（支持线路巡检多模板）
+    # 加载模板项映射
     name_to_id = await _get_template_item_map(db, task)
 
     if not name_to_id:
-        modes = []
-        if task.route_id:
-            modes.append("该路线尚未配置设备检查模板")
-        else:
-            modes.append("该任务未绑定检查模板")
-        raise ValueError("、".join(modes) + "，请先在系统中配置")
+        raise ValueError("该任务未绑定检查模板，请先在系统中配置")
 
     # 构建 records
     records: list[dict[str, Any]] = []

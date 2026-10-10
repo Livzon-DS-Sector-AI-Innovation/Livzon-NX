@@ -28,7 +28,7 @@ export function PageNavigation({ modules }: { modules: ModuleMenu[] }) {
           {level.path && index < levels.length - 1
             ? <Link href={returnTo && level.path.split("?")[0] === returnPath ? returnTo : level.path} className="rounded-[var(--rounded-sm)] hover:text-[var(--color-primary)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]">{level.label}</Link>
             : level.options?.length && index < levels.length - 1
-              ? <Dropdown trigger={["click"]} overlayClassName="page-breadcrumb-menu" menu={{ items: level.options.map((option, optionIndex) => ({ key: `${option.path}:${optionIndex}`, label: <Link href={option.path}>{option.label}</Link> })) }}>
+              ? <Dropdown trigger={["click"]} classNames={{ root: "page-breadcrumb-menu" }} menu={{ items: level.options.map((option, optionIndex) => ({ key: `${option.path}:${optionIndex}`, label: <Link href={option.path}>{option.label}</Link> })) }}>
                   <button type="button" aria-label={`展开${level.label}菜单`} className="rounded-[var(--rounded-sm)] hover:text-[var(--color-primary)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]">{level.label}</button>
                 </Dropdown>
             : <span aria-current={index === levels.length - 1 ? "page" : undefined} className={index === levels.length - 1 ? "font-medium text-[var(--color-charcoal)]" : undefined}>{level.label}</span>}

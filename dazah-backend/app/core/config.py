@@ -85,6 +85,12 @@ class Settings(BaseSettings):
     EQUIPMENT_FEISHU_APP_SECRET: str = ""
     EQUIPMENT_FEISHU_WS_ENABLED: bool = True
 
+    # 设备巡检飞书多维表格镜像同步（只读展示，录入在飞书）
+    EQUIPMENT_FEISHU_BITABLE_APP_TOKEN: str = ""
+    EQUIPMENT_FEISHU_BITABLE_TODAY_TABLE_ID: str = ""
+    EQUIPMENT_FEISHU_BITABLE_HISTORY_TABLE_ID: str = ""
+    EQUIPMENT_FEISHU_BITABLE_DEVICE_TABLE_ID: str = ""
+
     # Upload
     UPLOAD_DIR: str = "./uploads"
     MAX_UPLOAD_SIZE_MB: int = 50

@@ -53,23 +53,17 @@ from app.modules.equipment.service.inspection import (
     complete_task as complete_inspection_task,
 )
 from app.modules.equipment.service.inspection import (
-    create_route,
-    delete_route,
-    get_history,
-    get_route_by_id,
-    get_routes,
-    get_task_detail,
-    get_task_photos,
-    set_route_locations,
-    skip_equipment_check,
-    submit_equipment_check,
-    update_route,
-)
-from app.modules.equipment.service.inspection import (
     create_task as create_inspection_task,
 )
 from app.modules.equipment.service.inspection import (
     delete_photo as delete_inspection_photo,
+)
+from app.modules.equipment.service.inspection import (
+    get_history,
+    get_task_detail,
+    get_task_photos,
+    skip_equipment_check,
+    submit_equipment_check,
 )
 from app.modules.equipment.service.inspection import (
     get_task_by_id as get_inspection_task_by_id,
@@ -201,17 +195,11 @@ __all__ = [
     # inspection
     "close_inspection_task",
     "complete_inspection_task",
-    "create_route",
-    "delete_route",
     "get_history",
-    "get_route_by_id",
-    "get_routes",
     "get_task_detail",
     "get_task_photos",
-    "set_route_locations",
     "skip_equipment_check",
     "submit_equipment_check",
-    "update_route",
     "create_inspection_task",
     "delete_inspection_photo",
     "get_inspection_task_by_id",

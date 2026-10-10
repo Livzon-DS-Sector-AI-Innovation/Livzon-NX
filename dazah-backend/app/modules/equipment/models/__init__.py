@@ -17,14 +17,15 @@ from app.modules.equipment.models.failure_code import (
 )
 from app.modules.equipment.models.inspection import (
     InspectionPhoto,
-    InspectionRoute,
-    InspectionRouteEquipment,
     InspectionTask,
 )
-from app.modules.equipment.models.inspection_route_location import (
-    RouteEquipmentTemplate,
-    RouteLocation,
-    RouteLocationEquipment,
+from app.modules.equipment.models.inspection_feishu_config import (
+    EquipmentInspectionFeishuConfig,
+)
+from app.modules.equipment.models.inspection_feishu_mirror import (
+    EquipmentInspectionFeishuDevice,
+    EquipmentInspectionFeishuRecord,
+    EquipmentInspectionFeishuSyncState,
 )
 from app.modules.equipment.models.inspection_template import (
     InspectionRecord,
@@ -58,21 +59,20 @@ __all__ = [
     "EquipmentPersonnelCategory",
     "EquipmentPersonnelRole",
     "EquipmentRole",
+    "EquipmentInspectionFeishuConfig",
+    "EquipmentInspectionFeishuDevice",
+    "EquipmentInspectionFeishuRecord",
+    "EquipmentInspectionFeishuSyncState",
     "FailureAction",
     "FailureCause",
     "FailureSymptom",
     "InspectionPhoto",
     "InspectionRecord",
-    "InspectionRoute",
-    "InspectionRouteEquipment",
     "InspectionTask",
     "InspectionTemplate",
     "InspectionTemplateItem",
     "Location",
     "MaintenancePlan",
-    "RouteEquipmentTemplate",
-    "RouteLocation",
-    "RouteLocationEquipment",
     "EquipmentSparePart",
     "SparePart",
     "SparePartStock",

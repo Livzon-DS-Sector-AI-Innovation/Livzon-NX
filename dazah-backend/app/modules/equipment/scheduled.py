@@ -1,63 +1,60 @@
-"""Inspection route schedule generator — DB-driven dynamic task scanner."""
+"""设备巡检飞书镜像同步调度器。
+
+增量：每 5 分钟按水位同步三张表（今日巡检 / 历史记录 / 设备档案）；
+全量：每天 03:10 全表对账（补漏 + 删除对账）。未配置时静默跳过。
+"""
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.equipment.models.inspection import InspectionRouteSchedule
-from app.modules.equipment.repository.inspection import get_due_schedules
-from app.modules.equipment.service.inspection import (
-    compute_next_cron,
-    create_task,
-    start_task,
-)
+from app.modules.equipment.service import inspection_feishu_config as feishu_config
+from app.modules.equipment.service import inspection_feishu_mirror as mirror
 from app.platform.scheduler import ScheduleConfig, ScheduleStrategy, TaskGenerator
 
 logger = logging.getLogger(__name__)
 
-_CST = timezone(timedelta(hours=8))
 
+class InspectionFeishuMirrorSyncGenerator(TaskGenerator):
+    """每 5 分钟增量同步设备巡检飞书多维表格镜像。"""
 
-class InspectionScheduleGenerator(TaskGenerator):
-    """Scan inspection_route_schedules and auto-create/start tasks."""
-
-    name = "equipment.inspection_schedules"
+    name = "equipment.inspection_feishu_mirror_sync"
     schedule = ScheduleConfig(
         strategy=ScheduleStrategy.INTERVAL,
-        interval_seconds=30,
+        interval_seconds=300,
+        timezone="Asia/Shanghai",
     )
 
-    async def find_due(self, session: AsyncSession) -> list[InspectionRouteSchedule]:
-        return await get_due_schedules(session)
+    async def find_due(self, session: AsyncSession) -> list[Any]:
+        if not await feishu_config.is_mirror_enabled(session):
+            return []
+        return ["all"]
 
-    async def execute_one(
-        self, session: AsyncSession, item: InspectionRouteSchedule
-    ) -> None:
-        now = datetime.now(_CST)
+    async def execute_one(self, session: AsyncSession, item: Any) -> None:
+        results = await mirror.sync_all(session, incremental=True)
+        await session.commit()
+        logger.info("inspection feishu mirror incremental sync: %s", results)
 
-        task = await create_task(
-            session,
-            {
-                "plan_type": "线路巡检",
-                "route_id": str(item.route_id),
-                "assigned_to": (str(item.assigned_to) if item.assigned_to else None),
-                "planned_time": now,
-            },
-        )
 
-        await start_task(session, task.id)
+class InspectionFeishuMirrorFullSyncGenerator(TaskGenerator):
+    """每天 03:10 全量对账（补漏 + 删除飞书侧已删行）。"""
 
-        item.last_triggered_at = now
-        item.next_trigger_at = compute_next_cron(
-            item.cron_expression,
-            now,
-        )
+    name = "equipment.inspection_feishu_mirror_full_sync"
+    schedule = ScheduleConfig(
+        strategy=ScheduleStrategy.FIXED_TIME,
+        time_of_day="03:10",
+        timezone="Asia/Shanghai",
+    )
 
-        logger.info(
-            "Schedule triggered: route=%s task=%s",
-            item.route_id,
-            task.task_no,
-        )
+    async def find_due(self, session: AsyncSession) -> list[Any]:
+        if not await feishu_config.is_mirror_enabled(session):
+            return []
+        return ["all"]
+
+    async def execute_one(self, session: AsyncSession, item: Any) -> None:
+        results = await mirror.sync_all(session, incremental=False)
+        await session.commit()
+        logger.info("inspection feishu mirror full sync: %s", results)

@@ -11,11 +11,6 @@ from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import AppException, NotFoundException
 from app.modules.equipment.models.inspection import InspectionTask
-from app.modules.equipment.models.inspection_route_location import (
-    RouteEquipmentTemplate,
-    RouteLocation,
-    RouteLocationEquipment,
-)
 from app.modules.equipment.models.inspection_template import (
     InspectionTemplate,
     InspectionTemplateItem,
@@ -238,41 +233,16 @@ async def _get_task(db: AsyncSession, task_id: uuid.UUID) -> InspectionTask:
 async def _get_inspection_items(
     db: AsyncSession, task: InspectionTask, equipment_id: uuid.UUID
 ) -> list[InspectionTemplateItem]:
-    """获取巡检检查项 — 统一处理线路巡检和设备巡检的多模板合并。
+    """获取巡检检查项 — 处理设备巡检的多模板合并。
 
-    线路巡检：从 route → locations → equipment → templates 链获取
-    设备巡检（新）：从 task.equipment_templates 按设备匹配
-    设备巡检（旧）：从 task.template_ids 扁平列表（兼容）
+    新方式：从 task.equipment_templates 按设备匹配
+    旧数据：从 task.template_ids 扁平列表（兼容）
     """
     all_items: list[InspectionTemplateItem] = []
     seen_names: set[str] = set()
     template_ids: set[uuid.UUID] = set()
 
-    if task.route_id:
-        # 线路巡检：找到该设备在路线中的所有模板绑定
-        loc_stmt = select(RouteLocation).where(
-            RouteLocation.route_id == task.route_id,
-            RouteLocation.is_deleted == False,  # noqa: E712
-        )
-        locs = (await db.execute(loc_stmt)).scalars().all()
-
-        for loc in locs:
-            eq_stmt = select(RouteLocationEquipment).where(
-                RouteLocationEquipment.route_location_id == loc.id,
-                RouteLocationEquipment.equipment_id == equipment_id,
-                RouteLocationEquipment.is_deleted == False,  # noqa: E712
-            )
-            route_eqs = (await db.execute(eq_stmt)).scalars().all()
-            for req in route_eqs:
-                tpl_stmt = select(RouteEquipmentTemplate).where(
-                    RouteEquipmentTemplate.route_equipment_id == req.id,
-                    RouteEquipmentTemplate.is_deleted == False,  # noqa: E712
-                )
-                tpls = (await db.execute(tpl_stmt)).scalars().all()
-                for tpl in tpls:
-                    template_ids.add(tpl.template_id)
-
-    elif task.equipment_templates:
+    if task.equipment_templates:
         # 新方式：从设备-模板映射中获取该设备绑定的模板
         eq_id_str = str(equipment_id)
         tpl_ids = task.equipment_templates.get(eq_id_str, [])

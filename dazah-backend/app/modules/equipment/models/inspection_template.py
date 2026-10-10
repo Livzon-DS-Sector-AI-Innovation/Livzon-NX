@@ -89,11 +89,6 @@ class InspectionRecord(BaseModel):
         ForeignKey("equipment.inspection_tasks.id"),
         comment="关联巡检任务ID",
     )
-    route_location_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("equipment.route_locations.id"),
-        nullable=True,
-        comment="关联线路地点（线路巡检时标记）",
-    )
     equipment_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("equipment.equipments.id"),
         nullable=True,

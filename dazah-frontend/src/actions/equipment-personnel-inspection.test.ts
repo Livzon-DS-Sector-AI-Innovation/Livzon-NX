@@ -5,7 +5,6 @@ vi.mock('@/lib/auth', () => ({ getAuthHeaders: vi.fn().mockResolvedValue({
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 import { uploadWorkOrderImages } from './equipment'
 import { createRole } from './equipment-personnel'
-import { uploadTaskPhoto, submitRouteCheck } from './inspection'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -15,15 +14,13 @@ it('forwards operation IDs through equipment writes and lets uploads set their o
   const upload = new FormData()
   upload.append('file', new Blob(['fixture']), 'fixture.txt')
   await uploadWorkOrderImages('fixture-order', upload)
-  await uploadTaskPhoto('fixture-task', upload)
   for (const [, options] of fetcher.mock.calls) {
     expect(options.headers['X-Dazah-Operation-ID']).toBe('fixture-operation')
     expect(options.headers['Content-Type']).toBeUndefined()
     expect(options.body).toBe(upload)
   }
   await createRole({ name: 'fixture' } as never)
-  await submitRouteCheck('fixture', {} as never)
-  for (const [, options] of fetcher.mock.calls.slice(2)) {
+  for (const [, options] of fetcher.mock.calls.slice(1)) {
     expect(options.headers['X-Dazah-Operation-ID']).toBe('fixture-operation')
     expect(options.headers['Content-Type']).toBe('application/json')
   }
