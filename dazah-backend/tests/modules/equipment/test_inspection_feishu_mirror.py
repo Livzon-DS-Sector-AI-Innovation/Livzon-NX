@@ -10,14 +10,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.equipment.models.inspection_feishu_config import (
     EquipmentInspectionFeishuConfig,
 )
+from app.modules.equipment.models.inspection_feishu_mirror import (
+    EquipmentInspectionFeishuDevice,
+    EquipmentInspectionFeishuRecord,
+)
 from app.modules.equipment.service import inspection_feishu_config as feishu_config
 from app.modules.equipment.service import inspection_feishu_mirror as mirror
 
 
 @pytest.fixture(autouse=True)
 async def _clear_config_rows(db_session: AsyncSession) -> None:
-    """清空配置表，保证环境变量回退路径不被残留数据库行抢占。"""
+    """清空配置与镜像表，保证环境变量回退路径和行数断言不被残留数据干扰。"""
     await db_session.execute(delete(EquipmentInspectionFeishuConfig))
+    await db_session.execute(delete(EquipmentInspectionFeishuRecord))
+    await db_session.execute(delete(EquipmentInspectionFeishuDevice))
     await db_session.commit()
 
 
@@ -272,3 +278,64 @@ async def test_sync_all_records_failure_on_unexpected_db_error(
         state = await mirror._get_state(db_session, key)
         assert state.last_status == "failed"
         assert "同步中断已回滚" in (state.last_message or "")
+
+
+# ---------- 字段规范化分支 ----------
+
+
+def test_text_value_variants() -> None:
+    assert mirror._text_value(None) is None
+    assert mirror._text_value("") is None
+    assert mirror._text_value("  ") is None
+    rich = [{"text": "混合", "type": "text"}, {"text": "机"}]
+    assert mirror._text_value(rich) == "混合机"
+    assert mirror._text_value(["纯", "文本段"]) == "纯文本段"
+    assert mirror._text_value(123) == "123"
+    assert mirror._text_value([{"text": "  ", "type": "text"}]) is None
+
+
+def test_date_value_variants() -> None:
+    from datetime import date
+
+    assert mirror._date_value(None) is None
+    # 毫秒时间戳（北京时间 2026-10-09）
+    assert mirror._date_value(1791475200000) == date(2026, 10, 9)
+    # ISO 字符串（含 Z 与 +00:00 两种写法）
+    assert mirror._date_value("2026-10-08") == date(2026, 10, 8)
+    assert mirror._date_value("2026-10-08T16:00:00Z") == date(2026, 10, 8)
+    assert mirror._date_value("2026-10-08T16:00:00+00:00") == date(2026, 10, 8)
+    # 无效与空值
+    assert mirror._date_value("") is None
+    assert mirror._date_value("不是日期") is None
+
+
+def test_datetime_value_variants() -> None:
+    from datetime import datetime
+
+    value = mirror._datetime_value(1791475200000)
+    assert value is not None and value.year == 2026
+    assert mirror._datetime_value("2026-10-08T16:00:00Z") == datetime(
+        2026, 10, 8, 16, 0, tzinfo=mirror.UTC
+    )
+    assert mirror._datetime_value(None) is None
+    assert mirror._datetime_value("垃圾") is None
+    assert mirror._datetime_value("") is None
+
+
+def test_normalize_covers_date_note_and_status() -> None:
+    values = mirror.normalize_record_fields(
+        _fields(
+            **{
+                "日期": "2026-09-30",
+                "其他异常情况": "渗漏",
+                "处理状态": "已拆分",
+            }
+        )
+    )
+    assert values["record_date"] is not None
+    assert values["anomaly_note"] == "渗漏"
+    assert values["process_status"] == "已拆分"
+
+
+def test_normalize_empty_fields_dict() -> None:
+    assert mirror.normalize_record_fields({})["has_abnormal"] is False

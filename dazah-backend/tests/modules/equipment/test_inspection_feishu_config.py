@@ -26,8 +26,14 @@ async def _clean_config_table(
     同时覆盖服务级会话（db_session）与 API 级共享会话
     （_equipment_session）两条写入路径。
     """
+    from app.modules.equipment.models.inspection_feishu_mirror import (
+        EquipmentInspectionFeishuDevice,
+        EquipmentInspectionFeishuRecord,
+    )
     for session in (db_session, _equipment_session):
         await session.execute(delete(EquipmentInspectionFeishuConfig))
+        await session.execute(delete(EquipmentInspectionFeishuRecord))
+        await session.execute(delete(EquipmentInspectionFeishuDevice))
         await session.commit()
     yield
     for session in (db_session, _equipment_session):
@@ -439,3 +445,167 @@ async def test_config_api_get_put_flow(client: Any) -> None:
     resp = await client.get("/api/v1/equipment/inspection/feishu/config")
     assert resp.status_code == 200
     assert resp.json()["data"]["app_id"] == "cli_api"
+
+
+# ---------- 镜像查询与手动同步端点 ----------
+
+
+async def _seed_mirror_rows(db_session: AsyncSession) -> None:
+    from datetime import date as date_type
+
+    from app.modules.equipment.models.inspection_feishu_mirror import (
+        EquipmentInspectionFeishuDevice,
+        EquipmentInspectionFeishuRecord,
+    )
+
+    db_session.add(
+        EquipmentInspectionFeishuRecord(
+            source="history",
+            record_id="rec_api_1",
+            record_date=date_type(2026, 10, 9),
+            equipment_name="方锥混合机",
+            equipment_no="XT1-1-1-129",
+            am_clean="√",
+            pm_clean="×",
+            has_abnormal=True,
+        )
+    )
+    db_session.add(
+        EquipmentInspectionFeishuDevice(
+            record_id="dev_api_1",
+            equipment_name="方锥混合机",
+            equipment_no="XT1-1-1-129",
+        )
+    )
+    await db_session.commit()
+
+
+async def test_mirror_read_endpoints(client: Any, db_session: AsyncSession) -> None:
+    await _seed_mirror_rows(db_session)
+
+    resp = await client.get(
+        "/api/v1/equipment/inspection/feishu/records",
+        params={"source": "history", "abnormal_only": "true"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["data"][0]["equipment_name"] == "方锥混合机"
+    assert body["data"][0]["has_abnormal"] is True
+    assert body["meta"]["total"] == 1
+
+    resp = await client.get(
+        "/api/v1/equipment/inspection/feishu/devices",
+        params={"keyword": "方锥"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["data"][0]["equipment_no"] == "XT1-1-1-129"
+
+    resp = await client.get("/api/v1/equipment/inspection/feishu/today-summary")
+    assert resp.status_code == 200
+    assert resp.json()["data"]["total_devices"] >= 1
+
+
+async def test_mirror_records_rejects_unknown_source(client: Any) -> None:
+    resp = await client.get(
+        "/api/v1/equipment/inspection/feishu/records",
+        params={"source": "bogus"},
+    )
+    assert resp.status_code == 400
+    assert "source 仅支持" in resp.json()["message"]
+
+
+async def test_mirror_sync_status_and_manual_sync(
+    client: Any,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_env(monkeypatch)
+    from app.modules.equipment.service import inspection_feishu_mirror as mirror_svc
+
+    resp = await client.get("/api/v1/equipment/inspection/feishu/sync-status")
+    assert resp.status_code == 200
+    assert resp.json()["data"]["enabled"] is True
+
+    async def fake_sync(db: Any, *, incremental: bool) -> dict[str, dict[str, Any]]:
+        return {"today": {"synced": 1, "total": 1}}
+
+    monkeypatch.setattr(mirror_svc, "sync_all", fake_sync)
+    resp = await client.post("/api/v1/equipment/inspection/feishu/sync")
+    assert resp.status_code == 200
+    assert resp.json()["data"]["today"] == {"synced": 1, "total": 1}
+
+
+async def test_config_test_endpoint_reports_unconfigured(
+    client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_env_empty(monkeypatch)
+    resp = await client.post("/api/v1/equipment/inspection/feishu/config/test")
+    assert resp.status_code == 400
+    assert "请先完整配置" in resp.json()["message"]
+
+
+# ---------- 加密与更新分支 ----------
+
+
+def test_decrypt_stored_secret_branches(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert config_service._decrypt_stored_secret(None) == ""
+    assert config_service._decrypt_stored_secret("") == ""
+
+    def broken(_value: str) -> str:
+        raise config_service.LLMConfigError("no key")
+
+    monkeypatch.setattr(config_service, "decrypt_api_key", broken)
+    assert config_service._decrypt_stored_secret("bad-cipher") == ""
+
+
+def test_mask_short_identifier() -> None:
+    assert config_service._mask_feishu_identifier("short") == "****"
+    masked = config_service._mask_feishu_identifier("tblVeryLong123456")
+    assert masked.startswith("tblV")
+
+
+async def test_update_config_replaces_secret_on_existing_row(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_env_empty(monkeypatch)
+    await config_service.update_config(
+        db_session,
+        EquipmentInspectionFeishuConfigUpdateRequest(
+            app_id="cli_rotate",
+            app_secret="old_secret",
+            app_token="bascn_r",
+        ),
+    )
+    detail = await config_service.update_config(
+        db_session,
+        EquipmentInspectionFeishuConfigUpdateRequest(
+            app_id="cli_rotate",
+            app_secret="new_secret",
+            app_token="bascn_r",
+        ),
+    )
+    assert detail.app_secret_configured is True
+    config = await config_service.get_effective_config(db_session)
+    assert config.app_secret == "new_secret"
+
+
+async def test_update_config_wraps_wiki_resolve_errors(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_env_empty(monkeypatch)
+
+    async def broken_resolve(**_kwargs: Any) -> str:
+        raise RuntimeError("wiki node not found: bascnXYZ")
+
+    monkeypatch.setattr(
+        config_service, "resolve_wiki_bitable_app_token", broken_resolve
+    )
+    with pytest.raises(AppException, match="解析知识库多维表格失败"):
+        await config_service.update_config(
+            db_session,
+            EquipmentInspectionFeishuConfigUpdateRequest(
+                app_id="cli_w",
+                app_secret="s",
+                app_token="https://x.feishu.cn/wiki/WikiNodeError",
+            ),
+        )
