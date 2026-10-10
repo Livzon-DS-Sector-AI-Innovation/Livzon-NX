@@ -65,6 +65,10 @@ import {
   saveScheduleConstraints,
   generateScheduleDraft,
   exportScheduleDraft,
+  getScheduleDraftRecords,
+  getScheduleDraftRecord,
+  deleteScheduleDraftRecord,
+  downloadScheduleDraftRecordFile,
   getFermentationBatchActuals,
   upsertFermentationBatchActual,
   deleteFermentationBatchActual,
@@ -634,6 +638,96 @@ describe('production actions', () => {
       `${API_BASE}/api/v1/production/schedule-drafts/export`,
       expect.objectContaining({ method: 'POST' }),
     )
+  })
+
+  it('falls back to the default filename without a starred disposition', async () => {
+    const fetchMock = vi.fn(
+      () => new Response(new Uint8Array([9]), { status: 200 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const file = await exportScheduleDraft({})
+    expect(file.filename).toBe('FA排产草稿.xlsx')
+    expect(file.bytes.byteLength).toBe(1)
+  })
+
+  it('throws the backend message when the draft export fails', async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ message: '排产约束缺失' }, 500),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(exportScheduleDraft({})).rejects.toThrow('排产约束缺失')
+  })
+
+  it('keeps the default export hint for non-JSON failures', async () => {
+    const fetchMock = vi.fn(
+      () => new Response('Internal Server Error', { status: 502 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(exportScheduleDraft({})).rejects.toThrow('导出失败')
+  })
+
+  it('lists and fetches schedule draft records', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getScheduleDraftRecords(2, 5)).resolves.toMatchObject({ code: 200 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/production/schedule-drafts/records?page=2&page_size=5`,
+      expect.anything(),
+    )
+    await expect(getScheduleDraftRecord('rec-9')).resolves.toMatchObject({ code: 200 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/production/schedule-drafts/records/rec-9`,
+      expect.anything(),
+    )
+  })
+
+  it('deletes a schedule draft record via DELETE', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(deleteScheduleDraftRecord('rec-9')).resolves.toMatchObject({ code: 200 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/production/schedule-drafts/records/rec-9`,
+      expect.objectContaining({ method: 'DELETE' }),
+    )
+  })
+
+  it('returns null when the record file was never exported', async () => {
+    const fetchMock = vi.fn(() => new Response(null, { status: 404 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(downloadScheduleDraftRecordFile('rec-9')).resolves.toBeNull()
+  })
+
+  it('throws for a failed record file download', async () => {
+    const fetchMock = vi.fn(() => new Response(null, { status: 500 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(downloadScheduleDraftRecordFile('rec-9')).rejects.toThrow(
+      '下载草稿文件失败',
+    )
+  })
+
+  it('downloads a record file parsing the starred filename', async () => {
+    const fetchMock = vi.fn(
+      () =>
+        new Response(new Uint8Array([4, 5]), {
+          status: 200,
+          headers: {
+            'content-disposition':
+              "attachment; filename*=utf-8''FA%E6%8E%92%E4%BA%A7%E8%8D%89%E7%A8%BF.xlsx",
+          },
+        }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const file = await downloadScheduleDraftRecordFile('rec-9')
+    expect(file?.filename).toBe('FA排产草稿.xlsx')
+    expect(file?.bytes.byteLength).toBe(2)
   })
 
   it('marks tank maintenance with an optional recovery date', async () => {

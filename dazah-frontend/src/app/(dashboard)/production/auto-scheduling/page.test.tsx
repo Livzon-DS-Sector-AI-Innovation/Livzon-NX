@@ -454,6 +454,41 @@ describe('AutoSchedulingPage', () => {
     })
   })
 
+  it('refreshes history and closes the detail modal', async () => {
+    mockHistory()
+    actions.getScheduleDraftRecord.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: HISTORY_RECORD,
+    })
+    await render()
+    const refresh = [...container.querySelectorAll('button')].find((b) =>
+      b.textContent?.replace(/\s/g, '') === '刷新',
+    ) as HTMLButtonElement | undefined
+    expect(refresh).toBeTruthy()
+    await act(async () => {
+      refresh!.click()
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(actions.getScheduleDraftRecords).toHaveBeenCalledTimes(2)
+
+    await act(async () => {
+      findButton('查看').click()
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(document.body.textContent).toContain('草稿方案：2026-10-27～2026-11-26')
+    const closeModal = [...document.body.querySelectorAll('.ant-modal button')].find(
+      (b) => b.textContent?.replace(/\s/g, '') === '关闭' ||
+        b.hasAttribute('aria-label'),
+    ) as HTMLButtonElement | undefined
+    if (closeModal) {
+      await act(async () => {
+        closeModal.click()
+        await new Promise((r) => setTimeout(r, 80))
+      })
+    }
+  })
+
   it('opens record detail from history', async () => {
     mockHistory()
     actions.getScheduleDraftRecord.mockResolvedValue({
