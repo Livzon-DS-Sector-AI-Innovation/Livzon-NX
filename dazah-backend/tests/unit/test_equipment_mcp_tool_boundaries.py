@@ -62,8 +62,10 @@ def test_equipment_mcp_serializers_cover_relationship_fallbacks() -> None:
     assert order["started_at"] == ""
 
     task = mcp_tools._it_to_dict(_inspection_task())
-    assert task["route_name"] == "一车间路线"
-    assert task["equipment_count"] == 1
+    # 巡检线路体系已删除：不再输出 route_name，
+    # 设备数只按 equipment_ids / equipment_id 统计
+    assert "route_name" not in task
+    assert task["equipment_count"] == 0
 
     equipment_task = _inspection_task()
     equipment_task.route = None

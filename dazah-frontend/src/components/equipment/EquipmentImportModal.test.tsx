@@ -70,6 +70,8 @@ describe('EquipmentImportModal', () => {
     act(() => root.unmount())
     container.remove()
     vi.restoreAllMocks()
+    vi.clearAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('renders upload area, defaults selectors and template link', () => {
@@ -116,5 +118,114 @@ describe('EquipmentImportModal', () => {
     expect(document.querySelector('.ant-message')?.textContent).toContain(
       '请先选择台账 .xlsx 文件',
     )
+  })
+
+  async function pickFile() {
+    const input = document.body.querySelector(
+      'input[type=file]',
+    ) as HTMLInputElement | null
+    expect(input).toBeTruthy()
+    const file = new File(['bytes'], 'ledger.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    Object.defineProperty(input, 'files', { value: [file] })
+    await act(async () => {
+      input!.dispatchEvent(new Event('change', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 60))
+    })
+  }
+
+  function findSubmitButton() {
+    const button = Array.from(document.body.querySelectorAll('button')).find(
+      (b) => b.textContent?.includes('开始导入'),
+    ) as HTMLButtonElement
+    expect(button).toBeTruthy()
+    return button
+  }
+
+  it('imports the ledger and renders the summary with failures', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            code: 200,
+            data: {
+              total_rows: 616,
+              created: 257,
+              updated: 1,
+              failed: 3,
+              flagged: 5,
+              locations_created: 35,
+              failures: [
+                { row: 9, equipment_no: 'IMP-009', reason: '设备编号为空' },
+              ],
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    act(() => {
+      root.render(
+        <AntApp>
+          <EquipmentImportModal open onClose={onClose} onImported={onImported} />
+        </AntApp>,
+      )
+    })
+    await pickFile()
+    await act(async () => {
+      findSubmitButton().dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const text = (document.body.textContent || '').replace(/\s/g, '')
+    expect(text).toContain('共616行：新建257台、更新1台、失败3行')
+    expect(text).toContain('新建位置35处')
+    expect(text).toContain('第9行（IMP-009）：设备编号为空')
+    expect(onImported).toHaveBeenCalledTimes(1)
+  })
+
+  it('surfaces backend import errors and keeps the modal open', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ code: 400, message: '文件不是有效的台账模板' }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    act(() => {
+      root.render(
+        <AntApp>
+          <EquipmentImportModal open onClose={onClose} onImported={onImported} />
+        </AntApp>,
+      )
+    })
+    await pickFile()
+    await act(async () => {
+      findSubmitButton().dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(document.body.textContent).toContain('文件不是有效的台账模板')
+    expect(onImported).not.toHaveBeenCalled()
+  })
+
+  it('reports network failures with a retry hint', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('offline'))))
+    act(() => {
+      root.render(
+        <AntApp>
+          <EquipmentImportModal open onClose={onClose} onImported={onImported} />
+        </AntApp>,
+      )
+    })
+    await pickFile()
+    await act(async () => {
+      findSubmitButton().dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(document.body.textContent).toContain('导入失败，请稍后重试')
   })
 })
