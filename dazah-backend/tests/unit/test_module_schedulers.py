@@ -381,3 +381,38 @@ async def test_equipment_timeout_loop_contains_scan_failure(monkeypatch: Any) ->
     monkeypatch.setattr(equipment_scheduler.asyncio, "wait_for", fake_wait_for)  # type: ignore[attr-defined]
     await equipment_scheduler.timeout_scan_loop()
     equipment_scheduler.stop_timeout_flag.clear()
+
+
+@pytest.mark.asyncio
+async def test_equipment_feishu_mirror_generators_gate_on_config(
+    monkeypatch: Any,
+) -> None:
+    """镜像同步生成器按配置启停：未配置静默跳过，已配置按周期执行。"""
+    from app.modules.equipment import scheduled as equipment_scheduled
+
+    enabled = AsyncMock(return_value=True)
+    monkeypatch.setattr(
+        equipment_scheduled.feishu_config, "is_mirror_enabled", enabled
+    )
+    sync_all = AsyncMock(return_value={"today": {"synced": 0, "total": 0}})
+    monkeypatch.setattr(equipment_scheduled.mirror, "sync_all", sync_all)
+
+    session: Any = SimpleNamespace(commit=AsyncMock())
+    incremental = equipment_scheduled.InspectionFeishuMirrorSyncGenerator()
+    full = equipment_scheduled.InspectionFeishuMirrorFullSyncGenerator()
+
+    enabled.return_value = False
+    assert await incremental.find_due(session) == []
+    assert await full.find_due(session) == []
+
+    enabled.return_value = True
+    assert await incremental.find_due(session) == ["all"]
+    assert await full.find_due(session) == ["all"]
+
+    await incremental.execute_one(session, "all")
+    sync_all.assert_awaited_with(session, incremental=True)
+    session.commit.assert_awaited_once()
+
+    await full.execute_one(session, "all")
+    sync_all.assert_awaited_with(session, incremental=False)
+    assert session.commit.await_count == 2
