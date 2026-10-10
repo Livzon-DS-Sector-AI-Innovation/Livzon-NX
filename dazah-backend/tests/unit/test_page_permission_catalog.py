@@ -55,6 +55,7 @@ def test_production_catalog_tracks_current_workshop_and_operation_pages():
         "production:batches:workshop-203-3",
         "production:plan:sales-plan",
         "production:plan:scheduling",
+        "production:plan:auto-scheduling",
         "production:shift-log:shift-log-deviation",
         "production:shift-log:shift-log-quality",
         "production:shift-log:shift-log-summary",
