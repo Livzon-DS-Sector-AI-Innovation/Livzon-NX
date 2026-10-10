@@ -1048,7 +1048,7 @@ def build_dr_board(
                     "cultured_hours": None,
                     "cycle_hours": None,
                     "dump_at": None,
-                    "note": f"检修：{maint['reason']}",
+                    "note": maintenance_note(maint),
                 }
             )
             continue
@@ -1844,7 +1844,7 @@ def _statin_tanks(
                     "cultured_hours": None,
                     "cycle_hours": None,
                     "dump_at": None,
-                    "note": f"检修：{maint['reason']}",
+                    "note": maintenance_note(maint),
                 }
             )
             continue
@@ -2129,7 +2129,7 @@ def build_mp_board(
                         "cultured_hours": None,
                         "cycle_hours": None,
                         "dump_at": None,
-                        "note": f"检修：{maint['reason']}",
+                        "note": maintenance_note(maint),
                     }
                 )
                 continue
@@ -2822,7 +2822,7 @@ def build_board(
                     "cultured_hours": None,
                     "cycle_hours": None,
                     "dump_at": None,
-                    "note": f"检修：{maint['reason']}",
+                    "note": maintenance_note(maint),
                 }
             )
             continue
@@ -3426,7 +3426,30 @@ def serialize_maintenance(item: TankMaintenance) -> dict[str, Any]:
         "tank_no": item.tank_no,
         "reason": item.reason,
         "started_at": item.started_at.isoformat() if item.started_at else None,
+        "expected_recovery_date": (
+            item.expected_recovery_date.isoformat()
+            if item.expected_recovery_date
+            else None
+        ),
     }
+
+
+def maintenance_note(maint: dict[str, Any]) -> str:
+    """检修行备注：原因 + 预计恢复日期（填写时）。"""
+    note = f"检修：{maint['reason']}"
+    recovery = _parse_board_date(maint.get("expected_recovery_date"))
+    if recovery is not None:
+        note += f"，预计{recovery:%m-%d}恢复"
+    return note
+
+
+def _parse_board_date(value: Any) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
 
 
 async def upsert_maintenance(
@@ -3434,6 +3457,7 @@ async def upsert_maintenance(
     *,
     tank_no: str,
     reason: str,
+    expected_recovery_date: date | None = None,
     created_by: Any = None,
 ) -> TankMaintenance:
     """同一罐存在进行中标注则更新（保持单条进行中）。"""
@@ -3445,10 +3469,16 @@ async def upsert_maintenance(
     )
     item = result.scalar_one_or_none()
     if item is None:
-        item = TankMaintenance(tank_no=tank_no, reason=reason, created_by=created_by)
+        item = TankMaintenance(
+            tank_no=tank_no,
+            reason=reason,
+            expected_recovery_date=expected_recovery_date,
+            created_by=created_by,
+        )
         session.add(item)
     else:
         item.reason = reason
+        item.expected_recovery_date = expected_recovery_date
         item.updated_by = created_by
     await session.commit()
     await session.refresh(item)

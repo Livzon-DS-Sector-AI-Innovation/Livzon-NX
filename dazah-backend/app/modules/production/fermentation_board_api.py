@@ -41,6 +41,9 @@ BEIJING_TZ = timezone(timedelta(hours=8))
 class MaintenanceBody(BaseModel):
     tank_no: str = Field(..., min_length=1, max_length=32, description="罐号")
     reason: str = Field(..., min_length=1, max_length=255, description="检修原因")
+    expected_recovery_date: date | None = Field(
+        None, description="预计恢复日期（可选；供排产校验判定检修窗口）"
+    )
 
 
 class ProductionLineStatusBody(BaseModel):
@@ -357,6 +360,7 @@ async def mark_tank_maintenance(
         db,
         tank_no=body.tank_no,
         reason=body.reason,
+        expected_recovery_date=body.expected_recovery_date,
         created_by=current_user.id if current_user else None,
     )
     return success_response(

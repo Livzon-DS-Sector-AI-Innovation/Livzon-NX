@@ -60,6 +60,11 @@ import {
   getFermentationBoard,
   markTankMaintenance,
   removeTankMaintenance,
+  getScheduleValidation,
+  getScheduleConstraints,
+  saveScheduleConstraints,
+  generateScheduleDraft,
+  exportScheduleDraft,
   getFermentationBatchActuals,
   upsertFermentationBatchActual,
   deleteFermentationBatchActual,
@@ -516,6 +521,139 @@ describe('production actions', () => {
     )
   })
 
+  it('gets the schedule validation report for an archive', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { issues: [] } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getScheduleValidation('arc-1')).resolves.toMatchObject({ code: 200 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/production/schedule-excel/arc-1/validation`,
+      expect.anything(),
+    )
+  })
+
+  it('gets the schedule constraints by product', async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { product_code: 'FA' } }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getScheduleConstraints('FA')).resolves.toMatchObject({ code: 200 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/production/schedule-constraints?product=FA`,
+      expect.anything(),
+    )
+  })
+
+  it('saves schedule constraints with a JSON body', async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { product_code: 'FA' } }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      saveScheduleConstraints(
+        {
+          product_code: 'FA',
+          standard_cycle_hours: 61,
+          cycle_tolerance_hours: 4,
+          max_cycle_hours: 72,
+          turnaround_hours: 8,
+          monthly_dump_target: 26,
+        },
+        'FA',
+      ),
+    ).resolves.toMatchObject({ code: 200 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/production/schedule-constraints?product=FA`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          standard_cycle_hours: 61,
+          cycle_tolerance_hours: 4,
+          max_cycle_hours: 72,
+          turnaround_hours: 8,
+          monthly_dump_target: 26,
+        }),
+      }),
+    )
+  })
+
+  it('generates a schedule draft with instruction params', async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { days: [], summary: {}, validation: {} } }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      generateScheduleDraft({
+        period_start: '2026-11-27',
+        period_end: '2026-12-26',
+        skip_dates: ['2026-12-05'],
+        tank_blocks: [
+          { tank_no: '302A', from_date: '2026-12-01', to_date: '2026-12-05' },
+        ],
+      }),
+    ).resolves.toMatchObject({ code: 200 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/production/schedule-drafts/generate`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          period_start: '2026-11-27',
+          period_end: '2026-12-26',
+          batch_start_no: null,
+          skip_dates: ['2026-12-05'],
+          tank_blocks: [
+            { tank_no: '302A', from_date: '2026-12-01', to_date: '2026-12-05' },
+          ],
+        }),
+      }),
+    )
+  })
+
+  it('exports the schedule draft excel as bytes with filename', async () => {
+    const fetchMock = vi.fn(
+      () =>
+        new Response(new Uint8Array([1, 2, 3]), {
+          status: 200,
+          headers: {
+            'content-type':
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'content-disposition':
+              "attachment; filename*=utf-8''FA%E6%8E%92%E4%BA%A7%E8%8D%89%E7%A8%BF.xlsx",
+          },
+        }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const file = await exportScheduleDraft({})
+    expect(file.filename).toBe('FA排产草稿.xlsx')
+    expect(file.bytes.byteLength).toBe(3)
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/production/schedule-drafts/export`,
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
+  it('marks tank maintenance with an optional recovery date', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(markTankMaintenance('302A', '染菌检查', '2026-10-13')).resolves.toMatchObject({ code: 200 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/production/tank-maintenance`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          tank_no: '302A',
+          reason: '染菌检查',
+          expected_recovery_date: '2026-10-13',
+        }),
+      }),
+    )
+  })
+
   it('fetches the fermentation board without caching', async () => {
     const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { tanks: [] } }))
     vi.stubGlobal('fetch', fetchMock)
@@ -538,7 +676,7 @@ describe('production actions', () => {
     const [url, init] = fetchMock.mock.calls[0]
     expect(url).toBe(`${API_BASE}/api/v1/production/tank-maintenance`)
     expect(init?.method).toBe('POST')
-    expect(JSON.parse(init?.body as string)).toEqual({ tank_no: 'F-1', reason: '搅拌桨检修' })
+    expect(JSON.parse(init?.body as string)).toEqual({ tank_no: 'F-1', reason: '搅拌桨检修', expected_recovery_date: null })
     expect(((init?.headers ?? {}) as Record<string, string>)['Content-Type']).toBe('application/json')
 
     await expect(removeTankMaintenance('m-1')).resolves.toMatchObject({ code: 200 })

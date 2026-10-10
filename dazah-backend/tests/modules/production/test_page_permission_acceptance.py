@@ -1,5 +1,6 @@
 """Actual production routes must agree with page and decision grants."""
 
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
@@ -461,3 +462,427 @@ async def test_receiving_decision_requires_its_own_action(
         )
     else:
         session.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("sections", [["MC"], []])
+@pytest.mark.parametrize(
+    "operation", ["validate", "get-constraints", "save-constraints"]
+)
+async def test_scheduling_hidden_product_cannot_validate_or_configure(
+    monkeypatch, sections, operation
+):
+    """排产校验与约束配置沿用排产页的产品可见性：未授权产品一律 403。"""
+    from app.modules.production import schedule_excel_api as schedule
+
+    app, _ = acceptance_app(
+        schedule.router,
+        monkeypatch,
+        "production:plan:scheduling",
+        actions=["sync_config"],
+        visible_sections=sections,
+    )
+    archive = SimpleNamespace(product_code="LN", rows=[])
+    get_archive = AsyncMock(return_value=archive)
+    building = AsyncMock()
+    get_constraints = AsyncMock()
+    upsert = AsyncMock()
+    monkeypatch.setattr(schedule.schedule_excel_service, "get_archive", get_archive)
+    monkeypatch.setattr(
+        schedule.schedule_validation_service, "build_validation_report", building
+    )
+    monkeypatch.setattr(
+        schedule.schedule_validation_service,
+        "get_constraint_setting",
+        get_constraints,
+    )
+    monkeypatch.setattr(
+        schedule.schedule_validation_service,
+        "upsert_constraint_setting",
+        upsert,
+    )
+    headers = {"X-Dazah-Page-Key": "production:plan:scheduling"}
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        if operation == "validate":
+            response = await client.get(
+                f"/api/v1/production/schedule-excel/{uuid4()}/validation",
+                headers=headers,
+            )
+        elif operation == "get-constraints":
+            response = await client.get(
+                "/api/v1/production/schedule-constraints",
+                params={"product": "LN"},
+                headers=headers,
+            )
+        else:
+            response = await client.post(
+                "/api/v1/production/schedule-constraints",
+                params={"product": "LN"},
+                json={},
+                headers=headers,
+            )
+    assert response.status_code == 403
+    assert "该产品" in response.json()["detail"]
+    building.assert_not_awaited()
+    get_constraints.assert_not_awaited()
+    upsert.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_schedule_validation_and_constraints_allowed_for_visible_product(
+    monkeypatch,
+):
+    from app.modules.production import schedule_excel_api as schedule
+
+    app, _ = acceptance_app(
+        schedule.router,
+        monkeypatch,
+        "production:plan:scheduling",
+        actions=["sync_config"],
+        visible_sections=["FA"],
+    )
+    archive = SimpleNamespace(
+        id=uuid4(), product_code="FA", rows=[], created_at="2026-09-30T10:00:00"
+    )
+    report = {"issues": [], "summary": {"warn": 0, "info": 0}}
+    building = AsyncMock(return_value=report)
+    get_constraints = AsyncMock(return_value=None)
+    saved = SimpleNamespace(
+        product_code="FA",
+        standard_cycle_hours=61.0,
+        cycle_tolerance_hours=4.0,
+        max_cycle_hours=72.0,
+        turnaround_hours=8.0,
+        monthly_dump_target=26,
+    )
+    upsert = AsyncMock(return_value=saved)
+    monkeypatch.setattr(
+        schedule.schedule_excel_service,
+        "get_archive",
+        AsyncMock(return_value=archive),
+    )
+    monkeypatch.setattr(
+        schedule.schedule_validation_service, "build_validation_report", building
+    )
+    monkeypatch.setattr(
+        schedule.schedule_validation_service, "get_constraint_setting", get_constraints
+    )
+    monkeypatch.setattr(
+        schedule.schedule_validation_service, "upsert_constraint_setting", upsert
+    )
+    headers = {"X-Dazah-Page-Key": "production:plan:scheduling"}
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        validation = await client.get(
+            f"/api/v1/production/schedule-excel/{archive.id}/validation",
+            headers=headers,
+        )
+        constraints = await client.get(
+            "/api/v1/production/schedule-constraints",
+            params={"product": "FA"},
+            headers=headers,
+        )
+        saved_resp = await client.post(
+            "/api/v1/production/schedule-constraints",
+            params={"product": "FA"},
+            json={"standard_cycle_hours": 61, "monthly_dump_target": 26},
+            headers=headers,
+        )
+    assert validation.status_code == 200
+    assert validation.json()["data"]["summary"] == {"warn": 0, "info": 0}
+    assert constraints.status_code == 200
+    assert constraints.json()["data"]["product_code"] == "FA"
+    assert saved_resp.status_code == 200
+    assert saved_resp.json()["data"]["standard_cycle_hours"] == 61.0
+    assert building.await_args.args[1] is archive
+    upsert.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_schedule_validation_rejects_non_fa_product(monkeypatch):
+    from app.modules.production import schedule_excel_api as schedule
+
+    app, _ = acceptance_app(
+        schedule.router,
+        monkeypatch,
+        "production:plan:scheduling",
+        visible_sections=None,
+    )
+    archive = SimpleNamespace(product_code="MC", rows=[])
+    building = AsyncMock()
+    monkeypatch.setattr(
+        schedule.schedule_excel_service,
+        "get_archive",
+        AsyncMock(return_value=archive),
+    )
+    monkeypatch.setattr(
+        schedule.schedule_validation_service, "build_validation_report", building
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            f"/api/v1/production/schedule-excel/{uuid4()}/validation",
+            headers={"X-Dazah-Page-Key": "production:plan:scheduling"},
+        )
+    assert response.status_code == 400
+    assert "仅支持 FA" in response.json()["detail"]
+    building.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_save_constraints_maps_value_error_to_400(monkeypatch):
+    from app.modules.production import schedule_excel_api as schedule
+
+    app, _ = acceptance_app(
+        schedule.router,
+        monkeypatch,
+        "production:plan:scheduling",
+        actions=["sync_config"],
+        visible_sections=["FA"],
+    )
+    monkeypatch.setattr(
+        schedule.schedule_validation_service,
+        "upsert_constraint_setting",
+        AsyncMock(side_effect=ValueError("最大培养周期不能小于标准培养周期")),
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/production/schedule-constraints",
+            params={"product": "FA"},
+            json={"standard_cycle_hours": 61, "max_cycle_hours": 50},
+            headers={"X-Dazah-Page-Key": "production:plan:scheduling"},
+        )
+    assert response.status_code == 400
+    assert "不能小于" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("actions,expected", [(["sensitive_export"], 200), ([], 403)])
+async def test_schedule_draft_export_requires_sensitive_export(
+    monkeypatch, actions, expected
+):
+    """草稿导出挂 sensitive_export：未授予该敏感动作时 403 且不触发生成。"""
+    from app.modules.production import schedule_draft_api as draft_api
+
+    app, _ = acceptance_app(
+        draft_api.router,
+        monkeypatch,
+        "production:plan:auto-scheduling",
+        actions=actions,
+    )
+    archive = SimpleNamespace(rows=[])
+    from io import BytesIO
+
+    composing = Mock(return_value=BytesIO(b"PK-draft"))
+    monkeypatch.setattr(
+        draft_api.board, "load_latest_archive", AsyncMock(return_value=archive)
+    )
+    monkeypatch.setattr(
+        draft_api.validation, "get_constraint_setting", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(
+        draft_api.board, "list_active_maintenance", AsyncMock(return_value=[])
+    )
+    monkeypatch.setattr(draft_api.draft, "build_draft_workbook", composing)
+    monkeypatch.setattr(
+        draft_api.draft,
+        "upsert_draft_record",
+        AsyncMock(return_value=SimpleNamespace(id=uuid4())),
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/production/schedule-drafts/export",
+            json={},
+            headers={"X-Dazah-Page-Key": "production:plan:auto-scheduling"},
+        )
+    assert response.status_code == expected
+    if expected == 403:
+        composing.assert_not_called()
+    else:
+        composing.assert_called_once()
+        assert "attachment" in response.headers["content-disposition"]
+
+
+@pytest.mark.asyncio
+async def test_schedule_draft_generate_happy_path(monkeypatch):
+    from app.modules.production import schedule_draft_api as draft_api
+
+    app, _ = acceptance_app(
+        draft_api.router,
+        monkeypatch,
+        "production:plan:auto-scheduling",
+        actions=["sensitive_export"],
+    )
+    archive = SimpleNamespace(rows=[])
+    monkeypatch.setattr(
+        draft_api.board, "load_latest_archive", AsyncMock(return_value=archive)
+    )
+    monkeypatch.setattr(
+        draft_api.validation, "get_constraint_setting", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(
+        draft_api.board, "list_active_maintenance", AsyncMock(return_value=[])
+    )
+    monkeypatch.setattr(
+        draft_api.draft,
+        "upsert_draft_record",
+        AsyncMock(return_value=SimpleNamespace(id=uuid4())),
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        ok = await client.post(
+            "/api/v1/production/schedule-drafts/generate",
+            json={},
+            headers={"X-Dazah-Page-Key": "production:plan:auto-scheduling"},
+        )
+        await client.post(
+            "/api/v1/production/schedule-drafts/generate",
+            json={},
+            headers={"X-Dazah-Page-Key": "production:plan:auto-scheduling"},
+        )
+    assert ok.status_code == 200
+    data = ok.json()["data"]
+    assert data["summary"]["transfer_count"] > 0
+    assert isinstance(data["days"], list) and len(data["days"]) >= 28
+    assert "validation" in data
+    # 无 FA 存档时给出业务 4xx，而不是 500
+    monkeypatch.setattr(
+        draft_api.board, "load_latest_archive", AsyncMock(return_value=None)
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        missing = await client.post(
+            "/api/v1/production/schedule-drafts/generate",
+            json={},
+            headers={"X-Dazah-Page-Key": "production:plan:auto-scheduling"},
+        )
+        bad_period = await client.post(
+            "/api/v1/production/schedule-drafts/generate",
+            json={"period_start": "2026-11-27"},
+            headers={"X-Dazah-Page-Key": "production:plan:auto-scheduling"},
+        )
+    assert missing.status_code == 400
+    assert "排产存档" in missing.json()["detail"]
+    assert bad_period.status_code == 400
+    assert "同时提供" in bad_period.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_schedule_draft_period_alignment(monkeypatch):
+    """起止日期各自对齐所在扎帐周期；跨月分块、超两月拒绝。"""
+    from app.modules.production import schedule_draft_api as draft_api
+
+    app, _ = acceptance_app(
+        draft_api.router,
+        monkeypatch,
+        "production:plan:auto-scheduling",
+        actions=["sensitive_export"],
+    )
+    archive = SimpleNamespace(rows=[])
+    monkeypatch.setattr(
+        draft_api.board, "load_latest_archive", AsyncMock(return_value=archive)
+    )
+    monkeypatch.setattr(
+        draft_api.validation, "get_constraint_setting", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(
+        draft_api.board, "list_active_maintenance", AsyncMock(return_value=[])
+    )
+    monkeypatch.setattr(
+        draft_api.draft,
+        "upsert_draft_record",
+        AsyncMock(return_value=SimpleNamespace(id=uuid4())),
+    )
+    headers = {"X-Dazah-Page-Key": "production:plan:auto-scheduling"}
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        aligned = await client.post(
+            "/api/v1/production/schedule-drafts/generate",
+            json={"period_start": "2026-10-20", "period_end": "2026-11-15"},
+            headers=headers,
+        )
+        overlong = await client.post(
+            "/api/v1/production/schedule-drafts/generate",
+            json={"period_start": "2026-08-20", "period_end": "2026-11-15"},
+            headers=headers,
+        )
+    assert aligned.status_code == 200
+    period = aligned.json()["data"]["summary"]["period"]
+    assert period == {"start": "2026-09-27", "end": "2026-11-26"}
+    assert overlong.status_code == 400
+    assert "不能超过两个月" in overlong.json()["detail"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "actions,expected",
+    [(["sensitive_export", "delete"], 200), ([], 403)],
+)
+async def test_schedule_draft_records_actions_gate(
+    monkeypatch, actions, expected
+):
+    """草稿历史的下载/删除分别挂 sensitive_export/delete 敏感动作。"""
+    from app.modules.production import schedule_draft_api as draft_api
+
+    app, session = acceptance_app(
+        draft_api.router,
+        monkeypatch,
+        "production:plan:auto-scheduling",
+        actions=actions,
+    )
+    record = SimpleNamespace(
+        id=uuid4(),
+        product_code="FA",
+        params={},
+        params_hash="hash",
+        days=[],
+        summary={"period": {"start": "2026-11-27", "end": "2026-12-26"}},
+        validation={"summary": {"warn": 0}},
+        file_name="草稿.xlsx",
+        original_path="schedule_drafts/x.xlsx",
+        downloaded_at=datetime(2026, 10, 1, 8, 0, 0),
+        created_at=datetime(2026, 10, 1, 7, 0, 0),
+        created_by=None,
+    )
+    getting = AsyncMock(return_value=record)
+    listing = AsyncMock(return_value=([], 0))
+    deleting = AsyncMock()
+    monkeypatch.setattr(draft_api.draft, "get_draft_record", getting)
+    monkeypatch.setattr(draft_api.draft, "list_draft_records", listing)
+    monkeypatch.setattr(draft_api.draft, "soft_delete_draft_record", deleting)
+    monkeypatch.setattr(draft_api, "_record_user_name", AsyncMock(return_value=None))
+    headers = {"X-Dazah-Page-Key": "production:plan:auto-scheduling"}
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        list_resp = await client.get(
+            "/api/v1/production/schedule-drafts/records", headers=headers
+        )
+        detail = await client.get(
+            f"/api/v1/production/schedule-drafts/records/{record.id}",
+            headers=headers,
+        )
+        delete_resp = await client.delete(
+            f"/api/v1/production/schedule-drafts/records/{record.id}",
+            headers=headers,
+        )
+    # 列表/详情挂 query：两类授权均可访问
+    assert list_resp.status_code == 200
+    assert detail.status_code == 200
+    # 删除挂 operate+delete
+    assert delete_resp.status_code == expected
+    if expected == 403:
+        deleting.assert_not_awaited()
+    else:
+        deleting.assert_awaited_once()

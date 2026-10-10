@@ -27,6 +27,11 @@ import type {
   ProcessSpecQueryParams,
   ApiResponse,
   ScheduleExcelArchive,
+  ScheduleValidationReport,
+  ScheduleConstraintSettings,
+  ScheduleDraftParams,
+  ScheduleDraftResult,
+  ScheduleDraftRecord,
   FermentationBatchActual,
   FermentationBatchActualFormData,
   ProductionSummary,
@@ -483,6 +488,137 @@ export async function deleteScheduleExcelArchive(id: string) {
   return response.json()
 }
 
+// ============ 排产校验 Actions（当前仅 FA） ============
+
+export async function getScheduleValidation(archiveId: string) {
+  return fetchApi<ScheduleValidationReport>(
+    `/api/v1/production/schedule-excel/${archiveId}/validation`,
+  )
+}
+
+export async function getScheduleConstraints(product = 'FA') {
+  return fetchApi<ScheduleConstraintSettings>(
+    `/api/v1/production/schedule-constraints?product=${encodeURIComponent(product)}`,
+  )
+}
+
+export async function saveScheduleConstraints(
+  settings: ScheduleConstraintSettings,
+  product = 'FA',
+) {
+  const response = await fetch(
+    `${API_BASE}/api/v1/production/schedule-constraints?product=${encodeURIComponent(product)}`,
+    {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        standard_cycle_hours: settings.standard_cycle_hours ?? null,
+        cycle_tolerance_hours: settings.cycle_tolerance_hours ?? null,
+        max_cycle_hours: settings.max_cycle_hours ?? null,
+        turnaround_hours: settings.turnaround_hours ?? null,
+        monthly_dump_target: settings.monthly_dump_target ?? null,
+      }),
+    },
+  )
+  return response.json()
+}
+
+// ============ 自动排产草稿 Actions（当前仅 FA） ============
+
+export async function generateScheduleDraft(params: ScheduleDraftParams) {
+  return fetchApi<ScheduleDraftResult>(
+    '/api/v1/production/schedule-drafts/generate',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        period_start: params.period_start ?? null,
+        period_end: params.period_end ?? null,
+        batch_start_no: params.batch_start_no ?? null,
+        skip_dates: params.skip_dates ?? [],
+        tank_blocks: params.tank_blocks ?? [],
+      }),
+    },
+  )
+}
+
+/** 导出草稿 Excel：服务端生成字节流，浏览器侧用 lib/download.ts 下载 */
+export async function exportScheduleDraft(
+  params: ScheduleDraftParams,
+): Promise<{ bytes: ArrayBuffer; filename: string }> {
+  const response = await fetch(
+    `${API_BASE}/api/v1/production/schedule-drafts/export`,
+    {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        period_start: params.period_start ?? null,
+        period_end: params.period_end ?? null,
+        batch_start_no: params.batch_start_no ?? null,
+        skip_dates: params.skip_dates ?? [],
+        tank_blocks: params.tank_blocks ?? [],
+      }),
+    },
+  )
+  if (!response.ok) {
+    let message = '导出失败'
+    try {
+      const payload = await response.json()
+      message = payload?.message || payload?.detail || message
+    } catch {
+      // 非 JSON 响应沿用默认提示
+    }
+    throw new Error(message)
+  }
+  const disposition = response.headers.get('content-disposition')
+  const star = disposition?.match(/filename\*=(?:UTF-8|utf-8)''([^;]+)/)
+  const filename = star
+    ? decodeURIComponent(star[1].replace(/"/g, ''))
+    : `FA排产草稿.xlsx`
+  return { bytes: await response.arrayBuffer(), filename }
+}
+
+export async function getScheduleDraftRecords(page = 1, pageSize = 20) {
+  return fetchApi<ScheduleDraftRecord[]>(
+    `/api/v1/production/schedule-drafts/records?page=${page}&page_size=${pageSize}`,
+  )
+}
+
+export async function getScheduleDraftRecord(id: string) {
+  return fetchApi<ScheduleDraftRecord>(
+    `/api/v1/production/schedule-drafts/records/${id}`,
+  )
+}
+
+export async function deleteScheduleDraftRecord(id: string) {
+  const response = await fetch(
+    `${API_BASE}/api/v1/production/schedule-drafts/records/${id}`,
+    {
+      method: 'DELETE',
+      headers: await getAuthHeaders(),
+    },
+  )
+  return response.json()
+}
+
+/** 下载历史记录导出的 Excel 原件（浏览器侧触发下载） */
+export async function downloadScheduleDraftRecordFile(
+  id: string,
+): Promise<{ bytes: ArrayBuffer; filename: string } | null> {
+  const response = await fetch(
+    `${API_BASE}/api/v1/production/schedule-drafts/records/${id}/file`,
+    { headers: await getAuthHeaders() },
+  )
+  if (response.status === 404) return null
+  if (!response.ok) throw new Error('下载草稿文件失败')
+  const disposition = response.headers.get('content-disposition')
+  const star = disposition?.match(/filename\*=(?:UTF-8|utf-8)''([^;]+)/)
+  const plain = disposition?.match(/filename="?([^";]+)"?/)
+  const filename = star
+    ? decodeURIComponent(star[1].replace(/"/g, ''))
+    : plain?.[1] || 'FA排产草稿.xlsx'
+  return { bytes: await response.arrayBuffer(), filename }
+}
+
 // ============ 发酵车间看板 Actions ============
 
 export async function getFermentationBoard(date?: string, product = 'FA') {
@@ -508,13 +644,21 @@ export async function getFlBoard(month?: string) {
   return response.json()
 }
 
-export async function markTankMaintenance(tankNo: string, reason: string) {
+export async function markTankMaintenance(
+  tankNo: string,
+  reason: string,
+  expectedRecoveryDate?: string | null,
+) {
   const response = await fetch(
     `${API_BASE}/api/v1/production/tank-maintenance`,
     {
       method: 'POST',
       headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tank_no: tankNo, reason }),
+      body: JSON.stringify({
+        tank_no: tankNo,
+        reason,
+        expected_recovery_date: expectedRecoveryDate ?? null,
+      }),
     },
   )
   return response.json()

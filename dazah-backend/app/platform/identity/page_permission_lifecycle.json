@@ -294,6 +294,21 @@
         }
       }
     },
+    "production:plan:auto-scheduling": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/auto-scheduling",
+      "actions": {
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        }
+      }
+    },
     "production:process": {
       "status": "retired",
       "module_code": "production",
