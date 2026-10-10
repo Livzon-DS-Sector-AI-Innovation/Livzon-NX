@@ -1,12 +1,10 @@
-"""Inspection service: business logic for routes, tasks, photos."""
+"""Inspection service: business logic for inspection tasks, photos."""
 
 import os
 import uuid
-from datetime import UTC, date, datetime, timedelta
-from datetime import timezone as dt_timezone
+from datetime import UTC, date, datetime
 from typing import Any
 
-from croniter import croniter  # type: ignore[import-untyped]
 from fastapi import UploadFile
 from sqlalchemy import String, and_, cast, func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -19,18 +17,10 @@ from app.core.storage import is_enabled as minio_enabled
 from app.modules.equipment import repository as repo
 from app.modules.equipment.models.inspection import (
     InspectionPhoto,
-    InspectionRoute,
-    InspectionRouteSchedule,
     InspectionTask,
-)
-from app.modules.equipment.models.inspection_route_location import (
-    RouteLocation,
 )
 from app.modules.equipment.models.inspection_template import InspectionRecord
 from app.modules.equipment.models.work_order import WorkOrder
-from app.modules.equipment.schemas.inspection import (
-    InspectionScheduleResponse,
-)
 
 _UPLOAD_DIR = "uploads/inspection"
 _MAX_RETRIES = 3
@@ -42,58 +32,6 @@ _VALID_TRANSITIONS: dict[str, list[str]] = {
     "已完成": ["已关闭"],
     "已关闭": [],
 }
-
-
-# ═══════════ 路线 ═══════════
-async def create_route(db: AsyncSession, data: dict[str, Any]) -> InspectionRoute:
-    return await repo.create_route(db, data)
-
-
-async def get_route_by_id(db: AsyncSession, route_id: uuid.UUID) -> InspectionRoute:
-    route = await repo.get_route_by_id(db, route_id)
-    if not route:
-        raise NotFoundException("巡检路线", str(route_id))
-    return route
-
-
-async def get_routes(
-    db: AsyncSession,
-    is_active: bool | None = None,
-    location_id: uuid.UUID | None = None,
-    keyword: str | None = None,
-    page: int = 1,
-    page_size: int = 20,
-) -> tuple[list[InspectionRoute], int]:
-    return await repo.get_routes(
-        db,
-        is_active=is_active,
-        location_id=location_id,
-        keyword=keyword,
-        page=page,
-        page_size=page_size,
-    )
-
-
-async def update_route(
-    db: AsyncSession, route_id: uuid.UUID, data: dict[str, Any]
-) -> InspectionRoute:
-    route = await repo.update_route(db, route_id, data)
-    if not route:
-        raise NotFoundException("巡检路线", str(route_id))
-    return route
-
-
-async def delete_route(db: AsyncSession, route_id: uuid.UUID) -> bool:
-    if not await repo.delete_route(db, route_id):
-        raise NotFoundException("巡检路线", str(route_id))
-    return True
-
-
-async def set_route_locations(
-    db: AsyncSession, route_id: uuid.UUID, items: list[dict[str, Any]]
-) -> list[RouteLocation]:
-    await get_route_by_id(db, route_id)
-    return await repo.set_route_locations(db, route_id, items)
 
 
 # ═══════════ 任务 ═══════════
@@ -121,43 +59,34 @@ def _validate_transition(current: str, target: str) -> None:
 
 
 async def create_task(db: AsyncSession, data: dict[str, Any]) -> InspectionTask:
-    plan_type = data.get("plan_type", "设备巡检")
-    has_route = data.get("route_id")
     has_equipment = data.get("equipment_id") or data.get("equipment_ids")
+    if not has_equipment:
+        raise AppException(message="设备巡检至少需要选择一台设备")
 
-    if plan_type == "线路巡检":
-        if not has_route:
-            raise AppException(message="线路巡检必须选择巡检路线")
-        # 线路巡检时，模板从路线地点下各设备的绑定获取，无需单独提供
+    equipment_templates = data.get("equipment_templates")
+    template_ids = data.get("template_ids")
+
+    if equipment_templates:
+        # 新方式：逐设备绑定模板
+        equipment_ids = data.get("equipment_ids", [])
+        eq_id_set = {str(eid) for eid in equipment_ids}
+        # 校验 equipment_templates 的 key 都在 equipment_ids 中
+        for eq_id in equipment_templates:
+            if eq_id not in eq_id_set:
+                raise AppException(message=f"设备 {eq_id} 不在已选择的设备列表中")
+        # 校验每个已选设备都绑定了至少一个模板
+        for eq_id in eq_id_set:
+            if eq_id not in equipment_templates or not equipment_templates[eq_id]:
+                raise AppException(message="每台已选设备必须绑定至少一个检查模板")
+        # 将 UUID 转为字符串存储
+        data["equipment_templates"] = {
+            str(k): [str(tid) for tid in v] for k, v in equipment_templates.items()
+        }
+    elif template_ids:
+        # 兼容旧方式：扁平模板列表（所有模板应用于所有设备）
+        pass
     else:
-        # 设备巡检：至少需要提供一个设备
-        if not has_equipment:
-            raise AppException(message="设备巡检至少需要选择一台设备")
-
-        equipment_templates = data.get("equipment_templates")
-        template_ids = data.get("template_ids")
-
-        if equipment_templates:
-            # 新方式：逐设备绑定模板
-            equipment_ids = data.get("equipment_ids", [])
-            eq_id_set = {str(eid) for eid in equipment_ids}
-            # 校验 equipment_templates 的 key 都在 equipment_ids 中
-            for eq_id in equipment_templates:
-                if eq_id not in eq_id_set:
-                    raise AppException(message=f"设备 {eq_id} 不在已选择的设备列表中")
-            # 校验每个已选设备都绑定了至少一个模板
-            for eq_id in eq_id_set:
-                if eq_id not in equipment_templates or not equipment_templates[eq_id]:
-                    raise AppException(message="每台已选设备必须绑定至少一个检查模板")
-            # 将 UUID 转为字符串存储
-            data["equipment_templates"] = {
-                str(k): [str(tid) for tid in v] for k, v in equipment_templates.items()
-            }
-        elif template_ids:
-            # 兼容旧方式：扁平模板列表（所有模板应用于所有设备）
-            pass
-        else:
-            raise AppException(message="设备巡检必须选择检查模板")
+        raise AppException(message="设备巡检必须选择检查模板")
 
     # JSON 列无法直接序列化 UUID 对象，需提前转为字符串
     if data.get("equipment_ids"):
@@ -183,7 +112,6 @@ async def get_tasks(
     db: AsyncSession,
     status: str | None = None,
     exclude_status: str | None = None,
-    route_id: uuid.UUID | None = None,
     assigned_to: uuid.UUID | None = None,
     equipment_id: uuid.UUID | None = None,
     planned_time_from: datetime | None = None,
@@ -195,7 +123,6 @@ async def get_tasks(
         db,
         status=status,
         exclude_status=exclude_status,
-        route_id=route_id,
         assigned_to=assigned_to,
         equipment_id=equipment_id,
         planned_time_from=planned_time_from,
@@ -210,26 +137,10 @@ async def get_task_by_id(db: AsyncSession, task_id: uuid.UUID) -> InspectionTask
 
 
 async def _refetch_task(db: AsyncSession, task_id: uuid.UUID) -> InspectionTask:
-    """eager re-fetch 任务及关联，避免 MissingGreenlet
-
-    线路巡检需要加载到 RouteLocation.equipments → Equipment 和
-    RouteLocation.location，确保通知服务和后续逻辑不触发懒加载。
-    """
-    from app.modules.equipment.models.inspection_route_location import (
-        RouteLocation,
-        RouteLocationEquipment,
-    )
-
+    """eager re-fetch 任务及关联，避免 MissingGreenlet。"""
     result = await db.execute(
         select(InspectionTask)
         .options(
-            selectinload(InspectionTask.route)
-            .selectinload(InspectionRoute.locations_rel)
-            .selectinload(RouteLocation.equipments)
-            .selectinload(RouteLocationEquipment.equipment),
-            selectinload(InspectionTask.route)
-            .selectinload(InspectionRoute.locations_rel)
-            .selectinload(RouteLocation.location),
             selectinload(InspectionTask.equipment),
             selectinload(InspectionTask.assignee),
         )
@@ -263,27 +174,6 @@ async def complete_task(db: AsyncSession, task_id: uuid.UUID) -> InspectionTask:
     records = await repo.get_records_by_task(db, task_id)
     has_abnormal = any(r.result == "异常" for r in records)
     task.overall_result = "异常" if has_abnormal else "正常"
-    task.status = "已完成"
-    task.completed_at = datetime.now(UTC)
-    await db.flush()
-    return await _refetch_task(db, task_id)
-
-
-async def submit_route_check(
-    db: AsyncSession,
-    task_id: uuid.UUID,
-    overall_result: str,
-    route_summary: str | None = None,
-) -> InspectionTask:
-    """线路巡检提交：设置总体结果和现场描述，完成任务"""
-    task = await _get_task(db, task_id)
-    if task.status != "执行中":
-        raise AppException(message="任务未在'执行中'状态，不能提交")
-    if task.plan_type != "线路巡检":
-        raise AppException(message="仅线路巡检任务支持此操作")
-
-    task.overall_result = overall_result
-    task.route_summary = route_summary
     task.status = "已完成"
     task.completed_at = datetime.now(UTC)
     await db.flush()
@@ -585,7 +475,6 @@ async def get_history(
     date_from: date | None = None,
     date_to: date | None = None,
     equipment_id: uuid.UUID | None = None,
-    route_id: uuid.UUID | None = None,
     result: str | None = None,
     page: int = 1,
     page_size: int = 20,
@@ -609,27 +498,15 @@ async def get_history(
                 cast(ITask.equipment_ids, String).like(f'%"{equipment_id}"%'),
             )
         )
-    if route_id:
-        conditions.append(ITask.route_id == route_id)
     if result:
         conditions.append(ITask.overall_result == result)
 
     count_stmt = select(func.count(ITask.id)).where(and_(*conditions))
     total = (await db.execute(count_stmt)).scalar_one()
 
-    from app.modules.equipment.models.inspection_route_location import (
-        RouteLocation,
-    )
-
     stmt = (
         select(ITask)
         .options(
-            selectinload(ITask.route)
-            .selectinload(InspectionRoute.locations_rel)
-            .selectinload(RouteLocation.equipments),
-            selectinload(ITask.route)
-            .selectinload(InspectionRoute.locations_rel)
-            .selectinload(RouteLocation.location),
             selectinload(ITask.equipment),
             selectinload(ITask.assignee),
         )
@@ -647,106 +524,3 @@ async def get_task_detail(db: AsyncSession, task_id: uuid.UUID) -> dict[str, Any
     records = await repo.get_records_by_task(db, task_id)
     photos = await repo.get_photos_by_task(db, task_id)
     return {"task": task, "records": records, "photos": photos}
-
-
-# ═══════════ 定时任务 ═══════════
-
-_CN_TZ = dt_timezone(timedelta(hours=8))
-
-
-def compute_next_cron(
-    expression: str,
-    from_time: datetime | None = None,
-) -> datetime:
-    """Compute the next fire time for a cron expression.
-
-    Raises ValueError if *expression* is not a valid cron string.
-    """
-    base = from_time or datetime.now(_CN_TZ)
-    naive = base.replace(tzinfo=None)
-    is_six = len(expression.split()) == 6
-    cron = croniter(expression, naive, second_at_beginning=is_six)
-    next_naive: datetime = cron.get_next(datetime)
-    return next_naive.replace(tzinfo=_CN_TZ)
-
-
-def _validate_cron(expression: str) -> None:
-    """Raise AppException if cron expression is invalid."""
-    try:
-        is_six = len(expression.split()) == 6
-        croniter(expression, second_at_beginning=is_six)
-    except (ValueError, KeyError) as e:
-        raise AppException(
-            message=f"无效的 cron 表达式: {expression}",
-            detail=str(e),
-        ) from e
-
-
-async def _batch_fetch_user_names(
-    db: AsyncSession,
-    user_ids: set[uuid.UUID],
-) -> dict[uuid.UUID, str]:
-    """Batch-fetch user names for a set of user IDs."""
-    if not user_ids:
-        return {}
-    from app.platform.identity.models import User
-
-    result = await db.execute(select(User.id, User.name).where(User.id.in_(user_ids)))
-    return {row.id: row.name for row in result.all()}
-
-
-async def create_schedule(
-    db: AsyncSession,
-    route_id: uuid.UUID,
-    data: dict[str, Any],
-) -> InspectionRouteSchedule:
-    await get_route_by_id(db, route_id)  # validate route exists
-    _validate_cron(data["cron_expression"])
-    data["route_id"] = str(route_id)
-    data["assigned_to"] = str(data["assigned_to"])
-    data["next_trigger_at"] = compute_next_cron(data["cron_expression"])
-    return await repo.create_schedule(db, data)
-
-
-async def get_schedules_by_route(
-    db: AsyncSession,
-    route_id: uuid.UUID,
-) -> list[InspectionScheduleResponse]:
-    schedules = await repo.get_schedules_by_route(db, route_id)
-
-    # batch-fetch assignee names
-    user_ids = {s.assigned_to for s in schedules if s.assigned_to is not None}
-    name_map = await _batch_fetch_user_names(db, user_ids)
-
-    result: list[InspectionScheduleResponse] = []
-    for s in schedules:
-        resp = InspectionScheduleResponse.model_validate(s)
-        if s.assigned_to and s.assigned_to in name_map:
-            resp.assignee_name = name_map[s.assigned_to]
-        result.append(resp)
-    return result
-
-
-async def update_schedule(
-    db: AsyncSession,
-    schedule_id: uuid.UUID,
-    data: dict[str, Any],
-) -> InspectionRouteSchedule:
-    schedule = await repo.get_schedule_by_id(db, schedule_id)
-    if not schedule:
-        raise NotFoundException("定时任务", str(schedule_id))
-    if data.get("cron_expression"):
-        _validate_cron(data["cron_expression"])
-        data["next_trigger_at"] = compute_next_cron(data["cron_expression"])
-    updated = await repo.update_schedule(db, schedule_id, data, schedule=schedule)
-    assert updated is not None
-    return updated
-
-
-async def delete_schedule(
-    db: AsyncSession,
-    schedule_id: uuid.UUID,
-) -> bool:
-    if not await repo.delete_schedule(db, schedule_id):
-        raise NotFoundException("定时任务", str(schedule_id))
-    return True

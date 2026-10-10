@@ -321,3 +321,31 @@ describe('production menu structure', () => {
     })
   })
 })
+
+describe('equipment menu structure', () => {
+  it('groups the workshop pages under a path-less 201二车间 submenu', () => {
+    const equipment = moduleMenus.find((menu) => menu.key === 'equipment')
+    const workshop = equipment?.children.find((item) => item.key === 'workshop-201-2')
+
+    expect(equipment?.children.map((item) => item.key)).toEqual(['stats', 'workshop-201-2'])
+    expect(workshop).toMatchObject({ label: '201二车间', path: '' })
+    expect(workshop?.children?.map((item) => item.path)).toEqual([
+      '/equipment/assets',
+      '/equipment/maintenance',
+      '/equipment/inspection',
+      '/equipment/spare-parts',
+      '/equipment/personnel',
+    ])
+  })
+
+  it.each([
+    ['/equipment/assets', 'equipment:workshop-201-2:assets'],
+    ['/equipment/maintenance', 'equipment:workshop-201-2:maintenance'],
+    ['/equipment/inspection', 'equipment:workshop-201-2:inspection'],
+    ['/equipment/spare-parts', 'equipment:workshop-201-2:spare-parts'],
+    ['/equipment/personnel', 'equipment:workshop-201-2:personnel'],
+    ['/equipment/stats', 'equipment:stats'],
+  ])('maps the nested equipment pages to scoped permission keys: %s', (path, pageKey) => {
+    expect(getPageKeyByPath(path)).toBe(pageKey)
+  })
+})

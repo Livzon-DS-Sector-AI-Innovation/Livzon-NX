@@ -140,12 +140,32 @@ async def test_create_equipment(client: AsyncClient) -> Any:
             "status": "在用",
             "model": "RF-1000",
             "manufacturer": "某设备厂",
+            "production_date": "2024-05-01",
+            "factory_no": "FACT-2024-001",
+            "arrival_date": "2024-06-15",
+            "technical_params": {"功率": "3kW", "容积": "500L"},
+            "description": "台账备注",
         },
     )
     assert response.status_code == 200
     data = response.json()
     assert data["data"]["equipment_no"] == f"EQ-{cat_code}-0001"
     assert data["data"]["name"] == "R-101反应釜"
+    # 台账字段对齐工厂标准台账：出厂编号/入厂日期/技术参数/备注需可写入并回读
+    assert data["data"]["factory_no"] == "FACT-2024-001"
+    assert data["data"]["arrival_date"] == "2024-06-15"
+    assert data["data"]["production_date"] == "2024-05-01"
+    assert data["data"]["technical_params"] == {"功率": "3kW", "容积": "500L"}
+    assert data["data"]["description"] == "台账备注"
+
+    # 更新出厂编号与入厂日期
+    update_response = await client.put(
+        f"/api/v1/equipment/equipments/{data['data']['id']}",
+        json={"factory_no": "FACT-2024-002", "arrival_date": "2024-06-20"},
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["data"]["factory_no"] == "FACT-2024-002"
+    assert update_response.json()["data"]["arrival_date"] == "2024-06-20"
 
 
 async def test_get_equipments(client: AsyncClient) -> Any:

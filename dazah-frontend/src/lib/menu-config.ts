@@ -121,11 +121,18 @@ export const moduleMenus: ModuleMenu[] = [
     path: "/equipment",
     children: [
       { key: "stats", label: "设备仪表盘", path: "/equipment/stats" },
-      { key: "assets", label: "设备台账", path: "/equipment/assets" },
-      { key: "maintenance", label: "维护保养", path: "/equipment/maintenance" },
-      { key: "inspection", label: "设备巡检", path: "/equipment/inspection" },
-      { key: "spare-parts", label: "备件管理", path: "/equipment/spare-parts" },
-      { key: "personnel", label: "人员配置", path: "/equipment/personnel" },
+      {
+        key: "workshop-201-2",
+        label: "201二车间",
+        path: "",
+        children: [
+          { key: "assets", label: "设备台账", path: "/equipment/assets" },
+          { key: "maintenance", label: "维护保养", path: "/equipment/maintenance" },
+          { key: "inspection", label: "设备巡检", path: "/equipment/inspection" },
+          { key: "spare-parts", label: "备件管理", path: "/equipment/spare-parts" },
+          { key: "personnel", label: "人员配置", path: "/equipment/personnel" },
+        ],
+      },
     ],
   },
   {

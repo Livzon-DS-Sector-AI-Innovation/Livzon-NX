@@ -41,7 +41,13 @@ describe("PageNavigation", () => {
     navigation.query = ""
   })
 
-  it("adds a list breadcrumb when the list is outside the module menu", () => {
+  it("renders the breadcrumb group dropdown trigger for sibling menu options", () => {
+    const html = renderToStaticMarkup(<PageNavigation modules={modules} />)
+    expect(html).toContain("展开批次管理菜单")
+    expect(html).not.toContain("overlayClassName")
+  })
+
+    it("adds a list breadcrumb when the list is outside the module menu", () => {
     navigation.pathname = "/registration/validation-audit/7"
     navigation.query = "returnTo=%2Fregistration%2Fvalidation-audit%3Fpage%3D3"
     const registration: ModuleMenu = {

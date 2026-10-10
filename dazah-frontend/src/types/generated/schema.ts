@@ -1935,6 +1935,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment/equipments/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Excel 批量导入设备台账
+         * @description 按设备编号增量导入：已存在则更新台账字段，不存在则新建
+         */
+        post: operations["import_equipments_api_v1_equipment_equipments_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/equipments/import-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 下载设备台账导入模板
+         * @description 下载标准台账 .xlsx 模板（含表头与示例行）
+         */
+        get: operations["download_equipment_import_template_api_v1_equipment_equipments_import_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment/equipments/statistics": {
         parameters: {
             query?: never;
@@ -1978,6 +2018,126 @@ export interface paths {
          * @description 删除设备
          */
         delete: operations["delete_equipment_api_v1_equipment_equipments__equipment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/inspection/feishu/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取设备巡检飞书镜像配置 */
+        get: operations["get_feishu_config_api_v1_equipment_inspection_feishu_config_get"];
+        /** 保存设备巡检飞书镜像配置 */
+        put: operations["save_feishu_config_api_v1_equipment_inspection_feishu_config_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/inspection/feishu/config/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 测试设备巡检飞书镜像连接 */
+        post: operations["test_feishu_config_api_v1_equipment_inspection_feishu_config_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/inspection/feishu/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 巡检设备清单（飞书镜像 + 台账关联） */
+        get: operations["list_feishu_devices_api_v1_equipment_inspection_feishu_devices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/inspection/feishu/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 巡检记录（飞书镜像） */
+        get: operations["list_feishu_records_api_v1_equipment_inspection_feishu_records_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/inspection/feishu/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 手动触发飞书同步 */
+        post: operations["feishu_sync_now_api_v1_equipment_inspection_feishu_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/inspection/feishu/sync-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 镜像同步状态 */
+        get: operations["feishu_sync_status_api_v1_equipment_inspection_feishu_sync_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/inspection/feishu/today-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 今日巡检进度 */
+        get: operations["feishu_today_summary_api_v1_equipment_inspection_feishu_today_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2029,96 +2189,6 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/equipment/inspection/routes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 巡检路线列表 */
-        get: operations["list_routes_api_v1_equipment_inspection_routes_get"];
-        put?: never;
-        /** 创建巡检路线 */
-        post: operations["create_route_api_v1_equipment_inspection_routes_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/equipment/inspection/routes/{route_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 巡检路线详情 */
-        get: operations["get_route_api_v1_equipment_inspection_routes__route_id__get"];
-        /** 更新巡检路线 */
-        put: operations["update_route_api_v1_equipment_inspection_routes__route_id__put"];
-        post?: never;
-        /** 删除巡检路线 */
-        delete: operations["delete_route_api_v1_equipment_inspection_routes__route_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/equipment/inspection/routes/{route_id}/locations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** 配置路线地点设备模板 */
-        post: operations["set_route_locations_api_v1_equipment_inspection_routes__route_id__locations_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/equipment/inspection/routes/{route_id}/schedules": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 获取路线定时任务列表 */
-        get: operations["list_schedules_api_v1_equipment_inspection_routes__route_id__schedules_get"];
-        put?: never;
-        /** 创建定时任务 */
-        post: operations["create_schedule_api_v1_equipment_inspection_routes__route_id__schedules_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/equipment/inspection/routes/{route_id}/schedules/{schedule_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** 更新定时任务 */
-        put: operations["update_schedule_api_v1_equipment_inspection_routes__route_id__schedules__schedule_id__put"];
-        post?: never;
-        /** 删除定时任务 */
-        delete: operations["delete_schedule_api_v1_equipment_inspection_routes__route_id__schedules__schedule_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2274,23 +2344,6 @@ export interface paths {
         post?: never;
         /** 删除照片 */
         delete: operations["remove_photo_api_v1_equipment_inspection_tasks__task_id__photos__photo_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/equipment/inspection/tasks/{task_id}/route-check": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** 提交线路巡检结果 */
-        post: operations["submit_route_check_api_v1_equipment_inspection_tasks__task_id__route_check_post"];
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -31575,6 +31628,24 @@ export interface components {
              */
             file: string;
         };
+        /** Body_import_equipments_api_v1_equipment_equipments_import_post */
+        Body_import_equipments_api_v1_equipment_equipments_import_post: {
+            /**
+             * Default Category Id
+             * @description 默认设备分类（可选，传入则导入设备统一挂该分类）
+             */
+            default_category_id?: string | null;
+            /**
+             * Default Location Id
+             * @description 默认安装地点（台账安装地点无法匹配时使用）
+             */
+            default_location_id?: string | null;
+            /**
+             * File
+             * @description 按模板填写的台账 .xlsx 文件
+             */
+            file: string;
+        };
         /** Body_import_esg_records_api_v1_hr_esg_training_records_import_post */
         Body_import_esg_records_api_v1_hr_esg_training_records_import_post: {
             /**
@@ -40545,6 +40616,11 @@ export interface components {
          */
         EquipmentCreate: {
             /**
+             * Arrival Date
+             * @description 入厂日期
+             */
+            arrival_date?: string | null;
+            /**
              * Asset Value
              * @description 资产原值（元）
              */
@@ -40560,6 +40636,11 @@ export interface components {
              */
             commissioning_date?: string | null;
             /**
+             * Data Issue Note
+             * @description 数据待修正说明（导入容错记录，人工修正后清除）
+             */
+            data_issue_note?: string | null;
+            /**
              * Department Id
              * @description 归属部门ID，逻辑引用 identity.departments.id
              */
@@ -40571,7 +40652,7 @@ export interface components {
             depreciation_years?: number | null;
             /**
              * Description
-             * @description 设备描述
+             * @description 备注
              */
             description?: string | null;
             /**
@@ -40579,6 +40660,11 @@ export interface components {
              * @description 设备编号（手动输入，需唯一）
              */
             equipment_no: string;
+            /**
+             * Factory No
+             * @description 出厂编号
+             */
+            factory_no?: string | null;
             /**
              * Importance
              * @description 设备重要性：高/中/低
@@ -40648,10 +40734,62 @@ export interface components {
             warranty_expire_date?: string | null;
         };
         /**
+         * EquipmentInspectionFeishuConfigUpdateRequest
+         * @description 保存设备巡检飞书镜像配置请求
+         */
+        EquipmentInspectionFeishuConfigUpdateRequest: {
+            /**
+             * App Id
+             * @description 飞书应用 App ID
+             * @default
+             */
+            app_id: string;
+            /**
+             * App Secret
+             * @description 飞书应用 App Secret（留空保留已保存值）
+             */
+            app_secret?: string | null;
+            /**
+             * App Token
+             * @description 多维表格 App Token，支持粘贴 /base/ 链接或 /wiki/ 知识库链接
+             * @default
+             */
+            app_token: string;
+            /**
+             * Device Table Id
+             * @description 设备档案表 ID
+             * @default
+             */
+            device_table_id: string;
+            /**
+             * History Table Id
+             * @description 设备历史巡检记录表 ID
+             * @default
+             */
+            history_table_id: string;
+            /**
+             * Is Enabled
+             * @description 启用镜像同步
+             * @default true
+             */
+            is_enabled: boolean;
+            /**
+             * Today Table Id
+             * @description 今日巡检表 ID
+             * @default
+             */
+            today_table_id: string;
+        };
+        /**
          * EquipmentUpdate
          * @description 更新设备请求
          */
         EquipmentUpdate: {
+            /**
+             * Arrival Date
+             * @description 入厂日期
+             */
+            arrival_date?: string | null;
             /**
              * Asset Value
              * @description 资产原值（元）
@@ -40668,6 +40806,11 @@ export interface components {
              */
             commissioning_date?: string | null;
             /**
+             * Data Issue Note
+             * @description 数据待修正说明（导入容错记录，人工修正后清除）
+             */
+            data_issue_note?: string | null;
+            /**
              * Department Id
              * @description 归属部门ID，逻辑引用 identity.departments.id
              */
@@ -40679,9 +40822,14 @@ export interface components {
             depreciation_years?: number | null;
             /**
              * Description
-             * @description 设备描述
+             * @description 备注
              */
             description?: string | null;
+            /**
+             * Factory No
+             * @description 出厂编号
+             */
+            factory_no?: string | null;
             /**
              * Importance
              * @description 设备重要性：高/中/低
@@ -44028,69 +44176,6 @@ export interface components {
             updated_at: string;
         };
         /**
-         * InspectionRouteCreate
-         * @description 创建巡检路线请求
-         */
-        InspectionRouteCreate: {
-            /**
-             * Description
-             * @description 路线描述
-             */
-            description?: string | null;
-            /**
-             * Name
-             * @description 路线名称
-             */
-            name: string;
-        };
-        /**
-         * InspectionRouteUpdate
-         * @description 更新巡检路线请求
-         */
-        InspectionRouteUpdate: {
-            /** Description */
-            description?: string | null;
-            /** Is Active */
-            is_active?: boolean | null;
-            /** Name */
-            name?: string | null;
-        };
-        /**
-         * InspectionScheduleCreate
-         * @description 创建定时任务请求
-         */
-        InspectionScheduleCreate: {
-            /**
-             * Assigned To
-             * Format: uuid
-             * @description 巡检人员ID
-             */
-            assigned_to: string;
-            /**
-             * Cron Expression
-             * @description cron 表达式
-             */
-            cron_expression: string;
-            /**
-             * Is Active
-             * @description 是否启用
-             * @default true
-             */
-            is_active: boolean;
-        };
-        /**
-         * InspectionScheduleUpdate
-         * @description 更新定时任务请求
-         */
-        InspectionScheduleUpdate: {
-            /** Assigned To */
-            assigned_to?: string | null;
-            /** Cron Expression */
-            cron_expression?: string | null;
-            /** Is Active */
-            is_active?: boolean | null;
-        };
-        /**
          * InspectionTaskClose
          * @description 关闭任务请求
          */
@@ -44141,11 +44226,6 @@ export interface components {
              * @description 计划巡检时间
              */
             planned_time: string;
-            /**
-             * Route Id
-             * @description 路线ID
-             */
-            route_id?: string | null;
             /**
              * Template Ids
              * @description [DEPRECATED] 模板ID列表，推荐用 equipment_templates
@@ -53484,80 +53564,6 @@ export interface components {
             description?: string | null;
             /** Name */
             name?: string | null;
-        };
-        /**
-         * RouteCheckSubmit
-         * @description 线路巡检提交请求
-         */
-        RouteCheckSubmit: {
-            /**
-             * Overall Result
-             * @description 总体结果：正常/异常
-             * @enum {string}
-             */
-            overall_result: "正常" | "异常";
-            /**
-             * Route Summary
-             * @description 现场描述
-             */
-            route_summary?: string | null;
-        };
-        /**
-         * RouteLocationEquipmentItem
-         * @description 地点设备配置请求项
-         */
-        RouteLocationEquipmentItem: {
-            /**
-             * Equipment Id
-             * Format: uuid
-             * @description 设备ID
-             */
-            equipment_id: string;
-            /**
-             * Sort Order
-             * @description 排序
-             * @default 0
-             */
-            sort_order: number;
-            /**
-             * Template Ids
-             * @description 绑定的模板ID列表
-             */
-            template_ids?: string[];
-        };
-        /**
-         * RouteLocationItem
-         * @description 线路地点配置请求项
-         */
-        RouteLocationItem: {
-            /**
-             * Equipments
-             * @description 该地点下的设备列表
-             */
-            equipments?: components["schemas"]["RouteLocationEquipmentItem"][];
-            /**
-             * Location Id
-             * Format: uuid
-             * @description 地点ID
-             */
-            location_id: string;
-            /**
-             * Sort Order
-             * @description 地点顺序
-             * @default 0
-             */
-            sort_order: number;
-        };
-        /**
-         * RouteLocationsBatch
-         * @description 批量设置线路地点-设备-模板请求
-         */
-        RouteLocationsBatch: {
-            /**
-             * Locations
-             * @description 地点列表（全量替换）
-             */
-            locations?: components["schemas"]["RouteLocationItem"][];
         };
         /**
          * SafetyCheckCreate
@@ -66428,6 +66434,72 @@ export interface operations {
             };
         };
     };
+    import_equipments_api_v1_equipment_equipments_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_equipments_api_v1_equipment_equipments_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_equipment_import_template_api_v1_equipment_equipments_import_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_equipment_statistics_api_v1_equipment_equipments_statistics_get: {
         parameters: {
             query?: never;
@@ -66562,6 +66634,276 @@ export interface operations {
             };
         };
     };
+    get_feishu_config_api_v1_equipment_inspection_feishu_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_feishu_config_api_v1_equipment_inspection_feishu_config_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EquipmentInspectionFeishuConfigUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_feishu_config_api_v1_equipment_inspection_feishu_config_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_feishu_devices_api_v1_equipment_inspection_feishu_devices_get: {
+        parameters: {
+            query?: {
+                /** @description 设备名称/编号搜索 */
+                keyword?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_feishu_records_api_v1_equipment_inspection_feishu_records_get: {
+        parameters: {
+            query?: {
+                /** @description 来源：today=今日巡检 / history=历史记录，缺省全部 */
+                source?: string | null;
+                /** @description 日期起 */
+                date_from?: string | null;
+                /** @description 日期止 */
+                date_to?: string | null;
+                /** @description 设备名称/编号搜索 */
+                keyword?: string | null;
+                /** @description 只看含异常（×）的记录 */
+                abnormal_only?: boolean;
+                /** @description 处理状态 */
+                process_status?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    feishu_sync_now_api_v1_equipment_inspection_feishu_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    feishu_sync_status_api_v1_equipment_inspection_feishu_sync_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    feishu_today_summary_api_v1_equipment_inspection_feishu_today_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_history_api_v1_equipment_inspection_history_get: {
         parameters: {
             query?: {
@@ -66571,8 +66913,6 @@ export interface operations {
                 date_to?: string | null;
                 /** @description 设备ID */
                 equipment_id?: string | null;
-                /** @description 路线ID */
-                route_id?: string | null;
                 /** @description 巡检结果 */
                 result?: string | null;
                 /** @description 页码 */
@@ -66674,365 +67014,6 @@ export interface operations {
             };
         };
     };
-    list_routes_api_v1_equipment_inspection_routes_get: {
-        parameters: {
-            query?: {
-                /** @description 是否启用 */
-                is_active?: boolean | null;
-                /** @description 按地点筛选 */
-                location_id?: string | null;
-                /** @description 关键词搜索 */
-                keyword?: string | null;
-                /** @description 页码 */
-                page?: number;
-                /** @description 每页数量 */
-                page_size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_route_api_v1_equipment_inspection_routes_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InspectionRouteCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_route_api_v1_equipment_inspection_routes__route_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                route_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_route_api_v1_equipment_inspection_routes__route_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                route_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InspectionRouteUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_route_api_v1_equipment_inspection_routes__route_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                route_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    set_route_locations_api_v1_equipment_inspection_routes__route_id__locations_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                route_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RouteLocationsBatch"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_schedules_api_v1_equipment_inspection_routes__route_id__schedules_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                route_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_schedule_api_v1_equipment_inspection_routes__route_id__schedules_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                route_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InspectionScheduleCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_schedule_api_v1_equipment_inspection_routes__route_id__schedules__schedule_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                route_id: string;
-                schedule_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InspectionScheduleUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_schedule_api_v1_equipment_inspection_routes__route_id__schedules__schedule_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                route_id: string;
-                schedule_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_tasks_api_v1_equipment_inspection_tasks_get: {
         parameters: {
             query?: {
@@ -67040,8 +67021,6 @@ export interface operations {
                 status?: string | null;
                 /** @description 排除的任务状态 */
                 exclude_status?: string | null;
-                /** @description 路线ID */
-                route_id?: string | null;
                 /** @description 巡检人员ID */
                 assigned_to?: string | null;
                 /** @description 设备ID */
@@ -67418,43 +67397,6 @@ export interface operations {
             };
         };
         requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    submit_route_check_api_v1_equipment_inspection_tasks__task_id__route_check_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RouteCheckSubmit"];
-            };
-        };
         responses: {
             /** @description Successful Response */
             200: {

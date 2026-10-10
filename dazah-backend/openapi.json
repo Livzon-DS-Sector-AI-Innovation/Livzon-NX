@@ -11554,6 +11554,47 @@
         "title": "Body_import_document_catalog_excel_api_v1_quality_document_catalog_import_post",
         "type": "object"
       },
+      "Body_import_equipments_api_v1_equipment_equipments_import_post": {
+        "properties": {
+          "default_category_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "默认设备分类（可选，传入则导入设备统一挂该分类）",
+            "title": "Default Category Id"
+          },
+          "default_location_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "默认安装地点（台账安装地点无法匹配时使用）",
+            "title": "Default Location Id"
+          },
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "按模板填写的台账 .xlsx 文件",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_equipments_api_v1_equipment_equipments_import_post",
+        "type": "object"
+      },
       "Body_import_esg_records_api_v1_hr_esg_training_records_import_post": {
         "properties": {
           "file": {
@@ -36073,6 +36114,19 @@
       "EquipmentCreate": {
         "description": "创建设备请求",
         "properties": {
+          "arrival_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "入厂日期",
+            "title": "Arrival Date"
+          },
           "asset_value": {
             "anyOf": [
               {
@@ -36109,6 +36163,18 @@
             "description": "投用日期",
             "title": "Commissioning Date"
           },
+          "data_issue_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "数据待修正说明（导入容错记录，人工修正后清除）",
+            "title": "Data Issue Note"
+          },
           "department_id": {
             "anyOf": [
               {
@@ -36144,7 +36210,7 @@
                 "type": "null"
               }
             ],
-            "description": "设备描述",
+            "description": "备注",
             "title": "Description"
           },
           "equipment_no": {
@@ -36153,6 +36219,19 @@
             "minLength": 1,
             "title": "Equipment No",
             "type": "string"
+          },
+          "factory_no": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "出厂编号",
+            "title": "Factory No"
           },
           "importance": {
             "default": "低",
@@ -36305,9 +36384,82 @@
         "title": "EquipmentCreate",
         "type": "object"
       },
+      "EquipmentInspectionFeishuConfigUpdateRequest": {
+        "description": "保存设备巡检飞书镜像配置请求",
+        "properties": {
+          "app_id": {
+            "default": "",
+            "description": "飞书应用 App ID",
+            "maxLength": 100,
+            "title": "App Id",
+            "type": "string"
+          },
+          "app_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "飞书应用 App Secret（留空保留已保存值）",
+            "title": "App Secret"
+          },
+          "app_token": {
+            "default": "",
+            "description": "多维表格 App Token，支持粘贴 /base/ 链接或 /wiki/ 知识库链接",
+            "maxLength": 500,
+            "title": "App Token",
+            "type": "string"
+          },
+          "device_table_id": {
+            "default": "",
+            "description": "设备档案表 ID",
+            "maxLength": 100,
+            "title": "Device Table Id",
+            "type": "string"
+          },
+          "history_table_id": {
+            "default": "",
+            "description": "设备历史巡检记录表 ID",
+            "maxLength": 100,
+            "title": "History Table Id",
+            "type": "string"
+          },
+          "is_enabled": {
+            "default": true,
+            "description": "启用镜像同步",
+            "title": "Is Enabled",
+            "type": "boolean"
+          },
+          "today_table_id": {
+            "default": "",
+            "description": "今日巡检表 ID",
+            "maxLength": 100,
+            "title": "Today Table Id",
+            "type": "string"
+          }
+        },
+        "title": "EquipmentInspectionFeishuConfigUpdateRequest",
+        "type": "object"
+      },
       "EquipmentUpdate": {
         "description": "更新设备请求",
         "properties": {
+          "arrival_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "入厂日期",
+            "title": "Arrival Date"
+          },
           "asset_value": {
             "anyOf": [
               {
@@ -36351,6 +36503,18 @@
             "description": "投用日期",
             "title": "Commissioning Date"
           },
+          "data_issue_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "数据待修正说明（导入容错记录，人工修正后清除）",
+            "title": "Data Issue Note"
+          },
           "department_id": {
             "anyOf": [
               {
@@ -36386,8 +36550,21 @@
                 "type": "null"
               }
             ],
-            "description": "设备描述",
+            "description": "备注",
             "title": "Description"
+          },
+          "factory_no": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "出厂编号",
+            "title": "Factory No"
           },
           "importance": {
             "anyOf": [
@@ -44745,146 +44922,6 @@
         "title": "InspectionRecordOut",
         "type": "object"
       },
-      "InspectionRouteCreate": {
-        "description": "创建巡检路线请求",
-        "properties": {
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "路线描述",
-            "title": "Description"
-          },
-          "name": {
-            "description": "路线名称",
-            "maxLength": 200,
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "InspectionRouteCreate",
-        "type": "object"
-      },
-      "InspectionRouteUpdate": {
-        "description": "更新巡检路线请求",
-        "properties": {
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "is_active": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Is Active"
-          },
-          "name": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          }
-        },
-        "title": "InspectionRouteUpdate",
-        "type": "object"
-      },
-      "InspectionScheduleCreate": {
-        "description": "创建定时任务请求",
-        "properties": {
-          "assigned_to": {
-            "description": "巡检人员ID",
-            "format": "uuid",
-            "title": "Assigned To",
-            "type": "string"
-          },
-          "cron_expression": {
-            "description": "cron 表达式",
-            "maxLength": 50,
-            "title": "Cron Expression",
-            "type": "string"
-          },
-          "is_active": {
-            "default": true,
-            "description": "是否启用",
-            "title": "Is Active",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "cron_expression",
-          "assigned_to"
-        ],
-        "title": "InspectionScheduleCreate",
-        "type": "object"
-      },
-      "InspectionScheduleUpdate": {
-        "description": "更新定时任务请求",
-        "properties": {
-          "assigned_to": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Assigned To"
-          },
-          "cron_expression": {
-            "anyOf": [
-              {
-                "maxLength": 50,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cron Expression"
-          },
-          "is_active": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Is Active"
-          }
-        },
-        "title": "InspectionScheduleUpdate",
-        "type": "object"
-      },
       "InspectionTaskClose": {
         "description": "关闭任务请求",
         "properties": {
@@ -44984,19 +45021,6 @@
             "format": "date-time",
             "title": "Planned Time",
             "type": "string"
-          },
-          "route_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "路线ID",
-            "title": "Route Id"
           },
           "template_ids": {
             "anyOf": [
@@ -66380,113 +66404,6 @@
           }
         },
         "title": "RoleUpdateRequest",
-        "type": "object"
-      },
-      "RouteCheckSubmit": {
-        "description": "线路巡检提交请求",
-        "properties": {
-          "overall_result": {
-            "description": "总体结果：正常/异常",
-            "enum": [
-              "正常",
-              "异常"
-            ],
-            "title": "Overall Result",
-            "type": "string"
-          },
-          "route_summary": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "现场描述",
-            "title": "Route Summary"
-          }
-        },
-        "required": [
-          "overall_result"
-        ],
-        "title": "RouteCheckSubmit",
-        "type": "object"
-      },
-      "RouteLocationEquipmentItem": {
-        "description": "地点设备配置请求项",
-        "properties": {
-          "equipment_id": {
-            "description": "设备ID",
-            "format": "uuid",
-            "title": "Equipment Id",
-            "type": "string"
-          },
-          "sort_order": {
-            "default": 0,
-            "description": "排序",
-            "title": "Sort Order",
-            "type": "integer"
-          },
-          "template_ids": {
-            "description": "绑定的模板ID列表",
-            "items": {
-              "format": "uuid",
-              "type": "string"
-            },
-            "title": "Template Ids",
-            "type": "array"
-          }
-        },
-        "required": [
-          "equipment_id"
-        ],
-        "title": "RouteLocationEquipmentItem",
-        "type": "object"
-      },
-      "RouteLocationItem": {
-        "description": "线路地点配置请求项",
-        "properties": {
-          "equipments": {
-            "description": "该地点下的设备列表",
-            "items": {
-              "$ref": "#/components/schemas/RouteLocationEquipmentItem"
-            },
-            "title": "Equipments",
-            "type": "array"
-          },
-          "location_id": {
-            "description": "地点ID",
-            "format": "uuid",
-            "title": "Location Id",
-            "type": "string"
-          },
-          "sort_order": {
-            "default": 0,
-            "description": "地点顺序",
-            "title": "Sort Order",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "location_id"
-        ],
-        "title": "RouteLocationItem",
-        "type": "object"
-      },
-      "RouteLocationsBatch": {
-        "description": "批量设置线路地点-设备-模板请求",
-        "properties": {
-          "locations": {
-            "description": "地点列表（全量替换）",
-            "items": {
-              "$ref": "#/components/schemas/RouteLocationItem"
-            },
-            "title": "Locations",
-            "type": "array"
-          }
-        },
-        "title": "RouteLocationsBatch",
         "type": "object"
       },
       "SafetyCheckCreate": {
@@ -98466,6 +98383,112 @@
         ]
       }
     },
+    "/api/v1/equipment/equipments/import": {
+      "post": {
+        "description": "按设备编号增量导入：已存在则更新台账字段，不存在则新建",
+        "operationId": "import_equipments_api_v1_equipment_equipments_import_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_equipments_api_v1_equipment_equipments_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Excel 批量导入设备台账",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/equipments/import-template": {
+      "get": {
+        "description": "下载标准台账 .xlsx 模板（含表头与示例行）",
+        "operationId": "download_equipment_import_template_api_v1_equipment_equipments_import_template_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "下载设备台账导入模板",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
     "/api/v1/equipment/equipments/statistics": {
       "get": {
         "description": "获取设备统计",
@@ -98694,6 +98717,535 @@
         ]
       }
     },
+    "/api/v1/equipment/inspection/feishu/config": {
+      "get": {
+        "operationId": "get_feishu_config_api_v1_equipment_inspection_feishu_config_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取设备巡检飞书镜像配置",
+        "tags": [
+          "设备管理"
+        ]
+      },
+      "put": {
+        "operationId": "save_feishu_config_api_v1_equipment_inspection_feishu_config_put",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EquipmentInspectionFeishuConfigUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "保存设备巡检飞书镜像配置",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/inspection/feishu/config/test": {
+      "post": {
+        "operationId": "test_feishu_config_api_v1_equipment_inspection_feishu_config_test_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "测试设备巡检飞书镜像连接",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/inspection/feishu/devices": {
+      "get": {
+        "operationId": "list_feishu_devices_api_v1_equipment_inspection_feishu_devices_get",
+        "parameters": [
+          {
+            "description": "设备名称/编号搜索",
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "设备名称/编号搜索",
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "巡检设备清单（飞书镜像 + 台账关联）",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/inspection/feishu/records": {
+      "get": {
+        "operationId": "list_feishu_records_api_v1_equipment_inspection_feishu_records_get",
+        "parameters": [
+          {
+            "description": "来源：today=今日巡检 / history=历史记录，缺省全部",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "来源：today=今日巡检 / history=历史记录，缺省全部",
+              "title": "Source"
+            }
+          },
+          {
+            "description": "日期起",
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "日期起",
+              "title": "Date From"
+            }
+          },
+          {
+            "description": "日期止",
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "日期止",
+              "title": "Date To"
+            }
+          },
+          {
+            "description": "设备名称/编号搜索",
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "设备名称/编号搜索",
+              "title": "Keyword"
+            }
+          },
+          {
+            "description": "只看含异常（×）的记录",
+            "in": "query",
+            "name": "abnormal_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "只看含异常（×）的记录",
+              "title": "Abnormal Only",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "处理状态",
+            "in": "query",
+            "name": "process_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "处理状态",
+              "title": "Process Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "巡检记录（飞书镜像）",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/inspection/feishu/sync": {
+      "post": {
+        "operationId": "feishu_sync_now_api_v1_equipment_inspection_feishu_sync_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "手动触发飞书同步",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/inspection/feishu/sync-status": {
+      "get": {
+        "operationId": "feishu_sync_status_api_v1_equipment_inspection_feishu_sync_status_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "镜像同步状态",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/inspection/feishu/today-summary": {
+      "get": {
+        "operationId": "feishu_today_summary_api_v1_equipment_inspection_feishu_today_summary_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "今日巡检进度",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
     "/api/v1/equipment/inspection/history": {
       "get": {
         "operationId": "get_history_api_v1_equipment_inspection_history_get",
@@ -98751,25 +99303,6 @@
               ],
               "description": "设备ID",
               "title": "Equipment Id"
-            }
-          },
-          {
-            "description": "路线ID",
-            "in": "query",
-            "name": "route_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "路线ID",
-              "title": "Route Id"
             }
           },
           {
@@ -98976,706 +99509,6 @@
         ]
       }
     },
-    "/api/v1/equipment/inspection/routes": {
-      "get": {
-        "operationId": "list_routes_api_v1_equipment_inspection_routes_get",
-        "parameters": [
-          {
-            "description": "是否启用",
-            "in": "query",
-            "name": "is_active",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "是否启用",
-              "title": "Is Active"
-            }
-          },
-          {
-            "description": "按地点筛选",
-            "in": "query",
-            "name": "location_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "按地点筛选",
-              "title": "Location Id"
-            }
-          },
-          {
-            "description": "关键词搜索",
-            "in": "query",
-            "name": "keyword",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "关键词搜索",
-              "title": "Keyword"
-            }
-          },
-          {
-            "description": "页码",
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "description": "页码",
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "每页数量",
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "description": "每页数量",
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "巡检路线列表",
-        "tags": [
-          "设备管理"
-        ]
-      },
-      "post": {
-        "operationId": "create_route_api_v1_equipment_inspection_routes_post",
-        "parameters": [
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/InspectionRouteCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "创建巡检路线",
-        "tags": [
-          "设备管理"
-        ]
-      }
-    },
-    "/api/v1/equipment/inspection/routes/{route_id}": {
-      "delete": {
-        "operationId": "delete_route_api_v1_equipment_inspection_routes__route_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "route_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Route Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "删除巡检路线",
-        "tags": [
-          "设备管理"
-        ]
-      },
-      "get": {
-        "operationId": "get_route_api_v1_equipment_inspection_routes__route_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "route_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Route Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "巡检路线详情",
-        "tags": [
-          "设备管理"
-        ]
-      },
-      "put": {
-        "operationId": "update_route_api_v1_equipment_inspection_routes__route_id__put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "route_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Route Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/InspectionRouteUpdate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "更新巡检路线",
-        "tags": [
-          "设备管理"
-        ]
-      }
-    },
-    "/api/v1/equipment/inspection/routes/{route_id}/locations": {
-      "post": {
-        "operationId": "set_route_locations_api_v1_equipment_inspection_routes__route_id__locations_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "route_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Route Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RouteLocationsBatch"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "配置路线地点设备模板",
-        "tags": [
-          "设备管理"
-        ]
-      }
-    },
-    "/api/v1/equipment/inspection/routes/{route_id}/schedules": {
-      "get": {
-        "operationId": "list_schedules_api_v1_equipment_inspection_routes__route_id__schedules_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "route_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Route Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response List Schedules Api V1 Equipment Inspection Routes  Route Id  Schedules Get"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "获取路线定时任务列表",
-        "tags": [
-          "设备管理"
-        ]
-      },
-      "post": {
-        "operationId": "create_schedule_api_v1_equipment_inspection_routes__route_id__schedules_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "route_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Route Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/InspectionScheduleCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Create Schedule Api V1 Equipment Inspection Routes  Route Id  Schedules Post"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "创建定时任务",
-        "tags": [
-          "设备管理"
-        ]
-      }
-    },
-    "/api/v1/equipment/inspection/routes/{route_id}/schedules/{schedule_id}": {
-      "delete": {
-        "operationId": "delete_schedule_api_v1_equipment_inspection_routes__route_id__schedules__schedule_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "route_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Route Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "schedule_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Schedule Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Delete Schedule Api V1 Equipment Inspection Routes  Route Id  Schedules  Schedule Id  Delete"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "删除定时任务",
-        "tags": [
-          "设备管理"
-        ]
-      },
-      "put": {
-        "operationId": "update_schedule_api_v1_equipment_inspection_routes__route_id__schedules__schedule_id__put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "route_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Route Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "schedule_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Schedule Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/InspectionScheduleUpdate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Update Schedule Api V1 Equipment Inspection Routes  Route Id  Schedules  Schedule Id  Put"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "更新定时任务",
-        "tags": [
-          "设备管理"
-        ]
-      }
-    },
     "/api/v1/equipment/inspection/tasks": {
       "get": {
         "operationId": "list_tasks_api_v1_equipment_inspection_tasks_get",
@@ -99714,25 +99547,6 @@
               ],
               "description": "排除的任务状态",
               "title": "Exclude Status"
-            }
-          },
-          {
-            "description": "路线ID",
-            "in": "query",
-            "name": "route_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "路线ID",
-              "title": "Route Id"
             }
           },
           {
@@ -100537,73 +100351,6 @@
           }
         },
         "summary": "删除照片",
-        "tags": [
-          "设备管理"
-        ]
-      }
-    },
-    "/api/v1/equipment/inspection/tasks/{task_id}/route-check": {
-      "post": {
-        "operationId": "submit_route_check_api_v1_equipment_inspection_tasks__task_id__route_check_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "task_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Task Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RouteCheckSubmit"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "提交线路巡检结果",
         "tags": [
           "设备管理"
         ]
