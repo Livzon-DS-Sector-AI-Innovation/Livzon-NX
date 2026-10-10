@@ -1,7 +1,7 @@
 """add schedule constraints and maintenance recovery date
 
 Revision ID: a3f5b7c9d1e2
-Revises: d7e8f9a1b2c3
+Revises: d9e1f2a4b6c8
 Create Date: 2026-09-30
 
 排产校验（一期）：新增按产品的排产约束配置表；检修标注增加可选的
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "a3f5b7c9d1e2"
-down_revision = "d7e8f9a1b2c3"
+down_revision = "d9e1f2a4b6c8"
 branch_labels = None
 depends_on = None
 
