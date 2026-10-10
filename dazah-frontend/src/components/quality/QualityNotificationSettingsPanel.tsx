@@ -5,6 +5,7 @@ import { usePagePermissions } from '@/hooks/usePagePermissions'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Button, Card, Input, InputNumber, Select, Space, Switch, TimePicker, Typography } from 'antd'
+import { SearchOutlined } from '@ant-design/icons'
 import Alert from '@/components/shared/PlatformNotice'
 import dayjs, { type Dayjs } from 'dayjs'
 
@@ -13,7 +14,7 @@ import {
   updateQualityNotificationSetting,
 } from '@/actions/quality'
 import { pushItemsLowStockTest } from '@/actions/quality-inspection'
-import { searchChangeActionPlanPersons, fetchQaPersonOptions } from '@/lib/api/client/quality'
+import { searchQualityPersonOptions, fetchQaPersonOptions } from '@/lib/api/client/quality'
 import type {
   QualityNotificationRecipient,
   QualityNotificationSettingItem,
@@ -68,9 +69,12 @@ function RecipientSelect({
   /** 预载候选（如 QA 部门人员），与搜索结果合并 */
   preloadOptions?: RecipientOption[]
 }) {
+  const { message } = App.useApp()
   const [searchedOptions, setSearchedOptions] = useState<RecipientOption[]>([])
   const [searching, setSearching] = useState(false)
+  const [searchKeyword, setSearchKeyword] = useState('')
   const timerRef = useRef<number | null>(null)
+  const searchVersionRef = useRef(0)
 
   // 回填值 + 预载候选 + 搜索结果合并为选项；回填值始终参与合并以保证回显有名称
   const options = useMemo(
@@ -84,36 +88,42 @@ function RecipientSelect({
 
   useEffect(() => {
     return () => {
+      searchVersionRef.current += 1
       if (timerRef.current) window.clearTimeout(timerRef.current)
     }
   }, [])
 
   const handleSearch = useCallback((rawKeyword: string) => {
     const keyword = rawKeyword.trim()
+    setSearchKeyword(keyword)
+    const version = ++searchVersionRef.current
     if (timerRef.current) window.clearTimeout(timerRef.current)
     if (!keyword) {
+      setSearchedOptions([])
       setSearching(false)
       return
     }
     setSearching(true)
     timerRef.current = window.setTimeout(async () => {
       try {
-        const people = await searchChangeActionPlanPersons(keyword)
+        const people = await searchQualityPersonOptions(keyword)
+        if (version !== searchVersionRef.current) return
         const fetched = people
-          .filter((person) => person.open_id)
+          .filter((person) => person.open_id && person.name)
           .map((person) => ({
-            label: person.name,
+            label: person.name ?? '',
             value: person.open_id,
-            name: person.name,
+            name: person.name ?? '',
           }))
-        setSearchedOptions((prev) => mergeOptions(prev, fetched))
-      } catch {
-        // 搜索失败时保留既有选项
+        setSearchedOptions(fetched)
+      } catch (error) {
+        if (version !== searchVersionRef.current) return
+        message.error(`人员搜索失败：${error instanceof Error ? error.message : '请稍后重试'}`)
       } finally {
-        setSearching(false)
+        if (version === searchVersionRef.current) setSearching(false)
       }
     }, 250)
-  }, [])
+  }, [message])
 
   const selected = value.map(recipientKey)
 
@@ -121,10 +131,15 @@ function RecipientSelect({
     <Select
       mode="multiple"
       allowClear
-      showSearch
-      filterOption={false}
+      prefix={<SearchOutlined />}
+      showSearch={{
+        onSearch: handleSearch,
+        filterOption: (input, option) => Boolean(option?.name.toLowerCase().includes(input.trim().toLowerCase())),
+      }}
+      aria-label={placeholder ?? '搜索飞书用户姓名'}
       labelInValue
       loading={searching}
+      notFoundContent={searching ? '正在搜索人员…' : searchKeyword ? '未找到匹配的在职人员' : '输入姓名搜索人员'}
       placeholder={placeholder ?? '搜索飞书用户姓名'}
       style={style}
       value={selected.map((key) => {
@@ -132,7 +147,6 @@ function RecipientSelect({
         return { value: key, label: known?.name ?? key.replace(/^name:/, '') }
       })}
       options={options}
-      onSearch={handleSearch}
       onChange={(
         _,
         optionList: RecipientOption | RecipientOption[] | undefined
@@ -310,13 +324,14 @@ function InspectionTrendAlertCard({
             }))
         )
       })
-      .catch(() => {
-        // 预载失败不影响手填/搜索
+      .catch((error: unknown) => {
+        if (cancelled) return
+        message.error(`QA 人员加载失败：${error instanceof Error ? error.message : '请稍后重试'}`)
       })
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [message])
 
   const handleSave = async () => {
     if (!canSync) return
@@ -421,7 +436,7 @@ function InspectionTrendAlertCard({
                 onChange={(next) =>
                   updateLine(line.entity_code, { recipients: next })
                 }
-                placeholder="搜索接收人（不填走系统默认）"
+                placeholder="搜索接收人"
                 style={{ minWidth: 280, flex: 1, maxWidth: 400 }}
               />
               <Typography.Text type="secondary">产品QA</Typography.Text>
@@ -430,7 +445,7 @@ function InspectionTrendAlertCard({
                 onChange={(next) =>
                   updateLine(line.entity_code, { qa_recipients: next })
                 }
-                placeholder="QA 部门人员（可搜索）"
+                placeholder="QA 部门人员"
                 style={{ minWidth: 240, flex: 1, maxWidth: 360 }}
                 preloadOptions={qaOptions}
               />
@@ -520,7 +535,7 @@ function AnomalyEscalationCard({
           <RecipientSelect
             value={firstRecipients}
             onChange={setFirstRecipients}
-            placeholder="搜索首推接收人（默认李文昊）"
+            placeholder="搜索首推接收人"
             style={{ minWidth: 280 }}
           />
           <Typography.Text>复检间隔（小时）</Typography.Text>

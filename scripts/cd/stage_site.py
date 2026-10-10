@@ -29,6 +29,17 @@ def guarded_config(source: str) -> str:
     if "dazah-server-guard.conf" in source:
         raise ValueError("site is already guarded; inspect before restaging")
     result, servers = re.subn(r"(?m)^(\s*)server\s*\{", r"\1server {\n\1    include /etc/nginx/dazah-server-guard.conf;", source)
+    if "dazah-maintenance.conf" not in source:
+        result = re.sub(r"(?m)^(\s*)server\s*\{", r"\1server {\n\1    include /etc/nginx/dazah-maintenance.conf;", result)
+    if "127.0.0.1:8090" not in source:
+        result = re.sub(r"(?m)^(\s*)location\s+/api/", r"\1listen 127.0.0.1:8090;\n\1location /api/", result, count=1)
+    if "__dazah_maintenance_watch.js" not in source:
+        result = re.sub(r"(?m)^(\s*)location / \{(?=\s*proxy_pass)",
+                        r'''\1location / {
+\1    proxy_set_header Accept-Encoding $dazah_frontend_encoding;
+\1    gzip on;
+\1    sub_filter_once on;
+\1    sub_filter '</body>' '<script src="/__dazah_maintenance_watch.js"></script></body>';''', result)
     result, api = re.subn(r"(?m)^(\s*)location\s+/api/\s*\{([^{}]*)\}", api_locations, result)
     result = re.sub(r"(?m)^(\s*)location\s+/mcp/\s*\{([^{}]*)\}", mcp_location, result)
     if not servers or not api:

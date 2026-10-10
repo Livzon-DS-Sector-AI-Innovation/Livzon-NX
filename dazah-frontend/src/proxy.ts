@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 import { getServerApiBaseUrl } from '@/lib/server-api'
-import { getModuleByKey, getPageKeyByPath, getAuthorizedPageMenus } from '@/lib/menu-config'
+import { getModuleByKey, getPageKeyByPath, getAuthorizedPageMenus, getAuthorizedDirectoryEntryPath } from '@/lib/menu-config'
 import type { SubMenuItem } from '@/lib/menu-config'
 import type { User } from '@/types/user'
 import { isSystemAdministrator, isSystemSettingsPath } from '@/lib/administrator-role'
@@ -104,6 +104,13 @@ export async function proxy(request: NextRequest) {
         }
         const target = visible && firstPage(visible.children)
         return target ? NextResponse.redirect(new URL(target, request.url)) : denied('未获得本模块的任何页面访问权限。')
+      }
+      // Navigation fallback must never replay a Server Action onto another page.
+      if (request.method === 'GET' || request.method === 'HEAD') {
+        const entry = getAuthorizedDirectoryEntryPath(request.nextUrl.pathname, user.page_permissions)
+        if (entry && entry !== request.nextUrl.pathname.replace(/\/$/, '')) {
+          return NextResponse.redirect(new URL(entry, request.url))
+        }
       }
       const key = getPageKeyByPath(request.nextUrl.pathname)
       const grant = user.page_permissions?.find((item) => item.page_key === key)

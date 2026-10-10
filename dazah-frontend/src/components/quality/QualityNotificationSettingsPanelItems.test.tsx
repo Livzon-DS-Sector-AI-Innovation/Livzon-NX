@@ -17,7 +17,7 @@ const inspectionActions = vi.hoisted(() => ({
   pushItemsLowStockTest: vi.fn(),
 }))
 const apiClient = vi.hoisted(() => ({
-  searchChangeActionPlanPersons: vi.fn(),
+  searchQualityPersonOptions: vi.fn(),
   fetchQaPersonOptions: vi.fn(),
 }))
 
@@ -54,7 +54,7 @@ beforeEach(() => {
   inspectionActions.pushItemsLowStockTest.mockResolvedValue({
     status: 'sent', sent: 1, skipped: 0, failed: 0, item_count: 1,
   })
-  apiClient.searchChangeActionPlanPersons.mockResolvedValue([])
+  apiClient.searchQualityPersonOptions.mockResolvedValue([])
   apiClient.fetchQaPersonOptions.mockResolvedValue([])
 })
 
@@ -72,6 +72,44 @@ async function flush() {
 }
 
 describe('QualityNotificationSettingsPanel 物品库存不足预警卡', () => {
+  it('库存接收人可搜索、选择并保存，保留原有接收人', async () => {
+    apiClient.searchQualityPersonOptions.mockResolvedValue([{ open_id: 'ou_stock', name: '库存搜索用户' }])
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    root = createRoot(container)
+    await act(async () => {
+      root.render(<QueryClientProvider client={queryClient}><App><QualityNotificationSettingsPanel /></App></QueryClientProvider>)
+    })
+    await flush()
+    const input = container.querySelector<HTMLInputElement>('.ant-select input')!
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '库存搜索')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 350))
+    })
+    expect(apiClient.searchQualityPersonOptions).toHaveBeenCalledWith('库存搜索')
+    const option = Array.from(document.querySelectorAll('.ant-select-item-option')).find(
+      (node) => node.textContent?.includes('库存搜索用户'),
+    )
+    expect(option).toBeTruthy()
+    await act(async () => {
+      option?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    const save = Array.from(container.querySelectorAll('button')).find((button) => /保\s*存/.test(button.textContent || ''))
+    await act(async () => {
+      save?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(qualityActions.updateQualityNotificationSetting).toHaveBeenCalledWith(
+      'items_stock_alert', expect.objectContaining({ stock_recipients: [
+        { open_id: 'ou_z', name: '张三' },
+        { open_id: 'ou_stock', name: '库存搜索用户' },
+      ] }),
+    )
+    container.remove()
+  })
+
   it('没有同步配置权限时禁止保存及测试推送', async () => {
     permissions.canSync = false
     const container = document.createElement('div')

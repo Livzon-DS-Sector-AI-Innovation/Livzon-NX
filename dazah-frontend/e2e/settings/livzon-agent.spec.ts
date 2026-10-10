@@ -11,9 +11,11 @@ async function selectAgentView(page: import('@playwright/test').Page, name: stri
 
 test.describe('Livzon Agent 治理台', () => {
   async function openAgentGovernance(page: import('@playwright/test').Page) {
+    // The isolated frontend fixture has no Nginx; model its normal status endpoint.
+    await page.route('**/__dazah_maintenance_status', route => route.fulfill({ status: 204 }))
     await page.goto('/settings')
-    await page.waitForLoadState('networkidle')
     const agentTab = page.getByRole('link', { name: 'Livzon Agent管理', exact: true })
+    await expect(agentTab).toBeVisible()
     await agentTab.click()
     await expect(agentTab).toHaveAttribute('aria-current', 'page')
   }
@@ -147,7 +149,7 @@ test.describe('Livzon Agent 治理台', () => {
     await page.getByPlaceholder('输入调用链路编号或运行编号').fill(
       '00000000-0000-0000-0000-000000000099',
     )
-    await page.getByRole('button', { name: '查询' }).click()
+    await page.getByRole('button', { name: /^(?:search\s+)?查询$/ }).click()
 
     await expect(page.getByText('飞书入站消息（正文已隐藏）')).toBeVisible()
     await expect(page.getByText('会话事件').locator('..')).toContainText('2')

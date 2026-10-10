@@ -176,8 +176,12 @@ __all__ = [
     "SafetyCheckCreate",
     "SafetyCheckResponse",
     "SafetyCheckUpdate",
+    "SafetyFeishuAppSettingsDetail",
+    "SafetyFeishuSettingsTestResult",
     "SafetyKnowledgeArticleBase",
     "SafetyKnowledgeArticleCreate",
+    "RegulationRadarRunDetail",
+    "RegulationRadarRunSummary",
     "SafetyKnowledgeArticleResponse",
     "SafetyKnowledgeArticleUpdate",
     "SafetyTrainingBase",
@@ -216,6 +220,7 @@ __all__ = [
     "TrainingRecordUpdate",
     "TrainingType",
     "UpdateActionItemRequest",
+    "UpdateSafetyFeishuAppSettingsRequest",
     "VerificationDataSchema",
     "VerifyLevelRequest",
     "VerifyMonitorRequest",
@@ -362,6 +367,11 @@ from app.modules.safety.schemas.enums import (
     TrainingMode,
     TrainingType,
 )
+from app.modules.safety.schemas.feishu_settings import (
+    SafetyFeishuAppSettingsDetail,
+    SafetyFeishuSettingsTestResult,
+    UpdateSafetyFeishuAppSettingsRequest,
+)
 from app.modules.safety.schemas.hazard_identifications import (
     AI_NODE_PROGRESS_OPTIONS,
     OVERALL_STATUS_OPTIONS,
@@ -387,6 +397,8 @@ from app.modules.safety.schemas.hazards import (
     VerifyLevelRequest,
 )
 from app.modules.safety.schemas.knowledge import (
+    RegulationRadarRunDetail,
+    RegulationRadarRunSummary,
     SafetyKnowledgeArticleBase,
     SafetyKnowledgeArticleCreate,
     SafetyKnowledgeArticleResponse,

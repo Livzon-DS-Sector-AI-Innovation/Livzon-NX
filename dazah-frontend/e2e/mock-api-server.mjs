@@ -1,4 +1,5 @@
 import { createServer } from 'node:http'
+import { operationReceipts } from './operation-receipts.mjs'
 
 const port = Number(process.env.E2E_MOCK_API_PORT || 4100)
 
@@ -178,8 +179,10 @@ async function streamAgentReply(request, response) {
 const pageBusinessRequests = new Map()
 const ledgerLastWrites = new Map()
 const ledgerDeleted = new Set()
+const recordOperation = operationReceipts()
 const server = createServer(async (request, response) => {
   response.setHeader('Content-Type', 'application/json; charset=utf-8')
+  if (recordOperation(request, response)) return
   const authorization = request.headers.authorization || ''
   const pageTestToken = authorization.replace('Bearer ', '')
   if (pageTestToken.startsWith('page-') && request.url?.startsWith('/api/v1/procurement/')) {

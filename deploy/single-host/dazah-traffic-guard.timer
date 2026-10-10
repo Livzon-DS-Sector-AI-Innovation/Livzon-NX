@@ -1,0 +1,9 @@
+[Unit]
+Description=Dazah maintenance gate readiness polling
+[Timer]
+OnBootSec=10
+OnUnitInactiveSec=2
+AccuracySec=1
+Unit=dazah-traffic-guard.service
+[Install]
+WantedBy=timers.target

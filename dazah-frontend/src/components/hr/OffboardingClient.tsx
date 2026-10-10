@@ -5,9 +5,13 @@ import { App, Button, Table, Space, Popconfirm, Input, Tag, Tooltip, Select, Aut
 import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined, EyeOutlined, SyncOutlined, FileTextOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { OffboardingRecord } from '@/types/hr'
-import { fetchOffboardingRecordsAction, deleteOffboardingRecord, syncOffboardingFromFeishuAction, updateOffboardingRecord, generateOffboardingCertificateAction } from '@/actions/hr'
+import { deleteOffboardingRecord, syncOffboardingFromFeishuAction, updateOffboardingRecord, generateOffboardingCertificateAction } from '@/actions/hr'
+import { fetchOffboardingRecords, HrListReadError } from '@/lib/api/hr'
+import { getUserErrorMessage } from '@/lib/user-error'
+import PlatformNotice from '@/components/shared/PlatformNotice'
 import OffboardingForm from './OffboardingForm'
 import OffboardingDetailDrawer from './OffboardingDetailDrawer'
+import { getOffboardingEmploymentStatus } from './offboardingStatus'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
 
 interface OffboardingClientProps {
@@ -33,26 +37,43 @@ export default function OffboardingClient({
   const [viewingRecord, setViewingRecord] = useState<OffboardingRecord | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [editingCell, setEditingCell] = useState<{ recordId: string; field: string } | null>(null)
   const [editingReason, setEditingReason] = useState('')
+  const [today, setToday] = useState(() => dayjs().format('YYYY-MM-DD'))
+
+  useEffect(() => {
+    const refreshDate = () => setToday(dayjs().format('YYYY-MM-DD'))
+    const timer = window.setInterval(refreshDate, 60_000)
+    window.addEventListener('focus', refreshDate)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refreshDate)
+    }
+  }, [])
 
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetchOffboardingRecordsAction({
+      const res = await fetchOffboardingRecords({
         keyword: searchKeyword || undefined,
         page,
         page_size: pageSize })
       setRecords(res.data)
       setTotal(res.meta?.total || 0)
+      setLoadError(null)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '加载数据失败')
+      setLoadError(getUserErrorMessage(err, '离职记录加载失败，请稍后重试'))
+      if (err instanceof HrListReadError && [401, 403].includes(err.status)) {
+        setRecords([])
+        setTotal(0)
+      }
     } finally {
       setLoading(false)
     }
-  }, [searchKeyword, page, pageSize, message])
+  }, [searchKeyword, page, pageSize])
 
   const handlePageChange = (newPage: number, newPageSize: number) => {
     setPage(newPage)
@@ -140,12 +161,6 @@ export default function OffboardingClient({
     { label: '合同到期', value: '合同到期' },
     { label: '退休', value: '退休' },
     { label: '其他', value: '其他' },
-  ]
-
-  // 在职状态选项（页面内联切换；选「离职」触发员工档案转抄）
-  const statusOptions = [
-    { label: '在职', value: '在职' },
-    { label: '离职', value: '离职' },
   ]
 
   // 离职原因选项（可下拉选择或手动输入；HR 自动转离职的特殊原因不在此列）
@@ -263,26 +278,11 @@ export default function OffboardingClient({
       dataIndex: 'status',
       key: 'status',
       width: 90,
-      render: (status: string, record: OffboardingRecord) => {
-        const s = status || record.employee?.status || ''
-        if (editingCell?.recordId === record.id && editingCell?.field === 'status') {
-          return (
-            <Select
-              value={s}
-              options={statusOptions}
-              onChange={(value) => handleCellSave(record.id, 'status', value)}
-              onBlur={handleCellCancel}
-              autoFocus
-              style={{ width: '100%' }}
-              size="small"
-            />
-          )
-        }
+      render: (_: unknown, record: OffboardingRecord) => {
+        const s = getOffboardingEmploymentStatus(record.offboarding_date, today)
         return (
           <Tag
             color={s === '离职' ? 'red' : s === '在职' ? 'green' : 'default'}
-            onClick={() => handleCellEdit(record.id, 'status')}
-            className="cursor-pointer hover:opacity-80"
           >
             {s || '-'}
           </Tag>
@@ -435,11 +435,16 @@ export default function OffboardingClient({
         />
       </div>
 
+      {loadError && <PlatformNotice type="error" title={loadError}
+        description="离职记录查询未成功。临时故障时保留上次加载的记录；登录失效或权限不足时清空记录，请重新登录或联系管理员。恢复后可重试。"
+        action={<Button loading={loading} onClick={loadData}>重试</Button>} />}
+
       <Table
         columns={columns}
         dataSource={records}
         rowKey="id"
         loading={loading}
+        locale={loadError ? { emptyText: '离职记录未加载成功' } : undefined}
         pagination={{
           current: page,
           pageSize,

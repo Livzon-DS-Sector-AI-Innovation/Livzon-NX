@@ -543,6 +543,7 @@ async def test_offboarding_sync_from_feishu_upserts_and_marks_missing(
         execute=AsyncMock(return_value=execute_result),
         add=Mock(),
         commit=AsyncMock(),
+        begin_nested=lambda: _NestedTransaction(),
     )
     instance = service.OffboardingRecordService.__new__(
         service.OffboardingRecordService
@@ -628,6 +629,8 @@ async def test_position_transfer_mapping_sync_and_approval_fields(
     instance._get_position_bitable = AsyncMock(return_value=(client, "tbl-move"))
     instance._get_open_id_by_name = AsyncMock(return_value="ou-applicant")
     instance.repo = SimpleNamespace(update=AsyncMock(), create=AsyncMock())
+    # 回拉同步按 savepoint 逐条入库（单条失败不污染整批）
+    instance.session = SimpleNamespace(begin_nested=lambda: _NestedTransaction())
 
     fields = await instance._build_feishu_fields(record)
     assert fields["申请人"] == "张三"
@@ -655,13 +658,17 @@ async def test_position_transfer_mapping_sync_and_approval_fields(
     client.search_records.return_value = [
         {
             "record_id": "move-2",
+            # 2026-09 新版岗位调动台账结构（姓名/部门前后/岗位前后/调动日期）
             "fields": {
-                "申请人": "李四",
-                "原部门": "生产部",
-                "原职位": "操作员",
-                "申请部门": "质量部",
-                "申请职位": "质量员",
-                "生效日期": "2026-09-01",
+                "序号": 12,
+                "姓名": "李四",
+                "一级部门": "生产部",
+                "二级部门": "一车间",
+                "岗位": "操作员",
+                "一级部门（变动后）": "质量部",
+                "二级部门（变动后）": "检验组",
+                "岗位（变动后）": "质量员",
+                "岗位调动日期": "2026-09-01",
             },
         }
     ]
@@ -686,6 +693,8 @@ async def test_legacy_record_service_sync_status_and_failure_paths() -> None:
         ),
         count_total=AsyncMock(return_value=3),
         count_synced=AsyncMock(return_value=2),
+        # 同步按 savepoint 逐条入库（self.repo.session.begin_nested()）
+        session=SimpleNamespace(begin_nested=lambda: _NestedTransaction()),
     )
     bitable = SimpleNamespace(
         table_id="tbl",

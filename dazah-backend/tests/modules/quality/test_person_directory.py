@@ -177,6 +177,8 @@ async def test_get_qa_reminder_recipients_filters_by_keyword(db_session) -> None
     db_session.add_all(
         [
             _member("qa1", "武一", "质量保证部", enterprise_email="wu1@example.com"),
+            # 同一人兼属排序更靠前的部门，QA 身份不能被 min(department) 覆盖。
+            _member("qa1", "武一", "研发部", enterprise_email="wu1@example.com"),
             _member("qa2", "武二", "QA部", enterprise_email="wu2@example.com"),
             _member("prod", "生一", "生产部", enterprise_email="p@example.com"),
         ]
@@ -191,6 +193,7 @@ async def test_get_qa_reminder_recipients_filters_by_keyword(db_session) -> None
     ]
     by_id = {item["open_id"]: item for item in recipients}
     assert by_id[f"ou_{run_id}_qa1"]["enterprise_email"] == "wu1@example.com"
+    assert by_id[f"ou_{run_id}_qa1"]["department"] == "质量保证部"
 
 
 @pytest.mark.anyio

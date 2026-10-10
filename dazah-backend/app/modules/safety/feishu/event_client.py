@@ -16,9 +16,9 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 import websockets
 
-from app.modules.safety.feishu.client import (
-    SAFETY_FEISHU_APP_ID,
-    SAFETY_FEISHU_APP_SECRET,
+from app.modules.safety.feishu.runtime_config import (
+    SafetyFeishuConfigError,
+    require_safety_feishu_runtime_config,
 )
 
 logger = logging.getLogger(__name__)
@@ -79,14 +79,16 @@ async def _get_ws_url_and_config() -> tuple[str | None, int]:
 
     返回 (url, service_id)。
     """
-    if not SAFETY_FEISHU_APP_ID or not SAFETY_FEISHU_APP_SECRET:
-        logger.error("安全模块飞书配置缺失，无法获取 WebSocket URL")
+    try:
+        config = await require_safety_feishu_runtime_config()
+    except SafetyFeishuConfigError as exc:
+        logger.error("安全模块飞书配置不可用，无法获取 WebSocket URL: %s", exc)
         return None, 0
 
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(
             WS_ENDPOINT_URL,
-            json={"AppID": SAFETY_FEISHU_APP_ID, "AppSecret": SAFETY_FEISHU_APP_SECRET},
+            json={"AppID": config.app_id, "AppSecret": config.app_secret},
         )
         if resp.status_code == 200:
             data = resp.json()
@@ -301,16 +303,15 @@ async def start_ws() -> None:
     _stop = asyncio.Event()
     _ws_task = asyncio.current_task()
 
-    if not SAFETY_FEISHU_APP_ID or not SAFETY_FEISHU_APP_SECRET:
-        logger.warning(
-            "安全模块飞书配置缺失（SAFETY_FEISHU_APP_ID / "
-            "SAFETY_FEISHU_APP_SECRET），跳过事件订阅"
-        )
+    try:
+        config = await require_safety_feishu_runtime_config()
+    except SafetyFeishuConfigError as exc:
+        logger.warning("安全模块飞书配置不可用，跳过事件订阅: %s", exc)
         return
 
     logger.info(
         "启动安全模块飞书事件订阅 (app_id=%s, 最大重试=%d)",
-        SAFETY_FEISHU_APP_ID,
+        config.app_id,
         _MAX_RECONNECT_ATTEMPTS,
     )
 

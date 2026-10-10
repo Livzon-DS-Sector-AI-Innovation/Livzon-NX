@@ -298,7 +298,7 @@ async def test_employee_statistics_assemble_all_distributions() -> None:
         position="QA",
         status="在职",
         is_deleted=False,
-        contract_end_date=date(2026, 9, 1),
+        contract_end_date=date.today() + timedelta(days=15),
         contract_end_2=None,
         contract_end_3=None,
         contract_end_4=None,
@@ -328,6 +328,7 @@ async def test_employee_statistics_assemble_all_distributions() -> None:
 @pytest.mark.anyio
 async def test_employee_statistics_parses_string_contract_end_5() -> None:
     """合同到期取 6 个合同字段最晚非空日期：contract_end_5 为字符串时需解析。"""
+    expiry = date.today() + timedelta(days=15)
     emp = SimpleNamespace(
         employee_number="E002",
         name="李四",
@@ -335,11 +336,11 @@ async def test_employee_statistics_parses_string_contract_end_5() -> None:
         position="QA",
         status="在职",
         is_deleted=False,
-        contract_end_date=date(2026, 8, 1),
+        contract_end_date=date.today() - timedelta(days=15),
         contract_end_2=None,
         contract_end_3=None,
         contract_end_4=None,
-        contract_end_5="2026/09/15",
+        contract_end_5=expiry.strftime("%Y/%m/%d"),
         contract_end_6=None,
     )
     results = [
@@ -354,7 +355,7 @@ async def test_employee_statistics_parses_string_contract_end_5() -> None:
     stats = await repository.EmployeeRepository(session).get_stats({"质量部"})
     assert stats["contract_expiring_count"] == 1
     assert stats["contract_expiring_list"][0]["employee_number"] == "E002"
-    assert stats["contract_expiring_list"][0]["contract_end_date"] == "2026-09-15"
+    assert stats["contract_expiring_list"][0]["contract_end_date"] == expiry.isoformat()
     assert stats["contract_expiring_list"][0]["contract_sequence"] == 5
 
 

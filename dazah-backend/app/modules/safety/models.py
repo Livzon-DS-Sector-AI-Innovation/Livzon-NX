@@ -1546,12 +1546,46 @@ class SpecialOperationPermit(BaseModel):
 
 
 class SafetyKnowledgeArticle(BaseModel):
-    """安全知识库文章表"""
+    """安全知识库文章表（含 EHS 法规库多维表格镜像字段）"""
 
     __tablename__ = "knowledge_articles"
-    __table_args__ = {"schema": "safety"}
+    __table_args__ = (
+        Index(
+            "uq_knowledge_articles_feishu_record_active",
+            "feishu_record_id",
+            unique=True,
+            postgresql_where=text(
+                "is_deleted = false AND feishu_record_id IS NOT NULL"
+            ),
+        ),
+        {"schema": "safety"},
+    )
 
-    title: Mapped[str] = mapped_column(String(255), nullable=False, comment="文章标题")
+    title: Mapped[str] = mapped_column(
+        String(255), nullable=False, comment="文章标题"
+    )
+    article_no: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="法规编号"
+    )
+    regulation_category: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, comment="法规类别（飞书原始值）"
+    )
+    source: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="颁布机关"
+    )
+    promulgation_date: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="颁布修订日期"
+    )
+    implement_date: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="实施日期"
+    )
+    regulation_status: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, comment="法规状态（如 现行有效）"
+    )
+    regulation_link: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="法规链接"
+    )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
     summary: Mapped[str | None] = mapped_column(Text, nullable=True, comment="摘要")
     content: Mapped[str | None] = mapped_column(Text, nullable=True, comment="正文内容")
     tags: Mapped[str | None] = mapped_column(
@@ -1579,6 +1613,42 @@ class SafetyKnowledgeArticle(BaseModel):
     )
     attachment_original_name: Mapped[str | None] = mapped_column(
         String(255), nullable=True, comment="附件原始文件名"
+    )
+    feishu_record_id: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, comment="飞书多维表格 record_id（镜像唯一键）"
+    )
+    feishu_attachments: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        default=list,
+        comment="飞书附件快照 [{file_token,name,size}]",
+    )
+    local_attachments: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        default=list,
+        comment="本地附件快照 [{token,name,size}]（镜像行附件在飞书维护）",
+    )
+    source_type: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="feishu",
+        server_default="feishu",
+        comment="来源: feishu=飞书镜像 / manual=本地录入 / ai_radar=AI雷达发现",
+    )
+    standard_no: Mapped[str | None] = mapped_column(
+        String(80), nullable=True, comment="标准号（如 GB 30871-2022，用于标准库检索）"
+    )
+    version_status: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        comment="标准版本状态: current=现行 / obsolete=已废止 / revised=已修订",
+    )
+    version_checked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="最近版本核查时间"
+    )
+    ai_analysis: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True, comment="AI 分析结果（相关性评分/判定理由/分析时间）"
     )
 
 
@@ -2528,3 +2598,240 @@ class HazardRevisionRecord(BaseModel):
         UUID(as_uuid=True), nullable=True, comment="关联的危害归档ID"
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
+
+
+class SafetyFeishuAppSettings(BaseModel):
+    """安全模块飞书应用配置（单一事实源存数据库，Web 设置页维护）。
+
+    app_secret 使用 app.core.llm.encryption 加密存储；回显仅返回掩码。
+    """
+
+    __tablename__ = "feishu_app_settings"
+    __table_args__ = {"schema": "safety"}
+
+    app_id: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="飞书应用 App ID"
+    )
+    app_secret: Mapped[str] = mapped_column(
+        Text, nullable=False, comment="飞书应用 App Secret（加密存储）"
+    )
+    bitable_app_token: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="隐患多维表格 app_token"
+    )
+    bitable_hazard_table_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="隐患多维表格 table_id"
+    )
+    knowledge_app_token: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="EHS 法规库多维表格 app_token"
+    )
+    knowledge_table_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="EHS 法规库多维表格 table_id"
+    )
+    is_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+        comment="是否启用安全模块飞书集成",
+    )
+    knowledge_last_sync_status: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, comment="知识库最近同步状态: success/failed"
+    )
+    knowledge_last_sync_error: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="知识库最近同步错误信息"
+    )
+    knowledge_last_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="知识库最近同步时间"
+    )
+    last_test_status: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, comment="最近连接测试状态: success/failed"
+    )
+    last_test_error: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="最近连接测试错误信息"
+    )
+    last_tested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="最近连接测试时间"
+    )
+    radar_scan_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+        comment="是否启用法规雷达自动扫描（每周一 08:00）",
+    )
+    radar_notify_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="法规雷达扫描后是否推送飞书通知",
+    )
+    radar_notify_chat_ids: Mapped[list[Any] | None] = mapped_column(
+        JSON, nullable=True, default=list, comment="通知群 chat_id 列表"
+    )
+    radar_notify_user_ids: Mapped[list[Any] | None] = mapped_column(
+        JSON, nullable=True, default=list, comment="通知个人 open_id 列表"
+    )
+
+
+# ==================== EHS 法规雷达 ====================
+
+
+class RegulationRadarSite(BaseModel):
+    """法规雷达来源站点（从表格链接派生 + 人工维护栏目地址）。"""
+
+    __tablename__ = "regulation_radar_sites"
+    __table_args__ = (
+        Index(
+            "uq_regulation_radar_sites_domain_active",
+            "domain",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        {"schema": "safety"},
+    )
+
+    site_code: Mapped[str] = mapped_column(
+        String(50), nullable=False, comment="站点代码（如 mee_gzk）"
+    )
+    site_name: Mapped[str] = mapped_column(
+        String(120), nullable=False, comment="站点名称（如 生态环境部·规章库）"
+    )
+    domain: Mapped[str] = mapped_column(
+        String(120), nullable=False, comment="域名（从表格链接派生）"
+    )
+    channel: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="column",
+        server_default="column",
+        comment="通道类型: column=栏目页抓取 / standard_search=标准号检索",
+    )
+    list_url: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="栏目页地址（column 通道必填）"
+    )
+    parser: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, comment="解析器标识（如 generic_list / openstd_gb）"
+    )
+    is_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true", comment="是否启用"
+    )
+    last_crawled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="最近抓取时间"
+    )
+    last_status: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, comment="最近抓取状态: success/failed"
+    )
+    last_error: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="最近抓取错误信息"
+    )
+    last_item_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0", comment="最近抓取条目数"
+    )
+
+
+class RegulationRadarRun(BaseModel):
+    """法规雷达扫描批次（页面提示与追溯的数据源）。"""
+
+    __tablename__ = "regulation_radar_runs"
+    __table_args__ = {"schema": "safety"}
+
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, comment="开始时间"
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="结束时间"
+    )
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="running",
+        server_default="running",
+        comment="状态: running/success/partial/failed",
+    )
+    trigger: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="manual", server_default="manual",
+        comment="触发方式: manual=手动 / schedule=定时",
+    )
+    dry_run: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="是否干跑",
+    )
+    sites_total: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="参与站点数",
+    )
+    sites_failed: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="抓取失败站点数",
+    )
+    found_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="抓取条目总数",
+    )
+    new_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="判定为新法规数",
+    )
+    revised_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="判定为已修订/已废止数",
+    )
+    link_fixed_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="修复链接数",
+    )
+    skipped_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="跳过数（不相关/重复）",
+    )
+    failed_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="处理失败数",
+    )
+    items: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON, nullable=True, default=list, comment="本批明细 [{action,name,url,...}]"
+    )
+    error_message: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="错误信息"
+    )
+    is_acknowledged: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="页面提示是否已确认",
+    )
+    acknowledged_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="确认时间"
+    )
+    acknowledged_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, comment="确认人"
+    )

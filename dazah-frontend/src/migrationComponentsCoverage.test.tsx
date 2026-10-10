@@ -2969,7 +2969,7 @@ describe('migrated component coverage', () => {
       gender: '男', department: '质量部', position: '分析员', phone: '13800000000', email: 'lisi@example.com',
       offboarding_date: '2026-08-30', offboarding_type: '辞职', handover_status: '待交接',
     }
-    getMock('actions/hr', 'fetchOffboardingRecordsAction').mockResolvedValue({ data: [record], meta: { total: 1 } })
+    getMock('lib/api/hr', 'fetchOffboardingRecords').mockResolvedValue({ data: [record], meta: { total: 1 } })
     getMock('actions/hr', 'syncOffboardingFromFeishuAction').mockResolvedValue({ message: '同步完成' })
     getMock('actions/hr', 'deleteOffboardingRecord').mockResolvedValue({})
     getMock('actions/hr', 'updateOffboardingRecord').mockResolvedValue({})

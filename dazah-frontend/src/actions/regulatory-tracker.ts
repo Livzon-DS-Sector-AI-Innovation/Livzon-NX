@@ -1,6 +1,6 @@
 'use server'
 
-import { cookies } from 'next/headers'
+import { getAuthHeaders } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 
 import type { components } from '@/types/generated/schema'
@@ -68,12 +68,10 @@ function getDefaultRecentWindowDays(): number {
 }
 
 async function actionFetch<T>(path: string, options?: RequestInit): Promise<T | null> {
-  const cookieStore = await cookies()
-  const authToken = cookieStore.get('auth_token')?.value
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      ...await getAuthHeaders(),
       ...(options?.body ? { 'Content-Type': 'application/json' } : {}),
       ...options?.headers,
     },

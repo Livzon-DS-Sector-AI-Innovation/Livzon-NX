@@ -5,10 +5,11 @@ from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace as _SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from docx import Document
+from sqlalchemy.exc import IntegrityError
 
 from app.modules.quality.service import quality_import_export as service
 
@@ -125,19 +126,21 @@ async def test_capa_preview_handles_no_table_valid_missing_and_duplicate(
 async def test_confirm_capa_import_covers_create_update_skip_duplicate_and_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    db: Any = SimpleNamespace(commit=AsyncMock())
+    db: Any = SimpleNamespace(
+        commit=AsyncMock(), begin_nested=MagicMock(side_effect=lambda: AsyncMock())
+    )
     existing = {
-        "C-UP": SimpleNamespace(),
-        "C-SKIP": SimpleNamespace(),
-        "C-DUP": SimpleNamespace(),
+        "C-UP": SimpleNamespace(is_deleted=False),
+        "C-SKIP": SimpleNamespace(is_deleted=False),
+        "C-DUP": SimpleNamespace(is_deleted=False),
     }
 
-    async def get_by_code(_db: Any, code: str) -> Any:
+    async def get_by_code(_db: Any, code: str, **_kwargs: Any) -> Any:
         return existing.get(code)
 
     async def create(_db: Any, data: dict[str, Any]) -> Any:
         if data["capa_code"] == "C-FAIL":
-            raise RuntimeError("create failed")
+            raise IntegrityError("statement", {}, ValueError("duplicate"))
 
     update: Any = AsyncMock()
     monkeypatch.setattr(service.repo, "get_capa_by_code", get_by_code)  # type: ignore[attr-defined]
@@ -245,7 +248,9 @@ async def test_deviation_preview_handles_no_table_valid_missing_and_duplicate(
 async def test_confirm_deviation_import_covers_all_duplicate_paths(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    db: Any = SimpleNamespace(commit=AsyncMock())
+    db: Any = SimpleNamespace(
+        commit=AsyncMock(), begin_nested=MagicMock(side_effect=lambda: AsyncMock())
+    )
     existing = {
         "PC-DELETED": SimpleNamespace(is_deleted=True, deleted_by="x", deleted_at="x"),
         "PC-UP": SimpleNamespace(is_deleted=False),
@@ -253,12 +258,12 @@ async def test_confirm_deviation_import_covers_all_duplicate_paths(
         "PC-DUP": SimpleNamespace(is_deleted=False),
     }
 
-    async def get_by_code(_db: Any, code: str) -> Any:
+    async def get_by_code(_db: Any, code: str, **_kwargs: Any) -> Any:
         return existing.get(code)
 
     async def create(_db: Any, data: dict[str, Any]) -> Any:
         if data["deviation_code"] == "PC-FAIL":
-            raise RuntimeError("create failed")
+            raise IntegrityError("statement", {}, ValueError("duplicate"))
 
     monkeypatch.setattr(
         service.repo,  # type: ignore[attr-defined]
@@ -328,7 +333,9 @@ def test_parse_closed_text_and_discovery_date_patterns() -> None:
 async def test_confirm_deviation_import_parses_closed_and_stub_rows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    db: Any = SimpleNamespace(commit=AsyncMock())
+    db: Any = SimpleNamespace(
+        commit=AsyncMock(), begin_nested=MagicMock(side_effect=lambda: AsyncMock())
+    )
     captured: dict[str, dict[str, Any]] = {}
 
     async def get_by_code(_db: Any, _code: str) -> None:

@@ -925,6 +925,8 @@ class DataScopeRuleUpdateRequest(BaseModel):
 
 
 class DataScopeRuleResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
     id: UUID
     role_id: UUID | None = None
     user_id: UUID | None = None

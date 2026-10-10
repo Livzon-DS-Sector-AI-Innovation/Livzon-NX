@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Position = 0)]
-  [ValidateSet('Build', 'Deploy', 'Rollback', 'Status', 'Verify', 'Help')]
+  [ValidateSet('Build', 'Deploy', 'Rollback', 'Status', 'Verify', 'MaintenanceOn', 'MaintenanceOff', 'Help')]
   [string]$Action = 'Help',
 
   [Parameter(Position = 1)]
@@ -17,6 +17,8 @@ param(
   [string]$BuildProxy,
   [string]$ReuseUnchangedFrom,
   [string]$ReleaseRoot,
+  [ValidateRange(0, 3600)]
+  [int]$NoticeSeconds = 180,
   [switch]$SkipUpload,
   [switch]$SkipDeploy,
   [switch]$NoSudo
@@ -255,6 +257,9 @@ function Prepare-Release {
     Set-Content -LiteralPath "$TarPath.sha256" -Encoding ascii -NoNewline
   Copy-Item -LiteralPath $ComposeFile -Destination (Join-Path $releaseDir 'compose.yml')
   Copy-Item -LiteralPath (Join-Path $Root 'deploy/compose.edge.yml') -Destination (Join-Path $releaseDir 'compose.edge.yml')
+  Copy-Item -LiteralPath (Join-Path $Root 'deploy/nginx-maintenance.conf') -Destination (Join-Path $releaseDir 'nginx-maintenance.conf')
+  Copy-Item -LiteralPath (Join-Path $Root 'deploy/migration-policy.json') -Destination (Join-Path $releaseDir 'migration-policy.json')
+  Copy-Item -LiteralPath (Join-Path $Root 'deploy/single-host/nginx-capacity.conf') -Destination (Join-Path $releaseDir 'nginx-capacity.conf')
   $nginxTemplate = Get-Content -Raw -LiteralPath (Join-Path $Root 'deploy/nginx.default.conf.template')
   $nginxConfig = $nginxTemplate.Replace('__PUBLIC_HOST__', $PublicHost)
   $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
@@ -271,6 +276,9 @@ function Upload-Release([string]$ReleaseDir) {
   Write-Step "上传发布包到服务器"
   $staging = "/tmp/dazah-release-$Version"
   $sudo = if ($NoSudo) { '' } else { 'sudo ' }
+  # A unified archive store must resolve to the operator-validated data disk.
+  $archiveGuard = "if test '$RemoteRelease' = /data/dazah/releases || ${sudo}readlink $RemoteRelease 2>/dev/null | grep -qx /data/dazah/releases || ${sudo}readlink -f $RemoteRelease 2>/dev/null | grep -qx /data/dazah/releases; then ${sudo}python3 $RemoteRoot/control/controller.py mount-check || exit 1; fi"
+  Invoke-Ssh $archiveGuard
   Invoke-Ssh "${sudo}rm -rf $staging; ${sudo}mkdir -p $staging; ${sudo}chown $SshUser`:$SshUser $staging"
   foreach ($name in @(
       "dazah-$Version.tar",
@@ -278,20 +286,23 @@ function Upload-Release([string]$ReleaseDir) {
       'compose.yml',
       'compose.edge.yml',
       'nginx.default.conf',
+      'nginx-maintenance.conf',
+      'migration-policy.json',
+      'nginx-capacity.conf',
       'deploy-production.sh'
     )) {
     Invoke-Scp (Join-Path $ReleaseDir $name) "$staging/"
   }
-  Invoke-Ssh "if ${sudo}test -e $RemoteRelease/$Version; then echo '远端版本目录已存在，拒绝覆盖' >&2; exit 1; fi; ${sudo}mkdir -p $RemoteRelease/$Version; ${sudo}mv $staging/* $RemoteRelease/$Version/; ${sudo}rmdir $staging; ${sudo}install -m 0755 $RemoteRelease/$Version/deploy-production.sh $RemoteCurrent/deploy-production.sh"
+  Invoke-Ssh "$archiveGuard; if ${sudo}test -e $RemoteRelease/$Version; then echo '远端版本目录已存在，拒绝覆盖' >&2; exit 1; fi; ${sudo}mkdir -p $RemoteRelease/$Version; ${sudo}mv $staging/* $RemoteRelease/$Version/; ${sudo}rmdir $staging; ${sudo}install -m 0755 $RemoteRelease/$Version/deploy-production.sh $RemoteCurrent/deploy-production.sh"
 }
 
 function Deploy-Remote {
   Write-Step "执行服务器部署"
   if ($NoSudo) {
-    Invoke-Ssh "DAZAH_ALLOW_UNPRIVILEGED=1 DAZAH_DEPLOY_LOCK=$RemoteCurrent/dazah-deploy.lock bash $RemoteScript deploy $Version $RemoteRelease/$Version"
+    Invoke-Ssh "DAZAH_ALLOW_UNPRIVILEGED=1 DAZAH_DEPLOY_LOCK=$RemoteCurrent/dazah-deploy.lock bash $RemoteScript deploy $Version $RemoteRelease/$Version $NoticeSeconds"
   }
   else {
-    Invoke-Ssh "sudo $RemoteScript deploy $Version $RemoteRelease/$Version"
+    Invoke-Ssh "sudo $RemoteScript deploy $Version $RemoteRelease/$Version $NoticeSeconds"
   }
 }
 
@@ -346,7 +357,7 @@ function Deploy-Action {
 function Remote-Action([string]$RemoteAction, [string]$TargetVersion) {
   Require-Command ssh
   $arguments = if ($TargetVersion) {
-    "$RemoteAction $TargetVersion $RemoteRelease/$TargetVersion"
+    "$RemoteAction $TargetVersion $RemoteRelease/$TargetVersion $NoticeSeconds"
   }
   else {
     $RemoteAction
@@ -403,6 +414,8 @@ try {
     }
     'Status' { Remote-Action 'status' '' }
     'Verify' { Remote-Action 'verify' '' }
+    'MaintenanceOn' { Remote-Action 'maintenance-on' '' }
+    'MaintenanceOff' { Remote-Action 'maintenance-off' '' }
     default { Show-Help }
   }
 }

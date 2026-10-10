@@ -5715,6 +5715,74 @@
         "title": "ApiResponseEnvelope[ReturnRecallOut]",
         "type": "object"
       },
+      "ApiResponseEnvelope_SafetyFeishuAppSettingsDetail_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SafetyFeishuAppSettingsDetail"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[SafetyFeishuAppSettingsDetail]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_SafetyFeishuSettingsTestResult_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SafetyFeishuSettingsTestResult"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[SafetyFeishuSettingsTestResult]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_SupplierOut_": {
         "properties": {
           "code": {
@@ -11901,18 +11969,21 @@
         "title": "Body_upload_historical_deviation_attachment_api_api_v1_quality_historical_deviations__record_id__attachments_post",
         "type": "object"
       },
-      "Body_upload_knowledge_article_attachment_api_v1_safety_knowledge_articles__article_id__upload_post": {
+      "Body_upload_knowledge_attachments_api_v1_safety_knowledge_articles__article_id__attachments_post": {
         "properties": {
-          "file": {
-            "contentMediaType": "application/octet-stream",
-            "title": "File",
-            "type": "string"
+          "files": {
+            "items": {
+              "contentMediaType": "application/octet-stream",
+              "type": "string"
+            },
+            "title": "Files",
+            "type": "array"
           }
         },
         "required": [
-          "file"
+          "files"
         ],
-        "title": "Body_upload_knowledge_article_attachment_api_v1_safety_knowledge_articles__article_id__upload_post",
+        "title": "Body_upload_knowledge_attachments_api_v1_safety_knowledge_articles__article_id__attachments_post",
         "type": "object"
       },
       "Body_upload_label_verification_video_api_v1_production_label_verifications_upload_video_post": {
@@ -46716,21 +46787,6 @@
         "title": "KnowledgeAttachmentResponse",
         "type": "object"
       },
-      "KnowledgeCategory": {
-        "description": "安全知识库分类枚举",
-        "enum": [
-          "laws_regulations",
-          "standards",
-          "management_systems",
-          "accident_cases",
-          "emergency_plans",
-          "sds",
-          "training_materials",
-          "other"
-        ],
-        "title": "KnowledgeCategory",
-        "type": "string"
-      },
       "KnowledgeCategoryCreate": {
         "description": "新增知识分类。",
         "properties": {
@@ -54760,6 +54816,50 @@
         "title": "OperationLevel",
         "type": "string"
       },
+      "OperationReceipt": {
+        "properties": {
+          "http_status": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Http Status"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "unknown",
+              "completed",
+              "rejected"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "number"
+          }
+        },
+        "required": [
+          "method",
+          "path",
+          "state",
+          "updated_at"
+        ],
+        "title": "OperationReceipt",
+        "type": "object"
+      },
       "OperationRegulationCreate": {
         "description": "创建安全操作规程",
         "properties": {
@@ -54941,6 +55041,28 @@
           }
         },
         "title": "OperationRegulationUpdate",
+        "type": "object"
+      },
+      "OperationResult": {
+        "properties": {
+          "operation_id": {
+            "format": "uuid",
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "receipts": {
+            "items": {
+              "$ref": "#/components/schemas/OperationReceipt"
+            },
+            "title": "Receipts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "operation_id",
+          "receipts"
+        ],
+        "title": "OperationResult",
         "type": "object"
       },
       "OralExamExportRequest": {
@@ -66710,15 +66832,20 @@
         "title": "SafetyCheckUpdate",
         "type": "object"
       },
-      "SafetyKnowledgeArticleCreate": {
-        "description": "创建知识库文章",
+      "SafetyFeishuAppSettingsDetail": {
+        "description": "飞书应用配置回显（Secret 仅返回掩码）。",
         "properties": {
-          "category": {
-            "$ref": "#/components/schemas/KnowledgeCategory",
-            "default": "other",
-            "description": "分类"
+          "app_id": {
+            "default": "",
+            "title": "App Id",
+            "type": "string"
           },
-          "content": {
+          "app_secret_masked": {
+            "default": "",
+            "title": "App Secret Masked",
+            "type": "string"
+          },
+          "bitable_app_token": {
             "anyOf": [
               {
                 "type": "string"
@@ -66727,8 +66854,271 @@
                 "type": "null"
               }
             ],
-            "description": "正文内容",
-            "title": "Content"
+            "title": "Bitable App Token"
+          },
+          "bitable_hazard_table_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bitable Hazard Table Id"
+          },
+          "is_enabled": {
+            "default": true,
+            "title": "Is Enabled",
+            "type": "boolean"
+          },
+          "knowledge_app_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knowledge App Token"
+          },
+          "knowledge_last_sync_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knowledge Last Sync Error"
+          },
+          "knowledge_last_sync_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knowledge Last Sync Status"
+          },
+          "knowledge_last_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knowledge Last Synced At"
+          },
+          "knowledge_table_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knowledge Table Id"
+          },
+          "last_test_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Test Error"
+          },
+          "last_test_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Test Status"
+          },
+          "last_tested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Tested At"
+          },
+          "radar_notify_chat_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Radar Notify Chat Ids",
+            "type": "array"
+          },
+          "radar_notify_enabled": {
+            "default": false,
+            "title": "Radar Notify Enabled",
+            "type": "boolean"
+          },
+          "radar_notify_user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Radar Notify User Ids",
+            "type": "array"
+          },
+          "radar_scan_enabled": {
+            "default": true,
+            "title": "Radar Scan Enabled",
+            "type": "boolean"
+          }
+        },
+        "title": "SafetyFeishuAppSettingsDetail",
+        "type": "object"
+      },
+      "SafetyFeishuSettingsTestResult": {
+        "description": "飞书应用连接测试结果。",
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success",
+          "message",
+          "checked_at"
+        ],
+        "title": "SafetyFeishuSettingsTestResult",
+        "type": "object"
+      },
+      "SafetyKnowledgeArticleCreate": {
+        "description": "创建知识库文章",
+        "properties": {
+          "article_no": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "法规编号",
+            "title": "Article No"
+          },
+          "implement_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "实施日期",
+            "title": "Implement Date"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "备注",
+            "title": "Notes"
+          },
+          "promulgation_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "颁布修订日期",
+            "title": "Promulgation Date"
+          },
+          "regulation_category": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "法规类别",
+            "title": "Regulation Category"
+          },
+          "regulation_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "法规链接",
+            "title": "Regulation Link"
+          },
+          "regulation_status": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "法规状态",
+            "title": "Regulation Status"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "颁布机关",
+            "title": "Source"
           },
           "summary": {
             "anyOf": [
@@ -66739,24 +67129,11 @@
                 "type": "null"
               }
             ],
-            "description": "摘要",
+            "description": "核心要点总结",
             "title": "Summary"
           },
-          "tags": {
-            "anyOf": [
-              {
-                "maxLength": 500,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "标签（逗号分隔）",
-            "title": "Tags"
-          },
           "title": {
-            "description": "文章标题",
+            "description": "法律法规及标准名称",
             "maxLength": 255,
             "title": "Title",
             "type": "string"
@@ -66771,18 +67148,33 @@
       "SafetyKnowledgeArticleUpdate": {
         "description": "更新知识库文章",
         "properties": {
-          "category": {
+          "article_no": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/KnowledgeCategory"
+                "maxLength": 100,
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "分类"
+            "description": "法规编号",
+            "title": "Article No"
           },
-          "content": {
+          "implement_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "实施日期",
+            "title": "Implement Date"
+          },
+          "notes": {
             "anyOf": [
               {
                 "type": "string"
@@ -66791,21 +67183,72 @@
                 "type": "null"
               }
             ],
-            "description": "正文内容",
-            "title": "Content"
+            "description": "备注",
+            "title": "Notes"
           },
-          "status": {
+          "promulgation_date": {
             "anyOf": [
               {
-                "maxLength": 32,
+                "format": "date-time",
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "状态",
-            "title": "Status"
+            "description": "颁布修订日期",
+            "title": "Promulgation Date"
+          },
+          "regulation_category": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "法规类别",
+            "title": "Regulation Category"
+          },
+          "regulation_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "法规链接",
+            "title": "Regulation Link"
+          },
+          "regulation_status": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "法规状态",
+            "title": "Regulation Status"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "颁布机关",
+            "title": "Source"
           },
           "summary": {
             "anyOf": [
@@ -66816,21 +67259,8 @@
                 "type": "null"
               }
             ],
-            "description": "摘要",
+            "description": "核心要点总结",
             "title": "Summary"
-          },
-          "tags": {
-            "anyOf": [
-              {
-                "maxLength": 500,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "标签（逗号分隔）",
-            "title": "Tags"
           },
           "title": {
             "anyOf": [
@@ -66842,7 +67272,7 @@
                 "type": "null"
               }
             ],
-            "description": "文章标题",
+            "description": "法律法规及标准名称",
             "title": "Title"
           }
         },
@@ -80340,6 +80770,105 @@
           }
         },
         "title": "UpdateReturnRecallRequest",
+        "type": "object"
+      },
+      "UpdateSafetyFeishuAppSettingsRequest": {
+        "description": "保存飞书应用配置。\n\napp_secret 留空或传回掩码值表示保持当前 Secret 不变；\n首次保存（尚无存量配置）时必须提供明文 Secret。",
+        "properties": {
+          "app_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "App Id",
+            "type": "string"
+          },
+          "app_secret": {
+            "default": "",
+            "maxLength": 200,
+            "title": "App Secret",
+            "type": "string"
+          },
+          "bitable_app_token": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bitable App Token"
+          },
+          "bitable_hazard_table_id": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bitable Hazard Table Id"
+          },
+          "is_enabled": {
+            "default": true,
+            "title": "Is Enabled",
+            "type": "boolean"
+          },
+          "knowledge_app_token": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knowledge App Token"
+          },
+          "knowledge_table_id": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knowledge Table Id"
+          },
+          "radar_notify_chat_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Radar Notify Chat Ids",
+            "type": "array"
+          },
+          "radar_notify_enabled": {
+            "default": false,
+            "title": "Radar Notify Enabled",
+            "type": "boolean"
+          },
+          "radar_notify_user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Radar Notify User Ids",
+            "type": "array"
+          },
+          "radar_scan_enabled": {
+            "default": true,
+            "title": "Radar Scan Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "app_id"
+        ],
+        "title": "UpdateSafetyFeishuAppSettingsRequest",
         "type": "object"
       },
       "UpdateSolidMaterialInspectionRequest": {
@@ -207006,6 +207535,164 @@
         ]
       }
     },
+    "/api/v1/safety/feishu-settings/app": {
+      "get": {
+        "description": "返回当前配置（App Secret 仅掩码回显）。",
+        "operationId": "get_safety_feishu_app_settings_api_v1_safety_feishu_settings_app_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyFeishuAppSettingsDetail_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取安全模块飞书应用配置",
+        "tags": [
+          "安全管理"
+        ]
+      },
+      "put": {
+        "description": "保存应用凭证与隐患多维表格绑定；Secret 加密存储。",
+        "operationId": "save_safety_feishu_app_settings_api_v1_safety_feishu_settings_app_put",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSafetyFeishuAppSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyFeishuAppSettingsDetail_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "保存安全模块飞书应用配置",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/feishu-settings/app/test": {
+      "post": {
+        "description": "用已保存凭证换取 tenant_access_token 验证连通性并记录结果。",
+        "operationId": "test_safety_feishu_app_settings_api_v1_safety_feishu_settings_app_test_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyFeishuSettingsTestResult_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "测试安全模块飞书应用连接",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
     "/api/v1/safety/feishu/ws/restart": {
       "post": {
         "description": "WS 因重试次数耗尽（3 次）自动停止后，手动重新建立连接。\n\n无需传参，调用即重置重试计数并创建新的 WS 任务。\n返回当前已注册的事件类型列表。",
@@ -209313,38 +210000,6 @@
           },
           {
             "in": "query",
-            "name": "category",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Category"
-            }
-          },
-          {
-            "in": "query",
-            "name": "status",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Status"
-            }
-          },
-          {
-            "in": "query",
             "name": "keyword",
             "required": false,
             "schema": {
@@ -209357,6 +210012,22 @@
                 }
               ],
               "title": "Keyword"
+            }
+          },
+          {
+            "in": "query",
+            "name": "regulation_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Regulation Status"
             }
           },
           {
@@ -209457,6 +210128,421 @@
           }
         },
         "summary": "创建安全知识库文章",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/knowledge-articles/feishu/records/{record_id}/attachments/{file_token}/content": {
+      "get": {
+        "description": "按附件快照校验后经安全应用凭证代理下载（平台缓存加速）。",
+        "operationId": "download_knowledge_attachment_api_v1_safety_knowledge_articles_feishu_records__record_id__attachments__file_token__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_token",
+            "required": true,
+            "schema": {
+              "title": "File Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "下载知识库飞书附件",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/knowledge-articles/feishu/records/{record_id}/attachments/{file_token}/preview": {
+      "get": {
+        "description": "浏览器内联预览（PDF/图片直接打开，其余类型回退为下载）。",
+        "operationId": "preview_knowledge_attachment_api_v1_safety_knowledge_articles_feishu_records__record_id__attachments__file_token__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_token",
+            "required": true,
+            "schema": {
+              "title": "File Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "在线预览知识库飞书附件",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/knowledge-articles/feishu/sync": {
+      "post": {
+        "description": "全量拉取 EHS 法规库并按 feishu_record_id upsert 本地镜像。",
+        "operationId": "sync_knowledge_from_feishu_api_v1_safety_knowledge_articles_feishu_sync_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "从 EHS 法规库多维表格同步知识库",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/knowledge-articles/radar/notify/test": {
+      "post": {
+        "description": "向已配置的群/个人发送一条测试卡片，验证通知目标配置。",
+        "operationId": "test_regulation_radar_notify_api_v1_safety_knowledge_articles_radar_notify_test_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "测试法规雷达通知发送",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/knowledge-articles/radar/run": {
+      "post": {
+        "description": "扫描官方栏目页，发现新法规与已修订法规。dry_run 只出报告不写入。",
+        "operationId": "run_regulation_radar_api_v1_safety_knowledge_articles_radar_run_post",
+        "parameters": [
+          {
+            "description": "干跑：只比对不写入飞书表",
+            "in": "query",
+            "name": "dry_run",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "干跑：只比对不写入飞书表",
+              "title": "Dry Run",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "手动执行法规雷达扫描",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/knowledge-articles/radar/runs": {
+      "get": {
+        "description": "返回最近的扫描批次（新的在前）。",
+        "operationId": "list_regulation_radar_runs_api_v1_safety_knowledge_articles_radar_runs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "查询法规雷达扫描批次",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/knowledge-articles/radar/runs/{run_id}": {
+      "get": {
+        "operationId": "get_regulation_radar_run_api_v1_safety_knowledge_articles_radar_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "查询法规雷达扫描批次详情",
         "tags": [
           "安全管理"
         ]
@@ -209648,130 +210734,10 @@
         ]
       }
     },
-    "/api/v1/safety/knowledge-articles/{article_id}/archive": {
+    "/api/v1/safety/knowledge-articles/{article_id}/attachments": {
       "post": {
-        "description": "归档文章（已发布→已归档）",
-        "operationId": "archive_knowledge_article_api_v1_safety_knowledge_articles__article_id__archive_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "article_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Article Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "归档知识库文章",
-        "tags": [
-          "安全管理"
-        ]
-      }
-    },
-    "/api/v1/safety/knowledge-articles/{article_id}/publish": {
-      "post": {
-        "description": "发布文章（草稿→已发布）",
-        "operationId": "publish_knowledge_article_api_v1_safety_knowledge_articles__article_id__publish_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "article_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Article Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "发布知识库文章",
-        "tags": [
-          "安全管理"
-        ]
-      }
-    },
-    "/api/v1/safety/knowledge-articles/{article_id}/upload": {
-      "post": {
-        "description": "上传知识库文章附件",
-        "operationId": "upload_knowledge_article_attachment_api_v1_safety_knowledge_articles__article_id__upload_post",
+        "description": "镜像文档附件请在飞书多维表格维护；本端点仅服务本地创建的文档。",
+        "operationId": "upload_knowledge_attachments_api_v1_safety_knowledge_articles__article_id__attachments_post",
         "parameters": [
           {
             "in": "path",
@@ -209804,7 +210770,7 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_upload_knowledge_article_attachment_api_v1_safety_knowledge_articles__article_id__upload_post"
+                "$ref": "#/components/schemas/Body_upload_knowledge_attachments_api_v1_safety_knowledge_articles__article_id__attachments_post"
               }
             }
           },
@@ -209832,7 +210798,210 @@
             "description": "Validation Error"
           }
         },
-        "summary": "上传知识库文章附件",
+        "summary": "为本地文档上传附件（支持多文件）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/knowledge-articles/{article_id}/attachments/{token}": {
+      "delete": {
+        "description": "删除附件快照与磁盘文件。",
+        "operationId": "delete_knowledge_attachment_api_v1_safety_knowledge_articles__article_id__attachments__token__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "article_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Article Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除本地文档附件",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/knowledge-articles/{article_id}/attachments/{token}/content": {
+      "get": {
+        "description": "校验属主后返回文件流（attachment）。",
+        "operationId": "download_knowledge_local_attachment_api_v1_safety_knowledge_articles__article_id__attachments__token__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "article_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Article Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "下载本地文档附件",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/knowledge-articles/{article_id}/attachments/{token}/preview": {
+      "get": {
+        "description": "PDF/图片浏览器内联预览，其余类型回退为下载。",
+        "operationId": "preview_knowledge_local_attachment_api_v1_safety_knowledge_articles__article_id__attachments__token__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "article_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Article Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "在线预览本地文档附件",
         "tags": [
           "安全管理"
         ]
@@ -217098,6 +218267,65 @@
           }
         },
         "summary": "业务模块清单",
+        "tags": [
+          "系统"
+        ]
+      }
+    },
+    "/api/v1/system/operations/{operation_id}": {
+      "get": {
+        "operationId": "get_operation_result_api_v1_system_operations__operation_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Operation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "查询本人操作的处理结果",
         "tags": [
           "系统"
         ]

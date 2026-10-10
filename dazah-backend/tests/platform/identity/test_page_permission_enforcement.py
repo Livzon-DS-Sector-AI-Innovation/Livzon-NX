@@ -579,6 +579,84 @@ def test_quality_module_landing_routes_resolve_reviewed_alias():
     assert "quality:change:change-ledger" in stats.page_keys
 
 
+def test_all_enabled_directory_routes_resolve_to_real_permission_pages():
+    def walk(nodes):
+        for node in nodes:
+            if node.get("disabled"):
+                continue
+            children = node.get("children") or []
+            if children and node.get("path"):
+                key = page_policy.page_key_for_route(node["path"])
+                assert key in page_policy.PAGES_BY_KEY, node["path"]
+            walk(children)
+
+    for module in page_policy.SEED_MENUS:
+        if not module.get("disabled"):
+            walk(module.get("children") or [])
+
+
+def test_deviation_dashboard_context_uses_the_statistics_grant():
+    key = page_policy.page_key_for_route("/quality/deviations")
+    binding = page_policy.api_binding_for_route(
+        "GET", "/api/v1/quality/statistics/deviations"
+    )
+    assert key == "quality:deviations:deviation-ledger"
+    assert binding is not None and key in binding.page_keys
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "granted_key,permissions,expected",
+    [
+        ("quality:deviations:deviation-ledger", ["access", "query"], 200),
+        ("quality:deviations:deviation-ledger", ["access"], 403),
+        ("quality:deviations:deviation-records", ["access", "query"], 403),
+    ],
+)
+async def test_deviation_directory_api_context_preserves_grant_scope(
+    monkeypatch, granted_key, permissions, expected
+):
+    user = SimpleNamespace(id=uuid4(), role="user")
+
+    async def grants(*args, **kwargs):
+        return [
+            EffectivePageGrantOut(
+                page_key=granted_key,
+                module_code="quality",
+                permissions=permissions,
+                sensitive_actions=[],
+                data_scope=PageDataScopeInput(scope_type="all"),
+                source="user",
+            )
+        ]
+
+    monkeypatch.setattr(PagePermissionService, "effective_grants", grants)
+    app = FastAPI()
+    app.dependency_overrides[deps.get_current_user] = lambda: user
+    app.dependency_overrides[get_db] = lambda: None
+    app.dependency_overrides[deps.get_settings] = lambda: SimpleNamespace(
+        effective_module_access_mode="roles"
+    )
+
+    @app.get(
+        "/api/v1/quality/statistics/deviations",
+        dependencies=[Depends(deps.require_module_view("quality"))],
+    )
+    async def statistics():
+        return {"count": 1}
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            "/api/v1/quality/statistics/deviations",
+            headers={
+                "X-Dazah-Page-Path": "/quality/deviations",
+            },
+        )
+        assert response.status_code == expected
+
+
 def test_oos_report_attachment_routes_require_report_page_query():
     from app.platform.identity.quality_api_contract import QUALITY_REVIEWED_API_ROUTES
 

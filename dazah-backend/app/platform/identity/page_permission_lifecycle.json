@@ -667,7 +667,12 @@
       "status": "active",
       "module_code": "safety",
       "route_path": "/safety/knowledge-base",
-      "actions": {}
+      "actions": {
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     },
     "rd:route-development": {
       "status": "active",
@@ -4676,6 +4681,17 @@
       "module_code": "production",
       "route_path": "/production/summary",
       "actions": {}
+    },
+    "safety:system-config:safety-feishu-settings": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/settings/feishu",
+      "actions": {
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     }
   }
 }

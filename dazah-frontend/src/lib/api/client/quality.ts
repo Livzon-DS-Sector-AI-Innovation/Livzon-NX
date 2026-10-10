@@ -1401,6 +1401,18 @@ export async function fetchQualityPersonDirectory(): Promise<QualityPersonOption
   return json.data ?? []
 }
 
+/** 质量设置人员搜索：使用人事飞书联系人缓存中的在职人员。 */
+export async function searchQualityPersonOptions(
+  keyword: string,
+  limit = 20,
+): Promise<QualityPersonOption[]> {
+  const params = new URLSearchParams({ keyword: keyword.trim(), limit: String(limit) })
+  const res = await fetch(`/api/v1/quality/person-options?${params.toString()}`)
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return json.data ?? []
+}
+
 /** 按部门收敛的人员候选（质量检验表单选人用，如 QC/AI创新部） */
 export async function fetchQualityPersonOptions(
   departments: string[],

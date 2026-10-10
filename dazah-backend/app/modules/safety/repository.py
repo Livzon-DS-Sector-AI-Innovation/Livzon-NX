@@ -1530,8 +1530,8 @@ class SafetyRepository:
         skip: int = 0,
         limit: int = 20,
         category: str | None = None,
-        status: str | None = None,
         keyword: str | None = None,
+        regulation_status: str | None = None,
     ) -> tuple[list[SafetyKnowledgeArticle], int]:
         """获取安全知识库文章列表"""
         query = select(SafetyKnowledgeArticle).where(
@@ -1540,8 +1540,10 @@ class SafetyRepository:
 
         if category:
             query = query.where(SafetyKnowledgeArticle.category == category)
-        if status:
-            query = query.where(SafetyKnowledgeArticle.status == status)
+        if regulation_status:
+            query = query.where(
+                SafetyKnowledgeArticle.regulation_status == regulation_status
+            )
         if keyword:
             like = f"%{keyword}%"
             query = query.where(
@@ -1549,6 +1551,10 @@ class SafetyRepository:
                 | SafetyKnowledgeArticle.summary.ilike(like)
                 | SafetyKnowledgeArticle.content.ilike(like)
                 | SafetyKnowledgeArticle.tags.ilike(like)
+                | SafetyKnowledgeArticle.article_no.ilike(like)
+                | SafetyKnowledgeArticle.source.ilike(like)
+                | SafetyKnowledgeArticle.regulation_category.ilike(like)
+                | SafetyKnowledgeArticle.notes.ilike(like)
             )
 
         count_query = select(func.count(SafetyKnowledgeArticle.id)).where(
@@ -1556,8 +1562,10 @@ class SafetyRepository:
         )
         if category:
             count_query = count_query.where(SafetyKnowledgeArticle.category == category)
-        if status:
-            count_query = count_query.where(SafetyKnowledgeArticle.status == status)
+        if regulation_status:
+            count_query = count_query.where(
+                SafetyKnowledgeArticle.regulation_status == regulation_status
+            )
         if keyword:
             like = f"%{keyword}%"
             count_query = count_query.where(
@@ -1565,6 +1573,10 @@ class SafetyRepository:
                 | SafetyKnowledgeArticle.summary.ilike(like)
                 | SafetyKnowledgeArticle.content.ilike(like)
                 | SafetyKnowledgeArticle.tags.ilike(like)
+                | SafetyKnowledgeArticle.article_no.ilike(like)
+                | SafetyKnowledgeArticle.source.ilike(like)
+                | SafetyKnowledgeArticle.regulation_category.ilike(like)
+                | SafetyKnowledgeArticle.notes.ilike(like)
             )
 
         total = await self.session.scalar(count_query)

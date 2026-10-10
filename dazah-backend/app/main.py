@@ -20,6 +20,7 @@ import app.platform.audit.models as _audit_models  # noqa: F401
 import app.platform.identity.models as _identity_models  # noqa: F401
 from app.api.router import api_router
 from app.core.config import get_settings
+from app.core.maintenance_middleware import MaintenanceMiddleware
 from app.core.exceptions import AppException
 from app.core.llm import (
     LLMConfigError,
@@ -289,6 +290,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_registry.register_generator(ResumeFolderScanner())
     scheduler_registry.register_generator(MailFetchScanner())
 
+    # ── 安全模块法规雷达（每周一 08:00） ──
+    try:
+        from app.modules.safety.scheduled import SafetyRegulationRadarGenerator
+
+        scheduler_registry.register_generator(SafetyRegulationRadarGenerator())
+    except Exception:
+        logger.exception("注册安全模块法规雷达调度任务失败")
+
     # ── 法规跟踪三阶段流水线（00:10 抓取 / 02:00 AI 分析 / 10:00 推送） ──
     try:
         from app.modules.regulatory_tracker.scheduled import (
@@ -421,8 +430,12 @@ app.add_middleware(
 # only as a development compatibility override and is ignored in production.
 from app.platform.identity.permission_middleware import PermissionMiddleware  # noqa: E402
 
+app.add_middleware(MaintenanceMiddleware)
 app.add_middleware(PermissionMiddleware)
 app.add_middleware(AuditMiddleware)
+# Admission precedes identity DB access; the inner instance journals only after
+# identity authentication has supplied the authoritative owner.
+app.add_middleware(MaintenanceMiddleware, journal=False)
 
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 

@@ -198,6 +198,9 @@ def deployment_control(tmp_path, monkeypatch):
     from types import SimpleNamespace
     monkeypatch.setattr(cd.shutil, "disk_usage", lambda _: SimpleNamespace(free=100 * 1024**3))
     monkeypatch.setattr(control, "drain", lambda: None)
+    monkeypatch.setattr(control, "announce", lambda: None)
+    monkeypatch.setattr(control, "business_phase", lambda phase: None)
+    monkeypatch.setattr(control, "wait_work_finished", lambda: None)
     monkeypatch.setattr(control, "wait_ready", lambda **kw: None)
     monkeypatch.setattr(control, "revision", lambda: "old")
     monkeypatch.setattr(control, "backup", lambda kind: tmp_path / "backup")
@@ -213,6 +216,93 @@ def test_site_configuration_drift_refuses_before_maintenance(tmp_path, monkeypat
     with pytest.raises(cd.Refused, match="configuration changed"):
         control.deploy("a" * 40, manifest)
     assert not (control.state_dir / "public" / "maintenance").exists()
+
+
+def test_countdown_keeps_traffic_open_until_notice_has_elapsed(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    phases, elapsed = [], [0]
+    monkeypatch.setattr(control, "business_phase", phases.append)
+    monkeypatch.setattr(cd.time, "time", lambda: 1000)
+    monkeypatch.setattr(cd.time, "monotonic", lambda: elapsed[0])
+    monkeypatch.setattr(control, "containers", lambda: {
+        s: {"state": "running", "health": "healthy"} for s in (*cd.APPS, *cd.DEPS, "nginx")})
+
+    def wait(seconds):
+        assert not (control.state_dir / "public" / "maintenance").exists()
+        assert cd.read_json(control.state_dir / "public" / "status.json") == {"phase": "announced", "starts_at": 1180}
+        elapsed[0] += seconds
+
+    monkeypatch.setattr(cd.time, "sleep", wait)
+    cd.Controller.announce(control)
+    assert elapsed[0] == 180
+    assert phases == ["normal"]
+
+
+def test_notice_dependency_failure_closes_gate_and_clears_countdown(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    monkeypatch.setattr(control, "containers", lambda: {})
+    with pytest.raises(cd.Refused, match="unavailable during"):
+        cd.Controller.announce(control, 300)
+    assert (control.state_dir / "public" / "maintenance").exists()
+    assert not (control.state_dir / "public" / "status.json").exists()
+
+
+def test_notice_cannot_extend_unattended_switch_past_cutoff(tmp_path, monkeypatch):
+    control, manifest = deployment_control(tmp_path, monkeypatch)
+    monkeypatch.setattr(cd, "in_window", lambda *a, **k: False)
+    with pytest.raises(cd.Refused, match="cutoff reached during"):
+        control.deploy("a" * 40, manifest, enforce_window=True)
+    assert not (control.state_dir / "public" / "maintenance").exists()
+
+
+@pytest.mark.parametrize("seconds", [-1, 3601, True, "300"])
+def test_invalid_notice_refused_before_announcement(tmp_path, monkeypatch, seconds):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    with pytest.raises(cd.Refused, match="notice"):
+        cd.Controller.announce(control, seconds)
+    assert not (control.state_dir / "public" / "status.json").exists()
+
+
+def test_drain_waits_for_business_work_after_nginx_becomes_idle(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    phases, reports, elapsed = [], iter([2, 1, 0]), [0]
+    monkeypatch.setattr(control, "business_phase", phases.append)
+    monkeypatch.setattr(cd.time, "monotonic", lambda: elapsed[0])
+    monkeypatch.setattr(cd.time, "sleep", lambda seconds: elapsed.__setitem__(0, elapsed[0] + seconds))
+
+    def compose(*args, **kwargs):
+        if "nginx" in args:
+            return "Reading: 0 Writing: 1 Waiting: 8"
+        return json.dumps({"active": next(reports)})
+
+    monkeypatch.setattr(control, "compose", compose)
+    cd.Controller.drain(control)
+    assert phases == ["draining"]
+    assert elapsed[0] == 6
+
+
+def test_undrained_tasks_never_stop_restart_or_reopen_apps(tmp_path, monkeypatch):
+    control, manifest = deployment_control(tmp_path, monkeypatch)
+    calls = []
+    monkeypatch.setattr(control, "compose", lambda *a, **kw: calls.append(a))
+    monkeypatch.setattr(control, "drain", lambda: (_ for _ in ()).throw(cd.Refused("business work did not drain")))
+    with pytest.raises(cd.Refused, match="did not drain"):
+        control.deploy("a" * 40, manifest)
+    assert calls == []
+    assert (control.state_dir / "public" / "maintenance").exists()
+    assert cd.read_json(control.state_file)["traffic_opened"] is False
+
+
+def test_unfinished_bootstrap_or_interrupted_work_prevents_reopening(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    control.maintenance(True)
+    phases = []
+    monkeypatch.setattr(control, "business_phase", phases.append)
+    monkeypatch.setattr(control, "wait_work_finished", lambda: (_ for _ in ()).throw(cd.Refused("unfinished business work")))
+    with pytest.raises(cd.Refused, match="unfinished"):
+        control.maintenance_off()
+    assert phases == ["draining"]
+    assert (control.state_dir / "public" / "maintenance").exists()
 
 
 def test_backup_failure_restores_apps_before_reopening(tmp_path, monkeypatch):
@@ -373,7 +463,7 @@ def test_retention_preserves_recovery_points_and_unfinished_backups(tmp_path, mo
     for day in range(1, 16):
         path = root / f"daily-202609{day:02d}T010000Z"
         path.mkdir()
-        cd.atomic_json(path / "manifest.json", {"kind": "daily", "files": {}})
+        write_backup_manifest(path)
         paths.append(path)
     unfinished = root / "daily-20260801T010000Z"
     unfinished.mkdir()
@@ -382,6 +472,181 @@ def test_retention_preserves_recovery_points_and_unfinished_backups(tmp_path, mo
     assert paths[0].exists() and unfinished.exists()
     assert all(path.exists() for path in paths[-7:])
     assert not paths[1].exists()
+
+
+def write_backup_manifest(path, *, version=None):
+    files = {}
+    for name in ("database.dump", "config.tar.gz", "redis.rdb"):
+        file = path / name
+        file.write_bytes(b"isolated backup test fixture")
+        files[name] = cd.digest(file)
+    cd.atomic_json(path / "manifest.json", {"kind": "daily", "files": files, "release_version": version})
+
+
+def test_online_archive_retries_changed_files_and_checks_readability(tmp_path, monkeypatch):
+    calls = []
+    target = tmp_path / "files.tar.gz"
+
+    def run(args, **kwargs):
+        calls.append((args, kwargs))
+        if args[1] == "-czf":
+            target.write_bytes(b"incomplete" if len(calls) == 1 else b"completed")
+            if len(calls) == 1:
+                raise cd.Refused("operation failed: tar, exit=1")
+        return ""
+
+    monkeypatch.setattr(cd, "command", run)
+    monkeypatch.setattr(cd.time, "sleep", lambda _: None)
+    assert cd.archive_directory(tmp_path, target) == 2
+    assert target.read_bytes() == b"completed"
+    assert [args[1] for args, _ in calls] == ["-czf", "-czf", "-tzf"]
+    assert calls[-1][1]["output"] == cd.subprocess.DEVNULL
+    assert all(0 < options["timeout"] <= 600 for _, options in calls)
+
+
+@pytest.mark.parametrize("reason,expected_attempts", [
+    ("operation failed: tar, exit=1", 3),
+    ("operation failed: tar, exit=2", 1),
+])
+def test_archive_never_accepts_failed_tar(tmp_path, monkeypatch, reason, expected_attempts):
+    attempts = []
+
+    def run(args, **kwargs):
+        attempts.append(args)
+        raise cd.Refused(reason)
+
+    monkeypatch.setattr(cd, "command", run)
+    monkeypatch.setattr(cd.time, "sleep", lambda _: None)
+    with pytest.raises(cd.Refused):
+        cd.archive_directory(tmp_path, tmp_path / "files.tar.gz")
+    assert len(attempts) == expected_attempts
+
+
+@pytest.mark.parametrize("archive_failure", [False, True])
+def test_backup_completes_manifest_only_after_all_archives(tmp_path, monkeypatch, archive_failure):
+    control = cd.Controller({"data_root": str(tmp_path), "current": str(tmp_path / "current"),
+                             "state_dir": str(tmp_path / "state")})
+    inventory = {s: {"id": s, "state": "running", "health": "healthy"} for s in (*cd.APPS, *cd.DEPS)}
+    monkeypatch.setattr(control, "mount_check", lambda: None)
+    monkeypatch.setattr(control, "containers", lambda: inventory)
+    monkeypatch.setattr(control, "revision", lambda: "revision")
+    monkeypatch.setattr(control, "prune_backups", lambda: None)
+    monkeypatch.setattr(cd.shutil, "disk_usage", lambda _: SimpleNamespace(free=11 * 1024**3))
+
+    def run(args, **kwargs):
+        if args[1:3] == ["exec", "db"]:
+            kwargs["output"].write(b"database")
+        elif args[1] == "cp":
+            Path(args[-1]).write_bytes(b"redis")
+        elif "{{json .Mounts}}" in args:
+            return json.dumps([{"Type": "volume", "Source": "/var/lib/docker/volumes/fixture/_data", "Name": "fixture"}])
+        elif "{{.Config.Image}}" in args:
+            return {"app": "dazah/backend:release", "frontend": "dazah/frontend:release",
+                    "hermes-lite": "dazah/hermes-lite:release"}[args[-1]]
+        elif "{{.Image}}" in args:
+            return "sha256:" + "a" * 64
+        return ""
+
+    def archive(source, target, **kwargs):
+        if archive_failure:
+            raise cd.Refused("backup archive changed during all attempts")
+        target.write_bytes(b"archive")
+        return 2
+
+    monkeypatch.setattr(cd, "command", run)
+    monkeypatch.setattr(cd, "archive_directory", archive)
+    if archive_failure:
+        with pytest.raises(cd.Refused):
+            control.backup()
+        assert not list((tmp_path / "backups").glob("*/manifest.json"))
+    else:
+        backup = control.backup()
+        manifest = cd.verified_backup_manifest(backup)
+        assert manifest["release_version"] == "release"
+        assert manifest["archive_attempts"] == {"fixture.tar.gz": 2, "config.tar.gz": 2}
+        assert manifest["database_revision"] == "revision"
+
+
+def test_archive_rejects_corrupt_output_and_exhausted_time(tmp_path, monkeypatch):
+    def run(args, **kwargs):
+        if args[1] == "-tzf":
+            raise cd.Refused("operation failed: tar, exit=2")
+        return ""
+
+    monkeypatch.setattr(cd, "command", run)
+    with pytest.raises(cd.Refused, match="exit=2"):
+        cd.archive_directory(tmp_path, tmp_path / "files.tar.gz")
+
+    attempts = []
+    monkeypatch.setattr(cd.time, "monotonic", iter([0, 1, 599]).__next__)
+    monkeypatch.setattr(cd, "command", lambda *a, **k: attempts.append(a) or (_ for _ in ()).throw(cd.Refused("operation failed: tar, exit=1")))
+    with pytest.raises(cd.Refused, match="changed during all attempts"):
+        cd.archive_directory(tmp_path, tmp_path / "files.tar.gz")
+    assert len(attempts) == 1
+
+
+def test_retention_keeps_monthly_and_current_previous_release_points(tmp_path, monkeypatch):
+    current = tmp_path / "opt" / "dazah" / "current"
+    current.mkdir(parents=True)
+    control = cd.Controller({"data_root": str(tmp_path / "data"), "current": str(current),
+                             "state_dir": str(tmp_path / "state")})
+    monkeypatch.setattr(control, "mount_check", lambda: None)
+    root = control.data / "backups"
+    root.mkdir(parents=True)
+    paths = {}
+    dates = [f"2026{month:02d}01" for month in range(1, 9)] + [f"202609{day:02d}" for day in range(15, 30)]
+    for date in dates:
+        path = root / f"daily-{date}T010000Z"
+        path.mkdir()
+        write_backup_manifest(path, version={"20260101": "current", "20260201": "previous"}.get(date))
+        paths[date] = path
+    marker = current.parent / "backups" / "deploy" / "last-success"
+    prior = marker.parent / "prior"
+    prior.mkdir(parents=True)
+    (prior / "current-version").write_text("previous\n")
+    marker.write_text(f"version=current\nbackup={prior}\n")
+    control.prune_backups()
+    assert all(paths[f"202609{day:02d}"].exists() for day in range(23, 30))
+    assert all(paths[f"2026{month:02d}01"].exists() for month in range(4, 9))
+    assert paths["20260101"].exists() and paths["20260201"].exists()
+    assert not paths["20260301"].exists()
+
+
+@pytest.mark.parametrize("damage", ["checksum", "traversal", "missing", "invalid_json", "empty_database"])
+def test_corrupt_backups_never_qualify_for_retention_deletion(tmp_path, monkeypatch, damage):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    monkeypatch.setattr(control, "mount_check", lambda: None)
+    path = tmp_path / "backups" / "daily-20200101T010000Z"
+    path.mkdir(parents=True)
+    write_backup_manifest(path)
+    manifest = cd.read_json(path / "manifest.json")
+    if damage == "checksum":
+        (path / "config.tar.gz").write_bytes(b"corrupt")
+    elif damage == "traversal":
+        manifest["files"]["../outside"] = "0" * 64
+        cd.atomic_json(path / "manifest.json", manifest)
+    elif damage == "missing":
+        (path / "redis.rdb").unlink()
+    elif damage == "invalid_json":
+        (path / "manifest.json").write_text("invalid")
+    else:
+        (path / "database.dump").write_bytes(b"")
+        manifest["files"]["database.dump"] = cd.digest(path / "database.dump")
+        cd.atomic_json(path / "manifest.json", manifest)
+    assert cd.verified_backup_manifest(path) is None
+    control.prune_backups()
+    assert path.exists()
+
+
+def test_deployment_metadata_does_not_follow_arbitrary_backup_path(tmp_path):
+    current = tmp_path / "current"
+    marker = tmp_path / "backups" / "deploy" / "last-success"
+    marker.parent.mkdir(parents=True)
+    unrelated = tmp_path / "outside"
+    unrelated.mkdir()
+    (unrelated / "current-version").write_text("must-not-be-protected")
+    marker.write_text(f"version=current\nbackup={unrelated}\n")
+    assert cd.protected_release_versions(current) == {"current"}
 
 
 def test_complete_backup_references_protect_old_release(tmp_path, monkeypatch):
@@ -487,3 +752,135 @@ def test_offline_policy_rejects_untrusted_ownership(uid, mode, symlink):
 
 def test_without_migration_hold_target_is_source_head():
     assert cd.migration_target({}, "head_revision", "old") == "head_revision"
+
+
+@pytest.mark.parametrize("heads,revision", [("head", "old"), ("head\nother", "head"), ("head", "head\nother")])
+def test_schema_mismatch_keeps_manual_gate_closed(tmp_path, monkeypatch, heads, revision):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    control.maintenance(True)
+    monkeypatch.setattr(control, "compose", lambda *a, **kw: heads)
+    monkeypatch.setattr(control, "revision", lambda: revision)
+    monkeypatch.setattr(control, "wait_ready", lambda: control.verify_schema())
+    with pytest.raises(cd.Refused):
+        control.maintenance_off()
+    assert (control.state_dir / "public" / "maintenance").exists()
+
+
+def test_schema_respects_only_reviewed_hold(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    monkeypatch.setattr(control, "compose", lambda *a, **kw: "source")
+    monkeypatch.setattr(control, "revision", lambda: "held")
+    cd.atomic_json(control.current / "migration-policy.json", {"deployment_hold": {
+        "source_head": "source", "target_revision": "held", "allowed_from_revisions": ["held"], "review_reference": "review"}})
+    control.verify_schema()
+    monkeypatch.setattr(control, "compose", lambda *a, **kw: "later")
+    with pytest.raises(cd.Refused):
+        control.verify_schema()
+
+
+@pytest.mark.parametrize("service", [*cd.DEPS, *cd.APPS, "nginx"])
+def test_traffic_guard_closes_on_missing_service_and_verifies_before_reopening(tmp_path, monkeypatch, service):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    inventory = {s: {"state": "running", "health": "healthy"} for s in (*cd.DEPS, *cd.APPS, "nginx")}
+    del inventory[service]
+    monkeypatch.setattr(control, "containers", lambda: inventory)
+    monkeypatch.setattr(cd, "lock", lambda _: contextlib.nullcontext())
+    control.traffic_guard()
+    marker = control.state_dir / "public" / "maintenance"
+    assert marker.exists()
+    inventory[service] = {"state": "running", "health": "healthy"}
+    monkeypatch.setattr(control, "wait_ready", lambda **kw: (_ for _ in ()).throw(cd.Refused("probe failed")))
+    with pytest.raises(cd.Refused):
+        control.traffic_guard()
+    assert marker.exists()
+    monkeypatch.setattr(control, "wait_ready", lambda **kw: None)
+    control.traffic_guard()
+    assert not marker.exists()
+
+
+def test_traffic_guard_never_reopens_manual_or_failed_deployment(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    monkeypatch.setattr(cd, "lock", lambda _: contextlib.nullcontext())
+    monkeypatch.setattr(control, "containers", lambda: {s: {"state": "running", "health": "healthy"} for s in (*cd.DEPS, *cd.APPS, "nginx")})
+    monkeypatch.setattr(control, "wait_ready", lambda **kw: pytest.fail("manual gate belongs to operator"))
+    control.maintenance_on()
+    control.traffic_guard()
+    owned = control.state_dir / "traffic-guard-owned"
+    owned.touch()
+    cd.atomic_json(control.state_file, {"phase": "recovery_required"})
+    control.traffic_guard()
+    assert (control.state_dir / "public" / "maintenance").exists()
+    control.maintenance_on()
+    assert not owned.exists()
+
+
+def test_readiness_includes_health_proxy_and_schema_before_opening(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    monkeypatch.setattr(control, "containers", lambda: {s: {"state": "running", "health": "healthy"} for s in (*cd.DEPS, *cd.APPS, "nginx")})
+    calls = []
+    monkeypatch.setattr(control, "compose", lambda *a, **kw: calls.append(a) or "")
+    monkeypatch.setattr(control, "verify_schema", lambda: calls.append(("schema",)))
+    cd.Controller.wait_ready(control)
+    assert calls[-1] == ("schema",)
+    for path in ("health", "login"):
+        assert any(f"http://127.0.0.1:8090/{path}" in args for args in calls)
+    assert any("hermes-lite" in args and "8100/health" in " ".join(args) for args in calls)
+
+
+def test_traffic_guard_closes_on_unknown_docker_state(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    monkeypatch.setattr(cd, "lock", lambda _: contextlib.nullcontext())
+    monkeypatch.setattr(control, "containers", lambda: (_ for _ in ()).throw(cd.Refused("docker unavailable")))
+    control.traffic_guard()
+    assert (control.state_dir / "public" / "maintenance").exists()
+
+
+def test_traffic_guard_closes_while_migration_container_runs(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    monkeypatch.setattr(cd, "lock", lambda _: contextlib.nullcontext())
+    inventory = {s: {"state": "running", "health": "healthy"} for s in (*cd.DEPS, *cd.APPS, "nginx", "migrate")}
+    monkeypatch.setattr(control, "containers", lambda: inventory)
+    control.traffic_guard()
+    assert (control.state_dir / "public" / "maintenance").exists()
+
+
+@pytest.mark.parametrize("change", ["manual", "deployment", "watchdog"])
+def test_traffic_guard_rechecks_gate_owner_and_blockers_after_lock(tmp_path, monkeypatch, change):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    control.maintenance(True)
+    (control.state_dir / "traffic-guard-owned").touch()
+    monkeypatch.setattr(control, "containers", lambda: {
+        s: {"state": "running", "health": "healthy"} for s in (*cd.DEPS, *cd.APPS, "nginx")})
+    monkeypatch.setattr(control, "wait_ready", lambda **kw: pytest.fail("gate ownership or blocker changed"))
+
+    @contextlib.contextmanager
+    def changed_before_lock(_):
+        if change == "manual":
+            control.maintenance_on()
+        elif change == "deployment":
+            cd.atomic_json(control.state_file, {"phase": "migrating"})
+        else:
+            cd.atomic_json(control.state_dir / "watchdog.json", {"app": {"blocked": True}})
+        yield
+
+    monkeypatch.setattr(cd, "lock", changed_before_lock)
+    control.traffic_guard()
+    assert (control.state_dir / "public" / "maintenance").exists()
+
+
+def test_traffic_guard_does_not_claim_manual_gate_created_before_close_lock(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    monkeypatch.setattr(control, "containers", lambda: {})
+    locked = []
+
+    @contextlib.contextmanager
+    def manual_gate_before_lock(_):
+        locked.append(True)
+        control.maintenance_on()
+        yield
+
+    monkeypatch.setattr(cd, "lock", manual_gate_before_lock)
+    control.traffic_guard()
+    assert locked
+    assert (control.state_dir / "public" / "maintenance").exists()
+    assert not (control.state_dir / "traffic-guard-owned").exists()

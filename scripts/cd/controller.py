@@ -66,6 +66,73 @@ def digest(path: Path) -> str:
     return checksum.hexdigest()
 
 
+def archive_directory(source: Path, target: Path, *, timeout: int = 600) -> int:
+    """Retry a changing online file set, but accept only a successful, readable tar."""
+    deadline = time.monotonic() + timeout
+    for attempt in range(1, 4):
+        remaining = max(1, int(deadline - time.monotonic()))
+        try:
+            command(["tar", "-czf", str(target), "-C", str(source), "."], timeout=remaining)
+        except Refused as exc:
+            if str(exc) != "operation failed: tar, exit=1":
+                raise
+            if attempt == 3 or deadline - time.monotonic() <= 2:
+                raise Refused("backup archive changed during all attempts") from exc
+            time.sleep(2)
+            continue
+        command(["tar", "-tzf", str(target)], timeout=max(1, int(deadline - time.monotonic())),
+                output=subprocess.DEVNULL)
+        return attempt
+    raise Refused("backup archive did not complete")
+
+
+def verified_backup_manifest(path: Path) -> dict | None:
+    """Incomplete, corrupt or linked backups must never qualify for retention deletion."""
+    try:
+        manifest_path = path / "manifest.json"
+        if path.is_symlink() or manifest_path.is_symlink() or not manifest_path.is_file():
+            return None
+        manifest = read_json(manifest_path)
+        if not isinstance(manifest, dict) or manifest.get("kind") not in ("daily", "predeploy"):
+            return None
+        files = manifest.get("files")
+        if not isinstance(files, dict) or not {"database.dump", "config.tar.gz", "redis.rdb"} <= files.keys():
+            return None
+        for name, expected in files.items():
+            if not isinstance(name, str) or Path(name).name != name:
+                return None
+            file = path / name
+            if (file.is_symlink() or not file.is_file() or not isinstance(expected, str)
+                    or not re.fullmatch(r"[a-f0-9]{64}", expected) or digest(file) != expected):
+                return None
+        if not (path / "database.dump").stat().st_size:
+            return None
+        return manifest
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def protected_release_versions(current: Path) -> set[str]:
+    """Read only public deployment metadata, never the production environment file."""
+    marker = current.parent / "backups" / "deploy" / "last-success"
+    versions = set()
+    if marker.is_symlink() or not marker.is_file():
+        return versions
+    record = dict(line.split("=", 1) for line in marker.read_text().splitlines() if "=" in line)
+    version = record.get("version", "")
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,80}", version):
+        versions.add(version)
+    backup = Path(record.get("backup", ""))
+    if (backup.is_absolute() and not backup.is_symlink()
+            and backup.resolve().parent == marker.parent.resolve()):
+        prior = backup / "current-version"
+        if prior.is_file() and not prior.is_symlink():
+            version = prior.read_text().strip()
+            if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,80}", version):
+                versions.add(version)
+    return versions
+
+
 def restore_archive(archive: Path, target: Path) -> None:
     """Restore only inside a new root-private drill directory, never into live volumes."""
     target.mkdir(mode=0o700)
@@ -265,7 +332,61 @@ class Controller:
             # nginx runs unprivileged inside its container; marker contains no data.
             os.chmod(marker, 0o644)
         else:
+            if marker.exists():
+                self.business_phase("draining")
+                self.wait_work_finished()
+            self.business_phase("normal")
             marker.unlink(missing_ok=True)
+            (self.state_dir / "public" / "status.json").unlink(missing_ok=True)
+
+    def business_phase(self, phase: str) -> None:
+        code = "import asyncio,sys; from app.core.maintenance import set_release_phase; asyncio.run(set_release_phase(sys.argv[1]))"
+        self.compose("exec", "-T", "app", ".venv/bin/python", "-c", code, phase, timeout=15)
+
+    def resume_work(self) -> None:
+        """Permit bootstrap work while the public gate stays closed."""
+        code = "import asyncio; from app.core.maintenance import set_release_phase; asyncio.run(set_release_phase('starting'))"
+        self.compose("run", "--rm", "--no-deps", "--entrypoint", ".venv/bin/python", "migrate", "-c", code)
+
+    def open_work(self) -> None:
+        self.wait_ready()
+        self.business_phase("draining")
+        self.wait_work_finished()
+        self.business_phase("normal")
+
+    def wait_work_finished(self, timeout: int = 120) -> None:
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            code = "import asyncio; from app.core.maintenance import drain_report; print(asyncio.run(drain_report()))"
+            report = json.loads(self.compose("exec", "-T", "app", ".venv/bin/python", "-c", code, timeout=15))
+            if report.get("active") == 0:
+                return
+            time.sleep(3)
+        raise Refused("unfinished business work blocks reopening; maintenance remains closed")
+
+    def announce(self, seconds: int | None = None) -> None:
+        seconds = self.config.get("maintenance_notice_seconds", 180) if seconds is None else seconds
+        if isinstance(seconds, bool) or not isinstance(seconds, int) or not 0 <= seconds <= 3600:
+            raise Refused("maintenance notice must be between 0 and 3600 seconds")
+        if (self.state_dir / "public" / "maintenance").exists():
+            return
+        # Capability check happens before publishing a promise to users.
+        self.business_phase("normal")
+        path = self.state_dir / "public" / "status.json"
+        atomic_json(path, {"phase": "announced", "starts_at": int(time.time()) + seconds})
+        os.chmod(path, 0o644)
+        self.event("maintenance_announced", notice_seconds=seconds)
+        deadline = time.monotonic() + seconds
+        try:
+            while time.monotonic() < deadline:
+                inventory = self.containers()
+                if not all(self.healthy(inventory.get(s, {})) for s in (*DEPS, *APPS, "nginx")):
+                    self.maintenance(True)
+                    raise Refused("service became unavailable during maintenance notice")
+                time.sleep(min(3, max(0, deadline - time.monotonic())))
+        except BaseException:
+            path.unlink(missing_ok=True)
+            raise
 
     def wait_ready(self, timeout=180) -> None:
         end = time.monotonic() + timeout
@@ -276,22 +397,88 @@ class Controller:
                 self.compose("exec", "-T", "redis", "redis-cli", "ping")
                 self.compose("exec", "-T", "minio", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/ready")
                 self.compose("exec", "-T", "nginx", "nginx", "-t")
-                self.compose("exec", "-T", "nginx", "wget", "-q", "--spider", "http://frontend:3000/login")
+                self.compose("exec", "-T", "nginx", "wget", "-Y", "off", "-q", "--spider", "http://frontend:3000/login")
+                self.compose("exec", "-T", "app", ".venv/bin/python", "-c",
+                             "from urllib.request import urlopen; assert urlopen('http://127.0.0.1:8000/health', timeout=5).status == 200")
+                self.compose("exec", "-T", "hermes-lite", "python", "-c",
+                             "from urllib.request import urlopen; assert urlopen('http://127.0.0.1:8100/health', timeout=5).status == 200")
+                for route in ("health", "login"):
+                    self.compose("exec", "-T", "nginx", "wget", "-Y", "off", "-q", "--spider",
+                                 f"http://127.0.0.1:8090/{route}")
                 probe = Path(__file__).with_name("readiness.py").read_text()
                 self.compose("exec", "-T", "app", ".venv/bin/python", "-c", probe, timeout=20)
+                self.verify_schema()
                 return
             time.sleep(5)
         raise Refused("application readiness timeout")
 
+    def verify_schema(self) -> None:
+        heads = self.compose("exec", "-T", "app", ".venv/bin/python", "-c",
+                             "from alembic.config import Config; from alembic.script import ScriptDirectory; "
+                             "print('\\n'.join(ScriptDirectory.from_config(Config('alembic.ini')).get_heads()))").splitlines()
+        before = self.revision()
+        if len(heads) != 1 or not re.fullmatch(r"[A-Za-z0-9_]+", before):
+            raise Refused("schema must have one code head and one database revision")
+        policy = read_json(self.current / "migration-policy.json", {})
+        if before != heads[0] and before != migration_target(policy, heads[0], before):
+            raise Refused("database revision does not match the reviewed deployment target")
+
+    def maintenance_on(self) -> None:
+        (self.state_dir / "traffic-guard-owned").unlink(missing_ok=True)
+        self.maintenance(True)
+        self.business_phase("draining")
+        self.event("maintenance_enabled")
+
+    def maintenance_off(self) -> None:
+        self.wait_ready()
+        self.maintenance(False)
+        self.event("maintenance_disabled_after_verification")
+
+    def traffic_guard(self) -> None:
+        """Close on unavailability; only reopen gates owned by this observer."""
+        marker = self.state_dir / "public" / "maintenance"
+        owned = self.state_dir / "traffic-guard-owned"
+        try:
+            inventory = self.containers()
+            ready = all(self.healthy(inventory.get(s, {})) for s in (*DEPS, *APPS, "nginx"))
+            ready = ready and inventory.get("migrate", {}).get("state") != "running"
+        except (Refused, OSError, ValueError, subprocess.TimeoutExpired):
+            ready = False
+        if not ready:
+            with lock(Path("/var/lock/dazah-deploy.lock")):
+                if not marker.exists():
+                    owned.touch()
+                    self.maintenance(True)
+                    self.event("traffic_guard_closed")
+            return
+        if not owned.exists():
+            return
+        with lock(Path("/var/lock/dazah-deploy.lock")):
+            # Ownership and deployment blockers may change before lock acquisition.
+            if not owned.exists():
+                return
+            if read_json(self.state_file, {}).get("phase") in UNSAFE_PHASES:
+                return
+            if any(record.get("blocked") for record in read_json(self.state_dir / "watchdog.json", {}).values()):
+                return
+            self.wait_ready(timeout=15)
+            self.maintenance(False)
+            owned.unlink(missing_ok=True)
+            self.event("traffic_guard_reopened")
+
     def drain(self) -> None:
+        self.business_phase("draining")
         end = time.monotonic() + 120
         while time.monotonic() < end:
-            status = self.compose("exec", "-T", "nginx", "wget", "-qO-", "http://127.0.0.1:8089/status")
+            status = self.compose("exec", "-T", "nginx", "wget", "-Y", "off", "-qO-", "http://127.0.0.1:8089/status")
             match = re.search(r"Reading:\s+(\d+) Writing:\s+(\d+)", status)
             if match and sum(map(int, match.groups())) <= 1:
-                return
+                code = "import asyncio; from app.core.maintenance import drain_report; print(asyncio.run(drain_report()))"
+                report = json.loads(self.compose("exec", "-T", "app", ".venv/bin/python", "-c", code, timeout=15))
+                if report.get("active") == 0:
+                    return
             time.sleep(3)
-        raise Refused("active requests did not drain")
+        raise Refused("active requests or business tasks did not drain; maintenance remains closed")
 
     def revision(self) -> str:
         # Only schema revision is returned; no connection settings or row data.
@@ -308,10 +495,11 @@ class Controller:
             service: {"image": image, "pull_policy": "never"} for service, image in images.items()}})
 
     def site_checksums(self) -> dict:
-        names = ("compose.yml", "compose.edge.yml", "compose.single-host.yml", ".env", "nginx.default.conf")
+        names = ("compose.yml", "compose.edge.yml", "compose.single-host.yml", ".env", "nginx.default.conf",
+                 "nginx-maintenance.conf", "nginx-capacity.conf", "migration-policy.json")
         return {name: digest(self.current / name) for name in names if (self.current / name).is_file()}
 
-    def deploy(self, sha: str, manifest: dict) -> None:
+    def deploy(self, sha: str, manifest: dict, *, enforce_window: bool = False) -> None:
         self.mount_check()
         if shutil.disk_usage("/").free < 20 * 1024**3 or shutil.disk_usage(self.data).free < 50 * 1024**3:
             raise Refused("disk headroom insufficient for release switch")
@@ -333,11 +521,16 @@ class Controller:
             previous[service] = command(["docker", "inspect", "--format", "{{.Image}}", inventory[service]["id"]])
         previous["migrate"] = previous["app"]
         atomic_json(self.state_dir / "previous-images.json", previous)
+        self.announce()
+        if enforce_window and not in_window(dt.datetime.now(dt.timezone.utc), switch=True):
+            (self.state_dir / "public" / "status.json").unlink(missing_ok=True)
+            raise Refused("switch cutoff reached during maintenance notice")
         self.phase("quiescing", candidate_sha=sha, previous_revision=before, traffic_opened=False)
         self.maintenance(True)
         migrated = False
+        # Failure to drain must not restart containers or reopen traffic.
+        self.drain()
         try:
-            self.drain()
             self.compose("stop", "--timeout", "120", "hermes-lite", "app", "frontend", timeout=400)
             self.phase("backup")
             backup = self.backup("predeploy")
@@ -346,6 +539,7 @@ class Controller:
             self.compose("config", "--quiet")
         except Exception:
             self.release_overlay(previous)
+            self.resume_work()
             self.compose("up", "-d", "--no-deps", *APPS)
             self.compose("up", "-d", "--no-deps", "--force-recreate", "nginx")
             self.wait_ready()
@@ -359,6 +553,7 @@ class Controller:
                 raise Refused("migration revision verification failed")
             migrated = True
             self.phase("starting")
+            self.resume_work()
             for service in APPS:
                 self.compose("up", "-d", "--no-deps", service)
             self.compose("up", "-d", "--no-deps", "--force-recreate", "nginx")
@@ -463,6 +658,7 @@ class Controller:
             command(["docker", "exec", inventory["redis"]["id"], "rm", "-f", redis_snapshot])
         # Persistent file stores. Online copies are explicitly not a cross-store snapshot.
         volumes: list[str] = []
+        archive_attempts = {}
         for service in ("app", "hermes-lite", "minio", "redis"):
             if service not in inventory:
                 raise Refused("persistent service missing")
@@ -473,13 +669,19 @@ class Controller:
                     if not source.is_relative_to("/var/lib/docker/volumes"):
                         raise Refused("unrecognized volume location")
                     volumes.append(str(source))
-                    command(["tar", "-czf", str(target / f"{mount['Name']}.tar.gz"),
-                             "-C", str(source), "."], timeout=600)
-        command(["tar", "-czf", str(target / "config.tar.gz"), "-C", str(self.current), "."], timeout=120)
+                    filename = f"{mount['Name']}.tar.gz"
+                    archive_attempts[filename] = archive_directory(source, target / filename)
+        archive_attempts["config.tar.gz"] = archive_directory(self.current, target / "config.tar.gz", timeout=120)
         files = {p.name: digest(p) for p in target.iterdir() if p.is_file()}
         if not (target / "database.dump").stat().st_size:
             raise Refused("empty database backup")
+        references = [command(["docker", "inspect", "--format", "{{.Config.Image}}", inventory[s]["id"]]) for s in APPS]
+        tagged = [ref for ref in references
+                  if re.fullmatch(r"dazah/(backend|frontend|hermes-lite):[A-Za-z0-9][A-Za-z0-9._-]{0,80}", ref)]
+        versions = {ref.rsplit(":", 1)[1] for ref in tagged}
+        release_version = next(iter(versions)) if len(versions) == 1 and len(tagged) == len(APPS) else None
         atomic_json(target / "manifest.json", {"kind": kind, "files": files,
+                    "release_version": release_version, "archive_attempts": archive_attempts,
                     "database_revision": self.revision(),
                     "consistency": "writers_stopped" if kind == "predeploy" else "online_independent_copies",
                     "images": {s: command(["docker", "inspect", "--format", "{{.Image}}", inventory[s]["id"]]) for s in (*APPS, *DEPS)},
@@ -494,18 +696,25 @@ class Controller:
         root = self.data / "backups"
         state = read_json(self.state_file, {})
         protected = {state.get("backup"), state.get("previous_backup")}
-        daily = sorted((p for p in root.glob("daily-*") if not p.is_symlink()
-                        and (p / "manifest.json").is_file()), reverse=True)
-        before = sorted((p for p in root.glob("predeploy-*") if not p.is_symlink()
-                         and (p / "manifest.json").is_file()), reverse=True)
+        manifests = {p: manifest for p in (*root.glob("daily-*"), *root.glob("predeploy-*"))
+                     if (manifest := verified_backup_manifest(p)) is not None}
+        daily = sorted((p for p in manifests if p.name.startswith("daily-")), reverse=True)
+        before = sorted((p for p in manifests if p.name.startswith("predeploy-")), reverse=True)
         weeks = {}
+        months = {}
         for path in daily:
             try:
                 date = dt.datetime.strptime(path.name[6:14], "%Y%m%d").date()
             except ValueError:
                 continue
             weeks.setdefault(date.isocalendar()[:2], path)
-        keep = set(daily[:7] + list(weeks.values())[:4] + before[:3])
+            months.setdefault((date.year, date.month), path)
+        keep = set(daily[:7] + list(weeks.values())[:4] + list(months.values())[:6] + before[:3])
+        for version in protected_release_versions(self.current):
+            match = next((p for p in sorted(manifests, reverse=True)
+                          if manifests[p].get("release_version") == version), None)
+            if match is not None:
+                keep.add(match)
         for path in (*daily, *before):
             if path in keep or str(path) in protected:
                 continue
@@ -689,7 +898,7 @@ class Controller:
         if not in_window(dt.datetime.now(dt.timezone.utc), switch=True):
             raise Refused("switch cutoff reached")
         self.verify_candidate(candidate)
-        self.deploy(sha, manifest)
+        self.deploy(sha, manifest, enforce_window=True)
 
     def build(self, candidate: dict) -> None:
         sha = self.verify_candidate(candidate)
@@ -929,8 +1138,11 @@ def lock(path: Path):
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["backup", "drill", "watchdog", "schedule", "status", "mount-check"])
+    parser.add_argument("action", choices=["backup", "drill", "watchdog", "schedule", "status", "mount-check",
+                                         "verify", "drain", "traffic-guard", "maintenance-on", "maintenance-off", "announce", "resume-work", "open-work"])
     parser.add_argument("--config", default="/etc/dazah-cd/config.json")
+    parser.add_argument("--notice-seconds", type=int, default=None)
+    parser.add_argument("--lock-held", action="store_true", help="Called by the deployment helper which already owns the release lock")
     args = parser.parse_args()
     os.umask(0o077)
     config_path = Path(args.config)
@@ -943,11 +1155,17 @@ def main() -> int:
         if args.action == "mount-check":
             controller.mount_check()
             return 0
-        with lock(Path("/var/lock/dazah-deploy.lock")):
+        if args.action in ("verify", "traffic-guard"):
+            {"verify": controller.wait_ready,
+             "traffic-guard": controller.traffic_guard}[args.action]()
+            return 0
+        with (contextlib.nullcontext() if args.lock_held else lock(Path("/var/lock/dazah-deploy.lock"))):
             if args.action == "status":
                 controller.event("status", state=read_json(controller.state_file, {}), enabled=controller.config.get("enabled", False))
+            elif args.action == "announce":
+                controller.announce(args.notice_seconds)
             else:
-                getattr(controller, args.action)()
+                getattr(controller, args.action.replace("-", "_"))()
         return 0
     except Exception as exc:
         # Network/OS exceptions can contain URLs or subprocess details.

@@ -91,3 +91,11 @@ it('opens standalone notices without requiring an App provider', async () => {
   await act(async () => rulesButton().click())
   expect(document.querySelector('.ant-modal')?.textContent).toContain('登录状态已失效，请重新发起授权。')
 })
+
+it('hides the rules entry when showRulesLink is disabled', async () => {
+  await act(async () => root.render(<PlatformNotice type="info" title="法规雷达 · 上次扫描发现 2 部新法规" showRulesLink={false} />))
+  const notice = document.querySelector<HTMLElement>('[data-platform-notice]')!
+  expect(notice.textContent).toContain('法规雷达')
+  expect(notice.querySelector('.ant-btn-link')).toBeNull()
+  expect(document.querySelector('.ant-modal')).toBeNull()
+})

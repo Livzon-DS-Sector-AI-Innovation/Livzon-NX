@@ -1,6 +1,6 @@
 "use server"
 
-import { cookies } from "next/headers"
+import { cookies, headers as requestHeaders } from "next/headers"
 import { revalidatePath } from "next/cache"
 import type { components } from "@/types/generated/schema"
 import { permissionActionResult } from "@/lib/permission-action-result"
@@ -53,6 +53,8 @@ async function authedFetch(path: string, init?: RequestInit): Promise<Response> 
   if (token?.value) {
     headers["Authorization"] = `Bearer ${token.value}`
   }
+  const operationId = (await requestHeaders()).get('X-Dazah-Operation-ID')
+  if (operationId) headers['X-Dazah-Operation-ID'] = operationId
   // 无 token 时不拦截：交由后端鉴权（开发免登录模式后端放行；
   // 生产环境后端返回 401 → handleResponse 抛出"未登录或登录已过期"），
   // 与 getCurrentUser 的免登录降级策略保持一致
@@ -137,12 +139,12 @@ export async function assignUserRoles(userId: string, roleIds: string[], options
     ...(options?.expectedGrantVersion == null ? {} : { expected_grant_version: options.expectedGrantVersion }),
     ...(options?.reason ? { reason: options.reason } : {}),
   }
-  const res = await authedFetch(`/identity/admin/users/${userId}/roles`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  })
-  const result = await handleResponse(res)
-  revalidatePath("/system/user-roles")
+  const result = await permissionActionResult<Pick<components["schemas"]["UserResponse"], "grant_version">>(
+    () => authedFetch(`/identity/admin/users/${userId}/roles`, {
+      method: "POST", body: JSON.stringify(body),
+    }),
+  )
+  if (result.ok) revalidatePath("/system/user-roles")
   return result
 }
 
@@ -271,23 +273,23 @@ export async function saveUserDataScope(
     scope_type: scopeType,
     department_names: scopeType === "departments" ? departmentNames : null,
   }
-  const res = await authedFetch("/identity/admin/data-scopes", {
+  const result = await permissionActionResult<unknown>(() => authedFetch("/identity/admin/data-scopes", {
     method: "POST",
     body: JSON.stringify(body),
-  })
-  const result = await handleResponse(res)
-  revalidatePath("/system/user-roles")
+  }))
+  if (result.ok) revalidatePath("/system/user-roles")
   return result
 }
 
 /** 删除数据范围配置（恢复默认：本部门+子部门） */
 export async function deleteDataScope(ruleId: string) {
-  const res = await authedFetch(`/identity/admin/data-scopes/${ruleId}`, {
+  const result = await permissionActionResult<unknown>(() => authedFetch(`/identity/admin/data-scopes/${ruleId}`, {
     method: "DELETE",
-  })
-  const result = await handleResponse(res)
-  revalidatePath("/system/roles")
-  revalidatePath("/system/user-roles")
+  }))
+  if (result.ok) {
+    revalidatePath("/system/roles")
+    revalidatePath("/system/user-roles")
+  }
   return result
 }
 

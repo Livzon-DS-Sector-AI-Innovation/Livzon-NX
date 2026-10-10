@@ -42,6 +42,8 @@ describe('PlanPage', () => {
   let container: HTMLElement
 
   beforeEach(() => {
+    // The picker fixtures start in September and select October as a new month.
+    vi.setSystemTime(new Date('2026-09-08T12:00:00'))
     window.localStorage.setItem('dazah.production.plan-page.tab', 'plan')
     // 月份记忆是会话级（sessionStorage），逐用例隔离避免相互污染
     window.sessionStorage.clear()
@@ -66,6 +68,7 @@ describe('PlanPage', () => {
     act(() => root.unmount())
     container?.remove()
     vi.clearAllMocks()
+    vi.useRealTimers()
   })
 
   async function renderAndSettle() {

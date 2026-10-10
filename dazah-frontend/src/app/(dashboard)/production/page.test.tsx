@@ -164,6 +164,8 @@ describe('ProductionHomePage (fermentation board)', () => {
   let container: HTMLElement
 
   beforeEach(() => {
+    // Plan labels and board data use the same fixed September fixture month.
+    vi.setSystemTime(new Date('2026-09-08T12:00:00'))
     authStore.state.user.role = 'admin'
     authStore.state.user.permissions = ['*']
     authStore.state.user.page_permissions = []
@@ -245,6 +247,7 @@ describe('ProductionHomePage (fermentation board)', () => {
     container?.remove()
     vi.clearAllMocks()
     window.localStorage.clear()
+    vi.useRealTimers()
   })
 
   async function render() {

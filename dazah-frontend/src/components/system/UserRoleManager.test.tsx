@@ -46,7 +46,9 @@ beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   mocks.fetchUsers.mockResolvedValue({ items: [user], total: 1 })
   mocks.fetchScopes.mockResolvedValue([])
-  mocks.assign.mockResolvedValue({ message: '角色分配已更新' })
+  mocks.assign.mockResolvedValue({ ok: true, data: { grant_version: 8 } })
+  mocks.saveScope.mockResolvedValue({ ok: true, data: { id: 'scope-1' } })
+  mocks.deleteScope.mockResolvedValue({ ok: true, data: { message: '已删除' } })
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
@@ -225,13 +227,11 @@ it('saves the segmented department scope with the existing role assignment contr
   await act(async () => button('保存').click())
   await act(async () => mocks.confirm.mock.lastCall![0].onOk())
   expect(mocks.saveScope).toHaveBeenCalledWith('user-1', 'all', [])
-  expect(mocks.assign).toHaveBeenCalledWith('user-1', ['role-a'], {
-    expectedGrantVersion: 7, reason: '覆盖全部部门',
-  })
+  expect(mocks.assign).not.toHaveBeenCalled()
 })
 
 it('preserves input after a failed save and allows retrying', async () => {
-  mocks.assign.mockRejectedValueOnce(new Error('授权版本已变化，请刷新后重试'))
+  mocks.assign.mockResolvedValueOnce({ ok: false, status: 409, message: '授权版本已变化，请刷新后重试' })
   await renderManager()
   await act(async () => button('分配角色').click())
   await act(async () => roleCheckbox('体系QA').click())
@@ -243,6 +243,42 @@ it('preserves input after a failed save and allows retrying', async () => {
   expect(document.querySelector<HTMLTextAreaElement>('[aria-label="角色授权调整原因"]')!.value).toBe('增加体系职责')
   expect(button('保存').disabled).toBe(false)
   expect(mocks.saveScope).not.toHaveBeenCalled()
+})
+
+it('retries only the failed scope after roles have already been saved', async () => {
+  mocks.saveScope.mockResolvedValueOnce({ ok: false, status: 500, message: '权限服务暂时不可用，请稍后重试' })
+  await renderManager()
+  await act(async () => button('分配角色').click())
+  await act(async () => roleCheckbox('体系QA').click())
+  await act(async () => document.querySelector<HTMLInputElement>('input[type="radio"][value="all"]')!.click())
+  await setInputValue(document.querySelector<HTMLTextAreaElement>('[aria-label="角色授权调整原因"]')!, '调整职责范围')
+  await act(async () => button('保存').click())
+  await act(async () => mocks.confirm.mock.lastCall![0].onOk())
+  expect(mocks.message.error).toHaveBeenCalledWith('角色已保存，部门数据范围保存失败：权限服务暂时不可用，请稍后重试')
+  expect(mocks.message.success).not.toHaveBeenCalled()
+  expect(roleCheckbox('体系QA').checked).toBe(true)
+  await act(async () => button('保存').click())
+  await act(async () => mocks.confirm.mock.lastCall![0].onOk())
+  expect(mocks.assign).toHaveBeenCalledTimes(1)
+  expect(mocks.saveScope).toHaveBeenCalledTimes(2)
+  expect(mocks.message.success).toHaveBeenCalled()
+})
+
+it('uses the returned grant version when roles change again after a scope failure', async () => {
+  mocks.saveScope.mockResolvedValueOnce({ ok: false, status: 500, message: '服务暂时不可用' })
+  await renderManager()
+  await act(async () => button('分配角色').click())
+  await act(async () => roleCheckbox('体系QA').click())
+  await act(async () => document.querySelector<HTMLInputElement>('input[type="radio"][value="all"]')!.click())
+  await setInputValue(document.querySelector<HTMLTextAreaElement>('[aria-label="角色授权调整原因"]')!, '调整职责范围')
+  await act(async () => button('保存').click())
+  await act(async () => mocks.confirm.mock.lastCall![0].onOk())
+  await act(async () => roleCheckbox('体系QA').click())
+  await act(async () => button('保存').click())
+  await act(async () => mocks.confirm.mock.lastCall![0].onOk())
+  expect(mocks.assign).toHaveBeenLastCalledWith('user-1', ['role-a'], {
+    expectedGrantVersion: 8, reason: '调整职责范围',
+  })
 })
 
 it('previews added roles and submits a versioned full replacement with a reason', async () => {
@@ -264,6 +300,8 @@ it('previews added roles and submits a versioned full replacement with a reason'
     expectedGrantVersion: 7,
     reason: '增加体系文件维护职责',
   })
+  expect(mocks.saveScope).not.toHaveBeenCalled()
+  expect(mocks.deleteScope).not.toHaveBeenCalled()
 })
 
 it('keeps system administrator exclusive', async () => {

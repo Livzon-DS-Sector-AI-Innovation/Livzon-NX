@@ -115,26 +115,38 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
   const handleSave = async () => {
     if (!editingUser) return
     setSaving(true)
+    let rolesSaved = false
     try {
-      await assignUserRoles(editingUser.id, selectedRoleIds, {
-        expectedGrantVersion: editingUser.grant_version,
-        reason: reason.trim(),
-      })
-      // 保存用户级可见部门配置（个例覆盖，如高管看全厂）
-      if (PAGE_DATA_SCOPE_VISIBLE && dataScope.scopeType === null) {
-        if (dataScopeRuleId) await deleteDataScope(dataScopeRuleId)
-      } else if (PAGE_DATA_SCOPE_VISIBLE && dataScope.scopeType !== null) {
-        await saveUserDataScope(
-          editingUser.id,
-          dataScope.scopeType,
-          dataScope.departmentNames,
-        )
+      if (roleChanged) {
+        const result = await assignUserRoles(editingUser.id, selectedRoleIds, {
+          expectedGrantVersion: editingUser.grant_version,
+          reason: reason.trim(),
+        })
+        if (!result.ok) { message.error(result.message); return }
+        rolesSaved = true
+        setEditingUser({ ...editingUser, grant_version: result.data.grant_version })
+        setOriginalRoleIds([...selectedRoleIds])
+        void loadUsers(keyword)
       }
-      message.success(`角色分配已更新：新增 ${addedRoles.length} 个，移除 ${removedRoles.length} 个`)
+      // 保存用户级可见部门配置（个例覆盖，如高管看全厂）
+      if (PAGE_DATA_SCOPE_VISIBLE && scopeChanged) {
+        const result = dataScope.scopeType === null
+          ? dataScopeRuleId ? await deleteDataScope(dataScopeRuleId) : null
+          : await saveUserDataScope(editingUser.id, dataScope.scopeType, dataScope.departmentNames)
+        if (result && !result.ok) {
+          message.error(`${rolesSaved ? "角色已保存，" : ""}部门数据范围保存失败：${result.message}`)
+          return
+        }
+        setOriginalDataScope({ ...dataScope, departmentNames: [...dataScope.departmentNames] })
+      }
+      message.success(roleChanged
+        ? `角色分配已更新：新增 ${addedRoles.length} 个，移除 ${removedRoles.length} 个`
+        : "部门数据范围已更新")
       setDrawerOpen(false)
       loadUsers(keyword)
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "分配失败")
+      message.error(rolesSaved ? "角色已保存，请刷新确认部门数据范围是否已保存"
+        : e instanceof Error ? e.message : "分配失败")
     } finally {
       setSaving(false)
     }

@@ -100,11 +100,8 @@ async def test_hazard_crud_photos_and_rectification_workflow(monkeypatch: Any) -
     repo.create_hazard = AsyncMock(return_value=hazard)
     repo.update_hazard = AsyncMock(return_value=hazard)
     repo.delete_hazard = AsyncMock(return_value=True)
-    monkeypatch.setattr(
-        safety_module.asyncio,  # type: ignore[attr-defined]
-        "create_task",
-        lambda coroutine: coroutine.close(),
-    )
+    submit = AsyncMock()
+    monkeypatch.setattr(safety_module, "submit_job", submit)
 
     assert await service.get_hazards(keyword="泄漏") == ([hazard], 1)
     assert await service.get_hazard_stats() == {"total": 1}

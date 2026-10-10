@@ -1,5 +1,6 @@
 """Unit tests for the shared scheduler primitives and execution engine."""
 
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace as _SimpleNamespace
 from typing import Any
@@ -20,6 +21,15 @@ from app.platform.scheduler.registry import (
 from app.platform.scheduler.strategies import is_due
 
 SimpleNamespace: Any = _SimpleNamespace
+
+
+@pytest.fixture(autouse=True)
+def isolated_admission(monkeypatch):
+    @asynccontextmanager
+    async def activity(_kind):
+        yield
+
+    monkeypatch.setattr(engine_module, "business_activity", activity)
 
 
 async def _noop() -> None:
@@ -122,6 +132,71 @@ def test_schedule_strategies(
     schedule: Any, last_run: Any, now: Any, expected: Any
 ) -> None:
     assert is_due(schedule, last_run, now) is expected
+
+
+def test_fixed_time_fires_in_schedule_timezone_not_host_utc() -> None:
+    """FIXED_TIME "00:00" Asia/Shanghai must fire at UTC 16:00 (北京零点).
+
+    Regression: the strategy compared ``time_of_day`` against the host
+    clock (UTC on the production container), firing at UTC 00:00
+    (北京 08:00) — eight hours late — which made the warehouse nightly
+    full-sync window check (00:00–06:00 Beijing) reject every run.
+    """
+    schedule = ScheduleConfig(
+        strategy=ScheduleStrategy.FIXED_TIME,
+        time_of_day="00:00",
+        timezone="Asia/Shanghai",
+    )
+    # UTC 16:00 = 北京次日 00:00 —— 零点已过，应触发
+    assert is_due(
+        schedule,
+        datetime(2026, 1, 1, 15, 55, tzinfo=UTC),
+        datetime(2026, 1, 1, 16, 0, tzinfo=UTC),
+    )
+    # UTC 15:55 = 北京 23:55 —— 当日零点未到，不应触发
+    assert not is_due(
+        schedule,
+        datetime(2026, 1, 1, 15, 55, tzinfo=UTC),
+        datetime(2026, 1, 1, 15, 55, tzinfo=UTC),
+    )
+
+
+def test_fixed_time_host_utc_midnight_is_not_beijing_midnight() -> None:
+    """宿主机 UTC 00:30（北京 08:30）不得再次触发 "00:00" Asia/Shanghai 任务。
+
+    当日北京零点（UTC 前一天 16:05）已运行过，同一天内不应重复触发。
+    """
+    schedule = ScheduleConfig(
+        strategy=ScheduleStrategy.FIXED_TIME,
+        time_of_day="00:00",
+        timezone="Asia/Shanghai",
+    )
+    assert not is_due(
+        schedule,
+        datetime(2025, 12, 31, 16, 5, tzinfo=UTC),
+        datetime(2026, 1, 1, 0, 30, tzinfo=UTC),
+    )
+
+
+def test_fixed_time_honors_explicit_utc_timezone() -> None:
+    """timezone="UTC" 时按 UTC 零点触发，互不串扰。"""
+    schedule = ScheduleConfig(
+        strategy=ScheduleStrategy.FIXED_TIME,
+        time_of_day="00:00",
+        timezone="UTC",
+    )
+    # 首次运行且目标时刻已过：触发
+    assert is_due(
+        schedule,
+        None,
+        datetime(2026, 1, 1, 0, 30, tzinfo=UTC),
+    )
+    # 当日 00:05 已运行过：同一天 16:00 不再触发
+    assert not is_due(
+        schedule,
+        datetime(2026, 1, 1, 0, 5, tzinfo=UTC),
+        datetime(2026, 1, 1, 16, 0, tzinfo=UTC),
+    )
 
 
 def test_engine_tick_interval_validation_and_stop() -> None:

@@ -5,40 +5,57 @@
 """
 
 import logging
-import os
-from pathlib import Path
 from typing import Any
 
 import httpx
-from dotenv import load_dotenv
 
 from app.modules.safety.feishu.client import get_safety_tenant_token
+from app.modules.safety.feishu.runtime_config import load_safety_feishu_runtime_config
 
 logger = logging.getLogger(__name__)
 
-# 安全模块独立读取 .env 中的 Bitable 配置（不经过全局 config.py）
-_env_dir = Path(__file__).resolve().parent.parent.parent.parent.parent
-_app_env = os.getenv("APP_ENV", "development")
-_env_path = _env_dir / f".env.{_app_env}"
-if _env_path.exists():
-    load_dotenv(_env_path)
-
-SAFETY_BITABLE_APP_TOKEN = os.getenv("SAFETY_FEISHU_BITABLE_APP_TOKEN", "")
-SAFETY_BITABLE_HAZARD_TABLE_ID = os.getenv("SAFETY_FEISHU_BITABLE_HAZARD_TABLE_ID", "")
-
 BITABLE_BASE = "https://open.feishu.cn/open-apis/bitable/v1"
+DRIVE_UPLOAD_URL = "https://open.feishu.cn/open-apis/drive/v1/medias/upload_all"
 
 
 class SafetyBitableClient:
-    """安全模块多维表格 API 客户端。"""
+    """安全模块多维表格 API 客户端。
+
+    默认绑定（隐患多维表格 app_token / table_id）来自数据库配置；
+    使用 `await SafetyBitableClient.create()` 构造，或显式传入覆盖值。
+    """
 
     def __init__(
         self,
         app_token: str | None = None,
         table_id: str | None = None,
     ) -> None:
-        self.app_token = app_token or SAFETY_BITABLE_APP_TOKEN
-        self.table_id = table_id or SAFETY_BITABLE_HAZARD_TABLE_ID
+        self.app_token = app_token or ""
+        self.table_id = table_id or ""
+
+    @classmethod
+    async def create(
+        cls,
+        app_token: str | None = None,
+        table_id: str | None = None,
+    ) -> "SafetyBitableClient":
+        """以数据库配置为默认值构造客户端（显式参数优先）。"""
+        config = await load_safety_feishu_runtime_config()
+        resolved_app_token = app_token or (config.bitable_app_token if config else "")
+        resolved_table_id = table_id or (
+            config.bitable_hazard_table_id if config else ""
+        )
+        client = cls(
+            app_token=resolved_app_token or None,
+            table_id=resolved_table_id or None,
+        )
+        if not client.app_token or not client.table_id:
+            logger.warning(
+                "安全模块飞书 Bitable 绑定不完整 (app_token=%s, table_id=%s)",
+                bool(client.app_token),
+                bool(client.table_id),
+            )
+        return client
 
     def _record_url(self, table_id: str | None = None, record_id: str = "") -> str:
         tid = table_id or self.table_id
@@ -119,6 +136,101 @@ class SafetyBitableClient:
                 record_id,
                 list(fields.keys()),
             )
+            return True
+
+    async def create_record(
+        self,
+        fields: dict[str, Any],
+        table_id: str | None = None,
+    ) -> str | None:
+        """新增一条记录，成功返回 record_id，失败返回 None。"""
+        if not fields:
+            return None
+        token = await self._token()
+        async with httpx.AsyncClient(timeout=15) as http:
+            resp = await http.post(
+                self._record_url(table_id),
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json; charset=utf-8",
+                },
+                json={"fields": fields},
+            )
+            data = resp.json()
+            if data.get("code") != 0:
+                logger.error(
+                    "Bitable create_record 失败: code=%s msg=%s fields=%s",
+                    data.get("code"),
+                    data.get("msg"),
+                    list(fields.keys()),
+                )
+                return None
+            record_id = (data.get("data") or {}).get("record", {}).get("record_id")
+            logger.info(
+                "Bitable create_record 成功: record_id=%s fields=%s",
+                record_id,
+                list(fields.keys()),
+            )
+            return str(record_id) if record_id else None
+
+    async def upload_media(
+        self,
+        file_bytes: bytes,
+        file_name: str,
+        parent_type: str = "bitable_file",
+    ) -> str | None:
+        """上传附件到多维表格，成功返回 file_token，失败返回 None。"""
+        if not file_bytes:
+            return None
+        token = await self._token()
+        async with httpx.AsyncClient(timeout=120) as http:
+            resp = await http.post(
+                DRIVE_UPLOAD_URL,
+                headers={"Authorization": f"Bearer {token}"},
+                data={
+                    "file_name": file_name,
+                    "parent_type": parent_type,
+                    "size": str(len(file_bytes)),
+                },
+                files={"file": (file_name, file_bytes)},
+            )
+            data = resp.json()
+            if data.get("code") != 0:
+                logger.error(
+                    "Bitable upload_media 失败: file=%s code=%s msg=%s",
+                    file_name,
+                    data.get("code"),
+                    data.get("msg"),
+                )
+                return None
+            file_token = (data.get("data") or {}).get("file_token")
+            logger.info(
+                "Bitable upload_media 成功: file=%s token=%s", file_name, file_token
+            )
+            return file_token
+
+    async def delete_record(
+        self,
+        record_id: str,
+        table_id: str | None = None,
+    ) -> bool:
+        """删除单条记录（用于回滚误写入的批次）。"""
+        token = await self._token()
+        async with httpx.AsyncClient(timeout=15) as http:
+            resp = await http.delete(
+                self._record_url(table_id, record_id),
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            data = resp.json()
+            if data.get("code") != 0:
+                logger.error(
+                    "Bitable delete_record 失败: record_id=%s code=%s msg=%s",
+                    record_id,
+                    data.get("code"),
+                    data.get("msg"),
+                )
+                return False
+            logger.info("Bitable delete_record 成功: record_id=%s", record_id)
             return True
 
     async def download_attachment(
@@ -232,31 +344,42 @@ class SafetyBitableClient:
         *,
         filter_str: str | None = None,
         page_size: int = 100,
+        max_pages: int = 50,
     ) -> list[dict[str, Any]]:
-        """搜索记录，返回 [{"record_id": "...", "fields": {...}}, ...]."""
+        """搜索记录（自动翻页），返回 [{"record_id": "...", "fields": {...}}, ...]."""
         token = await self._token()
         tid = table_id or self.table_id
-        payload: dict[str, Any] = {"page_size": page_size}
-        if filter_str:
-            payload["filter"] = filter_str
-
+        results: list[dict[str, Any]] = []
+        page_token: str | None = None
         async with httpx.AsyncClient(timeout=30) as http:
-            resp = await http.post(
-                f"{BITABLE_BASE}/apps/{self.app_token}/tables/{tid}/records/search",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Content-Type": "application/json; charset=utf-8",
-                },
-                json=payload,
-            )
-            data = resp.json()
-            if data.get("code") != 0:
-                logger.error("Bitable search_records 失败: %s", data.get("msg"))
-                return []
-            items = data.get("data", {}).get("items", [])
-            if not isinstance(items, list):
-                return []
-            return [item for item in items if isinstance(item, dict)]
+            for _ in range(max_pages):
+                payload: dict[str, Any] = {"page_size": page_size}
+                if filter_str:
+                    payload["filter"] = filter_str
+                if page_token:
+                    payload["page_token"] = page_token
+                resp = await http.post(
+                    f"{BITABLE_BASE}/apps/{self.app_token}/tables/{tid}/records/search",
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Content-Type": "application/json; charset=utf-8",
+                    },
+                    json=payload,
+                )
+                data = resp.json()
+                if data.get("code") != 0:
+                    logger.error("Bitable search_records 失败: %s", data.get("msg"))
+                    return results
+                page = data.get("data", {})
+                items = page.get("items", [])
+                if isinstance(items, list):
+                    results.extend(
+                        item for item in items if isinstance(item, dict)
+                    )
+                page_token = page.get("page_token") or None
+                if not page.get("has_more") or not page_token:
+                    break
+        return results
 
     async def list_fields(self, table_id: str | None = None) -> list[dict[str, Any]]:
         """列出表格的所有字段。"""

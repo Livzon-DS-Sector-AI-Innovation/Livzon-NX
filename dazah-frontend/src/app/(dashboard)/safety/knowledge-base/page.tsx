@@ -1,9 +1,5 @@
 'use client'
 
-"use client"
-
-'use client'
-
 import { useEffect, useState } from 'react'
 import {
   Table,
@@ -23,49 +19,182 @@ import {
   App,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
+import { Upload } from 'antd'
+import { PaperClipOutlined, UploadOutlined } from '@ant-design/icons'
 import {
   PlusOutlined,
   SearchOutlined,
   EditOutlined,
   DeleteOutlined,
-  SendOutlined,
-  InboxOutlined,
-  FileTextOutlined,
   EyeOutlined,
+  CloudDownloadOutlined,
+  FilePdfOutlined,
+  LinkOutlined,
 } from '@ant-design/icons'
+import PlatformNotice from '@/components/shared/PlatformNotice'
 import { useSafetyStore } from '@/stores/safety'
 import {
+  uploadKnowledgeAttachments,
+  deleteKnowledgeAttachment,
   getKnowledgeArticles,
   getKnowledgeArticle,
   createKnowledgeArticle,
   updateKnowledgeArticle,
   deleteKnowledgeArticle,
-  publishKnowledgeArticle,
-  archiveKnowledgeArticle,
+  syncSafetyKnowledge,
+  getRadarRuns,
+  getRadarRunDetail,
+  runRadarScan,
 } from '@/actions/safety'
+import type { RadarRunDetail } from '@/actions/safety'
 import type {
   SafetyKnowledgeArticle,
   SafetyKnowledgeArticleFormData,
 } from '@/types/safety'
-import {
-  KNOWLEDGE_CATEGORY_OPTIONS,
-} from '@/types/safety'
 import dayjs from 'dayjs'
 
 const { Text } = Typography
+
+const REGULATION_STATUS_OPTIONS = [
+  { value: '现行有效', label: '现行有效' },
+  { value: '已废止', label: '已废止' },
+  { value: '已失效', label: '已失效' },
+  { value: '部分有效', label: '部分有效' },
+]
+
+function formatDate(value?: string | null): string {
+  return value ? dayjs(value).format('YYYY-MM-DD') : '-'
+}
+
+function regulationStatusColor(status?: string | null): string {
+  if (status === '现行有效') return 'green'
+  if (status === '已废止' || status === '已失效') return 'default'
+  return 'blue'
+}
+
+function attachmentUrl(recordId: string, fileToken: string, kind: 'content' | 'preview'): string {
+  return `/api/v1/safety/knowledge-articles/feishu/records/${recordId}/attachments/${fileToken}/${kind}`
+}
+
+function openAttachment(recordId: string, fileToken: string, kind: 'content' | 'preview'): void {
+  window.open(attachmentUrl(recordId, fileToken, kind), '_blank', 'noopener')
+}
+
+
+function localAttachmentUrl(articleId: string, token: string, kind: 'content' | 'preview'): string {
+  return `/api/v1/safety/knowledge-articles/${articleId}/attachments/${token}/${kind}`
+}
+
+function openLocalAttachment(articleId: string, token: string, kind: 'content' | 'preview'): void {
+  window.open(localAttachmentUrl(articleId, token, kind), '_blank', 'noopener')
+}
+
+function formatSize(bytes?: number): string {
+  if (!bytes) return ''
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)}MB`
+  return `${Math.round(bytes / 1024)}KB`
+}
+
+function AttachmentActions({ article }: { article: SafetyKnowledgeArticle }) {
+  const feishuItems = article.feishu_attachments ?? []
+  const localItems = article.local_attachments ?? []
+  if (!feishuItems.length && !localItems.length) return <Text type="secondary">-</Text>
+  return (
+    <Space size={4} wrap>
+      {feishuItems.map((item) => (
+        <Space key={item.file_token} size={0}>
+          <Button
+            type="link"
+            size="small"
+            icon={<FilePdfOutlined />}
+            title={item.name}
+            disabled={!article.feishu_record_id}
+            onClick={() =>
+              article.feishu_record_id &&
+              openAttachment(article.feishu_record_id, item.file_token, 'preview')
+            }
+          >
+            预览
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            disabled={!article.feishu_record_id}
+            onClick={() =>
+              article.feishu_record_id &&
+              openAttachment(article.feishu_record_id, item.file_token, 'content')
+            }
+          >
+            下载
+          </Button>
+        </Space>
+      ))}
+      {localItems.map((item) => (
+        <Space key={item.token} size={0}>
+          <Button
+            type="link"
+            size="small"
+            icon={<PaperClipOutlined />}
+            title={item.name}
+            onClick={() => openLocalAttachment(article.id, item.token, 'preview')}
+          >
+            预览
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            onClick={() => openLocalAttachment(article.id, item.token, 'content')}
+          >
+            下载
+          </Button>
+        </Space>
+      ))}
+    </Space>
+  )
+}
+
+interface RadarRunSummary {
+  id: string
+  started_at: string
+  finished_at?: string | null
+  status: string
+  dry_run: boolean
+  new_count: number
+  revised_count: number
+  link_fixed_count: number
+  failed_count: number
+  is_acknowledged: boolean
+  items?: {
+    action: string
+    name: string
+    date?: string
+    old_date?: string
+    new_date?: string
+    url?: string
+    site?: string
+  }[] | null
+  error_message?: string | null
+}
 
 export default function KnowledgeBasePage() {
   const { message, modal } = App.useApp()
   const [form] = Form.useForm()
   const [editForm] = Form.useForm()
   const [loading, setLoading] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [radarRun, setRadarRun] = useState<RadarRunSummary | null>(null)
+  const [radarDetail, setRadarDetail] = useState(false)
+  const [radarRunning, setRadarRunning] = useState(false)
+  const [radarItems, setRadarItems] = useState<RadarRunDetail['items']>([])
+  const [radarDetailLoading, setRadarDetailLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
   const [detailVisible, setDetailVisible] = useState(false)
   const [editingRecord, setEditingRecord] = useState<SafetyKnowledgeArticle | null>(null)
   const [detailRecord, setDetailRecord] = useState<SafetyKnowledgeArticle | null>(null)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const [uploadingCount, setUploadingCount] = useState(0)
   const [searchText, setSearchText] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string | undefined>()
-  const [categoryFilter, setCategoryFilter] = useState<string | undefined>()
+  const [regulationStatusFilter, setRegulationStatusFilter] = useState<string | undefined>()
 
   const {
     articles,
@@ -84,8 +213,7 @@ export default function KnowledgeBasePage() {
     try {
       const response = await getKnowledgeArticles({
         ...articleQueryParams,
-        status: statusFilter,
-        category: categoryFilter,
+        regulation_status: regulationStatusFilter,
         keyword: searchText || undefined,
       })
       if (response.code === 200) {
@@ -101,16 +229,89 @@ export default function KnowledgeBasePage() {
 
   useEffect(() => {
     loadData()
-  }, [articleQueryParams.page, articleQueryParams.page_size, statusFilter, categoryFilter])
+    // 关键词仅在点击查询时生效，避免输入过程触发请求（loadData 依赖刻意省略）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [articleQueryParams.page, articleQueryParams.page_size, regulationStatusFilter])
+
+  const openRadarDetail = async () => {
+    if (!radarRun) return
+    setRadarDetail(true)
+    setRadarDetailLoading(true)
+    try {
+      const res = await getRadarRunDetail(radarRun.id)
+      if (res.code === 200 && res.data) {
+        setRadarItems(res.data.items ?? [])
+      } else {
+        message.error(res.message || '获取明细失败')
+      }
+    } finally {
+      setRadarDetailLoading(false)
+    }
+  }
+
+  const loadRadarRuns = async () => {
+    const res = await getRadarRuns(10)
+    if (res.code === 200 && Array.isArray(res.data)) {
+      const runs = res.data as unknown as RadarRunSummary[]
+      setRadarRun(runs.find((r) => !r.dry_run) ?? null)
+    }
+  }
+
+  useEffect(() => {
+    void loadRadarRuns()
+  }, [])
+
+  const handleRunRadar = async () => {
+    modal.confirm({
+      title: '立即扫描法规动态？',
+      content: '将抓取生态环境部、应急管理部、市场监管总局等官方栏目页，发现新法规后自动写入飞书法规库。',
+      onOk: async () => {
+        setRadarRunning(true)
+        try {
+          const res = await runRadarScan(false)
+          if (res.code === 200 && res.data) {
+            const d = res.data as { new_count?: number; revised_count?: number; status?: string }
+            message.success(`扫描完成（${d.status}）：新增 ${d.new_count ?? 0} 部、修订 ${d.revised_count ?? 0} 部`)
+            await Promise.all([loadRadarRuns(), loadData()])
+          } else {
+            message.error(res.message || '扫描失败')
+          }
+        } finally {
+          setRadarRunning(false)
+        }
+      },
+    })
+  }
 
   const handleSearch = () => {
     setArticleQueryParams({ page: 1 })
     loadData()
   }
 
+  const handleSync = async () => {
+    setSyncing(true)
+    try {
+      const response = await syncSafetyKnowledge()
+      if (response.code === 200 && response.data) {
+        const d = response.data as Record<string, number>
+        message.success(
+          `同步完成：新增 ${d.created ?? 0} 条，更新 ${d.updated ?? 0} 条，移除 ${d.removed ?? 0} 条` +
+            (d.failed ? `，失败 ${d.failed} 条` : '')
+        )
+        setArticleQueryParams({ page: 1 })
+        await loadData()
+      } else {
+        message.error(response.message || '同步失败')
+      }
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   const handleAdd = () => {
     setEditingRecord(null)
     form.resetFields()
+    setPendingFiles([])
     setModalVisible(true)
   }
 
@@ -118,9 +319,40 @@ export default function KnowledgeBasePage() {
     setEditingRecord(record)
     editForm.setFieldsValue({
       ...record,
-      publish_date: record.publish_date ? dayjs(record.publish_date) : undefined,
+      promulgation_date: record.promulgation_date ? dayjs(record.promulgation_date) : undefined,
+      implement_date: record.implement_date ? dayjs(record.implement_date) : undefined,
     })
     setModalVisible(true)
+  }
+
+  const handleRemoveLocalAttachment = async (token: string) => {
+    if (!editingRecord) return
+    const response = await deleteKnowledgeAttachment(editingRecord.id, token)
+    if (response.code === 200) {
+      message.success('附件已删除')
+      updateArticleInStore(editingRecord.id, response.data)
+      setEditingRecord(response.data)
+    } else {
+      message.error(response.message || '删除附件失败')
+    }
+  }
+
+  const handleEditUpload = async (file: File) => {
+    if (!editingRecord) return false
+    setUploadingCount((n) => n + 1)
+    try {
+      const response = await uploadKnowledgeAttachments(editingRecord.id, [file])
+      if (response.code === 200 && response.data) {
+        message.success(`附件已上传：${file.name}`)
+        updateArticleInStore(editingRecord.id, response.data)
+        setEditingRecord(response.data)
+      } else {
+        message.error(response.message || '上传附件失败')
+      }
+    } finally {
+      setUploadingCount((n) => n - 1)
+    }
+    return false
   }
 
   const handleViewDetail = async (record: SafetyKnowledgeArticle) => {
@@ -139,7 +371,7 @@ export default function KnowledgeBasePage() {
   const handleDelete = (id: string) => {
     modal.confirm({
       title: '确认删除',
-      content: '确定要删除该知识文档吗？',
+      content: '确定要删除该知识文档吗？（飞书镜像记录下次同步会恢复）',
       onOk: async () => {
         const response = await deleteKnowledgeArticle(id)
         if (response.code === 200) { message.success('删除成功'); removeArticle(id) }
@@ -151,9 +383,10 @@ export default function KnowledgeBasePage() {
   const handleSubmit = async () => {
     try {
       const values = editingRecord ? await editForm.validateFields() : await form.validateFields()
-      const formattedValues = {
+      const formattedValues: SafetyKnowledgeArticleFormData = {
         ...values,
-        publish_date: values.publish_date ? values.publish_date.toISOString() : undefined,
+        promulgation_date: values.promulgation_date ? values.promulgation_date.toISOString() : undefined,
+        implement_date: values.implement_date ? values.implement_date.toISOString() : undefined,
       }
 
       if (editingRecord) {
@@ -162,59 +395,78 @@ export default function KnowledgeBasePage() {
         else { message.error(response.message || '更新失败') }
       } else {
         const response = await createKnowledgeArticle(formattedValues as SafetyKnowledgeArticleFormData)
-        if (response.code === 200) { message.success('创建成功'); addArticle(response.data); setModalVisible(false); form.resetFields() }
-        else { message.error(response.message || '创建失败') }
+        if (response.code === 200) {
+          if (pendingFiles.length) {
+            const uploadRes = await uploadKnowledgeAttachments(response.data.id, pendingFiles)
+            if (uploadRes.code === 200 && uploadRes.data) {
+              message.success(`创建成功，已上传 ${pendingFiles.length} 个附件`)
+              addArticle(uploadRes.data)
+            } else {
+              message.warning(`文档已创建，但附件上传失败：${uploadRes.message || '未知错误'}`)
+              addArticle(response.data)
+            }
+          } else {
+            message.success('创建成功')
+            addArticle(response.data)
+          }
+          setModalVisible(false); form.resetFields(); setPendingFiles([])
+        } else {
+          message.error(response.message || '创建失败')
+        }
       }
     } catch { console.error('表单验证失败') }
   }
 
-  const handlePublish = async (id: string) => {
-    const response = await publishKnowledgeArticle(id)
-    if (response.code === 200) { message.success('发布成功'); updateArticleInStore(id, response.data) }
-    else { message.error(response.message || '发布失败') }
-  }
-
-  const handleArchive = async (id: string) => {
-    const response = await archiveKnowledgeArticle(id)
-    if (response.code === 200) { message.success('已归档'); updateArticleInStore(id, response.data) }
-    else { message.error(response.message || '归档失败') }
-  }
-
   const columns: ColumnsType<SafetyKnowledgeArticle> = [
-    { title: '编号', dataIndex: 'article_no', key: 'article_no', width: 130 },
-    { title: '标题', dataIndex: 'title', key: 'title', width: 250, ellipsis: true },
+    { title: '编号', dataIndex: 'article_no', key: 'article_no', width: 80 },
     {
-      title: '分类', dataIndex: 'category', key: 'category', width: 120,
-      render: (c: string) => { const opt = KNOWLEDGE_CATEGORY_OPTIONS.find(o => o.value === c); return <Tag>{opt?.label || c}</Tag> },
-    },
-    { title: '来源', dataIndex: 'source', key: 'source', width: 150, ellipsis: true },
-    { title: '作者', dataIndex: 'author', key: 'author', width: 100 },
-    {
-      title: '发布日期', dataIndex: 'publish_date', key: 'publish_date', width: 110,
-      render: (d: string) => d ? dayjs(d).format('YYYY-MM-DD') : '-',
+      title: '法律法规及标准名称',
+      dataIndex: 'title',
+      key: 'title',
+      width: 260,
+      ellipsis: true,
     },
     {
-      title: '浏览', dataIndex: 'view_count', key: 'view_count', width: 70,
+      title: '法规类别',
+      dataIndex: 'regulation_category',
+      key: 'regulation_category',
+      width: 100,
+      render: (c: string | null) => (c ? <Tag>{c}</Tag> : '-'),
+    },
+    { title: '颁布机关', dataIndex: 'source', key: 'source', width: 130, ellipsis: true },
+    {
+      title: '颁布/修订',
+      dataIndex: 'promulgation_date',
+      key: 'promulgation_date',
+      width: 105,
+      render: (d: string | null) => formatDate(d),
     },
     {
-      title: '状态', dataIndex: 'status', key: 'status', width: 80,
-      render: (s: string) => {
-        const colors: Record<string, string> = { draft: 'default', published: 'green', archived: 'default' }
-        const labels: Record<string, string> = { draft: '草稿', published: '已发布', archived: '已归档' }
-        return <Tag color={colors[s]}>{labels[s] || s}</Tag>
-      },
+      title: '实施日期',
+      dataIndex: 'implement_date',
+      key: 'implement_date',
+      width: 105,
+      render: (d: string | null) => formatDate(d),
     },
     {
-      title: '操作', key: 'action', width: 240, fixed: 'right',
+      title: '法规状态',
+      dataIndex: 'regulation_status',
+      key: 'regulation_status',
+      width: 100,
+      render: (s: string | null) =>
+        s ? <Tag color={regulationStatusColor(s)}>{s}</Tag> : '-',
+    },
+    {
+      title: '附件',
+      key: 'attachments',
+      width: 130,
+      render: (_, record) => <AttachmentActions article={record} />,
+    },
+    {
+      title: '操作', key: 'action', width: 180, fixed: 'right',
       render: (_, record) => (
         <Space size="small">
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>查看</Button>
-          {record.status === 'draft' && (
-            <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handlePublish(record.id)}>发布</Button>
-          )}
-          {record.status === 'published' && (
-            <Button type="link" size="small" icon={<InboxOutlined />} onClick={() => handleArchive(record.id)}>归档</Button>
-          )}
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
           <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>删除</Button>
         </Space>
@@ -225,93 +477,186 @@ export default function KnowledgeBasePage() {
   const formContent = (
     <>
       <Row gutter={16}>
-        <Col span={12}>
-          <Form.Item name="article_no" label="文档编号" rules={[{ required: true }]}>
-            <Input placeholder="自动生成或手动输入" />
+        <Col span={8}>
+          <Form.Item name="article_no" label="法规编号">
+            <Input placeholder="如 001" />
           </Form.Item>
         </Col>
-        <Col span={12}>
-          <Form.Item name="category" label="知识分类" rules={[{ required: true }]}>
-            <Select options={KNOWLEDGE_CATEGORY_OPTIONS.map(o => ({ value: o.value, label: o.label }))} placeholder="请选择分类" />
+        <Col span={8}>
+          <Form.Item name="regulation_category" label="法规类别">
+            <Input placeholder="如 安全类" />
+          </Form.Item>
+        </Col>
+        <Col span={8}>
+          <Form.Item name="regulation_status" label="法规状态">
+            <Select options={REGULATION_STATUS_OPTIONS} allowClear placeholder="如 现行有效" />
           </Form.Item>
         </Col>
       </Row>
-      <Form.Item name="title" label="文档标题" rules={[{ required: true }]}>
-        <Input placeholder="请输入文档标题" />
-      </Form.Item>
-      <Form.Item name="summary" label="摘要">
-        <Input.TextArea rows={2} placeholder="请输入摘要" />
-      </Form.Item>
-      <Form.Item name="content" label="正文内容">
-        <Input.TextArea rows={6} placeholder="请输入正文内容" />
+      <Form.Item name="title" label="法律法规及标准名称" rules={[{ required: true }]}>
+        <Input placeholder="请输入名称" />
       </Form.Item>
       <Row gutter={16}>
-        <Col span={12}>
-          <Form.Item name="tags" label="标签">
-            <Input placeholder="多个以逗号分隔" />
+        <Col span={8}>
+          <Form.Item name="source" label="颁布机关">
+            <Input placeholder="如 全国人大" />
           </Form.Item>
         </Col>
-        <Col span={12}>
-          <Form.Item name="publish_date" label="发布日期">
+        <Col span={8}>
+          <Form.Item name="promulgation_date" label="颁布/修订日期">
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+        </Col>
+        <Col span={8}>
+          <Form.Item name="implement_date" label="实施日期">
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
         </Col>
       </Row>
-      <Row gutter={16}>
-        <Col span={12}>
-          <Form.Item name="source" label="来源">
-            <Input placeholder="请输入来源/出处" />
-          </Form.Item>
-        </Col>
-        <Col span={12}>
-          <Form.Item name="author" label="作者">
-            <Input placeholder="请输入作者/发布单位" />
-          </Form.Item>
-        </Col>
-      </Row>
+      <Form.Item name="regulation_link" label="法规链接">
+        <Input placeholder="https://..." />
+      </Form.Item>
+      <Form.Item name="summary" label="核心要点总结">
+        <Input.TextArea rows={3} placeholder="请输入核心要点总结" />
+      </Form.Item>
       <Form.Item name="notes" label="备注">
         <Input.TextArea rows={2} placeholder="请输入备注" />
+      </Form.Item>
+      <Form.Item label="附件">
+        {editingRecord?.feishu_record_id ? (
+          <Text type="secondary">
+            该文档来自飞书法规库镜像，附件请在多维表格「附件」列中维护
+            （当前 {editingRecord.feishu_attachments?.length ?? 0} 个）。
+          </Text>
+        ) : editingRecord ? (
+          <Space direction="vertical" size={6} style={{ width: '100%' }}>
+            {(editingRecord.local_attachments ?? []).map((item) => (
+              <Space key={item.token} size={8}>
+                <PaperClipOutlined />
+                <Text ellipsis style={{ maxWidth: 320 }} title={item.name}>
+                  {item.name}
+                </Text>
+                <Text type="secondary">{formatSize(item.size)}</Text>
+                <Button
+                  type="link"
+                  size="small"
+                  danger
+                  onClick={() => handleRemoveLocalAttachment(item.token)}
+                >
+                  删除
+                </Button>
+              </Space>
+            ))}
+            <Upload
+              multiple
+              showUploadList={false}
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.txt,.md"
+              beforeUpload={(file) => {
+                void handleEditUpload(file)
+                return false
+              }}
+            >
+              <Button icon={<UploadOutlined />} loading={uploadingCount > 0}>
+                上传附件（PDF/Office/图片/文本，单个 ≤ 20MB）
+              </Button>
+            </Upload>
+          </Space>
+        ) : (
+          <Space direction="vertical" size={6} style={{ width: '100%' }}>
+            {pendingFiles.length === 0 ? null : (
+              <>
+                {pendingFiles.map((file, index) => (
+                  <Space key={`${file.name}-${index}`} size={8}>
+                    <PaperClipOutlined />
+                    <Text ellipsis style={{ maxWidth: 320 }} title={file.name}>
+                      {file.name}
+                    </Text>
+                    <Text type="secondary">{formatSize(file.size)}</Text>
+                    <Button
+                      type="link"
+                      size="small"
+                      danger
+                      onClick={() =>
+                        setPendingFiles((files) => files.filter((_, i) => i !== index))
+                      }
+                    >
+                      移除
+                    </Button>
+                  </Space>
+                ))}
+              </>
+            )}
+            <Upload
+              multiple
+              showUploadList={false}
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.txt,.md"
+              beforeUpload={(file) => {
+                setPendingFiles((files) => [...files, file])
+                return false
+              }}
+            >
+              <Button icon={<UploadOutlined />}>选择附件（保存文档后自动上传）</Button>
+            </Upload>
+          </Space>
+        )}
       </Form.Item>
     </>
   )
 
   return (
     <div className="p-6">
+      {radarRun && (
+        <PlatformNotice
+          type="info"
+          style={{ marginBottom: 16 }}
+          title={
+            `🔔 法规雷达 · 上次扫描 ${radarRun.started_at.slice(5, 16).replace('T', ' ')}：` +
+            `发现新法规 ${radarRun.new_count} 部、已修订 ${radarRun.revised_count} 部` +
+            (radarRun.failed_count ? `、失败 ${radarRun.failed_count} 条` : '')
+          }
+          showRulesLink={false}
+          action={
+            <Space size={4}>
+              <Button type="link" size="small" onClick={() => void openRadarDetail()}>查看明细</Button>
+              <Button type="link" size="small" onClick={() => void handleRunRadar()} loading={radarRunning}>立即扫描</Button>
+            </Space>
+          }
+        />
+      )}
       <Card
-        title="安全知识库"
+        title="安全知识库（EHS 法规数据库）"
         extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            新建文档
-          </Button>
+          <Space>
+            <Button
+              icon={<CloudDownloadOutlined />}
+              onClick={() => void handleSync()}
+              loading={syncing}
+            >
+              同步飞书法规库
+            </Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+              新建文档
+            </Button>
+          </Space>
         }
       >
         <Row gutter={16} className="mb-4">
-          <Col span={6}>
-            <Input placeholder="搜索标题/内容/标签" prefix={<SearchOutlined />}
+          <Col span={12}>
+            <Input placeholder="搜索编号/名称/机关/要点/备注" prefix={<SearchOutlined />}
               value={searchText} onChange={e => setSearchText(e.target.value)} onPressEnter={handleSearch} />
           </Col>
-          <Col span={5}>
-            <Select placeholder="知识分类" allowClear value={categoryFilter}
-              onChange={v => { setCategoryFilter(v); setArticleQueryParams({ page: 1 }) }}
+          <Col span={8}>
+            <Select placeholder="法规状态" allowClear value={regulationStatusFilter}
+              onChange={v => { setRegulationStatusFilter(v); setArticleQueryParams({ page: 1 }) }}
               style={{ width: '100%' }}
-              options={KNOWLEDGE_CATEGORY_OPTIONS.map(o => ({ value: o.value, label: o.label }))} />
+              options={REGULATION_STATUS_OPTIONS} />
           </Col>
-          <Col span={5}>
-            <Select placeholder="状态" allowClear value={statusFilter}
-              onChange={v => { setStatusFilter(v); setArticleQueryParams({ page: 1 }) }}
-              style={{ width: '100%' }}
-              options={[
-                { value: 'draft', label: '草稿' },
-                { value: 'published', label: '已发布' },
-                { value: 'archived', label: '已归档' },
-              ]} />
-          </Col>
-          <Col span={3}>
+          <Col span={4}>
             <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>查询</Button>
           </Col>
         </Row>
 
-        <Table columns={columns} dataSource={articles} rowKey="id" loading={loading} scroll={{ x: 1300 }}
+        <Table columns={columns} dataSource={articles} rowKey="id" loading={loading} scroll={{ x: 1400 }}
           pagination={{
             current: articleQueryParams.page, pageSize: articleQueryParams.page_size, total: articleTotal,
             showSizeChanger: true, showTotal: t => `共 ${t} 条`,
@@ -320,42 +665,81 @@ export default function KnowledgeBasePage() {
       </Card>
 
       <Modal title={editingRecord ? '编辑文档' : '新建文档'} open={modalVisible}
-        onOk={handleSubmit} onCancel={() => setModalVisible(false)} width={800} okText="确认" cancelText="取消">
+        onOk={handleSubmit} onCancel={() => setModalVisible(false)} width={860} okText="确认" cancelText="取消">
         <Form form={editingRecord ? editForm : form} layout="vertical">
           {formContent}
         </Form>
       </Modal>
 
-      <Modal title="文档详情" open={detailVisible} width={800}
+      <Modal title="法规详情" open={detailVisible} width={860}
         onCancel={() => { setDetailVisible(false); setDetailRecord(null) }}
         footer={<Button onClick={() => { setDetailVisible(false); setDetailRecord(null) }}>关闭</Button>}>
         {detailRecord && (
           <Descriptions column={2} bordered size="small">
-            <Descriptions.Item label="编号">{detailRecord.article_no}</Descriptions.Item>
-            <Descriptions.Item label="分类">
-              <Tag>{KNOWLEDGE_CATEGORY_OPTIONS.find(o => o.value === detailRecord.category)?.label}</Tag>
+            <Descriptions.Item label="编号">{detailRecord.article_no || '-'}</Descriptions.Item>
+            <Descriptions.Item label="法规类别">
+              {detailRecord.regulation_category || '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="标题" span={2}>{detailRecord.title}</Descriptions.Item>
-            <Descriptions.Item label="摘要" span={2}>{detailRecord.summary || '-'}</Descriptions.Item>
-            <Descriptions.Item label="来源">{detailRecord.source || '-'}</Descriptions.Item>
-            <Descriptions.Item label="作者">{detailRecord.author || '-'}</Descriptions.Item>
-            <Descriptions.Item label="发布日期">
-              {detailRecord.publish_date ? dayjs(detailRecord.publish_date).format('YYYY-MM-DD') : '-'}
+            <Descriptions.Item label="名称" span={2}>{detailRecord.title}</Descriptions.Item>
+            <Descriptions.Item label="颁布机关">{detailRecord.source || '-'}</Descriptions.Item>
+            <Descriptions.Item label="法规状态">
+              {detailRecord.regulation_status
+                ? <Tag color={regulationStatusColor(detailRecord.regulation_status)}>{detailRecord.regulation_status}</Tag>
+                : '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="浏览次数">{detailRecord.view_count}</Descriptions.Item>
-            <Descriptions.Item label="标签" span={2}>{detailRecord.tags || '-'}</Descriptions.Item>
-            <Descriptions.Item label="正文内容" span={2}>
-              <div className="whitespace-pre-wrap">{detailRecord.content || '-'}</div>
+            <Descriptions.Item label="颁布/修订日期">{formatDate(detailRecord.promulgation_date)}</Descriptions.Item>
+            <Descriptions.Item label="实施日期">{formatDate(detailRecord.implement_date)}</Descriptions.Item>
+            <Descriptions.Item label="法规链接" span={2}>
+              {detailRecord.regulation_link ? (
+                <Button type="link" size="small" icon={<LinkOutlined />} href={detailRecord.regulation_link} target="_blank" rel="noopener noreferrer">
+                  打开原文链接
+                </Button>
+              ) : '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="附件">
-              {detailRecord.attachment_original_name || '-'}
+            <Descriptions.Item label="核心要点总结" span={2}>
+              <div className="whitespace-pre-wrap">{detailRecord.summary || '-'}</div>
             </Descriptions.Item>
-            <Descriptions.Item label="状态">
-              <Tag color={{ draft: 'default', published: 'green', archived: 'default' }[detailRecord.status]}>
-                {{ draft: '草稿', published: '已发布', archived: '已归档' }[detailRecord.status]}
-              </Tag>
+            <Descriptions.Item label="附件" span={2}>
+              <AttachmentActions article={detailRecord} />
+            </Descriptions.Item>
+            <Descriptions.Item label="备注" span={2}>
+              <div className="whitespace-pre-wrap">{detailRecord.notes || '-'}</div>
             </Descriptions.Item>
           </Descriptions>
+        )}
+      </Modal>
+
+      <Modal
+        title={`法规雷达扫描明细 · ${radarRun?.started_at.slice(0, 10) ?? ''}`}
+        open={radarDetail}
+        width={760}
+        onCancel={() => setRadarDetail(false)}
+        footer={<Button onClick={() => setRadarDetail(false)}>关闭</Button>}
+      >
+        {radarDetailLoading ? (
+          <Text type="secondary">加载中…</Text>
+        ) : (radarItems ?? []).length === 0 ? (
+          <Text type="secondary">本批次无明细</Text>
+        ) : (
+          <Space direction="vertical" size={10} style={{ display: 'flex' }}>
+            {(radarItems ?? []).map((it, idx) => (
+              <div key={`${it.action}-${idx}`}>
+                <Tag color={it.action === 'new' ? 'green' : it.action === 'revised' || it.action === 'obsolete' ? 'orange' : 'default'}>
+                  {it.action === 'new' ? '新增' : it.action === 'revised' ? '已修订' : it.action === 'obsolete' ? '已废止' : it.action}
+                </Tag>
+                {it.name}
+                {it.url ? (
+                  <Button type="link" size="small" href={it.url} target="_blank" rel="noopener noreferrer">
+                    原文
+                  </Button>
+                ) : null}
+                {it.reason ? <Text type="secondary">{it.reason}</Text> : null}
+                {it.action === 'revised' && (it.old_date || it.new_date) ? (
+                  <Text type="secondary">　{it.old_date ?? ''} → {it.new_date ?? ''}</Text>
+                ) : null}
+              </div>
+            ))}
+          </Space>
         )}
       </Modal>
     </div>
