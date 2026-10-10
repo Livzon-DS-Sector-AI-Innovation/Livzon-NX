@@ -317,6 +317,224 @@ describe('AutoSchedulingPage', () => {
       ),
     ).toBe(true)
   })
+
+  const HISTORY_RECORD = {
+    id: 'rec-1',
+    params: {
+      period_start: '2026-10-27',
+      period_end: '2026-11-26',
+      batch_start_no: 'FA26001',
+      skip_dates: ['2026-11-05'],
+      tank_blocks: [
+        { tank_no: '302A', from_date: '2026-11-01', to_date: '2026-11-05' },
+      ],
+    },
+    summary: {
+      period: { start: '2026-10-27', end: '2026-11-26' },
+      transfer_count: 29,
+      dump_count: 29,
+    },
+    downloaded_at: '2026-10-01T08:00:00Z',
+    file_name: 'FA排产草稿_2026-10-27_2026-11-26.xlsx',
+    created_at: '2026-10-01T07:00:00Z',
+    created_by_name: '系统管理员',
+  }
+
+  function mockHistory() {
+    actions.getScheduleDraftRecords.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [HISTORY_RECORD],
+    })
+  }
+
+  function findButton(text: string) {
+    const btn = [...container.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes(text),
+    ) as HTMLButtonElement | undefined
+    expect(btn, `button not found: ${text}`).toBeTruthy()
+    return btn!
+  }
+
+  it('warns when the generated draft has issues needing confirmation', async () => {
+    actions.generateScheduleDraft.mockResolvedValue({
+      ...DRAFT_RESULT,
+      data: {
+        ...DRAFT_RESULT.data,
+        validation: {
+          ...DRAFT_RESULT.data.validation,
+          summary: { warn: 2, info: 0 },
+        },
+      },
+    })
+    await render()
+    await act(async () => {
+      findButton('生成草稿').click()
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(document.body.textContent).toContain(
+      '草稿已生成，存在 2 个需人工确认的问题',
+    )
+  })
+
+  it('shows backend message when generation returns non-200', async () => {
+    actions.generateScheduleDraft.mockResolvedValue({
+      code: 400,
+      message: '排产周期无效',
+    })
+    await render()
+    await act(async () => {
+      findButton('生成草稿').click()
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(document.body.textContent).toContain('排产周期无效')
+  })
+
+  it('shows request failure when generation throws', async () => {
+    actions.generateScheduleDraft.mockRejectedValue(new Error('boom'))
+    await render()
+    await act(async () => {
+      findButton('生成草稿').click()
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(document.body.textContent).toContain('生成请求失败')
+  })
+
+  it('reports export failure with the error message', async () => {
+    actions.generateScheduleDraft.mockResolvedValue(DRAFT_RESULT)
+    actions.exportScheduleDraft.mockRejectedValue(new Error('导出服务不可用'))
+    await render()
+    await act(async () => {
+      findButton('生成草稿').click()
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    await act(async () => {
+      findButton('下载 Excel').click()
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(document.body.textContent).toContain('导出服务不可用')
+  })
+
+  it('warns when adding a tank block without a complete range', async () => {
+    mockHistory()
+    await render()
+    // 页面上有两个「添加」（跳过进罐日 / 罐占用窗口），罐占用的在后
+    const addButton = [...container.querySelectorAll('button')]
+      .filter((b) => b.textContent?.replace(/\s/g, '') === '添加')
+      .at(-1) as HTMLButtonElement | undefined
+    expect(addButton).toBeTruthy()
+    await act(async () => {
+      addButton!.click()
+      await new Promise((r) => setTimeout(r, 40))
+    })
+    expect(document.body.textContent).toContain('请选择罐号和占用起止日期')
+  })
+
+  it('loads params from a history record and generates with them', async () => {
+    mockHistory()
+    actions.generateScheduleDraft.mockResolvedValue(DRAFT_RESULT)
+    await render()
+    await act(async () => {
+      findButton('载入参数').click()
+      await new Promise((r) => setTimeout(r, 40))
+    })
+    expect(document.body.textContent).toContain('已载入该方案的生成参数')
+    await act(async () => {
+      findButton('生成草稿').click()
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(actions.generateScheduleDraft).toHaveBeenLastCalledWith({
+      period_start: '2026-10-27',
+      period_end: '2026-11-26',
+      batch_start_no: 'FA26001',
+      skip_dates: ['2026-11-05'],
+      tank_blocks: [
+        { tank_no: '302A', from_date: '2026-11-01', to_date: '2026-11-05' },
+      ],
+    })
+  })
+
+  it('opens record detail from history', async () => {
+    mockHistory()
+    actions.getScheduleDraftRecord.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: HISTORY_RECORD,
+    })
+    await render()
+    await act(async () => {
+      findButton('查看').click()
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(document.body.textContent).toContain('草稿方案：2026-10-27～2026-11-26')
+  })
+
+  it('shows detail load failure for non-200 and rejected requests', async () => {
+    mockHistory()
+    actions.getScheduleDraftRecord.mockResolvedValue({
+      code: 404,
+      message: '记录不存在',
+    })
+    await render()
+    await act(async () => {
+      findButton('查看').click()
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(document.body.textContent).toContain('记录不存在')
+
+    actions.getScheduleDraftRecord.mockReset()
+    actions.getScheduleDraftRecord.mockRejectedValue(new Error('boom'))
+    await act(async () => {
+      findButton('查看').click()
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(document.body.textContent).toContain('加载草稿详情失败')
+  })
+
+  it('deletes a record after confirmation and reports failure states', async () => {
+    mockHistory()
+    actions.deleteScheduleDraftRecord.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: null,
+    })
+    await render()
+    const dangerButton = container.querySelector(
+      'table .ant-btn-dangerous',
+    ) as HTMLButtonElement | null
+    expect(dangerButton).toBeTruthy()
+    await act(async () => {
+      dangerButton!.click()
+      await new Promise((r) => setTimeout(r, 300))
+    })
+    const confirmButton = [...document.body.querySelectorAll('button')].find(
+      (b) => b.textContent?.replace(/\s/g, '') === '删除',
+    ) as HTMLButtonElement | undefined
+    expect(confirmButton).toBeTruthy()
+    await act(async () => {
+      confirmButton!.click()
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(actions.deleteScheduleDraftRecord).toHaveBeenCalledWith('rec-1')
+    expect(document.body.textContent).toContain('草稿记录已删除')
+
+    actions.deleteScheduleDraftRecord.mockResolvedValue({
+      code: 400,
+      message: '删除失败：归档占用',
+    })
+    await act(async () => {
+      dangerButton!.click()
+      await new Promise((r) => setTimeout(r, 300))
+    })
+    const confirmAgain = [...document.body.querySelectorAll('button')].find(
+      (b) => b.textContent?.replace(/\s/g, '') === '删除',
+    ) as HTMLButtonElement | undefined
+    await act(async () => {
+      confirmAgain!.click()
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(document.body.textContent).toContain('删除失败：归档占用')
+  })
 })
 
 describe('alignedPeriodHint', () => {
