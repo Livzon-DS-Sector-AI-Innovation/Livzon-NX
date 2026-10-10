@@ -95,6 +95,7 @@ export const moduleMenus: ModuleMenu[] = [
         children: [
           { key: "sales-plan", label: "产销计划", path: "/production/plan" },
           { key: "scheduling", label: "排产计划", path: "/production/scheduling" },
+          { key: "auto-scheduling", label: "自动排产", path: "/production/auto-scheduling" },
         ],
       },
       {

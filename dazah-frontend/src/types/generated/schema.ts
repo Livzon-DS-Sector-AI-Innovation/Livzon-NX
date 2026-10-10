@@ -13229,6 +13229,110 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/production/schedule-constraints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 排产约束配置（按产品） */
+        get: operations["get_schedule_constraints_api_v1_production_schedule_constraints_get"];
+        put?: never;
+        /** 保存排产约束配置（按产品） */
+        post: operations["save_schedule_constraints_api_v1_production_schedule_constraints_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/schedule-drafts/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 导出 FA 排产草稿 Excel（单周期块，与现行排产表同构） */
+        post: operations["export_schedule_draft_api_v1_production_schedule_drafts_export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/schedule-drafts/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 生成 FA 排产草稿（预览 + 一期校验报告，不落库） */
+        post: operations["generate_schedule_draft_api_v1_production_schedule_drafts_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/schedule-drafts/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 排产草稿生成历史列表（工作台记录，不生效） */
+        get: operations["list_schedule_draft_records_api_v1_production_schedule_drafts_records_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/schedule-drafts/records/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 排产草稿历史详情（含逐日事件与校验快照） */
+        get: operations["get_schedule_draft_record_api_v1_production_schedule_drafts_records__record_id__get"];
+        put?: never;
+        post?: never;
+        /** 删除草稿历史记录（软删，不影响已上传的排产存档） */
+        delete: operations["delete_schedule_draft_record_api_v1_production_schedule_drafts_records__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/schedule-drafts/records/{record_id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 下载草稿历史导出的 Excel 原件 */
+        get: operations["download_schedule_draft_record_file_api_v1_production_schedule_drafts_records__record_id__file_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/production/schedule-excel": {
         parameters: {
             query?: never;
@@ -13274,6 +13378,23 @@ export interface paths {
         };
         /** 下载排产 Excel 原件 */
         get: operations["download_schedule_excel_file_api_v1_production_schedule_excel__archive_id__file_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/schedule-excel/{archive_id}/validation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 排产存档校验报告（实时计算，当前仅 FA） */
+        get: operations["get_schedule_validation_report_api_v1_production_schedule_excel__archive_id__validation_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -45660,6 +45781,11 @@ export interface components {
         /** MaintenanceBody */
         MaintenanceBody: {
             /**
+             * Expected Recovery Date
+             * @description 预计恢复日期（可选；供排产校验判定检修窗口）
+             */
+            expected_recovery_date?: string | null;
+            /**
              * Reason
              * @description 检修原因
              */
@@ -54031,6 +54157,68 @@ export interface components {
             unit?: string | null;
         };
         /**
+         * ScheduleConstraintBody
+         * @description 排产约束配置写入体（全字段可空，空值表示该项检查跳过）。
+         */
+        ScheduleConstraintBody: {
+            /**
+             * Cycle Tolerance Hours
+             * @description 周期容差(h)
+             */
+            cycle_tolerance_hours?: number | null;
+            /**
+             * Max Cycle Hours
+             * @description 最大培养周期(h)，工艺上限
+             */
+            max_cycle_hours?: number | null;
+            /**
+             * Monthly Dump Target
+             * @description 月计划放罐批数
+             */
+            monthly_dump_target?: number | null;
+            /**
+             * Standard Cycle Hours
+             * @description 标准培养周期(h)
+             */
+            standard_cycle_hours?: number | null;
+            /**
+             * Turnaround Hours
+             * @description 罐最小周转时间(h)
+             */
+            turnaround_hours?: number | null;
+        };
+        /**
+         * ScheduleDraftBody
+         * @description 草稿生成参数；周期缺省为今天之后的下一个扎帐周期。
+         */
+        ScheduleDraftBody: {
+            /**
+             * Batch Start No
+             * @description 起始批号数字（缺省自动续号）
+             */
+            batch_start_no?: number | null;
+            /**
+             * Period End
+             * @description 周期结束日（26 日）
+             */
+            period_end?: string | null;
+            /**
+             * Period Start
+             * @description 周期起始日（27 日）
+             */
+            period_start?: string | null;
+            /**
+             * Skip Dates
+             * @description 跳过进罐日（当日不移种，前一日不接种）
+             */
+            skip_dates?: string[];
+            /**
+             * Tank Blocks
+             * @description 罐占用窗口（检修/停用，不接新批）
+             */
+            tank_blocks?: components["schemas"]["TankBlockBody"][];
+        };
+        /**
          * ScheduledTaskCreate
          * @description 创建定时任务请求
          */
@@ -56083,6 +56271,26 @@ export interface components {
         TableEnabledPayload: {
             /** Is Enabled */
             is_enabled: boolean;
+        };
+        /** TankBlockBody */
+        TankBlockBody: {
+            /**
+             * From Date
+             * Format: date
+             * @description 占用起始日（含）
+             */
+            from_date: string;
+            /**
+             * Tank No
+             * @description 罐号
+             */
+            tank_no: string;
+            /**
+             * To Date
+             * Format: date
+             * @description 占用结束日（含）
+             */
+            to_date: string;
         };
         /** TeamCreate */
         TeamCreate: {
@@ -95277,6 +95485,281 @@ export interface operations {
             };
         };
     };
+    get_schedule_constraints_api_v1_production_schedule_constraints_get: {
+        parameters: {
+            query?: {
+                /** @description 产品代码 */
+                product?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_schedule_constraints_api_v1_production_schedule_constraints_post: {
+        parameters: {
+            query?: {
+                /** @description 产品代码 */
+                product?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleConstraintBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_schedule_draft_api_v1_production_schedule_drafts_export_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleDraftBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_schedule_draft_api_v1_production_schedule_drafts_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleDraftBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_schedule_draft_records_api_v1_production_schedule_drafts_records_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_schedule_draft_record_api_v1_production_schedule_drafts_records__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_schedule_draft_record_api_v1_production_schedule_drafts_records__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_schedule_draft_record_file_api_v1_production_schedule_drafts_records__record_id__file_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_schedule_excel_archives_api_v1_production_schedule_excel_get: {
         parameters: {
             query?: {
@@ -95418,6 +95901,39 @@ export interface operations {
         };
     };
     download_schedule_excel_file_api_v1_production_schedule_excel__archive_id__file_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                archive_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_schedule_validation_report_api_v1_production_schedule_excel__archive_id__validation_get: {
         parameters: {
             query?: never;
             header?: never;

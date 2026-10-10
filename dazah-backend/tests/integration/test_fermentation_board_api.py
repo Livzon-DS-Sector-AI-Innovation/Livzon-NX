@@ -399,6 +399,7 @@ async def test_maintenance_mark_list_release_via_mock(
             tank_no="302A",
             reason="滤芯更换",
             started_at=datetime(2026, 9, 8, 8, 0, 0),
+            expected_recovery_date=None,
         )
 
     board.upsert_maintenance.side_effect = _fake_upsert
@@ -568,7 +569,9 @@ async def test_maintenance_release_success_path(
     mock_db_service: None,
     monkeypatch: Any,
 ) -> None:
-    item = SimpleNamespace(id=uuid.uuid4(), tank_no="302A", reason="滤芯更换")
+    item = SimpleNamespace(
+        id=uuid.uuid4(), tank_no="302A", reason="滤芯更换", expected_recovery_date=None
+    )
     monkeypatch.setattr(board, "get_maintenance", AsyncMock(return_value=item))
     monkeypatch.setattr(board, "delete_maintenance", AsyncMock())
     res = await auth_client.delete(f"{API}/tank-maintenance/{item.id}")

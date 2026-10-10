@@ -543,6 +543,7 @@ def _sensitive_actions(
             "sensitive_export",
             "sync_config",
         ),
+        "production:plan:auto-scheduling": ("sensitive_export", "delete"),
         "production:shift-log:shift-log-deviation": ("delete",),
         "production:shift-log:shift-log-summary": ("delete",),
         "production:shift-log:shift-log-handover": ("approve", "delete"),
@@ -1642,6 +1643,7 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
     process_context = overview
     sales_plan_page = ("production:plan:sales-plan",)
     scheduling_page = ("production:plan:scheduling",)
+    auto_scheduling_page = ("production:plan:auto-scheduling",)
     deviation_page = ("production:shift-log:shift-log-deviation",)
     summary_page = ("production:shift-log:shift-log-summary",)
     handover_page = ("production:shift-log:shift-log-handover",)
@@ -1913,6 +1915,66 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
         scheduling_page,
         "operate",
         "sensitive_export",
+        "production.plan",
+    )
+    add(
+        "GET",
+        "/schedule-excel/{archive_id}/validation",
+        scheduling_page,
+        scope_adapter="production.plan",
+    )
+    add(
+        "GET",
+        "/schedule-constraints",
+        scheduling_page,
+        scope_adapter="production.plan",
+    )
+    add(
+        "POST",
+        "/schedule-constraints",
+        scheduling_page,
+        "operate",
+        "sync_config",
+        "production.plan",
+    )
+    add(
+        "POST",
+        "/schedule-drafts/generate",
+        auto_scheduling_page,
+        "operate",
+        scope_adapter="production.plan",
+    )
+    add(
+        "POST",
+        "/schedule-drafts/export",
+        auto_scheduling_page,
+        "operate",
+        "sensitive_export",
+        "production.plan",
+    )
+    add_many(
+        "GET",
+        (
+            "/schedule-drafts/records",
+            "/schedule-drafts/records/{record_id}",
+        ),
+        auto_scheduling_page,
+        scope_adapter="production.plan",
+    )
+    add(
+        "GET",
+        "/schedule-drafts/records/{record_id}/file",
+        auto_scheduling_page,
+        "operate",
+        "sensitive_export",
+        "production.plan",
+    )
+    add(
+        "DELETE",
+        "/schedule-drafts/records/{record_id}",
+        auto_scheduling_page,
+        "operate",
+        "delete",
         "production.plan",
     )
     add_many(
