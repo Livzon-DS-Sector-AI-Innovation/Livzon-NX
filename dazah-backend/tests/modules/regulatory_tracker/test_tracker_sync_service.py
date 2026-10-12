@@ -84,7 +84,22 @@ def test_site_registry_entries_match_adapter_contract(site_code: str) -> None:
 
 @pytest.mark.parametrize(
     "site_code",
-    sorted(EXPECTED_SITE_CODES - {"cde", "cfdi", "ema", "fda", "ich", "moa", "ivdc"}),
+    sorted(
+        EXPECTED_SITE_CODES
+        # 已升级为真实抓取的适配器不再返回空列表，从占位断言中排除。
+        # 只排除确属真实抓取的站点：nmpa 已用 httpx 抓列表页；其余仍为空实现，
+        # 继续断言「返回空列表」，下次有适配器升级而未同步此清单时会立刻报错。
+        - {
+            "cde",
+            "cfdi",
+            "ema",
+            "fda",
+            "ich",
+            "moa",
+            "ivdc",
+            "nmpa",
+        }
+    ),
 )
 def test_site_registry_placeholder_adapters_return_empty_list(site_code: str) -> None:
     adapter = create_site_adapter(site_code)

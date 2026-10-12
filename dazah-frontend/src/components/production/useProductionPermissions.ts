@@ -24,6 +24,7 @@ export const PRODUCTION_PAGE_KEYS = {
   workshop2033: 'production:batches:workshop-203-3',
   salesPlan: 'production:plan:sales-plan',
   scheduling: 'production:plan:scheduling',
+  autoScheduling: 'production:plan:auto-scheduling',
   shiftLogDeviation: 'production:shift-log:shift-log-deviation',
   shiftLogQuality: 'production:shift-log:shift-log-quality',
   shiftLogSummary: 'production:shift-log:shift-log-summary',

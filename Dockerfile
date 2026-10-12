@@ -39,6 +39,12 @@ COPY dazah-backend/pyproject.toml dazah-backend/uv.lock ./
 RUN --mount=type=cache,id=dazah-backend-uv,target=/home/app/.cache/uv,sharing=locked \
     uv sync --frozen --no-dev
 
+# Playwright Chromium：法规雷达与法规跟踪（CDE）的 JS 渲染站点抓取依赖；
+# 浏览器装入 app 用户缓存目录并归属 app，运行时可被 Playwright 找到
+RUN .venv/bin/playwright install --with-deps chromium \
+    && mkdir -p /home/app/.cache \
+    && chown -R app:app /home/app/.cache/ms-playwright
+
 COPY scripts/cd/conversion_limit.py /usr/local/bin/dazah-conversion
 COPY scripts/cd/readiness.py /opt/dazah-readiness.py
 RUN chmod 0755 /usr/local/bin/dazah-conversion \

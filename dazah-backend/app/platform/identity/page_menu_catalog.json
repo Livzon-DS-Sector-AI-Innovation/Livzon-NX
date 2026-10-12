@@ -169,6 +169,15 @@
             "permission_code": null,
             "disabled": false,
             "children": null
+          },
+          {
+            "key": "auto-scheduling",
+            "name": "自动排产",
+            "path": "/production/auto-scheduling",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
           }
         ]
       },

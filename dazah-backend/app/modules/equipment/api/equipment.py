@@ -1,14 +1,16 @@
 """设备台账 API 路由."""
 
+import io
 import uuid
 
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import CurrentUser
 from app.core.response import paginated_response, success_response
+from app.core.upload_security import validate_upload_metadata
 from app.modules.equipment import repository as repo
 from app.modules.equipment import service
 from app.modules.equipment.models.equipment import Equipment
@@ -26,6 +28,7 @@ from app.modules.equipment.schemas import (
     LocationTree,
     LocationUpdate,
 )
+from app.modules.equipment.service import equipment_import
 
 router = APIRouter()
 
@@ -240,6 +243,68 @@ async def get_equipment_statistics(
     """获取设备统计"""
     stats = await service.get_equipment_statistics(db)
     return success_response(data=EquipmentStatistics(**stats))
+
+
+_ALLOWED_IMPORT_EXTENSIONS = {".xlsx"}
+_ALLOWED_IMPORT_MIMES = {
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+_MAX_IMPORT_UPLOAD_BYTES = 2 * 1024 * 1024  # 台账 .xlsx 通常几十 KB
+
+
+@router.get("/equipments/import-template", summary="下载设备台账导入模板")
+async def download_equipment_import_template() -> StreamingResponse:
+    """下载标准台账 .xlsx 模板（含表头与示例行）"""
+    content = equipment_import.build_ledger_template()
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={
+            "Content-Disposition": (
+                'attachment; filename="equipment-ledger-template.xlsx"'
+            )
+        },
+    )
+
+
+@router.post("/equipments/import", summary="Excel 批量导入设备台账")
+async def import_equipments(
+    file: UploadFile = File(..., description="按模板填写的台账 .xlsx 文件"),
+    default_category_id: uuid.UUID | None = Form(
+        None, description="默认设备分类（可选，传入则导入设备统一挂该分类）"
+    ),
+    default_location_id: uuid.UUID | None = Form(
+        None, description="默认安装地点（台账安装地点无法匹配时使用）"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    """按设备编号增量导入：已存在则更新台账字段，不存在则新建"""
+    validate_upload_metadata(
+        file,
+        allowed_extensions=_ALLOWED_IMPORT_EXTENSIONS,
+        allowed_mimes=_ALLOWED_IMPORT_MIMES,
+    )
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > _MAX_IMPORT_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="台账文件不能超过 2MB")
+        chunks.append(chunk)
+
+    summary = await equipment_import.import_equipment_ledger(
+        db,
+        b"".join(chunks),
+        default_category_id=default_category_id,
+        default_location_id=default_location_id,
+    )
+    return success_response(data=summary)
 
 
 @router.get("/equipments/{equipment_id}", summary="获取设备详情")

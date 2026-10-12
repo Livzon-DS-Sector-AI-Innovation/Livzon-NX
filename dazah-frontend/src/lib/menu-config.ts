@@ -95,6 +95,7 @@ export const moduleMenus: ModuleMenu[] = [
         children: [
           { key: "sales-plan", label: "产销计划", path: "/production/plan" },
           { key: "scheduling", label: "排产计划", path: "/production/scheduling" },
+          { key: "auto-scheduling", label: "自动排产", path: "/production/auto-scheduling" },
         ],
       },
       {
@@ -120,11 +121,18 @@ export const moduleMenus: ModuleMenu[] = [
     path: "/equipment",
     children: [
       { key: "stats", label: "设备仪表盘", path: "/equipment/stats" },
-      { key: "assets", label: "设备台账", path: "/equipment/assets" },
-      { key: "maintenance", label: "维护保养", path: "/equipment/maintenance" },
-      { key: "inspection", label: "设备巡检", path: "/equipment/inspection" },
-      { key: "spare-parts", label: "备件管理", path: "/equipment/spare-parts" },
-      { key: "personnel", label: "人员配置", path: "/equipment/personnel" },
+      {
+        key: "workshop-201-2",
+        label: "201二车间",
+        path: "",
+        children: [
+          { key: "assets", label: "设备台账", path: "/equipment/assets" },
+          { key: "maintenance", label: "维护保养", path: "/equipment/maintenance" },
+          { key: "inspection", label: "设备巡检", path: "/equipment/inspection" },
+          { key: "spare-parts", label: "备件管理", path: "/equipment/spare-parts" },
+          { key: "personnel", label: "人员配置", path: "/equipment/personnel" },
+        ],
+      },
     ],
   },
   {
@@ -163,6 +171,7 @@ export const moduleMenus: ModuleMenu[] = [
         children: [
           { key: "ai-workflow", label: "AI工作流配置", path: "/safety/ai-workflow-config" },
           { key: "scheduled-tasks", label: "定时任务", path: "/safety/scheduled-tasks" },
+          { key: "safety-feishu-settings", label: "飞书设置", path: "/safety/settings/feishu" },
         ],
       },
       // ── 作业安全 ──

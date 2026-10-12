@@ -12,6 +12,7 @@ from app.modules.safety.api.contractors import contractors_router
 from app.modules.safety.api.daily_risk_reports import daily_risk_reports_router
 from app.modules.safety.api.ehs_changes import ehs_changes_router
 from app.modules.safety.api.enums import enums_router
+from app.modules.safety.api.feishu_settings import feishu_settings_router
 from app.modules.safety.api.hazard_identifications import hazard_identifications_router
 from app.modules.safety.api.hazards import hazards_router
 from app.modules.safety.api.knowledge import knowledge_router
@@ -34,6 +35,7 @@ router.include_router(checks_router)
 router.include_router(contractors_router)
 router.include_router(daily_risk_reports_router)
 router.include_router(ehs_changes_router)
+router.include_router(feishu_settings_router)
 router.include_router(enums_router)
 router.include_router(hazard_identifications_router)
 router.include_router(hazards_router)

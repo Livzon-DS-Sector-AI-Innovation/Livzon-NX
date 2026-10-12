@@ -520,6 +520,46 @@ jobs:
           format: table
           exit-code: "1"
 
+      - name: Build development backend image
+        run: |
+          docker buildx build \
+            --load \
+            --cache-from type=gha,scope=backend-dev \
+            --cache-to type=gha,scope=backend-dev,mode=max \
+            --file Dockerfile.dev \
+            --target backend \
+            --tag "${IMAGE_TAG}-dev" \
+            .
+
+      - name: Verify Chromium as app in both backend images
+        shell: bash
+        run: |
+          for image in "$IMAGE_TAG" "${IMAGE_TAG}-dev"; do
+            timeout 60s docker run --rm --interactive --network none \
+              --user app --entrypoint .venv/bin/python "$image" - <<'PY'
+          import os
+          import pwd
+          from pathlib import Path
+          from playwright.sync_api import sync_playwright
+
+          assert pwd.getpwuid(os.geteuid()).pw_name == "app"
+          cache = Path(os.environ["XDG_CACHE_HOME"]) / "ms-playwright"
+          assert cache.is_dir(), f"Browser cache missing: {cache}"
+          assert cache.stat().st_uid == os.geteuid(), "Browser cache must belong to app"
+          with sync_playwright() as playwright:
+              executable = playwright.chromium.executable_path
+              assert os.access(executable, os.R_OK | os.X_OK), executable
+              browser = playwright.chromium.launch(headless=True)
+              try:
+                  page = browser.new_page()
+                  page.set_content("<div id='result'></div><script>document.getElementById('result').textContent = 'chromium-ok'</script>")
+                  assert page.locator("#result").inner_text() == "chromium-ok"
+                  print(f"Chromium {browser.version}: app user and JavaScript rendering OK")
+              finally:
+                  browser.close()
+          PY
+          done
+
       - name: Start isolated dependencies
         run: |
           docker network create "$NETWORK_NAME"

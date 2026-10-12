@@ -49,15 +49,6 @@ export { MaterialRecordTable } from './MaterialRecordTable'
 export { MaterialConsumeDrawer } from './MaterialConsumeDrawer'
 
 // inspection components (新巡检模块)
-export { InspectionPage } from './inspection/InspectionPage'
-export { InspectionTasksTab } from './inspection/InspectionTasksTab'
-export { InspectionRoutesTab } from './inspection/InspectionRoutesTab'
-export { InspectionHistoryTab } from './inspection/InspectionHistoryTab'
-export { InspectionExecuteView } from './inspection/InspectionExecuteView'
-export { InspectionTaskDrawer } from './inspection/InspectionTaskDrawer'
-export { InspectionRouteDrawer } from './inspection/InspectionRouteDrawer'
-export { InspectionRouteEquipmentDrawer } from './inspection/InspectionRouteEquipmentDrawer'
-export { InspectionDetailDrawer } from './inspection/InspectionDetailDrawer'
 
 // personnel components
 export { PersonnelQueryProvider } from './PersonnelQueryProvider'
@@ -66,3 +57,4 @@ export { PersonnelTable } from './PersonnelTable'
 export { PersonnelDrawer } from './PersonnelDrawer'
 export { RoleManagePanel } from './RoleManagePanel'
 export { PersonnelCategoryDrawer } from './PersonnelCategoryDrawer'
+export { FeishuInspectionPage } from './inspection/FeishuInspectionPage'

@@ -187,28 +187,6 @@ export const COMPLETION_METHOD_OPTIONS = [
   { value: CompletionMethod.EARLY_TERMINATION, label: '提前终止' },
 ]
 
-export enum KnowledgeCategory {
-  LAWS_REGULATIONS = 'laws_regulations',
-  STANDARDS = 'standards',
-  MANAGEMENT_SYSTEMS = 'management_systems',
-  ACCIDENT_CASES = 'accident_cases',
-  EMERGENCY_PLANS = 'emergency_plans',
-  SDS = 'sds',
-  TRAINING_MATERIALS = 'training_materials',
-  OTHER = 'other',
-}
-
-export const KNOWLEDGE_CATEGORY_OPTIONS = [
-  { value: KnowledgeCategory.LAWS_REGULATIONS, label: '法律法规' },
-  { value: KnowledgeCategory.STANDARDS, label: '标准规范' },
-  { value: KnowledgeCategory.MANAGEMENT_SYSTEMS, label: '安全管理制度' },
-  { value: KnowledgeCategory.ACCIDENT_CASES, label: '事故案例' },
-  { value: KnowledgeCategory.EMERGENCY_PLANS, label: '应急预案' },
-  { value: KnowledgeCategory.SDS, label: 'SDS/MSDS' },
-  { value: KnowledgeCategory.TRAINING_MATERIALS, label: '培训资料' },
-  { value: KnowledgeCategory.OTHER, label: '其他' },
-]
-
 export enum AccidentType {
   INJURY = 'injury',
   FIRE = 'fire',
@@ -1506,44 +1484,55 @@ export interface SpecialOperationPermitQueryParams {
 
 // ============ Safety Knowledge Article Types ============
 
+export interface KnowledgeFeishuAttachment {
+  file_token: string
+  name: string
+  size?: number
+}
+
+export interface KnowledgeLocalAttachment {
+  token: string
+  name: string
+  size?: number
+}
+
+// 严格对齐 EHS 法规库多维表格字段，不额外扩展
 export interface SafetyKnowledgeArticle {
   id: string
-  article_no: string
+  article_no?: string | null
   title: string
-  category: string
-  summary?: string | null
-  content?: string | null
-  tags?: string | null
+  regulation_category?: string | null
   source?: string | null
-  author?: string | null
-  publish_date?: string | null
-  attachment_path?: string | null
-  attachment_original_name?: string | null
-  view_count: number
-  status: string
+  promulgation_date?: string | null
+  implement_date?: string | null
+  regulation_status?: string | null
+  regulation_link?: string | null
+  summary?: string | null
   notes?: string | null
+  feishu_record_id?: string | null
+  feishu_attachments?: KnowledgeFeishuAttachment[] | null
+  local_attachments?: KnowledgeLocalAttachment[] | null
   created_at: string
   updated_at: string
 }
 
 export interface SafetyKnowledgeArticleFormData {
-  article_no: string
+  article_no?: string
   title: string
-  category: KnowledgeCategory
-  summary?: string
-  content?: string
-  tags?: string
+  regulation_category?: string
   source?: string
-  author?: string
-  publish_date?: string
+  promulgation_date?: string
+  implement_date?: string
+  regulation_status?: string
+  regulation_link?: string
+  summary?: string
   notes?: string
 }
 
 export interface SafetyKnowledgeArticleQueryParams {
   page?: number
   page_size?: number
-  category?: string
-  status?: string
+  regulation_status?: string
   keyword?: string
 }
 

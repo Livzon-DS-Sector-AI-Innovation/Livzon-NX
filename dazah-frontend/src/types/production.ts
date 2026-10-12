@@ -483,6 +483,8 @@ export interface ScheduleExcelArchive {
   updated_at?: string
   /** 重复存档时的历史冻结/修正报告（仅上传响应携带） */
   merge?: ScheduleMergeReport
+  /** 上传后自动排产校验报告（仅上传响应携带，当前仅 FA） */
+  validation?: ScheduleValidationReport | null
   /** 该存档关联的历史修正记录（仅列表接口携带） */
   history_fixes?: ScheduleHistoryFix[]
 }
@@ -513,6 +515,130 @@ export interface ScheduleMergeReport {
   /** 本次以新文件修正了历史 */
   corrected?: boolean
   warning?: string
+}
+
+// ============ 排产校验（当前仅 FA） ============
+
+/** 校验问题级别：warn=疑似排错需人工确认；info=合法形态/参数提示 */
+export type ScheduleValidationLevel = 'warn' | 'info'
+
+/** 一条排产校验问题 */
+export interface ScheduleValidationIssue {
+  level: ScheduleValidationLevel
+  /** 规则标识（tank_overlap/cycle_deviation 等） */
+  rule: string
+  /** 问题说明（中文，可直接展示） */
+  text: string
+  /** 所在周期块标签（如 11月27日～12月26日） */
+  block?: string | null
+  /** 相关日期（ISO） */
+  date?: string | null
+  tank_no?: string | null
+  batch_no?: string | null
+}
+
+/** 排产校验报告（实时计算，不落库） */
+export interface ScheduleValidationReport {
+  /** 校验范围：仅校验今天及以后的排产 */
+  scope?: { from?: string; blocks?: string[] } | null
+  /** 排产表覆盖的周期范围 */
+  coverage?: { start?: string; end?: string } | null
+  issues: ScheduleValidationIssue[]
+  summary?: { warn?: number; info?: number }
+  /** 本次校验应用的约束快照（未配置时为空值集合） */
+  constraints?: ScheduleConstraintSettings | null
+  /** 无周期块等无法校验时的说明 */
+  message?: string | null
+}
+
+/** 排产约束配置（按产品，全字段可空，空值对应检查跳过） */
+export interface ScheduleConstraintSettings {
+  product_code: string
+  /** 标准培养周期(h) */
+  standard_cycle_hours?: number | null
+  /** 周期容差(h)：容差内视为正常波动 */
+  cycle_tolerance_hours?: number | null
+  /** 最大培养周期(h)：工艺上限 */
+  max_cycle_hours?: number | null
+  /** 罐最小周转时间(h)：放罐结束到下次移种 */
+  turnaround_hours?: number | null
+  /** 月计划放罐批数 */
+  monthly_dump_target?: number | null
+}
+
+// ============ 自动排产草稿（当前仅 FA） ============
+
+/** 草稿某日的排产事件 */
+export interface ScheduleDraftDay {
+  date: string
+  seed_batch?: string | null
+  /** 种子罐号（沿用上期轮转，如 201A/202A） */
+  seed_tank?: string | null
+  /** 未接种原因（次日跳过/无罐/周期末） */
+  seed_note?: string
+  transfer?: { batch_no: string; tank_no: string } | null
+  /** 未移种原因（跳过/无种子/无罐） */
+  transfer_note?: string
+  dumps?: { batch_no: string; tank_no: string }[]
+  /** 放罐含上期在制批次 */
+  dump_inflight?: boolean
+  /** 当日空闲却未接罐的罐（空拍） */
+  idle_tanks?: string[]
+}
+
+/** 罐占用窗口（检修/停用，窗口内不接新批） */
+export interface ScheduleTankBlock {
+  tank_no: string
+  from_date: string
+  to_date: string
+}
+
+/** 草稿生成请求参数 */
+export interface ScheduleDraftParams {
+  period_start?: string | null
+  period_end?: string | null
+  batch_start_no?: number | null
+  skip_dates?: string[]
+  tank_blocks?: { tank_no: string; from_date: string; to_date: string }[]
+}
+
+/** 草稿摘要 */
+export interface ScheduleDraftSummary {
+  period?: { start?: string; end?: string }
+  transfer_count?: number
+  seed_count?: number
+  dump_count?: number
+  dump_target?: number | null
+  skip_dates?: string[]
+  no_seed_days?: string[]
+  /** 空拍罐·天（空闲却未接罐） */
+  idle_tank_days?: number
+  tank_blocks?: ScheduleTankBlock[]
+  inflight_batches?: { batch_no: string; tank_no: string }[]
+  turnaround_hours?: number | null
+}
+
+/** 草稿生成结果（预览 + 摘要 + 一期校验报告 + 历史记录 id） */
+export interface ScheduleDraftResult {
+  record_id?: string
+  days: ScheduleDraftDay[]
+  summary: ScheduleDraftSummary
+  validation: ScheduleValidationReport
+}
+
+/** 草稿生成历史（工作台记录，不生效） */
+export interface ScheduleDraftRecord {
+  id: string
+  product_code?: string
+  params?: ScheduleDraftParams
+  summary?: ScheduleDraftSummary
+  downloaded_at?: string | null
+  file_name?: string | null
+  created_at?: string
+  created_by_name?: string | null
+  /** 详情接口携带 */
+  days?: ScheduleDraftDay[]
+  validation?: ScheduleValidationReport
 }
 
 // ============ 发酵车间实时看板 ============

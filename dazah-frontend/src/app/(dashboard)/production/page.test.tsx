@@ -969,7 +969,7 @@ describe('ProductionHomePage (fermentation board)', () => {
     })
     const okBtn = Array.from(document.body.querySelectorAll('.ant-modal-footer button')).find((b) => b.classList.contains('ant-btn-primary')) as HTMLElement | undefined
     await act(async () => { okBtn!.click(); await new Promise((r) => setTimeout(r, 200)) })
-    expect(actions.markTankMaintenance).toHaveBeenCalledWith('302A', '滤芯更换')
+    expect(actions.markTankMaintenance).toHaveBeenCalledWith('302A', '滤芯更换', null)
     expect(actions.getFermentationBoard).toHaveBeenCalledTimes(2)
     expect(document.body.textContent || '').toContain('302A 已标记检修')
   })

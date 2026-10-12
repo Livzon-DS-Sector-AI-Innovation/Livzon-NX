@@ -211,7 +211,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_registry.register_task(user_operation_retention_task)
 
     from app.modules.equipment.scheduled import (
-        InspectionScheduleGenerator,
+        InspectionFeishuMirrorFullSyncGenerator,
+        InspectionFeishuMirrorSyncGenerator,
     )
     from app.modules.energy.scheduler import EnergyWikiSyncGenerator
     from app.modules.hr.scheduler import (
@@ -259,7 +260,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_registry.register_generator(AgentAutomationGenerator())
     scheduler_registry.register_generator(AgentPushDeliveryGenerator())
     scheduler_registry.register_generator(ProductionPlanFeishuSyncGenerator())
-    scheduler_registry.register_generator(InspectionScheduleGenerator())
+    scheduler_registry.register_generator(InspectionFeishuMirrorSyncGenerator())
+    scheduler_registry.register_generator(InspectionFeishuMirrorFullSyncGenerator())
     scheduler_registry.register_generator(EnergyWikiSyncGenerator())
     scheduler_registry.register_generator(WarehouseFeishuDailySyncGenerator())
     scheduler_registry.register_generator(WarehouseFeishuAnalysisGenerator())
@@ -289,6 +291,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_registry.register_generator(ContractSignReminderGenerator())
     scheduler_registry.register_generator(ResumeFolderScanner())
     scheduler_registry.register_generator(MailFetchScanner())
+
+    # ── 安全模块法规雷达（每周一 08:00） ──
+    try:
+        from app.modules.safety.scheduled import SafetyRegulationRadarGenerator
+
+        scheduler_registry.register_generator(SafetyRegulationRadarGenerator())
+    except Exception:
+        logger.exception("注册安全模块法规雷达调度任务失败")
 
     # ── 法规跟踪三阶段流水线（00:10 抓取 / 02:00 AI 分析 / 10:00 推送） ──
     try:

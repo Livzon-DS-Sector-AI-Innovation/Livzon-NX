@@ -35,19 +35,8 @@ async def _collect_equipment_names(db: AsyncSession, task: InspectionTask) -> li
     """收集任务关联的所有设备名称"""
     names: list[str] = []
 
-    # 线路巡检：从路线关联获取设备名
-    if task.route and task.route.locations_rel:
-        eq_ids: list[uuid.UUID] = []
-        for loc in task.route.locations_rel:
-            for eq in loc.equipments or []:
-                eq_ids.append(eq.equipment_id)
-        if eq_ids:
-            name_map = await repo.get_equipment_names_by_ids(db, eq_ids)
-            for eid in eq_ids:
-                if eid in name_map:
-                    names.append(name_map[eid])
     # 多设备模式
-    elif task.equipment_ids:
+    if task.equipment_ids:
         id_list = [
             uid if isinstance(uid, uuid.UUID) else uuid.UUID(uid)
             for uid in (task.equipment_ids or [])
@@ -71,39 +60,10 @@ async def _get_template_items(
 
     优先使用已加载的 template.items 关系；若未加载则查询数据库。
     """
-    # 线路巡检：从 route → locations → equipment → templates 链获取
-    # 设备巡检：从 task.template_ids JSON 列表获取
+    # 设备巡检：从 task.equipment_templates / task.template_ids 获取
     template_id_set: set[uuid.UUID] = set()
 
-    if task.route_id:
-        from sqlalchemy import select as sa_select
-
-        from app.modules.equipment.models.inspection_route_location import (
-            RouteEquipmentTemplate,
-            RouteLocation,
-            RouteLocationEquipment,
-        )
-
-        loc_stmt = sa_select(RouteLocation).where(
-            RouteLocation.route_id == task.route_id,
-            RouteLocation.is_deleted == False,  # noqa: E712
-        )
-        locs = (await db.execute(loc_stmt)).scalars().all()
-        for loc in locs:
-            eq_stmt = sa_select(RouteLocationEquipment).where(
-                RouteLocationEquipment.route_location_id == loc.id,
-                RouteLocationEquipment.is_deleted == False,  # noqa: E712
-            )
-            eqs = (await db.execute(eq_stmt)).scalars().all()
-            for eq in eqs:
-                tpl_stmt = sa_select(RouteEquipmentTemplate).where(
-                    RouteEquipmentTemplate.route_equipment_id == eq.id,
-                    RouteEquipmentTemplate.is_deleted == False,  # noqa: E712
-                )
-                tpls = (await db.execute(tpl_stmt)).scalars().all()
-                for tpl in tpls:
-                    template_id_set.add(tpl.template_id)
-    elif task.equipment_templates:
+    if task.equipment_templates:
         # 新方式：从设备-模板映射聚合所有唯一模板
         for tpl_ids in task.equipment_templates.values():
             for t in tpl_ids:
@@ -137,14 +97,8 @@ def _build_card_content(
     task: InspectionTask,
     equipment_names: list[str],
     items: list[dict[str, Any]],
-    locations_info: list[dict[str, Any]] | None = None,
 ) -> str:
-    """构建飞书卡片 markdown 正文。
-
-    Args:
-        locations_info: 线路巡检的地点信息列表，每项:
-            {location_name, sort_order, equipment: [{name, equipment_no}]}
-    """
+    """构建飞书卡片 markdown 正文。"""
     plan_type = task.plan_type or "设备巡检"
     lines = [
         f"**任务编号：**{task.task_no}",
@@ -152,41 +106,11 @@ def _build_card_content(
         f"**巡检类型：**{plan_type}",
     ]
 
-    # 设备/路线信息
-    if plan_type == "线路巡检" and task.route:
-        lines.append(f"**巡检路线：**{task.route.name}")
-
-        # 按地点展示路线层级
-        if locations_info:
-            total_equipment = sum(
-                len(loc.get("equipment", [])) for loc in locations_info
-            )
-            lines.append("")
-            lines.append("---")
-            lines.append(
-                f"**📍 巡检路线（共 {len(locations_info)} 个地点 · "
-                f"{total_equipment} 台设备）**"
-            )
-            lines.append("")
-            for i, loc in enumerate(locations_info):
-                eq_list = loc.get("equipment", [])
-                eq_names = "、".join(e["name"] for e in eq_list[:3])
-                if len(eq_list) > 3:
-                    eq_names += f" 等 {len(eq_list)} 台"
-                lines.append(f"**第 {i + 1} 站：{loc['location_name']}**")
-                lines.append(f"  ↳ {eq_names}")
-                lines.append("")
-        elif equipment_names:
-            lines.append(
-                f"**涉及设备：**{'、'.join(equipment_names[:5])}"
-                f"{f' 等{len(equipment_names)}台' if len(equipment_names) > 5 else ''}"
-            )
-    else:
-        if equipment_names:
-            lines.append(
-                f"**巡检设备：**{'、'.join(equipment_names[:5])}"
-                f"{f' 等{len(equipment_names)}台' if len(equipment_names) > 5 else ''}"
-            )
+    if equipment_names:
+        lines.append(
+            f"**巡检设备：**{'、'.join(equipment_names[:5])}"
+            f"{f' 等{len(equipment_names)}台' if len(equipment_names) > 5 else ''}"
+        )
 
     # 巡检人员
     if task.assignee:
@@ -231,7 +155,7 @@ async def send_inspection_start_notification(
     应在任务状态已更新为"执行中"后调用。通知发送失败不会影响主流程。
 
     Args:
-        task: InspectionTask（需已加载 route/equipment/template/assignee 关系）
+        task: InspectionTask（需已加载 equipment/assignee 关系）
         db: 数据库会话
     """
     logger.info(
@@ -251,32 +175,8 @@ async def send_inspection_start_notification(
         items = await _get_template_items(db, task)
         logger.info("  Collected %d template items", len(items))
 
-        # 线路巡检：收集地点层级信息
-        locations_info: list[dict[str, Any]] | None = None
-        if task.plan_type == "线路巡检" and task.route and task.route.locations_rel:
-            locations_info = []
-            for loc in sorted(task.route.locations_rel, key=lambda x: x.sort_order):
-                eq_list: list[dict[str, Any]] = []
-                for eq in sorted((loc.equipments or []), key=lambda x: x.sort_order):
-                    if eq.equipment and not eq.equipment.is_deleted:
-                        eq_list.append(
-                            {
-                                "name": eq.equipment.name,
-                                "equipment_no": eq.equipment.equipment_no or "",
-                            }
-                        )
-                locations_info.append(
-                    {
-                        "location_name": loc.location.name
-                        if loc.location
-                        else "未知地点",
-                        "sort_order": loc.sort_order,
-                        "equipment": eq_list,
-                    }
-                )
-
         title = f"🔍 巡检任务已开始 - {task.task_no}"
-        content = _build_card_content(task, equipment_names, items, locations_info)
+        content = _build_card_content(task, equipment_names, items)
 
         # 1) DM 通知巡检人员
         if task.assignee and task.assignee.feishu_user_id:

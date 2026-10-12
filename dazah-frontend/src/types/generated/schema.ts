@@ -2003,6 +2003,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment/equipments/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Excel 批量导入设备台账
+         * @description 按设备编号增量导入：已存在则更新台账字段，不存在则新建
+         */
+        post: operations["import_equipments_api_v1_equipment_equipments_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/equipments/import-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 下载设备台账导入模板
+         * @description 下载标准台账 .xlsx 模板（含表头与示例行）
+         */
+        get: operations["download_equipment_import_template_api_v1_equipment_equipments_import_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment/equipments/statistics": {
         parameters: {
             query?: never;
@@ -2046,6 +2086,126 @@ export interface paths {
          * @description 删除设备
          */
         delete: operations["delete_equipment_api_v1_equipment_equipments__equipment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/inspection/feishu/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取设备巡检飞书镜像配置 */
+        get: operations["get_feishu_config_api_v1_equipment_inspection_feishu_config_get"];
+        /** 保存设备巡检飞书镜像配置 */
+        put: operations["save_feishu_config_api_v1_equipment_inspection_feishu_config_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/inspection/feishu/config/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 测试设备巡检飞书镜像连接 */
+        post: operations["test_feishu_config_api_v1_equipment_inspection_feishu_config_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/inspection/feishu/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 巡检设备清单（飞书镜像 + 台账关联） */
+        get: operations["list_feishu_devices_api_v1_equipment_inspection_feishu_devices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/inspection/feishu/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 巡检记录（飞书镜像） */
+        get: operations["list_feishu_records_api_v1_equipment_inspection_feishu_records_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/inspection/feishu/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 手动触发飞书同步 */
+        post: operations["feishu_sync_now_api_v1_equipment_inspection_feishu_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/inspection/feishu/sync-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 镜像同步状态 */
+        get: operations["feishu_sync_status_api_v1_equipment_inspection_feishu_sync_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/inspection/feishu/today-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 今日巡检进度 */
+        get: operations["feishu_today_summary_api_v1_equipment_inspection_feishu_today_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2097,96 +2257,6 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/equipment/inspection/routes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 巡检路线列表 */
-        get: operations["list_routes_api_v1_equipment_inspection_routes_get"];
-        put?: never;
-        /** 创建巡检路线 */
-        post: operations["create_route_api_v1_equipment_inspection_routes_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/equipment/inspection/routes/{route_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 巡检路线详情 */
-        get: operations["get_route_api_v1_equipment_inspection_routes__route_id__get"];
-        /** 更新巡检路线 */
-        put: operations["update_route_api_v1_equipment_inspection_routes__route_id__put"];
-        post?: never;
-        /** 删除巡检路线 */
-        delete: operations["delete_route_api_v1_equipment_inspection_routes__route_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/equipment/inspection/routes/{route_id}/locations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** 配置路线地点设备模板 */
-        post: operations["set_route_locations_api_v1_equipment_inspection_routes__route_id__locations_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/equipment/inspection/routes/{route_id}/schedules": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 获取路线定时任务列表 */
-        get: operations["list_schedules_api_v1_equipment_inspection_routes__route_id__schedules_get"];
-        put?: never;
-        /** 创建定时任务 */
-        post: operations["create_schedule_api_v1_equipment_inspection_routes__route_id__schedules_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/equipment/inspection/routes/{route_id}/schedules/{schedule_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** 更新定时任务 */
-        put: operations["update_schedule_api_v1_equipment_inspection_routes__route_id__schedules__schedule_id__put"];
-        post?: never;
-        /** 删除定时任务 */
-        delete: operations["delete_schedule_api_v1_equipment_inspection_routes__route_id__schedules__schedule_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2342,23 +2412,6 @@ export interface paths {
         post?: never;
         /** 删除照片 */
         delete: operations["remove_photo_api_v1_equipment_inspection_tasks__task_id__photos__photo_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/equipment/inspection/tasks/{task_id}/route-check": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** 提交线路巡检结果 */
-        post: operations["submit_route_check_api_v1_equipment_inspection_tasks__task_id__route_check_post"];
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -13297,6 +13350,110 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/production/schedule-constraints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 排产约束配置（按产品） */
+        get: operations["get_schedule_constraints_api_v1_production_schedule_constraints_get"];
+        put?: never;
+        /** 保存排产约束配置（按产品） */
+        post: operations["save_schedule_constraints_api_v1_production_schedule_constraints_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/schedule-drafts/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 导出 FA 排产草稿 Excel（单周期块，与现行排产表同构） */
+        post: operations["export_schedule_draft_api_v1_production_schedule_drafts_export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/schedule-drafts/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 生成 FA 排产草稿（预览 + 一期校验报告，不落库） */
+        post: operations["generate_schedule_draft_api_v1_production_schedule_drafts_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/schedule-drafts/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 排产草稿生成历史列表（工作台记录，不生效） */
+        get: operations["list_schedule_draft_records_api_v1_production_schedule_drafts_records_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/schedule-drafts/records/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 排产草稿历史详情（含逐日事件与校验快照） */
+        get: operations["get_schedule_draft_record_api_v1_production_schedule_drafts_records__record_id__get"];
+        put?: never;
+        post?: never;
+        /** 删除草稿历史记录（软删，不影响已上传的排产存档） */
+        delete: operations["delete_schedule_draft_record_api_v1_production_schedule_drafts_records__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/schedule-drafts/records/{record_id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 下载草稿历史导出的 Excel 原件 */
+        get: operations["download_schedule_draft_record_file_api_v1_production_schedule_drafts_records__record_id__file_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/production/schedule-excel": {
         parameters: {
             query?: never;
@@ -13342,6 +13499,23 @@ export interface paths {
         };
         /** 下载排产 Excel 原件 */
         get: operations["download_schedule_excel_file_api_v1_production_schedule_excel__archive_id__file_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/schedule-excel/{archive_id}/validation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 排产存档校验报告（实时计算，当前仅 FA） */
+        get: operations["get_schedule_validation_report_api_v1_production_schedule_excel__archive_id__validation_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -22823,6 +22997,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/safety/feishu-settings/app": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 获取安全模块飞书应用配置
+         * @description 返回当前配置（App Secret 仅掩码回显）。
+         */
+        get: operations["get_safety_feishu_app_settings_api_v1_safety_feishu_settings_app_get"];
+        /**
+         * 保存安全模块飞书应用配置
+         * @description 保存应用凭证与隐患多维表格绑定；Secret 加密存储。
+         */
+        put: operations["save_safety_feishu_app_settings_api_v1_safety_feishu_settings_app_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/feishu-settings/app/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 测试安全模块飞书应用连接
+         * @description 用已保存凭证换取 tenant_access_token 验证连通性并记录结果。
+         */
+        post: operations["test_safety_feishu_app_settings_api_v1_safety_feishu_settings_app_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/safety/feishu/ws/restart": {
         parameters: {
             query?: never;
@@ -23367,6 +23585,143 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/safety/knowledge-articles/feishu/records/{record_id}/attachments/{file_token}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 下载知识库飞书附件
+         * @description 按附件快照校验后经安全应用凭证代理下载（平台缓存加速）。
+         */
+        get: operations["download_knowledge_attachment_api_v1_safety_knowledge_articles_feishu_records__record_id__attachments__file_token__content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/knowledge-articles/feishu/records/{record_id}/attachments/{file_token}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 在线预览知识库飞书附件
+         * @description 浏览器内联预览（PDF/图片直接打开，其余类型回退为下载）。
+         */
+        get: operations["preview_knowledge_attachment_api_v1_safety_knowledge_articles_feishu_records__record_id__attachments__file_token__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/knowledge-articles/feishu/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 从 EHS 法规库多维表格同步知识库
+         * @description 全量拉取 EHS 法规库并按 feishu_record_id upsert 本地镜像。
+         */
+        post: operations["sync_knowledge_from_feishu_api_v1_safety_knowledge_articles_feishu_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/knowledge-articles/radar/notify/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 测试法规雷达通知发送
+         * @description 向已配置的群/个人发送一条测试卡片，验证通知目标配置。
+         */
+        post: operations["test_regulation_radar_notify_api_v1_safety_knowledge_articles_radar_notify_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/knowledge-articles/radar/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 手动执行法规雷达扫描
+         * @description 扫描官方栏目页，发现新法规与已修订法规。dry_run 只出报告不写入。
+         */
+        post: operations["run_regulation_radar_api_v1_safety_knowledge_articles_radar_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/knowledge-articles/radar/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 查询法规雷达扫描批次
+         * @description 返回最近的扫描批次（新的在前）。
+         */
+        get: operations["list_regulation_radar_runs_api_v1_safety_knowledge_articles_radar_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/knowledge-articles/radar/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询法规雷达扫描批次详情 */
+        get: operations["get_regulation_radar_run_api_v1_safety_knowledge_articles_radar_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/safety/knowledge-articles/{article_id}": {
         parameters: {
             query?: never;
@@ -23395,7 +23750,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/safety/knowledge-articles/{article_id}/archive": {
+    "/api/v1/safety/knowledge-articles/{article_id}/attachments": {
         parameters: {
             query?: never;
             header?: never;
@@ -23405,17 +23760,17 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * 归档知识库文章
-         * @description 归档文章（已发布→已归档）
+         * 为本地文档上传附件（支持多文件）
+         * @description 镜像文档附件请在飞书多维表格维护；本端点仅服务本地创建的文档。
          */
-        post: operations["archive_knowledge_article_api_v1_safety_knowledge_articles__article_id__archive_post"];
+        post: operations["upload_knowledge_attachments_api_v1_safety_knowledge_articles__article_id__attachments_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/safety/knowledge-articles/{article_id}/publish": {
+    "/api/v1/safety/knowledge-articles/{article_id}/attachments/{token}": {
         parameters: {
             query?: never;
             header?: never;
@@ -23424,31 +23779,51 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        post?: never;
         /**
-         * 发布知识库文章
-         * @description 发布文章（草稿→已发布）
+         * 删除本地文档附件
+         * @description 删除附件快照与磁盘文件。
          */
-        post: operations["publish_knowledge_article_api_v1_safety_knowledge_articles__article_id__publish_post"];
+        delete: operations["delete_knowledge_attachment_api_v1_safety_knowledge_articles__article_id__attachments__token__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/knowledge-articles/{article_id}/attachments/{token}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 下载本地文档附件
+         * @description 校验属主后返回文件流（attachment）。
+         */
+        get: operations["download_knowledge_local_attachment_api_v1_safety_knowledge_articles__article_id__attachments__token__content_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/safety/knowledge-articles/{article_id}/upload": {
+    "/api/v1/safety/knowledge-articles/{article_id}/attachments/{token}/preview": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
         /**
-         * 上传知识库文章附件
-         * @description 上传知识库文章附件
+         * 在线预览本地文档附件
+         * @description PDF/图片浏览器内联预览，其余类型回退为下载。
          */
-        post: operations["upload_knowledge_article_attachment_api_v1_safety_knowledge_articles__article_id__upload_post"];
+        get: operations["preview_knowledge_local_attachment_api_v1_safety_knowledge_articles__article_id__attachments__token__preview_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -28816,6 +29191,42 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[SafetyFeishuAppSettingsDetail] */
+        ApiResponseEnvelope_SafetyFeishuAppSettingsDetail_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["SafetyFeishuAppSettingsDetail"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[SafetyFeishuSettingsTestResult] */
+        ApiResponseEnvelope_SafetyFeishuSettingsTestResult_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["SafetyFeishuSettingsTestResult"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[SupplierOut] */
         ApiResponseEnvelope_SupplierOut_: {
             /**
@@ -31568,6 +31979,24 @@ export interface components {
              */
             file: string;
         };
+        /** Body_import_equipments_api_v1_equipment_equipments_import_post */
+        Body_import_equipments_api_v1_equipment_equipments_import_post: {
+            /**
+             * Default Category Id
+             * @description 默认设备分类（可选，传入则导入设备统一挂该分类）
+             */
+            default_category_id?: string | null;
+            /**
+             * Default Location Id
+             * @description 默认安装地点（台账安装地点无法匹配时使用）
+             */
+            default_location_id?: string | null;
+            /**
+             * File
+             * @description 按模板填写的台账 .xlsx 文件
+             */
+            file: string;
+        };
         /** Body_import_esg_records_api_v1_hr_esg_training_records_import_post */
         Body_import_esg_records_api_v1_hr_esg_training_records_import_post: {
             /**
@@ -31747,10 +32176,10 @@ export interface components {
             /** File */
             file: string;
         };
-        /** Body_upload_knowledge_article_attachment_api_v1_safety_knowledge_articles__article_id__upload_post */
-        Body_upload_knowledge_article_attachment_api_v1_safety_knowledge_articles__article_id__upload_post: {
-            /** File */
-            file: string;
+        /** Body_upload_knowledge_attachments_api_v1_safety_knowledge_articles__article_id__attachments_post */
+        Body_upload_knowledge_attachments_api_v1_safety_knowledge_articles__article_id__attachments_post: {
+            /** Files */
+            files: string[];
         };
         /** Body_upload_label_verification_video_api_v1_production_label_verifications_upload_video_post */
         Body_upload_label_verification_video_api_v1_production_label_verifications_upload_video_post: {
@@ -40538,6 +40967,11 @@ export interface components {
          */
         EquipmentCreate: {
             /**
+             * Arrival Date
+             * @description 入厂日期
+             */
+            arrival_date?: string | null;
+            /**
              * Asset Value
              * @description 资产原值（元）
              */
@@ -40553,6 +40987,11 @@ export interface components {
              */
             commissioning_date?: string | null;
             /**
+             * Data Issue Note
+             * @description 数据待修正说明（导入容错记录，人工修正后清除）
+             */
+            data_issue_note?: string | null;
+            /**
              * Department Id
              * @description 归属部门ID，逻辑引用 identity.departments.id
              */
@@ -40564,7 +41003,7 @@ export interface components {
             depreciation_years?: number | null;
             /**
              * Description
-             * @description 设备描述
+             * @description 备注
              */
             description?: string | null;
             /**
@@ -40572,6 +41011,11 @@ export interface components {
              * @description 设备编号（手动输入，需唯一）
              */
             equipment_no: string;
+            /**
+             * Factory No
+             * @description 出厂编号
+             */
+            factory_no?: string | null;
             /**
              * Importance
              * @description 设备重要性：高/中/低
@@ -40641,10 +41085,62 @@ export interface components {
             warranty_expire_date?: string | null;
         };
         /**
+         * EquipmentInspectionFeishuConfigUpdateRequest
+         * @description 保存设备巡检飞书镜像配置请求
+         */
+        EquipmentInspectionFeishuConfigUpdateRequest: {
+            /**
+             * App Id
+             * @description 飞书应用 App ID
+             * @default
+             */
+            app_id: string;
+            /**
+             * App Secret
+             * @description 飞书应用 App Secret（留空保留已保存值）
+             */
+            app_secret?: string | null;
+            /**
+             * App Token
+             * @description 多维表格 App Token，支持粘贴 /base/ 链接或 /wiki/ 知识库链接
+             * @default
+             */
+            app_token: string;
+            /**
+             * Device Table Id
+             * @description 设备档案表 ID
+             * @default
+             */
+            device_table_id: string;
+            /**
+             * History Table Id
+             * @description 设备历史巡检记录表 ID
+             * @default
+             */
+            history_table_id: string;
+            /**
+             * Is Enabled
+             * @description 启用镜像同步
+             * @default true
+             */
+            is_enabled: boolean;
+            /**
+             * Today Table Id
+             * @description 今日巡检表 ID
+             * @default
+             */
+            today_table_id: string;
+        };
+        /**
          * EquipmentUpdate
          * @description 更新设备请求
          */
         EquipmentUpdate: {
+            /**
+             * Arrival Date
+             * @description 入厂日期
+             */
+            arrival_date?: string | null;
             /**
              * Asset Value
              * @description 资产原值（元）
@@ -40661,6 +41157,11 @@ export interface components {
              */
             commissioning_date?: string | null;
             /**
+             * Data Issue Note
+             * @description 数据待修正说明（导入容错记录，人工修正后清除）
+             */
+            data_issue_note?: string | null;
+            /**
              * Department Id
              * @description 归属部门ID，逻辑引用 identity.departments.id
              */
@@ -40672,9 +41173,14 @@ export interface components {
             depreciation_years?: number | null;
             /**
              * Description
-             * @description 设备描述
+             * @description 备注
              */
             description?: string | null;
+            /**
+             * Factory No
+             * @description 出厂编号
+             */
+            factory_no?: string | null;
             /**
              * Importance
              * @description 设备重要性：高/中/低
@@ -44021,69 +44527,6 @@ export interface components {
             updated_at: string;
         };
         /**
-         * InspectionRouteCreate
-         * @description 创建巡检路线请求
-         */
-        InspectionRouteCreate: {
-            /**
-             * Description
-             * @description 路线描述
-             */
-            description?: string | null;
-            /**
-             * Name
-             * @description 路线名称
-             */
-            name: string;
-        };
-        /**
-         * InspectionRouteUpdate
-         * @description 更新巡检路线请求
-         */
-        InspectionRouteUpdate: {
-            /** Description */
-            description?: string | null;
-            /** Is Active */
-            is_active?: boolean | null;
-            /** Name */
-            name?: string | null;
-        };
-        /**
-         * InspectionScheduleCreate
-         * @description 创建定时任务请求
-         */
-        InspectionScheduleCreate: {
-            /**
-             * Assigned To
-             * Format: uuid
-             * @description 巡检人员ID
-             */
-            assigned_to: string;
-            /**
-             * Cron Expression
-             * @description cron 表达式
-             */
-            cron_expression: string;
-            /**
-             * Is Active
-             * @description 是否启用
-             * @default true
-             */
-            is_active: boolean;
-        };
-        /**
-         * InspectionScheduleUpdate
-         * @description 更新定时任务请求
-         */
-        InspectionScheduleUpdate: {
-            /** Assigned To */
-            assigned_to?: string | null;
-            /** Cron Expression */
-            cron_expression?: string | null;
-            /** Is Active */
-            is_active?: boolean | null;
-        };
-        /**
          * InspectionTaskClose
          * @description 关闭任务请求
          */
@@ -44134,11 +44577,6 @@ export interface components {
              * @description 计划巡检时间
              */
             planned_time: string;
-            /**
-             * Route Id
-             * @description 路线ID
-             */
-            route_id?: string | null;
             /**
              * Template Ids
              * @description [DEPRECATED] 模板ID列表，推荐用 equipment_templates
@@ -45028,12 +45466,6 @@ export interface components {
             id: string;
         };
         /**
-         * KnowledgeCategory
-         * @description 安全知识库分类枚举
-         * @enum {string}
-         */
-        KnowledgeCategory: "laws_regulations" | "standards" | "management_systems" | "accident_cases" | "emergency_plans" | "sds" | "training_materials" | "other";
-        /**
          * KnowledgeCategoryCreate
          * @description 新增知识分类。
          */
@@ -45779,6 +46211,11 @@ export interface components {
         };
         /** MaintenanceBody */
         MaintenanceBody: {
+            /**
+             * Expected Recovery Date
+             * @description 预计恢复日期（可选；供排产校验判定检修窗口）
+             */
+            expected_recovery_date?: string | null;
             /**
              * Reason
              * @description 检修原因
@@ -53480,80 +53917,6 @@ export interface components {
             name?: string | null;
         };
         /**
-         * RouteCheckSubmit
-         * @description 线路巡检提交请求
-         */
-        RouteCheckSubmit: {
-            /**
-             * Overall Result
-             * @description 总体结果：正常/异常
-             * @enum {string}
-             */
-            overall_result: "正常" | "异常";
-            /**
-             * Route Summary
-             * @description 现场描述
-             */
-            route_summary?: string | null;
-        };
-        /**
-         * RouteLocationEquipmentItem
-         * @description 地点设备配置请求项
-         */
-        RouteLocationEquipmentItem: {
-            /**
-             * Equipment Id
-             * Format: uuid
-             * @description 设备ID
-             */
-            equipment_id: string;
-            /**
-             * Sort Order
-             * @description 排序
-             * @default 0
-             */
-            sort_order: number;
-            /**
-             * Template Ids
-             * @description 绑定的模板ID列表
-             */
-            template_ids?: string[];
-        };
-        /**
-         * RouteLocationItem
-         * @description 线路地点配置请求项
-         */
-        RouteLocationItem: {
-            /**
-             * Equipments
-             * @description 该地点下的设备列表
-             */
-            equipments?: components["schemas"]["RouteLocationEquipmentItem"][];
-            /**
-             * Location Id
-             * Format: uuid
-             * @description 地点ID
-             */
-            location_id: string;
-            /**
-             * Sort Order
-             * @description 地点顺序
-             * @default 0
-             */
-            sort_order: number;
-        };
-        /**
-         * RouteLocationsBatch
-         * @description 批量设置线路地点-设备-模板请求
-         */
-        RouteLocationsBatch: {
-            /**
-             * Locations
-             * @description 地点列表（全量替换）
-             */
-            locations?: components["schemas"]["RouteLocationItem"][];
-        };
-        /**
          * SafetyCheckCreate
          * @description 创建安全检查
          */
@@ -53717,33 +54080,128 @@ export interface components {
             status?: string | null;
         };
         /**
+         * SafetyFeishuAppSettingsDetail
+         * @description 飞书应用配置回显（Secret 仅返回掩码）。
+         */
+        SafetyFeishuAppSettingsDetail: {
+            /**
+             * App Id
+             * @default
+             */
+            app_id: string;
+            /**
+             * App Secret Masked
+             * @default
+             */
+            app_secret_masked: string;
+            /** Bitable App Token */
+            bitable_app_token?: string | null;
+            /** Bitable Hazard Table Id */
+            bitable_hazard_table_id?: string | null;
+            /**
+             * Is Enabled
+             * @default true
+             */
+            is_enabled: boolean;
+            /** Knowledge App Token */
+            knowledge_app_token?: string | null;
+            /** Knowledge Last Sync Error */
+            knowledge_last_sync_error?: string | null;
+            /** Knowledge Last Sync Status */
+            knowledge_last_sync_status?: string | null;
+            /** Knowledge Last Synced At */
+            knowledge_last_synced_at?: string | null;
+            /** Knowledge Table Id */
+            knowledge_table_id?: string | null;
+            /** Last Test Error */
+            last_test_error?: string | null;
+            /** Last Test Status */
+            last_test_status?: string | null;
+            /** Last Tested At */
+            last_tested_at?: string | null;
+            /** Radar Notify Chat Ids */
+            radar_notify_chat_ids?: string[];
+            /**
+             * Radar Notify Enabled
+             * @default false
+             */
+            radar_notify_enabled: boolean;
+            /** Radar Notify User Ids */
+            radar_notify_user_ids?: string[];
+            /**
+             * Radar Scan Enabled
+             * @default true
+             */
+            radar_scan_enabled: boolean;
+        };
+        /**
+         * SafetyFeishuSettingsTestResult
+         * @description 飞书应用连接测试结果。
+         */
+        SafetyFeishuSettingsTestResult: {
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /** Message */
+            message: string;
+            /** Success */
+            success: boolean;
+        };
+        /**
          * SafetyKnowledgeArticleCreate
          * @description 创建知识库文章
          */
         SafetyKnowledgeArticleCreate: {
             /**
-             * @description 分类
-             * @default other
+             * Article No
+             * @description 法规编号
              */
-            category: components["schemas"]["KnowledgeCategory"];
+            article_no?: string | null;
             /**
-             * Content
-             * @description 正文内容
+             * Implement Date
+             * @description 实施日期
              */
-            content?: string | null;
+            implement_date?: string | null;
+            /**
+             * Notes
+             * @description 备注
+             */
+            notes?: string | null;
+            /**
+             * Promulgation Date
+             * @description 颁布修订日期
+             */
+            promulgation_date?: string | null;
+            /**
+             * Regulation Category
+             * @description 法规类别
+             */
+            regulation_category?: string | null;
+            /**
+             * Regulation Link
+             * @description 法规链接
+             */
+            regulation_link?: string | null;
+            /**
+             * Regulation Status
+             * @description 法规状态
+             */
+            regulation_status?: string | null;
+            /**
+             * Source
+             * @description 颁布机关
+             */
+            source?: string | null;
             /**
              * Summary
-             * @description 摘要
+             * @description 核心要点总结
              */
             summary?: string | null;
             /**
-             * Tags
-             * @description 标签（逗号分隔）
-             */
-            tags?: string | null;
-            /**
              * Title
-             * @description 文章标题
+             * @description 法律法规及标准名称
              */
             title: string;
         };
@@ -53752,31 +54210,54 @@ export interface components {
          * @description 更新知识库文章
          */
         SafetyKnowledgeArticleUpdate: {
-            /** @description 分类 */
-            category?: components["schemas"]["KnowledgeCategory"] | null;
             /**
-             * Content
-             * @description 正文内容
+             * Article No
+             * @description 法规编号
              */
-            content?: string | null;
+            article_no?: string | null;
             /**
-             * Status
-             * @description 状态
+             * Implement Date
+             * @description 实施日期
              */
-            status?: string | null;
+            implement_date?: string | null;
+            /**
+             * Notes
+             * @description 备注
+             */
+            notes?: string | null;
+            /**
+             * Promulgation Date
+             * @description 颁布修订日期
+             */
+            promulgation_date?: string | null;
+            /**
+             * Regulation Category
+             * @description 法规类别
+             */
+            regulation_category?: string | null;
+            /**
+             * Regulation Link
+             * @description 法规链接
+             */
+            regulation_link?: string | null;
+            /**
+             * Regulation Status
+             * @description 法规状态
+             */
+            regulation_status?: string | null;
+            /**
+             * Source
+             * @description 颁布机关
+             */
+            source?: string | null;
             /**
              * Summary
-             * @description 摘要
+             * @description 核心要点总结
              */
             summary?: string | null;
             /**
-             * Tags
-             * @description 标签（逗号分隔）
-             */
-            tags?: string | null;
-            /**
              * Title
-             * @description 文章标题
+             * @description 法律法规及标准名称
              */
             title?: string | null;
         };
@@ -54031,6 +54512,68 @@ export interface components {
             undelivered_qty?: number | null;
             /** Unit */
             unit?: string | null;
+        };
+        /**
+         * ScheduleConstraintBody
+         * @description 排产约束配置写入体（全字段可空，空值表示该项检查跳过）。
+         */
+        ScheduleConstraintBody: {
+            /**
+             * Cycle Tolerance Hours
+             * @description 周期容差(h)
+             */
+            cycle_tolerance_hours?: number | null;
+            /**
+             * Max Cycle Hours
+             * @description 最大培养周期(h)，工艺上限
+             */
+            max_cycle_hours?: number | null;
+            /**
+             * Monthly Dump Target
+             * @description 月计划放罐批数
+             */
+            monthly_dump_target?: number | null;
+            /**
+             * Standard Cycle Hours
+             * @description 标准培养周期(h)
+             */
+            standard_cycle_hours?: number | null;
+            /**
+             * Turnaround Hours
+             * @description 罐最小周转时间(h)
+             */
+            turnaround_hours?: number | null;
+        };
+        /**
+         * ScheduleDraftBody
+         * @description 草稿生成参数；周期缺省为今天之后的下一个扎帐周期。
+         */
+        ScheduleDraftBody: {
+            /**
+             * Batch Start No
+             * @description 起始批号数字（缺省自动续号）
+             */
+            batch_start_no?: number | null;
+            /**
+             * Period End
+             * @description 周期结束日（26 日）
+             */
+            period_end?: string | null;
+            /**
+             * Period Start
+             * @description 周期起始日（27 日）
+             */
+            period_start?: string | null;
+            /**
+             * Skip Dates
+             * @description 跳过进罐日（当日不移种，前一日不接种）
+             */
+            skip_dates?: string[];
+            /**
+             * Tank Blocks
+             * @description 罐占用窗口（检修/停用，不接新批）
+             */
+            tank_blocks?: components["schemas"]["TankBlockBody"][];
         };
         /**
          * ScheduledTaskCreate
@@ -56085,6 +56628,26 @@ export interface components {
         TableEnabledPayload: {
             /** Is Enabled */
             is_enabled: boolean;
+        };
+        /** TankBlockBody */
+        TankBlockBody: {
+            /**
+             * From Date
+             * Format: date
+             * @description 占用起始日（含）
+             */
+            from_date: string;
+            /**
+             * Tank No
+             * @description 罐号
+             */
+            tank_no: string;
+            /**
+             * To Date
+             * Format: date
+             * @description 占用结束日（含）
+             */
+            to_date: string;
         };
         /** TeamCreate */
         TeamCreate: {
@@ -58645,6 +59208,49 @@ export interface components {
             title?: string | null;
             /** Unit */
             unit?: string | null;
+        };
+        /**
+         * UpdateSafetyFeishuAppSettingsRequest
+         * @description 保存飞书应用配置。
+         *
+         *     app_secret 留空或传回掩码值表示保持当前 Secret 不变；
+         *     首次保存（尚无存量配置）时必须提供明文 Secret。
+         */
+        UpdateSafetyFeishuAppSettingsRequest: {
+            /** App Id */
+            app_id: string;
+            /**
+             * App Secret
+             * @default
+             */
+            app_secret: string;
+            /** Bitable App Token */
+            bitable_app_token?: string | null;
+            /** Bitable Hazard Table Id */
+            bitable_hazard_table_id?: string | null;
+            /**
+             * Is Enabled
+             * @default true
+             */
+            is_enabled: boolean;
+            /** Knowledge App Token */
+            knowledge_app_token?: string | null;
+            /** Knowledge Table Id */
+            knowledge_table_id?: string | null;
+            /** Radar Notify Chat Ids */
+            radar_notify_chat_ids?: string[];
+            /**
+             * Radar Notify Enabled
+             * @default false
+             */
+            radar_notify_enabled: boolean;
+            /** Radar Notify User Ids */
+            radar_notify_user_ids?: string[];
+            /**
+             * Radar Scan Enabled
+             * @default true
+             */
+            radar_scan_enabled: boolean;
         };
         /** UpdateSolidMaterialInspectionRequest */
         UpdateSolidMaterialInspectionRequest: {
@@ -66307,6 +66913,72 @@ export interface operations {
             };
         };
     };
+    import_equipments_api_v1_equipment_equipments_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_equipments_api_v1_equipment_equipments_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_equipment_import_template_api_v1_equipment_equipments_import_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_equipment_statistics_api_v1_equipment_equipments_statistics_get: {
         parameters: {
             query?: never;
@@ -66441,6 +67113,276 @@ export interface operations {
             };
         };
     };
+    get_feishu_config_api_v1_equipment_inspection_feishu_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_feishu_config_api_v1_equipment_inspection_feishu_config_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EquipmentInspectionFeishuConfigUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_feishu_config_api_v1_equipment_inspection_feishu_config_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_feishu_devices_api_v1_equipment_inspection_feishu_devices_get: {
+        parameters: {
+            query?: {
+                /** @description 设备名称/编号搜索 */
+                keyword?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_feishu_records_api_v1_equipment_inspection_feishu_records_get: {
+        parameters: {
+            query?: {
+                /** @description 来源：today=今日巡检 / history=历史记录，缺省全部 */
+                source?: string | null;
+                /** @description 日期起 */
+                date_from?: string | null;
+                /** @description 日期止 */
+                date_to?: string | null;
+                /** @description 设备名称/编号搜索 */
+                keyword?: string | null;
+                /** @description 只看含异常（×）的记录 */
+                abnormal_only?: boolean;
+                /** @description 处理状态 */
+                process_status?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    feishu_sync_now_api_v1_equipment_inspection_feishu_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    feishu_sync_status_api_v1_equipment_inspection_feishu_sync_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    feishu_today_summary_api_v1_equipment_inspection_feishu_today_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_history_api_v1_equipment_inspection_history_get: {
         parameters: {
             query?: {
@@ -66450,8 +67392,6 @@ export interface operations {
                 date_to?: string | null;
                 /** @description 设备ID */
                 equipment_id?: string | null;
-                /** @description 路线ID */
-                route_id?: string | null;
                 /** @description 巡检结果 */
                 result?: string | null;
                 /** @description 页码 */
@@ -66553,365 +67493,6 @@ export interface operations {
             };
         };
     };
-    list_routes_api_v1_equipment_inspection_routes_get: {
-        parameters: {
-            query?: {
-                /** @description 是否启用 */
-                is_active?: boolean | null;
-                /** @description 按地点筛选 */
-                location_id?: string | null;
-                /** @description 关键词搜索 */
-                keyword?: string | null;
-                /** @description 页码 */
-                page?: number;
-                /** @description 每页数量 */
-                page_size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_route_api_v1_equipment_inspection_routes_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InspectionRouteCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_route_api_v1_equipment_inspection_routes__route_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                route_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_route_api_v1_equipment_inspection_routes__route_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                route_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InspectionRouteUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_route_api_v1_equipment_inspection_routes__route_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                route_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    set_route_locations_api_v1_equipment_inspection_routes__route_id__locations_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                route_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RouteLocationsBatch"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_schedules_api_v1_equipment_inspection_routes__route_id__schedules_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                route_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_schedule_api_v1_equipment_inspection_routes__route_id__schedules_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                route_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InspectionScheduleCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_schedule_api_v1_equipment_inspection_routes__route_id__schedules__schedule_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                route_id: string;
-                schedule_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InspectionScheduleUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_schedule_api_v1_equipment_inspection_routes__route_id__schedules__schedule_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                route_id: string;
-                schedule_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_tasks_api_v1_equipment_inspection_tasks_get: {
         parameters: {
             query?: {
@@ -66919,8 +67500,6 @@ export interface operations {
                 status?: string | null;
                 /** @description 排除的任务状态 */
                 exclude_status?: string | null;
-                /** @description 路线ID */
-                route_id?: string | null;
                 /** @description 巡检人员ID */
                 assigned_to?: string | null;
                 /** @description 设备ID */
@@ -67297,43 +67876,6 @@ export interface operations {
             };
         };
         requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    submit_route_check_api_v1_equipment_inspection_tasks__task_id__route_check_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RouteCheckSubmit"];
-            };
-        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -95364,6 +95906,281 @@ export interface operations {
             };
         };
     };
+    get_schedule_constraints_api_v1_production_schedule_constraints_get: {
+        parameters: {
+            query?: {
+                /** @description 产品代码 */
+                product?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_schedule_constraints_api_v1_production_schedule_constraints_post: {
+        parameters: {
+            query?: {
+                /** @description 产品代码 */
+                product?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleConstraintBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_schedule_draft_api_v1_production_schedule_drafts_export_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleDraftBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_schedule_draft_api_v1_production_schedule_drafts_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleDraftBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_schedule_draft_records_api_v1_production_schedule_drafts_records_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_schedule_draft_record_api_v1_production_schedule_drafts_records__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_schedule_draft_record_api_v1_production_schedule_drafts_records__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_schedule_draft_record_file_api_v1_production_schedule_drafts_records__record_id__file_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_schedule_excel_archives_api_v1_production_schedule_excel_get: {
         parameters: {
             query?: {
@@ -95505,6 +96322,39 @@ export interface operations {
         };
     };
     download_schedule_excel_file_api_v1_production_schedule_excel__archive_id__file_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                archive_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_schedule_validation_report_api_v1_production_schedule_excel__archive_id__validation_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -121170,6 +122020,103 @@ export interface operations {
             };
         };
     };
+    get_safety_feishu_app_settings_api_v1_safety_feishu_settings_app_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SafetyFeishuAppSettingsDetail_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_safety_feishu_app_settings_api_v1_safety_feishu_settings_app_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSafetyFeishuAppSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SafetyFeishuAppSettingsDetail_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_safety_feishu_app_settings_api_v1_safety_feishu_settings_app_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SafetyFeishuSettingsTestResult_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     restart_feishu_ws_api_v1_safety_feishu_ws_restart_post: {
         parameters: {
             query?: never;
@@ -122238,9 +123185,8 @@ export interface operations {
             query?: {
                 page?: number;
                 page_size?: number;
-                category?: string | null;
-                status?: string | null;
                 keyword?: string | null;
+                regulation_status?: string | null;
             };
             header?: never;
             path?: never;
@@ -122284,6 +123230,236 @@ export interface operations {
                 "application/json": components["schemas"]["SafetyKnowledgeArticleCreate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_knowledge_attachment_api_v1_safety_knowledge_articles_feishu_records__record_id__attachments__file_token__content_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_knowledge_attachment_api_v1_safety_knowledge_articles_feishu_records__record_id__attachments__file_token__preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_knowledge_from_feishu_api_v1_safety_knowledge_articles_feishu_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_regulation_radar_notify_api_v1_safety_knowledge_articles_radar_notify_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_regulation_radar_api_v1_safety_knowledge_articles_radar_run_post: {
+        parameters: {
+            query?: {
+                /** @description 干跑：只比对不写入飞书表 */
+                dry_run?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_regulation_radar_runs_api_v1_safety_knowledge_articles_radar_runs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_regulation_radar_run_api_v1_safety_knowledge_articles_radar_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -122408,73 +123584,7 @@ export interface operations {
             };
         };
     };
-    archive_knowledge_article_api_v1_safety_knowledge_articles__article_id__archive_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                article_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    publish_knowledge_article_api_v1_safety_knowledge_articles__article_id__publish_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                article_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upload_knowledge_article_attachment_api_v1_safety_knowledge_articles__article_id__upload_post: {
+    upload_knowledge_attachments_api_v1_safety_knowledge_articles__article_id__attachments_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -122487,7 +123597,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_upload_knowledge_article_attachment_api_v1_safety_knowledge_articles__article_id__upload_post"];
+                "multipart/form-data": components["schemas"]["Body_upload_knowledge_attachments_api_v1_safety_knowledge_articles__article_id__attachments_post"];
             };
         };
         responses: {
@@ -122498,6 +123608,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_knowledge_attachment_api_v1_safety_knowledge_articles__article_id__attachments__token__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+                token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_knowledge_local_attachment_api_v1_safety_knowledge_articles__article_id__attachments__token__content_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+                token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_knowledge_local_attachment_api_v1_safety_knowledge_articles__article_id__attachments__token__preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+                token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

@@ -10,6 +10,9 @@ const actions = vi.hoisted(() => ({
   getScheduleExcelArchives: vi.fn(),
   getScheduleExcelArchive: vi.fn(),
   deleteScheduleExcelArchive: vi.fn(),
+  getScheduleValidation: vi.fn(),
+  getScheduleConstraints: vi.fn(),
+  saveScheduleConstraints: vi.fn(),
 }))
 
 vi.mock('@/actions/production', () => actions)
@@ -456,5 +459,208 @@ describe('SchedulingPage archive flow', () => {
     expect(text).toContain('发酵罐号')
     expect(text).toContain('B403')
     expect(text).toContain('B404')
+  })
+})
+
+// ═══════════════ 排产校验与排产约束（仅 FA） ═══════════════
+
+const FA_CONSTRAINTS = {
+  code: 200,
+  message: 'success',
+  data: {
+    product_code: 'FA',
+    standard_cycle_hours: 61,
+    cycle_tolerance_hours: 4,
+    max_cycle_hours: 72,
+    turnaround_hours: 8,
+    monthly_dump_target: 26,
+  },
+}
+
+const VALIDATION_DATA = {
+  scope: { from: '2026-09-30', blocks: ['9月27日～10月26日'] },
+  coverage: { start: '2026-08-27', end: '2026-09-26' },
+  issues: [
+    {
+      level: 'warn',
+      rule: 'tank_overlap',
+      text: '302A 批次 FA26301 的移种时刻早于上一批放罐作业结束，两批重叠',
+      block: '9月27日～10月26日',
+      date: '2026-10-02',
+      tank_no: '302A',
+      batch_no: 'FA26301',
+    },
+    {
+      level: 'info',
+      rule: 'seed_discarded',
+      text: '种子 FA26315 次日无移种位，将废弃；若为有意留痕请确认',
+      block: '9月27日～10月26日',
+      date: '2026-10-01',
+      tank_no: null,
+      batch_no: 'FA26315',
+    },
+  ],
+  summary: { warn: 1, info: 1 },
+  constraints: null,
+}
+
+describe('SchedulingPage schedule validation (FA only)', () => {
+  let root: Root
+  let container: HTMLElement
+
+  beforeEach(() => {
+    setProductionAdminForTest()
+    useProductContextStore.getState().setProductCode('FA')
+    permissionState.codes = []
+    actions.getScheduleExcelArchives.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: ARCHIVE_SUMMARY,
+    })
+    actions.getScheduleConstraints.mockResolvedValue(FA_CONSTRAINTS)
+    actions.getScheduleValidation.mockResolvedValue({
+      code: 200,
+      message: '发现 1 个疑似问题、1 个提示',
+      data: VALIDATION_DATA,
+    })
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+  })
+
+  afterEach(() => {
+    act(() => root.unmount())
+    container?.remove()
+    vi.clearAllMocks()
+  })
+
+  async function render() {
+    act(() => {
+      root.render(<App><SchedulingPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+  }
+
+  it('shows the constraints card with configured values on FA', async () => {
+    await render()
+    expect(actions.getScheduleConstraints).toHaveBeenCalledWith('FA')
+    const text = container.textContent || ''
+    expect(text).toContain('排产约束')
+    expect(text).toContain('标准培养周期：')
+    expect(text).toContain('61h')
+    expect(text).toContain('72h')
+    expect(text).toContain('26 批')
+    // 存档行提供校验入口
+    expect(
+      [...container.querySelectorAll('button')].some((b) =>
+        b.textContent?.includes('校验'),
+      ),
+    ).toBe(true)
+  })
+
+  it('opens the validation report modal from the archive row', async () => {
+    await render()
+    const validateBtn = [...container.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('校验'),
+    ) as HTMLElement | undefined
+    expect(validateBtn).toBeTruthy()
+    await act(async () => {
+      validateBtn!.click()
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    expect(actions.getScheduleValidation).toHaveBeenCalledWith('a-1')
+    const text = document.body.textContent || ''
+    expect(text).toContain('排产校验：2026-09排产.xlsx')
+    expect(text).toContain('需确认 1 项')
+    expect(text).toContain('提示 1 项')
+    expect(text).toContain('FA26301')
+    expect(text).toContain('两批重叠')
+    expect(text).toContain('FA26315')
+  })
+
+  it('auto opens the validation report after upload when issues exist', async () => {
+    actions.uploadScheduleExcel.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: {
+        id: 'a-3',
+        file_name: '10月排产.xlsx',
+        sheet_name: '10月排产',
+        row_count: 2,
+        col_count: 2,
+        created_at: '2026-09-30T02:00:00+08:00',
+        validation: VALIDATION_DATA,
+      },
+    })
+    await render()
+    const file = new File(['fake'], '10月排产.xlsx')
+    await act(async () => {
+      fakeUpload.trigger?.(file)
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const text = document.body.textContent || ''
+    expect(text).toContain('排产校验：10月排产.xlsx')
+    expect(text).toContain('两批重叠')
+  })
+
+  it('hides the constraint edit entry without sync_config sensitive action', async () => {
+    useAuthStore.getState().setUser({
+      id: 'fa-user', name: '排产用户', role: 'user',
+      page_permissions: [{ page_key: 'production:plan:scheduling', module_code: 'production',
+        source: 'user', permissions: ['access', 'query'], visible_sections: ['FA'], data_scope: { scope_type: 'all' } }],
+    })
+    await render()
+    // 无 operate+sync_config：卡片仍展示配置值，但没有编辑入口
+    expect(container.textContent || '').toContain('排产约束')
+    expect(container.textContent || '').toContain('61h')
+    expect(
+      [...container.querySelectorAll('button')].some((b) =>
+        b.textContent === '编辑',
+      ),
+    ).toBe(false)
+  })
+
+  it('does not show validation entry on non-FA products', async () => {
+    useProductContextStore.getState().setProductCode('MC')
+    await render()
+    const text = container.textContent || ''
+    expect(text).not.toContain('排产约束')
+    expect(
+      [...container.querySelectorAll('button')].some((b) =>
+        b.textContent?.includes('校验'),
+      ),
+    ).toBe(false)
+  })
+
+  it('saves constraints through the edit modal', async () => {
+    actions.saveScheduleConstraints.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: FA_CONSTRAINTS.data,
+    })
+    await render()
+    const editBtn = [...container.querySelectorAll('button')].find((b) =>
+      b.textContent === '编辑',
+    ) as HTMLElement | undefined
+    expect(editBtn).toBeTruthy()
+    await act(async () => {
+      editBtn!.click()
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const bodyText = document.body.textContent || ''
+    expect(bodyText).toContain('编辑排产约束')
+    expect(bodyText).toContain('标准培养周期(h)')
+    const okBtn = [...document.body.querySelectorAll('.ant-modal-footer button')].find(
+      (b) => b.classList.contains('ant-btn-primary'),
+    ) as HTMLElement | undefined
+    await act(async () => {
+      okBtn!.click()
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(actions.saveScheduleConstraints).toHaveBeenCalledTimes(1)
+    expect(actions.saveScheduleConstraints.mock.calls[0][1]).toBe('FA')
+    expect(document.body.textContent || '').toContain('排产约束已保存')
   })
 })

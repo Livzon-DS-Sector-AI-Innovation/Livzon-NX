@@ -172,7 +172,7 @@ def test_rectification_status_derivation(
     )
 
 
-def test_action_values_resolve_field_names_json_and_option_ids(
+async def test_action_values_resolve_field_names_json_and_option_ids(
     monkeypatch: Any,
 ) -> None:
     monkeypatch.setattr(
@@ -206,8 +206,12 @@ def test_action_values_resolve_field_names_json_and_option_ids(
     assert fields["缺陷图片"][0]["file_token"] == "token"
     assert handler._resolve_option_ids("raw", {}, 3) == "raw"
     assert handler._resolve_option_ids("unknown", {"known": "名称"}, 3) == "unknown"
-    assert handler._match_target(handler._TARGET_FILE_TOKEN, handler._TARGET_TABLE_ID)
-    assert not handler._match_target("wrong", handler._TARGET_TABLE_ID)
+    async def _fake_target() -> tuple[str, str]:
+        return "tok_target", "tbl_target"
+
+    monkeypatch.setattr(handler, "_load_target_bitable", _fake_target)
+    assert await handler._match_target("tok_target", "tbl_target")
+    assert not await handler._match_target("wrong", "tbl_target")
 
 
 @pytest.mark.anyio

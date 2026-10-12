@@ -13,176 +13,10 @@ InspectionOverallResult = Literal["正常", "异常"]
 CheckResult = Literal["正常", "异常", "跳过"]
 
 
-# ═══════════ 巡检路线 ═══════════
-class InspectionRouteCreate(BaseModel):
-    """创建巡检路线请求"""
-
-    name: str = Field(..., max_length=200, description="路线名称")
-    description: str | None = Field(default=None, description="路线描述")
-
-
-class InspectionRouteUpdate(BaseModel):
-    """更新巡检路线请求"""
-
-    name: str | None = Field(default=None, max_length=200)
-    description: str | None = Field(default=None)
-    is_active: bool | None = Field(default=None)
-
-
-class InspectionRouteResponse(BaseModel):
-    """巡检路线响应"""
-
-    id: uuid.UUID
-    name: str
-    description: str | None
-    is_active: bool
-    equipment_count: int = 0
-    location_count: int = 0
-    created_at: datetime
-    updated_at: datetime
-    created_by: uuid.UUID | None
-    updated_by: uuid.UUID | None
-
-    model_config = {"from_attributes": True}
-
-
-class InspectionRouteDetailResponse(InspectionRouteResponse):
-    """巡检路线详情响应（含地点设备列表）"""
-
-    locations: list["RouteLocationResponse"] = Field(default_factory=list)
-
-
-# ═══════════ 线路地点配置 ═══════════
-class RouteLocationEquipmentItem(BaseModel):
-    """地点设备配置请求项"""
-
-    equipment_id: uuid.UUID = Field(..., description="设备ID")
-    sort_order: int = Field(default=0, description="排序")
-    template_ids: list[uuid.UUID] = Field(
-        default_factory=list, description="绑定的模板ID列表"
-    )
-
-
-class RouteLocationItem(BaseModel):
-    """线路地点配置请求项"""
-
-    location_id: uuid.UUID = Field(..., description="地点ID")
-    sort_order: int = Field(default=0, description="地点顺序")
-    equipments: list[RouteLocationEquipmentItem] = Field(
-        default_factory=list, description="该地点下的设备列表"
-    )
-
-
-class RouteLocationsBatch(BaseModel):
-    """批量设置线路地点-设备-模板请求"""
-
-    locations: list[RouteLocationItem] = Field(
-        default_factory=list, description="地点列表（全量替换）"
-    )
-
-
-class RouteEquipmentTemplateResponse(BaseModel):
-    """设备-模板绑定响应"""
-
-    id: uuid.UUID
-    template_id: uuid.UUID
-    template_name: str | None = None
-
-    model_config = {"from_attributes": True}
-
-
-class RouteLocationEquipmentResponse(BaseModel):
-    """线路地点设备响应"""
-
-    id: uuid.UUID
-    equipment_id: uuid.UUID
-    sort_order: int
-    equipment_name: str | None = None
-    equipment_no: str | None = None
-    templates: list[RouteEquipmentTemplateResponse] = Field(default_factory=list)
-
-    model_config = {"from_attributes": True}
-
-
-class RouteLocationResponse(BaseModel):
-    """线路地点响应"""
-
-    id: uuid.UUID
-    location_id: uuid.UUID
-    location_name: str | None = None
-    sort_order: int
-    equipments: list[RouteLocationEquipmentResponse] = Field(default_factory=list)
-
-    model_config = {"from_attributes": True}
-
-
-# ═══════════ 保留旧 schemas（不可删除，可能被其他代码引用） ═══════════
-class InspectionRouteEquipmentItem(BaseModel):
-    """路线设备配置项（已废弃，保留兼容）"""
-
-    equipment_id: uuid.UUID = Field(..., description="设备ID")
-    sort_order: int = Field(default=0, description="排序")
-
-
-class InspectionRouteEquipmentBatch(BaseModel):
-    """批量设置路线设备请求（已废弃，保留兼容）"""
-
-    equipments: list[InspectionRouteEquipmentItem] = Field(
-        ..., min_length=1, description="设备列表"
-    )
-
-
-class RouteEquipmentResponse(BaseModel):
-    """路线设备关联响应（已废弃，保留兼容）"""
-
-    id: uuid.UUID
-    equipment_id: uuid.UUID
-    sort_order: int
-    equipment_name: str | None = None
-    equipment_no: str | None = None
-
-    model_config = {"from_attributes": True}
-
-
-# ═══════════ 巡检路线定时任务 ═══════════
-class InspectionScheduleCreate(BaseModel):
-    """创建定时任务请求"""
-
-    cron_expression: str = Field(..., max_length=50, description="cron 表达式")
-    assigned_to: uuid.UUID = Field(..., description="巡检人员ID")
-    is_active: bool = Field(default=True, description="是否启用")
-
-
-class InspectionScheduleUpdate(BaseModel):
-    """更新定时任务请求"""
-
-    cron_expression: str | None = Field(default=None, max_length=50)
-    assigned_to: uuid.UUID | None = Field(default=None)
-    is_active: bool | None = Field(default=None)
-
-
-class InspectionScheduleResponse(BaseModel):
-    """定时任务响应"""
-
-    id: uuid.UUID
-    route_id: uuid.UUID
-    cron_expression: str
-    assigned_to: uuid.UUID | None
-    is_active: bool
-    last_triggered_at: datetime | None
-    next_trigger_at: datetime | None
-    assignee_name: str | None = None
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
 # ═══════════ 巡检任务 ═══════════
 class InspectionTaskCreate(BaseModel):
     """创建巡检任务请求"""
 
-    route_id: uuid.UUID | None = Field(default=None, description="路线ID")
     equipment_id: uuid.UUID | None = Field(
         default=None, description="单设备ID（兼容旧版，推荐用 equipment_ids）"
     )
@@ -221,7 +55,6 @@ class InspectionTaskResponse(BaseModel):
 
     id: uuid.UUID
     task_no: str
-    route_id: uuid.UUID | None
     equipment_id: uuid.UUID | None
     equipment_ids: list[uuid.UUID] | None = None
     template_ids: list[uuid.UUID] | None = None
@@ -235,10 +68,8 @@ class InspectionTaskResponse(BaseModel):
     completed_at: datetime | None
     closed_at: datetime | None
     closure_remark: str | None
-    route_summary: str | None = None
     created_at: datetime
     updated_at: datetime
-    route_name: str | None = None
     equipment_name: str | None = None
     equipment_no: str | None = None
     assignee_name: str | None = None
@@ -282,19 +113,7 @@ class InspectionRecordResponse(BaseModel):
     item_name: str | None = None
     expected_result: str | None = None
     created_at: datetime
-    route_location_id: uuid.UUID | None = None
-
     model_config = {"from_attributes": True}
-
-
-# ═══════════ 线路巡检提交 ═══════════
-class RouteCheckSubmit(BaseModel):
-    """线路巡检提交请求"""
-
-    overall_result: InspectionOverallResult = Field(
-        ..., description="总体结果：正常/异常"
-    )
-    route_summary: str | None = Field(default=None, description="现场描述")
 
 
 # ═══════════ 巡检照片 ═══════════
@@ -344,3 +163,58 @@ class InspectionTaskDetailResponse(InspectionTaskResponse):
 
     records: list[InspectionRecordResponse] = Field(default_factory=list)
     photos: list[InspectionPhotoResponse] = Field(default_factory=list)
+
+
+# ═══════════ 飞书镜像配置 ═══════════
+class EquipmentInspectionFeishuConfigUpdateRequest(BaseModel):
+    """保存设备巡检飞书镜像配置请求"""
+
+    app_id: str = Field(default="", max_length=100, description="飞书应用 App ID")
+    app_secret: str | None = Field(
+        default=None, description="飞书应用 App Secret（留空保留已保存值）"
+    )
+    app_token: str = Field(
+        default="",
+        max_length=500,
+        description="多维表格 App Token，支持粘贴 /base/ 链接或 /wiki/ 知识库链接",
+    )
+    today_table_id: str = Field(default="", max_length=100, description="今日巡检表 ID")
+    history_table_id: str = Field(
+        default="", max_length=100, description="设备历史巡检记录表 ID"
+    )
+    device_table_id: str = Field(
+        default="", max_length=100, description="设备档案表 ID"
+    )
+    is_enabled: bool = Field(default=True, description="启用镜像同步")
+
+
+class EquipmentInspectionFeishuConfigDetail(BaseModel):
+    """设备巡检飞书镜像配置详情（Secret 掩码返回）"""
+
+    app_id: str = Field(description="飞书应用 App ID")
+    app_secret_masked: str = Field(description="App Secret 掩码")
+    app_secret_configured: bool = Field(description="是否已配置 App Secret")
+    app_token: str = Field(description="多维表格 App Token")
+    today_table_id: str = Field(description="今日巡检表 ID")
+    history_table_id: str = Field(description="设备历史巡检记录表 ID")
+    device_table_id: str = Field(description="设备档案表 ID")
+    is_enabled: bool = Field(description="启用镜像同步")
+    source: Literal["database", "environment"] = Field(
+        description="当前生效配置来源：数据库行或环境变量回退"
+    )
+    enabled: bool = Field(description="当前镜像同步是否实际启用")
+    last_test_status: str | None = Field(default=None, description="最近连接测试结果")
+    last_test_error: str | None = Field(
+        default=None, description="最近连接测试失败原因"
+    )
+    last_tested_at: datetime | None = Field(
+        default=None, description="最近连接测试时间"
+    )
+
+
+class EquipmentInspectionFeishuConfigTestResult(BaseModel):
+    """设备巡检飞书镜像连接测试结果"""
+
+    success: bool = Field(description="测试是否通过")
+    table_count: int = Field(default=0, description="读取到的多维表格子表数量")
+    message: str = Field(default="", description="结果说明（失败时为脱敏原因）")

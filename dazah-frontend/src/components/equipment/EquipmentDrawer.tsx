@@ -23,6 +23,32 @@ const statusOptions: { label: string; value: EquipmentStatus }[] = [
   { label: '报废', value: '报废' },
 ]
 
+// 技术参数 JSON 对象 → 表单文本（每行“参数名：参数值”）
+export function formatTechParams(
+  params: Record<string, unknown> | null | undefined,
+): string | undefined {
+  if (!params || Object.keys(params).length === 0) return undefined
+  return Object.entries(params)
+    .map(([key, value]) => `${key}：${String(value)}`)
+    .join('\n')
+}
+
+// 技术参数文本（每行“参数名：值”）→ JSON 对象；空文本返回 undefined
+export function parseTechParams(text?: string): Record<string, string> | undefined {
+  if (!text?.trim()) return undefined
+  const result: Record<string, string> = {}
+  for (const [index, line] of text.split('\n').entries()) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    const match = trimmed.match(/^([^:=：]+)[:：=](.*)$/)
+    if (!match) {
+      throw new Error(`技术参数第 ${index + 1} 行格式不正确，请按“参数名：参数值”逐行填写`)
+    }
+    result[match[1].trim()] = match[2].trim()
+  }
+  return Object.keys(result).length > 0 ? result : undefined
+}
+
 // 扁平化树结构
 function flattenCategories(categories: EquipmentCategory[], prefix = ''): { label: string; value: string }[] {
   const result: { label: string; value: string }[] = []
@@ -127,11 +153,11 @@ export function EquipmentDrawer({ onRefresh }: EquipmentDrawerProps) {
           location_id: editingEquipment.location_id,
           status: editingEquipment.status,
           model: editingEquipment.model ?? undefined,
-          specification: editingEquipment.specification ?? undefined,
           manufacturer: editingEquipment.manufacturer ?? undefined,
-          supplier: editingEquipment.supplier ?? undefined,
           production_date: editingEquipment.production_date ? dayjs(editingEquipment.production_date) : undefined,
-          commissioning_date: editingEquipment.commissioning_date ? dayjs(editingEquipment.commissioning_date) : undefined,
+          factory_no: editingEquipment.factory_no ?? undefined,
+          arrival_date: editingEquipment.arrival_date ? dayjs(editingEquipment.arrival_date) : undefined,
+          technical_params_text: formatTechParams(editingEquipment.technical_params),
           description: editingEquipment.description ?? undefined,
           department_id: editingEquipment.department_id ?? undefined,
           responsible_person_id: editingEquipment.responsible_person_id ?? undefined,
@@ -174,10 +200,14 @@ export function EquipmentDrawer({ onRefresh }: EquipmentDrawerProps) {
         production_date: values.production_date
           ? values.production_date.format('YYYY-MM-DD')
           : undefined,
-        commissioning_date: values.commissioning_date
-          ? values.commissioning_date.format('YYYY-MM-DD')
+        arrival_date: values.arrival_date
+          ? values.arrival_date.format('YYYY-MM-DD')
           : undefined,
+        technical_params: parseTechParams(values.technical_params_text),
+        // 人工编辑保存后清除导入时记录的待修正标记
+        data_issue_note: null,
       }
+      delete (submitData as Record<string, unknown>).technical_params_text
 
       if (editingEquipment) {
         await updateEquipment(editingEquipment.id, submitData)
@@ -191,7 +221,7 @@ export function EquipmentDrawer({ onRefresh }: EquipmentDrawerProps) {
     } catch (err) {
       // Ant Design validation errors have an errorFields property
       if ((typeof err === 'object' && err !== null && 'errorFields' in err)) return
-      message.error('操作失败')
+      message.error((err as { message?: string })?.message || '操作失败')
     } finally {
       setSubmitting(false)
     }
@@ -223,6 +253,26 @@ export function EquipmentDrawer({ onRefresh }: EquipmentDrawerProps) {
         requiredMark="optional"
         styles={{ label: { fontWeight: 500, color: '#1a1a1a' } }}
       >
+        {editingEquipment?.data_issue_note && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: '1px solid #f5b7b1',
+              background: '#fdedec',
+              color: '#c0392b',
+              fontSize: 13,
+              lineHeight: '20px',
+            }}
+          >
+            <strong>数据待修正：</strong>
+            {editingEquipment.data_issue_note}
+            <div style={{ marginTop: 4, fontSize: 12, color: '#e74c3c' }}>
+              请核对并修正上方相关字段，保存后该提示自动清除。
+            </div>
+          </div>
+        )}
         <Form.Item
           name="name"
           label="设备名称"
@@ -252,11 +302,11 @@ export function EquipmentDrawer({ onRefresh }: EquipmentDrawerProps) {
         </Form.Item>
         <Form.Item
           name="location_id"
-          label="设备位置"
-          rules={[{ required: true, message: '请选择设备位置' }]}
+          label="安装地点"
+          rules={[{ required: true, message: '请选择安装地点' }]}
         >
           <Select
-            placeholder="请选择设备位置"
+            placeholder="请选择安装地点"
             showSearch
             optionFilterProp="label"
             options={locationOptions}
@@ -298,26 +348,46 @@ export function EquipmentDrawer({ onRefresh }: EquipmentDrawerProps) {
         >
           <Select placeholder="请选择设备重要性" options={importanceOptions} />
         </Form.Item>
-        <Form.Item name="model" label="设备型号">
-          <Input placeholder="请输入设备型号" />
+        <Form.Item name="model" label="规格型号">
+          <Input placeholder="请输入规格型号" />
         </Form.Item>
-        <Form.Item name="specification" label="设备规格">
-          <Input placeholder="请输入设备规格" />
+        <Form.Item
+          name="technical_params_text"
+          label="技术参数"
+          rules={[
+            {
+              validator: (_: unknown, value: string | undefined) => {
+                if (!value?.trim()) return Promise.resolve()
+                for (const line of value.split('\n')) {
+                  if (!line.trim()) continue
+                  if (!/^([^:=：]+)[:：=](.*)$/.test(line.trim())) {
+                    return Promise.reject(new Error('每行请按“参数名：参数值”格式填写'))
+                  }
+                }
+                return Promise.resolve()
+              },
+            },
+          ]}
+        >
+          <TextArea
+            rows={4}
+            placeholder={'每行一条，格式“参数名：参数值”，例如：\n功率：3kW\n容积：500L'}
+          />
         </Form.Item>
-        <Form.Item name="manufacturer" label="制造商">
-          <Input placeholder="请输入制造商" />
-        </Form.Item>
-        <Form.Item name="supplier" label="供应商">
-          <Input placeholder="请输入供应商" />
+        <Form.Item name="manufacturer" label="生产厂家">
+          <Input placeholder="请输入生产厂家" />
         </Form.Item>
         <Form.Item name="production_date" label="出厂日期">
           <DatePicker style={{ width: '100%' }} />
         </Form.Item>
-        <Form.Item name="commissioning_date" label="投用日期">
+        <Form.Item name="factory_no" label="出厂编号">
+          <Input placeholder="请输入出厂编号" />
+        </Form.Item>
+        <Form.Item name="arrival_date" label="入厂日期">
           <DatePicker style={{ width: '100%' }} />
         </Form.Item>
-        <Form.Item name="description" label="设备描述">
-          <TextArea rows={4} placeholder="请输入设备描述" />
+        <Form.Item name="description" label="备注">
+          <TextArea rows={4} placeholder="请输入备注" />
         </Form.Item>
       </Form>
     </Drawer>

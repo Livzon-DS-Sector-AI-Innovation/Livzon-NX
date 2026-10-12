@@ -21,22 +21,10 @@ from app.modules.equipment.schemas.inspection import (
     InspectionAIItemResult,
     InspectionPhotoResponse,
     InspectionRecordResponse,
-    InspectionRouteCreate,
-    InspectionRouteDetailResponse,
-    InspectionRouteResponse,
-    InspectionRouteUpdate,
-    InspectionScheduleCreate,
-    InspectionScheduleResponse,
-    InspectionScheduleUpdate,
     InspectionTaskClose,
     InspectionTaskCreate,
     InspectionTaskDetailResponse,
     InspectionTaskResponse,
-    RouteCheckSubmit,
-    RouteEquipmentTemplateResponse,
-    RouteLocationEquipmentResponse,
-    RouteLocationResponse,
-    RouteLocationsBatch,
 )
 from app.modules.equipment.service import inspection as inspection_svc
 
@@ -51,17 +39,10 @@ def _require_user(current_user: CurrentUser) -> uuid.UUID:
 
 def _task_to_response(task: InspectionTask) -> InspectionTaskResponse:
     """将 ORM InspectionTask 转为响应对象，填充关联名称。
-    要求调用方已通过 selectinload 预加载 route/equipment/template 关系。"""
+    要求调用方已通过 selectinload 预加载 equipment/assignee 关系。"""
     resp = InspectionTaskResponse.model_validate(task)
     if task.equipment_ids:
         resp.equipment_count = len(task.equipment_ids)
-    elif task.route and task.route.locations_rel:
-        count = 0
-        for loc in task.route.locations_rel:
-            count += len(loc.equipments or [])
-        resp.equipment_count = count
-    if task.route:
-        resp.route_name = task.route.name
     if task.equipment:
         resp.equipment_name = task.equipment.name
         resp.equipment_no = task.equipment.equipment_no
@@ -73,7 +54,7 @@ def _task_to_response(task: InspectionTask) -> InspectionTaskResponse:
 async def _enrich_multi_device_names(
     db: AsyncSession, responses: list[InspectionTaskResponse]
 ) -> None:
-    """为多设备任务（无 route、无单 equipment）补充 equipment_name 显示名"""
+    """为多设备任务补充 equipment_name 显示名"""
     # 收集需要查询设备名称的任务
     need_enrich: list[InspectionTaskResponse] = []
     all_eq_ids: set[uuid.UUID] = set()
@@ -103,156 +84,6 @@ async def _enrich_multi_device_names(
                 resp.equipment_name += f" 等{len(names)}台"
 
 
-# ═══════════ 巡检路线 ═══════════
-@router.post("/routes", summary="创建巡检路线")
-async def create_route(
-    data: InspectionRouteCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
-) -> JSONResponse:
-    route = await inspection_svc.create_route(db, data.model_dump())
-    return success_response(data=InspectionRouteResponse.model_validate(route))
-
-
-@router.get("/routes", summary="巡检路线列表")
-async def list_routes(
-    is_active: bool | None = Query(None, description="是否启用"),
-    location_id: uuid.UUID | None = Query(None, description="按地点筛选"),
-    keyword: str | None = Query(None, description="关键词搜索"),
-    page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(20, ge=1, le=200, description="每页数量"),
-    db: AsyncSession = Depends(get_db),
-) -> JSONResponse:
-    routes, total = await inspection_svc.get_routes(
-        db,
-        is_active=is_active,
-        location_id=location_id,
-        keyword=keyword,
-        page=page,
-        page_size=page_size,
-    )
-    resp_list = []
-    for r in routes:
-        resp = InspectionRouteResponse.model_validate(r)
-        # 统计未删除的地点下的未删除设备
-        count = 0
-        for loc in r.locations_rel or []:
-            count += len([e for e in (loc.equipments or []) if not e.is_deleted])
-        resp.equipment_count = count
-        resp.location_count = len(r.locations_rel or [])
-        resp_list.append(resp)
-    return paginated_response(
-        data=resp_list,
-        page=page,
-        page_size=page_size,
-        total=total,
-    )
-
-
-@router.get("/routes/{route_id}", summary="巡检路线详情")
-async def get_route(
-    route_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-) -> JSONResponse:
-    route = await inspection_svc.get_route_by_id(db, route_id)
-    resp = InspectionRouteDetailResponse.model_validate(route)
-    resp.locations = [
-        RouteLocationResponse(
-            id=loc.id,
-            location_id=loc.location_id,
-            location_name=loc.location.name if loc.location else None,
-            sort_order=loc.sort_order,
-            equipments=[
-                RouteLocationEquipmentResponse(
-                    id=eq.id,
-                    equipment_id=eq.equipment_id,
-                    sort_order=eq.sort_order,
-                    equipment_name=(
-                        eq.equipment.name
-                        if (eq.equipment and not eq.equipment.is_deleted)
-                        else None
-                    ),
-                    equipment_no=(
-                        eq.equipment.equipment_no
-                        if (eq.equipment and not eq.equipment.is_deleted)
-                        else None
-                    ),
-                    templates=[
-                        RouteEquipmentTemplateResponse(
-                            id=rt.id,
-                            template_id=rt.template_id,
-                            template_name=rt.template.name if rt.template else None,
-                        )
-                        for rt in (eq.templates_rel or [])
-                    ],
-                )
-                for eq in (loc.equipments or [])
-            ],
-        )
-        for loc in (route.locations_rel or [])
-    ]
-    return success_response(data=resp)
-
-
-@router.put("/routes/{route_id}", summary="更新巡检路线")
-async def update_route(
-    route_id: uuid.UUID,
-    data: InspectionRouteUpdate,
-    db: AsyncSession = Depends(get_db),
-) -> JSONResponse:
-    update_data = data.model_dump(exclude_unset=True)
-    route = await inspection_svc.update_route(db, route_id, update_data)
-    return success_response(data=InspectionRouteResponse.model_validate(route))
-
-
-@router.delete("/routes/{route_id}", summary="删除巡检路线")
-async def delete_route(
-    route_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-) -> JSONResponse:
-    await inspection_svc.delete_route(db, route_id)
-    return success_response(message="删除成功")
-
-
-@router.post("/routes/{route_id}/locations", summary="配置路线地点设备模板")
-async def set_route_locations(
-    route_id: uuid.UUID,
-    data: RouteLocationsBatch,
-    db: AsyncSession = Depends(get_db),
-) -> JSONResponse:
-    items = [item.model_dump() for item in data.locations]
-    locations = await inspection_svc.set_route_locations(db, route_id, items)
-    resp_list = [
-        RouteLocationResponse(
-            id=loc.id,
-            location_id=loc.location_id,
-            location_name=loc.location.name if loc.location else None,
-            sort_order=loc.sort_order,
-            equipments=[
-                RouteLocationEquipmentResponse(
-                    id=eq.id,
-                    equipment_id=eq.equipment_id,
-                    sort_order=eq.sort_order,
-                    equipment_name=eq.equipment.name if eq.equipment else None,
-                    equipment_no=eq.equipment.equipment_no if eq.equipment else None,
-                    templates=[
-                        RouteEquipmentTemplateResponse(
-                            id=rt.id,
-                            template_id=rt.template_id,
-                            template_name=rt.template.name if rt.template else None,
-                        )
-                        for rt in (eq.templates_rel or [])
-                    ],
-                )
-                for eq in (loc.equipments or [])
-            ],
-        )
-        for loc in locations
-    ]
-    return success_response(data=resp_list)
-
-
-# ═══════════ 巡检任务 ═══════════
 @router.post("/tasks", summary="创建巡检任务")
 async def create_task(
     data: InspectionTaskCreate,
@@ -267,7 +98,6 @@ async def create_task(
 async def list_tasks(
     status: str | None = Query(None, description="任务状态"),
     exclude_status: str | None = Query(None, description="排除的任务状态"),
-    route_id: uuid.UUID | None = Query(None, description="路线ID"),
     assigned_to: uuid.UUID | None = Query(None, description="巡检人员ID"),
     equipment_id: uuid.UUID | None = Query(None, description="设备ID"),
     planned_time_from: str | None = Query(None, description="计划时间起始"),
@@ -285,7 +115,6 @@ async def list_tasks(
         db,
         status=status,
         exclude_status=exclude_status,
-        route_id=route_id,
         assigned_to=assigned_to,
         equipment_id=equipment_id,
         planned_time_from=pt_from,
@@ -334,19 +163,6 @@ async def complete_task(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     task = await inspection_svc.complete_task(db, task_id)
-    return success_response(data=_task_to_response(task))
-
-
-@router.post("/tasks/{task_id}/route-check", summary="提交线路巡检结果")
-async def submit_route_check(
-    task_id: uuid.UUID,
-    data: RouteCheckSubmit,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
-) -> JSONResponse:
-    task = await inspection_svc.submit_route_check(
-        db, task_id, data.overall_result, data.route_summary
-    )
     return success_response(data=_task_to_response(task))
 
 
@@ -504,7 +320,6 @@ async def get_history(
     date_from: str | None = Query(None, description="起始日期"),
     date_to: str | None = Query(None, description="截止日期"),
     equipment_id: uuid.UUID | None = Query(None, description="设备ID"),
-    route_id: uuid.UUID | None = Query(None, description="路线ID"),
     result: str | None = Query(None, description="巡检结果"),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=200, description="每页数量"),
@@ -520,7 +335,6 @@ async def get_history(
         date_from=d_from,
         date_to=d_to,
         equipment_id=equipment_id,
-        route_id=route_id,
         result=result,
         page=page,
         page_size=page_size,
@@ -580,71 +394,3 @@ async def get_history_detail(
         photos=[InspectionPhotoResponse.model_validate(p) for p in detail["photos"]],
     )
     return success_response(data=model)
-
-
-# ═══════════ 路线定时任务 ═══════════
-
-
-@router.get(
-    "/routes/{route_id}/schedules",
-    summary="获取路线定时任务列表",
-)
-async def list_schedules(
-    route_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-) -> Any:
-    schedules = await inspection_svc.get_schedules_by_route(db, route_id)
-    return success_response(schedules)
-
-
-@router.post(
-    "/routes/{route_id}/schedules",
-    summary="创建定时任务",
-)
-async def create_schedule(
-    route_id: uuid.UUID,
-    body: InspectionScheduleCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
-) -> Any:
-    _require_user(current_user)
-    data = body.model_dump(exclude_unset=True)
-    schedule = await inspection_svc.create_schedule(db, route_id, data)
-    return success_response(InspectionScheduleResponse.model_validate(schedule))
-
-
-@router.put(
-    "/routes/{route_id}/schedules/{schedule_id}",
-    summary="更新定时任务",
-)
-async def update_schedule(
-    route_id: uuid.UUID,
-    schedule_id: uuid.UUID,
-    body: InspectionScheduleUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
-) -> Any:
-    _require_user(current_user)
-    data = body.model_dump(exclude_unset=True)
-    schedule = await inspection_svc.update_schedule(db, schedule_id, data)
-    if str(schedule.route_id) != str(route_id):
-        raise NotFoundException("定时任务", str(schedule_id))
-    return success_response(InspectionScheduleResponse.model_validate(schedule))
-
-
-@router.delete(
-    "/routes/{route_id}/schedules/{schedule_id}",
-    summary="删除定时任务",
-)
-async def delete_schedule(
-    route_id: uuid.UUID,
-    schedule_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
-) -> Any:
-    _require_user(current_user)
-    schedule = await repo.get_schedule_by_id(db, schedule_id)
-    if not schedule or str(schedule.route_id) != str(route_id):
-        raise NotFoundException("定时任务", str(schedule_id))
-    await inspection_svc.delete_schedule(db, schedule_id)
-    return success_response(None)

@@ -493,6 +493,8 @@ def _sensitive_actions(
     # action set explicit so a new API binding cannot silently widen a page.
     explicit_actions = {
         "quality:documents": ("bulk_import",),
+        # 安全知识库：飞书法规库全量同步入口（写入镜像数据）
+        "safety:regulation-info:knowledge-base": ("sync_config",),
         "quality:inspection:inspection-instruments:inspection-instruments-equipment": (
             "bulk_import",
         ),
@@ -541,6 +543,7 @@ def _sensitive_actions(
             "sensitive_export",
             "sync_config",
         ),
+        "production:plan:auto-scheduling": ("sensitive_export", "delete"),
         "production:shift-log:shift-log-deviation": ("delete",),
         "production:shift-log:shift-log-summary": ("delete",),
         "production:shift-log:shift-log-handover": ("approve", "delete"),
@@ -1176,6 +1179,97 @@ def _quality_shared_ledger_bindings() -> tuple[PageApiBinding, ...]:
     return _module_api_bindings("quality", rules)
 
 
+# ── 安全模块：飞书设置与知识库同步 ──
+# 设置页持有应用凭证与多维绑定，写入/连接测试要求 operate + sync_config
+# （对齐质量模块 feishu-settings 的页面级敏感动作）；同步入口挂在知识库页。
+# 附件 content/preview 由浏览器直接打开（无页面上下文头），保持模块级校验不绑定。
+PAGE_API_BINDINGS += _module_api_bindings(
+    "safety",
+    [
+        (
+            "GET",
+            "/feishu-settings/app",
+            ("safety:system-config:safety-feishu-settings",),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "PUT",
+            "/feishu-settings/app",
+            ("safety:system-config:safety-feishu-settings",),
+            "operate",
+            "sync_config",
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/feishu-settings/app/test",
+            ("safety:system-config:safety-feishu-settings",),
+            "operate",
+            "sync_config",
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/knowledge-articles/feishu/sync",
+            ("safety:regulation-info:knowledge-base",),
+            "operate",
+            "sync_config",
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/knowledge-articles/radar/run",
+            ("safety:regulation-info:knowledge-base",),
+            "operate",
+            "sync_config",
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/knowledge-articles/radar/notify/test",
+            ("safety:system-config:safety-feishu-settings",),
+            "operate",
+            "sync_config",
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/knowledge-articles/radar/runs",
+            ("safety:regulation-info:knowledge-base",),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/knowledge-articles/radar/runs/{run_id}",
+            ("safety:regulation-info:knowledge-base",),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/knowledge-articles/{article_id}/attachments",
+            ("safety:regulation-info:knowledge-base",),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "DELETE",
+            "/knowledge-articles/{article_id}/attachments/{token}",
+            ("safety:regulation-info:knowledge-base",),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+    ],
+)
+
+
 PAGE_API_BINDINGS += _quality_shared_ledger_bindings()
 
 
@@ -1549,6 +1643,7 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
     process_context = overview
     sales_plan_page = ("production:plan:sales-plan",)
     scheduling_page = ("production:plan:scheduling",)
+    auto_scheduling_page = ("production:plan:auto-scheduling",)
     deviation_page = ("production:shift-log:shift-log-deviation",)
     summary_page = ("production:shift-log:shift-log-summary",)
     handover_page = ("production:shift-log:shift-log-handover",)
@@ -1820,6 +1915,66 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
         scheduling_page,
         "operate",
         "sensitive_export",
+        "production.plan",
+    )
+    add(
+        "GET",
+        "/schedule-excel/{archive_id}/validation",
+        scheduling_page,
+        scope_adapter="production.plan",
+    )
+    add(
+        "GET",
+        "/schedule-constraints",
+        scheduling_page,
+        scope_adapter="production.plan",
+    )
+    add(
+        "POST",
+        "/schedule-constraints",
+        scheduling_page,
+        "operate",
+        "sync_config",
+        "production.plan",
+    )
+    add(
+        "POST",
+        "/schedule-drafts/generate",
+        auto_scheduling_page,
+        "operate",
+        scope_adapter="production.plan",
+    )
+    add(
+        "POST",
+        "/schedule-drafts/export",
+        auto_scheduling_page,
+        "operate",
+        "sensitive_export",
+        "production.plan",
+    )
+    add_many(
+        "GET",
+        (
+            "/schedule-drafts/records",
+            "/schedule-drafts/records/{record_id}",
+        ),
+        auto_scheduling_page,
+        scope_adapter="production.plan",
+    )
+    add(
+        "GET",
+        "/schedule-drafts/records/{record_id}/file",
+        auto_scheduling_page,
+        "operate",
+        "sensitive_export",
+        "production.plan",
+    )
+    add(
+        "DELETE",
+        "/schedule-drafts/records/{record_id}",
+        auto_scheduling_page,
+        "operate",
+        "delete",
         "production.plan",
     )
     add_many(

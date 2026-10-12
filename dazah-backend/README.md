@@ -175,13 +175,15 @@ FEISHU_BITABLE_PRODUCT_TABLE_ID=tblProduct
 or use an explicitly independent Feishu app when the module owns a separate bot:
 
 ```env
-SAFETY_FEISHU_APP_ID=cli_xxx
-SAFETY_FEISHU_APP_SECRET=your_safety_app_secret
-SAFETY_FEISHU_BITABLE_APP_TOKEN=base_or_wiki_converted_app_token
-SAFETY_FEISHU_BITABLE_HAZARD_TABLE_ID=tblHazard
 EQUIPMENT_FEISHU_APP_ID=cli_xxx
 EQUIPMENT_FEISHU_APP_SECRET=your_equipment_app_secret
 ```
+
+Safety Feishu settings are managed by the safety module itself through
+`/api/v1/safety/feishu-settings/app`. The safety module stores its own app
+credentials (encrypted) and the hazard Bitable binding in
+`safety.feishu_app_settings`; configure them on the `/safety/settings/feishu`
+page instead of environment variables.
 
 Warehouse Feishu settings are managed by the warehouse module itself through
 `/api/v1/warehouse/feishu-config`. The warehouse module stores its own app

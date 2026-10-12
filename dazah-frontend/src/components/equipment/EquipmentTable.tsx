@@ -1,27 +1,48 @@
 'use client'
 
-import { useCallback, useState, useEffect, useRef, type CSSProperties } from 'react'
+import { useCallback, useState, useEffect, useRef } from 'react'
 import { App, Table, Space, Input, Select, Button } from 'antd'
-import { EditOutlined, DeleteOutlined, SearchOutlined, ToolOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons'
+import { EditOutlined, DeleteOutlined, SearchOutlined, ToolOutlined, PlusOutlined, EyeOutlined, ImportOutlined } from '@ant-design/icons'
 import { Equipment, EquipmentStatus } from '@/types/equipment'
 import { useEquipmentStore } from '@/stores/equipment'
 import { deleteEquipment } from '@/actions/equipment'
-import { statusPill, linkDanger, linkPrimary, linkWarning, pillPurple, pillNeutral } from '@/components/equipment/shared-styles'
+import { linkDanger, linkPrimary, linkWarning } from '@/components/equipment/shared-styles'
 import { EquipmentDetailDrawer } from './EquipmentDetailDrawer'
+import { EquipmentImportModal } from './EquipmentImportModal'
 
-const statusConfig: Record<EquipmentStatus, { color: string; bg: string }> = {
-  '在用':   { color: '#1aae39', bg: '#d9f3e1' },
-  '备用':   { color: '#7b3ff2', bg: '#e6e0f5' },
-  '维修中': { color: '#dd5b00', bg: '#ffe8d4' },
-  '停用':   { color: '#787671', bg: '#f0eeec' },
-  '报废':   { color: '#e03131', bg: '#fde0ec' },
+const statusOptions: { label: EquipmentStatus; value: EquipmentStatus }[] = (
+  ['在用', '备用', '维修中', '停用', '报废'] as EquipmentStatus[]
+).map(value => ({ label: value, value }))
+
+// 待修正说明中的「【字段】」标记 → 表格列 dataIndex，
+// 仅对问题字段所在单元格标红，而不是整行
+const ISSUE_FIELD_MARKERS: Array<[string, string]> = [
+  ['【设备编号】', 'equipment_no'],
+  ['【设备名称】', 'name'],
+  ['【规格型号】', 'model'],
+  ['【生产厂家】', 'manufacturer'],
+  ['【出厂日期】', 'production_date'],
+  ['【出厂编号】', 'factory_no'],
+  ['【入厂日期】', 'arrival_date'],
+  ['【备注】', 'description'],
+]
+
+function issueFieldSet(note?: string | null): Set<string> {
+  const fields = new Set<string>()
+  if (!note) return fields
+  for (const [marker, field] of ISSUE_FIELD_MARKERS) {
+    if (note.includes(marker)) fields.add(field)
+  }
+  return fields
 }
 
-const statusPillMap: Record<EquipmentStatus, React.CSSProperties> = Object.fromEntries(
-  Object.entries(statusConfig).map(([k, v]) => [k, statusPill(v.color, v.bg)])
-) as Record<EquipmentStatus, React.CSSProperties>
-
-const statusOptions = Object.keys(statusConfig).map(value => ({ label: value, value }))
+// 仅问题字段的单元格使用红色文字
+const ISSUE_RED = '#c0392b'
+const issueCellStyle = (
+  note: string | null | undefined,
+  field: string,
+): React.CSSProperties | undefined =>
+  issueFieldSet(note).has(field) ? { color: ISSUE_RED } : undefined
 
 interface EquipmentTableProps {
   loading?: boolean
@@ -52,6 +73,7 @@ export function EquipmentTable({ loading = false, onPageChange, resetKey }: Equi
 
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailEquipment, setDetailEquipment] = useState<Equipment | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   // 动态计算 scroll.y，使表头和筛选栏固定，仅表格数据行滚动
   const rootRef = useRef<HTMLDivElement>(null)
@@ -90,25 +112,73 @@ export function EquipmentTable({ loading = false, onPageChange, resetKey }: Equi
     })
   }, [modal, message, onPageChange, localPage, localPageSize])
 
+  // 技术参数 JSON 渲染为「参数名：值；…」文本
+  const renderTechParams = (params: Record<string, unknown> | null | undefined) => {
+    if (!params || Object.keys(params).length === 0) return '-'
+    return Object.entries(params)
+      .map(([key, value]) => `${key}：${String(value)}`)
+      .join('；')
+  }
+
   const columns = [
-    { title: '设备编号', dataIndex: 'equipment_no', key: 'equipment_no', width: 140, fixed: 'start' as const },
-    { title: '设备名称', dataIndex: 'name', key: 'name', width: 180, fixed: 'start' as const, ellipsis: true },
-    { title: '设备分类', dataIndex: 'category_names', key: 'category', width: 150, render: (n: string | null) => n || '-' },
-    { title: '设备位置', dataIndex: 'location_name', key: 'location', width: 120, render: (n: string | null) => n || '-' },
-    { title: '归属部门', dataIndex: 'department_name', key: 'department', width: 120,
-      render: (v: string | null) => v || '-' },
-    { title: '负责人', dataIndex: 'responsible_person_name', key: 'responsible', width: 100,
-      render: (v: string | null) => v || '-' },
-    { title: '设备状态', dataIndex: 'status', key: 'status', width: 90,
-      render: (s: EquipmentStatus) => <span style={statusPillMap[s] || statusPill('#787671', '#f0eeec')}>{s}</span> },
-    { title: '重要性', dataIndex: 'importance', key: 'importance', width: 80,
-      render: (v: string) => {
-        const m: Record<string, CSSProperties> = { '高': pillPurple, '中': pillNeutral, '低': pillNeutral }
-        return <span style={m[v] || pillNeutral}>{v}</span>
-      }},
-    { title: '型号', dataIndex: 'model', key: 'model', width: 140, ellipsis: true },
-    { title: '供应商', dataIndex: 'supplier', key: 'supplier', width: 150, ellipsis: true },
-    { title: '投用日期', dataIndex: 'commissioning_date', key: 'commissioning_date', width: 120 },
+    {
+      title: '序号', key: 'index', width: 60, fixed: 'start' as const,
+      render: (_: unknown, __: Equipment, index: number) =>
+        (localPage - 1) * localPageSize + index + 1,
+    },
+    {
+      title: '设备编号', dataIndex: 'equipment_no', key: 'equipment_no', width: 140, fixed: 'start' as const,
+      render: (v: string, record: Equipment) => (
+        <span style={issueCellStyle(record.data_issue_note, 'equipment_no')}>{v}</span>
+      ),
+    },
+    {
+      title: '设备名称', dataIndex: 'name', key: 'name', width: 180, fixed: 'start' as const, ellipsis: true,
+      render: (v: string, record: Equipment) => (
+        <span style={issueCellStyle(record.data_issue_note, 'name')}>{v}</span>
+      ),
+    },
+    {
+      title: '规格型号', dataIndex: 'model', key: 'model', width: 150, ellipsis: true,
+      render: (v: string | null, record: Equipment) => (
+        <span style={issueCellStyle(record.data_issue_note, 'model')}>{v || '-'}</span>
+      ),
+    },
+    {
+      title: '技术参数', dataIndex: 'technical_params', key: 'technical_params', width: 220, ellipsis: true,
+      render: (v: Record<string, unknown> | null | undefined) => renderTechParams(v),
+    },
+    {
+      title: '生产厂家', dataIndex: 'manufacturer', key: 'manufacturer', width: 160, ellipsis: true,
+      render: (v: string | null, record: Equipment) => (
+        <span style={issueCellStyle(record.data_issue_note, 'manufacturer')}>{v || '-'}</span>
+      ),
+    },
+    {
+      title: '出厂日期', dataIndex: 'production_date', key: 'production_date', width: 110,
+      render: (v: string | null, record: Equipment) => (
+        <span style={issueCellStyle(record.data_issue_note, 'production_date')}>{v || '-'}</span>
+      ),
+    },
+    {
+      title: '出厂编号', dataIndex: 'factory_no', key: 'factory_no', width: 120,
+      render: (v: string | null, record: Equipment) => (
+        <span style={issueCellStyle(record.data_issue_note, 'factory_no')}>{v || '-'}</span>
+      ),
+    },
+    {
+      title: '入厂日期', dataIndex: 'arrival_date', key: 'arrival_date', width: 110,
+      render: (v: string | null, record: Equipment) => (
+        <span style={issueCellStyle(record.data_issue_note, 'arrival_date')}>{v || '-'}</span>
+      ),
+    },
+    { title: '安装地点', dataIndex: 'location_name', key: 'location', width: 130, render: (n: string | null) => n || '-' },
+    {
+      title: '备注', dataIndex: 'description', key: 'description', width: 160, ellipsis: true,
+      render: (v: string | null, record: Equipment) => (
+        <span style={issueCellStyle(record.data_issue_note, 'description')}>{v || '-'}</span>
+      ),
+    },
     { title: '操作', key: 'action', width: 240, fixed: 'end' as const,
       render: (_: unknown, record: Equipment) => (
         <Space size={8}>
@@ -137,12 +207,16 @@ export function EquipmentTable({ loading = false, onPageChange, resetKey }: Equi
         <Input placeholder="搜索设备编号或名称" prefix={<SearchOutlined style={{ color: '#a4a097' }} />}
           style={{ width: 240 }} value={keyword} onChange={(e) => setKeyword(e.target.value)} allowClear />
         <div style={{ flex: 1 }} />
+        <Button icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>导入台账</Button>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => openEquipmentDrawer()}>新增设备</Button>
       </div>
       <div ref={tableWrapRef} style={{ flex: 1, minHeight: 0 }}>
         <Table
           columns={columns} dataSource={equipments} rowKey="id" size="small"
           loading={loading} scroll={{ x: 'max-content', y: scrollY || undefined }}
+          onRow={(record) => ({
+            title: record.data_issue_note || undefined,
+          })}
           pagination={{
             current: localPage,
             pageSize: localPageSize,
@@ -163,6 +237,11 @@ export function EquipmentTable({ loading = false, onPageChange, resetKey }: Equi
         categoryName={detailEquipment?.category_names || ''}
         locationName={detailEquipment?.location_name || ''}
         onClose={() => { setDetailOpen(false); setDetailEquipment(null) }}
+      />
+      <EquipmentImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={() => onPageChange(1, localPageSize)}
       />
     </div>
   )

@@ -171,11 +171,22 @@ class Equipment(BaseModel):
     production_date: Mapped[date | None] = mapped_column(
         Date, nullable=True, comment="出厂日期"
     )
+    factory_no: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="出厂编号"
+    )
+    arrival_date: Mapped[date | None] = mapped_column(
+        Date, nullable=True, comment="入厂日期"
+    )
     commissioning_date: Mapped[date | None] = mapped_column(
         Date, nullable=True, comment="投用日期"
     )
     description: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="设备描述"
+    )
+    data_issue_note: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="数据待修正说明（导入时字段缺失/无法解析的原始值，人工修正后清除）",
     )
     importance: Mapped[str] = mapped_column(
         String(10),

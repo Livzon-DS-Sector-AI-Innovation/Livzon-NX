@@ -28,7 +28,7 @@ def test_reviewed_modules_have_complete_runtime_page_api_bindings() -> None:
         page for page in page_policy.PAGE_DEFINITIONS
         if page.module_code in reviewed
     ]
-    assert len(pages) == 237
+    assert len(pages) == 238
     for module_code in reviewed:
         assert page_policy.page_api_catalog_gaps(module_code) == []
 

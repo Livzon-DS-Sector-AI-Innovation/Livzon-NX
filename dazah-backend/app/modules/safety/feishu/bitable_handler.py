@@ -19,6 +19,9 @@ from app.core.redis import redis_client
 from app.modules.safety.feishu.bitable_client import SafetyBitableClient
 from app.modules.safety.feishu.dept_config import DEPARTMENT_CONFIG
 from app.modules.safety.feishu.event_client import on_event
+from app.modules.safety.feishu.runtime_config import (
+    load_safety_feishu_runtime_config,
+)
 from app.modules.safety.schemas.enums import HazardCategory, HazardLevel, HazardType
 from app.modules.safety.service.safety import (
     _build_verify_card_content,
@@ -940,7 +943,7 @@ async def _create_hazard_from_bitable(
         # 3. 下载附件到本地后直接 SET clean file paths。
         # 不使用 append，避免残留 Bitable attachment 对象。
         saved = await _download_and_save_attachments(
-            SafetyBitableClient(),
+            await SafetyBitableClient.create(),
             bitable_fields,
             str(item.id),
             record_id=record_id,
@@ -1046,7 +1049,7 @@ async def _create_hazard_from_bitable(
             )
 
         # 6. 回写 Bitable（隐患编号 + AI 结果 + 整改期限 + 责任人）
-        bitable = SafetyBitableClient()
+        bitable = await SafetyBitableClient.create()
         writeback: dict[str, Any] = {
             "隐患编号": item.hazard_no,
         }
@@ -1179,7 +1182,7 @@ async def _create_hazard_from_bitable(
 
         # 回写失败状态（不写"同步状态"字段，因为 Bitable 中不存在该字段）
         try:
-            bitable = SafetyBitableClient()
+            bitable = await SafetyBitableClient.create()
             await _set_sync_ignore(record_id, ttl=30)
             await bitable.update_record(
                 record_id, {"隐患编号": f"ERROR:{record_id[:12]}"}
@@ -1273,7 +1276,7 @@ async def _update_hazard_from_bitable(
     if _bt_photo_fields:
         try:
             saved = await _download_and_save_attachments(
-                SafetyBitableClient(),
+                await SafetyBitableClient.create(),
                 _bt_photo_fields,
                 str(hazard.id),
                 record_id=record_id,
@@ -1620,7 +1623,7 @@ async def _update_hazard_from_bitable(
             # ── 回写整改状态到 Bitable ──
             try:
                 status_label = _STATUS_TO_BITABLE_LABEL.get(new_status, new_status)
-                _bt = SafetyBitableClient()
+                _bt = await SafetyBitableClient.create()
                 await _set_sync_ignore(record_id, ttl=30)
                 await _bt.update_record(record_id, {"整改状态": status_label})
                 logger.info(
@@ -1660,7 +1663,7 @@ async def push_hazard_to_bitable(hazard: Any) -> bool:
     if not fields:
         return True
 
-    bitable = SafetyBitableClient()
+    bitable = await SafetyBitableClient.create()
     await _set_sync_ignore(hazard.feishu_record_id, ttl=30)
     ok = await bitable.update_record(hazard.feishu_record_id, fields)
     if ok:
@@ -1682,9 +1685,12 @@ async def push_hazard_to_bitable(hazard: Any) -> bool:
 #   drive.file.bitable_field_changed_v1   字段级变更，更细粒度
 # 我们使用 record_changed_v1 为主，field_changed_v1 作为补充。
 
-# Bitable 目标凭证（模块级缓存，避免每次 os.getenv）
-_TARGET_FILE_TOKEN = os.getenv("SAFETY_FEISHU_BITABLE_APP_TOKEN", "")
-_TARGET_TABLE_ID = os.getenv("SAFETY_FEISHU_BITABLE_HAZARD_TABLE_ID", "")
+async def _load_target_bitable() -> tuple[str, str]:
+    """从数据库配置读取目标多维表格 (file_token, table_id)；未配置返回空串。"""
+    config = await load_safety_feishu_runtime_config()
+    if config is None:
+        return "", ""
+    return config.bitable_app_token, config.bitable_hazard_table_id
 
 # field_id → field_name 缓存（用于解析 action_list 中的 after_value）
 _field_name_cache: dict[str, str] | None = None
@@ -1814,8 +1820,9 @@ async def ensure_bitable_subscribed() -> bool:
     飞书要求：在接收 Bitable 事件之前，必须先调用 /drive/v1/files/:file_token/subscribe
     订阅文档事件。此订阅持久存在于飞书侧，只需调用一次，但每次启动时重试无害。
     """
-    if not _TARGET_FILE_TOKEN:
-        logger.warning("Bitable file_token 未配置，跳过文档事件订阅")
+    target_token, _target_table = await _load_target_bitable()
+    if not target_token:
+        logger.warning("Bitable file_token 未配置（数据库飞书设置），跳过文档事件订阅")
         return False
 
     try:
@@ -1826,14 +1833,14 @@ async def ensure_bitable_subscribed() -> bool:
         token = await get_safety_tenant_token()
         async with httpx.AsyncClient(timeout=15) as http:
             resp = await http.post(
-                f"https://open.feishu.cn/open-apis/drive/v1/files/{_TARGET_FILE_TOKEN}/subscribe",
+                f"https://open.feishu.cn/open-apis/drive/v1/files/{target_token}/subscribe",
                 headers={"Authorization": f"Bearer {token}"},
                 params={"file_type": "bitable"},
             )
             data = resp.json()
             if data.get("code") == 0:
                 logger.info(
-                    "Bitable 文档事件订阅成功: file_token=%s", _TARGET_FILE_TOKEN
+                    "Bitable 文档事件订阅成功: file_token=%s", target_token
                 )
                 return True
             logger.error(
@@ -1847,11 +1854,14 @@ async def ensure_bitable_subscribed() -> bool:
         return False
 
 
-def _match_target(file_token: str, table_id: str) -> bool:
-    """检查事件是否属于目标 Bitable 表格。"""
-    if file_token and file_token != _TARGET_FILE_TOKEN:
+async def _match_target(file_token: str, table_id: str) -> bool:
+    """检查事件是否属于目标 Bitable 表格（绑定以数据库配置为准）。"""
+    target_token, target_table = await _load_target_bitable()
+    if not target_token:
         return False
-    if table_id and table_id != _TARGET_TABLE_ID:
+    if file_token and file_token != target_token:
+        return False
+    if table_id and table_id != target_table:
         return False
     return True
 
@@ -2018,13 +2028,13 @@ async def handle_bitable_record_changed(event: dict[str, Any]) -> None:
     table_id = event.get("table_id", "")
 
     # ── 校验目标表格 ──
-    if not _match_target(file_token, table_id):
+    if not await _match_target(file_token, table_id):
         logger.debug(
             "忽略非目标表格事件: file_token=%s table_id=%s", file_token, table_id
         )
         return
 
-    bitable = SafetyBitableClient()
+    bitable = await SafetyBitableClient.create()
 
     # ── 解析 action_list（飞书实际格式）──
     action_list = event.get("action_list", [])
@@ -2118,7 +2128,7 @@ async def handle_bitable_field_changed(event: dict[str, Any]) -> None:
     file_token = event.get("file_token", "")
     table_id = event.get("table_id", "")
 
-    if not _match_target(file_token, table_id):
+    if not await _match_target(file_token, table_id):
         return
 
     action_list = event.get("action_list", [])
@@ -2220,7 +2230,7 @@ async def handle_card_action(event: dict[str, Any]) -> dict[str, Any] | None:
     )
 
     try:
-        bitable = SafetyBitableClient()
+        bitable = await SafetyBitableClient.create()
         success = await bitable.update_record(record_id, {bt_field: bt_value})
         if not success:
             logger.error("Bitable 更新失败: record_id=%s field=%s", record_id, bt_field)

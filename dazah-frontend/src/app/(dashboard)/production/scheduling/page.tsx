@@ -2,21 +2,27 @@
 
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, TdHTMLAttributes } from 'react'
-import { Card, Typography, Upload, Table, App, Row, Col, Button, Popconfirm, Space, Modal, Input, Tag } from 'antd'
+import { Card, Typography, Upload, Table, App, Row, Col, Button, Popconfirm, Space, Modal, Input, InputNumber, Tag } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
 import type { ColumnsType } from 'antd/es/table'
-import { ScheduleOutlined, InboxOutlined, ReloadOutlined, DownloadOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined } from '@ant-design/icons'
+import { ScheduleOutlined, InboxOutlined, ReloadOutlined, DownloadOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined, FileSearchOutlined, EditOutlined } from '@ant-design/icons'
 import {
   deleteScheduleExcelArchive,
   getScheduleExcelArchive,
   getScheduleExcelArchives,
+  getScheduleConstraints,
+  getScheduleValidation,
+  saveScheduleConstraints,
   uploadScheduleExcel,
 } from '@/actions/production'
 import type {
+  ScheduleConstraintSettings,
   ScheduleExcelArchive,
   ScheduleHistoryFix,
   ScheduleMergeChange,
   ScheduleMergeReport,
+  ScheduleValidationIssue,
+  ScheduleValidationReport,
 } from '@/types/production'
 import BoardNavBlocks from '@/components/production/board-nav-blocks'
 import { useProductContextStore } from '@/stores/product-context'
@@ -89,6 +95,64 @@ const MergeChangeTable = memo(function MergeChangeTable({
   )
 })
 
+const issueColumns: ColumnsType<ScheduleValidationIssue> = [
+  {
+    title: '级别',
+    dataIndex: 'level',
+    key: 'level',
+    width: 76,
+    render: (level: ScheduleValidationIssue['level']) => (
+      <Tag color={level === 'warn' ? 'orange' : 'blue'} style={{ marginRight: 0 }}>
+        {level === 'warn' ? '需确认' : '提示'}
+      </Tag>
+    ),
+  },
+  {
+    title: '日期',
+    dataIndex: 'date',
+    key: 'date',
+    width: 90,
+    render: (v?: string | null) => (v ? v.slice(5) : '—'),
+  },
+  {
+    title: '罐号',
+    dataIndex: 'tank_no',
+    key: 'tank_no',
+    width: 72,
+    render: (v?: string | null) => v || '—',
+  },
+  {
+    title: '批号',
+    dataIndex: 'batch_no',
+    key: 'batch_no',
+    width: 104,
+    render: (v?: string | null) => v || '—',
+  },
+  { title: '说明', dataIndex: 'text', key: 'text' },
+]
+
+/** 校验问题清单表：与 MergeChangeTable 同模式 */
+const ValidationIssueTable = memo(function ValidationIssueTable({
+  issues,
+}: {
+  issues: ScheduleValidationIssue[]
+}) {
+  return (
+    <Table
+      size="small"
+      pagination={{ pageSize: 10, showSizeChanger: false, hideOnSinglePage: true }}
+      dataSource={issues}
+      rowKey={(_: ScheduleValidationIssue, index?: number) => String(index)}
+      columns={issueColumns}
+    />
+  )
+})
+
+/** 约束展示值：未配置显示占位符 */
+function constraintText(value: number | null | undefined, unit: string) {
+  return value == null ? '未配置' : `${value}${unit}`
+}
+
 function fileDownloadUrl(archiveId: string) {
   return `/api/v1/production/schedule-excel/${archiveId}/file`
 }
@@ -137,9 +201,19 @@ function SchedulingContent({ productCode, hideCodes }: {
   const [viewingFixesFile, setViewingFixesFile] = useState('')
   // 当前产品累计历史修正次数（audit 口径，随存档列表 meta 返回）
   const [fixTotal, setFixTotal] = useState(0)
+  // 排产校验（当前仅 FA）：上传后自动弹报告，存档行可随时手动复查
+  const [validation, setValidation] = useState<ScheduleValidationReport | null>(null)
+  const [validationFile, setValidationFile] = useState('')
+  const [validatingId, setValidatingId] = useState<string | null>(null)
+  // 排产约束配置（校验与后续自动排产共用的工艺参数）
+  const [constraints, setConstraints] = useState<ScheduleConstraintSettings | null>(null)
+  const [constraintModalOpen, setConstraintModalOpen] = useState(false)
+  const [constraintDraft, setConstraintDraft] = useState<ScheduleConstraintSettings | null>(null)
+  const [savingConstraints, setSavingConstraints] = useState(false)
+  const isFa = productCode === 'FA'
   const { has } = usePermission()
   const canFixHistory = has('production:schedule-archive')
-  const { canDelete, canBulkImport, canExport } = useProductionPermissions(
+  const { canDelete, canBulkImport, canExport, canSync } = useProductionPermissions(
     PRODUCTION_PAGE_KEYS.scheduling,
   )
 
@@ -163,6 +237,86 @@ function SchedulingContent({ productCode, hideCodes }: {
     // 切换产品上下文后重新加载该产品的存档
   }, [reloadList, productCode])
 
+  // 排产约束（仅 FA）：随产品上下文加载，供卡片展示与编辑预填
+  const reloadConstraints = useCallback(async () => {
+    try {
+      const res = await getScheduleConstraints(productCode)
+      if (res.code === 200) setConstraints(res.data)
+    } catch {
+      // 约束加载失败不阻断排产页；编辑弹窗打开时会重新拉取
+    }
+  }, [productCode])
+
+  useEffect(() => {
+    if (!isFa) {
+      setConstraints(null)
+      return
+    }
+    void reloadConstraints()
+  }, [isFa, reloadConstraints])
+
+  const openValidation = useCallback(
+    async (archiveId: string, fileName: string) => {
+      setValidatingId(archiveId)
+      try {
+        const res = await getScheduleValidation(archiveId)
+        if (res.code === 200) {
+          setValidation(res.data)
+          setValidationFile(fileName)
+        } else {
+          message.error(res.message || '排产校验失败', TIP_SECONDS)
+        }
+      } catch {
+        message.error('排产校验请求失败')
+      } finally {
+        setValidatingId(null)
+      }
+    },
+    [message],
+  )
+
+  const openConstraintModal = useCallback(async () => {
+    // 打开时重拉一次，避免展示过期配置
+    try {
+      const res = await getScheduleConstraints(productCode)
+      if (res.code === 200) {
+        setConstraints(res.data)
+        setConstraintDraft({ ...res.data })
+      }
+    } catch {
+      setConstraintDraft(constraints ? { ...constraints } : null)
+      message.error('加载排产约束失败', TIP_SECONDS)
+    }
+    setConstraintModalOpen(true)
+  }, [constraints, message, productCode])
+
+  const submitConstraints = useCallback(async () => {
+    if (!constraintDraft) return
+    if (
+      constraintDraft.standard_cycle_hours != null &&
+      constraintDraft.max_cycle_hours != null &&
+      constraintDraft.max_cycle_hours < constraintDraft.standard_cycle_hours
+    ) {
+      message.error('最大培养周期不能小于标准培养周期', TIP_SECONDS)
+      return
+    }
+    setSavingConstraints(true)
+    try {
+      const res = await saveScheduleConstraints(constraintDraft, productCode)
+      if (res.code === 200) {
+        setConstraints(res.data)
+        setConstraintModalOpen(false)
+        message.success('排产约束已保存')
+      } else {
+        message.error(res.message || '保存失败', TIP_SECONDS)
+      }
+    } catch {
+      message.error('保存排产约束失败', TIP_SECONDS)
+    } finally {
+      setSavingConstraints(false)
+    }
+  }, [constraintDraft, message, productCode])
+
   const handleUpload = async (file: File) => {
     if (!canBulkImport) return false
     if (file.size > SCHEDULE_UPLOAD_MAX_BYTES) {
@@ -181,6 +335,11 @@ function SchedulingContent({ productCode, hideCodes }: {
         message.success(`已存档：${res.data.file_name}`)
         setActive(res.data)
         await reloadList()
+        // 上传后自动排产校验（仅 FA）：有问题才弹报告，干净则不打扰
+        if (res.data.validation?.issues?.length) {
+          setValidation(res.data.validation)
+          setValidationFile(res.data.file_name)
+        }
         const merge: ScheduleMergeReport | undefined = res.data.merge
         if (merge?.warning) {
           message.warning(merge.warning, TIP_SECONDS)
@@ -420,6 +579,7 @@ function SchedulingContent({ productCode, hideCodes }: {
 
   const listColumns = [
     {
+      // 弹性列：吸收剩余宽度，其余固定宽列贴表格右侧
       title: '文件名', dataIndex: 'file_name', key: 'file_name', ellipsis: true,
       render: (value: string, record: ScheduleExcelArchive) => (
         <Space size={6}>
@@ -457,12 +617,24 @@ function SchedulingContent({ productCode, hideCodes }: {
         value ? new Date(value).toLocaleString() : '',
     },
     {
-      title: '操作', key: 'actions', width: 210,
+      // 「查看+校验+下载原件+删除」四按钮合计约 270px，
+      // 列宽不足会把删除按钮顶出单元格，留足余量
+      title: '操作', key: 'actions', width: 310,
       render: (_: unknown, record: ScheduleExcelArchive) => (
         <Space size={4} onClick={(e) => e.stopPropagation()}>
           <Button size="small" icon={<EyeOutlined />} onClick={() => openArchive(record.id)}>
             查看
           </Button>
+          {isFa && (
+            <Button
+              size="small"
+              icon={<FileSearchOutlined />}
+              loading={validatingId === record.id}
+              onClick={() => void openValidation(record.id, record.file_name)}
+            >
+              校验
+            </Button>
+          )}
           {canExport && (
             <Button size="small" icon={<DownloadOutlined />} href={fileDownloadUrl(record.id)}>
               下载原件
@@ -544,6 +716,34 @@ function SchedulingContent({ productCode, hideCodes }: {
           </Card>
         </Col>
       </Row>
+
+      {/* 排产约束（仅 FA）：校验与后续自动排产共用的工艺参数 */}
+      {isFa && (
+        <Card
+          className="mb-6"
+          size="small"
+          title="排产约束"
+          styles={{ body: { padding: 14 } }}
+          extra={
+            canSync ? (
+              <Button size="small" icon={<EditOutlined />} onClick={() => void openConstraintModal()}>
+                编辑
+              </Button>
+            ) : null
+          }
+        >
+          <Space size={24} wrap className="mb-2">
+            <Text>标准培养周期：<Text strong>{constraintText(constraints?.standard_cycle_hours, 'h')}</Text></Text>
+            <Text>周期容差：<Text strong>{constraintText(constraints?.cycle_tolerance_hours, 'h')}</Text></Text>
+            <Text>最大培养周期：<Text strong>{constraintText(constraints?.max_cycle_hours, 'h')}</Text></Text>
+            <Text>罐周转时间：<Text strong>{constraintText(constraints?.turnaround_hours, 'h')}</Text></Text>
+            <Text>月计划放罐：<Text strong>{constraintText(constraints?.monthly_dump_target, ' 批')}</Text></Text>
+          </Space>
+          <Text type="secondary" className="text-xs">
+            排产校验与自动排产使用的工艺参数；未配置的项目对应检查自动跳过（培养周期超上限、周转不足、批数核对等）。
+          </Text>
+        </Card>
+      )}
 
       {/* 历史存档列表 */}
       <Card
@@ -636,6 +836,135 @@ function SchedulingContent({ productCode, hideCodes }: {
             <MergeChangeTable changes={fix.changes ?? EMPTY_CHANGES} />
           </div>
         ))}
+      </Modal>
+      {/* 排产校验报告：上传后自动弹出，或从存档行「校验」进入；只提醒不拦截 */}
+      <Modal
+        open={validation !== null}
+        title={`排产校验：${validationFile}`}
+        footer={null}
+        onCancel={() => setValidation(null)}
+        width={880}
+      >
+        {validation?.message ? (
+          <Alert type="info" showIcon className="!mb-3" title={validation.message} />
+        ) : (
+          <div className="mb-3">
+            <Space size={8} wrap>
+              <Tag color="orange">需确认 {validation?.summary?.warn ?? 0} 项</Tag>
+              <Tag color="blue">提示 {validation?.summary?.info ?? 0} 项</Tag>
+              <Text type="secondary" className="text-xs">
+                仅校验 {validation?.scope?.from ? validation.scope.from.slice(5) : '今天'} 及以后的排产；调整约束后重新点「校验」即可按新参数复查
+              </Text>
+            </Space>
+          </div>
+        )}
+        <ValidationIssueTable issues={validation?.issues ?? []} />
+      </Modal>
+      {/* 排产约束编辑：canSync（sync_config 敏感操作）门控 */}
+      <Modal
+        open={constraintModalOpen}
+        title="编辑排产约束"
+        onCancel={() => setConstraintModalOpen(false)}
+        onOk={() => void submitConstraints()}
+        okText="保存"
+        cancelText="取消"
+        confirmLoading={savingConstraints}
+        width={560}
+      >
+        <div className="mb-3">
+          <Space size={16} wrap>
+            <span>
+              标准培养周期(h)：
+              <InputNumber
+                className="ml-1"
+                min={0}
+                max={10000}
+                step={0.5}
+                placeholder="未配置"
+                value={constraintDraft?.standard_cycle_hours ?? null}
+                onChange={(v) =>
+                  setConstraintDraft((prev) =>
+                    prev ? { ...prev, standard_cycle_hours: v } : prev,
+                  )
+                }
+              />
+            </span>
+            <span>
+              周期容差(h)：
+              <InputNumber
+                className="ml-1"
+                min={0}
+                max={1000}
+                step={0.5}
+                placeholder="未配置"
+                value={constraintDraft?.cycle_tolerance_hours ?? null}
+                onChange={(v) =>
+                  setConstraintDraft((prev) =>
+                    prev ? { ...prev, cycle_tolerance_hours: v } : prev,
+                  )
+                }
+              />
+            </span>
+          </Space>
+        </div>
+        <div className="mb-3">
+          <Space size={16} wrap>
+            <span>
+              最大培养周期(h)：
+              <InputNumber
+                className="ml-1"
+                min={0}
+                max={10000}
+                step={0.5}
+                placeholder="未配置"
+                value={constraintDraft?.max_cycle_hours ?? null}
+                onChange={(v) =>
+                  setConstraintDraft((prev) =>
+                    prev ? { ...prev, max_cycle_hours: v } : prev,
+                  )
+                }
+              />
+            </span>
+            <span>
+              罐周转时间(h)：
+              <InputNumber
+                className="ml-1"
+                min={0}
+                max={1000}
+                step={0.5}
+                placeholder="未配置"
+                value={constraintDraft?.turnaround_hours ?? null}
+                onChange={(v) =>
+                  setConstraintDraft((prev) =>
+                    prev ? { ...prev, turnaround_hours: v } : prev,
+                  )
+                }
+              />
+            </span>
+          </Space>
+        </div>
+        <div className="mb-3">
+          月计划放罐(批)：
+          <InputNumber
+            className="ml-1"
+            min={0}
+            max={1000}
+            step={1}
+            precision={0}
+            placeholder="未配置"
+            value={constraintDraft?.monthly_dump_target ?? null}
+            onChange={(v) =>
+              setConstraintDraft((prev) =>
+                prev ? { ...prev, monthly_dump_target: v } : prev,
+              )
+            }
+          />
+        </div>
+        <Alert
+          type="info"
+          showIcon
+          title="留空的项目对应校验自动跳过；标准周期+容差用于识别有意延长培养，最大周期为工艺上限。"
+        />
       </Modal>
     </div>
   )

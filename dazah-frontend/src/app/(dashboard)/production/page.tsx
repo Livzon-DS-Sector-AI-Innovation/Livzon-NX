@@ -258,6 +258,8 @@ export default function ProductionDashboard() {
   const [maintModalOpen, setMaintModalOpen] = useState(false)
   const [maintTank, setMaintTank] = useState<BoardTank | null>(null)
   const [maintReason, setMaintReason] = useState('')
+  // 预计恢复日期（可选）：排产校验据此把检修窗口内的空位判为合法扰动
+  const [maintRecovery, setMaintRecovery] = useState<dayjs.Dayjs | null>(null)
   // 确认移种：记录实际移种时刻（默认当前时刻，可改，支持补录）
   const [inoculateModalOpen, setInoculateModalOpen] = useState(false)
   const [inoculateTank, setInoculateTank] = useState<BoardTank | null>(null)
@@ -439,11 +441,16 @@ export default function ProductionDashboard() {
       message.warning('请填写检修原因')
       return
     }
-    const res = await markTankMaintenance(maintTank.tank_no, maintReason.trim())
+    const res = await markTankMaintenance(
+      maintTank.tank_no,
+      maintReason.trim(),
+      maintRecovery ? maintRecovery.format('YYYY-MM-DD') : null,
+    )
     if (res.code === 200) {
       message.success(`${maintTank.tank_no} 已标记检修`)
       setMaintModalOpen(false)
       setMaintReason('')
+      setMaintRecovery(null)
       await loadBoard()
     } else {
       message.error(res.message || '标记失败')
@@ -1678,8 +1685,16 @@ export default function ProductionDashboard() {
           value={maintReason}
           onChange={(e) => setMaintReason(e.target.value)}
         />
+        <DatePicker
+          className="mt-3"
+          style={{ width: '100%' }}
+          placeholder="预计恢复日期（可选）"
+          value={maintRecovery}
+          onChange={(v) => setMaintRecovery(v)}
+          disabledDate={(d) => d.isBefore(dayjs(), 'day')}
+        />
         <Text type="secondary" style={{ fontSize: 12 }}>
-          标记后该罐在看板上显示「检修维护」，可随时解除。
+          标记后该罐在看板上显示「检修维护」，可随时解除；填写预计恢复日期后，排产校验会把检修窗口内的空罐位与无放罐日判为合法扰动。
         </Text>
       </Modal>
 

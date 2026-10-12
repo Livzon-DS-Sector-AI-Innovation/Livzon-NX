@@ -28,8 +28,8 @@ describe('production page permissions', () => {
     expect(hasProductionSchedulingProduct(null, 'LN')).toBe(false)
   })
   it('keeps the complete production page key set stable', () => {
-    expect(Object.values(PRODUCTION_PAGE_KEYS)).toHaveLength(21)
-    expect(new Set(Object.values(PRODUCTION_PAGE_KEYS)).size).toBe(21)
+    expect(Object.values(PRODUCTION_PAGE_KEYS)).toHaveLength(22)
+    expect(new Set(Object.values(PRODUCTION_PAGE_KEYS)).size).toBe(22)
   })
 
   it('denies every level when no authenticated user is available', () => {

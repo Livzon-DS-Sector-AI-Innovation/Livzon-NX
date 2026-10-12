@@ -36,16 +36,19 @@ def _document(headers: list[str], rows: list[list[str]]) -> bytes:
 
 
 @pytest.mark.anyio
-async def test_change_import_http_rejects_long_fields_without_poisoning_other_rows(
+async def test_change_import_rejects_overlong_code_and_accepts_long_object(
     db_session: AsyncSession,
 ) -> None:
     prefix = f"import-{uuid4().hex}"
+    long_object = "长" * 256
+    overlong_code = f"{prefix}-" + "X" * 100
     document = _document(
         ["变更控制号", "变更对象"],
         [
             [f"{prefix}-1", "合法对象"],
-            [f"{prefix}-2", "长" * 256],
+            [f"{prefix}-2", long_object],
             [f"{prefix}-3", "后续对象"],
+            [overlong_code, "编号超长"],
         ],
     )
     test_app = FastAPI()
@@ -73,18 +76,23 @@ async def test_change_import_http_rejects_long_fields_without_poisoning_other_ro
                 files={"file": ("import.docx", document)},
             )
             assert preview.status_code == 200
-            assert preview.json()["data"]["valid_rows"] == 2
-            assert "255" in preview.json()["data"]["error_rows"][0]["error_message"]
+            assert preview.json()["data"]["valid_rows"] == 3
+            assert "100" in preview.json()["data"]["error_rows"][0]["error_message"]
             response = await client.post(
                 "/api/v1/quality/changes/import/confirm",
                 files={"file": ("import.docx", document)},
             )
         assert response.status_code == 200
         result = response.json()["data"]
-        assert result["success_count"] == 2
+        assert result["success_count"] == 3
         assert result["error_count"] == 1
         assert result["error_details"] == [
-            {"row": 3, "error": "变更对象不能超过255个字符（当前256个）"}
+            {
+                "row": 5,
+                "error": (
+                    f"变更控制号不能超过100个字符（当前{len(overlong_code)}个）"
+                ),
+            }
         ]
         records = (
             await db_session.scalars(
@@ -95,8 +103,14 @@ async def test_change_import_http_rejects_long_fields_without_poisoning_other_ro
         ).all()
         assert {record.change_code for record in records} == {
             f"{prefix}-1",
+            f"{prefix}-2",
             f"{prefix}-3",
         }
+        # 变更对象已放宽为 TEXT：超过 255 字的长对象直接入库，不再截断或拒绝
+        long_record = next(
+            record for record in records if record.change_code == f"{prefix}-2"
+        )
+        assert long_record.change_object == long_object
     finally:
         await db_session.rollback()
         await db_session.execute(
@@ -125,7 +139,8 @@ async def test_change_import_real_flush_conflict_rolls_back_only_failed_row(
                 return await original(
                     db, {**data, "change_code": f"{prefix}-duplicate"}
                 )
-            return await original(db, {**data, "change_object": "长" * 256})
+            # 变更对象已放宽为 TEXT，改用仍有 100 字上限的变更控制号触发 22001
+            return await original(db, {**data, "change_code": f"{prefix}-" + "x" * 100})
         return await original(db, data)
 
     monkeypatch.setattr(service.repo, "create_change", conflicting_create)

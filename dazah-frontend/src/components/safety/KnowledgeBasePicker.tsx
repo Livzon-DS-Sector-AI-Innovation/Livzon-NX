@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { App,
   Modal,
   Input,
-  Select,
   Checkbox,
   List,
   Tag,
@@ -16,7 +15,6 @@ import { App,
 import { SearchOutlined, FileTextOutlined } from '@ant-design/icons'
 import { getKnowledgeArticles } from '@/actions/safety'
 import type { SafetyKnowledgeArticle } from '@/types/safety'
-import { KNOWLEDGE_CATEGORY_OPTIONS } from '@/types/safety'
 
 const { Text } = Typography
 
@@ -28,11 +26,6 @@ interface Props {
   excludeIds?: string[]
 }
 
-const CATEGORY_OPTIONS = [
-  { value: '', label: '全部分类' },
-  ...KNOWLEDGE_CATEGORY_OPTIONS,
-]
-
 const PAGE_SIZE = 50
 
 export default function KnowledgeBasePicker({ open, onClose, onSelect, excludeIds = [] }: Props) {
@@ -40,17 +33,14 @@ export default function KnowledgeBasePicker({ open, onClose, onSelect, excludeId
   const [articles, setArticles] = useState<SafetyKnowledgeArticle[]>([])
   const [loading, setLoading] = useState(false)
   const [keyword, setKeyword] = useState('')
-  const [category, setCategory] = useState('')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
 
   const fetchArticles = useCallback(async () => {
     setLoading(true)
     try {
       const res = await getKnowledgeArticles({
-        status: 'published',
         page_size: PAGE_SIZE,
-        keyword: keyword || undefined,
-        category: category || undefined
+        keyword: keyword || undefined
       })
       if (res.code === 200 && res.data) {
         setArticles(res.data.filter((a) => !excludeIds.includes(a.id)))
@@ -60,7 +50,7 @@ export default function KnowledgeBasePicker({ open, onClose, onSelect, excludeId
     } finally {
       setLoading(false)
     }
-  }, [keyword, category, excludeIds])
+  }, [keyword, excludeIds])
 
   useEffect(() => {
     if (open) {
@@ -73,7 +63,6 @@ export default function KnowledgeBasePicker({ open, onClose, onSelect, excludeId
     if (!open) {
       setSelectedIds([])
       setKeyword('')
-      setCategory('')
     }
   }, [open])
 
@@ -122,12 +111,6 @@ export default function KnowledgeBasePicker({ open, onClose, onSelect, excludeId
           allowClear
           style={{ flex: 1, borderRadius: 8 }}
         />
-        <Select
-          value={category}
-          onChange={(v) => setCategory(v)}
-          options={CATEGORY_OPTIONS}
-          style={{ width: 140, borderRadius: 8 }}
-        />
       </div>
 
       {/* ── 文章列表 ── */}
@@ -136,7 +119,7 @@ export default function KnowledgeBasePicker({ open, onClose, onSelect, excludeId
           <Spin />
         </div>
       ) : articles.length === 0 ? (
-        <Empty description="暂无已发布的知识库文章" />
+        <Empty description="暂无可选的法规文档" />
       ) : (
         <List
           dataSource={articles}
@@ -162,15 +145,18 @@ export default function KnowledgeBasePicker({ open, onClose, onSelect, excludeId
                 <div style={{ flex: 1 }}>
                   <Text style={{ fontSize: 14, color: '#37352f' }}>{article.title}</Text>
                   <div style={{ marginTop: 4, display: 'flex', gap: 8, alignItems: 'center' }}>
-                    {article.category && (
+                    {article.regulation_category && (
                       <Tag color="blue" style={{ borderRadius: 4, fontSize: 11 }}>
-                        {article.category}
+                        {article.regulation_category}
                       </Tag>
                     )}
-                    {article.tags && (
-                      <Text style={{ fontSize: 11, color: '#bbb8b1' }}>
-                        {article.tags.split(',').slice(0, 3).join(' · ')}
-                      </Text>
+                    {article.regulation_status && (
+                      <Tag
+                        color={article.regulation_status === '现行有效' ? 'green' : 'default'}
+                        style={{ borderRadius: 4, fontSize: 11 }}
+                      >
+                        {article.regulation_status}
+                      </Tag>
                     )}
                   </div>
                 </div>

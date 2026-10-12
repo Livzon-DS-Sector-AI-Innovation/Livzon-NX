@@ -25,7 +25,7 @@ import uuid
 from typing import Any
 
 import httpx
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -344,7 +344,7 @@ async def _cmd_start(open_id: str, user_id: str = "") -> None:
                 task_id=str(task_id),
                 plan_type=task.plan_type or "设备巡检",
                 task_no=task.task_no,
-                route_name=task.route.name if task.route else "",
+                route_name="",
                 equipment_order=equipment_order,
                 completed_equipment_ids=list(completed),
                 skipped_equipment_ids=list(skipped),
@@ -473,7 +473,7 @@ async def _select_and_guide(open_id: str, task_id: uuid.UUID) -> None:
 
         task_no = task.task_no
         plan_type = task.plan_type or "设备巡检"
-        route_name = task.route.name if task.route else ""
+        route_name = ""
 
     # Phase 2: Redis + 卡片（不持有 DB session）
     await save_session(
@@ -500,29 +500,6 @@ async def _count_task_equipment(db: AsyncSession, task: InspectionTask) -> int:
         return len(task.equipment_ids)
     if task.equipment_id:
         return 1
-    if task.route_id:
-        from app.modules.equipment.models.inspection_route_location import (
-            RouteLocation,
-            RouteLocationEquipment,
-        )
-
-        # 直接查询计数，不通过 relationship 访问
-        loc_result = await db.execute(
-            select(RouteLocation.id).where(
-                RouteLocation.route_id == task.route_id,
-                RouteLocation.is_deleted == False,  # noqa: E712
-            )
-        )
-        loc_ids = [row for row in loc_result.scalars().all()]
-        if not loc_ids:
-            return 0
-        eq_result = await db.execute(
-            select(func.count()).where(
-                RouteLocationEquipment.route_location_id.in_(loc_ids),
-                RouteLocationEquipment.is_deleted == False,  # noqa: E712
-            )
-        )
-        return eq_result.scalar_one()
     return 0
 
 
@@ -1294,14 +1271,9 @@ async def _find_active_task(
 
 async def _get_full_task(db: AsyncSession, task_id: uuid.UUID) -> InspectionTask:
     """带完整关系加载的获取任务。"""
-    from app.modules.equipment.models.inspection import InspectionRoute
-
     result = await db.execute(
         select(InspectionTask)
         .options(
-            selectinload(InspectionTask.route).selectinload(
-                InspectionRoute.locations_rel
-            ),
             selectinload(InspectionTask.equipment),
             selectinload(InspectionTask.assignee),
         )
@@ -1321,46 +1293,7 @@ async def _build_equipment_order(
     """
     order: list[dict[str, Any]] = []
 
-    if task.route_id:
-        from app.modules.equipment.models.equipment import Equipment, Location
-        from app.modules.equipment.models.inspection_route_location import (
-            RouteLocation,
-            RouteLocationEquipment,
-        )
-
-        loc_stmt = (
-            select(RouteLocation, Location.name)
-            .outerjoin(Location, RouteLocation.location_id == Location.id)
-            .where(
-                RouteLocation.route_id == task.route_id,
-                RouteLocation.is_deleted == False,  # noqa: E712
-            )
-            .order_by(RouteLocation.sort_order)
-        )
-        loc_rows = (await db.execute(loc_stmt)).all()
-        for loc, loc_name in loc_rows:
-            eq_stmt = (
-                select(RouteLocationEquipment, Equipment.name, Equipment.equipment_no)
-                .join(Equipment, RouteLocationEquipment.equipment_id == Equipment.id)
-                .where(
-                    RouteLocationEquipment.route_location_id == loc.id,
-                    RouteLocationEquipment.is_deleted == False,  # noqa: E712
-                    Equipment.is_deleted == False,  # noqa: E712
-                )
-                .order_by(RouteLocationEquipment.sort_order)
-            )
-            eq_rows = (await db.execute(eq_stmt)).all()
-            for eq, eq_name, eq_no in eq_rows:
-                order.append(
-                    {
-                        "equipment_id": str(eq.equipment_id),
-                        "equipment_name": eq_name,
-                        "equipment_no": eq_no or "",
-                        "location_name": loc_name or "",
-                        "location_sort_order": loc.sort_order,
-                    }
-                )
-    elif task.equipment_ids:
+    if task.equipment_ids:
         from app.modules.equipment.models.equipment import Equipment
 
         for eid_str in task.equipment_ids:
@@ -1457,7 +1390,7 @@ async def _auto_create_session(
         task_id=str(task.id),
         plan_type=task.plan_type or "设备巡检",
         task_no=task.task_no,
-        route_name=task.route.name if task.route else "",
+        route_name="",
         equipment_order=equipment_order,
         completed_equipment_ids=list(completed),
         skipped_equipment_ids=list(skipped),

@@ -73,8 +73,12 @@ export interface Equipment {
   manufacturer: string | null
   supplier: string | null
   production_date: string | null
+  factory_no: string | null
+  arrival_date: string | null
   commissioning_date: string | null
   description: string | null
+  data_issue_note?: string | null
+  technical_params?: Record<string, unknown> | null
   created_at: string
   updated_at: string
   created_by: string | null
@@ -99,8 +103,11 @@ export interface CreateEquipmentInput {
   manufacturer?: string
   supplier?: string
   production_date?: string
+  factory_no?: string
+  arrival_date?: string
   commissioning_date?: string
   description?: string
+  data_issue_note?: string | null
   department_id?: string
   responsible_person_id?: string
 }
@@ -116,10 +123,30 @@ export interface UpdateEquipmentInput {
   manufacturer?: string
   supplier?: string
   production_date?: string
+  factory_no?: string
+  arrival_date?: string
   commissioning_date?: string
   description?: string
+  data_issue_note?: string | null
   department_id?: string
   responsible_person_id?: string | null
+}
+
+// ==================== 台账 Excel 导入 ====================
+export interface EquipmentImportFailure {
+  row: number
+  equipment_no: string | null
+  reason: string
+}
+
+export interface EquipmentImportResult {
+  total_rows: number
+  created: number
+  updated: number
+  failed: number
+  flagged?: number
+  locations_created?: number
+  failures: EquipmentImportFailure[]
 }
 
 // 列表和筛选

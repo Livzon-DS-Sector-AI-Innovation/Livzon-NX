@@ -1,23 +1,27 @@
 """排产计划 Excel 存档 API。
 
 前端上传排产 Excel → 后端解析存档（全量行列/合并/列宽 + 原件），
-支持历史列表回看、原件下载与删除。数据可被其他模块后续引用。
+支持历史列表回看、原件下载与删除；上传后自动跑排产校验（FA），
+另有按存档校验与排产约束配置端点。数据可被其他模块后续引用。
 """
 from __future__ import annotations
 
+import logging
 import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.response import paginated_response, success_response
 from app.core.upload_security import validate_upload_metadata
-from app.modules.production import schedule_excel_service
+from app.modules.production import schedule_excel_service, schedule_validation_service
 from app.platform.audit.service import record_audit_log
 from app.platform.identity.data_scope import (
     current_page_key,
@@ -27,7 +31,11 @@ from app.platform.identity.deps import CurrentUser
 from app.shared.module_api import create_module_router
 from app.shared.module_registry import MODULES_BY_CODE
 
+logger = logging.getLogger(__name__)
+
 router = create_module_router(MODULES_BY_CODE["production"])
+
+BEIJING_TZ = timezone(timedelta(hours=8))
 
 _ALLOWED_EXTENSIONS = {".xlsx", ".xls"}
 _ALLOWED_MIMES = {
@@ -38,6 +46,26 @@ _MAX_UPLOAD_BYTES = 1024 * 1024  # 1MB（排产表通常几十 KB，与前端上
 _UPLOAD_SUB_DIR = "schedule_excel"
 # 以新文件修正历史列（覆盖冻结规则）所需的细粒度权限
 SCHEDULE_ARCHIVE_PERMISSION = "production:schedule-archive"
+
+
+class ScheduleConstraintBody(BaseModel):
+    """排产约束配置写入体（全字段可空，空值表示该项检查跳过）。"""
+
+    standard_cycle_hours: float | None = Field(
+        None, ge=0, le=10000, description="标准培养周期(h)"
+    )
+    cycle_tolerance_hours: float | None = Field(
+        None, ge=0, le=1000, description="周期容差(h)"
+    )
+    max_cycle_hours: float | None = Field(
+        None, ge=0, le=10000, description="最大培养周期(h)，工艺上限"
+    )
+    turnaround_hours: float | None = Field(
+        None, ge=0, le=1000, description="罐最小周转时间(h)"
+    )
+    monthly_dump_target: int | None = Field(
+        None, ge=0, le=1000, description="月计划放罐批数"
+    )
 
 
 def _require_visible_product(product_code: str) -> None:
@@ -170,6 +198,40 @@ async def upload_schedule_excel(
         created_by_name=current_user.name if current_user else None,
     )
     payload["merge"] = merge_report
+    # 上传后自动校验（FA）：辅助能力，存档已成功，校验故障不阻断响应
+    if product in schedule_validation_service.VALIDATION_PRODUCTS:
+        try:
+            payload["validation"] = (
+                await schedule_validation_service.build_validation_report(
+                    db, archive, now=datetime.now(BEIJING_TZ).replace(tzinfo=None)
+                )
+            )
+        except Exception:  # noqa: BLE001 - 校验为辅助能力，报告降级为提示重试
+            logger.exception(
+                "schedule validation failed after archive created",
+                extra={"archive_id": str(archive.id), "product_code": product},
+            )
+            degraded_text = (
+                "存档已成功，但排产校验未能执行；"
+                "请稍后在存档列表点「校验」重试"
+            )
+            payload["validation"] = {
+                "scope": None,
+                "coverage": None,
+                "issues": [
+                    {
+                        "level": "info",
+                        "rule": "validation_failed",
+                        "text": degraded_text,
+                        "block": None,
+                        "date": None,
+                        "tank_no": None,
+                        "batch_no": None,
+                    }
+                ],
+                "summary": {"warn": 0, "info": 1},
+                "constraints": None,
+            }
     message = "排产 Excel 已存档"
     if merge_report.get("corrected"):
         message = (
@@ -272,3 +334,79 @@ async def delete_schedule_excel_archive(
         db, archive, deleted_by=current_user.id if current_user else None
     )
     return success_response(data=None, message="存档已删除")
+
+
+@router.get(
+    "/schedule-excel/{archive_id}/validation",
+    summary="排产存档校验报告（实时计算，当前仅 FA）",
+)
+async def get_schedule_validation_report(
+    archive_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    archive = await schedule_excel_service.get_archive(db, archive_id)
+    if archive is None:
+        raise HTTPException(status_code=404, detail="存档记录不存在")
+    _require_visible_product(archive.product_code)
+    if archive.product_code not in schedule_validation_service.VALIDATION_PRODUCTS:
+        raise HTTPException(
+            status_code=400, detail="排产校验当前仅支持 FA 产线"
+        )
+    report = await schedule_validation_service.build_validation_report(
+        db, archive, now=datetime.now(BEIJING_TZ).replace(tzinfo=None)
+    )
+    summary = report.get("summary") or {}
+    warn_count = int(summary.get("warn") or 0)
+    info_count = int(summary.get("info") or 0)
+    message = (
+        f"发现 {warn_count} 个疑似问题、{info_count} 个提示"
+        if warn_count or info_count
+        else "未发现问题"
+    )
+    return success_response(data=report, message=message)
+
+
+@router.get("/schedule-constraints", summary="排产约束配置（按产品）")
+async def get_schedule_constraints(
+    db: AsyncSession = Depends(get_db),
+    product: str = Query("FA", min_length=1, max_length=32, description="产品代码"),
+) -> Any:
+    _require_visible_product(product)
+    item = await schedule_validation_service.get_constraint_setting(db, product)
+    data = (
+        schedule_validation_service.serialize_constraint_setting(item)
+        if item
+        else schedule_validation_service.empty_constraint_setting(product)
+    )
+    return success_response(data=data)
+
+
+@router.post("/schedule-constraints", summary="保存排产约束配置（按产品）")
+async def save_schedule_constraints(
+    body: ScheduleConstraintBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+    product: str = Query("FA", min_length=1, max_length=32, description="产品代码"),
+) -> Any:
+    _require_visible_product(product)
+    if product not in schedule_validation_service.VALIDATION_PRODUCTS:
+        raise HTTPException(
+            status_code=400, detail="排产约束配置当前仅支持 FA 产线"
+        )
+    try:
+        item = await schedule_validation_service.upsert_constraint_setting(
+            db,
+            product_code=product,
+            standard_cycle_hours=body.standard_cycle_hours,
+            cycle_tolerance_hours=body.cycle_tolerance_hours,
+            max_cycle_hours=body.max_cycle_hours,
+            turnaround_hours=body.turnaround_hours,
+            monthly_dump_target=body.monthly_dump_target,
+            updated_by=current_user.id if current_user else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return success_response(
+        data=schedule_validation_service.serialize_constraint_setting(item),
+        message="排产约束已保存",
+    )

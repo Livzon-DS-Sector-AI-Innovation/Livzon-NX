@@ -37,6 +37,10 @@ ENV UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
 COPY dazah-backend/pyproject.toml dazah-backend/uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --group dev
 
+# Playwright Chromium：法规雷达与法规跟踪（CDE）的 JS 渲染站点抓取依赖
+RUN .venv/bin/playwright install --with-deps chromium \
+    && chown -R app:app /home/app/.cache/ms-playwright
+
 COPY scripts/cd/conversion_limit.py /usr/local/bin/dazah-conversion
 COPY scripts/cd/readiness.py /opt/dazah-readiness.py
 RUN chmod 0755 /usr/local/bin/dazah-conversion \

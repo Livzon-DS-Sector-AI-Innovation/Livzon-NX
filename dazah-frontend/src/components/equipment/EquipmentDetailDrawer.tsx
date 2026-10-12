@@ -5,9 +5,9 @@ import { App, Drawer, Descriptions, Table, Tabs, Tag, Space, Empty, Spin } from 
 import { ToolOutlined, SearchOutlined, CalendarOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { Equipment, MaintenancePlan, WorkOrder } from '@/types/equipment'
-import type { InspectionTask } from '@/types/inspection'
+import type { InspectionFeishuRecord } from '@/types/inspection-feishu'
 import { fetchMaintenancePlansClient, fetchWorkOrdersClient } from '@/lib/api/equipment-client'
-import { fetchInspectionHistory } from '@/lib/api/inspection'
+import { fetchInspectionFeishuRecords } from '@/lib/api/inspection-feishu'
 import { monoFont, pillNeutral, pillSuccess, pillWarning, pillError, pillInfo, pillPurple, statusPill } from '@/components/equipment/shared-styles'
 import type { EquipmentStatus, EquipmentImportance } from '@/types/equipment'
 
@@ -67,7 +67,7 @@ export function EquipmentDetailDrawer({ open, equipment, categoryName, locationN
   const [plansLoading, setPlansLoading] = useState(false)
 
   // 巡检记录
-  const [history, setHistory] = useState<InspectionTask[]>([])
+  const [history, setHistory] = useState<InspectionFeishuRecord[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
 
   // 维修工单
@@ -91,7 +91,12 @@ export function EquipmentDetailDrawer({ open, equipment, categoryName, locationN
     if (!equipment) return
     setHistoryLoading(true)
     try {
-      const result = await fetchInspectionHistory({ equipment_id: equipment.id, page: 1, page_size: 50 })
+      // 巡检记录以飞书多维表格镜像为准，按设备编号匹配
+      const result = await fetchInspectionFeishuRecords({
+        keyword: equipment.equipment_no || equipment.name || undefined,
+        page: 1,
+        page_size: 50,
+      })
       setHistory(result.items)
     } catch {
       message.error('加载巡检记录失败')
@@ -144,28 +149,44 @@ export function EquipmentDetailDrawer({ open, equipment, categoryName, locationN
     },
   ]
 
-  // ── 巡检记录列 ──
-  const historyColumns: ColumnsType<InspectionTask> = [
+  // ── 巡检记录列（飞书镜像）──
+  const AM_PM_KEYS = [
+    'am_clean', 'am_lubrication', 'am_fastening', 'am_sealing',
+    'am_vibration', 'am_sound', 'am_surface',
+    'pm_clean', 'pm_lubrication', 'pm_fastening', 'pm_sealing',
+    'pm_vibration', 'pm_sound', 'pm_surface',
+  ] as const
+  const historyColumns: ColumnsType<InspectionFeishuRecord> = [
+    { title: '日期', dataIndex: 'record_date', key: 'record_date', width: 100, render: (d: string | null) => d || '-' },
     {
-      title: '任务编号', dataIndex: 'task_no', key: 'task_no', width: 170,
-      render: (no: string) => <span style={monoFont}>{no}</span>,
-    },
-    { title: '巡检类型', dataIndex: 'plan_type', key: 'plan_type', width: 90 },
-    { title: '计划日期', dataIndex: 'planned_date', key: 'planned_date', width: 100 },
-    { title: '巡检人', dataIndex: 'assignee_name', key: 'assignee_name', width: 80, render: (n: string | undefined) => n || '-' },
-    {
-      title: '状态', dataIndex: 'status', key: 'status', width: 80,
-      render: (s: string) => {
-        const m = TASK_STATUS_MAP[s] || { color: '#787671', bg: '#f0eeec' }
-        return <span style={localStatusPill(m.color, m.bg)}>{s}</span>
+      title: '上午/下午检查', key: 'checks', width: 120,
+      render: (_: unknown, r: InspectionFeishuRecord) => {
+        const values = AM_PM_KEYS.map((k) => r[k])
+        const ok = values.filter((v) => v === '√').length
+        const bad = values.filter((v) => v === '×').length
+        if (ok + bad === 0) return <span style={{ color: '#a4a097' }}>未填写</span>
+        return (
+          <span>
+            <span style={{ color: '#1aae39' }}>√{ok}</span>
+            {' / '}
+            <span style={{ color: bad > 0 ? '#c0392b' : '#a4a097' }}>×{bad}</span>
+            {' / 14'}
+          </span>
+        )
       },
     },
+    { title: '来源', dataIndex: 'source', key: 'source', width: 80, render: (s: string) => (s === 'today' ? '今日巡检' : '历史记录') },
     {
-      title: '结果', dataIndex: 'overall_result', key: 'overall_result', width: 75,
-      render: (r: string | null) => {
-        if (!r) return '-'
-        return <span style={r === '正常' ? pillSuccess : pillError}>{r}</span>
-      },
+      title: '结果', key: 'result', width: 75,
+      render: (_: unknown, r: InspectionFeishuRecord) => (
+        r.has_abnormal
+          ? <span style={pillError}>异常</span>
+          : <span style={pillSuccess}>正常</span>
+      ),
+    },
+    {
+      title: '异常情况', dataIndex: 'anomaly_note', key: 'anomaly_note', width: 170, ellipsis: true,
+      render: (v: string | null) => v || '-',
     },
   ]
 
@@ -265,7 +286,7 @@ export function EquipmentDetailDrawer({ open, equipment, categoryName, locationN
             <span style={{ fontWeight: 600 }}>{equipment.name}</span>
           </Descriptions.Item>
           <Descriptions.Item label="设备分类">{categoryName || '-'}</Descriptions.Item>
-          <Descriptions.Item label="设备位置">{locationName || '-'}</Descriptions.Item>
+          <Descriptions.Item label="安装地点">{locationName || '-'}</Descriptions.Item>
           <Descriptions.Item label="归属部门">{equipment.department_name || '-'}</Descriptions.Item>
           <Descriptions.Item label="负责人">{equipment.responsible_person_name || '-'}</Descriptions.Item>
           <Descriptions.Item label="设备状态">
@@ -274,13 +295,24 @@ export function EquipmentDetailDrawer({ open, equipment, categoryName, locationN
           <Descriptions.Item label="重要性">
             <span style={IMPORTANCE_MAP[equipment.importance as EquipmentImportance] || pillNeutral}>{equipment.importance}</span>
           </Descriptions.Item>
-          <Descriptions.Item label="设备型号">{equipment.model || '-'}</Descriptions.Item>
-          <Descriptions.Item label="设备规格">{equipment.specification || '-'}</Descriptions.Item>
-          <Descriptions.Item label="制造商">{equipment.manufacturer || '-'}</Descriptions.Item>
-          <Descriptions.Item label="供应商">{equipment.supplier || '-'}</Descriptions.Item>
+          <Descriptions.Item label="规格型号">{equipment.model || '-'}</Descriptions.Item>
+          <Descriptions.Item label="生产厂家">{equipment.manufacturer || '-'}</Descriptions.Item>
           <Descriptions.Item label="出厂日期">{equipment.production_date || '-'}</Descriptions.Item>
-          <Descriptions.Item label="投用日期">{equipment.commissioning_date || '-'}</Descriptions.Item>
-          <Descriptions.Item label="描述" span={2}>{equipment.description || '-'}</Descriptions.Item>
+          <Descriptions.Item label="出厂编号">{equipment.factory_no || '-'}</Descriptions.Item>
+          <Descriptions.Item label="入厂日期">{equipment.arrival_date || '-'}</Descriptions.Item>
+          <Descriptions.Item label="技术参数" span={2}>
+            {equipment.technical_params && Object.keys(equipment.technical_params).length > 0
+              ? Object.entries(equipment.technical_params)
+                  .map(([key, value]) => `${key}：${String(value)}`)
+                  .join('；')
+              : '-'}
+          </Descriptions.Item>
+          <Descriptions.Item label="备注" span={2}>{equipment.description || '-'}</Descriptions.Item>
+          {equipment.data_issue_note && (
+            <Descriptions.Item label="数据待修正" span={2}>
+              <span style={{ color: '#c0392b' }}>{equipment.data_issue_note}</span>
+            </Descriptions.Item>
+          )}
         </Descriptions>
       </div>
 

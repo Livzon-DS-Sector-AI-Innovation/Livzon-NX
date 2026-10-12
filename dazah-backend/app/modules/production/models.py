@@ -917,6 +917,12 @@ from app.modules.production.pretreatment_models import Pretreatment  # noqa: F40
 from app.modules.production.recrystallize_models import (  # noqa: F401, E402
     Recrystallize,  # noqa: F401, E402
 )
+from app.modules.production.schedule_constraint_models import (  # noqa: F401, E402
+    ScheduleConstraintSetting,
+)
+from app.modules.production.schedule_draft_models import (  # noqa: F401, E402
+    ScheduleDraftRecord,
+)
 from app.modules.production.schedule_excel_models import (  # noqa: F401, E402
     ScheduleExcelArchive,
 )

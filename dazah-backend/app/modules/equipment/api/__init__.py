@@ -15,6 +15,9 @@ from app.modules.equipment.api.images import router as images_router
 from app.modules.equipment.api.inspection import (
     router as inspection_router,
 )
+from app.modules.equipment.api.inspection_feishu import (
+    router as inspection_feishu_router,
+)
 from app.modules.equipment.api.inspection_templates import (
     router as inspection_templates_router,
 )
@@ -56,3 +59,4 @@ router.include_router(maintainers_router, prefix="/maintenance/staff")
 router.include_router(personnel_router, prefix="/personnel")
 # 巡检模块路由（独立于维修工单）
 router.include_router(inspection_router, prefix="/inspection")
+router.include_router(inspection_feishu_router, prefix="/inspection")

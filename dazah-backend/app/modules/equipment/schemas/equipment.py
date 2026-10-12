@@ -122,8 +122,15 @@ class EquipmentCreate(BaseModel):
     manufacturer: str | None = Field(default=None, max_length=200, description="制造商")
     supplier: str | None = Field(default=None, max_length=200, description="供应商")
     production_date: date | None = Field(default=None, description="出厂日期")
+    factory_no: str | None = Field(
+        default=None, max_length=100, description="出厂编号"
+    )
+    arrival_date: date | None = Field(default=None, description="入厂日期")
     commissioning_date: date | None = Field(default=None, description="投用日期")
-    description: str | None = Field(default=None, description="设备描述")
+    description: str | None = Field(default=None, description="备注")
+    data_issue_note: str | None = Field(
+        default=None, description="数据待修正说明（导入容错记录，人工修正后清除）"
+    )
     importance: EquipmentImportance = Field(
         default="低", description="设备重要性：高/中/低"
     )
@@ -162,8 +169,15 @@ class EquipmentUpdate(BaseModel):
     manufacturer: str | None = Field(default=None, max_length=200, description="制造商")
     supplier: str | None = Field(default=None, max_length=200, description="供应商")
     production_date: date | None = Field(default=None, description="出厂日期")
+    factory_no: str | None = Field(
+        default=None, max_length=100, description="出厂编号"
+    )
+    arrival_date: date | None = Field(default=None, description="入厂日期")
     commissioning_date: date | None = Field(default=None, description="投用日期")
-    description: str | None = Field(default=None, description="设备描述")
+    description: str | None = Field(default=None, description="备注")
+    data_issue_note: str | None = Field(
+        default=None, description="数据待修正说明（导入容错记录，人工修正后清除）"
+    )
     importance: EquipmentImportance | None = Field(
         default=None, description="设备重要性：高/中/低"
     )
@@ -198,8 +212,11 @@ class EquipmentResponse(BaseModel):
     manufacturer: str | None
     supplier: str | None
     production_date: date | None
+    factory_no: str | None
+    arrival_date: date | None
     commissioning_date: date | None
     description: str | None
+    data_issue_note: str | None
     importance: str
     warranty_expire_date: date | None
     asset_value: float | None
