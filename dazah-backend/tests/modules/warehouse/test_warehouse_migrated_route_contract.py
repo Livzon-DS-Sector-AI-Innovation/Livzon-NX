@@ -30,8 +30,13 @@ def test_warehouse_agent_operations_use_reviewed_page_bindings() -> None:
         "warehouse.list_raw_materials": "warehouse:materials:raw-summary",
         "warehouse.list_packaging_materials": "warehouse:materials:packaging-summary",
         "warehouse.list_products": "warehouse:product-inventory:product-summary",
-        "warehouse.list_feishu_tables": "warehouse:warehouse-settings",
-        "warehouse.get_feishu_table_records": "warehouse:warehouse-settings",
     }
     for operation, page_key in expected.items():
         assert tool_registry.require(operation).page_keys == (page_key,)
+    excluded = {spec.name: spec for spec, _ in tool_registry.excluded()}
+    for operation in (
+        "warehouse.list_feishu_tables",
+        "warehouse.get_feishu_table_records",
+    ):
+        assert tool_registry.get(operation) is None
+        assert excluded[operation].page_keys == ("warehouse:warehouse-settings",)

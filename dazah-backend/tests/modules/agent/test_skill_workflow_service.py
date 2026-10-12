@@ -191,7 +191,7 @@ def test_workflow_capabilities_mark_high_risk_as_not_allowed() -> None:
     )
     approve_capability = by_operation["procurement.approve_purchase_request"]
     assert approve_capability["workflow_allowed"] is False
-    assert by_operation["warehouse.restart_feishu_ws"]["workflow_allowed"] is False
+    assert "warehouse.restart_feishu_ws" not in by_operation
 
 
 def test_procurement_supplier_query_is_exposed_as_workflow_capability() -> None:

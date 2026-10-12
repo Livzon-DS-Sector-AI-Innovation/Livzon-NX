@@ -4,6 +4,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.platform.identity.schemas import EffectivePageGrantOut
+
 from .automation_schema import (
     AutomationDefinitionV1,
     AutomationRunStatus,
@@ -85,6 +87,17 @@ class AgentBackendAttachment(BaseModel):
     truncated: bool = False
 
 
+class AgentPageContext(BaseModel):
+    """Server-resolved page hints; never an identity or authorization grant."""
+
+    model_config = ConfigDict(extra="forbid")
+    page_key: str = Field(min_length=1, max_length=200)
+    page_name: str = Field(min_length=1, max_length=200)
+    module_code: str = Field(min_length=1, max_length=100)
+    route_path: str = Field(min_length=1, max_length=300)
+    filters: dict[str, str] = Field(default_factory=dict)
+
+
 class AgentBackendV2Request(BaseModel):
     model_config = ConfigDict(extra="forbid")
     protocol_version: Literal["2.0"] = AGENT_BACKEND_PROTOCOL_VERSION
@@ -103,6 +116,7 @@ class AgentBackendV2Request(BaseModel):
     )
     client_capabilities: list[str] = Field(default_factory=list)
     memory_policy: AgentMemoryPolicyEnvelope | None = None
+    page_context: AgentPageContext | None = None
 
 
 class AgentBackendV2Event(BaseModel):
@@ -344,6 +358,10 @@ class AgentToolSearchRequest(BaseModel):
 
 
 class AgentToolCatalogEntry(BaseModel):
+    result_kind: Literal[
+        "records", "statistics", "knowledge_index", "knowledge"
+    ] = "records"
+    output_hint: str = ""
     operation: str
     module: str | None = None
     version: str
@@ -403,6 +421,106 @@ class AgentModuleScopeOut(BaseModel):
     module_name: str
     permissions: list[str] = Field(default_factory=list)
     data_scope: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentRunFactOut(BaseModel):
+    kind: Literal["step", "tool", "confirmation", "interaction", "delivery"]
+    id: uuid.UUID
+    status: str
+    step_key: str | None = None
+    operation: str | None = None
+    occurred_at: datetime | None = None
+
+
+class AgentRunExplanationOut(BaseModel):
+    run_id: uuid.UUID
+    trace_id: uuid.UUID
+    status: str
+    error_code: str | None
+    recovery: str
+    facts: list[AgentRunFactOut]
+
+
+CapabilityState = Literal[
+    "available", "unauthorized", "not_integrated", "disabled", "sync_failed"
+]
+
+
+class AgentCapabilityOut(BaseModel):
+    operation: str
+    summary: str
+    module: str | None
+    state: CapabilityState
+    reason: str | None = None
+    write: bool
+    confirmation_required: bool
+    human_decision_required: bool
+    workflow_allowed: bool
+    page_keys: list[str] = Field(default_factory=list)
+    permission_sources: list[EffectivePageGrantOut] = Field(default_factory=list)
+
+
+class AgentCapabilityModuleOut(BaseModel):
+    module_code: str
+    module_name: str
+    state: CapabilityState
+    available_count: int
+    registered_count: int
+
+
+class AgentCapabilityViewOut(BaseModel):
+    user_id: uuid.UUID
+    source_grant_version: int
+    agent_scope_version: int | None
+    sync_status: Literal["synced", "failed"]
+    synced_at: datetime | None
+    modules: list[AgentCapabilityModuleOut]
+    tools: list[AgentCapabilityOut]
+
+
+class AgentCoveragePageOut(BaseModel):
+    page_key: str
+    page_name: str
+    route_path: str
+    registered_count: int
+    enabled_count: int
+
+
+class AgentCoverageToolOut(BaseModel):
+    operation: str
+    summary: str
+    state: Literal["enabled", "disabled", "excluded"]
+    reason: str | None = None
+    write: bool
+    human_decision_required: bool
+
+
+class AgentModuleCoverageOut(BaseModel):
+    module_code: str
+    module_name: str
+    state: Literal["not_integrated", "partial", "integrated", "disabled"]
+    registered_count: int
+    enabled_count: int
+    excluded_count: int
+    total_pages: int
+    covered_pages: int
+    enabled_pages: int
+    coverage_percent: float | None
+    pages: list[AgentCoveragePageOut]
+    tools: list[AgentCoverageToolOut]
+
+
+class AgentModuleCoverageViewOut(BaseModel):
+    generated_at: datetime
+    registered_count: int
+    enabled_count: int
+    excluded_count: int
+    personal_count: int
+    total_pages: int
+    covered_pages: int
+    enabled_pages: int
+    coverage_percent: float | None
+    modules: list[AgentModuleCoverageOut]
 
 
 class AgentAccessScopeOut(BaseModel):

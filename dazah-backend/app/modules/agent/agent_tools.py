@@ -813,15 +813,18 @@ async def list_automation_runs(
     workflow_allowed=False,
     method="GET",
     path="/agent/automation-runs/{run_id}",
+    capability_version="1.1",
 )
 async def get_automation_run(
     context: ToolContext, data: AutomationRunIdInput
 ) -> dict[str, Any]:
-    result = await _automation_service(context).get_run(
+    from app.modules.agent.run_explanation import AgentRunExplanationService
+
+    result = await AgentRunExplanationService().explain(
         context.db, user=_required_user(context), run_id=data.run_id
     )
     return {
-        **result,
+        **result.model_dump(mode="json"),
         "artifact": {"type": "run_timeline", "runId": str(data.run_id)},
     }
 
@@ -836,34 +839,19 @@ async def get_automation_run(
     method="POST",
     path="/agent/automation-runs/{run_id}/retry",
     output_hint=(
-        "仅允许重试当前用户有权访问且状态为 failed 的运行，并创建新的运行记录。"
+        "从原运行的失败步骤继续；保留已完成步骤，非幂等写入失败必须人工核对。"
     ),
 )
 async def retry_automation_run(
     context: ToolContext, data: AutomationRunIdInput
 ) -> dict[str, Any]:
     service = _automation_service(context)
-    failed_run = await service.get_run(
-        context.db,
-        user=_required_user(context),
-        run_id=data.run_id,
-    )
-    if failed_run.get("status") != "failed":
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            "仅失败的自动化运行可以重试",
-        )
-    automation_id = UUID(str(failed_run["automation_id"]))
-    await service._require_owner(
-        context.db,
-        user=_required_user(context),
-        automation_id=automation_id,
-    )
     from app.modules.agent.automation_runner import AgentAutomationRunner
 
-    retried = await AgentAutomationRunner().execute_manual(
+    retried = await AgentAutomationRunner().retry_failed(
         context.db,
-        automation_id=automation_id,
+        run_id=data.run_id,
+        user=_required_user(context),
     )
     result = await service.get_run(
         context.db,

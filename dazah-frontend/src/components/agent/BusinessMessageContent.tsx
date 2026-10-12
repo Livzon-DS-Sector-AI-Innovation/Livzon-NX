@@ -40,6 +40,24 @@ function isTableRow(line: string): boolean {
   return trimmed.includes("|") && splitTableRow(trimmed).length > 1
 }
 
+// Older stored replies can contain gateway diagnostics in their body.
+// Hide only their labeled lines; keep ordinary business prose and tables.
+function stripLegacyAgentDetails(content: string): string {
+  let sourceContinuation = false
+  return content.split(/\r?\n/).filter((line) => {
+    const plain = line.trim().replace(/^[-*]\s+/, "").replace(/\*\*/g, "")
+    if (/^(?:能力介绍\s+[a-z][\w-]*\s*[:：]|(?:任务|来源|查询条件|数据依据)\s*[:：])/.test(plain)) {
+      sourceContinuation = plain.startsWith("来源")
+      return false
+    }
+    if (sourceContinuation && /^(?:[a-f0-9]{32}|[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/i.test(plain)) {
+      return false
+    }
+    if (plain) sourceContinuation = false
+    return true
+  }).join("\n").replace(/\n{3,}/g, "\n\n").trim()
+}
+
 function parseBusinessSegments(content: string): MessageSegment[] {
   const lines = content.split(/\r?\n/)
   const segments: MessageSegment[] = []
@@ -228,9 +246,10 @@ export function BusinessMessageContent({
   streaming?: boolean
   onArtifactAction?: (artifact: AgentArtifact) => void
 }) {
-  const segments = useMemo(() => parseBusinessSegments(content), [content])
+  const visibleContent = useMemo(() => stripLegacyAgentDetails(content), [content])
+  const segments = useMemo(() => parseBusinessSegments(visibleContent), [visibleContent])
   const artifacts = useMemo(() => collectAgentArtifacts(metadata), [metadata])
-  const hasContent = content.trim().length > 0
+  const hasContent = visibleContent.trim().length > 0
 
   return (
     <div className={`agent-markdown min-h-5 break-words${streaming ? " agent-markdown-streaming" : ""}`}>
@@ -245,7 +264,6 @@ export function BusinessMessageContent({
           )}
           {streaming && <span className="agent-stream-cursor" aria-hidden="true" />}
           <AutomationArtifacts artifacts={artifacts} onAction={onArtifactAction} />
-          <EvidenceSummary metadata={metadata} />
         </>
       ) : streaming && (
         <span className="agent-thinking-dots" aria-label="Livzon助手正在思考">
@@ -255,52 +273,5 @@ export function BusinessMessageContent({
         </span>
       )}
     </div>
-  )
-}
-
-type EvidenceSource = {
-  operation: string
-  module?: string
-  params?: Record<string, unknown>
-  ok?: boolean
-}
-
-function EvidenceSummary({ metadata }: { metadata?: Record<string, unknown> }) {
-  const evidence = metadata?.evidence
-  if (!evidence || typeof evidence !== "object") return null
-  const record = evidence as Record<string, unknown>
-  const sources = Array.isArray(record.sources)
-    ? record.sources.filter(
-        (item): item is EvidenceSource =>
-          !!item && typeof item === "object" && typeof (item as EvidenceSource).operation === "string",
-      )
-    : []
-  if (!sources.length) return null
-  const queriedAt = typeof record.queried_at === "string"
-    ? new Date(record.queried_at).toLocaleString()
-    : null
-  const scope = Array.isArray(record.scope)
-    ? record.scope.filter((item): item is string => typeof item === "string")
-    : []
-  return (
-    <details className="agent-evidence">
-      <summary>
-        <span className="agent-evidence-toggle-icon" aria-hidden="true">▶</span>
-        <span>数据依据 · {sources.length} 个来源</span>
-      </summary>
-      <div className="agent-evidence-body">
-        {sources.map((source, index) => (
-          <div className="agent-evidence-source" key={`${source.operation}-${index}`}>
-            <strong>{source.operation}</strong>
-            {source.params && Object.keys(source.params).length > 0 && (
-              <span> · 条件 {JSON.stringify(source.params)}</span>
-            )}
-          </div>
-        ))}
-        {queriedAt && <div>查询时间：{queriedAt}</div>}
-        {scope.length > 0 && <div>请求模块范围：{scope.join("、 ")}</div>}
-        {record.truncated === true && <div>结果可能按分页截断，可继续查询后续记录。</div>}
-      </div>
-    </details>
   )
 }

@@ -116,11 +116,16 @@ def _context() -> SimpleNamespace:
     )
 
 
-def _specs(prefix: str, excluded: set[str] | None = None) -> list[Any]:
+def _specs(
+    prefix: str, excluded: set[str] | None = None, *, include_disabled: bool = False
+) -> list[Any]:
     excluded = excluded or set()
+    specs = tool_registry.list()
+    if include_disabled:
+        specs = [*specs, *(spec for spec, _ in tool_registry.excluded())]
     return [
         spec
-        for spec in tool_registry.list()
+        for spec in specs
         if spec.name.startswith(f"{prefix}.") and spec.name not in excluded
     ]
 
@@ -138,17 +143,23 @@ async def test_quality_agent_tool_adapters_forward_validated_inputs(
     }
     doubles: list[_ServiceDouble] = []
     for dependency_name in (
+        "agent_queries",
         "change_action_plan",
         "cpv_batch",
         "cpv_parameter",
         "cpv_product",
         "cpv_statistics",
+        "deviation_workbench",
         "external_quality",
         "feishu_capa",
+        "historical_deviation",
         "inspection",
+        "inspection_feishu_crud",
+        "inspection_items_mirror",
         "oos_oot",
         "quality_deviation",
         "quality_feishu_pages",
+        "quality_feishu_pages_oos_oot",
         "quality_feishu_sync",
         "quality_management",
         "quality_statistics",
@@ -203,7 +214,8 @@ async def test_energy_agent_tool_adapters_cover_paging_and_sync_paths(
         "energy.trigger_sync",
     }
     invoked: list[Any] = []
-    for spec in _specs("energy", excluded):
+    assert not _specs("energy")
+    for spec in _specs("energy", excluded, include_disabled=True):
         tool_input = _build_input(spec.input_model)
         if spec.name == "energy.update_feishu_source_root":
             tool_input = spec.input_model.model_construct(
@@ -227,6 +239,8 @@ async def test_warehouse_agent_tool_adapters_cover_inventory_and_feishu_paths(
 ) -> None:
     double = _ServiceDouble()
     monkeypatch.setattr(warehouse_tools, "_warehouse_service", lambda _context: double)
+    ai_double = _ServiceDouble()
+    monkeypatch.setattr(warehouse_tools, "WarehouseAIService", lambda _db: ai_double)
     monkeypatch.setattr(
         warehouse_ws_client,
         "get_ws_status",
@@ -244,8 +258,21 @@ async def test_warehouse_agent_tool_adapters_cover_inventory_and_feishu_paths(
         assert result is not None
         invoked.append(spec.name)
 
-    assert len(invoked) >= 8
-    assert len(double.calls) == 6
+    assert set(invoked) == {
+        "warehouse.list_raw_materials",
+        "warehouse.list_packaging_materials",
+        "warehouse.list_products",
+        "warehouse.list_page_records",
+        "warehouse.get_inventory_summary",
+        "warehouse.get_trend_summary",
+        "warehouse.get_hardware_cost_summary",
+    }
+    assert len(double.calls) == 4
+    assert {name for name, _, _ in ai_double.calls} == {
+        "get_inventory_summary",
+        "get_trend_anomaly_summary",
+        "get_hardware_cost_summary",
+    }
 
 
 @pytest.mark.anyio
@@ -259,6 +286,8 @@ async def test_procurement_read_agent_tool_adapters_cover_all_list_shapes(
         "list_purchase_order_lines": AsyncMock(return_value=([], 0)),
         "get_purchase_request": AsyncMock(return_value={}),
         "export_purchase_order_lines_xlsx": AsyncMock(return_value=b"xlsx"),
+        "list_material_catalog": AsyncMock(return_value=([], 0, None)),
+        "list_contract_records": AsyncMock(return_value=([], 0)),
     }
     for name, mock in mocks.items():
         monkeypatch.setattr(procurement_tools, name, mock)

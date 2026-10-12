@@ -222,6 +222,9 @@ def test_countdown_keeps_traffic_open_until_notice_has_elapsed(tmp_path, monkeyp
     control, _ = deployment_control(tmp_path, monkeypatch)
     phases, elapsed = [], [0]
     monkeypatch.setattr(control, "business_phase", phases.append)
+    monkeypatch.setattr(control, "compose", lambda *a, **k:
+                        (control.state_dir / "public" / "status.json").read_text()
+                        if a[-1].endswith("_status") else '<script src="/__dazah_maintenance_watch.js"></script>')
     monkeypatch.setattr(cd.time, "time", lambda: 1000)
     monkeypatch.setattr(cd.time, "monotonic", lambda: elapsed[0])
     monkeypatch.setattr(control, "containers", lambda: {
@@ -240,11 +243,33 @@ def test_countdown_keeps_traffic_open_until_notice_has_elapsed(tmp_path, monkeyp
 
 def test_notice_dependency_failure_closes_gate_and_clears_countdown(tmp_path, monkeypatch):
     control, _ = deployment_control(tmp_path, monkeypatch)
+    monkeypatch.setattr(control, "compose", lambda *a, **k:
+                        (control.state_dir / "public" / "status.json").read_text()
+                        if a[-1].endswith("_status") else '<script src="/__dazah_maintenance_watch.js"></script>')
     monkeypatch.setattr(control, "containers", lambda: {})
     with pytest.raises(cd.Refused, match="unavailable during"):
         cd.Controller.announce(control, 300)
     assert (control.state_dir / "public" / "maintenance").exists()
     assert not (control.state_dir / "public" / "status.json").exists()
+
+
+@pytest.mark.parametrize("fault", ["missing_status", "stale_status", "missing_observer"])
+def test_notice_delivery_failure_aborts_before_countdown(tmp_path, monkeypatch, fault):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    def compose(*args, **kwargs):
+        if args[-1].endswith("_status"):
+            if fault == "missing_status":
+                return ""
+            if fault == "stale_status":
+                return '{"phase":"announced","starts_at":1}'
+            return (control.state_dir / "public" / "status.json").read_text()
+        return "<html><body>login</body></html>"
+    monkeypatch.setattr(control, "compose", compose)
+    monkeypatch.setattr(cd.time, "sleep", lambda *a: pytest.fail("undelivered notice must not count down"))
+    with pytest.raises(cd.Refused, match="announcement|observer"):
+        cd.Controller.announce(control)
+    assert not (control.state_dir / "public" / "status.json").exists()
+    assert not (control.state_dir / "public" / "maintenance").exists()
 
 
 def test_notice_cannot_extend_unattended_switch_past_cutoff(tmp_path, monkeypatch):

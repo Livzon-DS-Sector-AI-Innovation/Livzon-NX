@@ -19,6 +19,7 @@ from app.modules.production.models import (
     ProcessStep,
     ProductionPlan,
     ProductionRecord,
+    SalesPlanDetail,
 )
 from app.modules.production.production_feishu_models import ProductionFeishuConfig
 
@@ -39,6 +40,31 @@ PRODUCTION_PLAN_WORKSHOP_ORDER = (
 
 class ProductionRepository:
     """Production module repository"""
+
+    async def get_sales_plan_details(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        product_name: str | None = None,
+        month: str | None = None,
+    ) -> tuple[list[SalesPlanDetail], int]:
+        conditions: list[ColumnElement[bool]] = [SalesPlanDetail.is_deleted.is_(False)]
+        if product_name:
+            conditions.append(SalesPlanDetail.product_name == product_name)
+        if month:
+            conditions.append(SalesPlanDetail.data_month == month)
+        total = await self.session.scalar(
+            select(func.count()).select_from(SalesPlanDetail).where(*conditions)
+        )
+        rows = await self.session.scalars(
+            select(SalesPlanDetail)
+            .where(*conditions)
+            .order_by(SalesPlanDetail.created_at.desc(), SalesPlanDetail.id)
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return list(rows.all()), total or 0
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session

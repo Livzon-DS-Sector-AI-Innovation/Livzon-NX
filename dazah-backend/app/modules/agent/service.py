@@ -41,11 +41,13 @@ from .memory_policy import AgentMemoryPolicyService, is_private_memory_channel
 from .models import (
     AgentAttachment,
     AgentConfirmation,
+    AgentMessage,
     AgentSession,
     AgentSkill,
     AgentWorkflow,
     AgentWorkflowRun,
 )
+from .page_context import resolve_page_context
 from .repository import AgentRepository
 from .schemas import (
     AgentAttachmentIn,
@@ -57,6 +59,7 @@ from .schemas import (
     AgentConfirmationOut,
     AgentMemoryPolicyEnvelope,
     AgentMessageOut,
+    AgentPageContext,
     AgentSessionDetail,
     AgentSessionItem,
     AgentSessionPage,
@@ -907,6 +910,7 @@ class AgentService:
             content=answer,
             metadata={
                 "source": "direct_vision",
+                "grant_version": current_user.grant_version,
                 "evidence": {
                     "queried_at": datetime.now(UTC).isoformat(),
                     "sources": [],
@@ -1033,7 +1037,10 @@ class AgentService:
             session_id=session.id,
             role="assistant",
             content=assistant_text,
-            metadata=self._assistant_metadata(hermes_result, request.context),
+            metadata={
+                **self._assistant_metadata(hermes_result, request.context),
+                "grant_version": current_user.grant_version,
+            },
             user_id=current_user.id if current_user else None,
         )
         if memory_policy.notice_required:
@@ -1329,7 +1336,10 @@ class AgentService:
                     session_id=session.id,
                     role="assistant",
                     content=assistant_text,
-                    metadata=self._assistant_metadata(hermes_result, request.context),
+                    metadata={
+                        **self._assistant_metadata(hermes_result, request.context),
+                        "grant_version": current_user.grant_version,
+                    },
                     user_id=current_user.id if current_user else None,
                 )
                 if memory_policy.notice_required:
@@ -1376,6 +1386,7 @@ class AgentService:
                         metadata={
                             **self._assistant_metadata({}, request.context),
                             "generation_status": "stopped",
+                            "grant_version": current_user.grant_version,
                         },
                         user_id=current_user.id if current_user else None,
                     )
@@ -1412,6 +1423,16 @@ class AgentService:
         current_user: User,
         attachment_metadata: list[dict[str, Any]] | None = None,
     ) -> tuple[Any, list[dict[str, Any]], Any]:
+        if "page_context" in request.context:
+            page_context = await resolve_page_context(
+                db, user=current_user, hint=request.context["page_context"],
+            )
+            request.context = {
+                key: value for key, value in request.context.items()
+                if key != "page_context"
+            }
+            if page_context is not None:
+                request.context["page_context"] = page_context.model_dump(mode="json")
         user_id = current_user.id if current_user else None
         session = None
         basic_command = normalize_agent_basic_command(request.message)
@@ -1421,7 +1442,7 @@ class AgentService:
                 raise HTTPException(
                     status.HTTP_404_NOT_FOUND, "Agent session not found"
                 )
-            if session.user_id and session.user_id != user_id:
+            if session.user_id != user_id:
                 raise HTTPException(
                     status.HTTP_403_FORBIDDEN,
                     "Agent session does not belong to current user",
@@ -1453,6 +1474,7 @@ class AgentService:
             metadata={
                 "context": request.context,
                 "attachments": attachment_metadata or [],
+                "grant_version": current_user.grant_version,
             },
             user_id=user_id,
         )
@@ -1465,7 +1487,7 @@ class AgentService:
                     "content": msg.content,
                     "metadata": msg.message_metadata,
                 }
-                for msg in history
+                for msg in self._authorized_history(history, current_user)
                 if msg.role in {"user", "assistant"}
             ],
             user_message,
@@ -1577,6 +1599,7 @@ class AgentService:
             metadata={
                 "channel": "feishu",
                 "external_message_id": request.external_message_id,
+                "grant_version": current_user.grant_version,
                 "trace_id": str(request.trace_id),
                 "run_id": str(request.run_id),
                 "source": {
@@ -1642,7 +1665,7 @@ class AgentService:
             session_id=session.id,
             messages=[
                 {"role": item.role, "content": item.content}
-                for item in history
+                for item in self._authorized_history(history, current_user)
                 if item.role in {"user", "assistant"}
             ],
             attachment_catalog=self._attachment_catalog(session_attachments),
@@ -1700,6 +1723,7 @@ class AgentService:
                 "in_reply_to_external_message_id": request.external_message_id,
                 "trace_id": str(request.trace_id),
                 "run_id": str(request.run_id),
+                "grant_version": current_user.grant_version,
                 "evidence": {"sources": sources[:50]},
             },
             user_id=current_user.id,
@@ -2139,6 +2163,10 @@ class AgentService:
             attachment_catalog=attachment_catalog or [],
             client_capabilities=["structured_events"],
             memory_policy=memory_policy,
+            page_context=(
+                AgentPageContext.model_validate(context["page_context"])
+                if context.get("page_context") else None
+            ),
         ).model_dump(mode="json")
         try:
             async with httpx.AsyncClient(
@@ -2198,6 +2226,10 @@ class AgentService:
             attachment_catalog=attachment_catalog or [],
             client_capabilities=["structured_events", "streaming"],
             memory_policy=memory_policy,
+            page_context=(
+                AgentPageContext.model_validate(context["page_context"])
+                if context.get("page_context") else None
+            ),
         )
         if not self.settings.HERMES_AGENT_V2_URL:
             yield AgentBackendV2Event(
@@ -3191,6 +3223,20 @@ class AgentService:
         normalized = "".join(str(message).lower().split())
         if not normalized:
             return False
+        # Remove only explicitly negated responsibility actions. Other positive
+        # actions in the same request must still trigger the policy.
+        action_pattern = (
+            "(?:"
+            + "|".join(re.escape(word) for word in HUMAN_DECISION_ACTION_KEYWORDS)
+            + ")"
+        )
+        normalized = re.sub(
+            r"(?:禁止|不要|不得|不允许|无需|不需要)"
+            r"(?:(?:直接|自动|代我|帮我|替我|执行|进行|提交))*"
+            + action_pattern + r"(?:(?:或|和|及|、)" + action_pattern + r")*",
+            "",
+            normalized,
+        )
         has_action = any(
             keyword in normalized for keyword in HUMAN_DECISION_ACTION_KEYWORDS
         )
@@ -3649,6 +3695,7 @@ class AgentService:
                 or item.get("name")
                 or item.get("item_name")
                 or item.get("title")
+                or ""
             ),
             "specification": (
                 item.get("specification") or item.get("spec") or item.get("model") or ""
@@ -3666,9 +3713,15 @@ class AgentService:
             "purpose": item.get("purpose") or item.get("use") or item.get("note") or "",
             "material": item.get("material") or "",
             "brand": item.get("brand") or "",
-            "quantity": item.get("quantity") or item.get("qty"),
+            "quantity": (
+                item.get("quantity")
+                if item.get("quantity") is not None else item.get("qty")
+            ),
             "unit": item.get("unit") or "",
-            "unit_price": item.get("unit_price") or item.get("price"),
+            "unit_price": (
+                item.get("unit_price")
+                if item.get("unit_price") is not None else item.get("price")
+            ),
             "remarks": item.get("remarks") or item.get("remark") or "",
         }
         if raw_item_category is not None:
@@ -3854,6 +3907,20 @@ class AgentService:
                 ),
             },
         }
+
+    @staticmethod
+    def _authorized_history(
+        history: list[AgentMessage], user: User
+    ) -> list[AgentMessage]:
+        # Unknown legacy provenance and earlier grant versions cannot be reused
+        # as model input after a permission or data-scope change.
+        return [
+            item
+            for item in history
+            if (
+                (item.message_metadata or {}).get("grant_version") == user.grant_version
+            )
+        ]
 
     def _uuid_or_none(self, value: Any) -> uuid.UUID | None:
         if not value:

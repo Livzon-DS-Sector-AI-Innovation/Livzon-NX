@@ -925,12 +925,12 @@ def test_agent_replaces_untrusted_session_tool_trace_with_current_run_trace(
 
     _, result = service._run_agent_conversation(_payload(chat_type="p2p"))
 
-    assert result["tool_trace"] == []
+    assert not any(item.get("ok") is True for item in result["tool_trace"])
     assert service._verified_agent_message(
         result["final_response"],
         [],
         result["tool_trace"],
-    ).startswith("没有取得 Dazah 平台本轮真实工具查询结果")
+    ).startswith("本次请求尚未全部完成")
 
 
 def test_explicit_self_delivery_binds_forced_operation_to_trusted_task_context(

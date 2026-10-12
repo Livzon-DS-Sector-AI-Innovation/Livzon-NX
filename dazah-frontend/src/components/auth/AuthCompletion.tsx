@@ -21,6 +21,7 @@ interface CurrentUserResponse {
 
 const READY_DURATION_MS = 850
 const ENTER_DURATION_MS = 900
+const IDENTITY_TIMEOUT_MS = 10_000
 
 export type AuthCompletionState =
   | 'checking'
@@ -89,6 +90,12 @@ export function AuthCompletion({ nextPath }: AuthCompletionProps) {
     abortController.current = controller
     setFailureMessage(null)
     setState('checking')
+    const verificationTimeout = setTimeout(() => {
+      setFailureMessage('身份验证超时，请重新验证或返回登录。')
+      setState('error')
+      controller.abort()
+    }, IDENTITY_TIMEOUT_MS)
+    controller.signal.addEventListener('abort', () => clearTimeout(verificationTimeout), { once: true })
 
     try {
       const response = await fetch('/api/v1/identity/me', {
@@ -99,11 +106,12 @@ export function AuthCompletion({ nextPath }: AuthCompletionProps) {
       const payload = (await response.json().catch(() => null)) as
         | CurrentUserResponse
         | null
+      if (controller.signal.aborted) return
 
       if (!response.ok || !payload?.data) {
         throw new Error(
           response.status === 401 || response.status === 403
-            ? '登录状态未生效，请重新发起飞书认证。'
+            ? '登录状态已失效，请返回登录后重试。'
             : '暂时无法确认登录状态，请重新验证。',
         )
       }
@@ -134,6 +142,8 @@ export function AuthCompletion({ nextPath }: AuthCompletionProps) {
           : '暂时无法确认登录状态，请重新验证。',
       )
       setState('error')
+    } finally {
+      clearTimeout(verificationTimeout)
     }
   }, [clearPendingWork, router])
 

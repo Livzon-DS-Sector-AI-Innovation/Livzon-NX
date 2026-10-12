@@ -25661,6 +25661,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent/automation-runs/{run_id}/explanation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Explain Automation Run */
+        get: operations["explain_automation_run_api_v1_agent_automation_runs__run_id__explanation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agent/automation-runs/{run_id}/events": {
         parameters: {
             query?: never;
@@ -25797,6 +25814,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get My Capabilities */
+        get: operations["get_my_capabilities_api_v1_agent_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent/control/capabilities/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Diagnose User Capabilities */
+        get: operations["diagnose_user_capabilities_api_v1_agent_control_capabilities__user_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agent/access-scope": {
         parameters: {
             query?: never;
@@ -25842,6 +25893,23 @@ export interface paths {
         put?: never;
         /** Execute Control Plane Tool */
         post: operations["execute_control_plane_tool_api_v1_agent_control_tools_execute_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent/control/module-coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Module Coverage */
+        get: operations["get_module_coverage_api_v1_agent_control_module_coverage_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -26893,6 +26961,73 @@ export interface components {
             /** Message Id */
             message_id?: string | null;
         };
+        /** AgentCapabilityModuleOut */
+        AgentCapabilityModuleOut: {
+            /** Module Code */
+            module_code: string;
+            /** Module Name */
+            module_name: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "available" | "unauthorized" | "not_integrated" | "disabled" | "sync_failed";
+            /** Available Count */
+            available_count: number;
+            /** Registered Count */
+            registered_count: number;
+        };
+        /** AgentCapabilityOut */
+        AgentCapabilityOut: {
+            /** Operation */
+            operation: string;
+            /** Summary */
+            summary: string;
+            /** Module */
+            module: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "available" | "unauthorized" | "not_integrated" | "disabled" | "sync_failed";
+            /** Reason */
+            reason?: string | null;
+            /** Write */
+            write: boolean;
+            /** Confirmation Required */
+            confirmation_required: boolean;
+            /** Human Decision Required */
+            human_decision_required: boolean;
+            /** Workflow Allowed */
+            workflow_allowed: boolean;
+            /** Page Keys */
+            page_keys?: string[];
+            /** Permission Sources */
+            permission_sources?: components["schemas"]["EffectivePageGrantOut"][];
+        };
+        /** AgentCapabilityViewOut */
+        AgentCapabilityViewOut: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Source Grant Version */
+            source_grant_version: number;
+            /** Agent Scope Version */
+            agent_scope_version: number | null;
+            /**
+             * Sync Status
+             * @enum {string}
+             */
+            sync_status: "synced" | "failed";
+            /** Synced At */
+            synced_at: string | null;
+            /** Modules */
+            modules: components["schemas"]["AgentCapabilityModuleOut"][];
+            /** Tools */
+            tools: components["schemas"]["AgentCapabilityOut"][];
+        };
         /** AgentChatRequest */
         AgentChatRequest: {
             /** Session Id */
@@ -26947,6 +27082,37 @@ export interface components {
              * @enum {string}
              */
             choice: "allow" | "reject";
+        };
+        /** AgentCoveragePageOut */
+        AgentCoveragePageOut: {
+            /** Page Key */
+            page_key: string;
+            /** Page Name */
+            page_name: string;
+            /** Route Path */
+            route_path: string;
+            /** Registered Count */
+            registered_count: number;
+            /** Enabled Count */
+            enabled_count: number;
+        };
+        /** AgentCoverageToolOut */
+        AgentCoverageToolOut: {
+            /** Operation */
+            operation: string;
+            /** Summary */
+            summary: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "enabled" | "disabled" | "excluded";
+            /** Reason */
+            reason?: string | null;
+            /** Write */
+            write: boolean;
+            /** Human Decision Required */
+            human_decision_required: boolean;
         };
         /** AgentMemoryPolicyEnvelope */
         AgentMemoryPolicyEnvelope: {
@@ -27013,6 +27179,62 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** AgentModuleCoverageOut */
+        AgentModuleCoverageOut: {
+            /** Module Code */
+            module_code: string;
+            /** Module Name */
+            module_name: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "not_integrated" | "partial" | "integrated" | "disabled";
+            /** Registered Count */
+            registered_count: number;
+            /** Enabled Count */
+            enabled_count: number;
+            /** Excluded Count */
+            excluded_count: number;
+            /** Total Pages */
+            total_pages: number;
+            /** Covered Pages */
+            covered_pages: number;
+            /** Enabled Pages */
+            enabled_pages: number;
+            /** Coverage Percent */
+            coverage_percent: number | null;
+            /** Pages */
+            pages: components["schemas"]["AgentCoveragePageOut"][];
+            /** Tools */
+            tools: components["schemas"]["AgentCoverageToolOut"][];
+        };
+        /** AgentModuleCoverageViewOut */
+        AgentModuleCoverageViewOut: {
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Registered Count */
+            registered_count: number;
+            /** Enabled Count */
+            enabled_count: number;
+            /** Excluded Count */
+            excluded_count: number;
+            /** Personal Count */
+            personal_count: number;
+            /** Total Pages */
+            total_pages: number;
+            /** Covered Pages */
+            covered_pages: number;
+            /** Enabled Pages */
+            enabled_pages: number;
+            /** Coverage Percent */
+            coverage_percent: number | null;
+            /** Modules */
+            modules: components["schemas"]["AgentModuleCoverageOut"][];
+        };
         /** AgentModuleScopeOut */
         AgentModuleScopeOut: {
             /** Module Code */
@@ -27025,6 +27247,48 @@ export interface components {
             data_scope?: {
                 [key: string]: unknown;
             };
+        };
+        /** AgentRunExplanationOut */
+        AgentRunExplanationOut: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Trace Id
+             * Format: uuid
+             */
+            trace_id: string;
+            /** Status */
+            status: string;
+            /** Error Code */
+            error_code: string | null;
+            /** Recovery */
+            recovery: string;
+            /** Facts */
+            facts: components["schemas"]["AgentRunFactOut"][];
+        };
+        /** AgentRunFactOut */
+        AgentRunFactOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "step" | "tool" | "confirmation" | "interaction" | "delivery";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Status */
+            status: string;
+            /** Step Key */
+            step_key?: string | null;
+            /** Operation */
+            operation?: string | null;
+            /** Occurred At */
+            occurred_at?: string | null;
         };
         /** AgentSessionDetail */
         AgentSessionDetail: {
@@ -27136,6 +27400,56 @@ export interface components {
             content?: string | null;
             /** Status */
             status?: ("active" | "disabled") | null;
+        };
+        /** AgentToolCatalogEntry */
+        AgentToolCatalogEntry: {
+            /**
+             * Result Kind
+             * @default records
+             * @enum {string}
+             */
+            result_kind: "records" | "statistics" | "knowledge_index" | "knowledge";
+            /**
+             * Output Hint
+             * @default
+             */
+            output_hint: string;
+            /** Operation */
+            operation: string;
+            /** Module */
+            module?: string | null;
+            /** Version */
+            version: string;
+            /** Summary */
+            summary: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "disabled";
+            /**
+             * Risk Level
+             * @enum {string}
+             */
+            risk_level: "low" | "medium" | "high";
+            /** Write */
+            write: boolean;
+            /** Confirmation Required */
+            confirmation_required: boolean;
+            /** Permission Key */
+            permission_key?: string | null;
+            /** Input Schema */
+            input_schema?: {
+                [key: string]: unknown;
+            };
+            /** Output Schema */
+            output_schema?: {
+                [key: string]: unknown;
+            };
+            /** Timeout Seconds */
+            timeout_seconds: number;
+            /** Idempotent */
+            idempotent: boolean;
         };
         /**
          * AgentToolControlRequest
@@ -27450,6 +27764,24 @@ export interface components {
             message: string;
             /** Data */
             data?: unknown;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[AgentToolCatalogEntry] */
+        ApiResponseEnvelope_AgentToolCatalogEntry_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            data: components["schemas"]["AgentToolCatalogEntry"];
             /** Meta */
             meta?: {
                 [key: string]: unknown;
@@ -29073,6 +29405,25 @@ export interface components {
             data: {
                 [key: string]: unknown;
             };
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[AgentToolCatalogEntry]] */
+        ApiResponseEnvelope_list_AgentToolCatalogEntry__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Data */
+            data: components["schemas"]["AgentToolCatalogEntry"][];
             /** Meta */
             meta?: {
                 [key: string]: unknown;
@@ -127590,6 +127941,39 @@ export interface operations {
             };
         };
     };
+    explain_automation_run_api_v1_agent_automation_runs__run_id__explanation_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunExplanationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_automation_run_events_api_v1_agent_automation_runs__run_id__events_get: {
         parameters: {
             query?: never;
@@ -127865,6 +128249,70 @@ export interface operations {
             };
         };
     };
+    get_my_capabilities_api_v1_agent_capabilities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentCapabilityViewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    diagnose_user_capabilities_api_v1_agent_control_capabilities__user_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentCapabilityViewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_my_access_scope_api_v1_agent_access_scope_get: {
         parameters: {
             query?: never;
@@ -127953,6 +128401,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_module_coverage_api_v1_agent_control_module_coverage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentModuleCoverageViewOut"];
                 };
             };
             /** @description Validation Error */
@@ -128190,7 +128669,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_AgentToolCatalogEntry__"];
                 };
             };
             /** @description Validation Error */
@@ -128227,7 +128706,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_AgentToolCatalogEntry_"];
                 };
             };
             /** @description Validation Error */

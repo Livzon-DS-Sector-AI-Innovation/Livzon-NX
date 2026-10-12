@@ -26,6 +26,8 @@ desktop.ini
 !/docs/business-module-boundaries.md
 !/docs/module-migration-audit.md
 !/docs/dazah-enterprise-agent-gateway-tool-registry-implementation-plan-2026-07-30.md
+!/docs/livzon-platform-completion-plan-2026-10-09.md
+!/docs/livzon-tool-inventory-2026-10-09.json
 !/docs/hermes-memory-governance.md
 !/docs/tasks/
 /docs/tasks/*
@@ -55,6 +57,7 @@ desktop.ini
 !/scripts/check-agent-v2-residuals.py
 !/scripts/check-agent-instruction-bridges.py
 !/scripts/check-test-impact.py
+!/scripts/export-livzon-tool-inventory.py
 !/scripts/check-page-permission-lifecycle.py
 !/scripts/prepare-integration.sh
 !/scripts/tests/

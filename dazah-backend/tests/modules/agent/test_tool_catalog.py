@@ -3,15 +3,19 @@ from types import SimpleNamespace as _SimpleNamespace
 from typing import Any
 
 import pytest
-from fastapi import HTTPException, status
+from fastapi import FastAPI, HTTPException, status
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import get_db
+from app.modules.agent import api
 from app.modules.agent.access_scope import AgentAccessScopeService
 from app.modules.agent.catalog import ToolCatalogService
 from app.modules.agent.models import AgentToolCatalog
 from app.modules.agent.schemas import AgentToolExecuteRequest, AgentToolSearchRequest
 from app.modules.agent.tools import ToolExecutor, tool_registry
+from app.platform.identity import deps
 from app.platform.identity.models import User
 
 SimpleNamespace: Any = _SimpleNamespace
@@ -181,6 +185,49 @@ async def test_enable_disable_and_missing_catalog_entry(
 
 
 @pytest.mark.anyio
+async def test_enable_unknown_and_retired_tools_have_distinct_http_errors(
+    db_session: AsyncSession,
+) -> None:
+    user = _user()
+    user.role = "admin"
+    retired = AgentToolCatalog(
+        operation="warehouse.restart_feishu_ws",
+        module="warehouse",
+        capability_version="1.0",
+        summary="retired settings operation",
+        status="active",
+        risk_level="high",
+        write=True,
+        confirmation_required=True,
+        input_schema={},
+        output_schema={},
+        timeout_seconds=30,
+        idempotent=False,
+        metadata_hash="retired",
+    )
+    db_session.add_all([user, retired])
+    await db_session.flush()
+    app = FastAPI()
+    app.include_router(api.router, prefix="/agent")
+    app.dependency_overrides[get_db] = lambda: db_session
+    app.dependency_overrides[deps.get_current_user] = lambda: user
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        missing = await client.post(
+            "/agent/tools/missing.operation/enabled", json={"enabled": True}
+        )
+        assert missing.status_code == 404
+        assert missing.json()["detail"] == "Agent tool was not found"
+        withdrawn = await client.post(
+            f"/agent/tools/{retired.operation}/enabled", json={"enabled": True}
+        )
+        assert withdrawn.status_code == 409
+        assert "不能重新启用" in withdrawn.json()["detail"]
+    assert retired.status == "disabled" and retired.admin_enabled is False
+
+
+@pytest.mark.anyio
 async def test_disabled_catalog_blocks_direct_execution(
     db_session: AsyncSession,
 ) -> None:
@@ -297,6 +344,13 @@ async def test_search_filters_module_query_scope_and_limit(
     )
 
     service.access_scope = ConfigurableAccessScope(denied={searchable.name})  # type: ignore[assignment]
+    assert (
+        await service.search(
+            db_session,
+            _request(user.id, query="agent.does_not_exist"),
+        )
+        == []
+    )
     assert (
         await service.search(
             db_session,

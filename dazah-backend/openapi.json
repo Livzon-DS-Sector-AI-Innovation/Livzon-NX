@@ -130663,6 +130663,65 @@
         }
       }
     },
+    "/api/v1/agent/automation-runs/{run_id}/explanation": {
+      "get": {
+        "tags": [
+          "中枢 Agent"
+        ],
+        "summary": "Explain Automation Run",
+        "operationId": "explain_automation_run_api_v1_agent_automation_runs__run_id__explanation_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "auth_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRunExplanationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/agent/automation-runs/{run_id}/events": {
       "get": {
         "tags": [
@@ -131149,6 +131208,114 @@
         }
       }
     },
+    "/api/v1/agent/capabilities": {
+      "get": {
+        "tags": [
+          "中枢 Agent"
+        ],
+        "summary": "Get My Capabilities",
+        "operationId": "get_my_capabilities_api_v1_agent_capabilities_get",
+        "parameters": [
+          {
+            "name": "auth_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentCapabilityViewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/control/capabilities/{user_id}": {
+      "get": {
+        "tags": [
+          "中枢 Agent"
+        ],
+        "summary": "Diagnose User Capabilities",
+        "operationId": "diagnose_user_capabilities_api_v1_agent_control_capabilities__user_id__get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "auth_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentCapabilityViewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/agent/access-scope": {
       "get": {
         "tags": [
@@ -131296,6 +131463,55 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/control/module-coverage": {
+      "get": {
+        "tags": [
+          "中枢 Agent"
+        ],
+        "summary": "Get Module Coverage",
+        "operationId": "get_module_coverage_api_v1_agent_control_module_coverage_get",
+        "parameters": [
+          {
+            "name": "auth_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentModuleCoverageViewOut"
+                }
               }
             }
           },
@@ -131807,7 +132023,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_AgentToolCatalogEntry__"
+                }
               }
             }
           },
@@ -131892,7 +132110,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_AgentToolCatalogEntry_"
+                }
               }
             }
           },
@@ -134432,6 +134652,202 @@
         ],
         "title": "AgentBackendSource"
       },
+      "AgentCapabilityModuleOut": {
+        "properties": {
+          "module_code": {
+            "type": "string",
+            "title": "Module Code"
+          },
+          "module_name": {
+            "type": "string",
+            "title": "Module Name"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unauthorized",
+              "not_integrated",
+              "disabled",
+              "sync_failed"
+            ],
+            "title": "State"
+          },
+          "available_count": {
+            "type": "integer",
+            "title": "Available Count"
+          },
+          "registered_count": {
+            "type": "integer",
+            "title": "Registered Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "module_code",
+          "module_name",
+          "state",
+          "available_count",
+          "registered_count"
+        ],
+        "title": "AgentCapabilityModuleOut"
+      },
+      "AgentCapabilityOut": {
+        "properties": {
+          "operation": {
+            "type": "string",
+            "title": "Operation"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "module": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Module"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unauthorized",
+              "not_integrated",
+              "disabled",
+              "sync_failed"
+            ],
+            "title": "State"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "write": {
+            "type": "boolean",
+            "title": "Write"
+          },
+          "confirmation_required": {
+            "type": "boolean",
+            "title": "Confirmation Required"
+          },
+          "human_decision_required": {
+            "type": "boolean",
+            "title": "Human Decision Required"
+          },
+          "workflow_allowed": {
+            "type": "boolean",
+            "title": "Workflow Allowed"
+          },
+          "page_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Page Keys"
+          },
+          "permission_sources": {
+            "items": {
+              "$ref": "#/components/schemas/EffectivePageGrantOut"
+            },
+            "type": "array",
+            "title": "Permission Sources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation",
+          "summary",
+          "module",
+          "state",
+          "write",
+          "confirmation_required",
+          "human_decision_required",
+          "workflow_allowed"
+        ],
+        "title": "AgentCapabilityOut"
+      },
+      "AgentCapabilityViewOut": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "source_grant_version": {
+            "type": "integer",
+            "title": "Source Grant Version"
+          },
+          "agent_scope_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Scope Version"
+          },
+          "sync_status": {
+            "type": "string",
+            "enum": [
+              "synced",
+              "failed"
+            ],
+            "title": "Sync Status"
+          },
+          "synced_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Synced At"
+          },
+          "modules": {
+            "items": {
+              "$ref": "#/components/schemas/AgentCapabilityModuleOut"
+            },
+            "type": "array",
+            "title": "Modules"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/AgentCapabilityOut"
+            },
+            "type": "array",
+            "title": "Tools"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "source_grant_version",
+          "agent_scope_version",
+          "sync_status",
+          "synced_at",
+          "modules",
+          "tools"
+        ],
+        "title": "AgentCapabilityViewOut"
+      },
       "AgentChatRequest": {
         "properties": {
           "session_id": {
@@ -134573,6 +134989,88 @@
           "choice"
         ],
         "title": "AgentConfirmationResolveRequest"
+      },
+      "AgentCoveragePageOut": {
+        "properties": {
+          "page_key": {
+            "type": "string",
+            "title": "Page Key"
+          },
+          "page_name": {
+            "type": "string",
+            "title": "Page Name"
+          },
+          "route_path": {
+            "type": "string",
+            "title": "Route Path"
+          },
+          "registered_count": {
+            "type": "integer",
+            "title": "Registered Count"
+          },
+          "enabled_count": {
+            "type": "integer",
+            "title": "Enabled Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "page_key",
+          "page_name",
+          "route_path",
+          "registered_count",
+          "enabled_count"
+        ],
+        "title": "AgentCoveragePageOut"
+      },
+      "AgentCoverageToolOut": {
+        "properties": {
+          "operation": {
+            "type": "string",
+            "title": "Operation"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "enabled",
+              "disabled",
+              "excluded"
+            ],
+            "title": "State"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "write": {
+            "type": "boolean",
+            "title": "Write"
+          },
+          "human_decision_required": {
+            "type": "boolean",
+            "title": "Human Decision Required"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation",
+          "summary",
+          "state",
+          "write",
+          "human_decision_required"
+        ],
+        "title": "AgentCoverageToolOut"
       },
       "AgentMemoryPolicyEnvelope": {
         "properties": {
@@ -134736,6 +135234,162 @@
         ],
         "title": "AgentMessageOut"
       },
+      "AgentModuleCoverageOut": {
+        "properties": {
+          "module_code": {
+            "type": "string",
+            "title": "Module Code"
+          },
+          "module_name": {
+            "type": "string",
+            "title": "Module Name"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "not_integrated",
+              "partial",
+              "integrated",
+              "disabled"
+            ],
+            "title": "State"
+          },
+          "registered_count": {
+            "type": "integer",
+            "title": "Registered Count"
+          },
+          "enabled_count": {
+            "type": "integer",
+            "title": "Enabled Count"
+          },
+          "excluded_count": {
+            "type": "integer",
+            "title": "Excluded Count"
+          },
+          "total_pages": {
+            "type": "integer",
+            "title": "Total Pages"
+          },
+          "covered_pages": {
+            "type": "integer",
+            "title": "Covered Pages"
+          },
+          "enabled_pages": {
+            "type": "integer",
+            "title": "Enabled Pages"
+          },
+          "coverage_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage Percent"
+          },
+          "pages": {
+            "items": {
+              "$ref": "#/components/schemas/AgentCoveragePageOut"
+            },
+            "type": "array",
+            "title": "Pages"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/AgentCoverageToolOut"
+            },
+            "type": "array",
+            "title": "Tools"
+          }
+        },
+        "type": "object",
+        "required": [
+          "module_code",
+          "module_name",
+          "state",
+          "registered_count",
+          "enabled_count",
+          "excluded_count",
+          "total_pages",
+          "covered_pages",
+          "enabled_pages",
+          "coverage_percent",
+          "pages",
+          "tools"
+        ],
+        "title": "AgentModuleCoverageOut"
+      },
+      "AgentModuleCoverageViewOut": {
+        "properties": {
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "registered_count": {
+            "type": "integer",
+            "title": "Registered Count"
+          },
+          "enabled_count": {
+            "type": "integer",
+            "title": "Enabled Count"
+          },
+          "excluded_count": {
+            "type": "integer",
+            "title": "Excluded Count"
+          },
+          "personal_count": {
+            "type": "integer",
+            "title": "Personal Count"
+          },
+          "total_pages": {
+            "type": "integer",
+            "title": "Total Pages"
+          },
+          "covered_pages": {
+            "type": "integer",
+            "title": "Covered Pages"
+          },
+          "enabled_pages": {
+            "type": "integer",
+            "title": "Enabled Pages"
+          },
+          "coverage_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage Percent"
+          },
+          "modules": {
+            "items": {
+              "$ref": "#/components/schemas/AgentModuleCoverageOut"
+            },
+            "type": "array",
+            "title": "Modules"
+          }
+        },
+        "type": "object",
+        "required": [
+          "generated_at",
+          "registered_count",
+          "enabled_count",
+          "excluded_count",
+          "personal_count",
+          "total_pages",
+          "covered_pages",
+          "enabled_pages",
+          "coverage_percent",
+          "modules"
+        ],
+        "title": "AgentModuleCoverageViewOut"
+      },
       "AgentModuleScopeOut": {
         "properties": {
           "module_code": {
@@ -134765,6 +135419,121 @@
           "module_name"
         ],
         "title": "AgentModuleScopeOut"
+      },
+      "AgentRunExplanationOut": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "trace_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Trace Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "recovery": {
+            "type": "string",
+            "title": "Recovery"
+          },
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/AgentRunFactOut"
+            },
+            "type": "array",
+            "title": "Facts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "trace_id",
+          "status",
+          "error_code",
+          "recovery",
+          "facts"
+        ],
+        "title": "AgentRunExplanationOut"
+      },
+      "AgentRunFactOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "step",
+              "tool",
+              "confirmation",
+              "interaction",
+              "delivery"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "step_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Key"
+          },
+          "operation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "status"
+        ],
+        "title": "AgentRunFactOut"
       },
       "AgentSessionDetail": {
         "properties": {
@@ -135061,6 +135830,116 @@
         },
         "type": "object",
         "title": "AgentSkillUpdate"
+      },
+      "AgentToolCatalogEntry": {
+        "properties": {
+          "result_kind": {
+            "type": "string",
+            "enum": [
+              "records",
+              "statistics",
+              "knowledge_index",
+              "knowledge"
+            ],
+            "title": "Result Kind",
+            "default": "records"
+          },
+          "output_hint": {
+            "type": "string",
+            "title": "Output Hint",
+            "default": ""
+          },
+          "operation": {
+            "type": "string",
+            "title": "Operation"
+          },
+          "module": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Module"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "title": "Status"
+          },
+          "risk_level": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Risk Level"
+          },
+          "write": {
+            "type": "boolean",
+            "title": "Write"
+          },
+          "confirmation_required": {
+            "type": "boolean",
+            "title": "Confirmation Required"
+          },
+          "permission_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Permission Key"
+          },
+          "input_schema": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Input Schema"
+          },
+          "output_schema": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Output Schema"
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "title": "Timeout Seconds"
+          },
+          "idempotent": {
+            "type": "boolean",
+            "title": "Idempotent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation",
+          "version",
+          "summary",
+          "status",
+          "risk_level",
+          "write",
+          "confirmation_required",
+          "timeout_seconds",
+          "idempotent"
+        ],
+        "title": "AgentToolCatalogEntry"
       },
       "AgentToolControlRequest": {
         "properties": {
@@ -135786,6 +136665,40 @@
         },
         "type": "object",
         "title": "ApiResponse"
+      },
+      "ApiResponseEnvelope_AgentToolCatalogEntry_": {
+        "properties": {
+          "code": {
+            "type": "integer",
+            "title": "Code",
+            "default": 200
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AgentToolCatalogEntry"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[AgentToolCatalogEntry]"
       },
       "ApiResponseEnvelope_AttachmentReviewOut_": {
         "properties": {
@@ -138848,6 +139761,44 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[dict[str, Any]]"
+      },
+      "ApiResponseEnvelope_list_AgentToolCatalogEntry__": {
+        "properties": {
+          "code": {
+            "type": "integer",
+            "title": "Code",
+            "default": 200
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": "success"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/AgentToolCatalogEntry"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[AgentToolCatalogEntry]]"
       },
       "ApiResponseEnvelope_list_AttachmentReviewOut__": {
         "properties": {

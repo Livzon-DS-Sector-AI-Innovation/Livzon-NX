@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from datetime import date
-from typing import Any, ParamSpec, TypeVar, cast
+from typing import Any, Literal, ParamSpec, TypeVar, cast
 
 from pydantic import BaseModel, Field
 
@@ -39,20 +39,33 @@ from app.modules.quality.schemas.external_quality import (
     SupplierOut,
 )
 from app.modules.quality.schemas.inspection import InspectionRecordOut
+from app.modules.quality.schemas.lab_instrument import LabInstrumentOut
+from app.modules.quality.schemas.lab_item import LabItemOut
+from app.modules.quality.schemas.material_inspection import (
+    FinishedProductInspectionOut,
+    LiquidMaterialInspectionOut,
+    SolidMaterialInspectionOut,
+)
 from app.modules.quality.schemas.oos_oot import OosOotRecordOut
 from app.modules.quality.schemas.validation import UpdateValidationExecutionRequest
 from app.modules.quality.service import (
+    agent_queries,
     change_action_plan,
     cpv_batch,
     cpv_parameter,
     cpv_product,
     cpv_statistics,
+    deviation_workbench,
     external_quality,
     feishu_capa,
+    historical_deviation,
     inspection,
+    inspection_feishu_crud,
+    inspection_items_mirror,
     oos_oot,
     quality_deviation,
     quality_feishu_pages,
+    quality_feishu_pages_oos_oot,
     quality_feishu_sync,
     quality_management,
     quality_statistics,
@@ -67,6 +80,44 @@ from app.platform.identity.page_policy import (
 class PageInput(BaseModel):
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=20, ge=1, le=100)
+
+
+class InspectionResourceListInput(PageInput):
+    keyword: str | None = Field(default=None, max_length=100)
+
+
+class DocumentListInput(InspectionResourceListInput):
+    department_id: uuid.UUID | None = None
+
+
+class WorkbenchListInput(InspectionResourceListInput):
+    source_type: Literal["report_record", "manual"] | None = None
+    status: Literal["processing", "completed", "failed"] | None = None
+    date_from: date | None = None
+    date_to: date | None = None
+
+
+class InvestigationListInput(PageInput):
+    deviation_code: str | None = Field(default=None, max_length=100)
+    push_round: str | None = Field(default=None, max_length=32)
+
+
+class OosInvestigationListInput(PageInput):
+    oos_oot_code: str | None = Field(default=None, max_length=100)
+    process_status: str | None = Field(default=None, max_length=100)
+
+
+class AnomalyListInput(InspectionResourceListInput):
+    year: int = Field(default=2026, ge=2025, le=2028)
+
+
+class QcValidationListInput(InspectionResourceListInput):
+    year: int = Field(default=2026, ge=2026, le=2028)
+
+
+class ReviewListInput(InspectionResourceListInput):
+    status: Literal["draft", "processing", "completed", "failed"] | None = None
+    review_mode: str | None = Field(default=None, max_length=100)
 
 
 class InspectionRecordListInput(PageInput):
@@ -415,9 +466,8 @@ def agent_tool(**kwargs: Any) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
         )
     if kwargs.get("sensitive_action") is None:
         kwargs["sensitive_action"] = (
-            (binding.sensitive_action if binding else None)
-            or _QUALITY_TOOL_SENSITIVE_ACTIONS.get(name)
-        )
+            binding.sensitive_action if binding else None
+        ) or _QUALITY_TOOL_SENSITIVE_ACTIONS.get(name)
     return cast(
         Callable[[Callable[_P, _R]], Callable[_P, _R]],
         _base_agent_tool(**kwargs),
@@ -522,6 +572,7 @@ async def get_related_capas(
 
 @agent_tool(
     name="quality.get_deviation_statistics",
+    result_kind="statistics",
     summary="查询偏差统计",
     method="GET",
     path="/quality/statistics/deviations",
@@ -529,9 +580,7 @@ async def get_related_capas(
 async def get_deviation_statistics(
     context: ToolContext, _: BaseModel
 ) -> dict[str, Any]:
-    return _dump_object(
-        await quality_statistics.get_deviation_statistics(context.db)
-    )
+    return _dump_object(await quality_statistics.get_deviation_statistics(context.db))
 
 
 @agent_tool(
@@ -699,6 +748,7 @@ async def auto_fill_capa_from_deviation(
 
 @agent_tool(
     name="quality.get_capa_statistics",
+    result_kind="statistics",
     summary="查询CAPA统计",
     method="GET",
     path="/quality/statistics/capas",
@@ -886,6 +936,7 @@ async def get_next_change_code(context: ToolContext, _: BaseModel) -> dict[str, 
 
 @agent_tool(
     name="quality.get_change_statistics",
+    result_kind="statistics",
     summary="查询变更统计",
     method="GET",
     path="/quality/statistics/changes",
@@ -1118,6 +1169,7 @@ async def get_validation(
 
 @agent_tool(
     name="quality.get_validation_statistics",
+    result_kind="statistics",
     summary="查询验证统计",
     method="GET",
     path="/quality/statistics/validations",
@@ -1425,6 +1477,7 @@ async def list_cpv_cqa_batches(
 
 @agent_tool(
     name="quality.get_cpv_statistics",
+    result_kind="statistics",
     summary="查询CPV统计数据",
     input_model=CpvMetricInput,
     method="GET",
@@ -1665,6 +1718,112 @@ async def get_inspection_record(
     return InspectionRecordOut.model_validate(record).model_dump(mode="json")
 
 
+async def _list_inspection_resource(
+    context: ToolContext,
+    data: InspectionResourceListInput,
+    resource: str,
+    output_model: type[BaseModel],
+) -> dict[str, Any]:
+    rows, total = await inspection.list_resource_records(
+        context.db,
+        resource,
+        keyword=data.keyword,
+        page=data.page,
+        page_size=data.page_size,
+    )
+    return _page_result(rows, total, data.page, data.page_size, output_model)
+
+
+@agent_tool(
+    name="quality.list_lab_items",
+    summary="查询检验物品库存",
+    input_model=InspectionResourceListInput,
+    method="GET",
+    path="/quality/lab-items",
+)
+async def list_lab_items(
+    context: ToolContext,
+    data: InspectionResourceListInput,
+) -> dict[str, Any]:
+    return await _list_inspection_resource(context, data, "lab_items", LabItemOut)
+
+
+@agent_tool(
+    name="quality.list_lab_instruments",
+    summary="查询授权部门检验仪器台账",
+    input_model=InspectionResourceListInput,
+    method="GET",
+    path="/quality/lab-instruments",
+)
+async def list_lab_instruments(
+    context: ToolContext,
+    data: InspectionResourceListInput,
+) -> dict[str, Any]:
+    return await _list_inspection_resource(
+        context,
+        data,
+        "lab_instruments",
+        LabInstrumentOut,
+    )
+
+
+@agent_tool(
+    name="quality.list_finished_product_inspections",
+    summary="查询成品检验台账",
+    input_model=InspectionResourceListInput,
+    method="GET",
+    path="/quality/finished-product-inspections",
+)
+async def list_finished_product_inspections(
+    context: ToolContext,
+    data: InspectionResourceListInput,
+) -> dict[str, Any]:
+    return await _list_inspection_resource(
+        context,
+        data,
+        "finished_product_inspections",
+        FinishedProductInspectionOut,
+    )
+
+
+@agent_tool(
+    name="quality.list_solid_material_inspections",
+    summary="查询固体物料检验台账",
+    input_model=InspectionResourceListInput,
+    method="GET",
+    path="/quality/solid-material-inspections",
+)
+async def list_solid_material_inspections(
+    context: ToolContext,
+    data: InspectionResourceListInput,
+) -> dict[str, Any]:
+    return await _list_inspection_resource(
+        context,
+        data,
+        "solid_material_inspections",
+        SolidMaterialInspectionOut,
+    )
+
+
+@agent_tool(
+    name="quality.list_liquid_material_inspections",
+    summary="查询液体物料检验台账",
+    input_model=InspectionResourceListInput,
+    method="GET",
+    path="/quality/liquid-material-inspections",
+)
+async def list_liquid_material_inspections(
+    context: ToolContext,
+    data: InspectionResourceListInput,
+) -> dict[str, Any]:
+    return await _list_inspection_resource(
+        context,
+        data,
+        "liquid_material_inspections",
+        LiquidMaterialInspectionOut,
+    )
+
+
 @agent_tool(
     name="quality.list_oos_oot_records",
     summary="查询OOS/OOT质量事件",
@@ -1806,3 +1965,271 @@ async def list_product_quality_records(
         page_size=data.page_size,
         output_model=ProductQualityRecordOut,
     )
+
+
+@agent_tool(
+    name="quality.list_documents",
+    result_kind="knowledge_index",
+    output_hint="返回质量文件目录与版本元数据，不包含SOP正文；不可根据标题编造操作规程。",
+    summary="查询授权部门质量文件目录",
+    input_model=DocumentListInput,
+    risk_level="low",
+    method="GET",
+    path="/quality/document-entries",
+)
+async def list_documents(
+    context: ToolContext, data: DocumentListInput
+) -> dict[str, Any]:
+    return await agent_queries.list_documents(context.db, **data.model_dump())
+
+
+@agent_tool(
+    name="quality.list_deviation_reports",
+    summary="查询偏差报告记录",
+    input_model=PageInput,
+    risk_level="low",
+    method="GET",
+    path="/quality/deviation-report-records",
+)
+async def list_deviation_reports(
+    context: ToolContext, data: PageInput
+) -> dict[str, Any]:
+    return _dump_object(
+        await quality_feishu_pages.list_report_records(context.db, **data.model_dump())
+    )
+
+
+@agent_tool(
+    name="quality.list_deviation_investigations",
+    summary="查询偏差调查推送记录",
+    input_model=InvestigationListInput,
+    risk_level="low",
+    method="GET",
+    path="/quality/deviation-investigation-push-records",
+    output_hint="只查询已有推送及审核状态，不执行推送或审核。",
+)
+async def list_deviation_investigations(
+    context: ToolContext, data: InvestigationListInput
+) -> dict[str, Any]:
+    return _dump_object(
+        await quality_feishu_pages.list_investigation_push_records(
+            context.db, **data.model_dump()
+        )
+    )
+
+
+@agent_tool(
+    name="quality.list_historical_deviations",
+    summary="查询历史偏差台账",
+    input_model=InspectionResourceListInput,
+    risk_level="low",
+    method="GET",
+    path="/quality/historical-deviations",
+)
+async def list_historical_deviations(
+    context: ToolContext, data: InspectionResourceListInput
+) -> dict[str, Any]:
+    return _dump_object(
+        await historical_deviation.get_historical_deviation_list(
+            context.db, **data.model_dump()
+        )
+    )
+
+
+@agent_tool(
+    name="quality.list_deviation_workbench_reports",
+    summary="查询偏差工作台分析记录",
+    input_model=WorkbenchListInput,
+    risk_level="low",
+    method="GET",
+    path="/quality/deviation-workbench/reports",
+    output_hint="查询已有分析记录，不触发模型分析，不替代责任判断。",
+)
+async def list_deviation_workbench_reports(
+    context: ToolContext, data: WorkbenchListInput
+) -> dict[str, Any]:
+    return _dump_object(
+        await deviation_workbench.list_workbench_reports(
+            context.db, **data.model_dump(mode="json")
+        )
+    )
+
+
+@agent_tool(
+    name="quality.list_lab_item_inbounds",
+    summary="查询检验物品入库明细",
+    input_model=InspectionResourceListInput,
+    risk_level="low",
+    method="GET",
+    path="/quality/items/inbound",
+    output_hint="读取本地镜像，不触发同步；无镜像时返回未配置状态。",
+)
+async def list_lab_item_inbounds(
+    context: ToolContext, data: InspectionResourceListInput
+) -> dict[str, Any]:
+    return _dump_object(
+        await inspection_items_mirror.list_items_mirror(
+            context.db, inspection_items_mirror.PAGE_INBOUND, **data.model_dump()
+        )
+    )
+
+
+@agent_tool(
+    name="quality.list_lab_item_outbounds",
+    summary="查询检验物品领用明细",
+    input_model=InspectionResourceListInput,
+    risk_level="low",
+    method="GET",
+    path="/quality/items/outbound",
+    output_hint="读取本地镜像，不触发同步；无镜像时返回未配置状态。",
+)
+async def list_lab_item_outbounds(
+    context: ToolContext, data: InspectionResourceListInput
+) -> dict[str, Any]:
+    return _dump_object(
+        await inspection_items_mirror.list_items_mirror(
+            context.db, inspection_items_mirror.PAGE_OUTBOUND, **data.model_dump()
+        )
+    )
+
+
+@agent_tool(
+    name="quality.list_oos_oot_reports",
+    summary="查询OOS/OOT报告记录",
+    input_model=InspectionResourceListInput,
+    risk_level="low",
+    method="GET",
+    path="/quality/oos-oot/report-records",
+)
+async def list_oos_oot_reports(
+    context: ToolContext, data: InspectionResourceListInput
+) -> dict[str, Any]:
+    return _dump_object(
+        await quality_feishu_pages_oos_oot.list_oos_oot_report_records(
+            context.db, **data.model_dump()
+        )
+    )
+
+
+@agent_tool(
+    name="quality.list_oos_oot_investigations",
+    summary="查询OOS/OOT调查推送状态",
+    input_model=OosInvestigationListInput,
+    risk_level="low",
+    method="GET",
+    path="/quality/oos-oot/investigation-push-records",
+    output_hint="只查询已有记录，不执行推送、审核或批准。",
+)
+async def list_oos_oot_investigations(
+    context: ToolContext, data: OosInvestigationListInput
+) -> dict[str, Any]:
+    return _dump_object(
+        await quality_feishu_pages_oos_oot.list_oos_oot_investigation_push_records(
+            context.db, **data.model_dump()
+        )
+    )
+
+
+@agent_tool(
+    name="quality.list_oot_ledger",
+    summary="查询OOT台账",
+    input_model=InspectionResourceListInput,
+    risk_level="low",
+    method="GET",
+    path="/quality/oos-oot/oot-ledger",
+)
+async def list_oot_ledger(
+    context: ToolContext, data: InspectionResourceListInput
+) -> dict[str, Any]:
+    return _dump_object(
+        await quality_feishu_pages_oos_oot.list_oot_ledger_records(
+            context.db, **data.model_dump()
+        )
+    )
+
+
+@agent_tool(
+    name="quality.list_oot_limit_products",
+    summary="查询OOT限度产品与通知单目录",
+    input_model=InspectionResourceListInput,
+    risk_level="low",
+    method="GET",
+    path="/quality/oos-oot/oot-limit-products",
+)
+async def list_oot_limit_products(
+    context: ToolContext, data: InspectionResourceListInput
+) -> dict[str, Any]:
+    return await agent_queries.list_oot_limit_products(context.db, **data.model_dump())
+
+
+@agent_tool(
+    name="quality.list_product_departments",
+    summary="查询OOS/OOT产品涉及部门记录",
+    input_model=InspectionResourceListInput,
+    risk_level="low",
+    method="GET",
+    path="/quality/oos-oot/product-departments",
+)
+async def list_product_departments(
+    context: ToolContext, data: InspectionResourceListInput
+) -> dict[str, Any]:
+    return _dump_object(
+        await quality_feishu_pages_oos_oot.list_product_department_records(
+            context.db, **data.model_dump()
+        )
+    )
+
+
+@agent_tool(
+    name="quality.list_finished_product_anomalies",
+    summary="查询年度成品异常报告",
+    input_model=AnomalyListInput,
+    risk_level="low",
+    method="GET",
+    path="/quality/finished-product-anomaly/records",
+)
+async def list_finished_product_anomalies(
+    context: ToolContext, data: AnomalyListInput
+) -> dict[str, Any]:
+    return _dump_object(
+        await inspection_feishu_crud.list_bitable_feishu_records(
+            context.db,
+            f"finished_product_anomaly_{data.year}",
+            **data.model_dump(exclude={"year"}),
+        )
+    )
+
+
+@agent_tool(
+    name="quality.list_qc_validations",
+    summary="查询年度QC验证记录",
+    input_model=QcValidationListInput,
+    risk_level="low",
+    method="GET",
+    path="/quality/validation-qc/records",
+)
+async def list_qc_validations(
+    context: ToolContext, data: QcValidationListInput
+) -> dict[str, Any]:
+    return _dump_object(
+        await inspection_feishu_crud.list_bitable_feishu_records(
+            context.db,
+            f"validation_qc_{data.year}",
+            **data.model_dump(exclude={"year"}),
+        )
+    )
+
+
+@agent_tool(
+    name="quality.list_validation_reviews",
+    summary="查询授权验证AI审核会话",
+    input_model=ReviewListInput,
+    risk_level="low",
+    method="GET",
+    path="/quality/validation-reviews",
+    output_hint="遵守本人记录和验证QA可见范围，只查询已有会话，不发起AI审核。",
+)
+async def list_validation_reviews(
+    context: ToolContext, data: ReviewListInput
+) -> dict[str, Any]:
+    return await agent_queries.list_validation_reviews(context.db, **data.model_dump())

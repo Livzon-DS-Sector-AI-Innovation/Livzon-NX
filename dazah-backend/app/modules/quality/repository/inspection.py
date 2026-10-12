@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 ModelClass = type[Any]
 
@@ -46,8 +47,11 @@ async def list_records(
     keyword: str | None,
     page: int,
     page_size: int,
+    scope_clause: ColumnElement[bool] | None = None,
 ) -> tuple[list[Any], int]:
     conditions = [model.is_deleted.is_(False)]
+    if scope_clause is not None:
+        conditions.append(scope_clause)
     for field_name, value in filters.items():
         if value is not None:
             conditions.append(getattr(model, field_name) == value)

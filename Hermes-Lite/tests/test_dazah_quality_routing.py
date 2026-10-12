@@ -5,12 +5,13 @@ SERVICE_SOURCE = Path(__file__).resolve().parents[1] / "services" / "dazah_agent
 PLATFORM_TOOL_SOURCE = Path(__file__).resolve().parents[1] / "tools" / "dazah_platform.py"
 
 
-def test_dazah_prompt_routes_quality_requests_to_quality_tools() -> None:
-    source = SERVICE_SOURCE.read_text(encoding="utf-8")
+def test_dazah_prompt_discovers_business_tools_from_live_directory() -> None:
+    from services.dazah_agent_service import _system_prompt
 
-    assert "服务能源、仓储、采购、质量管理和 Livzon 助手通讯录查询" in source
-    assert "必须优先调用 dazah_tool 的 quality.* operation" in source
-    assert "quality.list_deviation_report_records" in source
+    prompt = _system_prompt()
+    assert "以当前主体的实时工具目录为准" in prompt
+    assert "describe" in prompt and "execute" in prompt
+    assert "quality.list_deviation_report_records" not in prompt
 
 
 def test_skill_resolver_default_scope_includes_quality() -> None:
@@ -30,18 +31,34 @@ def test_quality_requests_do_not_bypass_agent_orchestration() -> None:
     assert "_try_direct_quality_response(payload)" not in source
 
 
-def test_energy_feishu_config_writes_route_through_confirmed_tools() -> None:
-    source = SERVICE_SOURCE.read_text(encoding="utf-8")
-    platform_source = PLATFORM_TOOL_SOURCE.read_text(encoding="utf-8")
+def test_energy_feishu_config_writes_route_through_confirmed_tools(monkeypatch) -> None:
+    import asyncio
+    import json
 
-    for operation in (
-        "energy.create_feishu_source_root",
-        "energy.update_feishu_source_root",
-        "energy.delete_feishu_source_root",
-        "energy.delete_source_sheets",
-    ):
-        assert operation in source
-        assert f'"{operation}"' not in platform_source
-    assert "action=search" in platform_source
-    assert "三类写操作都只能生成待确认项" in source
-    assert "不得声称会修改或删除飞书原表内容" in source
+    import httpx
+
+    from tools import dazah_platform as platform
+
+    operation = "energy.create_feishu_source_root"
+    real_client = httpx.AsyncClient
+
+    def respond(request):
+        if request.method == "GET":
+            return httpx.Response(200, json={"data": {"operation": operation, "write": True, "confirmation_required": True}})
+        return httpx.Response(200, json={"data": {
+            "ok": True, "requires_confirmation": True,
+            "confirmation": {"id": "pending-test", "status": "pending", "operation": operation},
+        }})
+
+    monkeypatch.setenv("DAZAH_AGENT_TOOL_TOKEN", "synthetic-test-token")
+    monkeypatch.setattr(platform.httpx, "AsyncClient", lambda **kwargs: real_client(transport=httpx.MockTransport(respond), **kwargs))
+    platform.register_dazah_task_context("energy-write", {"user_id": "u", "tenant_id": "t"})
+    try:
+        asyncio.run(platform.dazah_tool("describe", operation=operation, task_id="energy-write"))
+        response = json.loads(asyncio.run(platform.dazah_tool("execute", operation=operation, task_id="energy-write")))
+        assert response["data"]["requires_confirmation"] is True
+        assert platform.current_dazah_task_confirmations("energy-write")[0]["id"] == "pending-test"
+        fact = platform.current_dazah_task_evidence("energy-write")[-1]
+        assert fact.write is True and fact.confirmation_id == "pending-test" and fact.data is None
+    finally:
+        platform.unregister_dazah_task_context("energy-write")
