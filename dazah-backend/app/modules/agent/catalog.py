@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 import uuid
 
 from fastapi import HTTPException, status
@@ -90,10 +91,6 @@ class ToolCatalogService:
         enabled: bool,
     ) -> AgentToolCatalogEntry:
         await self.synchronize(db)
-        if enabled and tool_registry.get(operation) is None:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT, "该能力已退出助手注册目录，不能重新启用"
-            )
         row = await db.scalar(
             select(AgentToolCatalog).where(AgentToolCatalog.operation == operation)
         )
@@ -101,6 +98,10 @@ class ToolCatalogService:
             raise HTTPException(
                 status.HTTP_404_NOT_FOUND,
                 "Agent tool was not found",
+            )
+        if enabled and tool_registry.get(operation) is None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT, "该能力已退出助手注册目录，不能重新启用"
             )
         row.admin_enabled = enabled
         row.status = "active" if enabled else "disabled"
@@ -242,6 +243,9 @@ class ToolCatalogService:
         )
         allowed_tools = set(scope.tool_names or [])
         query = request.query.strip().casefold()
+        exact_operation = bool(
+            re.fullmatch(r"[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*", query)
+        )
         rows = list(
             (
                 await db.execute(
@@ -255,6 +259,8 @@ class ToolCatalogService:
         )
         candidates: list[tuple[AgentToolCatalog, str, str]] = []
         for row in rows:
+            if exact_operation and row.operation != query:
+                continue
             if request.module and row.module != request.module:
                 continue
             spec = tool_registry.get(row.operation)

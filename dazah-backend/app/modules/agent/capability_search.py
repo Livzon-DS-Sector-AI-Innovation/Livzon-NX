@@ -11,6 +11,12 @@ _ACTION_TERMS = (
     ("修改", "更新", "编辑", "update", "edit"),
 )
 _GENERIC = {
+    "does",
+    "not",
+    "match",
+    "any",
+    "tool",
+    "tools",
     "平台",
     "哪些",
     "怎么",

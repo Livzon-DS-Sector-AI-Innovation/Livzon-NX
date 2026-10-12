@@ -40,6 +40,7 @@ def test_exact_operation_and_summary_outrank_schema_fuzzy_match():
     assert exact > fuzzy > 0
     assert capability_score("不存在的意图", "custom.list 仓库物料") == 0
     assert capability_score("帮我看看一下", "custom.list 查询仓储记录") == 0
+    assert capability_score("does-not-match-any-tool", "custom.list", "Tool input") == 0
     assert capability_score("", "custom.list") == 1
 
 
