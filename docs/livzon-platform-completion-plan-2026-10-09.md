@@ -472,7 +472,7 @@ Web 截图：跨模块分析完成画面见 `livzon-web-live-acceptance-2026-10-
 - 后端静态检查：变更 Python 文件 `uv run ruff check` 通过；新增能力检索、能力视图、模块覆盖、页面上下文、运行解释和工具策略六个模块 `uv run mypy --follow-imports=silent` 通过。
 - Hermes：受影响的 14 个测试文件 `python -m pytest -q` **314 passed**；变更路径 Ruff 和 `python -m compileall -q services tools` 通过。
 - 前端：7 个受影响测试文件 `pnpm exec vitest run` **52 passed**；`pnpm typecheck` 和变更路径 ESLint 通过。
-- CD：`python -m pytest -q scripts/tests/test_cd_controller.py scripts/tests/test_cd_stage_site.py scripts/tests/test_maintenance_browser.py` **111 passed, 2 skipped**。跳过项为 Linux 文件安全用例和需要显式开启的隔离 Docker 集成；由对应 CI 补充验证，未记为通过。
+- CD：`python -m pytest -q scripts/tests/test_cd_controller.py scripts/tests/test_cd_stage_site.py scripts/tests/test_maintenance_browser.py` 首次 **111 passed, 2 skipped**。随后设置 `RUN_CD_CONTAINER_TESTS=1` 单独执行真实 Nginx 隔离用例 **1 passed**，在无网络的 Linux 开发镜像内单独执行候选文件安全用例 **1 passed**；两个跳过项都已补跑，合计 **113 项通过**。Nginx 使用独立内部网络及测试 stub，不连接业务数据库或生产入口。
 - 契约与策略：根 `scripts/generate-api.ps1` 重新生成后无新增契约漂移；桥接文件、页面权限生命周期、Agent V2 残留扫描和 `check-test-impact.py --base origin/main --head HEAD` 均通过。
 - 工具盘点：通过 `scripts/export-livzon-tool-inventory.py` 更新生成文件，当前开放 178 项、排除 33 项。相较最初盘点新增 61 项，无原有开放工具删除。主线新增的自动排产页面暂未接入 Agent，生产模块覆盖为 21/22；测试明确断言该缺口。
 - 本地开发栈：用户明确授权两个本地库的主线破坏性迁移后，专用测试库及开发库都从 `a3f8c2d91e47` 升级至唯一 head `a3d8f2c6e1b9`。开发库使用 `docker compose --env-file .env.local -f compose.dev.yml run --rm migrate`，再次确认 current 等于 head；以 `Dockerfile.dev` 重建后端后，容器健康且 `/health` 返回 `{"status":"ok"}`。Chromium 初次下载因 TLS 重置失败，后续只对构建 HTTPS 下载使用本机已配置代理，重试成功；仓库配置未修改。
