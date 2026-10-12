@@ -2,13 +2,13 @@
 
 创建日期：2026-10-09；更新日期：2026-10-10。权限修复、后端授权联动、设置工具关闭、全工具盘点，以及阶段二能力范围、运行诊断和安全重试已完成本地实现与定向回归。本机 Web 已验证真实登录、分配角色来源、实时目录、运行恢复说明及窄屏布局；完整模型编排对话与飞书真实客户端尚未验收。继续按平台基础、既有业务深化、新模块接入、运营与发布的顺序推进。
 
-本计划补充 [企业级 Agent 平台化方案](dazah-enterprise-agent-gateway-tool-registry-implementation-plan-2026-07-30.md) 和 [对话运营中心设计](livzon-conversational-operation-center-spec-2026-07-10.md)。业务能力和权限以当前模块注册表、页面权限、工具元数据及实际运行结果为准，不沿用历史任务账本中的过时实现描述。
+本计划补充 [企业级 Agent 平台化方案](dazah-enterprise-agent-gateway-tool-registry-implementation-plan-2026-07-30.md)。业务能力和权限以当前模块注册表、页面权限、工具元数据及实际运行结果为准，不沿用历史任务账本中的过时实现描述。
 
 ## 当前基础
 
 已有统一 Tool Registry、模块 Provider 自动发现、可信主体、页面权限与助手访问范围版本、写操作确认、人工责任操作拒绝、工具调用审计。Web 浮动入口、飞书 Gateway、自动化、交互表单、附件、记忆治理及运行概览均已有实现，应先验收，再补缺口。
 
-正式业务 Provider 已声明质量、采购、仓储、能源；能源配置工具及缺少页面绑定的业务工具已关闭，当前可用业务工具来自质量、采购和仓储。其余 11 个业务模块尚未在模块注册表声明 Livzon Provider；独立 MCP 工具不能直接算作 Livzon 接入。模块可进入菜单，不代表助手具有查询或执行能力。
+正式业务 Provider 已声明质量、采购、仓储、能源、生产、人事和注册；能源配置工具及缺少页面绑定的业务工具已关闭，当前可用业务工具来自质量、采购、仓储、生产、人事和注册。其余 8 个业务模块尚未在模块注册表声明 Livzon Provider；独立 MCP 工具不能直接算作 Livzon 接入。模块可进入菜单，不代表助手具有查询或执行能力。
 
 系统设置及其全部管理功能不接入助手；设置、组织身份管理、配置诊断及平台运维仅保留人工管理入口。后续业务扩展不得恢复这些助手工具。
 
@@ -463,3 +463,18 @@ Web 截图：跨模块分析完成画面见 `livzon-web-live-acceptance-2026-10-
 截图保存在当前任务的 `.codex/visualizations` 目录：`livzon-write-detail.png`、`livzon-write-cancel.png`、`livzon-login-no-access.png`、`livzon-login-expired.png`，未加入代码仓库。
 
 限制：开发热重载曾使代理连接中断，前端重新启动后复验完成，中断轮次不计作通过。少数措辞仍会使真实模型过度推测缺失字段或把确认卡片拆成额外任务；这些轮次如实显示未完成，未伪造写入。最终草稿确认、执行和取消已实测，但不声称所有自然语言规划均可靠。未执行生产构建、全量自动化 E2E、真实飞书认证、任意模块写入或所有页面遍历；本轮未变更路由、依赖、migration、OpenAPI、环境变量及生成文件，验证集中于本次交互和执行链路。
+
+## 2026-10-12 推送前验证
+
+本次范围经用户确认，包含 Livzon 能力完善和维护发布/CD 修复。已从原 main 保护工作到 feature 分支，并合入最新 origin/main；同步没有冲突。以下记录是本次实际验证，不覆盖前文各日期的历史验收结果。
+
+- 后端：在根 `.env.local` 的专用 `TEST_DATABASE_URL` 上运行变更测试及 Agent V2、Tool Registry、User Tool API 契约集，`uv run pytest -q` **445 passed**。测试进程的主数据库入口也指向专用测试库，Redis 使用独立测试库；未连接真实模型。
+- 后端静态检查：变更 Python 文件 `uv run ruff check` 通过；新增能力检索、能力视图、模块覆盖、页面上下文、运行解释和工具策略六个模块 `uv run mypy --follow-imports=silent` 通过。
+- Hermes：受影响的 14 个测试文件 `python -m pytest -q` **314 passed**；变更路径 Ruff 和 `python -m compileall -q services tools` 通过。
+- 前端：7 个受影响测试文件 `pnpm exec vitest run` **52 passed**；`pnpm typecheck` 和变更路径 ESLint 通过。
+- CD：`python -m pytest -q scripts/tests/test_cd_controller.py scripts/tests/test_cd_stage_site.py scripts/tests/test_maintenance_browser.py` **111 passed, 2 skipped**。跳过项为 Linux 文件安全用例和需要显式开启的隔离 Docker 集成；由对应 CI 补充验证，未记为通过。
+- 契约与策略：根 `scripts/generate-api.ps1` 重新生成后无新增契约漂移；桥接文件、页面权限生命周期、Agent V2 残留扫描和 `check-test-impact.py --base origin/main --head HEAD` 均通过。
+- 工具盘点：通过 `scripts/export-livzon-tool-inventory.py` 更新生成文件，当前开放 178 项、排除 33 项。相较最初盘点新增 61 项，无原有开放工具删除。主线新增的自动排产页面暂未接入 Agent，生产模块覆盖为 21/22；测试明确断言该缺口。
+- 本地开发栈：用户明确授权两个本地库的主线破坏性迁移后，专用测试库及开发库都从 `a3f8c2d91e47` 升级至唯一 head `a3d8f2c6e1b9`。开发库使用 `docker compose --env-file .env.local -f compose.dev.yml run --rm migrate`，再次确认 current 等于 head；以 `Dockerfile.dev` 重建后端后，容器健康且 `/health` 返回 `{"status":"ok"}`。Chromium 初次下载因 TLS 重置失败，后续只对构建 HTTPS 下载使用本机已配置代理，重试成功；仓库配置未修改。
+
+本次 PR 不新增 migration 或环境变量；新增 Agent HTTP Schema、OpenAPI、前端生成类型和工具清单随变更同步。上述数据库升级来自已合并主线，包含删表和删字段，不以代码回滚恢复已删除数据。全量测试、覆盖率、E2E 和交付镜像门禁交由最新 PR head 的 CI；本地定向通过不代表线上部署完成。
