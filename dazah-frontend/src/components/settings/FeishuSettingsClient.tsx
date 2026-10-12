@@ -54,6 +54,7 @@ import {
 } from '@/actions/settings'
 import { getUsers, type UserManagementItem } from '@/actions/users'
 import MemoryGovernanceClient from './MemoryGovernanceClient'
+import AgentModuleCoverageClient from './AgentModuleCoverageClient'
 import SettingsSegmentedNav from './SettingsSegmentedNav'
 import SettingsSubnav from './SettingsSubnav'
 
@@ -61,6 +62,7 @@ const { Text, Title } = Typography
 
 export const agentManagementTabKeys = [
   'overview',
+  'module-coverage',
   'feishu',
   'identity',
   'tools',
@@ -165,36 +167,68 @@ function Overview({
   status,
   health,
   onNavigate,
+  loading = false,
+  refreshErrors = [],
+  refreshedAt = null,
 }: {
   config: FeishuConfig | null
   status: FeishuGatewayStatus | null
   health: AgentRuntimeOverview | null
   onNavigate: (key: string, traceId?: string) => void
+  loading?: boolean
+  refreshErrors?: string[]
+  refreshedAt?: string | null
 }) {
+  const unavailable = loading ? '加载中' : '未获取'
+  const pendingConfirmations = health?.pending_confirmations ?? status?.pending_confirmations ?? unavailable
+  const allowedGroupCount = config?.allowed_group_chat_ids?.length ?? 0
   return (
     <Space orientation="vertical" size={16} className="w-full">
-      <Row gutter={[16, 16]}>
-        <Col xs={24} md={8} xl={6}>
-          <Card><Statistic title="飞书网关" value={statusLabels[status?.gateway || ''] || status?.gateway || '未知'} /></Card>
-        </Col>
-        <Col xs={24} md={8} xl={6}>
-          <Card><Statistic title="待写入审计事件" value={status?.outbox_depth ?? 0} /></Card>
-        </Col>
-        <Col xs={24} md={8} xl={6}>
-          <Card><Statistic title="待确认" value={status?.pending_confirmations ?? 0} /></Card>
-        </Col>
-        <Col xs={24} md={8} xl={6}>
-          <Card><Statistic title="待投递" value={status?.pending_deliveries ?? 0} /></Card>
-        </Col>
-      </Row>
+      <Text type="secondary">最近完整刷新：{formatDate(refreshedAt)} · {loading ? '正在刷新' : '手动刷新'} · 队列指标为当前积压，失败投递为累计失败记录</Text>
+      {refreshErrors.length > 0 && <Alert type="error" showIcon title={`运行数据加载不完整：${refreshErrors.join('、')}`} description="加载失败的数据已标记为未获取，不代表数量为零。请点击“刷新运行状态”重试；最近完整刷新时间仅在所有数据源成功时更新。" />}
+      {status && (!status.configured || !status.gateway_enabled || status.gateway !== 'connected' || status.event_consumer_count === 0) && (
+        <Alert type="warning" showIcon
+          title={!status.configured ? '飞书运行凭证未就绪' : !status.gateway_enabled ? '飞书网关已停用' : status.gateway !== 'connected' ? '飞书网关尚未连接，消息接入不可用' : '飞书已连接，但没有活动消费者'}
+          description="网关连接只代表飞书接入状态，不代表模型调用、工具执行或自动化任务全部正常。请检查接入配置和诊断结果。"
+          action={<Button size="small" onClick={() => onNavigate('feishu')}>检查飞书接入</Button>} />
+      )}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <div>
+          <Card className="h-full"><Statistic title="飞书网关" value={statusLabels[status?.gateway || ''] || status?.gateway || '未知'} /></Card>
+        </div>
+        <div>
+          <Card className="h-full"><Statistic title="待写入审计事件" value={status?.outbox_depth ?? unavailable} /></Card>
+        </div>
+        <div>
+          <Card className="h-full"><Statistic title="待确认" value={pendingConfirmations} /><Button type="link" onClick={() => onNavigate('authorizations')}>查看授权与确认</Button></Card>
+        </div>
+        <div>
+          <Card className="h-full"><Statistic title="待投递" value={status?.pending_deliveries ?? unavailable} /></Card>
+        </div>
+        <div>
+          <Card className="h-full"><Statistic title="失败投递" value={health?.failed_deliveries ?? unavailable} /><Button type="link" onClick={() => onNavigate('trace')}>查看投递诊断</Button></Card>
+        </div>
+      </div>
+      <Card title="接入就绪与范围" extra={<Button size="small" onClick={() => onNavigate('feishu')}>查看接入配置</Button>}>
+        <Descriptions column={{ xs: 1, md: 2, xl: 3 }} size="small">
+          <Descriptions.Item label="运行凭证">{status ? (status.configured ? '已配置' : '未配置') : unavailable}</Descriptions.Item>
+          <Descriptions.Item label="网关开关">{status ? (status.gateway_enabled ? '已启用' : '已停用') : unavailable}</Descriptions.Item>
+          <Descriptions.Item label="事件消费">{status?.event_consumer_count == null ? '未获取' : status.event_consumer_count > 0 ? '有活动消费者' : '无活动消费者'}</Descriptions.Item>
+          <Descriptions.Item label="配置租户">{config?.tenant_id || '—'}</Descriptions.Item>
+          <Descriptions.Item label="运行租户">{status?.tenant_id || '—'}</Descriptions.Item>
+          <Descriptions.Item label="群聊接入范围">{config ? (allowedGroupCount ? `指定 ${allowedGroupCount} 个群聊` : '未设置群聊限制') : unavailable}</Descriptions.Item>
+          <Descriptions.Item label="群聊触发条件">{config ? (config.require_group_mention ? '需要 @ 助手' : '无需 @ 助手') : unavailable}</Descriptions.Item>
+          <Descriptions.Item label="配置生效状态">{config && status ? (config.config_version === status.config_version && config.tenant_id === status.tenant_id && config.gateway_enabled === status.gateway_enabled ? '与运行配置一致' : '与运行配置不一致，请检查接入') : unavailable}</Descriptions.Item>
+        </Descriptions>
+      </Card>
       <Card title="运行版本与连接">
         <Descriptions column={{ xs: 1, md: 2, xl: 3 }} size="small">
           <Descriptions.Item label="连接状态">{statusTag(status?.gateway || 'unknown')}</Descriptions.Item>
-          <Descriptions.Item label="配置版本">{status?.config_version ?? 0}</Descriptions.Item>
+          <Descriptions.Item label="配置版本">{status?.config_version ?? '—'}</Descriptions.Item>
           <Descriptions.Item label="凭证版本">{status?.credential_version ?? '—'}</Descriptions.Item>
-          <Descriptions.Item label="重连次数">{status?.gateway_reconnects ?? 0}</Descriptions.Item>
-          <Descriptions.Item label="当前消费者">{status?.event_consumer || '—'}</Descriptions.Item>
-          <Descriptions.Item label="消费者数量">{status?.event_consumer_count ?? 0}</Descriptions.Item>
+          <Descriptions.Item label="重连次数">{status?.gateway_reconnects ?? '—'}</Descriptions.Item>
+          <Descriptions.Item label="当前消费者"><span className="break-all">{status?.event_consumer || '—'}</span></Descriptions.Item>
+          <Descriptions.Item label="消费者数量">{status?.event_consumer_count ?? '—'}</Descriptions.Item>
           <Descriptions.Item label="Hermes 发布版本">{status?.gateway_upstream?.release_tag || '—'}</Descriptions.Item>
           <Descriptions.Item label="代码版本">{status?.gateway_upstream?.commit_sha?.slice(0, 12) || '—'}</Descriptions.Item>
           <Descriptions.Item label="最近配置变更">{formatDate(config?.updated_at)}</Descriptions.Item>
@@ -209,15 +243,6 @@ function Overview({
           description={`发生时间：${formatDate(health.latest_error_at)}。这是最近一次失败记录，不代表当前仍异常；若重复出现或已影响业务，请查看完整链路。`}
           action={<Button size="small" onClick={() => onNavigate('trace', health.latest_error_trace_id || undefined)}>查看调用链路</Button>}
         />
-      )}
-      {health && (
-        <Card title="自动化健康摘要">
-          <Descriptions size="small">
-            <Descriptions.Item label="待确认">{health.pending_confirmations}</Descriptions.Item>
-            <Descriptions.Item label="失败投递">{health.failed_deliveries}</Descriptions.Item>
-            <Descriptions.Item label="最近异常链路">{health.latest_error_trace_id || '无'}</Descriptions.Item>
-          </Descriptions>
-        </Card>
       )}
     </Space>
   )
@@ -1053,7 +1078,7 @@ function TraceDelivery({
 }
 
 const agentSections = [
-  { key: 'runtime', label: '运行与接入', views: ['overview', 'feishu'] },
+  { key: 'runtime', label: '运行与接入', views: ['overview', 'module-coverage', 'feishu'] },
   { key: 'identity', label: '身份与授权', views: ['identity', 'authorizations'] },
   { key: 'capabilities', label: '能力与诊断', views: ['tools', 'trace'] },
 ] as const
@@ -1070,6 +1095,8 @@ export default function FeishuSettingsClient() {
     result: AgentTraceResult | null
   }>({ traceId: '', result: null })
   const [loading, setLoading] = useState(true)
+  const [refreshErrors, setRefreshErrors] = useState<string[]>([])
+  const [refreshedAt, setRefreshedAt] = useState<string | null>(null)
 
   const queryTrace = useCallback(async (traceId: string) => {
     const normalizedTraceId = traceId.trim()
@@ -1090,12 +1117,17 @@ export default function FeishuSettingsClient() {
       getLivzonFeishuGatewayStatus(),
       getAgentRuntimeOverview(),
     ])
+    const errors: string[] = []
     if (configResult.status === 'fulfilled') setConfig(configResult.value)
-    else message.error('加载飞书配置失败')
+    else { setConfig(null); errors.push('飞书配置') }
     if (statusResult.status === 'fulfilled') setStatus(statusResult.value)
+    else { setStatus(null); errors.push('网关状态') }
     if (healthResult.status === 'fulfilled') setHealth(healthResult.value)
+    else { setHealth(null); errors.push('确认与投递摘要') }
+    setRefreshErrors(errors)
+    if (errors.length === 0) setRefreshedAt(new Date().toISOString())
     setLoading(false)
-  }, [message])
+  }, [])
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadOverview(), 0)
@@ -1107,7 +1139,13 @@ export default function FeishuSettingsClient() {
       key: 'overview',
       label: '运行总览',
       icon: <CloudServerOutlined />,
-      children: <Overview config={config} status={status} health={health} onNavigate={(key, traceId) => { if (traceId) void queryTrace(traceId); setActiveKey(key) }} />,
+      children: <Overview config={config} status={status} health={health} loading={loading} refreshErrors={refreshErrors} refreshedAt={refreshedAt} onNavigate={(key, traceId) => { if (traceId) void queryTrace(traceId); setActiveKey(key) }} />,
+    },
+    {
+      key: 'module-coverage',
+      label: '模块能力接入',
+      icon: <ToolOutlined />,
+      children: <AgentModuleCoverageClient />,
     },
     {
       key: 'feishu',

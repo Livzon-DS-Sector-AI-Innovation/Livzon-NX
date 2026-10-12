@@ -20,6 +20,7 @@ import {
   getAgentOperationsHealth,
   getAgentRuntimeOverview,
   getAgentToolCatalogPage,
+  getAgentModuleCoverage,
   getAgentTrace,
   getExternalIdentityBindings,
   getExternalIdentityConflicts,
@@ -35,6 +36,14 @@ import {
 } from './settings'
 
 describe('settings Agent and Feishu actions', () => {
+  it('reads live module coverage through the authenticated management endpoint', async () => {
+    const data = { registered_count: 117, modules: [] }
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 200, data }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(getAgentModuleCoverage()).resolves.toEqual(data)
+    expect(fetchMock).toHaveBeenCalledWith('http://backend.test/api/v1/agent/control/module-coverage', expect.objectContaining({ cache: 'no-store' }))
+    expect(mocks.getAuthHeaders).toHaveBeenCalled()
+  })
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.clearAllMocks()

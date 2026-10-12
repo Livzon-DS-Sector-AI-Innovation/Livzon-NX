@@ -142,7 +142,9 @@ for method in ('GET','POST','PUT','PATCH','DELETE','OPTIONS','HEAD'):
   assert r.getheader('Retry-After')=='15'; assert r.getheader('Cache-Control')=='no-store'
   assert r.getheader('X-Dazah-Maintenance')=='1'
   body=r.read()
-  if method!='HEAD': assert '系统维护中'.encode() in body
+  if method!='HEAD':
+   assert '<title>工厂管理平台 · 系统维护中</title>'.encode() in body
+   assert '<div class="brand">工厂管理平台</div>'.encode() in body
   c.close()
 pathlib.Path('/fixture/maintenance').unlink()
 pathlib.Path('/fixture/status.json').unlink()

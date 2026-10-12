@@ -1,6 +1,5 @@
 import hashlib
 import json
-import re
 import uuid
 
 from fastapi import HTTPException, status
@@ -10,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.platform.identity.models import User
 
 from .access_scope import AgentAccessScopeService
+from .capability_search import capability_score, schema_search_text
 from .models import AgentToolCatalog
 from .schemas import AgentToolCatalogEntry, AgentToolSearchRequest
 from .tool_registration import ensure_agent_tools_registered
@@ -28,7 +28,10 @@ def _metadata_hash(spec: AgentToolSpec) -> str:
 
 
 def _catalog_entry(row: AgentToolCatalog) -> AgentToolCatalogEntry:
+    spec = tool_registry.get(row.operation)
     return AgentToolCatalogEntry(
+        result_kind=spec.result_kind if spec else "records",
+        output_hint=spec.output_hint if spec else "",
         operation=row.operation,
         module=row.module,
         version=row.capability_version,
@@ -43,29 +46,6 @@ def _catalog_entry(row: AgentToolCatalog) -> AgentToolCatalogEntry:
         timeout_seconds=row.timeout_seconds,
         idempotent=row.idempotent,
     )
-
-
-_GENERIC_SEARCH_BIGRAMS = frozenset(
-    {
-        "平台", "哪些", "怎么", "如何", "可以", "能够", "当前", "用户",
-        "查询", "查看", "请问", "什么",
-    }
-)
-
-
-def _search_score(query: str, haystack: str, *, fuzzy: bool) -> int:
-    if not query:
-        return 1
-    if query in haystack:
-        return 100 + len(query)
-    if not fuzzy:
-        return 0
-    bigrams = {
-        word[index : index + 2]
-        for word in re.findall(r"[\u4e00-\u9fff]{4,}", query)
-        for index in range(len(word) - 1)
-    } - _GENERIC_SEARCH_BIGRAMS
-    return sum(bigram in haystack for bigram in bigrams)
 
 
 class ToolCatalogService:
@@ -89,7 +69,7 @@ class ToolCatalogService:
             row.status = "active" if row.admin_enabled else "disabled"
             row.risk_level = spec.risk_level
             row.write = spec.write
-            row.confirmation_required = spec.write
+            row.confirmation_required = spec.confirmation_required
             row.permission_key = spec.permission_key
             row.input_schema = spec.input_schema or spec.input_model.model_json_schema()
             row.output_schema = spec.output_schema
@@ -99,6 +79,7 @@ class ToolCatalogService:
         for row in rows:
             if row.operation not in active_operations:
                 row.status = "disabled"
+                row.admin_enabled = False
         await db.flush()
 
     async def set_enabled(
@@ -109,6 +90,10 @@ class ToolCatalogService:
         enabled: bool,
     ) -> AgentToolCatalogEntry:
         await self.synchronize(db)
+        if enabled and tool_registry.get(operation) is None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT, "该能力已退出助手注册目录，不能重新启用"
+            )
         row = await db.scalar(
             select(AgentToolCatalog).where(AgentToolCatalog.operation == operation)
         )
@@ -268,26 +253,28 @@ class ToolCatalogService:
             .scalars()
             .all()
         )
-        candidates: list[tuple[AgentToolCatalog, str]] = []
+        candidates: list[tuple[AgentToolCatalog, str, str]] = []
         for row in rows:
             if request.module and row.module != request.module:
                 continue
             spec = tool_registry.get(row.operation)
             if row.operation not in allowed_tools or spec is None or (
                 user.role != "admin"
+                and spec.module is None
                 and spec.required_roles
                 and user.role not in spec.required_roles
             ):
                 continue
             haystack = f"{row.operation} {row.module or ''} {row.summary}".casefold()
-            candidates.append((row, haystack))
-        fuzzy = bool(query) and not any(
-            query in haystack for _, haystack in candidates
-        )
+            # Schema descriptions and task examples belong to the Provider.
+            # Authorization has already filtered candidates before ranking.
+            candidates.append(
+                (row, haystack, schema_search_text(row.input_schema or {}))
+            )
         ranked = sorted(
             (
-                (_search_score(query, haystack, fuzzy=fuzzy), row)
-                for row, haystack in candidates
+                (capability_score(query, haystack, schema_text), row)
+                for row, haystack, schema_text in candidates
             ),
             key=lambda item: (-item[0], item[1].operation),
         )

@@ -63,6 +63,7 @@ def test_tool_metadata_infers_business_module_and_permission_key() -> None:
         summary="查询批次",
         input_model=SampleInput,
         registry=registry,
+        page_keys=("quality:deviations:deviation-ledger",),
         workflow_allowed=True,
         idempotent=True,
         output_schema={"type": "object"},

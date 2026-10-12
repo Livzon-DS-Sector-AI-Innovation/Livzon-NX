@@ -1,6 +1,7 @@
-"""Stable procurement events consumed by other platform modules."""
+"""Public procurement analytics and events consumed by other modules."""
 
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +9,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.agent.event_service import DomainEventEnvelope
 from app.modules.agent.models import AgentDomainEvent
 from app.modules.agent.public_api import publish_domain_event
+from app.modules.procurement.analytics_service import (
+    AnalyticsAggregateInput as AnalyticsAggregateInput,
+)
+from app.modules.procurement.analytics_service import (
+    AnalyticsFilterInput as AnalyticsFilterInput,
+)
+from app.modules.procurement.analytics_service import (
+    AnalyticsMetricInput as AnalyticsMetricInput,
+)
+from app.modules.procurement.analytics_service import (
+    AnalyticsOrderInput as AnalyticsOrderInput,
+)
+from app.modules.procurement.analytics_service import (
+    aggregate_analytics,
+)
 
 
 async def publish_purchase_arrival(
@@ -41,3 +57,10 @@ async def publish_purchase_arrival(
             },
         ),
     )
+
+
+async def aggregate_supplier_analytics(
+    db: AsyncSession, data: AnalyticsAggregateInput
+) -> dict[str, Any]:
+    """Aggregate supplier master data under the executor's trusted page context."""
+    return await aggregate_analytics(db, data)

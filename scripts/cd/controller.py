@@ -378,6 +378,20 @@ class Controller:
         self.event("maintenance_announced", notice_seconds=seconds)
         deadline = time.monotonic() + seconds
         try:
+            # A local marker is not proof that the running proxy exposes it.
+            # Check the mounted config and HTML injection before counting down.
+            status = self.compose("exec", "-T", "nginx", "wget", "-Y", "off", "-qO-",
+                                  "http://127.0.0.1:8090/__dazah_maintenance_status", timeout=15)
+            try:
+                delivered = json.loads(status)
+            except (ValueError, TypeError) as exc:
+                raise Refused("maintenance announcement is not served by the running proxy") from exc
+            if delivered != read_json(path):
+                raise Refused("maintenance announcement differs from the published countdown")
+            html = self.compose("exec", "-T", "nginx", "wget", "-Y", "off", "-qO-",
+                                "--header=Accept: text/html", "http://127.0.0.1:8090/login", timeout=15)
+            if '<script src="/__dazah_maintenance_watch.js"></script>' not in html:
+                raise Refused("maintenance observer is not attached to the running frontend")
             while time.monotonic() < deadline:
                 inventory = self.containers()
                 if not all(self.healthy(inventory.get(s, {})) for s in (*DEPS, *APPS, "nginx")):

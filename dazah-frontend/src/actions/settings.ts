@@ -7,6 +7,8 @@ import type { components } from '@/types/generated/schema'
 const API_BASE = getServerApiBaseUrl()
 
 export type LLMConfig = components['schemas']['LLMConfigResponse']
+export type AgentModuleCoverageView = components['schemas']['AgentModuleCoverageViewOut']
+export type AgentModuleCoverage = components['schemas']['AgentModuleCoverageOut']
 export type LLMConfigFormData = components['schemas']['LLMConfigCreate']
 export type LLMConfigUpdate = components['schemas']['LLMConfigUpdate']
 export type LLMCapabilityDetection = components['schemas']['LLMCapabilityDetectionResponse']
@@ -366,6 +368,11 @@ export async function updateExternalIdentityBindingStatus(
 export async function getAgentToolCatalog() {
   const response = await fetchApi<unknown>('/agent/control/tools')
   return unwrapResponseData<AgentToolCatalogEntry[]>(response.data)
+}
+
+export async function getAgentModuleCoverage(): Promise<AgentModuleCoverageView> {
+  const response = await fetchApi<unknown>('/agent/control/module-coverage')
+  return unwrapResponseData<AgentModuleCoverageView>(response.data)
 }
 
 export async function getAgentMemoryTenantPolicy() {

@@ -19,10 +19,12 @@ from app.platform.audit.middleware import current_audit_request_id
 from app.platform.audit.models import AuditLog
 from app.platform.identity.deps import AdminUser, RequiredUser
 from app.platform.identity.models import User
+from app.shared.schemas import ApiResponseEnvelope
 
 from .access_scope import AgentAccessScopeService
 from .audit_service import AgentAuditService
 from .automation_service import AgentAutomationService
+from .capability_view import AgentCapabilityViewService
 from .catalog import ToolCatalogService
 from .event_service import AgentDomainEventService
 from .interaction_schemas import (
@@ -41,25 +43,31 @@ from .models import (
     AgentPushDelivery,
     AgentToolCall,
 )
+from .module_coverage import AgentModuleCoverageService
 from .operations_service import AgentOperationsService
 from .push_delivery_service import PushDeliveryService
 from .repository import AgentRepository
+from .run_explanation import AgentRunExplanationService
 from .schemas import (
     AgentAccessScopeOut,
     AgentAuditSessionDetail,
     AgentAuditSessionPage,
     AgentAutomationAuditItem,
+    AgentCapabilityViewOut,
     AgentChatRequest,
     AgentConfirmationExecuteResponse,
     AgentConfirmationResolveRequest,
     AgentMemoryTenantPolicyOut,
     AgentMemoryTenantPolicyUpdate,
+    AgentModuleCoverageViewOut,
+    AgentRunExplanationOut,
     AgentSessionDetail,
     AgentSessionItem,
     AgentSessionPage,
     AgentSkillCreate,
     AgentSkillResolveRequest,
     AgentSkillUpdate,
+    AgentToolCatalogEntry,
     AgentToolCatalogPage,
     AgentToolControlRequest,
     AgentToolEnabledUpdate,
@@ -708,6 +716,20 @@ async def get_automation_run(
     return success_response(data=result)
 
 
+@router.get(
+    "/automation-runs/{run_id}/explanation", response_model=AgentRunExplanationOut
+)
+async def explain_automation_run(
+    run_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentRunExplanationService().explain(
+        db, user=current_user, run_id=run_id
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
 @router.get("/automation-runs/{run_id}/events")
 async def list_automation_run_events(
     run_id: uuid.UUID,
@@ -847,6 +869,27 @@ async def chat_stream(
     )
 
 
+@router.get("/capabilities", response_model=AgentCapabilityViewOut)
+async def get_my_capabilities(
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentCapabilityViewService().view(db, user=current_user)
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.get("/control/capabilities/{user_id}", response_model=AgentCapabilityViewOut)
+async def diagnose_user_capabilities(
+    user_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentCapabilityViewService().diagnose(
+        db, actor=current_user, user_id=user_id
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
 @router.get("/access-scope", response_model=AgentAccessScopeOut)
 async def get_my_access_scope(
     db: AsyncSession = Depends(get_db),
@@ -905,6 +948,15 @@ async def execute_control_plane_tool(
         execution_context={"source": "admin_control_plane"},
     )
     result = await AgentService(settings).execute_tool(db, request=request)
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.get("/control/module-coverage", response_model=AgentModuleCoverageViewOut)
+async def get_module_coverage(
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentModuleCoverageService().view(db, actor=current_user)
     return success_response(data=result.model_dump(mode="json"))
 
 
@@ -1346,7 +1398,10 @@ async def get_control_plane_runtime_overview(
     )
 
 
-@router.post("/tools/search")
+@router.post(
+    "/tools/search",
+    response_model=ApiResponseEnvelope[list[AgentToolCatalogEntry]],
+)
 async def search_tools(
     payload: AgentToolSearchRequest,
     request: Request,
@@ -1406,7 +1461,9 @@ async def search_tools(
     return success_response(data=[item.model_dump(mode="json") for item in result])
 
 
-@router.get("/tools/{operation}")
+@router.get(
+    "/tools/{operation}", response_model=ApiResponseEnvelope[AgentToolCatalogEntry]
+)
 async def describe_tool(
     operation: str,
     subject_user_id: uuid.UUID,
@@ -1586,11 +1643,20 @@ async def execute_confirmation(
     current_user: RequiredUser = None,
     settings: Settings = Depends(get_settings),
 ):
-    confirmation, result = await AgentService(settings).execute_confirmation(
-        db,
-        confirmation_id=confirmation_id,
-        current_user=current_user,
-    )
+    try:
+        confirmation, result = await AgentService(settings).execute_confirmation(
+            db,
+            confirmation_id=confirmation_id,
+            current_user=current_user,
+        )
+    except HTTPException as exc:
+        if exc.status_code != status.HTTP_403_FORBIDDEN:
+            raise
+        # A normal error response lets get_db commit the cancelled confirmation
+        # and denial audit instead of rolling them back with an exception.
+        return error_response(
+            message="当前权限不允许执行该确认，操作未执行", status_code=403
+        )
     if result is None:
         return error_response(
             message="Agent confirmation has expired",
@@ -1634,6 +1700,10 @@ async def resolve_confirmation_from_gateway(
     user = await db.get(User, payload.subject.user_id)
     if user is None or user.is_deleted or user.status != "active":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Trusted subject is not active")
+    if (user.tenant_key or "default") != payload.subject.tenant_id:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Trusted subject tenant mismatch"
+        )
     service = AgentService(settings)
     if payload.choice == "reject":
         confirmation = await service.cancel_confirmation(
@@ -1648,11 +1718,18 @@ async def resolve_confirmation_from_gateway(
                 )
             }
         )
-    confirmation, result = await service.execute_confirmation(
-        db,
-        confirmation_id=confirmation_id,
-        current_user=user,
-    )
+    try:
+        confirmation, result = await service.execute_confirmation(
+            db,
+            confirmation_id=confirmation_id,
+            current_user=user,
+        )
+    except HTTPException as exc:
+        if exc.status_code != status.HTTP_403_FORBIDDEN:
+            raise
+        return error_response(
+            message="当前权限不允许执行该确认，操作未执行", status_code=403
+        )
     if result is None:
         return error_response(
             message="Agent confirmation has expired",

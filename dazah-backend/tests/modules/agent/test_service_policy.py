@@ -150,7 +150,7 @@ async def test_restart_command_archives_old_web_session_and_creates_new_one() ->
 
     service = AgentService(SimpleNamespace())
     service.repo = cast(Any, ResetRepository)()
-    current_user: Any = SimpleNamespace(id=user_id)
+    current_user: Any = SimpleNamespace(id=user_id, grant_version=0)
 
     session, history, _message = await service._prepare_chat_context(
         object(),  # type: ignore[arg-type]
@@ -399,7 +399,7 @@ async def test_stream_chat_sends_analysis_images_directly_to_vision_client(
 ) -> None:
     repo: Any = FakeAgentRepository()
     service = AgentService(settings=SimpleNamespace(), repo=repo)
-    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
+    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户", grant_version=0)
     request, prepared = _direct_image_request()
 
     async def prepare(_request: Any) -> Any:
@@ -448,7 +448,7 @@ async def test_stream_chat_maps_direct_vision_timeout_to_stable_error(
 ) -> None:
     repo: Any = FakeAgentRepository()
     service = AgentService(settings=SimpleNamespace(), repo=repo)
-    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
+    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户", grant_version=0)
     request, prepared = _direct_image_request()
 
     async def prepare(_request: Any) -> Any:
@@ -632,6 +632,24 @@ def test_human_decision_policy_detects_delegated_approval() -> None:
     assert AgentService._is_human_decision_required_message("请批准这条采购申请")
 
 
+@pytest.mark.parametrize("message", [
+    "请创建采购申请草稿，禁止审批，不要提交审批，确认前不要写入",
+    "帮我创建草稿，不要直接审批或驳回",
+    "请生成待确认卡片，不得执行批准",
+])
+def test_human_decision_policy_allows_explicitly_negated_actions(message: str) -> None:
+    assert not AgentService._is_human_decision_required_message(message)
+
+
+@pytest.mark.parametrize("message", [
+    "不要驳回，请批准这条申请",
+    "禁止重启连接，帮我审批通过申请",
+    "不要只创建草稿，请直接审批",
+])
+def test_negation_does_not_allow_another_responsibility_action(message: str) -> None:
+    assert AgentService._is_human_decision_required_message(message)
+
+
 def test_human_decision_policy_allows_read_only_approval_queries() -> None:
     assert not AgentService._is_human_decision_required_message("查看待审批采购申请")
     assert not AgentService._is_human_decision_required_message(
@@ -682,7 +700,7 @@ def test_assistant_metadata_exposes_structured_query_evidence() -> None:
 async def test_chat_returns_policy_refusal_for_delegated_approval() -> None:
     repo: Any = FakeAgentRepository()
     service = PolicyOnlyAgentService(settings=SimpleNamespace(), repo=repo)
-    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
+    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户", grant_version=0)
     db: Any = cast(Any, FakeDb)()
 
     response = await service.chat(
@@ -701,7 +719,7 @@ async def test_chat_returns_policy_refusal_for_delegated_approval() -> None:
 async def test_stream_chat_emits_agent_backend_v2_events() -> None:
     repo: Any = FakeAgentRepository()
     service = StreamingAgentService(settings=SimpleNamespace(), repo=repo)
-    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
+    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户", grant_version=0)
     db: Any = cast(Any, FakeDb)()
 
     stream = service.stream_chat(
@@ -736,7 +754,7 @@ async def test_stream_chat_emits_agent_backend_v2_events() -> None:
 async def test_stream_chat_persists_partial_response_when_client_stops() -> None:
     repo: Any = FakeAgentRepository()
     service = StreamingAgentService(settings=SimpleNamespace(), repo=repo)
-    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
+    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户", grant_version=0)
     db: Any = cast(Any, FakeDb)()
 
     stream = service.stream_chat(
@@ -758,7 +776,7 @@ async def test_stream_chat_persists_partial_response_when_client_stops() -> None
 async def test_stream_chat_error_does_not_store_assistant_message() -> None:
     repo: Any = FakeAgentRepository()
     service = ErrorStreamingAgentService(settings=SimpleNamespace(), repo=repo)
-    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
+    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户", grant_version=0)
     db: Any = cast(Any, FakeDb)()
 
     frames = [
@@ -785,7 +803,7 @@ async def test_stream_chat_error_does_not_store_assistant_message() -> None:
 async def test_stream_chat_pipeline_exception_emits_stable_error_event() -> None:
     repo: Any = FakeAgentRepository()
     service = CrashingStreamingAgentService(settings=SimpleNamespace(), repo=repo)
-    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
+    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户", grant_version=0)
 
     frames = [
         frame
@@ -807,7 +825,7 @@ async def test_stream_chat_pipeline_exception_emits_stable_error_event() -> None
 async def test_stream_chat_policy_refusal_returns_v2_finished_without_hermes() -> None:
     repo: Any = FakeAgentRepository()
     service = PolicyOnlyAgentService(settings=SimpleNamespace(), repo=repo)
-    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
+    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户", grant_version=0)
     db: Any = cast(Any, FakeDb)()
 
     frames = [

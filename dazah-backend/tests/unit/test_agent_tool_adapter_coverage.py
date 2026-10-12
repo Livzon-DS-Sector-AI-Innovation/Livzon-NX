@@ -244,8 +244,13 @@ async def test_warehouse_agent_tool_adapters_cover_inventory_and_feishu_paths(
         assert result is not None
         invoked.append(spec.name)
 
-    assert len(invoked) >= 8
-    assert len(double.calls) == 6
+    assert set(invoked) == {
+        "warehouse.list_raw_materials",
+        "warehouse.list_packaging_materials",
+        "warehouse.list_products",
+        "warehouse.list_page_records",
+    }
+    assert len(double.calls) == 4
 
 
 @pytest.mark.anyio
@@ -259,6 +264,8 @@ async def test_procurement_read_agent_tool_adapters_cover_all_list_shapes(
         "list_purchase_order_lines": AsyncMock(return_value=([], 0)),
         "get_purchase_request": AsyncMock(return_value={}),
         "export_purchase_order_lines_xlsx": AsyncMock(return_value=b"xlsx"),
+        "list_material_catalog": AsyncMock(return_value=([], 0, None)),
+        "list_contract_records": AsyncMock(return_value=([], 0)),
     }
     for name, mock in mocks.items():
         monkeypatch.setattr(procurement_tools, name, mock)

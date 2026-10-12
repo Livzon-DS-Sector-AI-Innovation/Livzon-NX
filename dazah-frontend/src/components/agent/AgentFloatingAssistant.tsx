@@ -19,7 +19,6 @@ import {
   SafetyCertificateOutlined,
   SendOutlined,
   StopOutlined,
-  SyncOutlined,
 } from "@ant-design/icons"
 import { App, Button, Drawer, Empty, Input, Skeleton, Tag, Tooltip } from "antd"
 import Alert from "@/components/shared/PlatformNotice"
@@ -41,12 +40,14 @@ import {
   type AgentSessionItem,
 } from "@/lib/api/agent"
 import { useAgentStore } from "@/stores/agent"
+import { useAuthStore } from "@/stores/auth"
+import { buildAgentPageHint } from "./pageContext"
 
 const suggestions = [
-  { label: "质量偏差", prompt: "查询质量偏差报告记录", icon: <FileSearchOutlined /> },
-  { label: "同步状态", prompt: "查看飞书同步状态", icon: <SyncOutlined /> },
-  { label: "原辅料库存", prompt: "查询原辅料库存", icon: <DatabaseOutlined /> },
-  { label: "采购审批", prompt: "查看待审批采购申请", icon: <SafetyCertificateOutlined /> },
+  { label: "质量偏差", prompt: "查询质量偏差报告记录", pageKey: "quality:deviations:deviation-ledger", icon: <FileSearchOutlined /> },
+  { label: "供应商", prompt: "查询供应商清单", pageKey: "purchasing:supplier", icon: <FileSearchOutlined /> },
+  { label: "原辅料库存", prompt: "查询原辅料库存", pageKey: "warehouse:materials:raw-summary", icon: <DatabaseOutlined /> },
+  { label: "采购申请", prompt: "查看采购申请", pageKey: "purchasing:request:request-hardware", icon: <SafetyCertificateOutlined /> },
 ]
 
 const ASSISTANT_EXIT_ANIMATION_MS = 180
@@ -442,6 +443,11 @@ export function confirmationExecutionFeedback(
 }
 
 export function AgentFloatingAssistant() {
+  const hasPagePermission = useAuthStore((state) => state.hasPagePermission)
+  const authUser = useAuthStore((state) => state.user)
+  const availableSuggestions = authUser
+    ? suggestions.filter((item) => hasPagePermission(item.pageKey, "query"))
+    : []
   const { message: toast } = App.useApp()
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -675,17 +681,18 @@ export function AgentFloatingAssistant() {
     resetStreamBuffer(true)
     setStreaming(false)
     setAttachments([])
-    if (sessionId) {
-      try {
-        await archiveAgentSession(sessionId)
-      } catch {
-        // Archiving is best effort; starting a fresh session must remain available.
-      }
-    }
+    const previousSessionId = sessionId
     startNewConversation()
     window.requestAnimationFrame(() => {
       scrollRef.current?.scrollTo({ top: 0 })
     })
+    if (previousSessionId) {
+      try {
+        await archiveAgentSession(previousSessionId)
+      } catch {
+        // Archiving is best effort; starting a fresh session must remain available.
+      }
+    }
   }
 
   async function submit(text?: string) {
@@ -733,7 +740,7 @@ export function AgentFloatingAssistant() {
           message: content,
           context: {
             entry: "floating-assistant",
-            scope: ["identity", "energy", "warehouse", "procurement", "quality"],
+            page_context: buildAgentPageHint(window.location),
           },
           attachments: submittedAttachments.map((attachment) => ({
             filename: attachment.filename,
@@ -993,15 +1000,15 @@ export function AgentFloatingAssistant() {
             <div className="agent-welcome-card">
               <div className="agent-welcome-mark" aria-hidden="true"><AgentMark /></div>
               <h2>你好，我是 Livzon 助手</h2>
-              <p>查询业务数据、同步状态与流程进展，或直接告诉我你想完成的工作。</p>
+              <p>查询已授权的业务数据与流程进展，或直接告诉我你想完成的工作。</p>
               <div className="agent-welcome-safety">
                 <SafetyCertificateOutlined aria-hidden="true" />
                 <span>创建、同步、发送等写操作会先请你确认</span>
               </div>
             </div>
-            <div className="agent-suggestion-heading">试试这样提问</div>
+            {availableSuggestions.length > 0 && <div className="agent-suggestion-heading">试试这样提问</div>}
             <div className="agent-suggestion-grid">
-              {suggestions.map((item) => (
+              {availableSuggestions.map((item) => (
                 <Button key={item.prompt} className="agent-suggestion" onClick={() => submit(item.prompt)}>
                   <span className="agent-suggestion-icon" aria-hidden="true">{item.icon}</span>
                   <span className="agent-suggestion-text"><span>{item.label}</span><small>{item.prompt}</small></span>

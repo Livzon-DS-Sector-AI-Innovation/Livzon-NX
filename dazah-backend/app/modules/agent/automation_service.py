@@ -1034,7 +1034,9 @@ class AgentAutomationService:
             error_code=item.error_code,
             error_message="已脱敏"
             if payload_redacted and item.error_message
-            else item.error_message,
+            else "运行未完成，请查看运行诊断和恢复建议"
+            if item.error_message
+            else None,
             started_at=item.started_at,
             finished_at=item.finished_at,
             created_at=item.created_at,
@@ -1059,7 +1061,9 @@ class AgentAutomationService:
             error_code=item.error_code,
             error_message="已脱敏"
             if payload_redacted and item.error_message
-            else item.error_message,
+            else "步骤未完成，请查看运行诊断和恢复建议"
+            if item.error_message
+            else None,
             started_at=item.started_at,
             finished_at=item.finished_at,
             payload_redacted=payload_redacted,
@@ -1067,15 +1071,16 @@ class AgentAutomationService:
 
     @staticmethod
     def _event_out(item: AgentRunEvent, *, payload_redacted: bool) -> AgentRunEventOut:
+        payload = redact_sensitive(item.payload_summary)
+        if isinstance(payload, dict) and "error" in payload:
+            payload["error"] = "步骤未完成，请查看运行诊断和恢复建议"
         return AgentRunEventOut(
             id=item.id,
             run_id=item.run_id,
             event_type=item.event_type,
             actor_type=item.actor_type,
             actor_id=item.actor_id,
-            payload_summary={}
-            if payload_redacted
-            else redact_sensitive(item.payload_summary),
+            payload_summary={} if payload_redacted else payload,
             occurred_at=item.occurred_at,
             payload_redacted=payload_redacted,
         )

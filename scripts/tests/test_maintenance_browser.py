@@ -51,6 +51,33 @@ def test_templates_attach_observer_only_to_frontend_html_routes():
         assert "proxy_set_header Host $host;" in frontend
 
 
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node runtime required")
+def test_observer_displays_countdown_on_pages_without_new_frontend_boundary():
+    import json
+    config = (ROOT / "deploy/nginx-maintenance.conf").read_text(encoding="utf-8")
+    source = re.search(r"return 200 '(.*?)';", config, re.DOTALL).group(1)
+    harness = '''
+const vm=require("node:vm"),assert=require("node:assert/strict");
+(async()=>{
+ let notice,tick,phase="announced";
+ const document={hidden:false,querySelector:()=>null,getElementById:()=>notice,
+  createElement:()=>({style:{},setAttribute:(k,v)=>assert.equal(v,"status"),remove:()=>{notice=undefined}}),
+  body:{appendChild:n=>{notice=n}},addEventListener:()=>{}};
+ vm.runInNewContext(JSON.parse(process.argv[2]),{document,Date,Number,
+  window:{dispatchEvent:()=>{}},CustomEvent:class{},setInterval:fn=>{tick=fn},
+  fetch:async()=>({status:phase==="normal"?204:200,headers:{get:()=>null},
+   json:async()=>({phase,starts_at:Date.now()/1000+180})})});
+ await new Promise(setImmediate);
+ assert.match(notice.textContent,/完成并保存当前工作/);
+ assert.match(notice.textContent,/剩余 180 秒/);
+ phase="normal";await tick();assert.equal(notice,undefined);
+})().catch(e=>{console.error(e);process.exit(1)});
+'''
+    result = subprocess.run(["node", "-e", harness, "unused", json.dumps(source)],
+                            capture_output=True, text=True, encoding="utf-8", timeout=15)
+    assert result.returncode == 0, result.stderr
+
+
 def test_release_notice_requires_finishing_work_and_has_no_reconciliation_entry():
     config = (ROOT / "deploy/nginx-maintenance.conf").read_text(encoding="utf-8")
     assert "3 分钟内更新" in config
@@ -58,5 +85,6 @@ def test_release_notice_requires_finishing_work_and_has_no_reconciliation_entry(
     assert "核对操作结果" not in config
     assert "确认操作结果" not in config
     assert '<div class="brand">工厂管理平台</div>' in config
+    assert '<title>工厂管理平台 · 系统维护中</title>' in config
     assert '<div class="brand">DAZAH</div>' not in config
     assert 'if ($dazah_maintenance = 1) { return 503; }' in config

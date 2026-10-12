@@ -245,6 +245,10 @@ def _normalize_multimodal_messages(messages: Any, model_name: str) -> Any:
 
 def apply_model_compatibility_defaults(body: dict[str, Any], model_name: str) -> None:
     """Apply defaults required by specific upstream model families."""
+    if _model_name_uses_completion_tokens(model_name):
+        # Hermes sees only the proxy alias, so it cannot apply the actual
+        # model's temperature contract. Match the unified client's behavior.
+        body.pop("temperature", None)
     if not model_name_suggests_kimi(model_name):
         return
 

@@ -10,11 +10,20 @@ from app.modules.agent.automation_runner import AgentAutomationRunner
 from app.modules.agent.push_delivery_service import PushDeliveryService
 from app.platform.identity.models import PermissionOutboxEvent
 from app.platform.identity.permission_repository import PermissionGrantRepository
+from app.platform.scheduler.engine import SchedulerEngine
 from app.platform.scheduler.registry import (
     ScheduleConfig,
+    SchedulerRegistry,
     ScheduleStrategy,
     TaskGenerator,
 )
+
+
+def create_access_scope_sync_engine() -> SchedulerEngine:
+    """Isolate authorization freshness from slow external business sync jobs."""
+    registry = SchedulerRegistry()
+    registry.register_generator(AgentAccessScopeSyncGenerator())
+    return SchedulerEngine(registry)
 
 
 class AgentAccessScopeSyncGenerator(TaskGenerator):
@@ -37,8 +46,12 @@ class AgentAccessScopeSyncGenerator(TaskGenerator):
             select(PermissionOutboxEvent)
             .where(
                 PermissionOutboxEvent.is_deleted.is_(False),
-                PermissionOutboxEvent.event_type
-                == "identity.user_module_grants.changed.v1",
+                PermissionOutboxEvent.event_type.in_(
+                    [
+                        "identity.user_page_grants.changed.v1",
+                        "identity.user_module_grants.changed.v1",
+                    ]
+                ),
                 PermissionOutboxEvent.status.in_(["pending", "failed"]),
                 or_(
                     PermissionOutboxEvent.next_attempt_at.is_(None),

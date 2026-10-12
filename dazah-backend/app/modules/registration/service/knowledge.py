@@ -139,6 +139,13 @@ class RegistrationKnowledgeService:
 
         return await self._build_article_response(article)
 
+    async def read_agent_article(self, article_id: UUID) -> KnowledgeArticleResponse:
+        """Read published knowledge without a view-count mutation or commit."""
+        article = await self.repository.get_article_by_id(article_id)
+        if article is None or not article.is_published:
+            raise NotFoundException("已发布知识文章", str(article_id))
+        return await self._build_article_response(article)
+
     async def create_article(
         self, data: KnowledgeArticleCreate
     ) -> KnowledgeArticleResponse:

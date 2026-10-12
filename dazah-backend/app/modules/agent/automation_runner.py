@@ -225,6 +225,63 @@ class AgentAutomationRunner:
             raise HTTPException(404, "未找到可运行的自动化")
         return run
 
+    async def retry_failed(
+        self, session: AsyncSession, *, run_id: uuid.UUID, user: User
+    ) -> AgentAutomationRun:
+        """Resume the original failed run without replaying completed writes."""
+        run = (
+            await session.execute(
+                select(AgentAutomationRun)
+                .where(
+                    AgentAutomationRun.id == run_id,
+                    AgentAutomationRun.owner_user_id == user.id,
+                    AgentAutomationRun.is_deleted.is_(False),
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if run is None:
+            raise HTTPException(404, "自动化运行不存在")
+        if run.status != AutomationRunStatus.FAILED.value:
+            raise HTTPException(409, "仅失败的自动化运行可以重试")
+        automation = await session.get(AgentAutomation, run.automation_id)
+        if automation is None or automation.status != AutomationStatus.ENABLED.value:
+            raise HTTPException(409, "自动化未启用，请先恢复并重新确认授权")
+        if automation.active_version_id != run.version_id:
+            raise HTTPException(409, "自动化版本已变化，不能重试旧版本运行")
+        failed_step = (
+            await session.execute(
+                select(AgentStepRun)
+                .where(
+                    AgentStepRun.run_id == run.id,
+                    AgentStepRun.step_key == run.current_step_key,
+                    AgentStepRun.is_deleted.is_(False),
+                )
+                .order_by(AgentStepRun.attempt.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if failed_step and failed_step.operation:
+            spec = tool_registry.require(failed_step.operation)
+            if spec.write and not spec.idempotent:
+                raise HTTPException(
+                    409, "失败步骤包含非幂等写入，请人工核对结果后重新发起"
+                )
+        elif failed_step is None or run.current_step_key is None:
+            raise HTTPException(409, "没有可安全恢复的失败步骤，请重新发起")
+        # The regular runtime gate rechecks owner, scope, grant and capability.
+        await self.access_scope_service.get_current_scope(session, user=user)
+        run.finished_at = None
+        run.error_code = None
+        run.error_message = None
+        run.retry_count += 1
+        failed_step.status = "retrying"
+        await self._event(
+            session, run, "run_manual_retry", {"step_key": run.current_step_key}
+        )
+        await self._execute_run(session, run)
+        return run
+
     async def _initialize_unplanned_triggers(
         self, session: AsyncSession, *, now: datetime
     ) -> None:
@@ -1202,7 +1259,9 @@ class AgentAutomationRunner:
         run.status = status_value
         run.error_code = error_code
         run.error_message = error_message[:2000] if error_message else None
-        run.output_summary = redact_sensitive(output_summary or {})
+        run.output_summary = redact_sensitive(
+            output_summary if output_summary is not None else run.output_summary or {}
+        )
         run.finished_at = datetime.now(UTC)
         run.retry_at = None
         automation.last_run_id = run.id

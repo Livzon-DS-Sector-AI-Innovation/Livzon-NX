@@ -79,14 +79,39 @@ def test_backend_openapi_exposes_feishu_gateway_restart_contract() -> None:
     assert response_schema["$ref"].endswith("FeishuGatewayRestartApiResponse")
 
 
-def test_describe_uses_operation_and_trusted_subject(monkeypatch) -> None:
+@pytest.mark.parametrize("operation", [
+    "quality.list_deviations", "production.list_batches", "warehouse.list_page_records",
+    "procurement.list_material_catalog", "hr.list_employees",
+    "hr.list_departments", "hr.list_contacts", "hr.list_candidates",
+    "hr.list_onboarding", "hr.list_offboarding", "hr.list_position_transfers",
+    "hr.list_contracts", "hr.list_contract_approval_results",
+    "hr.list_new_employee_training", "hr.list_employee_training_summary",
+    "hr.list_trainers", "hr.list_position_training", "hr.list_training_plan_tracking",
+    "registration.list_project_ledger", "quality.list_lab_instruments",
+    "production.list_sales_plan_details", "production.list_nonconforming_events",
+    "production.list_shift_logs", "production.list_shift_handovers",
+    "production.summarize_ipc_samples",
+    "warehouse.get_inventory_summary", "warehouse.get_trend_summary",
+    "warehouse.get_hardware_cost_summary",
+    "registration.list_authorization_letters", "registration.list_regulatory_documents",
+    "registration.list_inspection_contacts", "registration.list_knowledge_articles",
+    "quality.list_documents", "quality.list_deviation_reports",
+    "quality.list_deviation_investigations", "quality.list_historical_deviations",
+    "quality.list_deviation_workbench_reports", "quality.list_lab_item_inbounds",
+    "quality.list_lab_item_outbounds", "quality.list_oos_oot_reports",
+    "quality.list_oos_oot_investigations", "quality.list_oot_ledger",
+    "quality.list_oot_limit_products", "quality.list_product_departments",
+    "quality.list_finished_product_anomalies", "quality.list_qc_validations",
+    "quality.list_validation_reviews",
+])
+def test_describe_uses_operation_and_trusted_subject(monkeypatch, operation) -> None:
     recorded: dict[str, object] = {}
 
     class FakeResponse:
         status_code = 200
 
         def json(self) -> dict[str, object]:
-            return {"data": {"operation": "quality.list_deviations"}}
+            return {"data": {"operation": operation}}
 
     class FakeAsyncClient:
         def __init__(self, *args, **kwargs) -> None:
@@ -109,15 +134,15 @@ def test_describe_uses_operation_and_trusted_subject(monkeypatch) -> None:
         payload = asyncio.run(
             dazah_platform.dazah_tool(
                 "describe",
-                operation="quality.list_deviations",
+                operation=operation,
             )
         )
     finally:
         dazah_platform.dazah_request_context.reset(token)
 
-    assert json.loads(payload)["data"]["operation"] == "quality.list_deviations"
+    assert json.loads(payload)["data"]["operation"] == operation
     assert str(recorded["url"]).endswith(
-        "/agent/tools/quality.list_deviations"
+        f"/agent/tools/{operation}"
     )
     assert recorded["params"] == {
         "subject_user_id": "00000000-0000-0000-0000-000000000001",
@@ -387,3 +412,61 @@ def test_backend_openapi_keeps_deviation_statistics_tool_contract() -> None:
     assert set(item_properties) == {"name", "count"}
     trend_properties = schemas["MonthlyTrendPoint"]["properties"]
     assert set(trend_properties) == {"month", "count"}
+
+
+@pytest.mark.parametrize(
+    ("operation", "status_code"),
+    [("analytics.aggregate", 200), ("analytics.aggregate", 403),
+     ("identity.check_feishu_permissions", 400)],
+)
+def test_tools_preserve_backend_permission_and_exclusion_decision(monkeypatch, operation, status_code):
+    recorded = []
+
+    class FakeResponse:
+        text = "supplier page query permission denied"
+
+        def json(self):
+            return {"data": {"ok": True, "operation": "analytics.aggregate", "data": {"rows": [{"count": 3}]}}}
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def post(self, url, json, headers):
+            recorded.append((url, json))
+            response = FakeResponse()
+            response.status_code = status_code
+            return response
+
+    monkeypatch.setenv("DAZAH_AGENT_TOOL_TOKEN", "contract-token")
+    monkeypatch.setattr(dazah_platform.httpx, "AsyncClient", FakeAsyncClient)
+    token = _bind_context()
+    try:
+        payload = json.loads(
+            asyncio.run(
+                dazah_platform.dazah_tool(
+                    "execute",
+                    operation=operation,
+                    params={"dataset": "procurement.suppliers"},
+                )
+            )
+        )
+    finally:
+        dazah_platform.dazah_request_context.reset(token)
+    assert len(recorded) == 1
+    assert recorded[0][0].endswith("/agent/tools/execute")
+    assert recorded[0][1]["subject"]["user_id"] == "00000000-0000-0000-0000-000000000001"
+    assert recorded[0][1]["params"] == {"dataset": "procurement.suppliers"}
+    assert recorded[0][1]["operation"] == operation
+    if status_code in (400, 403):
+        assert payload["ok"] is False
+        assert payload["status_code"] == status_code
+        assert "rows" not in payload
+    else:
+        assert payload["data"]["data"]["rows"] == [{"count": 3}]

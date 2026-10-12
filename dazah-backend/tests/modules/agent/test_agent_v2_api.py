@@ -273,6 +273,7 @@ async def test_gateway_confirmation_resolution_delegates_choice(
         id=user_id,
         is_deleted=False,
         status="active",
+        tenant_key="tenant-a",
     )
     service: Any = FakeAgentService()
     monkeypatch.setattr(api, "require_service_token", lambda *args: None)
@@ -303,7 +304,9 @@ async def test_gateway_expired_confirmation_returns_conflict_response(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     user_id = uuid.uuid4()
-    user: Any = SimpleNamespace(id=user_id, is_deleted=False, status="active")
+    user: Any = SimpleNamespace(
+        id=user_id, is_deleted=False, status="active", tenant_key="tenant-a"
+    )
     service: Any = FakeAgentService()
     service.expired = True
     monkeypatch.setattr(api, "require_service_token", lambda *args: None)

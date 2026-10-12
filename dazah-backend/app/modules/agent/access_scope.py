@@ -80,6 +80,7 @@ class AgentAccessScopeService:
         for spec in specs:
             if (
                 user.role != "admin"
+                and spec.module is None
                 and spec.required_roles
                 and user.role not in spec.required_roles
             ):
@@ -170,7 +171,7 @@ class AgentAccessScopeService:
             except Exception as exc:
                 if snapshot is not None:
                     snapshot.sync_status = "failed"
-                    snapshot.last_error = str(exc)[:2000]
+                    snapshot.last_error = "权限范围同步失败，请检查后台授权同步状态"
                     snapshot.updated_by = user.id
                     await db.flush()
                 raise HTTPException(
