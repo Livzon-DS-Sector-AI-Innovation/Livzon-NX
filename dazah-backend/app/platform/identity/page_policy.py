@@ -1270,6 +1270,96 @@ PAGE_API_BINDINGS += _module_api_bindings(
 )
 
 
+PAGE_API_BINDINGS += _module_api_bindings(
+    "safety",
+    [
+        # 页面 ↔ 飞书多维表格绑定：归「安全飞书设置」页维护（路径里的
+        # {page_key} 指被配置的镜像页，不是调用者所在页面）。
+        (
+            "GET",
+            "/page-feishu-configs",
+            ("safety:system-config:safety-feishu-settings",),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "PUT",
+            "/page-feishu-configs/{page_key}",
+            ("safety:system-config:safety-feishu-settings",),
+            "operate",
+            "sync_config",
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/page-feishu-configs/{page_key}/test",
+            ("safety:system-config:safety-feishu-settings",),
+            "operate",
+            "sync_config",
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/page-feishu-configs/resolve",
+            ("safety:system-config:safety-feishu-settings",),
+            "operate",
+            "sync_config",
+            "not_applicable",
+        ),
+        # 24小时值班隐患：镜像飞书多维表格，可改记录、可上传附件（回写飞书）。
+        (
+            "GET",
+            "/page-tables/{page_key}/records",
+            ("safety:risk-hazard:hazard-inspection:hazard-duty",),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/page-tables/{page_key}/stats",
+            ("safety:risk-hazard:hazard-inspection:hazard-duty",),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "PUT",
+            "/page-tables/{page_key}/records/{record_id}",
+            ("safety:risk-hazard:hazard-inspection:hazard-duty",),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/page-tables/{page_key}/records/{record_id}/attachments/{field_name}",
+            ("safety:risk-hazard:hazard-inspection:hazard-duty",),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/page-tables/{page_key}/records/{record_id}/attachments/{field_name}/{file_token}/content",
+            ("safety:risk-hazard:hazard-inspection:hazard-duty",),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/page-tables/{page_key}/records/{record_id}/attachments/{field_name}/{file_token}/thumbnail",
+            ("safety:risk-hazard:hazard-inspection:hazard-duty",),
+            "query",
+            None,
+            "not_applicable",
+        ),
+    ],
+)
+
+
 PAGE_API_BINDINGS += _quality_shared_ledger_bindings()
 
 

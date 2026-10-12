@@ -4,6 +4,7 @@ import { serverApiUrl } from '@/lib/server-api'
 import { revalidatePath } from 'next/cache'
 // 注意：以下 revalidatePath 调用指向的页面路径部分仍在开发中，待对应页面创建后将自动生效
 import { getAuthHeaders, getServerToken } from '@/lib/auth'
+import { SAFETY_FEISHU_SETTINGS_PAGE_KEY } from '@/lib/safety-page-tables'
 import type {
   Accident,
   AccidentFormData,
@@ -76,6 +77,15 @@ import type { components } from '@/types/generated/schema'
 type SafetyFeishuAppSettingsDetail = components['schemas']['SafetyFeishuAppSettingsDetail']
 type SafetyFeishuSettingsTestResult = components['schemas']['SafetyFeishuSettingsTestResult']
 type UpdateSafetyFeishuAppSettingsRequest = components['schemas']['UpdateSafetyFeishuAppSettingsRequest']
+type PageTableRecordsResponse = components['schemas']['PageTableRecordsResponse']
+type PageTableStatsResponse = components['schemas']['PageTableStatsResponse']
+type PageTableRecord = components['schemas']['PageTableRecord']
+type PageTableAttachmentUploadResponse = components['schemas']['PageTableAttachmentUploadResponse']
+type PageFeishuConfigItem = components['schemas']['PageFeishuConfigItem']
+type PageFeishuConfigListResponse = components['schemas']['PageFeishuConfigListResponse']
+type PageFeishuConfigTestResult = components['schemas']['PageFeishuConfigTestResult']
+type ResolvedPageFeishuUrl = components['schemas']['ResolvedPageFeishuUrl']
+type UpdatePageFeishuConfigRequest = components['schemas']['UpdatePageFeishuConfigRequest']
 
 const API_BASE = serverApiUrl('')
 
@@ -2100,6 +2110,129 @@ export async function getSafetyFeishuWsStatus() {
 export async function restartSafetyFeishuWs() {
   const res = await fetchApi<Record<string, unknown>>('/safety/feishu/ws/restart', {
     method: 'POST',
+  })
+  return res
+}
+
+// ============ 页面飞书多维表格镜像 ============
+
+export async function getSafetyPageTableRecords(params: {
+  pageKey: string
+  page?: number
+  pageSize?: number
+  keyword?: string
+  sortField?: string | null
+  sortDirection?: 'asc' | 'desc'
+  filterField?: string | null
+  filterValue?: string | null
+}) {
+  const search = new URLSearchParams()
+  if (params.page) search.set('page', String(params.page))
+  if (params.pageSize) search.set('page_size', String(params.pageSize))
+  if (params.keyword) search.set('keyword', params.keyword)
+  if (params.sortField) search.set('sort_field', params.sortField)
+  if (params.sortDirection) search.set('sort_direction', params.sortDirection)
+  if (params.filterField) search.set('filter_field', params.filterField)
+  if (params.filterValue) search.set('filter_value', params.filterValue)
+  const query = search.toString()
+  const res = await fetchApi<PageTableRecordsResponse>(
+    `/safety/page-tables/${encodeURIComponent(params.pageKey)}/records${query ? `?${query}` : ''}`,
+    { headers: { 'X-Dazah-Page-Key': params.pageKey } }
+  )
+  return res
+}
+
+export async function getSafetyPageTableStats(params: {
+  pageKey: string
+  groupBy?: string[]
+}) {
+  const search = new URLSearchParams()
+  for (const field of params.groupBy ?? []) search.append('group_by', field)
+  const query = search.toString()
+  return fetchApi<PageTableStatsResponse>(
+    `/safety/page-tables/${encodeURIComponent(params.pageKey)}/stats${query ? `?${query}` : ''}`,
+    { headers: { 'X-Dazah-Page-Key': params.pageKey } }
+  )
+}
+
+export async function updateSafetyPageTableRecord(params: {
+  pageKey: string
+  recordId: string
+  fields: Record<string, unknown>
+}) {
+  const res = await fetchApi<PageTableRecord>(
+    `/safety/page-tables/${encodeURIComponent(params.pageKey)}/records/${encodeURIComponent(params.recordId)}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ fields: params.fields }),
+      headers: { 'X-Dazah-Page-Key': params.pageKey },
+    }
+  )
+  return res
+}
+
+export async function uploadSafetyPageTableAttachment(params: {
+  pageKey: string
+  recordId: string
+  fieldName: string
+  file: File
+}) {
+  const formData = new FormData()
+  formData.append('file', params.file)
+  const authHeaders = await getAuthHeaders()
+  const { 'Content-Type': _, ...uploadHeaders } = authHeaders
+  const response = await fetch(
+    `${API_BASE}/safety/page-tables/${encodeURIComponent(params.pageKey)}/records/${encodeURIComponent(params.recordId)}/attachments/${encodeURIComponent(params.fieldName)}`,
+    {
+      method: 'POST',
+      headers: { ...uploadHeaders, 'X-Dazah-Page-Key': params.pageKey },
+      body: formData,
+    }
+  )
+  const payload = (await response.json()) as ApiResponse<PageTableAttachmentUploadResponse>
+  return payload
+}
+
+// ============ 页面飞书表格绑定配置 ============
+
+export async function getSafetyPageFeishuConfigs() {
+  const res = await fetchApi<PageFeishuConfigListResponse>('/safety/page-feishu-configs', {
+    headers: { 'X-Dazah-Page-Key': SAFETY_FEISHU_SETTINGS_PAGE_KEY },
+  })
+  return res
+}
+
+export async function saveSafetyPageFeishuConfig(
+  pageKey: string,
+  data: UpdatePageFeishuConfigRequest
+) {
+  const res = await fetchApi<PageFeishuConfigItem>(
+    `/safety/page-feishu-configs/${encodeURIComponent(pageKey)}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(data),
+      headers: { 'X-Dazah-Page-Key': SAFETY_FEISHU_SETTINGS_PAGE_KEY },
+    }
+  )
+  return res
+}
+
+export async function testSafetyPageFeishuConfig(pageKey: string) {
+  const res = await fetchApi<PageFeishuConfigTestResult>(
+    `/safety/page-feishu-configs/${encodeURIComponent(pageKey)}/test`,
+    {
+      method: 'POST',
+      headers: { 'X-Dazah-Page-Key': SAFETY_FEISHU_SETTINGS_PAGE_KEY },
+    }
+  )
+  return res
+}
+
+export async function resolveSafetyPageFeishuUrl(url: string) {
+  const res = await fetchApi<ResolvedPageFeishuUrl>('/safety/page-feishu-configs/resolve', {
+    method: 'POST',
+    body: JSON.stringify({ url }),
+    headers: { 'X-Dazah-Page-Key': SAFETY_FEISHU_SETTINGS_PAGE_KEY },
   })
   return res
 }

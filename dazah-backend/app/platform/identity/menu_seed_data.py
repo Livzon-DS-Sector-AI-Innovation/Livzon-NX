@@ -143,6 +143,11 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
                                 "隐患台账",
                                 "/safety/hazard-ledger",
                             ),
+                            _n(
+                                "hazard-duty",
+                                "24小时值班隐患",
+                                "/safety/hazard-duty",
+                            ),
                         ],
                     ),
                     _n(

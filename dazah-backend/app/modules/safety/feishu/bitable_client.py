@@ -110,8 +110,22 @@ class SafetyBitableClient:
         table_id: str | None = None,
     ) -> bool:
         """更新单条记录的字段。返回是否成功。"""
+        ok, _ = await self.update_record_with_result(record_id, fields, table_id)
+        return ok
+
+    async def update_record_with_result(
+        self,
+        record_id: str,
+        fields: dict[str, Any],
+        table_id: str | None = None,
+    ) -> tuple[bool, str | None]:
+        """更新单条记录，返回 ``(是否成功, 飞书错误信息)``。
+
+        页面回写需要把失败原因透出给用户（权限不足、选项非法等），
+        因此与 ``update_record`` 并存，后者保持既有调用方的布尔语义。
+        """
         if not fields:
-            return True
+            return True, None
         token = await self._token()
         async with httpx.AsyncClient(timeout=15) as http:
             resp = await http.put(
@@ -124,19 +138,20 @@ class SafetyBitableClient:
             )
             data = resp.json()
             if data.get("code") != 0:
+                message = str(data.get("msg") or "飞书返回未知错误")
                 logger.error(
                     "Bitable update_record 失败: record_id=%s code=%s msg=%s",
                     record_id,
                     data.get("code"),
-                    data.get("msg"),
+                    message,
                 )
-                return False
+                return False, message
             logger.info(
                 "Bitable update_record 成功: record_id=%s fields=%s",
                 record_id,
                 list(fields.keys()),
             )
-            return True
+            return True, None
 
     async def create_record(
         self,
@@ -347,6 +362,27 @@ class SafetyBitableClient:
         max_pages: int = 50,
     ) -> list[dict[str, Any]]:
         """搜索记录（自动翻页），返回 [{"record_id": "...", "fields": {...}}, ...]."""
+        rows, _ = await self.search_records_with_result(
+            table_id,
+            filter_str=filter_str,
+            page_size=page_size,
+            max_pages=max_pages,
+        )
+        return rows
+
+    async def search_records_with_result(
+        self,
+        table_id: str | None = None,
+        *,
+        filter_str: str | None = None,
+        page_size: int = 100,
+        max_pages: int = 50,
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        """搜索记录，返回 ``(记录列表, 飞书错误信息)``。
+
+        与 ``search_records`` 并存：既有调用方只需要列表，页面则需要区分
+        「表里确实没有数据」和「读取失败」，否则会把故障显示成空表。
+        """
         token = await self._token()
         tid = table_id or self.table_id
         results: list[dict[str, Any]] = []
@@ -368,8 +404,9 @@ class SafetyBitableClient:
                 )
                 data = resp.json()
                 if data.get("code") != 0:
-                    logger.error("Bitable search_records 失败: %s", data.get("msg"))
-                    return results
+                    message = str(data.get("msg") or "飞书返回未知错误")
+                    logger.error("Bitable search_records 失败: %s", message)
+                    return results, message
                 page = data.get("data", {})
                 items = page.get("items", [])
                 if isinstance(items, list):
@@ -379,7 +416,7 @@ class SafetyBitableClient:
                 page_token = page.get("page_token") or None
                 if not page.get("has_more") or not page_token:
                     break
-        return results
+        return results, None
 
     async def list_fields(self, table_id: str | None = None) -> list[dict[str, Any]]:
         """列出表格的所有字段。"""
@@ -399,6 +436,45 @@ class SafetyBitableClient:
             if not isinstance(items, list):
                 return []
             return [item for item in items if isinstance(item, dict)]
+
+    async def list_tables(self, app_token: str | None = None) -> list[dict[str, Any]]:
+        """列出某个多维表格（Base）下的所有数据表。
+
+        用于配置页粘贴 Base 链接后选择子表；返回
+        ``[{"table_id": ..., "name": ...}, ...]``，失败返回空列表。
+        """
+        target = (app_token or self.app_token or "").strip()
+        if not target:
+            return []
+        token = await self._token()
+        tables: list[dict[str, Any]] = []
+        page_token: str | None = None
+        async with httpx.AsyncClient(timeout=15) as http:
+            for _ in range(20):
+                params: dict[str, Any] = {"page_size": 100}
+                if page_token:
+                    params["page_token"] = page_token
+                resp = await http.get(
+                    f"{BITABLE_BASE}/apps/{target}/tables",
+                    headers={"Authorization": f"Bearer {token}"},
+                    params=params,
+                )
+                data = resp.json()
+                if data.get("code") != 0:
+                    logger.error(
+                        "Bitable list_tables 失败: code=%s msg=%s",
+                        data.get("code"),
+                        data.get("msg"),
+                    )
+                    return tables
+                page = data.get("data", {})
+                items = page.get("items", [])
+                if isinstance(items, list):
+                    tables.extend(item for item in items if isinstance(item, dict))
+                page_token = page.get("page_token") or None
+                if not page.get("has_more") or not page_token:
+                    break
+        return tables
 
     async def create_field(
         self,

@@ -229,6 +229,7 @@ export const moduleMenus: ModuleMenu[] = [
             path: "",
             children: [
               { key: "hazard-inspection-ledger", label: "隐患台账", path: "/safety/hazard-ledger" },
+              { key: "hazard-duty", label: "24小时值班隐患", path: "/safety/hazard-duty" },
             ],
           },
           {

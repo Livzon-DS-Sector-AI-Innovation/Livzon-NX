@@ -2835,3 +2835,106 @@ class RegulationRadarRun(BaseModel):
     acknowledged_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True, comment="确认人"
     )
+
+
+# ==================== 页面飞书多维表格镜像 ====================
+
+
+class SafetyPageFeishuConfig(BaseModel):
+    """页面 ↔ 飞书多维表格绑定（每个镜像页一行）。
+
+    页面本身是代码（见 ``safety/page_tables.py`` 注册表），这里只存「这个页面
+    绑定哪张飞书表」，由「安全管理 → 系统配置 → 飞书设置」页维护，不写死在
+    代码里。使用安全模块飞书应用凭证读取，凭据仍在 ``feishu_app_settings``。
+    """
+
+    __tablename__ = "page_feishu_configs"
+    __table_args__ = (
+        Index(
+            "uq_safety_page_feishu_configs_page_key",
+            "page_key",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        {"schema": "safety"},
+    )
+
+    page_key: Mapped[str] = mapped_column(
+        String(160), nullable=False, comment="页面标识（安全模块菜单页面 key）"
+    )
+    app_token: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="多维表格 app_token"
+    )
+    table_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="多维表格 table_id"
+    )
+    view_id: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="多维表格 view_id（仅记录，不做服务端视图过滤）",
+    )
+    hidden_field_names: Mapped[list[Any] | None] = mapped_column(
+        JSON, nullable=True, default=list, comment="页面隐藏的字段名列表"
+    )
+    workshop_aliases: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        default=dict,
+        comment="车间别名归一映射（{别名: 规范车间名}），供仪表盘按车间聚合使用",
+    )
+    is_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+        comment="是否启用该页面的表格绑定",
+    )
+    last_test_status: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, comment="最近绑定测试状态: success/failed"
+    )
+    last_test_error: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="最近绑定测试错误信息"
+    )
+    last_tested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="最近绑定测试时间"
+    )
+    last_test_field_count: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="最近绑定测试读到的字段数"
+    )
+    last_test_record_count: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="最近绑定测试读到的记录数"
+    )
+
+
+class WorkshopClassification(BaseModel):
+    """AI 兜底车间分类缓存。
+
+    车间/位置 的自由文本写法未命中别名和车间号规则时，由 LLM 按规范车间清单
+    归类；结果按原始写法缓存（唯一），后续统计与下钻直接读缓存。别名映射
+    （``workshop_aliases``）优先于本表。
+    """
+
+    __tablename__ = "workshop_classifications"
+    __table_args__ = (
+        Index(
+            "uq_safety_workshop_classifications_raw_value",
+            "raw_value",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        {"schema": "safety"},
+    )
+
+    raw_value: Mapped[str] = mapped_column(
+        String(200), nullable=False, comment="原始位置写法"
+    )
+    canonical: Mapped[str] = mapped_column(
+        String(120), nullable=False, comment="归类后的规范车间/部门名"
+    )
+    source: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="ai",
+        server_default="ai",
+        comment="来源: ai=LLM 自动归类",
+    )
