@@ -176,12 +176,16 @@ async def test_module_coverage_http_projects_new_providers_and_rejects_non_admin
             modules["procurement"]["covered_pages"]
             == modules["procurement"]["total_pages"]
         )
-        assert modules["production"]["state"] == "integrated"
+        assert modules["production"]["state"] == "partial"
         assert modules["production"]["covered_pages"] == 21
-        assert modules["production"]["total_pages"] == 21
-        assert modules["production"]["coverage_percent"] == 100.0
+        assert modules["production"]["total_pages"] == 22
+        assert modules["production"]["coverage_percent"] == 95.5
         assert modules["production"]["registered_count"] == 10
-        assert all(page["enabled_count"] > 0 for page in modules["production"]["pages"])
+        assert {
+            page["page_key"]
+            for page in modules["production"]["pages"]
+            if page["enabled_count"] == 0
+        } == {"production:plan:auto-scheduling"}
         assert modules["warehouse"]["state"] == "integrated"
         assert modules["warehouse"]["covered_pages"] == 47
         assert modules["warehouse"]["total_pages"] == 47

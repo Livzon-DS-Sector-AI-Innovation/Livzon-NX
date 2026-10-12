@@ -23,6 +23,21 @@ class AllowAllAccessScopeService:
 
 
 EXPECTED_QUALITY_OPERATIONS = {
+    "quality.list_finished_product_anomalies",
+    "quality.list_qc_validations",
+    "quality.list_documents",
+    "quality.list_deviation_investigations",
+    "quality.list_deviation_reports",
+    "quality.list_deviation_workbench_reports",
+    "quality.list_historical_deviations",
+    "quality.list_lab_item_inbounds",
+    "quality.list_lab_item_outbounds",
+    "quality.list_oos_oot_reports",
+    "quality.list_oos_oot_investigations",
+    "quality.list_oot_ledger",
+    "quality.list_oot_limit_products",
+    "quality.list_product_departments",
+    "quality.list_validation_reviews",
     "quality.add_capa_execution_track",
     "quality.auto_fill_capa_from_deviation",
     "quality.complete_capa_part",

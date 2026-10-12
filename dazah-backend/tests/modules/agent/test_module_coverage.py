@@ -29,7 +29,7 @@ async def test_module_coverage_http_inventory_disabled_and_admin_boundary(
         response = await client.get("/agent/control/module-coverage")
         assert response.status_code == 200
         data = response.json()["data"]
-        assert data["registered_count"] == 177
+        assert data["registered_count"] == 178
         assert data["personal_count"] == 30
         assert data["excluded_count"] == 33
         modules = {item["module_code"]: item for item in data["modules"]}
@@ -44,7 +44,7 @@ async def test_module_coverage_http_inventory_disabled_and_admin_boundary(
             item["module_name"] for item in data["modules"]
         )
         assert sum(item["registered_count"] > 0 for item in data["modules"]) == 6
-        assert data["total_pages"] == 257
+        assert data["total_pages"] == 258
         assert data["covered_pages"] == 228
         assert modules["hr"]["registered_count"] == 16
         assert modules["hr"]["covered_pages"] == 17
@@ -53,7 +53,12 @@ async def test_module_coverage_http_inventory_disabled_and_admin_boundary(
         assert modules["registration"]["covered_pages"] == 20
         assert modules["warehouse"]["coverage_percent"] == 100.0
         assert modules["warehouse"]["covered_pages"] == 47
-        assert modules["production"]["coverage_percent"] == 100.0
+        assert modules["production"]["coverage_percent"] == 95.5
+        assert {
+            page["page_key"]
+            for page in modules["production"]["pages"]
+            if page["registered_count"] == 0
+        } == {"production:plan:auto-scheduling"}
         assert modules["production"]["covered_pages"] == 21
         assert modules["quality"]["registered_count"] == 89
         assert modules["quality"]["covered_pages"] == 59
