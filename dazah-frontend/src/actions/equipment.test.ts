@@ -8,7 +8,21 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/auth', () => ({ getAuthHeaders: mocks.getAuthHeaders }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 
-import { createCategory, createEquipment, deleteCategory, updateWorkOrder } from './equipment'
+import {
+  createCategory,
+  createEquipment,
+  deleteCategory,
+  fetchCalibrationPlans,
+  fetchCalibrationRecords,
+  fetchEquipments,
+  fetchEquipmentStatistics,
+  fetchMaintenancePlans,
+  fetchSpareParts,
+  fetchStockWarnings,
+  fetchWorkOrders,
+  fetchWorkOrderStatistics,
+  updateWorkOrder,
+} from './equipment'
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000'
 
@@ -81,5 +95,63 @@ describe('equipment actions', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(createEquipment({ name: 'x' } as never)).rejects.toThrow('设备编号重复')
+  })
+})
+
+describe('equipment workshop scoping actions', () => {
+  function stubFetch(body: unknown) {
+    const fetchMock = vi.fn(() => jsonResponse(body))
+    vi.stubGlobal('fetch', fetchMock)
+    return fetchMock
+  }
+  const lastUrl = (m: ReturnType<typeof vi.fn>) => String(m.mock.calls.at(-1)?.[0] ?? '')
+
+  it('fetchEquipments / fetchEquipmentStatistics 携带 workshop', async () => {
+    const m = stubFetch({ code: 200, data: [], meta: { total: 0 } })
+    await fetchEquipments({ workshop: '101-2', page: 1, page_size: 20 })
+    expect(lastUrl(m)).toContain('workshop=101-2')
+    await fetchEquipmentStatistics('101-2')
+    expect(lastUrl(m)).toContain('/equipments/statistics?workshop=101-2')
+  })
+
+  it('工单列表/统计走 maintenance 路径并携带 workshop', async () => {
+    const m = stubFetch({ code: 200, data: [], meta: { total: 0 } })
+    await fetchWorkOrders({ workshop: '101-2', page: 1, page_size: 20 })
+    expect(lastUrl(m)).toContain(`${API_BASE}/api/v1/equipment/maintenance/work-orders/?`)
+    expect(lastUrl(m)).toContain('workshop=101-2')
+    await fetchWorkOrderStatistics('101-2')
+    expect(lastUrl(m)).toContain('/work-orders/statistics?workshop=101-2')
+  })
+
+  it('校准/维护计划携带 workshop', async () => {
+    const m = stubFetch({ code: 200, data: [], meta: { total: 0 } })
+    await fetchCalibrationPlans({ workshop: '201-1', page: 1 })
+    expect(lastUrl(m)).toContain('/maintenance/calibration/plans?')
+    expect(lastUrl(m)).toContain('workshop=201-1')
+    await fetchCalibrationRecords({ workshop: '201-1', page: 1 })
+    expect(lastUrl(m)).toContain('/maintenance/calibration/records?')
+    expect(lastUrl(m)).toContain('workshop=201-1')
+    await fetchMaintenancePlans({ workshop: '201-1', page: 1 })
+    expect(lastUrl(m)).toContain('/maintenance/plans/?')
+    expect(lastUrl(m)).toContain('workshop=201-1')
+  })
+
+  it('备件列表/库存预警携带 workshop', async () => {
+    const m = stubFetch({ code: 200, data: [], meta: { total: 0 } })
+    await fetchSpareParts({ workshop: '201-1', page: 1 })
+    expect(lastUrl(m)).toContain('/api/v1/equipment/spare-parts/?')
+    expect(lastUrl(m)).toContain('workshop=201-1')
+    await fetchStockWarnings('201-1')
+    expect(lastUrl(m)).toBe(
+      `${API_BASE}/api/v1/equipment/spare-parts/stock/warnings?workshop=201-1`,
+    )
+  })
+
+  it('未传 workshop 时不携带该参数（跨车间查询）', async () => {
+    const m = stubFetch({ code: 200, data: [], meta: { total: 0 } })
+    await fetchEquipments({ page: 1 })
+    expect(lastUrl(m)).not.toContain('workshop')
+    await fetchStockWarnings()
+    expect(lastUrl(m)).not.toContain('workshop')
   })
 })
