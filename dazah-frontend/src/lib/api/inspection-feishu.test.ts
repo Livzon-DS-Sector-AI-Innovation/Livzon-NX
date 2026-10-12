@@ -35,6 +35,7 @@ describe('inspection-feishu api', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const result = await fetchInspectionFeishuRecords({
+      workshop: '201-1',
       source: 'history',
       date_from: '2026-10-01',
       date_to: '2026-10-10',
@@ -47,6 +48,7 @@ describe('inspection-feishu api', () => {
     const url = fetchMock.mock.calls[0][0] as unknown as string
     expect(url.startsWith(`${BASE}/records?`)).toBe(true)
     for (const fragment of [
+      'workshop=201-1',
       'source=history',
       'date_from=2026-10-01',
       'date_to=2026-10-10',
@@ -65,8 +67,10 @@ describe('inspection-feishu api', () => {
     const fetchMock = vi.fn((_url: unknown) => jsonResponse({ code: 200, data: [] }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await fetchInspectionFeishuDevices('萃取罐')
-    expect(fetchMock).toHaveBeenCalledWith(`${BASE}/devices?keyword=${encodeURIComponent('萃取罐')}`)
+    await fetchInspectionFeishuDevices('101-2', '萃取罐')
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${BASE}/devices?workshop=101-2&keyword=${encodeURIComponent('萃取罐')}`,
+    )
   })
 
   it('fetches the today summary and the sync status', async () => {
@@ -78,13 +82,13 @@ describe('inspection-feishu api', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(fetchInspectionFeishuTodaySummary()).resolves.toMatchObject({
+    await expect(fetchInspectionFeishuTodaySummary('201-1')).resolves.toMatchObject({
       total_devices: 49,
     })
     fetchMock.mockResolvedValue(
       jsonResponse({ code: 200, data: { enabled: true, tables: [] } }),
     )
-    await expect(fetchInspectionFeishuSyncStatus()).resolves.toMatchObject({
+    await expect(fetchInspectionFeishuSyncStatus('201-1')).resolves.toMatchObject({
       enabled: true,
     })
   })
@@ -95,12 +99,12 @@ describe('inspection-feishu api', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(fetchInspectionFeishuConfig()).resolves.toMatchObject({
+    await expect(fetchInspectionFeishuConfig('101-1')).resolves.toMatchObject({
       source: 'database',
     })
-    expect(fetchMock).toHaveBeenLastCalledWith(`${BASE}/config`)
+    expect(fetchMock).toHaveBeenLastCalledWith(`${BASE}/config?workshop=101-1`)
 
-    await updateInspectionFeishuConfig({
+    await updateInspectionFeishuConfig('101-1', {
       app_id: 'cli_x',
       app_secret: null,
       app_token: 'bascn_x',
@@ -110,13 +114,13 @@ describe('inspection-feishu api', () => {
       is_enabled: true,
     })
     const put = fetchMock.mock.calls.at(-1) as unknown as [string, RequestInit]
-    expect(put[0]).toBe(`${BASE}/config`)
+    expect(put[0]).toBe(`${BASE}/config?workshop=101-1`)
     expect(put[1]).toMatchObject({ method: 'PUT' })
     expect(JSON.parse(String(put[1].body))).toMatchObject({ app_token: 'bascn_x' })
 
-    await testInspectionFeishuConfig()
+    await testInspectionFeishuConfig('101-1')
     const post = fetchMock.mock.calls.at(-1) as unknown as [string, RequestInit]
-    expect(post[0]).toBe(`${BASE}/config/test`)
+    expect(post[0]).toBe(`${BASE}/config/test?workshop=101-1`)
     expect(post[1]).toMatchObject({ method: 'POST' })
   })
 
@@ -125,14 +129,14 @@ describe('inspection-feishu api', () => {
       'fetch',
       vi.fn((_url: unknown) => jsonResponse({ code: 400, message: '首次保存需填写 App ID 与 App Secret' }, 400)),
     )
-    await expect(updateInspectionFeishuConfig({} as never)).rejects.toThrow(
+    await expect(updateInspectionFeishuConfig('101-1', {} as never)).rejects.toThrow(
       '首次保存需填写 App ID 与 App Secret',
     )
   })
 
   it('surfaces a readable error when the sync status request fails', async () => {
     vi.stubGlobal('fetch', vi.fn((_url: unknown) => new Response('Internal Server Error', { status: 500 })))
-    await expect(fetchInspectionFeishuSyncStatus()).rejects.toThrow('请求失败: 500')
+    await expect(fetchInspectionFeishuSyncStatus('201-1')).rejects.toThrow('请求失败: 500')
   })
 })
 
@@ -142,7 +146,7 @@ describe('triggerInspectionFeishuSync', () => {
       'fetch',
       vi.fn((_url: unknown) => jsonResponse({ code: 200, data: { today: { synced: 1, total: 48 } } })),
     )
-    await expect(triggerInspectionFeishuSync()).resolves.toEqual({
+    await expect(triggerInspectionFeishuSync('201-1')).resolves.toEqual({
       today: { synced: 1, total: 48 },
     })
   })
@@ -153,7 +157,7 @@ describe('triggerInspectionFeishuSync', () => {
       'fetch',
       vi.fn((_url: unknown) => new Response('Internal Server Error', { status: 500 })),
     )
-    await expect(triggerInspectionFeishuSync()).rejects.toThrow(
+    await expect(triggerInspectionFeishuSync('201-1')).rejects.toThrow(
       '同步失败（HTTP 500）',
     )
   })
@@ -163,7 +167,7 @@ describe('triggerInspectionFeishuSync', () => {
       'fetch',
       vi.fn((_url: unknown) => jsonResponse({ code: 400, message: '巡检飞书镜像同步未配置' }, 400)),
     )
-    await expect(triggerInspectionFeishuSync()).rejects.toThrow(
+    await expect(triggerInspectionFeishuSync('201-1')).rejects.toThrow(
       '巡检飞书镜像同步未配置',
     )
   })

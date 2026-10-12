@@ -5,6 +5,7 @@ export type InspectionFeishuTodayStatus = 'inspected' | 'abnormal' | 'pending'
 
 export interface InspectionFeishuRecord {
   id: string
+  workshop_code: string
   source: InspectionFeishuSource
   record_id: string
   record_date: string | null
@@ -63,6 +64,8 @@ export interface InspectionFeishuTodaySummary {
 }
 
 export interface InspectionFeishuRecordFilters {
+  /** 车间代码；缺省跨车间查询（设备详情抽屉按设备编号聚合） */
+  workshop?: string
   source?: InspectionFeishuSource
   date_from?: string
   date_to?: string
@@ -81,6 +84,7 @@ export interface InspectionFeishuRecordListResponse {
 }
 
 export interface InspectionFeishuConfigDetail {
+  workshop_code: string
   app_id: string
   app_secret_masked: string
   app_secret_configured: boolean

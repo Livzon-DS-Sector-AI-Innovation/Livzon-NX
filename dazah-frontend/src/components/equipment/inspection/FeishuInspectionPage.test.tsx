@@ -103,7 +103,7 @@ describe('FeishuInspectionPage', () => {
     act(() => {
       root.render(
         <AntApp>
-          <FeishuInspectionPage />
+          <FeishuInspectionPage workshopCode="201-1" workshopLabel="201一车间" />
         </AntApp>,
       )
     })
@@ -121,8 +121,8 @@ describe('FeishuInspectionPage', () => {
   it('renders the header, sync bar, summary card and today table', async () => {
     await renderPage()
     const text = document.body.textContent || ''
-    expect(text).toContain('设备巡检')
-    expect(text).toContain('岗位巡检记录（飞书多维表格镜像，只读展示）')
+    expect(text).toContain('设备巡检 · 201一车间')
+    expect(text).toContain('201一车间岗位巡检记录（飞书多维表格镜像，只读展示）')
     expect(text).toContain('巡检数据在飞书多维表格录入，平台每 5 分钟自动同步')
     expect(text).toContain('最近同步')
     expect(text).toContain('镜像 98 行')
@@ -133,8 +133,10 @@ describe('FeishuInspectionPage', () => {
     expect(text).toContain('酸化罐 1')
     expect(text).toContain('XT1-1-1-028')
     expect(text).toContain('下午清洁异常')
+    expect(api.fetchInspectionFeishuSyncStatus).toHaveBeenCalledWith('201-1')
+    expect(api.fetchInspectionFeishuTodaySummary).toHaveBeenCalledWith('201-1')
     expect(api.fetchInspectionFeishuRecords).toHaveBeenCalledWith(
-      expect.objectContaining({ source: 'today' }),
+      expect.objectContaining({ workshop: '201-1', source: 'today' }),
     )
   })
 
@@ -144,7 +146,7 @@ describe('FeishuInspectionPage', () => {
       findButton('飞书同步').click()
       await new Promise((r) => setTimeout(r, 120))
     })
-    expect(api.triggerInspectionFeishuSync).toHaveBeenCalledTimes(1)
+    expect(api.triggerInspectionFeishuSync).toHaveBeenCalledWith('201-1')
     expect(document.body.textContent).toContain('飞书同步完成，本次更新 2 条')
   })
 
@@ -171,7 +173,7 @@ describe('FeishuInspectionPage', () => {
       await new Promise((r) => setTimeout(r, 80))
     })
     expect(api.fetchInspectionFeishuRecords).toHaveBeenLastCalledWith(
-      expect.objectContaining({ source: 'history' }),
+      expect.objectContaining({ workshop: '201-1', source: 'history' }),
     )
     const text = document.body.textContent || ''
     expect(text).toContain('处理状态')
@@ -190,7 +192,7 @@ describe('FeishuInspectionPage', () => {
         await new Promise((r) => setTimeout(r, 50))
       }
     })
-    expect(api.fetchInspectionFeishuDevices).toHaveBeenCalled()
+    expect(api.fetchInspectionFeishuDevices).toHaveBeenCalledWith('201-1', undefined)
     const text = document.body.textContent || ''
     expect(text).toContain('已关联')
     expect(text).toContain('PJ-3000L')

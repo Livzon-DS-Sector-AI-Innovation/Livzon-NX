@@ -12,6 +12,11 @@ class SparePartCreate(BaseModel):
 
     code: str = Field(..., min_length=1, max_length=50, description="备件编码")
     name: str = Field(..., min_length=1, max_length=200, description="备件名称")
+    workshop_code: str = Field(
+        default="201-1",
+        pattern=r"^\d{3}(-\d)?$",
+        description="归属车间代码（如 101-1 / 201-1）",
+    )
     specification: str | None = Field(
         default=None, max_length=200, description="规格型号"
     )
@@ -33,6 +38,11 @@ class SparePartUpdate(BaseModel):
     name: str | None = Field(
         default=None, min_length=1, max_length=200, description="备件名称"
     )
+    workshop_code: str | None = Field(
+        default=None,
+        pattern=r"^\d{3}(-\d)?$",
+        description="归属车间代码（如 101-1 / 201-1）",
+    )
     specification: str | None = Field(
         default=None, max_length=200, description="规格型号"
     )
@@ -53,6 +63,7 @@ class SparePartResponse(BaseModel):
     id: uuid.UUID
     code: str
     name: str
+    workshop_code: str
     specification: str | None
     unit: str
     category: str | None

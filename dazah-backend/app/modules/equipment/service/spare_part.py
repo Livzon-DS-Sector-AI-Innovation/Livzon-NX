@@ -50,15 +50,17 @@ async def get_spare_parts(
     category: str | None = None,
     keyword: str | None = None,
     is_active: bool | None = None,
+    workshop_code: str | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[SparePart], int]:
-    """获取备件列表"""
+    """获取备件列表（workshop_code 缺省跨车间查询）"""
     return await repo.get_spare_parts(
         db,
         category=category,
         keyword=keyword,
         is_active=is_active,
+        workshop_code=workshop_code,
         page=page,
         page_size=page_size,
     )
@@ -201,9 +203,10 @@ async def adjust_stock(
 
 async def get_stock_warnings(
     db: AsyncSession,
+    workshop_code: str | None = None,
 ) -> list[StockWarningResponse]:
-    """获取库存预警"""
-    warnings = await repo.get_stock_warnings(db)
+    """获取库存预警（workshop_code 缺省跨车间）"""
+    warnings = await repo.get_stock_warnings(db, workshop_code)
     result = []
     for spare_part, stock in warnings:
         result.append(

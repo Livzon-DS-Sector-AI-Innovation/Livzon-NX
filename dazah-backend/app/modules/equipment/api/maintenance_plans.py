@@ -34,6 +34,9 @@ async def list_maintenance_plans(
     equipment_id: uuid.UUID | None = Query(None, description="设备ID"),
     status: str | None = Query(None, description="状态"),
     keyword: str | None = Query(None, description="关键词搜索"),
+    workshop: str | None = Query(
+        None, pattern=r"^\d{3}(-\d)?$", description="车间代码（如 101-1 / 201-1）"
+    ),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=200, description="每页数量"),
     db: AsyncSession = Depends(get_db),
@@ -43,6 +46,7 @@ async def list_maintenance_plans(
         equipment_id=equipment_id,
         status=status,
         keyword=keyword,
+        workshop_code=workshop,
         page=page,
         page_size=page_size,
     )

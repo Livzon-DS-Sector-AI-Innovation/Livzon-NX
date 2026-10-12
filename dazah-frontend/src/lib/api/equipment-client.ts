@@ -15,6 +15,7 @@ import {
 } from '@/types/equipment'
 
 interface FetchEquipmentsParams {
+  workshop?: string
   category_id?: string | null
   location_id?: string | null
   department_id?: string | null
@@ -27,6 +28,7 @@ interface FetchEquipmentsParams {
 export async function fetchEquipmentsClient(params: FetchEquipmentsParams = {}): Promise<EquipmentListResponse> {
   const searchParams = new URLSearchParams()
 
+  if (params.workshop) searchParams.append('workshop', params.workshop)
   if (params.category_id) searchParams.append('category_id', params.category_id)
   if (params.location_id) searchParams.append('location_id', params.location_id)
   if (params.department_id) searchParams.append('department_id', params.department_id)
@@ -54,8 +56,9 @@ export async function fetchEquipmentsClient(params: FetchEquipmentsParams = {}):
   }
 }
 
-export async function fetchEquipmentStatisticsClient(): Promise<EquipmentStatistics> {
-  const response = await fetch(`/api/v1/equipment/equipments/statistics`)
+export async function fetchEquipmentStatisticsClient(workshop?: string): Promise<EquipmentStatistics> {
+  const qs = workshop ? `?workshop=${encodeURIComponent(workshop)}` : ''
+  const response = await fetch(`/api/v1/equipment/equipments/statistics${qs}`)
   if (!response.ok) {
     throw new Error(`请求失败: ${response.status} ${response.statusText}`)
   }
@@ -95,6 +98,7 @@ export async function fetchFailureCodesClient(type: 'symptoms' | 'causes' | 'act
 // ==================== 维修工单 ====================
 export async function fetchWorkOrdersClient(params: WorkOrderFilters = {}): Promise<WorkOrderListResponse> {
   const searchParams = new URLSearchParams()
+  if (params.workshop) searchParams.append('workshop', params.workshop)
   if (params.status) searchParams.append('status', params.status)
   if (params.equipment_id) searchParams.append('equipment_id', params.equipment_id)
   if (params.priority) searchParams.append('priority', params.priority)
@@ -121,8 +125,9 @@ export async function fetchWorkOrdersClient(params: WorkOrderFilters = {}): Prom
   }
 }
 
-export async function fetchWorkOrderStatisticsClient(): Promise<WorkOrderStatistics> {
-  const response = await fetch(`/api/v1/equipment/maintenance/work-ordersstatistics`)
+export async function fetchWorkOrderStatisticsClient(workshop?: string): Promise<WorkOrderStatistics> {
+  const qs = workshop ? `?workshop=${encodeURIComponent(workshop)}` : ''
+  const response = await fetch(`/api/v1/equipment/maintenance/work-orders/statistics${qs}`)
   if (!response.ok) {
     throw new Error(`请求失败: ${response.status} ${response.statusText}`)
   }
@@ -131,7 +136,7 @@ export async function fetchWorkOrderStatisticsClient(): Promise<WorkOrderStatist
 }
 
 export async function fetchWorkOrderByIdClient(id: string): Promise<WorkOrder> {
-  const response = await fetch(`/api/v1/equipment/maintenance/work-orders${id}`)
+  const response = await fetch(`/api/v1/equipment/maintenance/work-orders/${id}`)
   if (!response.ok) {
     throw new Error(`请求失败: ${response.status} ${response.statusText}`)
   }
@@ -142,6 +147,7 @@ export async function fetchWorkOrderByIdClient(id: string): Promise<WorkOrder> {
 // ==================== 校准计划 ====================
 export async function fetchCalibrationPlansClient(params: CalibrationPlanFilters = {}): Promise<CalibrationPlanListResponse> {
   const searchParams = new URLSearchParams()
+  if (params.workshop) searchParams.append('workshop', params.workshop)
   if (params.equipment_id) searchParams.append('equipment_id', params.equipment_id)
   if (params.status) searchParams.append('status', params.status)
   if (params.page && params.page > 0) searchParams.append('page', params.page.toString())
@@ -169,6 +175,7 @@ export async function fetchCalibrationPlansClient(params: CalibrationPlanFilters
 // ==================== 校准记录 ====================
 export async function fetchCalibrationRecordsClient(params: CalibrationRecordFilters = {}): Promise<CalibrationRecordListResponse> {
   const searchParams = new URLSearchParams()
+  if (params.workshop) searchParams.append('workshop', params.workshop)
   if (params.equipment_id) searchParams.append('equipment_id', params.equipment_id)
   if (params.plan_id) searchParams.append('plan_id', params.plan_id)
   if (params.page && params.page > 0) searchParams.append('page', params.page.toString())
@@ -196,6 +203,7 @@ export async function fetchCalibrationRecordsClient(params: CalibrationRecordFil
 // ==================== 备件管理 ====================
 export async function fetchSparePartsClient(params: SparePartFilters = {}): Promise<SparePartListResponse> {
   const searchParams = new URLSearchParams()
+  if (params.workshop) searchParams.append('workshop', params.workshop)
   if (params.category) searchParams.append('category', params.category)
   if (params.keyword) searchParams.append('keyword', params.keyword)
   if (params.is_active !== undefined) searchParams.append('is_active', params.is_active.toString())
@@ -225,8 +233,9 @@ export async function fetchSparePartByIdClient(id: string): Promise<SparePart> {
   return result.data
 }
 
-export async function fetchStockWarningsClient(): Promise<StockWarning[]> {
-  const response = await fetch(`/api/v1/equipment/spare-parts/stock/warnings`)
+export async function fetchStockWarningsClient(workshop?: string): Promise<StockWarning[]> {
+  const qs = workshop ? `?workshop=${encodeURIComponent(workshop)}` : ''
+  const response = await fetch(`/api/v1/equipment/spare-parts/stock/warnings${qs}`)
   if (!response.ok) throw new Error(`请求失败: ${response.status} ${response.statusText}`)
   const result = await response.json()
   return result.data || []
@@ -235,6 +244,7 @@ export async function fetchStockWarningsClient(): Promise<StockWarning[]> {
 // ==================== 维护计划 ====================
 export async function fetchMaintenancePlansClient(params: MaintenancePlanFilters = {}): Promise<MaintenancePlanListResponse> {
   const searchParams = new URLSearchParams()
+  if (params.workshop) searchParams.append('workshop', params.workshop)
   if (params.equipment_id) searchParams.append('equipment_id', params.equipment_id)
   if (params.status) searchParams.append('status', params.status)
   if (params.keyword) searchParams.append('keyword', params.keyword)

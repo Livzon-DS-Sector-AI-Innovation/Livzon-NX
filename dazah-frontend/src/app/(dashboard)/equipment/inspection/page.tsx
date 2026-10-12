@@ -1,7 +1,7 @@
-import { FeishuInspectionPage } from '@/components/equipment/inspection/FeishuInspectionPage'
+import { redirect } from 'next/navigation'
 
-export const dynamic = 'force-dynamic'
-
-export default function InspectionPageWrapper() {
-  return <FeishuInspectionPage />
+// 巡检已按车间拆分路由（/equipment/inspection/<车间代码>）；
+// 旧入口保留重定向，当前唯一已配置车间为 201一车间。
+export default function InspectionPageRedirect() {
+  redirect('/equipment/inspection/201-1')
 }

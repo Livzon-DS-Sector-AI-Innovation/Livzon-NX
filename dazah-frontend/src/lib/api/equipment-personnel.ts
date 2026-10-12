@@ -54,6 +54,7 @@ async function apiFetchPaginated(url: string, options?: RequestInit) {
 }
 
 export async function fetchPersonnelList(params?: {
+  workshop?: string
   role_id?: string[]
   is_active?: boolean
   keyword?: string
@@ -61,6 +62,7 @@ export async function fetchPersonnelList(params?: {
   page_size?: number
 }): Promise<PersonnelListResponse> {
   const searchParams = new URLSearchParams()
+  if (params?.workshop) searchParams.set('workshop', params.workshop)
   if (params?.role_id?.length) {
     params.role_id.forEach(rid => searchParams.append('role_id', rid))
   }
@@ -85,10 +87,12 @@ export async function fetchPersonnel(id: string): Promise<Personnel> {
 export async function fetchCandidates(
   roleCodes: string[],
   categoryId?: string,
+  workshop?: string,
 ): Promise<Candidate[]> {
   const params = new URLSearchParams()
   roleCodes.forEach(rc => params.append('role_codes', rc))
   if (categoryId) params.set('category_id', categoryId)
+  if (workshop) params.set('workshop', workshop)
   return apiFetch<Candidate[]>(
     `/api/v1/equipment/personnel/candidates?${params.toString()}`
   )

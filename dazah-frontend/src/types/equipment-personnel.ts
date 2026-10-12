@@ -68,6 +68,7 @@ export interface PersonnelListResponse {
 
 export interface AddPersonnelInput {
   user_ids: string[]
+  workshop_code?: string
 }
 
 export interface AssignRolesInput {

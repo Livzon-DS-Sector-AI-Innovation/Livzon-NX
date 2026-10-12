@@ -49,10 +49,12 @@ interface EquipmentTableProps {
   onPageChange: (page: number, pageSize: number) => void
   /** 变化时重置分页到第一页 */
   resetKey: number
+  /** 页面所在车间：导入设备归属该车间 */
+  workshopCode?: string
 }
 
 
-export function EquipmentTable({ loading = false, onPageChange, resetKey }: EquipmentTableProps) {
+export function EquipmentTable({ loading = false, onPageChange, resetKey, workshopCode }: EquipmentTableProps) {
   const { message, modal } = App.useApp()
   const {
     equipments, total,
@@ -242,6 +244,7 @@ export function EquipmentTable({ loading = false, onPageChange, resetKey }: Equi
         open={importOpen}
         onClose={() => setImportOpen(false)}
         onImported={() => onPageChange(1, localPageSize)}
+        workshopCode={workshopCode}
       />
     </div>
   )

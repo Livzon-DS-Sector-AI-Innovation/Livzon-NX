@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   App, Button, Drawer, Form, Input, Space, Switch, Tag, Typography,
 } from 'antd'
@@ -27,7 +27,6 @@ const C = {
 }
 
 const CONFIG_QUERY_KEY = ['equipment', 'inspection-feishu-config'] as const
-
 type ConfigFormValues = {
   is_enabled: boolean
   app_id: string
@@ -48,6 +47,8 @@ function fmtDateTime(iso: string | null | undefined): string {
  * 避免在无 QueryClient 上下文的页面上抛错触发路由错误边界。
  */
 export function InspectionFeishuConfigDrawer(props: {
+  workshopCode: string
+  workshopLabel: string
   open: boolean
   onClose: () => void
   onSaved: () => void
@@ -60,17 +61,28 @@ export function InspectionFeishuConfigDrawer(props: {
 }
 
 function InspectionFeishuConfigDrawerInner({
-  open, onClose, onSaved,
-}: { open: boolean; onClose: () => void; onSaved: () => void }) {
+  workshopCode, workshopLabel, open, onClose, onSaved,
+}: {
+  workshopCode: string
+  workshopLabel: string
+  open: boolean
+  onClose: () => void
+  onSaved: () => void
+}) {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const [form] = Form.useForm<ConfigFormValues>()
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
 
+  // 配置按车间隔离，缓存键与请求都带车间代码（memo 保持引用稳定，避免 effect 循环）
+  const configQueryKey = useMemo(
+    () => [...CONFIG_QUERY_KEY, workshopCode] as const,
+    [workshopCode],
+  )
   const configQuery = useQuery<InspectionFeishuConfigDetail>({
-    queryKey: CONFIG_QUERY_KEY,
-    queryFn: fetchInspectionFeishuConfig,
+    queryKey: configQueryKey,
+    queryFn: () => fetchInspectionFeishuConfig(workshopCode),
     enabled: open,
   })
   const detail = configQuery.data ?? null
@@ -78,9 +90,9 @@ function InspectionFeishuConfigDrawerInner({
   // 每次打开时拉取最新配置（含缓存场景），随后按数据回填表单
   useEffect(() => {
     if (open) {
-      void queryClient.invalidateQueries({ queryKey: CONFIG_QUERY_KEY })
+      void queryClient.invalidateQueries({ queryKey: configQueryKey })
     }
-  }, [open, queryClient])
+  }, [open, queryClient, configQueryKey])
 
   useEffect(() => {
     if (!open || !configQuery.data) return
@@ -130,9 +142,9 @@ function InspectionFeishuConfigDrawerInner({
         device_table_id: values.device_table_id.trim(),
         is_enabled: values.is_enabled,
       }
-      await updateInspectionFeishuConfig(payload)
+      await updateInspectionFeishuConfig(workshopCode, payload)
       form.setFieldValue('app_secret', '')
-      await queryClient.invalidateQueries({ queryKey: CONFIG_QUERY_KEY })
+      await queryClient.invalidateQueries({ queryKey: configQueryKey })
       message.success('飞书配置已保存')
       onSaved()
     } catch (error) {
@@ -140,28 +152,28 @@ function InspectionFeishuConfigDrawerInner({
     } finally {
       setSaving(false)
     }
-  }, [form, message, onSaved, queryClient])
+  }, [workshopCode, form, message, onSaved, queryClient, configQueryKey])
 
   const handleTest = useCallback(async () => {
     setTesting(true)
     try {
-      const result = await testInspectionFeishuConfig()
+      const result = await testInspectionFeishuConfig(workshopCode)
       if (result.success) {
         message.success(result.message || '连接测试通过')
       } else {
         message.error(result.message || '连接测试未通过')
       }
-      await queryClient.invalidateQueries({ queryKey: CONFIG_QUERY_KEY })
+      await queryClient.invalidateQueries({ queryKey: configQueryKey })
     } catch (error) {
       message.error((error as Error).message || '连接测试失败')
     } finally {
       setTesting(false)
     }
-  }, [message, queryClient])
+  }, [workshopCode, message, queryClient, configQueryKey])
 
   return (
     <Drawer
-      title="飞书同步配置"
+      title={`飞书同步配置 · ${workshopLabel}`}
       open={open}
       onClose={onClose}
       size={480}

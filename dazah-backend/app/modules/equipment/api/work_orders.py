@@ -98,6 +98,9 @@ async def list_work_orders(
     equipment_id: uuid.UUID | None = Query(None, description="设备ID"),
     priority: str | None = Query(None, description="优先级"),
     order_type: str | None = Query(None, description="工单类型"),
+    workshop: str | None = Query(
+        None, pattern=r"^\d{3}(-\d)?$", description="车间代码（如 101-1 / 201-1）"
+    ),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=200, description="每页数量"),
     db: AsyncSession = Depends(get_db),
@@ -108,6 +111,7 @@ async def list_work_orders(
         equipment_id=equipment_id,
         priority=priority,
         order_type=order_type,
+        workshop_code=workshop,
         page=page,
         page_size=page_size,
     )
@@ -121,9 +125,12 @@ async def list_work_orders(
 
 @router.get("/statistics", summary="工单统计")
 async def get_work_order_statistics(
+    workshop: str | None = Query(
+        None, pattern=r"^\d{3}(-\d)?$", description="车间代码（如 101-1 / 201-1）"
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
-    stats = await service.get_work_order_statistics(db)
+    stats = await service.get_work_order_statistics(db, workshop)
     return success_response(data=WorkOrderStatistics.model_validate(stats))
 
 

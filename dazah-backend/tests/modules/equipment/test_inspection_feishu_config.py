@@ -74,20 +74,20 @@ async def test_effective_config_falls_back_to_environment(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _patch_env(monkeypatch)
-    config = await config_service.get_effective_config(db_session)
+    config = await config_service.get_effective_config(db_session, "201-1")
     assert config.source == "environment"
     assert config.app_id == "cli_env"
     assert config.app_secret == "env_secret"
     assert config.app_token == "bascn_env"
     assert config.enabled is True
-    assert await config_service.is_mirror_enabled(db_session) is True
+    assert await config_service.is_mirror_enabled(db_session, "201-1") is True
 
 
 async def test_effective_config_env_missing_token_disables_sync(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _patch_env(monkeypatch, EQUIPMENT_FEISHU_BITABLE_APP_TOKEN="")
-    config = await config_service.get_effective_config(db_session)
+    config = await config_service.get_effective_config(db_session, "201-1")
     assert config.enabled is False
 
 
@@ -108,7 +108,7 @@ async def test_effective_config_prefers_database_row(
     )
     await db_session.commit()
 
-    config = await config_service.get_effective_config(db_session)
+    config = await config_service.get_effective_config(db_session, "201-1")
     assert config.source == "database"
     assert config.app_id == "cli_db"
     assert config.app_secret == "db_secret"
@@ -128,14 +128,14 @@ async def test_effective_config_disabled_switch_stops_sync(
         )
     )
     await db_session.commit()
-    assert await config_service.is_mirror_enabled(db_session) is False
+    assert await config_service.is_mirror_enabled(db_session, "201-1") is False
 
 
 async def test_get_config_detail_masks_secret(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _patch_env(monkeypatch)
-    detail = await config_service.get_config_detail(db_session)
+    detail = await config_service.get_config_detail(db_session, "201-1")
     assert detail.source == "environment"
     assert detail.app_secret_configured is True
     assert detail.app_secret_masked == "****"  # 短密钥全掩码，不回传明文
@@ -152,6 +152,7 @@ async def test_update_config_first_save_requires_credentials(
     with pytest.raises(AppException):
         await config_service.update_config(
             db_session,
+            "201-1",
             EquipmentInspectionFeishuConfigUpdateRequest(
                 app_id="", app_secret="", app_token=""
             ),
@@ -164,6 +165,7 @@ async def test_update_config_creates_row_and_returns_detail(
     _patch_env_empty(monkeypatch)
     detail = await config_service.update_config(
         db_session,
+        "201-1",
         EquipmentInspectionFeishuConfigUpdateRequest(
             app_id="cli_new",
             app_secret="new_secret_value",
@@ -188,6 +190,7 @@ async def test_update_config_blank_secret_keeps_stored_value(
     _patch_env_empty(monkeypatch)
     await config_service.update_config(
         db_session,
+        "201-1",
         EquipmentInspectionFeishuConfigUpdateRequest(
             app_id="cli_keep",
             app_secret="original_secret",
@@ -196,6 +199,7 @@ async def test_update_config_blank_secret_keeps_stored_value(
     )
     detail = await config_service.update_config(
         db_session,
+        "201-1",
         EquipmentInspectionFeishuConfigUpdateRequest(
             app_id="cli_keep2",
             app_secret=None,
@@ -205,7 +209,7 @@ async def test_update_config_blank_secret_keeps_stored_value(
     )
     assert detail.app_id == "cli_keep2"
     assert detail.app_secret_configured is True
-    config = await config_service.get_effective_config(db_session)
+    config = await config_service.get_effective_config(db_session, "201-1")
     assert config.app_secret == "original_secret"
 
 
@@ -215,6 +219,7 @@ async def test_update_config_masked_resend_not_treated_as_new_secret(
     _patch_env_empty(monkeypatch)
     await config_service.update_config(
         db_session,
+        "201-1",
         EquipmentInspectionFeishuConfigUpdateRequest(
             app_id="cli_mask",
             app_secret="original_secret",
@@ -224,13 +229,14 @@ async def test_update_config_masked_resend_not_treated_as_new_secret(
     # 前端把掩码原样带回时不得把掩码当新密钥存储
     await config_service.update_config(
         db_session,
+        "201-1",
         EquipmentInspectionFeishuConfigUpdateRequest(
             app_id="cli_mask",
             app_secret=config_service.mask_api_key("original_secret"),
             app_token="bascn_mask",
         ),
     )
-    config = await config_service.get_effective_config(db_session)
+    config = await config_service.get_effective_config(db_session, "201-1")
     assert config.app_secret == "original_secret"
 
 
@@ -241,6 +247,7 @@ async def test_update_config_enable_requires_complete_fields(
     with pytest.raises(AppException):
         await config_service.update_config(
             db_session,
+            "201-1",
             EquipmentInspectionFeishuConfigUpdateRequest(
                 app_id="cli_x",
                 app_secret="secret_x",
@@ -249,7 +256,7 @@ async def test_update_config_enable_requires_complete_fields(
             ),
         )
     # 校验失败不落库
-    detail = await config_service.get_config_detail(db_session)
+    detail = await config_service.get_config_detail(db_session, "201-1")
     assert detail.source == "environment"
 
 
@@ -259,6 +266,7 @@ async def test_update_config_disabled_allows_incomplete_fields(
     _patch_env_empty(monkeypatch)
     detail = await config_service.update_config(
         db_session,
+        "201-1",
         EquipmentInspectionFeishuConfigUpdateRequest(
             app_id="cli_partial",
             app_secret="partial_secret",
@@ -285,6 +293,7 @@ async def test_update_config_resolves_wiki_link(
     )
     detail = await config_service.update_config(
         db_session,
+        "201-1",
         EquipmentInspectionFeishuConfigUpdateRequest(
             app_id="cli_wiki",
             app_secret="wiki_secret",
@@ -310,6 +319,7 @@ async def test_update_config_wiki_requires_credentials(
     with pytest.raises(AppException):
         await config_service.update_config(
             db_session,
+            "201-1",
             EquipmentInspectionFeishuConfigUpdateRequest(
                 app_id="",
                 app_secret=None,
@@ -343,6 +353,7 @@ async def test_test_config_success_records_status(
     _patch_env_empty(monkeypatch)
     await config_service.update_config(
         db_session,
+        "201-1",
         EquipmentInspectionFeishuConfigUpdateRequest(
             app_id="cli_ok",
             app_secret="ok_secret",
@@ -351,10 +362,10 @@ async def test_test_config_success_records_status(
     )
     monkeypatch.setattr(config_service, "BitableClient", _FakeBitableClient)
 
-    result = await config_service.test_config(db_session)
+    result = await config_service.test_config(db_session, "201-1")
     assert result.success is True
     assert result.table_count == 2
-    detail = await config_service.get_config_detail(db_session)
+    detail = await config_service.get_config_detail(db_session, "201-1")
     assert detail.last_test_status == "success"
     assert detail.last_tested_at is not None
 
@@ -365,6 +376,7 @@ async def test_test_config_failure_sanitizes_and_records(
     _patch_env_empty(monkeypatch)
     await config_service.update_config(
         db_session,
+        "201-1",
         EquipmentInspectionFeishuConfigUpdateRequest(
             app_id="cli_bad",
             app_secret="bad_secret",
@@ -373,10 +385,10 @@ async def test_test_config_failure_sanitizes_and_records(
     )
     monkeypatch.setattr(config_service, "BitableClient", _BrokenBitableClient)
 
-    result = await config_service.test_config(db_session)
+    result = await config_service.test_config(db_session, "201-1")
     assert result.success is False
     assert "bascn_secret_token" not in result.message
-    detail = await config_service.get_config_detail(db_session)
+    detail = await config_service.get_config_detail(db_session, "201-1")
     assert detail.last_test_status == "failed"
     assert detail.last_test_error is not None
     assert "bascn_secret_token" not in detail.last_test_error
@@ -387,7 +399,7 @@ async def test_test_config_unconfigured_raises(
 ) -> None:
     _patch_env_empty(monkeypatch)
     with pytest.raises(AppException):
-        await config_service.test_config(db_session)
+        await config_service.test_config(db_session, "201-1")
 
 
 # ---------- API ----------
@@ -411,20 +423,26 @@ async def test_config_api_requires_login(db_session: AsyncSession) -> None:
                 ("PUT", "/api/v1/equipment/inspection/feishu/config"),
                 ("POST", "/api/v1/equipment/inspection/feishu/config/test"),
             ):
-                resp = await ac.request(method, path, json={})
+                resp = await ac.request(
+                    method, path, json={}, params={"workshop": "201-1"}
+                )
                 assert resp.status_code == 401, (method, path, resp.status_code)
     finally:
         app.dependency_overrides.clear()
 
 
 async def test_config_api_get_put_flow(client: Any) -> None:
-    resp = await client.get("/api/v1/equipment/inspection/feishu/config")
+    resp = await client.get(
+        "/api/v1/equipment/inspection/feishu/config",
+        params={"workshop": "201-1"},
+    )
     assert resp.status_code == 200
     body = resp.json()["data"]
     assert body["source"] == "environment"
 
     resp = await client.put(
         "/api/v1/equipment/inspection/feishu/config",
+        params={"workshop": "201-1"},
         json={
             "app_id": "cli_api",
             "app_secret": "api_secret",
@@ -442,7 +460,10 @@ async def test_config_api_get_put_flow(client: Any) -> None:
     assert "app_secret" not in body
     assert body["app_secret_masked"]
 
-    resp = await client.get("/api/v1/equipment/inspection/feishu/config")
+    resp = await client.get(
+        "/api/v1/equipment/inspection/feishu/config",
+        params={"workshop": "201-1"},
+    )
     assert resp.status_code == 200
     assert resp.json()["data"]["app_id"] == "cli_api"
 
@@ -485,7 +506,7 @@ async def test_mirror_read_endpoints(client: Any, db_session: AsyncSession) -> N
 
     resp = await client.get(
         "/api/v1/equipment/inspection/feishu/records",
-        params={"source": "history", "abnormal_only": "true"},
+        params={"workshop": "201-1", "source": "history", "abnormal_only": "true"},
     )
     assert resp.status_code == 200
     body = resp.json()
@@ -495,12 +516,15 @@ async def test_mirror_read_endpoints(client: Any, db_session: AsyncSession) -> N
 
     resp = await client.get(
         "/api/v1/equipment/inspection/feishu/devices",
-        params={"keyword": "方锥"},
+        params={"workshop": "201-1", "keyword": "方锥"},
     )
     assert resp.status_code == 200
     assert resp.json()["data"][0]["equipment_no"] == "XT1-1-1-129"
 
-    resp = await client.get("/api/v1/equipment/inspection/feishu/today-summary")
+    resp = await client.get(
+        "/api/v1/equipment/inspection/feishu/today-summary",
+        params={"workshop": "201-1"},
+    )
     assert resp.status_code == 200
     assert resp.json()["data"]["total_devices"] >= 1
 
@@ -522,15 +546,24 @@ async def test_mirror_sync_status_and_manual_sync(
     _patch_env(monkeypatch)
     from app.modules.equipment.service import inspection_feishu_mirror as mirror_svc
 
-    resp = await client.get("/api/v1/equipment/inspection/feishu/sync-status")
+    resp = await client.get(
+        "/api/v1/equipment/inspection/feishu/sync-status",
+        params={"workshop": "201-1"},
+    )
     assert resp.status_code == 200
     assert resp.json()["data"]["enabled"] is True
 
-    async def fake_sync(db: Any, *, incremental: bool) -> dict[str, dict[str, Any]]:
+    async def fake_sync(
+        db: Any, workshop: str, *, incremental: bool
+    ) -> dict[str, dict[str, Any]]:
+        assert workshop == "201-1"
         return {"today": {"synced": 1, "total": 1}}
 
     monkeypatch.setattr(mirror_svc, "sync_all", fake_sync)
-    resp = await client.post("/api/v1/equipment/inspection/feishu/sync")
+    resp = await client.post(
+        "/api/v1/equipment/inspection/feishu/sync",
+        params={"workshop": "201-1"},
+    )
     assert resp.status_code == 200
     assert resp.json()["data"]["today"] == {"synced": 1, "total": 1}
 
@@ -539,7 +572,10 @@ async def test_config_test_endpoint_reports_unconfigured(
     client: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _patch_env_empty(monkeypatch)
-    resp = await client.post("/api/v1/equipment/inspection/feishu/config/test")
+    resp = await client.post(
+        "/api/v1/equipment/inspection/feishu/config/test",
+        params={"workshop": "201-1"},
+    )
     assert resp.status_code == 400
     assert "请先完整配置" in resp.json()["message"]
 
@@ -570,6 +606,7 @@ async def test_update_config_replaces_secret_on_existing_row(
     _patch_env_empty(monkeypatch)
     await config_service.update_config(
         db_session,
+        "201-1",
         EquipmentInspectionFeishuConfigUpdateRequest(
             app_id="cli_rotate",
             app_secret="old_secret",
@@ -578,6 +615,7 @@ async def test_update_config_replaces_secret_on_existing_row(
     )
     detail = await config_service.update_config(
         db_session,
+        "201-1",
         EquipmentInspectionFeishuConfigUpdateRequest(
             app_id="cli_rotate",
             app_secret="new_secret",
@@ -585,7 +623,7 @@ async def test_update_config_replaces_secret_on_existing_row(
         ),
     )
     assert detail.app_secret_configured is True
-    config = await config_service.get_effective_config(db_session)
+    config = await config_service.get_effective_config(db_session, "201-1")
     assert config.app_secret == "new_secret"
 
 
@@ -603,6 +641,7 @@ async def test_update_config_wraps_wiki_resolve_errors(
     with pytest.raises(AppException, match="解析知识库多维表格失败"):
         await config_service.update_config(
             db_session,
+            "201-1",
             EquipmentInspectionFeishuConfigUpdateRequest(
                 app_id="cli_w",
                 app_secret="s",

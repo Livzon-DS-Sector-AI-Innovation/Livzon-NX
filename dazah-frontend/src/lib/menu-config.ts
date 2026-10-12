@@ -39,6 +39,39 @@ export function getPermissionModuleName(moduleCode: string): string {
     || "未命名模块"
 }
 
+/** 设备管理车间分组：台账/巡检/维护/备件/人员均按车间独立路由与数据。 */
+export const EQUIPMENT_WORKSHOPS: ReadonlyArray<{ code: string; label: string }> = [
+  { code: "101-1", label: "101一车间" },
+  { code: "101-2", label: "101二车间" },
+  { code: "102-1", label: "102一车间" },
+  { code: "102-2", label: "102二车间" },
+  { code: "103", label: "103车间" },
+  { code: "201-1", label: "201一车间" },
+  { code: "201-2", label: "201二车间" },
+  { code: "201-3", label: "201三车间" },
+  { code: "203", label: "203车间" },
+]
+
+function equipmentWorkshopMenu(workshopCode: string, label: string): SubMenuItem {
+  const leaf = (pageKey: string, text: string, path: string): SubMenuItem => ({
+    key: `${pageKey}-${workshopCode}`,
+    label: text,
+    path,
+  })
+  return {
+    key: `workshop-${workshopCode}`,
+    label,
+    path: "",
+    children: [
+      leaf("assets", "设备台账", `/equipment/assets/${workshopCode}`),
+      leaf("maintenance", "维护保养", `/equipment/maintenance/${workshopCode}`),
+      leaf("inspection", "设备巡检", `/equipment/inspection/${workshopCode}`),
+      leaf("spare-parts", "备件管理", `/equipment/spare-parts/${workshopCode}`),
+      leaf("personnel", "人员配置", `/equipment/personnel/${workshopCode}`),
+    ],
+  }
+}
+
 export const moduleMenus: ModuleMenu[] = [
   {
     key: "production",
@@ -121,18 +154,9 @@ export const moduleMenus: ModuleMenu[] = [
     path: "/equipment",
     children: [
       { key: "stats", label: "设备仪表盘", path: "/equipment/stats" },
-      {
-        key: "workshop-201-2",
-        label: "201二车间",
-        path: "",
-        children: [
-          { key: "assets", label: "设备台账", path: "/equipment/assets" },
-          { key: "maintenance", label: "维护保养", path: "/equipment/maintenance" },
-          { key: "inspection", label: "设备巡检", path: "/equipment/inspection" },
-          { key: "spare-parts", label: "备件管理", path: "/equipment/spare-parts" },
-          { key: "personnel", label: "人员配置", path: "/equipment/personnel" },
-        ],
-      },
+      ...EQUIPMENT_WORKSHOPS.map(({ code, label }) =>
+        equipmentWorkshopMenu(code, label),
+      ),
     ],
   },
   {

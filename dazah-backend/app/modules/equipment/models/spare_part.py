@@ -41,6 +41,12 @@ class SparePart(BaseModel):
 
     code: Mapped[str] = mapped_column(String(50), comment="备件编码")
     name: Mapped[str] = mapped_column(String(200), comment="备件名称")
+    workshop_code: Mapped[str] = mapped_column(
+        String(10),
+        default="201-1",
+        server_default="201-1",
+        comment="归属车间代码（如 101-1 / 201-1）",
+    )
     specification: Mapped[str | None] = mapped_column(
         String(200), nullable=True, comment="规格型号"
     )

@@ -48,6 +48,12 @@ class EquipmentPersonnel(BaseModel):
         UUID(as_uuid=True), nullable=True, comment="逻辑引用 identity.users.id"
     )
     name: Mapped[str] = mapped_column(String(100), comment="冗余，人员姓名")
+    workshop_code: Mapped[str] = mapped_column(
+        String(10),
+        default="201-1",
+        server_default="201-1",
+        comment="归属车间代码（如 101-1 / 201-1）",
+    )
     employee_no: Mapped[str | None] = mapped_column(
         String(64), nullable=True, comment="冗余，工号"
     )

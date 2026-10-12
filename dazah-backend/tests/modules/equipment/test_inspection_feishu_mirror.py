@@ -146,7 +146,7 @@ async def test_sync_all_persists_three_sources(db_session, monkeypatch) -> None:
         ]
 
     monkeypatch.setattr(mirror, "_fetch_pages", fake_fetch)
-    results = await mirror.sync_all(db_session, incremental=False)
+    results = await mirror.sync_all(db_session, "201-1", incremental=False)
     assert results["today"] == {"synced": 1, "total": 1}
     assert results["history"] == {"synced": 2, "total": 2}
     assert results["devices"] == {"synced": 3, "total": 3}
@@ -169,7 +169,7 @@ async def test_full_sync_reconciles_only_same_source(
         return []
 
     monkeypatch.setattr(mirror, "_fetch_pages", fetch_with_today)
-    await mirror.sync_all(db_session, incremental=False)
+    await mirror.sync_all(db_session, "201-1", incremental=False)
 
     # 第二轮：今日巡检的行在飞书消失（被拆分），历史表仍在
     async def fetch_history_only(client: Any, table_id: str, **kwargs: Any):
@@ -178,7 +178,7 @@ async def test_full_sync_reconciles_only_same_source(
         return []
 
     monkeypatch.setattr(mirror, "_fetch_pages", fetch_history_only)
-    await mirror.sync_all(db_session, incremental=False)
+    await mirror.sync_all(db_session, "201-1", incremental=False)
 
     from sqlalchemy import select
 
@@ -207,8 +207,8 @@ async def test_incremental_uses_watermark_state(db_session, monkeypatch) -> None
     await _patch_fetch(
         monkeypatch, [_item("rec_hist_9", _fields(), modified)]
     )
-    await mirror.sync_table(db_session, "history", incremental=True)
-    state = await mirror._get_state(db_session, "history")
+    await mirror.sync_table(db_session, "201-1", "history", incremental=True)
+    state = await mirror._get_state(db_session, "201-1", "history")
     assert state.last_status == "success"
     assert state.total_rows == 1
     assert state.last_synced_at is not None
@@ -231,7 +231,7 @@ async def test_sync_truncates_overlong_text_to_column_width(
             "处理状态": long_status,
         }), modified)],
     )
-    results = await mirror.sync_all(db_session, incremental=True)
+    results = await mirror.sync_all(db_session, "201-1", incremental=True)
     assert results["history"].get("error") is None
 
     from sqlalchemy import select
@@ -271,11 +271,11 @@ async def test_sync_all_records_failure_on_unexpected_db_error(
 
     monkeypatch.setattr(mirror, "_upsert_record", broken_upsert)
 
-    results = await mirror.sync_all(db_session, incremental=True)
+    results = await mirror.sync_all(db_session, "201-1", incremental=True)
     for key in ("today", "history", "devices"):
         assert "error" in results[key]
         assert "同步中断已回滚" in results[key]["error"]
-        state = await mirror._get_state(db_session, key)
+        state = await mirror._get_state(db_session, "201-1", key)
         assert state.last_status == "failed"
         assert "同步中断已回滚" in (state.last_message or "")
 
@@ -339,3 +339,175 @@ def test_normalize_covers_date_note_and_status() -> None:
 
 def test_normalize_empty_fields_dict() -> None:
     assert mirror.normalize_record_fields({})["has_abnormal"] is False
+
+
+# ---------- 今日口径（北京时间） ----------
+
+
+def test_cst_today_resolves_utc_cst_boundary() -> None:
+    """UTC 与北京日期不同的窗口（CST 00:00–08:00），“今日”按 CST 取。"""
+    # UTC 2026-10-11 19:00 = CST 2026-10-12 03:00（UTC 容器 date.today() 为 10-11）
+    assert mirror._cst_today(datetime(2026, 10, 11, 19, 0, tzinfo=UTC)) == date(
+        2026, 10, 12
+    )
+    # UTC 2026-10-12 01:00 = CST 10:00，同日
+    assert mirror._cst_today(datetime(2026, 10, 12, 1, 0, tzinfo=UTC)) == date(
+        2026, 10, 12
+    )
+    # UTC 2026-10-12 15:59 = CST 23:59；再过一分钟 CST 跨日
+    assert mirror._cst_today(datetime(2026, 10, 12, 15, 59, tzinfo=UTC)) == date(
+        2026, 10, 12
+    )
+    assert mirror._cst_today(datetime(2026, 10, 12, 16, 0, tzinfo=UTC)) == date(
+        2026, 10, 13
+    )
+
+
+async def test_today_summary_uses_cst_today(db_session, monkeypatch) -> None:
+    """今日进度按北京时间口径统计（回归：容器 UTC 在 CST 凌晨取错日期）。"""
+    monkeypatch.setattr(mirror, "_cst_today", lambda: date(2026, 10, 12))
+    db_session.add(
+        EquipmentInspectionFeishuDevice(
+            record_id="dev_a", equipment_name="方锥混合机", equipment_no="XT-A"
+        )
+    )
+    db_session.add(
+        EquipmentInspectionFeishuDevice(
+            record_id="dev_b", equipment_name="摇摆颗粒机", equipment_no="XT-B"
+        )
+    )
+    db_session.add(
+        EquipmentInspectionFeishuRecord(
+            source="today",
+            record_id="rec_today_a",
+            record_date=date(2026, 10, 12),
+            equipment_no="XT-A",
+            has_abnormal=True,
+        )
+    )
+    db_session.add(
+        EquipmentInspectionFeishuRecord(
+            source="today",
+            record_id="rec_today_b",
+            record_date=date(2026, 10, 11),
+            equipment_no="XT-B",
+            has_abnormal=True,
+        )
+    )
+    await db_session.flush()
+
+    summary = await mirror.today_summary(db_session, "201-1")
+    assert summary == {
+        "date": date(2026, 10, 12),
+        "total_devices": 2,
+        "inspected": 1,
+        "abnormal": 1,
+    }
+
+
+async def test_list_devices_today_status_uses_cst_today(
+    db_session, monkeypatch
+) -> None:
+    """设备清单今日状态按北京时间口径（回归：容器 UTC 在 CST 凌晨取错日期）。"""
+    monkeypatch.setattr(mirror, "_cst_today", lambda: date(2026, 10, 12))
+    db_session.add(
+        EquipmentInspectionFeishuDevice(
+            record_id="dev_a", equipment_name="方锥混合机", equipment_no="XT-A"
+        )
+    )
+    db_session.add(
+        EquipmentInspectionFeishuDevice(
+            record_id="dev_b", equipment_name="摇摆颗粒机", equipment_no="XT-B"
+        )
+    )
+    db_session.add(
+        EquipmentInspectionFeishuRecord(
+            source="today",
+            record_id="rec_today_a",
+            record_date=date(2026, 10, 12),
+            equipment_no="XT-A",
+            has_abnormal=False,
+        )
+    )
+    db_session.add(
+        EquipmentInspectionFeishuRecord(
+            source="today",
+            record_id="rec_today_b",
+            record_date=date(2026, 10, 11),
+            equipment_no="XT-B",
+            has_abnormal=True,
+        )
+    )
+    await db_session.flush()
+
+    devices = {
+        d["equipment_no"]: d["today_status"]
+        for d in await mirror.list_devices(db_session, "201-1")
+    }
+    assert devices["XT-A"] == "inspected"
+    # 昨日的记录（即使异常）不计入今日状态
+    assert devices["XT-B"] == "pending"
+
+
+# ---------- 车间隔离 ----------
+
+
+async def test_sync_scopes_records_by_workshop(db_session, monkeypatch) -> None:
+    """各车间各自配置各自同步：镜像行、设备清单与今日进度互不串台。"""
+    from app.modules.equipment.schemas.inspection import (
+        EquipmentInspectionFeishuConfigUpdateRequest,
+    )
+
+    await feishu_config.update_config(
+        db_session,
+        "101-1",
+        EquipmentInspectionFeishuConfigUpdateRequest(
+            app_id="cli_ws",
+            app_secret="secret_ws",
+            app_token="bascn_ws101",
+            today_table_id="tbl_ws_today",
+            history_table_id="tbl_ws_history",
+            device_table_id="tbl_ws_devices",
+        ),
+    )
+    modified = int(
+        datetime(2026, 10, 12, 9, 0, tzinfo=UTC).timestamp() * 1000
+    )
+
+    async def fake_fetch(client: Any, table_id: str, **kwargs: Any):
+        if table_id == "tbl_ws_devices":
+            return [
+                _item(
+                    "rec_ws_dev_1",
+                    {
+                        "设备名称": [{"text": "压滤机", "type": "text"}],
+                        "设备编号": [{"text": "XT2-1-1-001", "type": "text"}],
+                    },
+                    modified,
+                )
+            ]
+        return [_item("rec_ws_today_1", _fields(), modified)]
+
+    monkeypatch.setattr(mirror, "_fetch_pages", fake_fetch)
+    results = await mirror.sync_all(db_session, "101-1", incremental=False)
+    assert results["today"] == {"synced": 1, "total": 1}
+    assert results["devices"] == {"synced": 1, "total": 1}
+
+    summary_101 = await mirror.today_summary(db_session, "101-1")
+    summary_201 = await mirror.today_summary(db_session, "201-1")
+    assert summary_101["total_devices"] == 1
+    assert summary_201["total_devices"] == 0
+
+    devices_101 = await mirror.list_devices(db_session, "101-1")
+    assert [d["equipment_no"] for d in devices_101] == ["XT2-1-1-001"]
+
+    # 环境变量回退仅作用于默认车间：未配置车间视为未启用
+    assert await feishu_config.is_mirror_enabled(db_session, "101-1") is True
+    with pytest.MonkeyPatch.context() as env_patch:
+        for key in (
+            "EQUIPMENT_FEISHU_APP_ID",
+            "EQUIPMENT_FEISHU_APP_SECRET",
+            "EQUIPMENT_FEISHU_BITABLE_APP_TOKEN",
+        ):
+            env_patch.setattr(feishu_config.settings, key, "")
+        assert await feishu_config.is_mirror_enabled(db_session, "203") is False

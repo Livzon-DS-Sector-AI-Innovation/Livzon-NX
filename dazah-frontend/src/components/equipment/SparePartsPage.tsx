@@ -13,12 +13,16 @@ import { SparePartDrawer } from './SparePartDrawer'
 import { StockInboundDrawer } from './StockInboundDrawer'
 
 interface SparePartsPageProps {
+  workshopCode: string
+  workshopLabel: string
   initialSpareParts: SparePart[]
   initialSparePartTotal: number
   initialStockWarnings: StockWarning[]
 }
 
 export function SparePartsPage({
+  workshopCode,
+  workshopLabel,
   initialSpareParts,
   initialSparePartTotal,
   initialStockWarnings,
@@ -40,10 +44,11 @@ export function SparePartsPage({
     try {
       const [partsRes, warnings] = await Promise.all([
         fetchSparePartsClient({
+          workshop: workshopCode,
           keyword: sparePartKeyword || undefined,
           page: sparePartPage, page_size: sparePartPageSize,
         }),
-        fetchStockWarningsClient(),
+        fetchStockWarningsClient(workshopCode),
       ])
       setSpareParts(partsRes.items)
       setSparePartTotal(partsRes.total)
@@ -53,7 +58,7 @@ export function SparePartsPage({
     } finally {
       setSparePartLoading(false)
     }
-  }, [sparePartKeyword, sparePartPage, sparePartPageSize, setSpareParts, setSparePartTotal, setSparePartLoading, setStockWarnings])
+  }, [workshopCode, sparePartKeyword, sparePartPage, sparePartPageSize, setSpareParts, setSparePartTotal, setSparePartLoading, setStockWarnings])
 
   useEffect(() => {
     queueMicrotask(fetchData)
@@ -67,10 +72,10 @@ export function SparePartsPage({
             fontSize: 22, fontWeight: 600, color: '#1a1a1a',
             margin: 0, marginBottom: 4, lineHeight: 1.3,
           }}>
-            备件管理
+            备件管理 · {workshopLabel}
           </h2>
           <p style={{ fontSize: 14, color: '#787671', margin: 0, lineHeight: 1.5 }}>
-            备件库存 · 入库管理 · 库存预警 · 物料追踪
+            {workshopLabel} · 备件库存 · 入库管理 · 库存预警 · 物料追踪
           </p>
         </div>
         <div
@@ -84,7 +89,7 @@ export function SparePartsPage({
           <SparePartTable onRefresh={fetchData} />
         </div>
 
-        <SparePartDrawer onRefresh={fetchData} />
+        <SparePartDrawer onRefresh={fetchData} workshopCode={workshopCode} />
         <StockInboundDrawer onRefresh={fetchData} />
       </App>
     </ConfigProvider>
