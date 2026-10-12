@@ -13,6 +13,37 @@ from app.platform.identity.schemas import EffectivePageGrantOut, PageDataScopeIn
 
 
 @pytest.mark.asyncio
+async def test_scope_sync_selects_page_and_legacy_events_only():
+    from sqlalchemy.dialects import postgresql
+
+    from app.modules.agent.scheduled import AgentAccessScopeSyncGenerator
+
+    rows = [SimpleNamespace(user_id=uuid4())]
+    db = SimpleNamespace(
+        execute=AsyncMock(
+            return_value=SimpleNamespace(
+                scalars=lambda: SimpleNamespace(all=lambda: rows)
+            )
+        )
+    )
+    assert await AgentAccessScopeSyncGenerator().find_due(db) == rows
+    query = db.execute.await_args.args[0]
+    compiled = query.compile(dialect=postgresql.dialect())
+    events = next(
+        value
+        for value in compiled.params.values()
+        if isinstance(value, list) and "identity.user_page_grants.changed.v1" in value
+    )
+    assert set(events) == {
+        "identity.user_page_grants.changed.v1",
+        "identity.user_module_grants.changed.v1",
+    }
+    assert "FOR UPDATE SKIP LOCKED" in str(compiled)
+    assert "is_deleted IS false" in str(compiled)
+    assert ["pending", "failed"] in compiled.params.values()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("failed", [False, True])
 async def test_scope_sync_generator_initializes_and_tracks_outbox(monkeypatch, failed):
     from app.modules.agent.scheduled import AgentAccessScopeSyncGenerator

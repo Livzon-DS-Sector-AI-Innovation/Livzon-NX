@@ -13,11 +13,13 @@ import {
 } from "./AgentFloatingAssistant"
 import type { AgentConfirmation, AgentSessionItem } from "@/lib/api/agent"
 import { useAgentStore } from "@/stores/agent"
+import { useAuthStore } from "@/stores/auth"
 
 const mocks = vi.hoisted(() => ({
   streamAgentMessage: vi.fn(),
   fetchAgentSessions: vi.fn(),
   fetchAgentSession: vi.fn(),
+  archiveAgentSession: vi.fn(),
 }))
 
 vi.mock("@/lib/api/agent", async (importOriginal) => ({
@@ -25,6 +27,7 @@ vi.mock("@/lib/api/agent", async (importOriginal) => ({
   streamAgentMessage: mocks.streamAgentMessage,
   fetchAgentSessions: mocks.fetchAgentSessions,
   fetchAgentSession: mocks.fetchAgentSession,
+  archiveAgentSession: mocks.archiveAgentSession,
 }))
 
 const nativeConfirmation: AgentConfirmation = {
@@ -86,6 +89,7 @@ describe("agent session history", () => {
   let host: HTMLDivElement
 
   beforeEach(() => {
+    useAuthStore.getState().clearUser()
     useAgentStore.getState().startNewConversation()
     useAgentStore.getState().setOpen(true)
     mocks.fetchAgentSessions.mockResolvedValue({
@@ -105,12 +109,14 @@ describe("agent session history", () => {
   })
 
   afterEach(async () => {
+    useAuthStore.getState().clearUser()
     await act(async () => root.unmount())
     host.remove()
     useAgentStore.getState().startNewConversation()
     useAgentStore.getState().setOpen(false)
     mocks.fetchAgentSessions.mockReset()
     mocks.fetchAgentSession.mockReset()
+    mocks.archiveAgentSession.mockReset()
     vi.restoreAllMocks()
   })
 
@@ -120,8 +126,61 @@ describe("agent session history", () => {
     })
     const historyButton = host.querySelector<HTMLButtonElement>('button[aria-label="查看历史会话"]')
     expect(historyButton).not.toBeNull()
+    expect(host.querySelector('button[aria-label="查看能力与运行"]')).toBeNull()
+    expect(document.body.textContent).not.toContain("Livzon 能力与运行")
     await act(async () => historyButton!.click())
   }
+
+  it("starts a new conversation before slow archiving and preserves new messages", async () => {
+    let finishArchive!: () => void
+    mocks.archiveAgentSession.mockImplementation(() => new Promise<void>((resolve) => { finishArchive = resolve }))
+    useAgentStore.getState().loadConversation({ sessionId: session.id, messages: [{ role: "assistant", content: "旧会话" }], confirmations: [] })
+    await act(async () => root.render(createElement(App, null, createElement(AgentFloatingAssistant))))
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="开启新对话"]')!.click())
+    expect(mocks.archiveAgentSession).toHaveBeenCalledWith(session.id)
+    expect(useAgentStore.getState().sessionId).toBeNull()
+    expect(host.textContent).not.toContain("旧会话")
+    act(() => useAgentStore.getState().addMessage({ role: "user", content: "新请求" }))
+    await act(async () => finishArchive())
+    expect(host.textContent).toContain("新请求")
+  })
+
+  it("sends current page filters with a question without a fixed business scope", async () => {
+    const previousUrl = window.location.pathname + window.location.search
+    window.history.replaceState(null, "", "/production/batches?status=open&token=private")
+    useAuthStore.getState().setUser({ id: "test-user", name: "用户", role: "admin" })
+    mocks.streamAgentMessage.mockResolvedValue(undefined)
+    try {
+      await act(async () => root.render(createElement(App, null, createElement(AgentFloatingAssistant))))
+      const suggestion = [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("供应商"))
+      expect(suggestion).toBeDefined()
+      await act(async () => suggestion!.click())
+      expect(mocks.streamAgentMessage).toHaveBeenCalled()
+      expect(mocks.streamAgentMessage.mock.calls.at(-1)?.[0].context).toEqual({
+        entry: "floating-assistant",
+        page_context: { route_path: "/production/batches", filters: { status: "open" } },
+      })
+    } finally {
+      window.history.replaceState(null, "", previousUrl)
+      mocks.streamAgentMessage.mockReset()
+    }
+  })
+
+  it("limits business suggestions to assigned page grants and reacts to revocation", async () => {
+    useAuthStore.getState().setUser({
+      id: "test-user", name: "只读用户", role: "user",
+      page_permissions: [{page_key: "purchasing:supplier", module_code: "procurement",
+        permissions: ["access", "query"], sensitive_actions: [],
+        data_scope: {scope_type: "all"}, source: "role"}],
+    })
+    await act(async () => root.render(createElement(App, null, createElement(AgentFloatingAssistant))))
+    expect(host.textContent).toContain("查询供应商清单")
+    expect(host.textContent).not.toContain("查询质量偏差报告记录")
+    expect(host.textContent).not.toContain("查看飞书同步状态")
+    await act(async () => useAuthStore.getState().setUser({id: "test-user", name: "已撤权用户", role: "user", page_permissions: []}))
+    expect(host.textContent).not.toContain("查询供应商清单")
+    expect(host.textContent).not.toContain("试试这样提问")
+  })
 
   it("renders session summaries and fallbacks without the deprecated List warning", async () => {
     const errors = vi.spyOn(console, "error")

@@ -102,6 +102,8 @@ async def lark_cli(
         verification_text = str(payload.get("verification_text", verification_text) or "")
     task_id = str(_ignored.get("task_id", "") or "")
     context = current_dazah_request_context(task_id)
+    if context.get("_read_only_repair"):
+        return json.dumps({"ok": False, "error": "repair_read_only"})
 
     def ensure_run_active() -> None:
         cancellation = context.get("_cancellation_event")

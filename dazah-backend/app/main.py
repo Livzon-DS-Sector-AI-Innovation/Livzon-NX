@@ -251,12 +251,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         QualityFeishuReadDailySyncGenerator,
     )
     from app.modules.agent.scheduled import (
-        AgentAccessScopeSyncGenerator,
         AgentAutomationGenerator,
         AgentPushDeliveryGenerator,
+        create_access_scope_sync_engine,
     )
 
-    scheduler_registry.register_generator(AgentAccessScopeSyncGenerator())
+    access_scope_sync_engine = create_access_scope_sync_engine()
     scheduler_registry.register_generator(AgentAutomationGenerator())
     scheduler_registry.register_generator(AgentPushDeliveryGenerator())
     scheduler_registry.register_generator(ProductionPlanFeishuSyncGenerator())
@@ -345,6 +345,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     start_dr_sync_scheduler()
 
     scheduler_engine_task = asyncio.create_task(scheduler_engine.run())
+    access_scope_sync_task = asyncio.create_task(access_scope_sync_engine.run())
 
     logger.info("Background tasks started")
 
@@ -364,8 +365,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # ── 停止统一调度引擎 ──
     scheduler_engine.stop()
+    access_scope_sync_engine.stop()
     try:
         await asyncio.wait_for(scheduler_engine_task, timeout=10)
+    except (TimeoutError, asyncio.CancelledError):
+        pass
+    try:
+        await asyncio.wait_for(access_scope_sync_task, timeout=10)
     except (TimeoutError, asyncio.CancelledError):
         pass
 

@@ -16,6 +16,7 @@ from app.platform.identity.data_scope import (
     current_page_actor,
     current_page_data_scope,
     current_page_key,
+    current_page_visible_sections,
 )
 from app.platform.identity.models import User
 from app.platform.identity.page_permissions import PagePermissionService
@@ -31,8 +32,10 @@ from app.shared.module_registry import MODULES_BY_CODE
 from .models import AgentAutomationGrant, AgentConfirmation
 from .repository import AgentRepository
 from .schemas import AgentToolExecuteRequest, AgentToolExecuteResponse
+from .tool_policy import tool_exclusion_reason
 
 RiskLevel = Literal["low", "medium", "high"]
+ResultKind = Literal["records", "statistics", "knowledge_index", "knowledge"]
 ToolHandler = Callable[["ToolContext", BaseModel], Awaitable[Any] | Any]
 ToolCallable = TypeVar("ToolCallable", bound=Callable[..., Any])
 
@@ -66,6 +69,7 @@ class AgentToolSpec:
     path: str = ""
     input_schema: dict[str, Any] = field(default_factory=dict)
     output_hint: str = ""
+    result_kind: ResultKind = "records"
     capability_version: str = "1.0"
     module: str | None = None
     permission_key: str | None = None
@@ -95,6 +99,7 @@ class AgentToolSpec:
             "workflow_allowed": self.workflow_allowed,
             "human_decision_required": self.human_decision_required,
             "output_hint": self.output_hint,
+            "result_kind": self.result_kind,
             "capability_version": self.capability_version,
             "module": self.module,
             "permission_key": self.permission_key,
@@ -121,8 +126,15 @@ class EmptyToolInput(BaseModel):
 class ToolRegistry:
     def __init__(self) -> None:
         self._tools: dict[str, AgentToolSpec] = {}
+        self._excluded: dict[str, tuple[AgentToolSpec, str]] = {}
 
     def register(self, spec: AgentToolSpec) -> AgentToolSpec:
+        reason = tool_exclusion_reason(
+            name=spec.name, path=spec.path, page_keys=spec.page_keys, module=spec.module
+        )
+        if reason is not None:
+            self._excluded[spec.name] = (spec, reason)
+            return spec
         if spec.name in self._tools:
             raise ValueError(f"Agent tool already registered: {spec.name}")
         self._tools[spec.name] = spec
@@ -140,11 +152,16 @@ class ToolRegistry:
             )
         return spec
 
+    def excluded(self) -> list[tuple[AgentToolSpec, str]]:
+        """Return administration exclusions for offline inventory only."""
+        return [self._excluded[name] for name in sorted(self._excluded)]
+
     def list(self) -> list[AgentToolSpec]:
         return [self._tools[name] for name in sorted(self._tools)]
 
     def clear(self) -> None:
         self._tools.clear()
+        self._excluded.clear()
 
 
 tool_registry = ToolRegistry()
@@ -193,6 +210,7 @@ def agent_tool(
     path: str = "",
     input_schema: dict[str, Any] | None = None,
     output_hint: str = "",
+    result_kind: ResultKind = "records",
     capability_version: str = "1.0",
     module: str | None = None,
     permission_key: str | None = None,
@@ -243,6 +261,7 @@ def agent_tool(
             path=path,
             input_schema=input_schema or input_model.model_json_schema(),
             output_hint=output_hint,
+            result_kind=result_kind,
             capability_version=capability_version,
             module=business_module or module,
             permission_key=inferred_permission_key,
@@ -587,6 +606,10 @@ class ToolExecutor:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail) from exc
 
     def _check_permission(self, spec: AgentToolSpec, user: User | None) -> None:
+        # Business authorization comes from effective page grants, including
+        # assigned RBAC roles and explicit user overrides, rather than User.role.
+        if spec.module is not None:
+            return
         if user is not None and user.role == "admin":
             return
         if not spec.required_roles:
@@ -647,6 +670,9 @@ class ToolExecutor:
             grant.data_scope.model_dump() if grant else None
         )
         page_token = current_page_key.set(grant.page_key if grant else None)
+        sections_token = current_page_visible_sections.set(
+            grant.visible_sections if grant else None
+        )
         try:
             data = spec.handler(context, validated)
             if inspect.isawaitable(data):
@@ -655,6 +681,7 @@ class ToolExecutor:
             current_page_actor.reset(actor_token)
             current_page_data_scope.reset(scope_token)
             current_page_key.reset(page_token)
+            current_page_visible_sections.reset(sections_token)
         return AgentToolExecuteResponse(
             ok=True,
             operation=request.operation,

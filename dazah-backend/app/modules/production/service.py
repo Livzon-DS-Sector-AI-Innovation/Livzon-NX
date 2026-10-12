@@ -19,7 +19,9 @@ from app.modules.production.models import (
     ProcessStep,
     ProductionPlan,
     ProductionRecord,
+    SalesPlanDetail,
 )
+from app.modules.production.overview_visibility import require_overview_section
 from app.modules.production.repository import ProductionRepository
 from app.modules.production.schemas import (
     BatchCreate,
@@ -40,6 +42,22 @@ from app.modules.production.schemas import (
 
 class ProductionService:
     """Production module service"""
+
+    async def get_sales_plan_details(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        product_name: str | None = None,
+        month: str | None = None,
+    ) -> tuple[list[SalesPlanDetail], int]:
+        require_overview_section("sales_plan")
+        return await self.repo.get_sales_plan_details(
+            page=page,
+            page_size=page_size,
+            product_name=product_name,
+            month=month,
+        )
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session

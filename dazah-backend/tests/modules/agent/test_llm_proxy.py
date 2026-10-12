@@ -142,11 +142,18 @@ def test_kimi_image_parts_are_forwarded_before_text_without_mutating_payload() -
     assert payload["messages"][0]["content"][1]["image_url"]["detail"] == "auto"
 
 
-def test_gpt5_provider_body_uses_completion_tokens_and_default_temperature() -> Any:
+@pytest.mark.parametrize("explicit_temperature", [0, 0.7, None])
+def test_gpt5_provider_body_uses_completion_tokens_and_default_temperature(
+    explicit_temperature: float | None,
+) -> Any:
     body = build_provider_body(
         {
             "messages": [{"role": "user", "content": "分析"}],
             "max_tokens": 128,
+            **(
+                {"temperature": explicit_temperature}
+                if explicit_temperature is not None else {}
+            ),
         },
         model_name="GPT-5.6-Luna",
         temperature=0.1,
@@ -155,6 +162,61 @@ def test_gpt5_provider_body_uses_completion_tokens_and_default_temperature() -> 
     assert body["max_completion_tokens"] == 128
     assert "max_tokens" not in body
     assert "temperature" not in body
+
+
+@pytest.mark.asyncio
+async def test_gpt5_proxy_route_strips_hermes_explicit_temperature(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def configured(_kind: str = "text") -> SimpleNamespace:
+        return _proxy_config("GPT-5.6-Luna")
+
+    @asynccontextmanager
+    async def available() -> AsyncIterator[None]:
+        yield
+
+    class ProviderClient:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        async def __aenter__(self) -> "ProviderClient":
+            return self
+
+        async def __aexit__(self, *args: Any) -> None:
+            pass
+
+        async def post(
+            self, url: str, *, headers: dict[str, str], json: dict[str, Any]
+        ) -> httpx.Response:
+            assert json["model"] == "GPT-5.6-Luna"
+            assert "temperature" not in json
+            assert json["max_completion_tokens"] == 128
+            return httpx.Response(
+                200, json={"choices": [{"message": {"content": "verified"}}]}
+            )
+
+    monkeypatch.setattr(llm_proxy, "get_config", configured)
+    monkeypatch.setattr(llm_proxy, "hold_capacity", available)
+    monkeypatch.setattr(llm_proxy.httpx, "AsyncClient", ProviderClient)
+    test_app = FastAPI()
+    test_app.include_router(agent_api.router, prefix="/api/v1/agent")
+    test_app.dependency_overrides[agent_api.get_settings] = lambda: SimpleNamespace(
+        AGENT_LLM_PROXY_TOKEN="test-token"
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/agent/llm/chat/completions",
+            headers={"Authorization": "Bearer test-token"},
+            json={
+                "messages": [{"role": "user", "content": "test"}],
+                "temperature": 0,
+                "max_tokens": 128,
+            },
+        )
+    assert response.status_code == 200
+    assert response.json()["choices"][0]["message"]["content"] == "verified"
 
 
 @pytest.mark.asyncio

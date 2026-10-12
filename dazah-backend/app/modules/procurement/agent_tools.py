@@ -3,6 +3,7 @@ from typing import Any
 from urllib.parse import quote
 from uuid import UUID
 
+from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
 from app.modules.agent.tools import ToolContext, agent_tool
@@ -12,11 +13,17 @@ from app.modules.procurement.contract_generator import (
     generate_contract,
     get_contract_template_metadata,
 )
+from app.modules.procurement.material_source import (
+    MaterialSourceError,
+    list_material_catalog,
+)
 from app.modules.procurement.page_access import constrain_contract_category
 from app.modules.procurement.schemas import (
     ContractCategory,
     ContractGenerateRequest,
+    ContractRecordResponse,
     InvoiceRecognitionRecordResponse,
+    MaterialCatalogRecordResponse,
     PurchaseApprovalRequest,
     PurchaseApprovalResult,
     PurchaseApprovalRole,
@@ -31,6 +38,7 @@ from app.modules.procurement.service import (
     approve_purchase_request,
     export_purchase_order_lines_xlsx,
     get_purchase_request,
+    list_contract_records,
     list_invoice_recognition_records,
     list_purchase_order_lines,
     list_purchase_requests,
@@ -84,6 +92,65 @@ class InvoiceRecordsInput(PageInput):
     keyword: str | None = None
     seller_name: str | None = None
     invoice_number: str | None = None
+
+
+class MaterialCatalogInput(PageInput):
+    keyword: str | None = Field(default=None, max_length=100)
+    material_code: str | None = Field(default=None, max_length=255)
+    material_description: str | None = Field(default=None, max_length=255)
+    rule_model: str | None = Field(default=None, max_length=255)
+
+
+class ContractRecordsInput(PageInput):
+    keyword: str | None = Field(default=None, max_length=100)
+
+
+@agent_tool(
+    name="procurement.list_material_catalog",
+    summary="查询采购物料库",
+    input_model=MaterialCatalogInput,
+    method="GET",
+    path="/procurement/material-catalog",
+    page_keys=("purchasing:material-library",),
+)
+async def list_material_catalog_records(
+    context: ToolContext,
+    data: MaterialCatalogInput,
+) -> dict[str, Any]:
+    try:
+        rows, total, _ = await list_material_catalog(context.db, **data.model_dump())
+    except MaterialSourceError as exc:
+        raise HTTPException(exc.status_code, exc.public_message) from exc
+    return {
+        "data": [
+            MaterialCatalogRecordResponse.model_validate(row).model_dump(mode="json")
+            for row in rows
+        ],
+        "meta": {"page": data.page, "page_size": data.page_size, "total": total},
+    }
+
+
+@agent_tool(
+    name="procurement.list_contract_records",
+    summary="查询采购合同汇总",
+    input_model=ContractRecordsInput,
+    method="GET",
+    path="/procurement/contracts",
+    page_keys=("purchasing:contract-summary",),
+    sensitivity="sensitive",
+)
+async def list_contract_record_summaries(
+    context: ToolContext,
+    data: ContractRecordsInput,
+) -> dict[str, Any]:
+    rows, total = await list_contract_records(context.db, **data.model_dump())
+    return {
+        "data": [
+            ContractRecordResponse.model_validate(row).model_dump(mode="json")
+            for row in rows
+        ],
+        "meta": {"page": data.page, "page_size": data.page_size, "total": total},
+    }
 
 
 class SupplierListInput(PageInput):

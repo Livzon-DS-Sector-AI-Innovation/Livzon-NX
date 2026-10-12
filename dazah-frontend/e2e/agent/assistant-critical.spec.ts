@@ -25,7 +25,7 @@ test.describe('Livzon 助手关键交互', () => {
     if (safetyAlignment === null) throw new Error('确认提示未完成布局')
     expect(safetyAlignment).toBeLessThanOrEqual(1)
     await expect(page.getByRole('button', { name: /质量偏差/ })).toBeVisible()
-    await expect(page.getByRole('button', { name: /采购审批/ })).toBeInViewport({ ratio: 1 })
+    await expect(page.getByRole('button', { name: /采购申请/ })).toBeInViewport({ ratio: 1 })
     await expect(page.getByLabel('中枢助手输入框')).toBeVisible()
 
     await page.getByRole('button', { name: /质量偏差/ }).click()

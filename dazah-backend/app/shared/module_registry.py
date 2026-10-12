@@ -31,6 +31,7 @@ BUSINESS_MODULES: tuple[ModuleDefinition, ...] = (
         db_schema="production",
         owner_hint="生产技术/车间工艺负责人",
         description="批次、工序、产量、生产过程记录等生产侧数据入口。",
+        agent_tools_module="app.modules.production.agent_tools",
     ),
     ModuleDefinition(
         code="equipment",
@@ -106,6 +107,7 @@ BUSINESS_MODULES: tuple[ModuleDefinition, ...] = (
         db_schema="hr",
         owner_hint="人事负责人",
         description="人员、岗位、培训、考勤等人事业务数据入口。",
+        agent_tools_module="app.modules.hr.agent_tools",
     ),
     ModuleDefinition(
         code="research",
@@ -122,6 +124,7 @@ BUSINESS_MODULES: tuple[ModuleDefinition, ...] = (
         db_schema="registration",
         owner_hint="注册事务负责人",
         description="注册资料、申报进度、变更事项和法规跟踪数据入口。",
+        agent_tools_module="app.modules.registration.agent_tools",
     ),
     ModuleDefinition(
         code="regulatory_tracker",

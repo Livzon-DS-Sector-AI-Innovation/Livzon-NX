@@ -4,6 +4,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import DuplicateException, NotFoundException
@@ -16,6 +17,12 @@ from app.modules.quality.models import (
     SolidMaterialInspection,
 )
 from app.modules.quality.repository import inspection as repository
+from app.platform.identity.data_scope import (
+    current_page_actor,
+    current_page_key,
+    department_in_clause,
+    resolve_user_department_scope,
+)
 
 
 @dataclass(frozen=True)
@@ -104,6 +111,13 @@ async def list_resource_records(
     filters: dict[str, Any] | None = None,
 ) -> tuple[list[Any], int]:
     resource = get_resource(resource_code)
+    scope_clause = None
+    if resource_code == "lab_instruments" and current_page_key.get() is not None:
+        actor = current_page_actor.get()
+        if actor is None:
+            raise HTTPException(403, "页面授权缺少可信用户身份")
+        scope = await resolve_user_department_scope(db, actor)
+        scope_clause = department_in_clause(LabInstrument.department, scope)
     return await repository.list_records(
         db,
         resource.model,
@@ -112,6 +126,7 @@ async def list_resource_records(
         keyword=keyword,
         page=page,
         page_size=page_size,
+        scope_clause=scope_clause,
     )
 
 

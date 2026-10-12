@@ -70,7 +70,7 @@ describe('AuthCompletion', () => {
     })
 
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      '登录状态未生效，请重新发起飞书认证。',
+      '登录状态已失效，请返回登录后重试。',
     )
 
     const retryButton = Array.from(container.querySelectorAll('button')).find(
@@ -121,5 +121,16 @@ describe('AuthCompletion', () => {
     })
 
     expect(routerReplace).toHaveBeenCalledWith('/rd/project-initiation')
+  })
+
+  it('offers recovery when identity verification never responds', async () => {
+    const fetchMock = vi.fn().mockImplementation(() => new Promise(() => {}))
+    vi.stubGlobal('fetch', fetchMock)
+    act(() => root.render(<AuthCompletion nextPath="/production" />))
+    await act(async () => { await vi.advanceTimersByTimeAsync(15_000) })
+    expect(container.textContent).toContain('身份验证未完成')
+    expect(container.textContent).toContain('身份验证超时，请重新验证或返回登录。')
+    expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true)
+    expect(routerReplace).not.toHaveBeenCalled()
   })
 })

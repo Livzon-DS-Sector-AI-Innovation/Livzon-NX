@@ -54,7 +54,12 @@ def test_warehouse_tools_use_reviewed_page_bindings():
             "sync_config",
         ),
     }
+    excluded = {spec.name: spec for spec, reason in tool_registry.excluded()}
     for operation, (page_keys, sensitive_action) in expected.items():
-        spec = tool_registry.require(operation)
+        if page_keys == ("warehouse:warehouse-settings",):
+            assert tool_registry.get(operation) is None
+            spec = excluded[operation]
+        else:
+            spec = tool_registry.require(operation)
         assert spec.page_keys == page_keys
         assert spec.sensitive_action == sensitive_action

@@ -221,7 +221,11 @@ async def test_versioned_role_and_user_replacement_keeps_baseline_audit_and_outb
                 )
             ).all()
             assert len(logs) == 2
-            assert logs[0].new_value["reason"] == "明确拒绝此用户页面访问"
+            # SQL without ORDER BY does not guarantee insertion order.
+            assert {log.new_value["reason"] for log in logs} == {
+                "明确拒绝此用户页面访问",
+                "恢复角色基线",
+            }
             events = (
                 await db.scalars(
                     select(PermissionOutboxEvent).where(

@@ -312,7 +312,7 @@ describe('FeishuSettingsClient governance lifecycle', () => {
     expect(actions.getAgentRuntimeOverview).toHaveBeenCalledTimes(2)
 
     const tabs = walk(tree).find((element) => element.props?.ariaLabel === 'Livzon Agent管理子导航')
-    expect((tabs?.props?.items as Array<{ label: string }>).map((item) => item.label)).toEqual(['运行总览', '飞书接入'])
+    expect((tabs?.props?.items as Array<{ label: string }>).map((item) => item.label)).toEqual(['运行总览', '模块能力接入', '飞书接入'])
     const overviewTab = (tabs?.props?.items as Array<{ children: ElementLike }>)[0].children
     ;(overviewTab.props?.onNavigate as (key: string, traceId: string) => void)(
       'trace',
@@ -354,6 +354,82 @@ describe('FeishuSettingsClient governance lifecycle', () => {
     )).toBe(true)
     await (findButton(overview, '查看调用链路').props?.onClick as () => void)()
     expect(onNavigate).toHaveBeenCalledWith('trace', 'trace-1')
+  })
+
+  it('shows missing metrics instead of zero and exposes partial refresh failures', () => {
+    const tree = Overview({ config: null, status: null, health: null, onNavigate: vi.fn(), refreshErrors: ['网关状态'] })
+    const metrics = walk(tree).filter((element) => element.props?.value !== undefined)
+    expect(metrics.map((element) => element.props?.value)).toEqual(['未知', '未获取', '未获取', '未获取', '未获取'])
+    expect(walk(tree).some((element) => element.props?.title === '运行数据加载不完整：网关状态')).toBe(true)
+    const loadingTree = Overview({ config: null, status: null, health: null, loading: true, onNavigate: vi.fn() })
+    expect(walk(loadingTree).filter((element) => element.props?.value === '加载中')).toHaveLength(4)
+  })
+
+  it('clears failed sources, reports each failure and only timestamps a complete refresh', async () => {
+    actions.getLivzonFeishuConfig.mockRejectedValue(new Error('unavailable'))
+    actions.getLivzonFeishuGatewayStatus.mockRejectedValue(new Error('unavailable'))
+    actions.getAgentRuntimeOverview.mockRejectedValue(new Error('unavailable'))
+    const tree = FeishuSettingsClient()
+    await (findButton(tree, '刷新运行状态').props?.onClick as () => Promise<void>)()
+    await vi.waitFor(() => expect(lifecycle.setters[1]).toHaveBeenCalledWith(null))
+    expect(lifecycle.setters[2]).toHaveBeenCalledWith(null)
+    expect(lifecycle.setters[3]).toHaveBeenCalledWith(null)
+    expect(lifecycle.setters[6]).toHaveBeenCalledWith(['飞书配置', '网关状态', '确认与投递摘要'])
+    expect(lifecycle.setters[7]).not.toHaveBeenCalled()
+
+    actions.getLivzonFeishuConfig.mockResolvedValue(config)
+    actions.getLivzonFeishuGatewayStatus.mockResolvedValue({ gateway: 'connected' })
+    actions.getAgentRuntimeOverview.mockResolvedValue({ pending_confirmations: 2, failed_deliveries: 0 })
+    await (findButton(tree, '刷新运行状态').props?.onClick as () => Promise<void>)()
+    await vi.waitFor(() => expect(lifecycle.setters[6]).toHaveBeenLastCalledWith([]))
+    expect(lifecycle.setters[7]).toHaveBeenCalledWith(expect.any(String))
+    actions.getLivzonFeishuGatewayStatus.mockRejectedValue(new Error('unavailable'))
+    await (findButton(tree, '刷新运行状态').props?.onClick as () => Promise<void>)()
+    await vi.waitFor(() => expect(lifecycle.setters[6]).toHaveBeenLastCalledWith(['网关状态']))
+    expect(lifecycle.setters[1]).toHaveBeenLastCalledWith(config)
+    expect(lifecycle.setters[2]).toHaveBeenLastCalledWith(null)
+    expect(lifecycle.setters[3]).toHaveBeenLastCalledWith({ pending_confirmations: 2, failed_deliveries: 0 })
+    expect(lifecycle.setters[7]).toHaveBeenCalledOnce()
+  })
+
+  it('shows readiness, scope, version drift and backend confirmation counts with working shortcuts', () => {
+    const onNavigate = vi.fn()
+    const status = {
+      configured: true, gateway: 'connected', config_version: 2, credential_version: 2,
+      gateway_reconnects: 1, tenant_id: 'tenant-a', gateway_enabled: true,
+      outbox_depth: 0, pending_confirmations: 9, pending_deliveries: 3, event_consumer_count: 0,
+    }
+    const tree = Overview({ config, status, health: { pending_confirmations: 2, failed_deliveries: 4 }, onNavigate })
+    expect(walk(tree).some((element) => element.props?.title === '飞书已连接，但没有活动消费者')).toBe(true)
+    expect(textOf(tree)).toContain('指定 1 个群聊')
+    expect(textOf(tree)).toContain('需要 @ 助手')
+    expect(textOf(tree)).toContain('与运行配置不一致')
+    expect(walk(tree).find((element) => element.props?.title === '待确认')?.props?.value).toBe(2)
+    expect(walk(tree).find((element) => element.props?.title === '失败投递')?.props?.value).toBe(4)
+    ;(findButton(tree, '查看授权与确认').props?.onClick as () => void)()
+    ;(findButton(tree, '查看投递诊断').props?.onClick as () => void)()
+    ;(findButton(tree, '检查飞书接入').props?.onClick as () => void)()
+    expect(walk(tree).some((element) => element.props?.title === '异常与处理入口')).toBe(false)
+    expect(onNavigate.mock.calls).toEqual([['authorizations'], ['trace'], ['feishu']])
+    const readyTree = Overview({ config, status: { ...status, config_version: 3, event_consumer_count: 1 }, health: null, onNavigate })
+    expect(textOf(readyTree)).toContain('与运行配置一致')
+    expect(walk(readyTree).some((element) => element.props?.type === 'warning')).toBe(false)
+    const unrestrictedTree = Overview({ config: { ...config, allowed_group_chat_ids: undefined, require_group_mention: false }, status, health: null, onNavigate })
+    expect(textOf(unrestrictedTree)).toContain('未设置群聊限制')
+    expect(textOf(unrestrictedTree)).toContain('无需 @ 助手')
+  })
+
+  it.each([
+    [false, true, '飞书运行凭证未就绪'],
+    [true, false, '飞书网关已停用'],
+    [true, true, '飞书网关尚未连接，消息接入不可用'],
+  ])('explains unavailable access for configured=%s enabled=%s', (configured, enabled, title) => {
+    const tree = Overview({ config, status: {
+      configured, gateway_enabled: enabled, gateway: 'inactive', config_version: 3,
+      credential_version: null, gateway_reconnects: 0, tenant_id: 'tenant-a', outbox_depth: 0,
+      pending_confirmations: 0, pending_deliveries: 0,
+    }, health: null, onNavigate: vi.fn() })
+    expect(walk(tree).some((element) => element.props?.title === title)).toBe(true)
   })
 
   it('saves and diagnoses Feishu access configuration', async () => {

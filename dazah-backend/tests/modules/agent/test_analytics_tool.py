@@ -15,6 +15,19 @@ from app.modules.agent.schemas import AgentToolExecuteRequest, AgentTrustedSubje
 from app.modules.agent.tool_registration import ensure_agent_tools_registered
 from app.modules.agent.tools import ToolContext, tool_registry
 from app.modules.procurement.models import Supplier
+from app.platform.identity.data_scope import current_page_actor
+from app.platform.identity.models import User
+
+
+@pytest.fixture(autouse=True)
+def trusted_analytics_actor():
+    token = current_page_actor.set(
+        User(role="admin", status="active", is_deleted=False)
+    )
+    try:
+        yield
+    finally:
+        current_page_actor.reset(token)
 
 
 def _context(db: AsyncSession) -> ToolContext:
@@ -43,6 +56,9 @@ def test_analytics_tool_is_registered() -> None:
     assert spec is not None
     assert spec.write is False
     assert spec.workflow_allowed is True
+    assert spec.module == "procurement"
+    assert spec.page_keys == ("purchasing:supplier",)
+    assert spec.data_scope_type == "all"
 
 
 @pytest.mark.anyio

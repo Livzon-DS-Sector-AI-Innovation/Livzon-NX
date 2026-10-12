@@ -30,7 +30,6 @@ export interface AgentConfirmation {
 export type AgentSessionItem = components["schemas"]["AgentSessionItem"]
 export type AgentSessionPage = components["schemas"]["AgentSessionPage"]
 export type AgentSessionDetail = components["schemas"]["AgentSessionDetail"]
-
 export interface LivzonTaskTrigger {
   id: string
   automation_id: string

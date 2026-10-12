@@ -30,16 +30,28 @@ def _context() -> ToolContext:
     )
 
 
-def test_energy_tools_are_registered_with_expected_policy() -> None:
+def test_energy_tools_are_excluded_until_page_authorization_is_bound() -> None:
     ensure_agent_tools_registered()
-
-    config = tool_registry.require("energy.get_feishu_config")
-    sync = tool_registry.require("energy.trigger_sync")
-    connectivity = tool_registry.require("energy.test_feishu_connectivity")
-    create_root = tool_registry.require("energy.create_feishu_source_root")
-    update_root = tool_registry.require("energy.update_feishu_source_root")
-    delete_root = tool_registry.require("energy.delete_feishu_source_root")
-    delete_sheets = tool_registry.require("energy.delete_source_sheets")
+    excluded = {spec.name: spec for spec, reason in tool_registry.excluded()}
+    config = excluded["energy.get_feishu_config"]
+    sync = excluded["energy.trigger_sync"]
+    connectivity = excluded["energy.test_feishu_connectivity"]
+    create_root = excluded["energy.create_feishu_source_root"]
+    update_root = excluded["energy.update_feishu_source_root"]
+    delete_root = excluded["energy.delete_feishu_source_root"]
+    delete_sheets = excluded["energy.delete_source_sheets"]
+    assert all(
+        tool_registry.get(spec.name) is None
+        for spec in (
+            config,
+            sync,
+            connectivity,
+            create_root,
+            update_root,
+            delete_root,
+            delete_sheets,
+        )
+    )
 
     assert config.write is False
     assert config.required_roles == ("admin",)
@@ -68,7 +80,10 @@ def test_all_energy_tools_are_discovered_by_backend_registry() -> None:
         spec.name for spec in tool_registry.list() if spec.name.startswith("energy.")
     }
 
-    assert backend_operations
+    assert backend_operations == set()
+    excluded = {spec.name: reason for spec, reason in tool_registry.excluded()}
+    assert "配置" in excluded["energy.get_feishu_config"]
+    assert "页面授权绑定" in excluded["energy.get_overview"]
 
 
 def test_energy_overview_input_validates_mixed_timezone_range() -> None:

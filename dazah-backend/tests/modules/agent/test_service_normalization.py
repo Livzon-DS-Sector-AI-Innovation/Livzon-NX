@@ -307,7 +307,7 @@ def test_normalize_purchase_request_material_fields(service: AgentService) -> No
     assert normalized["attachment_note"] == "消防技术附件"
     assert normalized["items"] == [
         {
-            "product_name": None,
+            "product_name": "",
             "specification": "",
             "material_code": "FIRE-001",
             "material_description": "灭火器",
@@ -350,6 +350,23 @@ def test_purchase_tool_schema_exposes_new_request_fields() -> None:
     assert payload.items[0].material_description == "灭火器"
     assert payload.items[0].rule_model == "4kg"
     assert update.attachment_note == "补充说明"
+
+
+@pytest.mark.parametrize(("quantity", "unit_price"), [(2, 3.5), (0, 0)])
+def test_material_only_request_remains_valid_after_normalization(
+    service: AgentService, quantity: float, unit_price: float,
+) -> None:
+    body = service._normalize_purchase_request_body({
+        "category": "hardware", "request_department": "验收部门",
+        "request_date": "2026-10-10", "items": [{
+            "material_code": "TEST-001", "material_description": "验收螺栓",
+            "quantity": quantity, "unit_price": unit_price,
+        }],
+    }, {})
+    payload = PurchaseRequestCreateInput.model_validate(body)
+    assert payload.items[0].product_name == ""
+    assert payload.items[0].quantity == quantity
+    assert payload.items[0].unit_price == unit_price
 
 
 def test_normalize_urgent_purchase_request_item_categories(

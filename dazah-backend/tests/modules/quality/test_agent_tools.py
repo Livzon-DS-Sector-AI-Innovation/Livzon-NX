@@ -23,6 +23,21 @@ class AllowAllAccessScopeService:
 
 
 EXPECTED_QUALITY_OPERATIONS = {
+    "quality.list_finished_product_anomalies",
+    "quality.list_qc_validations",
+    "quality.list_documents",
+    "quality.list_deviation_investigations",
+    "quality.list_deviation_reports",
+    "quality.list_deviation_workbench_reports",
+    "quality.list_historical_deviations",
+    "quality.list_lab_item_inbounds",
+    "quality.list_lab_item_outbounds",
+    "quality.list_oos_oot_reports",
+    "quality.list_oos_oot_investigations",
+    "quality.list_oot_ledger",
+    "quality.list_oot_limit_products",
+    "quality.list_product_departments",
+    "quality.list_validation_reviews",
     "quality.add_capa_execution_track",
     "quality.auto_fill_capa_from_deviation",
     "quality.complete_capa_part",
@@ -67,15 +82,18 @@ EXPECTED_QUALITY_OPERATIONS = {
     "quality.list_feishu_capa_plan_tracks",
     "quality.list_feishu_validations",
     "quality.list_inspection_records",
+    "quality.list_lab_items",
+    "quality.list_lab_instruments",
+    "quality.list_finished_product_inspections",
+    "quality.list_solid_material_inspections",
+    "quality.list_liquid_material_inspections",
     "quality.list_oos_oot_records",
     "quality.list_product_quality_records",
-    "quality.list_quality_sync_conflicts",
     "quality.list_return_recalls",
     "quality.list_suppliers",
     "quality.list_validation_executions",
     "quality.list_validations",
     "quality.pull_feishu_validations",
-    "quality.pull_quality_records_from_feishu",
     "quality.resubmit_capa",
     "quality.resubmit_deviation",
     "quality.run_change_action_plan_reminders",
@@ -195,6 +213,8 @@ def test_quality_tools_exclude_deleted_approval_and_config_operations() -> None:
     assert "quality.reject_deviation" not in operations
     assert "quality.update_quality_feishu_app_settings" not in operations
     assert "quality.update_quality_feishu_entity_setting" not in operations
+    assert tool_registry.get("quality.list_quality_sync_conflicts") is None
+    assert tool_registry.get("quality.pull_quality_records_from_feishu") is None
 
 
 @pytest.mark.anyio

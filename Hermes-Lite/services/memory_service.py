@@ -729,8 +729,17 @@ class UserMemoryRepository:
             items.append(item)
         return items
 
-    def format_for_prompt(self, tenant_id: str, user_id: str) -> str:
+    def format_for_prompt(
+        self, tenant_id: str, user_id: str, *, personal_only: bool = False
+    ) -> str:
         rows = self.list_entries(tenant_id, user_id)
+        if personal_only:
+            # Task results and business knowledge require fresh platform
+            # authorization. They remain visible in the user's memory list,
+            # but must never act as a cached business query for the model.
+            rows = [row for row in rows if row["category"] in {
+                "preference", "personal_fact", "interaction_pattern"
+            }]
         eligible = [
             row for row in rows
             if row["entry_kind"] == "summary"
