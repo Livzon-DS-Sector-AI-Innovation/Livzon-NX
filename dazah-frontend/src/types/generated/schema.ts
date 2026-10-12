@@ -24242,6 +24242,176 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/safety/page-feishu-configs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 列出支持飞书表格镜像的页面及其绑定 */
+        get: operations["list_page_feishu_configs_api_v1_safety_page_feishu_configs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/page-feishu-configs/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 解析多维表格链接并列出子表 */
+        post: operations["resolve_page_feishu_url_api_v1_safety_page_feishu_configs_resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/page-feishu-configs/{page_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 保存页面的飞书多维表格绑定 */
+        put: operations["save_page_feishu_config_api_v1_safety_page_feishu_configs__page_key__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/page-feishu-configs/{page_key}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 测试页面的飞书多维表格绑定 */
+        post: operations["test_page_feishu_config_api_v1_safety_page_feishu_configs__page_key__test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/page-tables/{page_key}/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读取镜像页的记录（列定义来自飞书实时 schema） */
+        get: operations["list_page_table_records_api_v1_safety_page_tables__page_key__records_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/page-tables/{page_key}/records/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新镜像页的记录（回写飞书多维表格） */
+        put: operations["update_page_table_record_api_v1_safety_page_tables__page_key__records__record_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/page-tables/{page_key}/records/{record_id}/attachments/{field_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 上传附件到记录（追加到飞书附件字段） */
+        post: operations["upload_page_table_attachment_api_v1_safety_page_tables__page_key__records__record_id__attachments__field_name__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/page-tables/{page_key}/records/{record_id}/attachments/{field_name}/{file_token}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 代理下载镜像页记录附件 */
+        get: operations["download_page_table_attachment_api_v1_safety_page_tables__page_key__records__record_id__attachments__field_name___file_token__content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/page-tables/{page_key}/records/{record_id}/attachments/{field_name}/{file_token}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 镜像页记录附件缩略图（PIL 缩放为小图，避免列表页拉取原图全量字节） */
+        get: operations["thumbnail_page_table_attachment_api_v1_safety_page_tables__page_key__records__record_id__attachments__field_name___file_token__thumbnail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/page-tables/{page_key}/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 页面仪表盘聚合（默认：日期按月 / 位置文本按车间号归一 / 单选按选项） */
+        get: operations["get_page_table_stats_api_v1_safety_page_tables__page_key__stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/safety/regulations": {
         parameters: {
             query?: never;
@@ -28975,6 +29145,132 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[PageFeishuConfigItem] */
+        ApiResponseEnvelope_PageFeishuConfigItem_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["PageFeishuConfigItem"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[PageFeishuConfigListResponse] */
+        ApiResponseEnvelope_PageFeishuConfigListResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["PageFeishuConfigListResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[PageFeishuConfigTestResult] */
+        ApiResponseEnvelope_PageFeishuConfigTestResult_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["PageFeishuConfigTestResult"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[PageTableAttachmentUploadResponse] */
+        ApiResponseEnvelope_PageTableAttachmentUploadResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["PageTableAttachmentUploadResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[PageTableRecord] */
+        ApiResponseEnvelope_PageTableRecord_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["PageTableRecord"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[PageTableRecordsResponse] */
+        ApiResponseEnvelope_PageTableRecordsResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["PageTableRecordsResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[PageTableStatsResponse] */
+        ApiResponseEnvelope_PageTableStatsResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["PageTableStatsResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[ProductQualityOut] */
         ApiResponseEnvelope_ProductQualityOut_: {
             /**
@@ -29163,6 +29459,24 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["RegulatoryTrackerNotificationTestResult"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[ResolvedPageFeishuUrl] */
+        ApiResponseEnvelope_ResolvedPageFeishuUrl_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["ResolvedPageFeishuUrl"];
             /**
              * Message
              * @default success
@@ -32204,6 +32518,11 @@ export interface components {
         };
         /** Body_upload_onboarding_attachment_api_v1_hr_onboarding_attachments_post */
         Body_upload_onboarding_attachment_api_v1_hr_onboarding_attachments_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_upload_page_table_attachment_api_v1_safety_page_tables__page_key__records__record_id__attachments__field_name__post */
+        Body_upload_page_table_attachment_api_v1_safety_page_tables__page_key__records__record_id__attachments__field_name__post: {
             /** File */
             file: string;
         };
@@ -49148,6 +49467,88 @@ export interface components {
              */
             scope_type: "not_applicable" | "department_tree" | "departments" | "all" | "self" | "production_fermentation" | "production_extraction";
         };
+        /**
+         * PageFeishuConfigItem
+         * @description 一个镜像页的表格绑定（未配置时也返回，便于设置页展示全部可配页面）。
+         */
+        PageFeishuConfigItem: {
+            /** App Token */
+            app_token?: string | null;
+            /** Hidden Field Names */
+            hidden_field_names?: string[];
+            /**
+             * Is Configured
+             * @default false
+             */
+            is_configured: boolean;
+            /**
+             * Is Enabled
+             * @default true
+             */
+            is_enabled: boolean;
+            /** Last Test Error */
+            last_test_error?: string | null;
+            /** Last Test Field Count */
+            last_test_field_count?: number | null;
+            /** Last Test Record Count */
+            last_test_record_count?: number | null;
+            /** Last Test Status */
+            last_test_status?: string | null;
+            /** Last Tested At */
+            last_tested_at?: string | null;
+            /** Page Key */
+            page_key: string;
+            /** Page Name */
+            page_name: string;
+            /** Route Path */
+            route_path: string;
+            /** Table Id */
+            table_id?: string | null;
+            /** View Id */
+            view_id?: string | null;
+            /** Workshop Aliases */
+            workshop_aliases?: {
+                [key: string]: string;
+            };
+        };
+        /** PageFeishuConfigListResponse */
+        PageFeishuConfigListResponse: {
+            /** Items */
+            items: components["schemas"]["PageFeishuConfigItem"][];
+        };
+        /** PageFeishuConfigTestResult */
+        PageFeishuConfigTestResult: {
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /**
+             * Field Count
+             * @default 0
+             */
+            field_count: number;
+            /** Fields */
+            fields?: components["schemas"]["PageFeishuFieldSummary"][];
+            /** Message */
+            message: string;
+            /**
+             * Record Count
+             * @default 0
+             */
+            record_count: number;
+            /** Success */
+            success: boolean;
+        };
+        /** PageFeishuFieldSummary */
+        PageFeishuFieldSummary: {
+            /** Editable */
+            editable: boolean;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+        };
         /** PageGrantInput */
         PageGrantInput: {
             data_scope?: components["schemas"]["PageDataScopeInput"];
@@ -49465,6 +49866,118 @@ export interface components {
              * Format: uuid
              */
             user_id: string;
+        };
+        /** PageTableAttachmentItem */
+        PageTableAttachmentItem: {
+            /** File Token */
+            file_token: string;
+            /** Name */
+            name: string;
+            /** Size */
+            size?: number | null;
+            /**
+             * Type
+             * @default
+             */
+            type: string;
+        };
+        /** PageTableAttachmentUploadResponse */
+        PageTableAttachmentUploadResponse: {
+            /** Attachments */
+            attachments?: components["schemas"]["PageTableAttachmentItem"][];
+            /** Field Name */
+            field_name: string;
+            /** Record Id */
+            record_id: string;
+        };
+        /** PageTableColumn */
+        PageTableColumn: {
+            /** Editable */
+            editable: boolean;
+            /** Field Id */
+            field_id: string;
+            /** Is Primary */
+            is_primary: boolean;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Options */
+            options?: string[];
+            /** Type */
+            type: number;
+        };
+        /** PageTableRecord */
+        PageTableRecord: {
+            /** Fields */
+            fields?: {
+                [key: string]: unknown;
+            };
+            /** Record Id */
+            record_id: string;
+        };
+        /** PageTableRecordsResponse */
+        PageTableRecordsResponse: {
+            /** Columns */
+            columns?: components["schemas"]["PageTableColumn"][];
+            /**
+             * Page
+             * @default 1
+             */
+            page: number;
+            /** Page Key */
+            page_key: string;
+            /** Page Name */
+            page_name: string;
+            /**
+             * Page Size
+             * @default 20
+             */
+            page_size: number;
+            /** Records */
+            records?: components["schemas"]["PageTableRecord"][];
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
+        /** PageTableStatBucket */
+        PageTableStatBucket: {
+            /** Count */
+            count: number;
+            /** Key */
+            key: string;
+        };
+        /** PageTableStatGroup */
+        PageTableStatGroup: {
+            /** Buckets */
+            buckets?: components["schemas"]["PageTableStatBucket"][];
+            /** Field */
+            field: string;
+            /** Kind */
+            kind: string;
+            /** Mode */
+            mode: string;
+        };
+        /** PageTableStatsResponse */
+        PageTableStatsResponse: {
+            /** Groups */
+            groups?: components["schemas"]["PageTableStatGroup"][];
+            /** Page Key */
+            page_key: string;
+            /** Page Name */
+            page_name: string;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
         };
         /** PasswordResetRequest */
         PasswordResetRequest: {
@@ -53638,6 +54151,34 @@ export interface components {
              * @description 标准 MD 文本内容
              */
             md_text: string;
+        };
+        /** ResolvePageFeishuUrlRequest */
+        ResolvePageFeishuUrlRequest: {
+            /** Url */
+            url: string;
+        };
+        /** ResolvedFeishuTable */
+        ResolvedFeishuTable: {
+            /** Table Id */
+            table_id: string;
+            /** Table Name */
+            table_name: string;
+        };
+        /** ResolvedPageFeishuUrl */
+        ResolvedPageFeishuUrl: {
+            /** App Token */
+            app_token: string;
+            /**
+             * Is Wiki
+             * @default false
+             */
+            is_wiki: boolean;
+            /** Table Id */
+            table_id?: string | null;
+            /** Tables */
+            tables?: components["schemas"]["ResolvedFeishuTable"][];
+            /** View Id */
+            view_id?: string | null;
         };
         /** ResourceChangeEvent */
         ResourceChangeEvent: {
@@ -59055,6 +59596,30 @@ export interface components {
             source_file_name?: string | null;
             /** Version Label */
             version_label?: string | null;
+        };
+        /** UpdatePageFeishuConfigRequest */
+        UpdatePageFeishuConfigRequest: {
+            /** App Token */
+            app_token?: string | null;
+            /** Hidden Field Names */
+            hidden_field_names?: string[] | null;
+            /** Is Enabled */
+            is_enabled?: boolean | null;
+            /** Table Id */
+            table_id?: string | null;
+            /** View Id */
+            view_id?: string | null;
+            /** Workshop Aliases */
+            workshop_aliases?: {
+                [key: string]: string;
+            } | null;
+        };
+        /** UpdatePageTableRecordRequest */
+        UpdatePageTableRecordRequest: {
+            /** Fields */
+            fields?: {
+                [key: string]: unknown;
+            };
         };
         /**
          * UpdateProductQualityRequest
@@ -124758,6 +125323,373 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_page_feishu_configs_api_v1_safety_page_feishu_configs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_PageFeishuConfigListResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_page_feishu_url_api_v1_safety_page_feishu_configs_resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolvePageFeishuUrlRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ResolvedPageFeishuUrl_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_page_feishu_config_api_v1_safety_page_feishu_configs__page_key__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page_key: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePageFeishuConfigRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_PageFeishuConfigItem_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_page_feishu_config_api_v1_safety_page_feishu_configs__page_key__test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page_key: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_PageFeishuConfigTestResult_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_page_table_records_api_v1_safety_page_tables__page_key__records_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                keyword?: string | null;
+                sort_field?: string | null;
+                sort_direction?: string;
+                filter_field?: string | null;
+                filter_value?: string | null;
+            };
+            header?: never;
+            path: {
+                page_key: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_PageTableRecordsResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_page_table_record_api_v1_safety_page_tables__page_key__records__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page_key: string;
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePageTableRecordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_PageTableRecord_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_page_table_attachment_api_v1_safety_page_tables__page_key__records__record_id__attachments__field_name__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page_key: string;
+                record_id: string;
+                field_name: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_page_table_attachment_api_v1_safety_page_tables__page_key__records__record_id__attachments__field_name__post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_PageTableAttachmentUploadResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_page_table_attachment_api_v1_safety_page_tables__page_key__records__record_id__attachments__field_name___file_token__content_get: {
+        parameters: {
+            query?: {
+                inline?: boolean;
+            };
+            header?: never;
+            path: {
+                page_key: string;
+                record_id: string;
+                field_name: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    thumbnail_page_table_attachment_api_v1_safety_page_tables__page_key__records__record_id__attachments__field_name___file_token__thumbnail_get: {
+        parameters: {
+            query?: {
+                max_width?: number;
+                max_height?: number;
+            };
+            header?: never;
+            path: {
+                page_key: string;
+                record_id: string;
+                field_name: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_page_table_stats_api_v1_safety_page_tables__page_key__stats_get: {
+        parameters: {
+            query?: {
+                /** @description 分组字段名，可重复；缺省时自动挑选日期/位置/单选字段 */
+                group_by?: string[] | null;
+            };
+            header?: never;
+            path: {
+                page_key: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_PageTableStatsResponse_"];
                 };
             };
             /** @description Validation Error */

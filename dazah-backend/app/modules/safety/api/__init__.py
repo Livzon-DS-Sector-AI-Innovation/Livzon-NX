@@ -18,6 +18,7 @@ from app.modules.safety.api.hazards import hazards_router
 from app.modules.safety.api.knowledge import knowledge_router
 from app.modules.safety.api.oh_hazard_monitors import oh_hazard_monitors_router
 from app.modules.safety.api.oh_health_exams import oh_health_exams_router
+from app.modules.safety.api.page_table import page_table_router
 from app.modules.safety.api.regulations import regulations_router
 from app.modules.safety.api.scheduled_tasks import scheduled_tasks_router
 from app.modules.safety.api.special_operation_reports import (
@@ -42,6 +43,7 @@ router.include_router(hazards_router)
 router.include_router(knowledge_router)
 router.include_router(oh_hazard_monitors_router)
 router.include_router(oh_health_exams_router)
+router.include_router(page_table_router)
 router.include_router(regulations_router)
 router.include_router(scheduled_tasks_router)
 router.include_router(special_operation_reports_router)

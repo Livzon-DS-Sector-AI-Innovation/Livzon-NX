@@ -18,15 +18,23 @@ import {
   getRadarRunDetail,
   getRadarRuns,
   getSafetyFeishuSettings,
+  getSafetyPageFeishuConfigs,
+  getSafetyPageTableRecords,
+  getSafetyPageTableStats,
   getSafetyFeishuWsStatus,
+  resolveSafetyPageFeishuUrl,
   restartSafetyFeishuWs,
   runRadarScan,
   saveSafetyFeishuSettings,
+  saveSafetyPageFeishuConfig,
   submitCheck,
   syncSafetyKnowledge,
   testRadarNotify,
   testSafetyFeishuSettings,
+  testSafetyPageFeishuConfig,
+  updateSafetyPageTableRecord,
   uploadKnowledgeAttachments,
+  uploadSafetyPageTableAttachment,
 } from './safety'
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000'
@@ -317,5 +325,149 @@ describe('regulation radar actions', () => {
         headers: expect.objectContaining({ 'X-Dazah-Page-Key': SETTINGS_PAGE_KEY }),
       }),
     )
+  })
+})
+
+const HAZARD_DUTY_PAGE_KEY = 'safety:risk-hazard:hazard-inspection:hazard-duty'
+
+describe('safety page table mirror actions', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('reads page table records with the page key header and query params', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { records: [] } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getSafetyPageTableRecords({
+      pageKey: HAZARD_DUTY_PAGE_KEY,
+      page: 2,
+      pageSize: 50,
+      keyword: '萃取罐',
+      sortField: '值班日期',
+      sortDirection: 'desc',
+    })
+
+    const [url, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toContain(
+      `/api/v1/safety/page-tables/${encodeURIComponent(HAZARD_DUTY_PAGE_KEY)}/records?`,
+    )
+    expect(url).toContain('page=2')
+    expect(url).toContain('page_size=50')
+    expect(url).toContain(`keyword=${encodeURIComponent('萃取罐')}`)
+    expect(url).toContain('sort_direction=desc')
+    expect((options.headers as Record<string, string>)['X-Dazah-Page-Key']).toBe(
+      HAZARD_DUTY_PAGE_KEY,
+    )
+  })
+
+  it('writes back a record with PUT and the page key header', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { record_id: 'rec-1' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await updateSafetyPageTableRecord({
+      pageKey: HAZARD_DUTY_PAGE_KEY,
+      recordId: 'rec-1',
+      fields: { 整改情况: '已整改' },
+    })
+
+    const [url, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe(
+      `${API_BASE}/api/v1/safety/page-tables/${encodeURIComponent(HAZARD_DUTY_PAGE_KEY)}/records/rec-1`,
+    )
+    expect(options.method).toBe('PUT')
+    expect(JSON.parse(String(options.body))).toEqual({
+      fields: { 整改情况: '已整改' },
+    })
+    expect((options.headers as Record<string, string>)['X-Dazah-Page-Key']).toBe(
+      HAZARD_DUTY_PAGE_KEY,
+    )
+  })
+
+  it('uploads an attachment as multipart without a JSON content type', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { attachments: [] } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const file = new File([new Uint8Array([1, 2, 3])], 'a.jpg', { type: 'image/jpeg' })
+    await uploadSafetyPageTableAttachment({
+      pageKey: HAZARD_DUTY_PAGE_KEY,
+      recordId: 'rec-1',
+      fieldName: '照片',
+      file,
+    })
+
+    const [url, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe(
+      `${API_BASE}/api/v1/safety/page-tables/${encodeURIComponent(HAZARD_DUTY_PAGE_KEY)}/records/rec-1/attachments/${encodeURIComponent('照片')}`,
+    )
+    expect(options.method).toBe('POST')
+    expect(options.body).toBeInstanceOf(FormData)
+    const headers = options.headers as Record<string, string>
+    expect(headers['Content-Type']).toBeUndefined()
+    expect(headers['X-Dazah-Page-Key']).toBe(HAZARD_DUTY_PAGE_KEY)
+  })
+
+  it('manages the page binding config with the settings page key', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { items: [] } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getSafetyPageFeishuConfigs()
+    await saveSafetyPageFeishuConfig(HAZARD_DUTY_PAGE_KEY, {
+      app_token: 'bascnX',
+      table_id: 'tblX',
+    })
+    await testSafetyPageFeishuConfig(HAZARD_DUTY_PAGE_KEY)
+    await resolveSafetyPageFeishuUrl('https://x.feishu.cn/base/bascnX?table=tblX')
+
+    for (const [, options] of fetchMock.mock.calls as unknown as [string, RequestInit][]) {
+      expect((options.headers as Record<string, string>)['X-Dazah-Page-Key']).toBe(
+        SETTINGS_PAGE_KEY,
+      )
+    }
+    const urls = (fetchMock.mock.calls as unknown as [string, RequestInit][]).map(
+      ([url]) => url,
+    )
+    expect(urls[0]).toBe(`${API_BASE}/api/v1/safety/page-feishu-configs`)
+    expect(urls[1]).toBe(
+      `${API_BASE}/api/v1/safety/page-feishu-configs/${encodeURIComponent(HAZARD_DUTY_PAGE_KEY)}`,
+    )
+    expect(urls[2]).toBe(
+      `${API_BASE}/api/v1/safety/page-feishu-configs/${encodeURIComponent(HAZARD_DUTY_PAGE_KEY)}/test`,
+    )
+    expect(urls[3]).toBe(`${API_BASE}/api/v1/safety/page-feishu-configs/resolve`)
+  })
+})
+
+
+describe('safety page table actions', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('lists page table records with the page key header', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getSafetyPageTableRecords({ pageKey: 'k', page: 2, keyword: 'YH' })
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toContain('/api/v1/safety/page-tables/k/records')
+    expect(init.headers).toMatchObject({ 'X-Dazah-Page-Key': 'k' })
+  })
+
+  it('encodes group_by dimensions into the stats query', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getSafetyPageTableStats({ pageKey: 'k', groupBy: ['值班日期', '整改情况'] })
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe(
+      `${API_BASE}/api/v1/safety/page-tables/k/stats?${new URLSearchParams([
+        ['group_by', '值班日期'],
+        ['group_by', '整改情况'],
+      ]).toString()}`,
+    )
+    expect(init.headers).toMatchObject({ 'X-Dazah-Page-Key': 'k' })
   })
 })

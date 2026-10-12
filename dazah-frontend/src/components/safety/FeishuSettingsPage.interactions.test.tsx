@@ -12,6 +12,10 @@ const mocks = vi.hoisted(() => ({
   getSafetyFeishuWsStatus: vi.fn(),
   restartSafetyFeishuWs: vi.fn(),
   testRadarNotify: vi.fn(),
+  getSafetyPageFeishuConfigs: vi.fn(),
+  saveSafetyPageFeishuConfig: vi.fn(),
+  testSafetyPageFeishuConfig: vi.fn(),
+  resolveSafetyPageFeishuUrl: vi.fn(),
 }))
 
 vi.mock('@/actions/safety', () => ({
@@ -21,6 +25,10 @@ vi.mock('@/actions/safety', () => ({
   testRadarNotify: mocks.testRadarNotify,
   getSafetyFeishuWsStatus: mocks.getSafetyFeishuWsStatus,
   restartSafetyFeishuWs: mocks.restartSafetyFeishuWs,
+  getSafetyPageFeishuConfigs: mocks.getSafetyPageFeishuConfigs,
+  saveSafetyPageFeishuConfig: mocks.saveSafetyPageFeishuConfig,
+  testSafetyPageFeishuConfig: mocks.testSafetyPageFeishuConfig,
+  resolveSafetyPageFeishuUrl: mocks.resolveSafetyPageFeishuUrl,
 }))
 
 vi.mock('@/components/shared/PlatformNotice', async () => {
@@ -183,6 +191,8 @@ beforeEach(() => {
   mocks.getSafetyFeishuWsStatus.mockResolvedValue({ code: 200, data: { connected: true } })
   mocks.saveSafetyFeishuSettings.mockResolvedValue({ code: 200, data: settingsDetail })
   mocks.testRadarNotify.mockResolvedValue({ code: 200, data: { sent: 2, errors: [] } })
+  // 「页面数据表映射」标签页默认无已登记镜像页，卡片渲染为空态
+  mocks.getSafetyPageFeishuConfigs.mockResolvedValue({ code: 200, data: { items: [] } })
 })
 
 afterEach(() => {
