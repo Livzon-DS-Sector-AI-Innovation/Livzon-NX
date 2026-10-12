@@ -12,7 +12,9 @@ import { PersonnelDrawer } from './PersonnelDrawer'
 import { PersonnelCategoryDrawer } from './PersonnelCategoryDrawer'
 import type { EquipmentRole, Personnel } from '@/types/equipment-personnel'
 
-export function PersonnelPage() {
+export function PersonnelPage({
+  workshopCode, workshopLabel,
+}: { workshopCode: string; workshopLabel: string }) {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<'personnel' | 'roles'>('personnel')
@@ -105,6 +107,7 @@ export function PersonnelPage() {
             </div>
           </div>
           <PersonnelTable
+            workshopCode={workshopCode}
             roles={roles}
             onAddClick={() => setDrawerOpen(true)}
             onRoleClick={openRoleModal}
@@ -133,10 +136,10 @@ export function PersonnelPage() {
           fontSize: 22, fontWeight: 600, color: '#1a1a1a',
           margin: 0, marginBottom: 4, lineHeight: 1.3,
         }}>
-          人员配置
+          人员配置 · {workshopLabel}
         </h2>
         <p style={{ fontSize: 14, color: '#787671', margin: 0, lineHeight: 1.5 }}>
-          角色权限管理 · 人员分配 · 分类约束 · 飞书同步
+          {workshopLabel} · 角色权限管理 · 人员分配 · 分类约束 · 飞书同步
         </p>
       </div>
 
@@ -164,6 +167,7 @@ export function PersonnelPage() {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         roles={roles}
+        workshopCode={workshopCode}
       />
 
       <Modal

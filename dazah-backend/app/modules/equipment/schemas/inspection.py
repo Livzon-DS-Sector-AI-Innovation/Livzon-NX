@@ -191,6 +191,7 @@ class EquipmentInspectionFeishuConfigUpdateRequest(BaseModel):
 class EquipmentInspectionFeishuConfigDetail(BaseModel):
     """设备巡检飞书镜像配置详情（Secret 掩码返回）"""
 
+    workshop_code: str = Field(description="车间代码（配置归属车间）")
     app_id: str = Field(description="飞书应用 App ID")
     app_secret_masked: str = Field(description="App Secret 掩码")
     app_secret_configured: bool = Field(description="是否已配置 App Secret")

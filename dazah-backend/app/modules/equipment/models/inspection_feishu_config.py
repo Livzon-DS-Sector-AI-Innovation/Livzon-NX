@@ -1,25 +1,41 @@
 """设备巡检飞书镜像配置 ORM 模型。
 
-单行配置：飞书应用凭据（App Secret 加密存储）与三张多维表格
-引用。数据库行优先于 EQUIPMENT_FEISHU_* 环境变量回退。
+按车间一行配置：飞书应用凭据（App Secret 加密存储）与三张多维表格
+引用。数据库行优先于 EQUIPMENT_FEISHU_* 环境变量回退（环境变量仅
+作用于默认车间）。
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String, Text
+from sqlalchemy import Boolean, DateTime, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.shared.base_model import BaseModel
 
 
 class EquipmentInspectionFeishuConfig(BaseModel):
-    """设备巡检飞书镜像配置（全模块仅一行）"""
+    """设备巡检飞书镜像配置（每个车间一行）"""
 
     __tablename__ = "inspection_feishu_config"
-    __table_args__ = {"schema": "equipment"}
+    __table_args__ = (
+        # 部分唯一索引：未删除行内每个车间仅一行配置
+        Index(
+            "uq_inspection_feishu_config_workshop",
+            "workshop_code",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        {"schema": "equipment"},
+    )
 
+    workshop_code: Mapped[str] = mapped_column(
+        String(10),
+        default="201-1",
+        server_default="201-1",
+        comment="车间代码（如 101-1 / 201-1）",
+    )
     app_id: Mapped[str] = mapped_column(
         String(100), default="", comment="飞书应用 App ID"
     )

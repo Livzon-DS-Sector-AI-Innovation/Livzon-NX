@@ -99,6 +99,9 @@ async def list_personnel(
     role_id: list[uuid.UUID] | None = Query(None, description="按角色 ID 筛选"),
     is_active: bool | None = Query(None, description="在岗状态筛选"),
     keyword: str | None = Query(None, description="姓名搜索"),
+    workshop: str | None = Query(
+        None, pattern=r"^\d{3}(-\d)?$", description="车间代码（如 101-1 / 201-1）"
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
@@ -108,6 +111,7 @@ async def list_personnel(
         role_ids=role_id,
         is_active=is_active,
         keyword=keyword,
+        workshop_code=workshop,
         page=page,
         page_size=page_size,
     )
@@ -128,12 +132,16 @@ async def get_candidates(
         description="角色编码列表，如 maintenance_tech",
     ),
     category_id: uuid.UUID | None = Query(None, description="设备分类ID（可选）"),
+    workshop: str | None = Query(
+        None, pattern=r"^\d{3}(-\d)?$", description="车间代码（如 101-1 / 201-1）"
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     candidates = await service.get_candidates(
         db,
         role_codes,
         category_id=category_id,
+        workshop_code=workshop,
     )
     return success_response(data=[c.model_dump(mode="json") for c in candidates])
 

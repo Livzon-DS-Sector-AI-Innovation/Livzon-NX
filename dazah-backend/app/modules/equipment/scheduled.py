@@ -1,7 +1,9 @@
 """设备巡检飞书镜像同步调度器。
 
-增量：每 5 分钟按水位同步三张表（今日巡检 / 历史记录 / 设备档案）；
-全量：每天 03:10 全表对账（补漏 + 删除对账）。未配置时静默跳过。
+增量：每 5 分钟按水位同步各启用车间三张表（今日巡检 / 历史记录 /
+设备档案）；全量：每天 03:10 全表对账（补漏 + 删除对账）。
+每个启用车间一个任务项，单车间失败不影响其他车间。未配置的
+车间静默跳过。
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class InspectionFeishuMirrorSyncGenerator(TaskGenerator):
-    """每 5 分钟增量同步设备巡检飞书多维表格镜像。"""
+    """每 5 分钟增量同步各车间设备巡检飞书多维表格镜像。"""
 
     name = "equipment.inspection_feishu_mirror_sync"
     schedule = ScheduleConfig(
@@ -29,18 +31,20 @@ class InspectionFeishuMirrorSyncGenerator(TaskGenerator):
     )
 
     async def find_due(self, session: AsyncSession) -> list[Any]:
-        if not await feishu_config.is_mirror_enabled(session):
-            return []
-        return ["all"]
+        return await feishu_config.list_enabled_workshops(session)
 
     async def execute_one(self, session: AsyncSession, item: Any) -> None:
-        results = await mirror.sync_all(session, incremental=True)
+        workshop_code = str(item)
+        results = await mirror.sync_all(session, workshop_code, incremental=True)
         await session.commit()
-        logger.info("inspection feishu mirror incremental sync: %s", results)
+        logger.info(
+            "inspection feishu mirror incremental sync [%s]: %s",
+            workshop_code, results,
+        )
 
 
 class InspectionFeishuMirrorFullSyncGenerator(TaskGenerator):
-    """每天 03:10 全量对账（补漏 + 删除飞书侧已删行）。"""
+    """每天 03:10 各启用车间全量对账（补漏 + 删除飞书侧已删行）。"""
 
     name = "equipment.inspection_feishu_mirror_full_sync"
     schedule = ScheduleConfig(
@@ -50,11 +54,13 @@ class InspectionFeishuMirrorFullSyncGenerator(TaskGenerator):
     )
 
     async def find_due(self, session: AsyncSession) -> list[Any]:
-        if not await feishu_config.is_mirror_enabled(session):
-            return []
-        return ["all"]
+        return await feishu_config.list_enabled_workshops(session)
 
     async def execute_one(self, session: AsyncSession, item: Any) -> None:
-        results = await mirror.sync_all(session, incremental=False)
+        workshop_code = str(item)
+        results = await mirror.sync_all(session, workshop_code, incremental=False)
         await session.commit()
-        logger.info("inspection feishu mirror full sync: %s", results)
+        logger.info(
+            "inspection feishu mirror full sync [%s]: %s",
+            workshop_code, results,
+        )

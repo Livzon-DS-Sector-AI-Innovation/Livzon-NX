@@ -31996,6 +31996,12 @@ export interface components {
              * @description 按模板填写的台账 .xlsx 文件
              */
             file: string;
+            /**
+             * Workshop
+             * @description 归属车间代码
+             * @default 201-1
+             */
+            workshop: string | null;
         };
         /** Body_import_esg_records_api_v1_hr_esg_training_records_import_post */
         Body_import_esg_records_api_v1_hr_esg_training_records_import_post: {
@@ -41083,6 +41089,12 @@ export interface components {
              * @description 保修到期日
              */
             warranty_expire_date?: string | null;
+            /**
+             * Workshop Code
+             * @description 归属车间代码（如 101-1 / 201-1）
+             * @default 201-1
+             */
+            workshop_code: string;
         };
         /**
          * EquipmentInspectionFeishuConfigUpdateRequest
@@ -49573,6 +49585,12 @@ export interface components {
              * @description identity.users 的 ID 列表
              */
             user_ids: string[];
+            /**
+             * Workshop Code
+             * @description 归属车间代码（如 101-1 / 201-1）
+             * @default 201-1
+             */
+            workshop_code: string;
         };
         /**
          * PersonnelCategoryAssign
@@ -55491,6 +55509,12 @@ export interface components {
              * @description 参考单价
              */
             unit_price?: number | null;
+            /**
+             * Workshop Code
+             * @description 归属车间代码（如 101-1 / 201-1）
+             * @default 201-1
+             */
+            workshop_code: string;
         };
         /**
          * SparePartUpdate
@@ -55537,6 +55561,11 @@ export interface components {
              * @description 参考单价
              */
             unit_price?: number | null;
+            /**
+             * Workshop Code
+             * @description 归属车间代码（如 101-1 / 201-1）
+             */
+            workshop_code?: string | null;
         };
         /**
          * SpecialOperationPermitCreate
@@ -66845,6 +66874,8 @@ export interface operations {
                 status?: string | null;
                 /** @description 关键词搜索 */
                 keyword?: string | null;
+                /** @description 车间代码（如 101-1 / 201-1） */
+                workshop?: string | null;
                 /** @description 页码 */
                 page?: number;
                 /** @description 每页数量 */
@@ -66981,7 +67012,10 @@ export interface operations {
     };
     get_equipment_statistics_api_v1_equipment_equipments_statistics_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 车间代码（如 101-1 / 201-1） */
+                workshop?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -67115,7 +67149,10 @@ export interface operations {
     };
     get_feishu_config_api_v1_equipment_inspection_feishu_config_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description 车间代码（如 101-1 / 201-1） */
+                workshop: string;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -67146,7 +67183,10 @@ export interface operations {
     };
     save_feishu_config_api_v1_equipment_inspection_feishu_config_put: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description 车间代码（如 101-1 / 201-1） */
+                workshop: string;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -67181,7 +67221,10 @@ export interface operations {
     };
     test_feishu_config_api_v1_equipment_inspection_feishu_config_test_post: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description 车间代码（如 101-1 / 201-1） */
+                workshop: string;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -67212,7 +67255,9 @@ export interface operations {
     };
     list_feishu_devices_api_v1_equipment_inspection_feishu_devices_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description 车间代码（如 101-1 / 201-1） */
+                workshop: string;
                 /** @description 设备名称/编号搜索 */
                 keyword?: string | null;
             };
@@ -67247,6 +67292,8 @@ export interface operations {
     list_feishu_records_api_v1_equipment_inspection_feishu_records_get: {
         parameters: {
             query?: {
+                /** @description 车间代码；缺省跨车间查询 */
+                workshop?: string | null;
                 /** @description 来源：today=今日巡检 / history=历史记录，缺省全部 */
                 source?: string | null;
                 /** @description 日期起 */
@@ -67292,7 +67339,10 @@ export interface operations {
     };
     feishu_sync_now_api_v1_equipment_inspection_feishu_sync_post: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description 车间代码（如 101-1 / 201-1） */
+                workshop: string;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -67323,7 +67373,10 @@ export interface operations {
     };
     feishu_sync_status_api_v1_equipment_inspection_feishu_sync_status_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description 车间代码（如 101-1 / 201-1） */
+                workshop: string;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -67354,7 +67407,10 @@ export interface operations {
     };
     feishu_today_summary_api_v1_equipment_inspection_feishu_today_summary_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description 车间代码（如 101-1 / 201-1） */
+                workshop: string;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -68111,6 +68167,8 @@ export interface operations {
                 equipment_id?: string | null;
                 /** @description 状态 */
                 status?: string | null;
+                /** @description 车间代码（如 101-1 / 201-1） */
+                workshop?: string | null;
                 /** @description 页码 */
                 page?: number;
                 /** @description 每页数量 */
@@ -68323,6 +68381,8 @@ export interface operations {
                 equipment_id?: string | null;
                 /** @description 计划ID */
                 plan_id?: string | null;
+                /** @description 车间代码（如 101-1 / 201-1） */
+                workshop?: string | null;
                 /** @description 页码 */
                 page?: number;
                 /** @description 每页数量 */
@@ -69330,6 +69390,8 @@ export interface operations {
                 status?: string | null;
                 /** @description 关键词搜索 */
                 keyword?: string | null;
+                /** @description 车间代码（如 101-1 / 201-1） */
+                workshop?: string | null;
                 /** @description 页码 */
                 page?: number;
                 /** @description 每页数量 */
@@ -69568,7 +69630,10 @@ export interface operations {
     };
     list_maintainers_api_v1_equipment_maintenance_staff_maintainers_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 车间代码（如 101-1 / 201-1） */
+                workshop?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -69608,6 +69673,8 @@ export interface operations {
                 priority?: string | null;
                 /** @description 工单类型 */
                 order_type?: string | null;
+                /** @description 车间代码（如 101-1 / 201-1） */
+                workshop?: string | null;
                 /** @description 页码 */
                 page?: number;
                 /** @description 每页数量 */
@@ -69678,7 +69745,10 @@ export interface operations {
     };
     get_work_order_statistics_api_v1_equipment_maintenance_work_orders_statistics_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 车间代码（如 101-1 / 201-1） */
+                workshop?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -70204,6 +70274,8 @@ export interface operations {
                 is_active?: boolean | null;
                 /** @description 姓名搜索 */
                 keyword?: string | null;
+                /** @description 车间代码（如 101-1 / 201-1） */
+                workshop?: string | null;
                 page?: number;
                 page_size?: number;
             };
@@ -70277,6 +70349,8 @@ export interface operations {
                 role_codes: string[];
                 /** @description 设备分类ID（可选） */
                 category_id?: string | null;
+                /** @description 车间代码（如 101-1 / 201-1） */
+                workshop?: string | null;
             };
             header?: never;
             path?: never;
@@ -70773,6 +70847,8 @@ export interface operations {
                 keyword?: string | null;
                 /** @description 是否启用 */
                 is_active?: boolean | null;
+                /** @description 车间代码（如 101-1 / 201-1） */
+                workshop?: string | null;
                 /** @description 页码 */
                 page?: number;
                 /** @description 每页数量 */
@@ -70843,7 +70919,10 @@ export interface operations {
     };
     get_stock_warnings_api_v1_equipment_spare_parts_stock_warnings_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 车间代码（如 101-1 / 201-1） */
+                workshop?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: {

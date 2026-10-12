@@ -72,14 +72,16 @@ async def get_calibration_plans(
     db: AsyncSession,
     equipment_id: uuid.UUID | None = None,
     status: str | None = None,
+    workshop_code: str | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[CalibrationPlan], int]:
-    """获取校准计划列表"""
+    """获取校准计划列表（workshop_code 经所属设备派生，缺省跨车间）"""
     return await repo.get_calibration_plans(
         db,
         equipment_id=equipment_id,
         status=status,
+        workshop_code=workshop_code,
         page=page,
         page_size=page_size,
     )
@@ -168,14 +170,16 @@ async def get_calibration_records(
     db: AsyncSession,
     equipment_id: uuid.UUID | None = None,
     plan_id: uuid.UUID | None = None,
+    workshop_code: str | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[CalibrationRecord], int]:
-    """获取校准记录列表"""
+    """获取校准记录列表（workshop_code 经所属设备派生，缺省跨车间）"""
     return await repo.get_calibration_records(
         db,
         equipment_id=equipment_id,
         plan_id=plan_id,
+        workshop_code=workshop_code,
         page=page,
         page_size=page_size,
     )

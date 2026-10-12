@@ -97,9 +97,27 @@ async def soft_delete_role(db: AsyncSession, role: EquipmentRole) -> None:
 async def get_personnel_by_user_id(
     db: AsyncSession, user_id: uuid.UUID
 ) -> EquipmentPersonnel | None:
+    """按 user_id 查人员池行（同人可属多个车间，仅取首行）。"""
+    result = await db.execute(
+        select(EquipmentPersonnel)
+        .where(
+            EquipmentPersonnel.user_id == user_id,
+            EquipmentPersonnel.is_deleted == False,  # noqa: E712
+        )
+        .order_by(EquipmentPersonnel.created_at)
+        .limit(1)
+    )
+    return result.scalars().first()
+
+
+async def get_personnel_by_user_and_workshop(
+    db: AsyncSession, user_id: uuid.UUID, workshop_code: str
+) -> EquipmentPersonnel | None:
+    """按 user_id + 车间查人员池行（同车间去重判据）。"""
     result = await db.execute(
         select(EquipmentPersonnel).where(
             EquipmentPersonnel.user_id == user_id,
+            EquipmentPersonnel.workshop_code == workshop_code,
             EquipmentPersonnel.is_deleted == False,  # noqa: E712
         )
     )
@@ -124,6 +142,7 @@ async def list_personnel(
     role_ids: list[uuid.UUID] | None = None,
     is_active: bool | None = None,
     keyword: str | None = None,
+    workshop_code: str | None = None,
     offset: int = 0,
     limit: int = 100,
 ) -> tuple[list[EquipmentPersonnel], int]:
@@ -138,6 +157,11 @@ async def list_personnel(
         )
     )
 
+    if workshop_code:
+        stmt = stmt.where(EquipmentPersonnel.workshop_code == workshop_code)
+        count_stmt = count_stmt.where(
+            EquipmentPersonnel.workshop_code == workshop_code
+        )
     if is_active is not None:
         stmt = stmt.where(EquipmentPersonnel.is_active == is_active)
         count_stmt = count_stmt.where(EquipmentPersonnel.is_active == is_active)
@@ -324,8 +348,9 @@ async def get_candidates(
     db: AsyncSession,
     role_ids: list[uuid.UUID],
     category_id: uuid.UUID | None = None,
+    workshop_code: str | None = None,
 ) -> list[dict[str, Any]]:
-    """按角色查找可分配人员，支持设备分类过滤"""
+    """按角色查找可分配人员，支持设备分类与车间过滤"""
     base = (
         select(
             EquipmentPersonnel,
@@ -348,6 +373,8 @@ async def get_candidates(
             EquipmentRole.is_active == True,  # noqa: E712
         )
     )
+    if workshop_code:
+        base = base.where(EquipmentPersonnel.workshop_code == workshop_code)
 
     result = await db.execute(base)
     rows = result.all()

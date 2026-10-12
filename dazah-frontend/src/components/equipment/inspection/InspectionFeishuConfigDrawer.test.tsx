@@ -278,7 +278,13 @@ describe('InspectionFeishuConfigDrawer', () => {
   async function renderDrawer() {
     await act(async () => {
       root.render(
-        <InspectionFeishuConfigDrawer open onClose={onClose} onSaved={onSaved} />,
+        <InspectionFeishuConfigDrawer
+          workshopCode="201-1"
+          workshopLabel="201一车间"
+          open
+          onClose={onClose}
+          onSaved={onSaved}
+        />,
       )
     })
     // 真实 react-query 的 fetch 完成与回填 effect 需要若干宏任务节拍
@@ -292,7 +298,8 @@ describe('InspectionFeishuConfigDrawer', () => {
   it('renders summary and prefills fields from loaded config', async () => {
     await renderDrawer()
 
-    expect(document.body.textContent).toContain('飞书同步配置')
+    expect(document.body.textContent).toContain('飞书同步配置 · 201一车间')
+    expect(api.fetchInspectionFeishuConfig).toHaveBeenCalledWith('201-1')
     expect(document.body.textContent).toContain('数据库配置')
     expect(document.body.textContent).toContain('同步已启用')
     const appIdInput = findInputByPlaceholder('cli_xxxxxxxx')
@@ -311,7 +318,7 @@ describe('InspectionFeishuConfigDrawer', () => {
       findButton('保存配置').click()
     })
 
-    expect(api.updateInspectionFeishuConfig).toHaveBeenCalledWith({
+    expect(api.updateInspectionFeishuConfig).toHaveBeenCalledWith('201-1', {
       app_id: 'cli_fixture',
       app_secret: null,
       app_token: 'bascn_fixture',
@@ -353,7 +360,7 @@ describe('InspectionFeishuConfigDrawer', () => {
       findButton('测试连接（已保存配置）').click()
     })
 
-    expect(api.testInspectionFeishuConfig).toHaveBeenCalled()
+    expect(api.testInspectionFeishuConfig).toHaveBeenCalledWith('201-1')
     expect(messages.success).toHaveBeenCalledWith('连接成功，读取到 2 张子表')
   })
 

@@ -97,15 +97,17 @@ async def get_maintenance_plans(
     equipment_id: uuid.UUID | None = None,
     status: str | None = None,
     keyword: str | None = None,
+    workshop_code: str | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[MaintenancePlan], int]:
-    """获取维护计划列表"""
+    """获取维护计划列表（workshop_code 经所属设备派生，缺省跨车间）"""
     return await repo.get_maintenance_plans(
         db,
         equipment_id=equipment_id,
         status=status,
         keyword=keyword,
+        workshop_code=workshop_code,
         page=page,
         page_size=page_size,
     )

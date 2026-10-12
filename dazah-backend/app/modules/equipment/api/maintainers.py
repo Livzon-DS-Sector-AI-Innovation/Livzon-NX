@@ -2,7 +2,7 @@
 
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,16 +19,22 @@ router = APIRouter()
 
 @router.get("/maintainers", summary="获取设备模块维修人员列表")
 async def list_maintainers(
+    workshop: str | None = Query(
+        None, pattern=r"^\d{3}(-\d)?$", description="车间代码（如 101-1 / 201-1）"
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     """从人员配置中获取所有在岗人员，供工单指派维修人时选择。"""
+    conditions = [
+        EquipmentPersonnel.is_deleted == False,  # noqa: E712
+        EquipmentPersonnel.is_active == True,  # noqa: E712
+        EquipmentPersonnel.user_id.isnot(None),
+    ]
+    if workshop:
+        conditions.append(EquipmentPersonnel.workshop_code == workshop)
     result = await db.execute(
         select(EquipmentPersonnel)
-        .where(
-            EquipmentPersonnel.is_deleted == False,  # noqa: E712
-            EquipmentPersonnel.is_active == True,  # noqa: E712
-            EquipmentPersonnel.user_id.isnot(None),
-        )
+        .where(*conditions)
         .order_by(EquipmentPersonnel.name)
     )
     personnel_list = result.scalars().all()

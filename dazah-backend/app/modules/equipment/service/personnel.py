@@ -137,8 +137,10 @@ async def add_personnel(
                 )
                 continue
 
-            # 去重
-            existing = await repo.get_personnel_by_user_id(db, user_id)
+            # 去重（按车间：同一人可加入多个车间的人员池）
+            existing = await repo.get_personnel_by_user_and_workshop(
+                db, user_id, data.workshop_code
+            )
             if existing:
                 result.skipped.append(user_id)
                 continue
@@ -147,6 +149,7 @@ async def add_personnel(
             personnel = EquipmentPersonnel(
                 user_id=user.id,
                 name=user.name,
+                workshop_code=data.workshop_code,
                 employee_no=user.employee_no,
                 department=user.department,
                 feishu_user_id=user.feishu_user_id,
@@ -209,6 +212,7 @@ async def get_personnel(db: AsyncSession, personnel_id: uuid.UUID) -> PersonnelR
         id=personnel.id,
         user_id=personnel.user_id,
         name=personnel.name,
+        workshop_code=personnel.workshop_code,
         employee_no=personnel.employee_no,
         department=personnel.department,
         position=position,
@@ -231,6 +235,7 @@ async def list_personnel(
     role_ids: list[uuid.UUID] | None = None,
     is_active: bool | None = None,
     keyword: str | None = None,
+    workshop_code: str | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> PersonnelListResponse:
@@ -240,6 +245,7 @@ async def list_personnel(
         role_ids=role_ids,
         is_active=is_active,
         keyword=keyword,
+        workshop_code=workshop_code,
         offset=offset,
         limit=page_size,
     )
@@ -299,6 +305,7 @@ async def list_personnel(
                 id=p.id,
                 user_id=p.user_id,
                 name=p.name,
+                workshop_code=p.workshop_code,
                 employee_no=p.employee_no,
                 department=p.department,
                 position=user.position if user else None,
@@ -379,8 +386,9 @@ async def get_candidates(
     db: AsyncSession,
     role_codes: list[str],
     category_id: uuid.UUID | None = None,
+    workshop_code: str | None = None,
 ) -> list[CandidateResponse]:
-    """按角色编码查找可分配人员"""
+    """按角色编码查找可分配人员（workshop_code 缺省跨车间）"""
     role_result = await db.execute(
         select(EquipmentRole).where(
             EquipmentRole.code.in_(role_codes),
@@ -393,7 +401,9 @@ async def get_candidates(
     if not role_ids:
         return []
 
-    raw = await repo.get_candidates(db, role_ids, category_id=category_id)
+    raw = await repo.get_candidates(
+        db, role_ids, category_id=category_id, workshop_code=workshop_code
+    )
     return [
         CandidateResponse(
             personnel_id=r["personnel_id"],

@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.equipment.models import MaintenancePlan
+from app.modules.equipment.repository.workshop import equipment_workshop_filter
 
 
 async def create_maintenance_plan(
@@ -40,13 +41,18 @@ async def get_maintenance_plans(
     equipment_id: uuid.UUID | None = None,
     status: str | None = None,
     keyword: str | None = None,
+    workshop_code: str | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[MaintenancePlan], int]:
-    """获取维护计划列表"""
+    """获取维护计划列表（workshop_code 经所属设备派生，缺省跨车间）"""
     query = select(MaintenancePlan).where(
         MaintenancePlan.is_deleted == False  # noqa: E712
     )
+    if workshop_code:
+        query = query.where(
+            equipment_workshop_filter(MaintenancePlan.equipment_id, workshop_code)
+        )
     if equipment_id:
         query = query.where(MaintenancePlan.equipment_id == equipment_id)
     if status:

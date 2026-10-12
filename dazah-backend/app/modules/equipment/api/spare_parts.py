@@ -37,6 +37,9 @@ async def list_spare_parts(
     category: str | None = Query(None, description="备件分类"),
     keyword: str | None = Query(None, description="关键词搜索"),
     is_active: bool | None = Query(None, description="是否启用"),
+    workshop: str | None = Query(
+        None, pattern=r"^\d{3}(-\d)?$", description="车间代码（如 101-1 / 201-1）"
+    ),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=200, description="每页数量"),
     db: AsyncSession = Depends(get_db),
@@ -46,6 +49,7 @@ async def list_spare_parts(
         category=category,
         keyword=keyword,
         is_active=is_active,
+        workshop_code=workshop,
         page=page,
         page_size=page_size,
     )
@@ -59,9 +63,12 @@ async def list_spare_parts(
 
 @router.get("/stock/warnings", summary="库存预警列表")
 async def get_stock_warnings(
+    workshop: str | None = Query(
+        None, pattern=r"^\d{3}(-\d)?$", description="车间代码（如 101-1 / 201-1）"
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
-    warnings = await service.get_stock_warnings(db)
+    warnings = await service.get_stock_warnings(db, workshop)
     return success_response(
         data=[warning.model_dump(mode="json") for warning in warnings]
     )

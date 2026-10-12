@@ -94,6 +94,7 @@ export interface Equipment {
 export interface CreateEquipmentInput {
   name: string
   equipment_no: string
+  workshop_code?: string
   category_ids: string[]
   location_id: string
   status?: EquipmentStatus
@@ -151,6 +152,7 @@ export interface EquipmentImportResult {
 
 // 列表和筛选
 export interface EquipmentFilters {
+  workshop?: string
   category_id?: string
   location_id?: string
   department_id?: string
@@ -297,6 +299,7 @@ export interface VerifyWorkOrderInput {
 }
 
 export interface WorkOrderFilters {
+  workshop?: string
   status?: WorkOrderStatus
   equipment_id?: string
   priority?: WorkOrderPriority
@@ -362,6 +365,7 @@ export interface UpdateCalibrationPlanInput {
 }
 
 export interface CalibrationPlanFilters {
+  workshop?: string
   equipment_id?: string
   status?: CalibrationPlanStatus
   page?: number
@@ -405,6 +409,7 @@ export interface CreateCalibrationRecordInput {
 }
 
 export interface CalibrationRecordFilters {
+  workshop?: string
   equipment_id?: string
   plan_id?: string
   page?: number
@@ -440,6 +445,7 @@ export interface SparePart {
 export interface CreateSparePartInput {
   code: string
   name: string
+  workshop_code?: string
   specification?: string
   unit: string
   category?: string
@@ -460,6 +466,7 @@ export interface UpdateSparePartInput {
 }
 
 export interface SparePartFilters {
+  workshop?: string
   category?: string
   keyword?: string
   is_active?: boolean
@@ -545,6 +552,7 @@ export interface UpdateMaintenancePlanInput {
 }
 
 export interface MaintenancePlanFilters {
+  workshop?: string
   equipment_id?: string
   status?: MaintenancePlanStatus
   keyword?: string

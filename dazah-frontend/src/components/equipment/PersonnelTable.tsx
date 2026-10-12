@@ -14,6 +14,8 @@ const { Text } = Typography
 
 interface Props {
   roles: EquipmentRole[]
+  /** 页面所在车间：人员列表按车间过滤 */
+  workshopCode?: string
   onAddClick: () => void
   onRoleClick: (personnel: Personnel) => void
   onCategoryClick: (personnel: Personnel) => void
@@ -34,7 +36,7 @@ const STATUS_PILL: Record<string, React.CSSProperties> = {
   },
 }
 
-export function PersonnelTable({ roles, onAddClick, onRoleClick, onCategoryClick }: Props) {
+export function PersonnelTable({ roles, workshopCode, onAddClick, onRoleClick, onCategoryClick }: Props) {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const [keyword, setKeyword] = useState('')
@@ -42,8 +44,8 @@ export function PersonnelTable({ roles, onAddClick, onRoleClick, onCategoryClick
   const [pageSize, setPageSize] = useState(20)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['equipment-personnel', { keyword, page, pageSize }],
-    queryFn: () => fetchPersonnelList({ keyword: keyword || undefined, page, page_size: pageSize }),
+    queryKey: ['equipment-personnel', { workshop: workshopCode, keyword, page, pageSize }],
+    queryFn: () => fetchPersonnelList({ workshop: workshopCode, keyword: keyword || undefined, page, page_size: pageSize }),
   })
 
   const handleDelete = async (id: string) => {

@@ -33,6 +33,7 @@ export async function fetchInspectionFeishuRecords(
   filters: InspectionFeishuRecordFilters = {},
 ): Promise<InspectionFeishuRecordListResponse> {
   const params = new URLSearchParams()
+  if (filters.workshop) params.append('workshop', filters.workshop)
   if (filters.source) params.append('source', filters.source)
   if (filters.date_from) params.append('date_from', filters.date_from)
   if (filters.date_to) params.append('date_to', filters.date_to)
@@ -51,28 +52,43 @@ export async function fetchInspectionFeishuRecords(
 }
 
 export async function fetchInspectionFeishuDevices(
+  workshop: string,
   keyword?: string,
 ): Promise<InspectionFeishuDevice[]> {
-  const qs = keyword ? `?keyword=${encodeURIComponent(keyword)}` : ''
-  const json = await getJson<InspectionFeishuDevice[]>(`${BASE}/devices${qs}`)
+  const params = new URLSearchParams({ workshop })
+  if (keyword) params.append('keyword', keyword)
+  const json = await getJson<InspectionFeishuDevice[]>(`${BASE}/devices?${params.toString()}`)
   return (json.data || []) as InspectionFeishuDevice[]
 }
 
-export async function fetchInspectionFeishuTodaySummary(): Promise<InspectionFeishuTodaySummary> {
-  const json = await getJson<InspectionFeishuTodaySummary>(`${BASE}/today-summary`)
+export async function fetchInspectionFeishuTodaySummary(
+  workshop: string,
+): Promise<InspectionFeishuTodaySummary> {
+  const json = await getJson<InspectionFeishuTodaySummary>(
+    `${BASE}/today-summary?workshop=${encodeURIComponent(workshop)}`,
+  )
   return json.data
 }
 
-export async function fetchInspectionFeishuSyncStatus(): Promise<InspectionFeishuSyncStatus> {
-  const json = await getJson<InspectionFeishuSyncStatus>(`${BASE}/sync-status`)
+export async function fetchInspectionFeishuSyncStatus(
+  workshop: string,
+): Promise<InspectionFeishuSyncStatus> {
+  const json = await getJson<InspectionFeishuSyncStatus>(
+    `${BASE}/sync-status?workshop=${encodeURIComponent(workshop)}`,
+  )
   return json.data
 }
 
 /** 手动触发飞书同步 */
-export async function triggerInspectionFeishuSync(): Promise<
+export async function triggerInspectionFeishuSync(
+  workshop: string,
+): Promise<
   Record<string, { synced?: number; total?: number; error?: string }>
 > {
-  const response = await fetch(`${BASE}/sync`, { method: 'POST' })
+  const response = await fetch(
+    `${BASE}/sync?workshop=${encodeURIComponent(workshop)}`,
+    { method: 'POST' },
+  )
   // 服务端异常可能返回纯文本（如 500 Internal Server Error），不能盲当 JSON 解析
   const json = await response.json().catch(() => null)
   if (!response.ok || !json || json.code !== 200) {
@@ -82,20 +98,28 @@ export async function triggerInspectionFeishuSync(): Promise<
 }
 
 /** 获取飞书镜像配置（Secret 掩码返回） */
-export async function fetchInspectionFeishuConfig(): Promise<InspectionFeishuConfigDetail> {
-  const json = await getJson<InspectionFeishuConfigDetail>(`${BASE}/config`)
+export async function fetchInspectionFeishuConfig(
+  workshop: string,
+): Promise<InspectionFeishuConfigDetail> {
+  const json = await getJson<InspectionFeishuConfigDetail>(
+    `${BASE}/config?workshop=${encodeURIComponent(workshop)}`,
+  )
   return json.data
 }
 
 /** 保存飞书镜像配置（Secret 留空保留已保存值） */
 export async function updateInspectionFeishuConfig(
+  workshop: string,
   values: InspectionFeishuConfigUpdateRequest,
 ): Promise<InspectionFeishuConfigDetail> {
-  const response = await fetch(`${BASE}/config`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(values),
-  })
+  const response = await fetch(
+    `${BASE}/config?workshop=${encodeURIComponent(workshop)}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(values),
+    },
+  )
   const json = await response.json()
   if (!response.ok || json.code !== 200) {
     throw new Error(json?.message || '保存配置失败')
@@ -104,8 +128,13 @@ export async function updateInspectionFeishuConfig(
 }
 
 /** 测试飞书镜像连接 */
-export async function testInspectionFeishuConfig(): Promise<InspectionFeishuConfigTestResult> {
-  const response = await fetch(`${BASE}/config/test`, { method: 'POST' })
+export async function testInspectionFeishuConfig(
+  workshop: string,
+): Promise<InspectionFeishuConfigTestResult> {
+  const response = await fetch(
+    `${BASE}/config/test?workshop=${encodeURIComponent(workshop)}`,
+    { method: 'POST' },
+  )
   const json = await response.json()
   if (!response.ok || json.code !== 200) {
     throw new Error(json?.message || '连接测试失败')

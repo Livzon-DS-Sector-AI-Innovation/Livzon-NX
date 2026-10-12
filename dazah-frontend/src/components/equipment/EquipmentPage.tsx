@@ -18,6 +18,8 @@ import { LocationDrawer } from './LocationDrawer'
 import { RepairDrawer } from './RepairDrawer'
 
 interface EquipmentPageProps {
+  workshopCode: string
+  workshopLabel: string
   initialCategories: EquipmentCategory[]
   initialLocations: Location[]
   initialEquipments: Equipment[]
@@ -29,6 +31,8 @@ interface EquipmentPageProps {
 const SIDEBAR_WIDTH = 280
 
 export function EquipmentPage({
+  workshopCode,
+  workshopLabel,
   initialCategories,
   initialLocations,
   initialEquipments,
@@ -126,6 +130,7 @@ export function EquipmentPage({
     setLoading(true)
     try {
       const equipmentsResponse = await fetchEquipmentsClient({
+        workshop: workshopCode,
         category_id: selectedCategory,
         location_id: selectedLocation,
         department_id: departmentFilter,
@@ -141,15 +146,15 @@ export function EquipmentPage({
     } finally {
       setLoading(false)
     }
-  }, [selectedCategory, selectedLocation, departmentFilter, statusFilter, keyword, setEquipments, setTotal, setLoading])
+  }, [workshopCode, selectedCategory, selectedLocation, departmentFilter, statusFilter, keyword, setEquipments, setTotal, setLoading])
 
   // 单独刷新统计（仅 mount 或需要时使用）
   const refreshStatistics = useCallback(async () => {
     try {
-      const stats = await fetchEquipmentStatisticsClient()
+      const stats = await fetchEquipmentStatisticsClient(workshopCode)
       setStatistics(stats)
     } catch { /* 静默 */ }
-  }, [setStatistics])
+  }, [workshopCode, setStatistics])
 
   // 刷新分类和位置树
   const refreshCategoriesAndLocations = useCallback(async () => {
@@ -209,10 +214,10 @@ export function EquipmentPage({
               margin: 0, marginBottom: 4, lineHeight: 1.3,
             }}
           >
-            设备台账
+            设备台账 · {workshopLabel}
           </h2>
           <p style={{ fontSize: 14, color: '#787671', margin: 0, lineHeight: 1.5 }}>
-            分类管理 · 位置管理 · 设备档案 · 状态追踪
+            {workshopLabel} · 分类管理 · 位置管理 · 设备档案 · 状态追踪
           </p>
         </div>
 
@@ -262,13 +267,13 @@ export function EquipmentPage({
 
             {/* 表格区域 */}
             <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
-              <EquipmentTable loading={loading} resetKey={resetKey} onPageChange={(p, ps) => fetchData(p, ps)} />
+              <EquipmentTable loading={loading} resetKey={resetKey} onPageChange={(p, ps) => fetchData(p, ps)} workshopCode={workshopCode} />
             </div>
           </div>
         </div>
 
         {/* 抽屉组件 */}
-        <EquipmentDrawer onRefresh={() => { fetchData(1, 20); setResetKey(k => k + 1) }} />
+        <EquipmentDrawer workshopCode={workshopCode} onRefresh={() => { fetchData(1, 20); setResetKey(k => k + 1) }} />
         <CategoryDrawer onRefresh={refreshCategoriesAndLocations} />
         <LocationDrawer onRefresh={refreshCategoriesAndLocations} />
         <RepairDrawer

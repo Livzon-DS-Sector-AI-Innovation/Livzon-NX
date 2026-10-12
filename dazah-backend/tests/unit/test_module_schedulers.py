@@ -387,12 +387,12 @@ async def test_equipment_timeout_loop_contains_scan_failure(monkeypatch: Any) ->
 async def test_equipment_feishu_mirror_generators_gate_on_config(
     monkeypatch: Any,
 ) -> None:
-    """镜像同步生成器按配置启停：未配置静默跳过，已配置按周期执行。"""
+    """镜像同步生成器按车间启停：未配置静默跳过，已配置车间逐个执行。"""
     from app.modules.equipment import scheduled as equipment_scheduled
 
-    enabled = AsyncMock(return_value=True)
+    enabled = AsyncMock(return_value=["101-2", "201-1"])
     monkeypatch.setattr(
-        equipment_scheduled.feishu_config, "is_mirror_enabled", enabled
+        equipment_scheduled.feishu_config, "list_enabled_workshops", enabled
     )
     sync_all = AsyncMock(return_value={"today": {"synced": 0, "total": 0}})
     monkeypatch.setattr(equipment_scheduled.mirror, "sync_all", sync_all)
@@ -401,18 +401,18 @@ async def test_equipment_feishu_mirror_generators_gate_on_config(
     incremental = equipment_scheduled.InspectionFeishuMirrorSyncGenerator()
     full = equipment_scheduled.InspectionFeishuMirrorFullSyncGenerator()
 
-    enabled.return_value = False
+    enabled.return_value = []
     assert await incremental.find_due(session) == []
     assert await full.find_due(session) == []
 
-    enabled.return_value = True
-    assert await incremental.find_due(session) == ["all"]
-    assert await full.find_due(session) == ["all"]
+    enabled.return_value = ["101-2", "201-1"]
+    assert await incremental.find_due(session) == ["101-2", "201-1"]
+    assert await full.find_due(session) == ["101-2", "201-1"]
 
-    await incremental.execute_one(session, "all")
-    sync_all.assert_awaited_with(session, incremental=True)
+    await incremental.execute_one(session, "201-1")
+    sync_all.assert_awaited_with(session, "201-1", incremental=True)
     session.commit.assert_awaited_once()
 
-    await full.execute_one(session, "all")
-    sync_all.assert_awaited_with(session, incremental=False)
+    await full.execute_one(session, "101-2")
+    sync_all.assert_awaited_with(session, "101-2", incremental=False)
     assert session.commit.await_count == 2

@@ -224,12 +224,21 @@ async def get_equipments(
     department_id: uuid.UUID | None = None,
     status: str | None = None,
     keyword: str | None = None,
+    workshop_code: str | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[Equipment], int]:
-    """获取设备列表"""
+    """获取设备列表（workshop_code 缺省跨车间查询）"""
     return await repo.get_equipments(
-        db, category_id, location_id, department_id, status, keyword, page, page_size
+        db,
+        category_id,
+        location_id,
+        department_id,
+        status,
+        keyword,
+        workshop_code,
+        page,
+        page_size,
     )
 
 
@@ -265,9 +274,11 @@ async def delete_equipment(
     return True
 
 
-async def get_equipment_statistics(db: AsyncSession) -> dict[str, Any]:
-    """获取设备统计"""
-    return await repo.get_equipment_statistics(db)
+async def get_equipment_statistics(
+    db: AsyncSession, workshop_code: str | None = None
+) -> dict[str, Any]:
+    """获取设备统计（workshop_code 缺省跨车间统计）"""
+    return await repo.get_equipment_statistics(db, workshop_code)
 
 
 async def get_departments_for_select(db: AsyncSession) -> list[dict[str, Any]]:

@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.equipment.models import CalibrationPlan, CalibrationRecord
+from app.modules.equipment.repository.workshop import equipment_workshop_filter
 
 
 async def create_calibration_plan(
@@ -39,13 +40,18 @@ async def get_calibration_plans(
     db: AsyncSession,
     equipment_id: uuid.UUID | None = None,
     status: str | None = None,
+    workshop_code: str | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[CalibrationPlan], int]:
-    """获取校准计划列表"""
+    """获取校准计划列表（workshop_code 经所属设备派生，缺省跨车间）"""
     query = select(CalibrationPlan).where(
         CalibrationPlan.is_deleted == False  # noqa: E712
     )
+    if workshop_code:
+        query = query.where(
+            equipment_workshop_filter(CalibrationPlan.equipment_id, workshop_code)
+        )
     if equipment_id:
         query = query.where(CalibrationPlan.equipment_id == equipment_id)
     if status:
@@ -138,13 +144,18 @@ async def get_calibration_records(
     db: AsyncSession,
     equipment_id: uuid.UUID | None = None,
     plan_id: uuid.UUID | None = None,
+    workshop_code: str | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[CalibrationRecord], int]:
-    """获取校准记录列表"""
+    """获取校准记录列表（workshop_code 经所属设备派生，缺省跨车间）"""
     query = select(CalibrationRecord).where(
         CalibrationRecord.is_deleted == False  # noqa: E712
     )
+    if workshop_code:
+        query = query.where(
+            equipment_workshop_filter(CalibrationRecord.equipment_id, workshop_code)
+        )
     if equipment_id:
         query = query.where(CalibrationRecord.equipment_id == equipment_id)
     if plan_id:

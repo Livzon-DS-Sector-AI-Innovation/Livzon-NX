@@ -1,10 +1,10 @@
 """设备巡检飞书多维表格镜像同步服务。
 
-岗位人员在飞书多维表格录入巡检记录，本服务把三张表
-（今日巡检 / 设备历史巡检记录 / 设备档案表）镜像到平台
-本地库，页面只读展示。同步策略：
+岗位人员在飞书多维表格录入巡检记录，本服务把每个车间配置的三张表
+（今日巡检 / 设备历史巡检记录 / 设备档案表）镜像到平台本地库
+（按 workshop_code 隔离），页面只读展示。同步策略：
 - 增量：按飞书记录 last_modified_time 降序翻页，取到水位
-  之前的记录即停；水位存 sync_state。
+  之前的记录即停；水位存 sync_state（每车间每表一行）。
 - 全量：翻页拉全表，UPSERT 并删除飞书侧已删除的行（软删）。
 - 容错：排序被飞书拒绝时增量回退全量翻页 + 客户端水位过滤；
   飞书不可达抛 AppException，由调用方（调度器/手动同步）记录
@@ -254,25 +254,28 @@ async def _fetch_pages(
 
 
 async def _get_state(
-    db: AsyncSession, table_key: str
+    db: AsyncSession, workshop_code: str, table_key: str
 ) -> EquipmentInspectionFeishuSyncState:
     state = (
         await db.execute(
             select(EquipmentInspectionFeishuSyncState).where(
+                EquipmentInspectionFeishuSyncState.workshop_code == workshop_code,
                 EquipmentInspectionFeishuSyncState.table_key == table_key,
                 EquipmentInspectionFeishuSyncState.is_deleted == False,  # noqa: E712
             )
         )
     ).scalar_one_or_none()
     if state is None:
-        state = EquipmentInspectionFeishuSyncState(table_key=table_key, total_rows=0)
+        state = EquipmentInspectionFeishuSyncState(
+            workshop_code=workshop_code, table_key=table_key, total_rows=0
+        )
         db.add(state)
         await db.flush()
     return state
 
 
 async def _upsert_record(
-    db: AsyncSession, source: str, item: dict[str, Any]
+    db: AsyncSession, workshop_code: str, source: str, item: dict[str, Any]
 ) -> None:
     record_id = str(item.get("record_id") or "")
     if not record_id:
@@ -282,6 +285,7 @@ async def _upsert_record(
     existing = (
         await db.execute(
             select(EquipmentInspectionFeishuRecord).where(
+                EquipmentInspectionFeishuRecord.workshop_code == workshop_code,
                 EquipmentInspectionFeishuRecord.source == source,
                 EquipmentInspectionFeishuRecord.record_id == record_id,
                 EquipmentInspectionFeishuRecord.is_deleted == False,  # noqa: E712
@@ -290,6 +294,7 @@ async def _upsert_record(
     ).scalar_one_or_none()
     modified = _datetime_value(item.get("last_modified_time"))
     column_values = {
+        "workshop_code": workshop_code,
         "record_id": record_id,
         "record_date": values.get("record_date"),
         "equipment_name": values.get("equipment_name"),
@@ -318,7 +323,9 @@ async def _upsert_record(
         )
 
 
-async def _upsert_device(db: AsyncSession, item: dict[str, Any]) -> None:
+async def _upsert_device(
+    db: AsyncSession, workshop_code: str, item: dict[str, Any]
+) -> None:
     record_id = str(item.get("record_id") or "")
     if not record_id:
         return
@@ -329,6 +336,7 @@ async def _upsert_device(db: AsyncSession, item: dict[str, Any]) -> None:
     existing = (
         await db.execute(
             select(EquipmentInspectionFeishuDevice).where(
+                EquipmentInspectionFeishuDevice.workshop_code == workshop_code,
                 EquipmentInspectionFeishuDevice.record_id == record_id,
                 EquipmentInspectionFeishuDevice.is_deleted == False,  # noqa: E712
             )
@@ -341,6 +349,7 @@ async def _upsert_device(db: AsyncSession, item: dict[str, Any]) -> None:
     else:
         db.add(
             EquipmentInspectionFeishuDevice(
+                workshop_code=workshop_code,
                 record_id=record_id,
                 equipment_name=name,
                 equipment_no=no,
@@ -351,20 +360,21 @@ async def _upsert_device(db: AsyncSession, item: dict[str, Any]) -> None:
 
 async def sync_table(
     db: AsyncSession,
+    workshop_code: str,
     table_key: str,
     *,
     incremental: bool = True,
     config: InspectionFeishuEffectiveConfig | None = None,
 ) -> dict[str, Any]:
-    """同步一张镜像表。返回 {synced, total}；失败抛 AppException。"""
+    """同步一个车间的一张镜像表。返回 {synced, total}；失败抛 AppException。"""
     if config is None:
-        config = await get_effective_config(db)
+        config = await get_effective_config(db, workshop_code)
     if not config.enabled:
         raise AppException(message="巡检飞书镜像同步未配置（缺少应用凭据或表格 ID）")
 
     table_id = _table_id(config, table_key)
     client = _build_client(config)
-    state = await _get_state(db, table_key)
+    state = await _get_state(db, workshop_code, table_key)
 
     stop_before_ms: int | None = None
     if incremental and state.last_synced_at is not None:
@@ -400,26 +410,28 @@ async def sync_table(
     synced = 0
     if table_key == SOURCE_DEVICES:
         for item in records:
-            await _upsert_device(db, item)
+            await _upsert_device(db, workshop_code, item)
             synced += 1
     else:
         for item in records:
-            await _upsert_record(db, table_key, item)
+            await _upsert_record(db, workshop_code, table_key, item)
             synced += 1
 
     if not incremental:
-        # 全量对账：删除飞书侧已删的行（限定本 source，不影响其他来源）
+        # 全量对账：删除飞书侧已删的行（限定本车间本来源，不影响其他）
         keep_ids = {str(item.get("record_id")) for item in records}
         if table_key == SOURCE_DEVICES:
             model: type[EquipmentInspectionFeishuDevice] | type[
                 EquipmentInspectionFeishuRecord
             ] = EquipmentInspectionFeishuDevice
             scope = [
+                EquipmentInspectionFeishuDevice.workshop_code == workshop_code,
                 EquipmentInspectionFeishuDevice.is_deleted == False,  # noqa: E712
             ]
         else:
             model = EquipmentInspectionFeishuRecord
             scope = [
+                EquipmentInspectionFeishuRecord.workshop_code == workshop_code,
                 EquipmentInspectionFeishuRecord.source == table_key,
                 EquipmentInspectionFeishuRecord.is_deleted == False,  # noqa: E712
             ]
@@ -439,12 +451,14 @@ async def sync_table(
     if table_key != SOURCE_DEVICES:
         count_stmt = (
             select(func.count(count_model.id))
+            .where(count_model.workshop_code == workshop_code)
             .where(count_model.source == table_key)
             .where(count_model.is_deleted == False)  # noqa: E712
         )
     else:
         count_stmt = select(func.count(count_model.id)).where(
-            count_model.is_deleted == False  # noqa: E712
+            count_model.workshop_code == workshop_code,
+            count_model.is_deleted == False,  # noqa: E712
         )
     total = (await db.execute(count_stmt)).scalar_one()
     state.total_rows = int(total)
@@ -467,18 +481,19 @@ async def sync_table(
 
 
 async def sync_all(
-    db: AsyncSession, *, incremental: bool = True
+    db: AsyncSession, workshop_code: str, *, incremental: bool = True
 ) -> dict[str, dict[str, Any]]:
-    """同步三张表；单表失败不影响其余表，结果按表返回。"""
-    config = await get_effective_config(db)
+    """同步一个车间三张表；单表失败不影响其余表，结果按表返回。"""
+    config = await get_effective_config(db, workshop_code)
     results: dict[str, dict[str, Any]] = {}
     for table_key in (SOURCE_TODAY, SOURCE_HISTORY, SOURCE_DEVICES):
         try:
             results[table_key] = await sync_table(
-                db, table_key, incremental=incremental, config=config
+                db, workshop_code, table_key,
+                incremental=incremental, config=config,
             )
         except AppException as error:
-            state = await _get_state(db, table_key)
+            state = await _get_state(db, workshop_code, table_key)
             state.last_run_at = datetime.now(UTC)
             state.last_status = "failed"
             state.last_message = error.message
@@ -491,11 +506,12 @@ async def sync_all(
                 f"同步中断已回滚：{type(error).__name__}: {str(error)[:200]}"
             )
             logger.exception(
-                "inspection feishu mirror sync aborted at %s", table_key
+                "inspection feishu mirror sync aborted at %s/%s",
+                workshop_code, table_key,
             )
             await db.rollback()
             for key in (SOURCE_TODAY, SOURCE_HISTORY, SOURCE_DEVICES):
-                state = await _get_state(db, key)
+                state = await _get_state(db, workshop_code, key)
                 state.last_run_at = datetime.now(UTC)
                 state.last_status = "failed"
                 state.last_message = message
@@ -504,11 +520,14 @@ async def sync_all(
     return results
 
 
-async def get_sync_states(db: AsyncSession) -> list[dict[str, Any]]:
+async def get_sync_states(
+    db: AsyncSession, workshop_code: str
+) -> list[dict[str, Any]]:
     rows = (
         await db.execute(
             select(EquipmentInspectionFeishuSyncState).where(
-                EquipmentInspectionFeishuSyncState.is_deleted == False  # noqa: E712
+                EquipmentInspectionFeishuSyncState.workshop_code == workshop_code,
+                EquipmentInspectionFeishuSyncState.is_deleted == False,  # noqa: E712
             )
         )
     ).scalars().all()
@@ -528,9 +547,16 @@ async def get_sync_states(db: AsyncSession) -> list[dict[str, Any]]:
 # ── 查询（页面只读展示） ─────────────────────────────────────────
 
 
+def _cst_today(now: datetime | None = None) -> date:
+    """“今日”按北京时间取日期：巡检记录 record_date 同步时即按 CST 解析，
+    服务器本地时区（容器为 UTC）在 CST 00:00–08:00 会落后一天。"""
+    return (now or datetime.now(_CST)).astimezone(_CST).date()
+
+
 async def list_records(
     db: AsyncSession,
     *,
+    workshop_code: str | None = None,
     source: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
@@ -541,6 +567,11 @@ async def list_records(
     page_size: int = 20,
 ) -> tuple[list[EquipmentInspectionFeishuRecord], int]:
     conditions = [EquipmentInspectionFeishuRecord.is_deleted == False]  # noqa: E712
+    # workshop 缺省 = 跨车间查询（设备详情抽屉按设备编号聚合各车间记录）
+    if workshop_code:
+        conditions.append(
+            EquipmentInspectionFeishuRecord.workshop_code == workshop_code
+        )
     if source:
         conditions.append(EquipmentInspectionFeishuRecord.source == source)
     if date_from:
@@ -581,10 +612,13 @@ async def list_records(
 
 
 async def list_devices(
-    db: AsyncSession, *, keyword: str | None = None
+    db: AsyncSession, workshop_code: str, *, keyword: str | None = None
 ) -> list[dict[str, Any]]:
     """巡检设备清单 + 台账信息（按编号关联，互不修改）。"""
-    conditions = [EquipmentInspectionFeishuDevice.is_deleted == False]  # noqa: E712
+    conditions = [
+        EquipmentInspectionFeishuDevice.workshop_code == workshop_code,
+        EquipmentInspectionFeishuDevice.is_deleted == False,  # noqa: E712
+    ]
     if keyword:
         like = f"%{keyword.strip()}%"
         conditions.append(
@@ -636,13 +670,14 @@ async def list_devices(
     }
 
     # 今日状态：已巡（有记录）/ 异常（含 ×）/ 未巡
-    today = date.today()
+    today = _cst_today()
     today_rows = (
         await db.execute(
             select(
                 EquipmentInspectionFeishuRecord.equipment_no,
                 EquipmentInspectionFeishuRecord.has_abnormal,
             ).where(
+                EquipmentInspectionFeishuRecord.workshop_code == workshop_code,
                 EquipmentInspectionFeishuRecord.record_date == today,
                 EquipmentInspectionFeishuRecord.is_deleted == False,  # noqa: E712
             )
@@ -673,22 +708,24 @@ async def list_devices(
     ]
 
 
-async def today_summary(db: AsyncSession) -> dict[str, Any]:
+async def today_summary(db: AsyncSession, workshop_code: str) -> dict[str, Any]:
     """今日进度：应巡（档案表）/ 已巡 / 异常。"""
     total_devices = (
         await db.execute(
             select(func.count(EquipmentInspectionFeishuDevice.id)).where(
-                EquipmentInspectionFeishuDevice.is_deleted == False  # noqa: E712
+                EquipmentInspectionFeishuDevice.workshop_code == workshop_code,
+                EquipmentInspectionFeishuDevice.is_deleted == False,  # noqa: E712
             )
         )
     ).scalar_one()
-    today = date.today()
+    today = _cst_today()
     rows = (
         await db.execute(
             select(
                 EquipmentInspectionFeishuRecord.equipment_no,
                 EquipmentInspectionFeishuRecord.has_abnormal,
             ).where(
+                EquipmentInspectionFeishuRecord.workshop_code == workshop_code,
                 EquipmentInspectionFeishuRecord.record_date == today,
                 EquipmentInspectionFeishuRecord.is_deleted == False,  # noqa: E712
             )

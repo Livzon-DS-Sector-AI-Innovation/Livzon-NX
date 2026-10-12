@@ -45,13 +45,16 @@ async def get_spare_parts(
     category: str | None = None,
     keyword: str | None = None,
     is_active: bool | None = None,
+    workshop_code: str | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[SparePart], int]:
-    """获取备件列表（分页）"""
+    """获取备件列表（workshop_code 缺省跨车间查询）"""
     query = select(SparePart).where(
         SparePart.is_deleted == False  # noqa: E712
     )
+    if workshop_code:
+        query = query.where(SparePart.workshop_code == workshop_code)
     if category:
         query = query.where(SparePart.category == category)
     if keyword:
@@ -177,8 +180,12 @@ async def create_transaction(
 
 async def get_stock_warnings(
     db: AsyncSession,
+    workshop_code: str | None = None,
 ) -> list[tuple[SparePart, SparePartStock]]:
-    """获取库存预警：当前库存 < 安全库存"""
+    """获取库存预警：当前库存 < 安全库存（workshop_code 缺省跨车间）"""
+    workshop_filters = (
+        [SparePart.workshop_code == workshop_code] if workshop_code else []
+    )
     result = await db.execute(
         select(SparePart, SparePartStock)
         .join(SparePartStock, SparePartStock.spare_part_id == SparePart.id)
@@ -187,6 +194,7 @@ async def get_stock_warnings(
             SparePartStock.is_deleted == False,  # noqa: E712
             SparePartStock.current_qty < SparePartStock.safety_qty,
             SparePartStock.safety_qty > 0,
+            *workshop_filters,
         )
     )
     return [(row[0], row[1]) for row in result.all()]

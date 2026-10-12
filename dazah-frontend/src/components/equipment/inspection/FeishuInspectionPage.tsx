@@ -146,8 +146,13 @@ function recordColumns(opts: { showStatus: boolean }): ColumnsType<InspectionFei
 }
 
 function RecordsTable({
-  source, defaultDays, showStatus,
-}: { source?: 'today' | 'history'; defaultDays: number | null; showStatus: boolean }) {
+  source, defaultDays, showStatus, workshop,
+}: {
+  source?: 'today' | 'history'
+  defaultDays: number | null
+  showStatus: boolean
+  workshop: string
+}) {
   const { message } = App.useApp()
   const [items, setItems] = useState<InspectionFeishuRecord[]>([])
   const [total, setTotal] = useState(0)
@@ -165,6 +170,7 @@ function RecordsTable({
     setLoading(true)
     try {
       const result = await fetchInspectionFeishuRecords({
+        workshop,
         source,
         date_from: range?.[0]?.format('YYYY-MM-DD'),
         date_to: range?.[1]?.format('YYYY-MM-DD'),
@@ -180,7 +186,7 @@ function RecordsTable({
     } finally {
       setLoading(false)
     }
-  }, [source, keyword, range, abnormalOnly, page, pageSize, message])
+  }, [workshop, source, keyword, range, abnormalOnly, page, pageSize, message])
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0)
@@ -224,12 +230,16 @@ function RecordsTable({
 
 // ── 今日进度 ─────────────────────────────────────────────────────
 
-function TodaySummaryCard({ refreshKey }: { refreshKey: number }) {
+function TodaySummaryCard({
+  refreshKey, workshop,
+}: { refreshKey: number; workshop: string }) {
   const [summary, setSummary] = useState<InspectionFeishuTodaySummary | null>(null)
 
   useEffect(() => {
-    fetchInspectionFeishuTodaySummary().then(setSummary).catch(() => setSummary(null))
-  }, [refreshKey])
+    fetchInspectionFeishuTodaySummary(workshop)
+      .then(setSummary)
+      .catch(() => setSummary(null))
+  }, [refreshKey, workshop])
 
   if (!summary) return null
   const pct = summary.total_devices > 0
@@ -263,7 +273,9 @@ const TODAY_STATUS_META: Record<string, { label: string; color: string }> = {
   pending: { label: '○ 未巡', color: C.stone },
 }
 
-function DevicesTab({ refreshKey }: { refreshKey: number }) {
+function DevicesTab({
+  refreshKey, workshop,
+}: { refreshKey: number; workshop: string }) {
   const { message } = App.useApp()
   const [devices, setDevices] = useState<InspectionFeishuDevice[]>([])
   const [loading, setLoading] = useState(false)
@@ -272,13 +284,13 @@ function DevicesTab({ refreshKey }: { refreshKey: number }) {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setLoading(true)
-      fetchInspectionFeishuDevices(keyword || undefined)
+      fetchInspectionFeishuDevices(workshop, keyword || undefined)
         .then(setDevices)
         .catch((error) => message.error((error as Error).message || '加载设备清单失败'))
         .finally(() => setLoading(false))
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [keyword, refreshKey, message])
+  }, [workshop, keyword, refreshKey, message])
 
   const columns: ColumnsType<InspectionFeishuDevice> = [
     { title: '设备名称', dataIndex: 'equipment_name', width: 170, ellipsis: true },
@@ -318,7 +330,9 @@ function DevicesTab({ refreshKey }: { refreshKey: number }) {
 
 // ── 主页面 ─────────────────────────────────────────────────────
 
-export function FeishuInspectionPage() {
+export function FeishuInspectionPage({
+  workshopCode, workshopLabel,
+}: { workshopCode: string; workshopLabel: string }) {
   const { message } = App.useApp()
   const [activeTab, setActiveTab] = useState('today')
   const [status, setStatus] = useState<InspectionFeishuSyncStatus | null>(null)
@@ -327,13 +341,15 @@ export function FeishuInspectionPage() {
   const [configOpen, setConfigOpen] = useState(false)
 
   useEffect(() => {
-    fetchInspectionFeishuSyncStatus().then(setStatus).catch(() => setStatus(null))
-  }, [refreshKey])
+    fetchInspectionFeishuSyncStatus(workshopCode)
+      .then(setStatus)
+      .catch(() => setStatus(null))
+  }, [refreshKey, workshopCode])
 
   const handleSync = async () => {
     setSyncing(true)
     try {
-      const results = await triggerInspectionFeishuSync()
+      const results = await triggerInspectionFeishuSync(workshopCode)
       const errors = Object.entries(results).filter(([, v]) => v.error)
       if (errors.length > 0) {
         message.warning(`同步完成，${errors.length} 张表失败：${errors.map(([k]) => k).join('、')}`)
@@ -355,30 +371,32 @@ export function FeishuInspectionPage() {
       label: <span><CheckSquareOutlined /> 今日巡检</span>,
       children: (
         <div>
-          <TodaySummaryCard refreshKey={refreshKey} />
-          <RecordsTable source="today" defaultDays={null} showStatus={false} />
+          <TodaySummaryCard refreshKey={refreshKey} workshop={workshopCode} />
+          <RecordsTable source="today" defaultDays={null} showStatus={false} workshop={workshopCode} />
         </div>
       ),
     },
     {
       key: 'history',
       label: <span><HistoryOutlined /> 巡检记录</span>,
-      children: <RecordsTable source="history" defaultDays={7} showStatus />,
+      children: <RecordsTable source="history" defaultDays={7} showStatus workshop={workshopCode} />,
     },
     {
       key: 'devices',
       label: <span><TabletOutlined /> 巡检设备</span>,
-      children: <DevicesTab refreshKey={refreshKey} />,
+      children: <DevicesTab refreshKey={refreshKey} workshop={workshopCode} />,
     },
-  ], [refreshKey])
+  ], [refreshKey, workshopCode])
 
   return (
     <div style={{ padding: '20px 24px 32px', maxWidth: 1440, margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2 style={{ fontSize: 20, fontWeight: 600, color: C.ink, margin: 0 }}>设备巡检</h2>
+          <h2 style={{ fontSize: 20, fontWeight: 600, color: C.ink, margin: 0 }}>
+            设备巡检 · {workshopLabel}
+          </h2>
           <p style={{ fontSize: 13, color: C.stone, margin: '4px 0 0' }}>
-            岗位巡检记录（飞书多维表格镜像，只读展示）
+            {workshopLabel}岗位巡检记录（飞书多维表格镜像，只读展示）
           </p>
           <p style={{ fontSize: 12, color: '#b5b1a8', margin: '2px 0 0' }}>
             巡检数据在飞书多维表格录入，平台每 5 分钟自动同步
@@ -391,6 +409,8 @@ export function FeishuInspectionPage() {
       </div>
 
       <InspectionFeishuConfigDrawer
+        workshopCode={workshopCode}
+        workshopLabel={workshopLabel}
         open={configOpen}
         onClose={() => setConfigOpen(false)}
         onSaved={() => setRefreshKey((k) => k + 1)}
