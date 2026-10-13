@@ -100963,7 +100963,7 @@
             }
           },
           {
-            "description": "来源：today=今日巡检 / history=历史记录，缺省全部",
+            "description": "来源：today=今日巡检（仅当天）/ history=历史记录，缺省全部",
             "in": "query",
             "name": "source",
             "required": false,
@@ -100976,7 +100976,7 @@
                   "type": "null"
                 }
               ],
-              "description": "来源：today=今日巡检 / history=历史记录，缺省全部",
+              "description": "来源：today=今日巡检（仅当天）/ history=历史记录，缺省全部",
               "title": "Source"
             }
           },
@@ -101245,6 +101245,53 @@
           }
         },
         "summary": "镜像同步状态",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/inspection/feishu/today-summaries": {
+      "get": {
+        "operationId": "feishu_today_summaries_api_v1_equipment_inspection_feishu_today_summaries_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "各车间今日巡检进度汇总",
         "tags": [
           "设备管理"
         ]

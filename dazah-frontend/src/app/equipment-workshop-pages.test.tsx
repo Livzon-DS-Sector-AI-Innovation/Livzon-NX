@@ -14,8 +14,10 @@ const actions = vi.hoisted(() => ({
   fetchCalibrationPlans: vi.fn(),
   fetchCalibrationRecords: vi.fn(),
   fetchMaintenancePlans: vi.fn(),
+  fetchOverdueMaintenancePlans: vi.fn(),
   fetchSpareParts: vi.fn(),
   fetchStockWarnings: vi.fn(),
+  fetchInspectionTodaySummaries: vi.fn(),
 }))
 
 const navigation = vi.hoisted(() => ({
@@ -37,6 +39,7 @@ vi.mock('@/components/equipment', () => {
     SparePartsPage: () => null,
     PersonnelPage: () => null,
     PersonnelQueryProvider: passthrough,
+    StatsDashboard: () => null,
   }
 })
 
@@ -50,6 +53,7 @@ import PersonnelRedirect from '@/app/(dashboard)/equipment/personnel/page'
 import PersonnelWorkshopPage from '@/app/(dashboard)/equipment/personnel/[workshop]/page'
 import SparePartsRedirect from '@/app/(dashboard)/equipment/spare-parts/page'
 import SparePartsWorkshopPage from '@/app/(dashboard)/equipment/spare-parts/[workshop]/page'
+import StatsPage from '@/app/(dashboard)/equipment/stats/page'
 
 function params(workshop: string) {
   return { params: Promise.resolve({ workshop }) }
@@ -77,8 +81,10 @@ function defaults() {
   actions.fetchCalibrationPlans.mockResolvedValue({ items: [], total: 0 })
   actions.fetchCalibrationRecords.mockResolvedValue({ items: [], total: 0 })
   actions.fetchMaintenancePlans.mockResolvedValue({ items: [], total: 0 })
+  actions.fetchOverdueMaintenancePlans.mockResolvedValue([])
   actions.fetchSpareParts.mockResolvedValue({ items: [], total: 0 })
   actions.fetchStockWarnings.mockResolvedValue([])
+  actions.fetchInspectionTodaySummaries.mockResolvedValue([])
 }
 
 describe('equipment workshop server pages', () => {
@@ -178,6 +184,38 @@ describe('equipment workshop server pages', () => {
 
   it('rejects unknown workshops on the inspection page', async () => {
     await expect(InspectionWorkshopPage(params('bad'))).rejects.toThrow('NOT_FOUND')
+  })
+
+  it('renders the stats dashboard with inspection summaries', async () => {
+    const summaries = [
+      {
+        workshop_code: '101-2',
+        date: '2026-10-13',
+        total_devices: 49,
+        inspected: 49,
+        abnormal: 0,
+        am_inspected: 49,
+        pm_inspected: 49,
+      },
+    ]
+    actions.fetchInspectionTodaySummaries.mockResolvedValue(summaries)
+
+    const element = (await StatsPage()) as {
+      props: { initialData: { inspectionSummaries: unknown } }
+    }
+
+    expect(actions.fetchInspectionTodaySummaries).toHaveBeenCalled()
+    expect(element.props.initialData.inspectionSummaries).toEqual(summaries)
+  })
+
+  it('degrades to empty inspection summaries when the fetch rejects', async () => {
+    actions.fetchInspectionTodaySummaries.mockRejectedValue(new Error('boom'))
+
+    const element = (await StatsPage()) as {
+      props: { initialData: { inspectionSummaries: unknown } }
+    }
+
+    expect(element.props.initialData.inspectionSummaries).toEqual([])
   })
 
   it('renders the personnel page scoped to the workshop', async () => {

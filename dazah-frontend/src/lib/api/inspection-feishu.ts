@@ -5,6 +5,7 @@ import type {
   InspectionFeishuConfigTestResult,
   InspectionFeishuConfigUpdateRequest,
   InspectionFeishuDevice,
+  InspectionFeishuDeviceList,
   InspectionFeishuRecordFilters,
   InspectionFeishuRecordListResponse,
   InspectionFeishuSyncStatus,
@@ -54,11 +55,16 @@ export async function fetchInspectionFeishuRecords(
 export async function fetchInspectionFeishuDevices(
   workshop: string,
   keyword?: string,
-): Promise<InspectionFeishuDevice[]> {
+): Promise<InspectionFeishuDeviceList> {
   const params = new URLSearchParams({ workshop })
   if (keyword) params.append('keyword', keyword)
-  const json = await getJson<InspectionFeishuDevice[]>(`${BASE}/devices?${params.toString()}`)
-  return (json.data || []) as InspectionFeishuDevice[]
+  const json = await getJson<InspectionFeishuDeviceList>(
+    `${BASE}/devices?${params.toString()}`,
+  )
+  return {
+    date: json.data?.date ?? '',
+    items: (json.data?.items || []) as InspectionFeishuDevice[],
+  }
 }
 
 export async function fetchInspectionFeishuTodaySummary(

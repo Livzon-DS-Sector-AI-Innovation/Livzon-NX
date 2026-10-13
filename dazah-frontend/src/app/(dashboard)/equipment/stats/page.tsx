@@ -7,6 +7,7 @@ import {
   fetchOverdueMaintenancePlans,
   fetchCalibrationPlans,
   fetchWorkOrders,
+  fetchInspectionTodaySummaries,
 } from '@/actions/equipment'
 import type {
 
@@ -46,6 +47,7 @@ export default async function StatsPage() {
   let overduePlans: MaintenancePlan[] = []
   let calibrationPlans: CalibrationPlan[] = []
   let recentWorkOrders: WorkOrder[] = []
+  let inspectionSummaries: Awaited<ReturnType<typeof fetchInspectionTodaySummaries>> = []
 
   try {
     const results = await Promise.allSettled([
@@ -55,10 +57,11 @@ export default async function StatsPage() {
       fetchOverdueMaintenancePlans(),
       fetchCalibrationPlans({ status: '启用', page_size: 100 }),
       fetchWorkOrders({ page: 1, page_size: 10 }),
+      fetchInspectionTodaySummaries(),
     ])
 
     // 依次解构，每个接口错误不影响其他
-    const [eqResult, woResult, swResult, overdueResult, calResult, ordersResult] = results
+    const [eqResult, woResult, swResult, overdueResult, calResult, ordersResult, inspectionResult] = results
 
     if (eqResult.status === 'fulfilled') {
       equipmentStats = eqResult.value
@@ -95,6 +98,12 @@ export default async function StatsPage() {
     } else {
       console.warn('近期工单加载失败:', ordersResult.reason)
     }
+
+    if (inspectionResult.status === 'fulfilled') {
+      inspectionSummaries = inspectionResult.value
+    } else {
+      console.warn('今日巡检进度加载失败:', inspectionResult.reason)
+    }
   } catch (error) {
     console.warn('设备仪表盘数据加载异常:', error)
   }
@@ -108,6 +117,7 @@ export default async function StatsPage() {
         overduePlans,
         calibrationPlans,
         recentWorkOrders,
+        inspectionSummaries,
       }}
     />
   )

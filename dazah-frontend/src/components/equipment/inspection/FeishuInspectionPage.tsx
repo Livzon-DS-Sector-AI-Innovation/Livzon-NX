@@ -45,6 +45,12 @@ function fmtTime(iso: string | null | undefined): string {
   return dayjs(iso).format('MM-DD HH:mm')
 }
 
+// 巡检日期展示：同年省略年份，跨年显示完整日期
+function fmtInspectDate(iso: string): string {
+  const d = dayjs(iso)
+  return d.year() === dayjs().year() ? d.format('MM-DD') : d.format('YYYY-MM-DD')
+}
+
 // ── 同步状态栏 ─────────────────────────────────────────────────────
 
 function SyncBar({
@@ -64,36 +70,41 @@ function SyncBar({
   const totalRows = status?.tables?.reduce((sum, t) => sum + (t.total_rows || 0), 0) || 0
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: C.slate }}>
-      {status && !status.enabled ? (
-        <span style={{ color: C.red }}>飞书镜像同步未配置（缺少应用凭据或表格 ID）</span>
-      ) : (
-        <>
-          <CloudSyncOutlined style={{ color: failed ? C.red : C.green }} />
-          <span>
-            最近同步 {fmtTime(newest)}
-            {failed ? <span style={{ color: C.red, marginLeft: 6 }}>同步失败</span> : ' ✓'}
-            {status ? ` · 镜像 ${totalRows} 行` : ''}
-          </span>
-          {failed && (
-            <Tooltip title={status?.tables?.filter((t) => t.last_status === 'failed').map((t) => `${t.table_key}: ${t.last_message}`).join('；')}>
-              <span style={{ color: C.red, cursor: 'help', borderBottom: `1px dotted ${C.red}` }}>查看原因</span>
-            </Tooltip>
-          )}
-        </>
-      )}
-      <Button
-        size="small" icon={<SyncOutlined spin={syncing} />}
-        onClick={onSync} loading={syncing}
-      >
-        飞书同步
-      </Button>
-      <Button
-        size="small" icon={<SettingOutlined />}
-        onClick={onOpenConfig}
-      >
-        配置
-      </Button>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: C.slate }}>
+        {status && !status.enabled ? (
+          <span style={{ color: C.red }}>飞书镜像同步未配置（缺少应用凭据或表格 ID）</span>
+        ) : (
+          <>
+            <CloudSyncOutlined style={{ color: failed ? C.red : C.green }} />
+            <span>
+              最近同步 {fmtTime(newest)}
+              {failed ? <span style={{ color: C.red, marginLeft: 6 }}>同步失败</span> : ' ✓'}
+              {status ? ` · 镜像 ${totalRows} 行` : ''}
+            </span>
+            {failed && (
+              <Tooltip title={status?.tables?.filter((t) => t.last_status === 'failed').map((t) => `${t.table_key}: ${t.last_message}`).join('；')}>
+                <span style={{ color: C.red, cursor: 'help', borderBottom: `1px dotted ${C.red}` }}>查看原因</span>
+              </Tooltip>
+            )}
+          </>
+        )}
+        <Button
+          size="small" icon={<SyncOutlined spin={syncing} />}
+          onClick={onSync} loading={syncing}
+        >
+          飞书同步
+        </Button>
+        <Button
+          size="small" icon={<SettingOutlined />}
+          onClick={onOpenConfig}
+        >
+          配置
+        </Button>
+      </div>
+      <p style={{ fontSize: 12, color: '#b5b1a8', margin: 0 }}>
+        巡检数据在飞书多维表格录入，平台每 5 分钟自动同步
+      </p>
     </div>
   )
 }
@@ -196,11 +207,13 @@ function RecordsTable({
   return (
     <div>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
-        <DatePicker.RangePicker
-          value={range}
-          onChange={(v) => { setRange(v); setPage(1) }}
-          allowEmpty={[true, true]}
-        />
+        {source !== 'today' && (
+          <DatePicker.RangePicker
+            value={range}
+            onChange={(v) => { setRange(v); setPage(1) }}
+            allowEmpty={[true, true]}
+          />
+        )}
         <Input.Search
           placeholder="搜索设备名称 / 编号" style={{ width: 220 }} allowClear
           onSearch={(v) => { setKeyword(v); setPage(1) }}
@@ -256,6 +269,9 @@ function TodaySummaryCard({
             strokeColor={summary.abnormal > 0 ? '#e67e22' : C.green}
             format={() => `${summary.inspected} / ${summary.total_devices} 台`}
           />
+          <div style={{ fontSize: 12, color: C.stone, marginTop: 2 }}>
+            上午 {summary.am_inspected}/{summary.total_devices} · 下午 {summary.pm_inspected}/{summary.total_devices}
+          </div>
         </div>
         <div style={{ fontSize: 13, color: C.slate }}>
           含异常 <span style={{ color: summary.abnormal > 0 ? C.red : C.green, fontWeight: 600, fontSize: 16 }}>{summary.abnormal}</span> 台
@@ -278,6 +294,7 @@ function DevicesTab({
 }: { refreshKey: number; workshop: string }) {
   const { message } = App.useApp()
   const [devices, setDevices] = useState<InspectionFeishuDevice[]>([])
+  const [todayDate, setTodayDate] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [keyword, setKeyword] = useState('')
 
@@ -285,7 +302,10 @@ function DevicesTab({
     const timer = window.setTimeout(() => {
       setLoading(true)
       fetchInspectionFeishuDevices(workshop, keyword || undefined)
-        .then(setDevices)
+        .then((result) => {
+          setDevices(result.items)
+          setTodayDate(result.date || null)
+        })
         .catch((error) => message.error((error as Error).message || '加载设备清单失败'))
         .finally(() => setLoading(false))
     }, 0)
@@ -304,11 +324,18 @@ function DevicesTab({
         : <Tag color="default" style={{ fontSize: 12 }}>未关联</Tag>,
     },
     {
-      title: '今日状态', dataIndex: 'today_status', width: 90,
+      title: `今日状态${todayDate ? `（${fmtInspectDate(todayDate)}）` : ''}`,
+      dataIndex: 'today_status', width: 110,
       render: (v: string) => {
         const meta = TODAY_STATUS_META[v] || TODAY_STATUS_META.pending
         return <span style={{ color: meta.color, fontWeight: 600 }}>{meta.label}</span>
       },
+    },
+    {
+      title: '最近巡检', dataIndex: 'last_inspected_date', width: 100,
+      render: (v: string | null) => v
+        ? <span style={{ fontFamily: 'monospace', fontSize: 12, color: C.slate }}>{fmtInspectDate(v)}</span>
+        : <span style={{ color: '#c9c5bd' }}>从未</span>,
     },
   ]
   return (
@@ -397,9 +424,6 @@ export function FeishuInspectionPage({
           </h2>
           <p style={{ fontSize: 13, color: C.stone, margin: '4px 0 0' }}>
             {workshopLabel}岗位巡检记录（飞书多维表格镜像，只读展示）
-          </p>
-          <p style={{ fontSize: 12, color: '#b5b1a8', margin: '2px 0 0' }}>
-            巡检数据在飞书多维表格录入，平台每 5 分钟自动同步
           </p>
         </div>
         <SyncBar

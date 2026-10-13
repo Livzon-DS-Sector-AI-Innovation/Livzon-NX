@@ -39,7 +39,8 @@ def _require_user(current_user: CurrentUser) -> None:
 async def list_feishu_records(
     workshop: str | None = WORKSHOP_QUERY_OPTIONAL,
     source: str | None = Query(
-        None, description="来源：today=今日巡检 / history=历史记录，缺省全部"
+        None,
+        description="来源：today=今日巡检（仅当天）/ history=历史记录，缺省全部",
     ),
     date_from: date | None = Query(None, description="日期起"),
     date_to: date | None = Query(None, description="日期止"),
@@ -119,6 +120,13 @@ async def feishu_today_summary(
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     return success_response(data=await mirror.today_summary(db, workshop))
+
+
+@router.get("/feishu/today-summaries", summary="各车间今日巡检进度汇总")
+async def feishu_today_summaries(
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    return success_response(data=await mirror.today_summaries_all(db))
 
 
 @router.get("/feishu/sync-status", summary="镜像同步状态")

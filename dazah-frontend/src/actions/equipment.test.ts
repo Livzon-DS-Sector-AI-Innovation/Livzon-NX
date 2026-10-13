@@ -16,6 +16,7 @@ import {
   fetchCalibrationRecords,
   fetchEquipments,
   fetchEquipmentStatistics,
+  fetchInspectionTodaySummaries,
   fetchMaintenancePlans,
   fetchSpareParts,
   fetchStockWarnings,
@@ -153,5 +154,38 @@ describe('equipment workshop scoping actions', () => {
     expect(lastUrl(m)).not.toContain('workshop')
     await fetchStockWarnings()
     expect(lastUrl(m)).not.toContain('workshop')
+  })
+
+  it('今日巡检汇总带登录凭证并解析 data 数组', async () => {
+    const summaries = [
+      {
+        workshop_code: '101-2',
+        date: '2026-10-13',
+        total_devices: 49,
+        inspected: 49,
+        abnormal: 0,
+        am_inspected: 49,
+        pm_inspected: 49,
+      },
+    ]
+    const m = vi.fn(() => jsonResponse({ code: 200, data: summaries }))
+    vi.stubGlobal('fetch', m)
+
+    await expect(fetchInspectionTodaySummaries()).resolves.toEqual(summaries)
+    expect(m).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/equipment/inspection/feishu/today-summaries`,
+      expect.objectContaining({
+        cache: 'no-store',
+        headers: expect.objectContaining({ Authorization: 'Bearer server-token' }),
+      }),
+    )
+  })
+
+  it('今日巡检汇总在非 200 或结构异常时降级为空列表', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ code: 500 }, 500)))
+    await expect(fetchInspectionTodaySummaries()).resolves.toEqual([])
+
+    vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ code: 200, data: null })))
+    await expect(fetchInspectionTodaySummaries()).resolves.toEqual([])
   })
 })

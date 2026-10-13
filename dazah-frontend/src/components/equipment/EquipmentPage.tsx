@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useCallback, useState } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import { App, ConfigProvider, Tabs, Button } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import { MenuFoldOutlined, MenuUnfoldOutlined, ReloadOutlined } from '@ant-design/icons'
@@ -66,6 +66,8 @@ export function EquipmentPage({
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [resetKey, setResetKey] = useState(0)
+  // 用户当前选择的每页条数：筛选/保存后的刷新沿用，避免分页器显示 N 而数据只有 20
+  const pageSizeRef = useRef(20)
 
   // 初始化 store 数据（包含 SSR 数据）
   useEffect(() => {
@@ -169,7 +171,7 @@ export function EquipmentPage({
 
   // 筛选变化时重置到第一页（含首次加载）
   useEffect(() => {
-    fetchData(1, 20)
+    fetchData(1, pageSizeRef.current)
     setResetKey(k => k + 1)
   }, [fetchData])
 
@@ -267,13 +269,13 @@ export function EquipmentPage({
 
             {/* 表格区域 */}
             <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
-              <EquipmentTable loading={loading} resetKey={resetKey} onPageChange={(p, ps) => fetchData(p, ps)} workshopCode={workshopCode} />
+              <EquipmentTable loading={loading} resetKey={resetKey} onPageChange={(p, ps) => { pageSizeRef.current = ps; fetchData(p, ps) }} workshopCode={workshopCode} />
             </div>
           </div>
         </div>
 
         {/* 抽屉组件 */}
-        <EquipmentDrawer workshopCode={workshopCode} onRefresh={() => { fetchData(1, 20); setResetKey(k => k + 1) }} />
+        <EquipmentDrawer workshopCode={workshopCode} onRefresh={() => { fetchData(1, pageSizeRef.current); setResetKey(k => k + 1) }} />
         <CategoryDrawer onRefresh={refreshCategoriesAndLocations} />
         <LocationDrawer onRefresh={refreshCategoriesAndLocations} />
         <RepairDrawer
@@ -281,7 +283,7 @@ export function EquipmentPage({
             id: e.id, equipment_no: e.equipment_no, name: e.name, importance: e.importance,
           }))}
           symptoms={failureCodes.symptoms}
-          onRefresh={() => fetchData(1, 20)}
+          onRefresh={() => fetchData(1, pageSizeRef.current)}
         />
       </App>
     </ConfigProvider>
