@@ -136,7 +136,7 @@ STATS_GROUP_LIMIT = 10
 STATS_MONTH_LIMIT = 12
 _UNFILLED_KEY = "（未填写）"
 # AI 兜底归类的后台任务状态（进程内防重入；跨实例由 Redis 锁兜底）
-_ai_classify_task: asyncio.Task | None = None
+_ai_classify_task: asyncio.Task[None] | None = None
 _AI_CLASSIFY_LOCK_KEY = "safety:page-table:ai-classify"
 
 
@@ -1021,10 +1021,9 @@ async def get_page_table_stats(
 
     raw_rows = await _fetch_raw_records(app_token, table_id)
     decoded = [
-        decode_record_fields(
-            columns, row.get("fields") if isinstance(row.get("fields"), dict) else {}
-        )
+        decode_record_fields(columns, fields)
         for row in raw_rows[:MAX_RECORDS]
+        if isinstance(fields := row.get("fields"), dict)
     ]
 
     groups: list[PageTableStatGroup] = []
@@ -1041,9 +1040,9 @@ async def get_page_table_stats(
             if pending:
                 # 后台触发 AI 兜底归类；本次返回未分类结果，下次刷新生效
                 _schedule_ai_classify(pending, aliases)
-            counter: Counter[str] = Counter(key_map[text] for text in row_texts)
+            counter = Counter(key_map[text] for text in row_texts)
         else:
-            counter: Counter[str] = Counter(
+            counter = Counter(
                 _stat_bucket_key(field, record.get(field.name), aliases)
                 for record in decoded
             )
@@ -1161,8 +1160,8 @@ async def resolve_page_feishu_url(
 
         parsed = urlparse(raw)
         query = parse_qs(parsed.query)
-        table_id = (query.get("table") or [None])[0]
-        view_id = (query.get("view") or [None])[0]
+        table_id = next(iter(query.get("table") or ()), None)
+        view_id = next(iter(query.get("view") or ()), None)
         base_match = _BASE_LINK_RE.search(parsed.path)
         if base_match:
             app_token = base_match.group(1)
