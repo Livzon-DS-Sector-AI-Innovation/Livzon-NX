@@ -1193,6 +1193,13 @@ async def test_resolve_page_feishu_url_parses_base_and_wiki_links(monkeypatch) -
             object(), "https://example.feishu.cn/wiki/wikcnABC?table=tblX"
         )
 
+    # 链接缺 table/view 参数：解析为 None（parse_qs 取值分支）
+    no_param = await page_table.resolve_page_feishu_url(
+        object(), "https://example.feishu.cn/base/bascnOnly"
+    )
+    assert no_param.app_token == "bascnOnly"
+    assert no_param.table_id is None and no_param.view_id is None
+
     # wiki 链接 + 凭证：经知识库节点解析出 app_token
     from app.modules.safety.feishu.runtime_config import SafetyFeishuRuntimeConfig
 
