@@ -341,6 +341,23 @@ def test_normalize_empty_fields_dict() -> None:
     assert mirror.normalize_record_fields({})["has_abnormal"] is False
 
 
+async def test_sync_wrong_table_id_error_hints_view_id(
+    db_session, monkeypatch
+) -> None:
+    """WrongTableId 失败信息附带视图 ID 提示，便于定位 Table ID 配置错误。"""
+    await _enable_config(monkeypatch)
+
+    async def fake_fetch(client: Any, table_id: str, **kwargs: Any):
+        raise RuntimeError(
+            "Feishu API error: code=1254004, msg=WrongTableId, "
+            "path=/bitable/v1/apps/app/tables/vewihhse0W/records/search"
+        )
+
+    monkeypatch.setattr(mirror, "_fetch_pages", fake_fetch)
+    results = await mirror.sync_all(db_session, "201-1", incremental=False)
+    assert "视图 ID" in (results["today"]["error"] or "")
+
+
 # ---------- 今日口径（北京时间） ----------
 
 
@@ -402,6 +419,8 @@ async def test_today_summary_uses_cst_today(db_session, monkeypatch) -> None:
         "total_devices": 2,
         "inspected": 1,
         "abnormal": 1,
+        "am_inspected": 0,
+        "pm_inspected": 0,
     }
 
 
@@ -440,13 +459,241 @@ async def test_list_devices_today_status_uses_cst_today(
     )
     await db_session.flush()
 
-    devices = {
-        d["equipment_no"]: d["today_status"]
-        for d in await mirror.list_devices(db_session, "201-1")
-    }
-    assert devices["XT-A"] == "inspected"
+    result = await mirror.list_devices(db_session, "201-1")
+    assert result["date"] == date(2026, 10, 12)
+    devices = {d["equipment_no"]: d for d in result["items"]}
+    assert devices["XT-A"]["today_status"] == "inspected"
     # 昨日的记录（即使异常）不计入今日状态
-    assert devices["XT-B"] == "pending"
+    assert devices["XT-B"]["today_status"] == "pending"
+    # 最近巡检日期：今日已巡取当天，未巡取最近一次
+    assert devices["XT-A"]["last_inspected_date"] == date(2026, 10, 12)
+    assert devices["XT-B"]["last_inspected_date"] == date(2026, 10, 11)
+
+
+async def test_today_status_matches_unnumbered_devices_by_name(
+    db_session, monkeypatch
+) -> None:
+    """无编号设备按名称匹配今日记录；飞书名称粘连的汇总行不产生误匹配。"""
+    monkeypatch.setattr(mirror, "_cst_today", lambda: date(2026, 10, 12))
+    db_session.add(
+        EquipmentInspectionFeishuDevice(
+            record_id="dev_nonum", equipment_name="尾气塔", equipment_no=None
+        )
+    )
+    db_session.add(
+        EquipmentInspectionFeishuDevice(
+            record_id="dev_num", equipment_name="方锥混合机", equipment_no="XT-A"
+        )
+    )
+    # 无编号设备的今日记录（同样没有编号，只有名称）
+    db_session.add(
+        EquipmentInspectionFeishuRecord(
+            source="today",
+            record_id="rec_nonum",
+            record_date=date(2026, 10, 12),
+            equipment_name="尾气塔",
+            equipment_no=None,
+            has_abnormal=True,
+        )
+    )
+    # 名称粘连的汇总行：匹配不到任何设备，不得计入
+    db_session.add(
+        EquipmentInspectionFeishuRecord(
+            source="today",
+            record_id="rec_garbage",
+            record_date=date(2026, 10, 12),
+            equipment_name="A101A102尾气塔泵类",
+            equipment_no=None,
+        )
+    )
+    await db_session.flush()
+
+    summary = await mirror.today_summary(db_session, "201-1")
+    assert summary == {
+        "date": date(2026, 10, 12),
+        "total_devices": 2,
+        "inspected": 1,
+        "abnormal": 1,
+        "am_inspected": 0,
+        "pm_inspected": 0,
+    }
+
+    devices = {
+        d["equipment_name"]: d
+        for d in (await mirror.list_devices(db_session, "201-1"))["items"]
+    }
+    assert devices["尾气塔"]["today_status"] == "abnormal"
+    assert devices["方锥混合机"]["today_status"] == "pending"
+    # 无编号设备同样带最近巡检日期；从未出现的设备为空
+    assert devices["尾气塔"]["last_inspected_date"] == date(2026, 10, 12)
+    assert devices["方锥混合机"]["last_inspected_date"] is None
+
+
+async def test_today_summary_counts_am_pm_completion(
+    db_session, monkeypatch
+) -> None:
+    """上午/下午完成数：对应时段任一检查项有值即计入；基于有效记录行。"""
+    monkeypatch.setattr(mirror, "_cst_today", lambda: date(2026, 10, 12))
+    db_session.add(
+        EquipmentInspectionFeishuDevice(record_id="dev_am", equipment_no="XT-AM")
+    )
+    db_session.add(
+        EquipmentInspectionFeishuDevice(record_id="dev_pm", equipment_no="XT-PM")
+    )
+    db_session.add(
+        EquipmentInspectionFeishuRecord(
+            source="today",
+            record_id="rec_am",
+            record_date=date(2026, 10, 12),
+            equipment_no="XT-AM",
+            am_clean="√",
+            process_status="有效记录",
+        )
+    )
+    db_session.add(
+        EquipmentInspectionFeishuRecord(
+            source="today",
+            record_id="rec_pm",
+            record_date=date(2026, 10, 12),
+            equipment_no="XT-PM",
+            pm_clean="√",
+            process_status="有效记录",
+        )
+    )
+    await db_session.flush()
+
+    summary = await mirror.today_summary(db_session, "201-1")
+    assert summary["inspected"] == 2
+    assert summary["am_inspected"] == 1
+    assert summary["pm_inspected"] == 1
+
+
+async def test_list_records_today_keeps_latest_valid_row_per_device(
+    db_session, monkeypatch
+) -> None:
+    """今日列表：排除关联行，同设备多条有效提交只保留最新一条。"""
+    monkeypatch.setattr(mirror, "_cst_today", lambda: date(2026, 10, 12))
+    common = {
+        "source": "today",
+        "record_date": date(2026, 10, 12),
+        "equipment_no": "XT-D",
+    }
+    # 飞书分组/引用产生的关联行（无处理状态），修改时间最新也不得展示
+    db_session.add(
+        EquipmentInspectionFeishuRecord(
+            record_id="rec_link",
+            last_modified_at=datetime(2026, 10, 12, 12, 0, tzinfo=UTC),
+            **common,
+        )
+    )
+    db_session.add(
+        EquipmentInspectionFeishuRecord(
+            record_id="rec_valid_old",
+            process_status="有效记录",
+            last_modified_at=datetime(2026, 10, 12, 10, 0, tzinfo=UTC),
+            **common,
+        )
+    )
+    db_session.add(
+        EquipmentInspectionFeishuRecord(
+            record_id="rec_valid_new",
+            process_status="有效记录",
+            last_modified_at=datetime(2026, 10, 12, 11, 0, tzinfo=UTC),
+            **common,
+        )
+    )
+    await db_session.flush()
+
+    rows, total = await mirror.list_records(
+        db_session, workshop_code="201-1", source="today"
+    )
+    assert total == 1
+    assert [r.record_id for r in rows] == ["rec_valid_new"]
+
+
+async def test_list_records_today_falls_back_without_process_status(
+    db_session, monkeypatch
+) -> None:
+    """表未启用“处理状态”字段时全部行有效，仍按设备保留最新一条。"""
+    monkeypatch.setattr(mirror, "_cst_today", lambda: date(2026, 10, 12))
+    for record_id, hour in (("rec_e_old", 8), ("rec_e_new", 12)):
+        db_session.add(
+            EquipmentInspectionFeishuRecord(
+                source="today",
+                record_id=record_id,
+                record_date=date(2026, 10, 12),
+                equipment_no="XT-E",
+                last_modified_at=datetime(2026, 10, 12, hour, 0, tzinfo=UTC),
+            )
+        )
+    # 无编号行（含名称粘连的汇总行）排在有编号设备之后
+    db_session.add(
+        EquipmentInspectionFeishuRecord(
+            source="today",
+            record_id="rec_garbage",
+            record_date=date(2026, 10, 12),
+            equipment_name="A101A102尾气塔泵类",
+            last_modified_at=datetime(2026, 10, 12, 7, 0, tzinfo=UTC),
+        )
+    )
+    await db_session.flush()
+
+    rows, total = await mirror.list_records(
+        db_session, workshop_code="201-1", source="today"
+    )
+    assert total == 2
+    assert [r.record_id for r in rows] == ["rec_e_new", "rec_garbage"]
+
+
+async def test_list_records_today_source_only_returns_cst_today_rows(
+    db_session, monkeypatch
+) -> None:
+    """「今日巡检」只返回当天（CST）记录：飞书今日表中滞留的旧日期行不出现。"""
+    monkeypatch.setattr(mirror, "_cst_today", lambda: date(2026, 10, 12))
+    db_session.add(
+        EquipmentInspectionFeishuRecord(
+            source="today",
+            record_id="rec_today_cur",
+            record_date=date(2026, 10, 12),
+            equipment_no="XT-A",
+        )
+    )
+    db_session.add(
+        EquipmentInspectionFeishuRecord(
+            source="today",
+            record_id="rec_today_stale",
+            record_date=date(2026, 10, 11),
+            equipment_no="XT-B",
+        )
+    )
+    db_session.add(
+        EquipmentInspectionFeishuRecord(
+            source="history",
+            record_id="rec_history_cur",
+            record_date=date(2026, 10, 12),
+            equipment_no="XT-C",
+        )
+    )
+    await db_session.flush()
+
+    # 今日口径按日期取数：当天记录无论落在今日表还是历史表（已拆分）都展示，
+    # 且按设备去重后每设备一条
+    rows, total = await mirror.list_records(
+        db_session, workshop_code="201-1", source="today"
+    )
+    assert [r.record_id for r in rows] == ["rec_today_cur", "rec_history_cur"]
+    assert total == 2
+
+    # history 来源不套用今日口径，仍按条件过滤
+    history_rows, history_total = await mirror.list_records(
+        db_session, workshop_code="201-1", source="history"
+    )
+    assert [r.record_id for r in history_rows] == ["rec_history_cur"]
+    assert history_total == 1
+
+    # 缺省 source 不受今日口径限制（设备详情抽屉按设备聚合全部记录）
+    _, all_total = await mirror.list_records(db_session, workshop_code="201-1")
+    assert all_total == 3
 
 
 # ---------- 车间隔离 ----------
@@ -499,7 +746,7 @@ async def test_sync_scopes_records_by_workshop(db_session, monkeypatch) -> None:
     assert summary_201["total_devices"] == 0
 
     devices_101 = await mirror.list_devices(db_session, "101-1")
-    assert [d["equipment_no"] for d in devices_101] == ["XT2-1-1-001"]
+    assert [d["equipment_no"] for d in devices_101["items"]] == ["XT2-1-1-001"]
 
     # 环境变量回退仅作用于默认车间：未配置车间视为未启用
     assert await feishu_config.is_mirror_enabled(db_session, "101-1") is True

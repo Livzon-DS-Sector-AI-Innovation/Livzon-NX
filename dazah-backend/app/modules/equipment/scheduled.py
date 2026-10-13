@@ -64,3 +64,24 @@ class InspectionFeishuMirrorFullSyncGenerator(TaskGenerator):
             "inspection feishu mirror full sync [%s]: %s",
             workshop_code, results,
         )
+
+
+class SparePartHardwareSyncGenerator(TaskGenerator):
+    """每小时把仓储五金镜像同步到设备备件台账（按车间聚合批次）。"""
+
+    name = "equipment.spare_part_hardware_sync"
+    schedule = ScheduleConfig(
+        strategy=ScheduleStrategy.INTERVAL,
+        interval_seconds=3600,
+        timezone="Asia/Shanghai",
+    )
+
+    async def find_due(self, session: AsyncSession) -> list[Any]:
+        return ["all"]
+
+    async def execute_one(self, session: AsyncSession, item: Any) -> None:
+        from app.modules.equipment.service import spare_part_sync
+
+        results = await spare_part_sync.sync_all(session)
+        await session.commit()
+        logger.info("spare part hardware sync: %s", results)

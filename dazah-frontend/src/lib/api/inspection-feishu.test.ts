@@ -63,11 +63,29 @@ describe('inspection-feishu api', () => {
     expect(result).toEqual({ items: [{ id: 'r1' }], total: 41, page: 2, page_size: 20 })
   })
 
-  it('fetches devices with an encoded keyword', async () => {
-    const fetchMock = vi.fn((_url: unknown) => jsonResponse({ code: 200, data: [] }))
+  it('fetches devices with an encoded keyword and parses {date, items}', async () => {
+    const fetchMock = vi.fn((_url: unknown) =>
+      jsonResponse({
+        code: 200,
+        data: {
+          date: '2026-10-13',
+          items: [
+            {
+              record_id: 'dev-1',
+              equipment_no: 'XT-A',
+              today_status: 'inspected',
+              last_inspected_date: '2026-10-13',
+            },
+          ],
+        },
+      }),
+    )
     vi.stubGlobal('fetch', fetchMock)
 
-    await fetchInspectionFeishuDevices('101-2', '萃取罐')
+    await expect(fetchInspectionFeishuDevices('101-2', '萃取罐')).resolves.toEqual({
+      date: '2026-10-13',
+      items: [expect.objectContaining({ equipment_no: 'XT-A' })],
+    })
     expect(fetchMock).toHaveBeenCalledWith(
       `${BASE}/devices?workshop=101-2&keyword=${encodeURIComponent('萃取罐')}`,
     )

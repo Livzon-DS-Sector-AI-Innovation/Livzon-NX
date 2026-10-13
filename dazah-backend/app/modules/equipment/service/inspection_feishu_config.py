@@ -224,6 +224,87 @@ def _normalized_table_id(value: str) -> str:
     return normalize_table_id(value) or ""
 
 
+def _is_view_id(value: str) -> bool:
+    """飞书视图 ID 以 vew 开头；数据表 ID 以 tbl 开头。"""
+    return value.startswith("vew")
+
+
+async def _resolve_view_table_ids(
+    client: BitableClient, table_ids: dict[str, str]
+) -> dict[str, str]:
+    """把误填的视图 ID（vew…）解析为所属数据表 ID（tbl…）。
+
+    遍历多维表格的数据表及其视图定位视图所属表；解析不到的保持原值，
+    由调用方决定如何提示。
+    """
+    pending = {value for value in table_ids.values() if _is_view_id(value)}
+    if not pending:
+        return table_ids
+    resolved: dict[str, str] = {}
+    for table in await client.list_tables():
+        table_id = table.get("table_id")
+        if not table_id:
+            continue
+        page_token: str | None = None
+        while True:
+            params: dict[str, object] = {"page_size": 100}
+            if page_token:
+                params["page_token"] = page_token
+            data = await client.client.request(
+                "GET",
+                f"/bitable/v1/apps/{client.app_token}/tables/{table_id}/views",
+                params=params,
+            )
+            for view in data.get("items") or []:
+                view_id = view.get("view_id") if isinstance(view, dict) else None
+                if view_id in pending:
+                    resolved[view_id] = table_id
+            if not data.get("has_more"):
+                break
+            page_token = data.get("page_token")
+            if not page_token:
+                break
+        if not pending - set(resolved):
+            break
+    return {key: resolved.get(value, value) for key, value in table_ids.items()}
+
+
+async def _resolve_view_ids_or_raise(
+    table_ids: dict[str, str], *, app_id: str, app_secret: str, app_token: str
+) -> dict[str, str]:
+    """保存时自动纠正视图 ID（vew…）为数据表 ID（tbl…）。
+
+    误填视图 ID 会导致同步报 WrongTableId；用已配置的应用凭据查询
+    视图所属数据表并替换，无法解析时给出可操作的错误。
+    """
+    if not any(_is_view_id(value) for value in table_ids.values()):
+        return table_ids
+    if not (app_id and app_secret and app_token):
+        raise AppException(
+            message=(
+                "Table ID 以 vew 开头是视图 ID，"
+                "自动解析需完整填写 App ID、App Secret 与 App Token"
+            )
+        )
+    client = BitableClient(app_token=app_token, app_id=app_id, app_secret=app_secret)
+    try:
+        resolved = await _resolve_view_table_ids(client, table_ids)
+    except AppException:
+        raise
+    except Exception as exc:
+        raise AppException(
+            message=f"视图 ID 自动解析失败：{_sanitize_feishu_error_message(str(exc))}"
+        ) from exc
+    if any(_is_view_id(value) for value in resolved.values()):
+        raise AppException(
+            message=(
+                "Table ID 以 vew 开头是视图 ID，且未能在该多维表格中解析到所属数据表；"
+                "请改用数据表 ID（多维表格链接中 table= 参数，以 tbl 开头）"
+            )
+        )
+    return resolved
+
+
 async def _resolve_app_token(
     *, app_id: str, app_secret: str, raw_app_token: str
 ) -> str:
@@ -297,9 +378,19 @@ async def update_config(
     row.app_id = app_id
     row.is_enabled = data.is_enabled
     row.app_token = app_token
-    row.today_table_id = _normalized_table_id(data.today_table_id)
-    row.history_table_id = _normalized_table_id(data.history_table_id)
-    row.device_table_id = _normalized_table_id(data.device_table_id)
+    table_ids = await _resolve_view_ids_or_raise(
+        {
+            "today_table_id": _normalized_table_id(data.today_table_id),
+            "history_table_id": _normalized_table_id(data.history_table_id),
+            "device_table_id": _normalized_table_id(data.device_table_id),
+        },
+        app_id=app_id,
+        app_secret=current_secret,
+        app_token=app_token,
+    )
+    row.today_table_id = table_ids["today_table_id"]
+    row.history_table_id = table_ids["history_table_id"]
+    row.device_table_id = table_ids["device_table_id"]
 
     await db.commit()
     return await get_config_detail(db, workshop_code)

@@ -2194,6 +2194,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment/inspection/feishu/today-summaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 各车间今日巡检进度汇总 */
+        get: operations["feishu_today_summaries_api_v1_equipment_inspection_feishu_today_summaries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment/inspection/feishu/today-summary": {
         parameters: {
             query?: never;
@@ -67859,7 +67876,7 @@ export interface operations {
             query?: {
                 /** @description 车间代码；缺省跨车间查询 */
                 workshop?: string | null;
-                /** @description 来源：today=今日巡检 / history=历史记录，缺省全部 */
+                /** @description 来源：today=今日巡检（仅当天）/ history=历史记录，缺省全部 */
                 source?: string | null;
                 /** @description 日期起 */
                 date_from?: string | null;
@@ -67942,6 +67959,37 @@ export interface operations {
                 /** @description 车间代码（如 101-1 / 201-1） */
                 workshop: string;
             };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    feishu_today_summaries_api_v1_equipment_inspection_feishu_today_summaries_get: {
+        parameters: {
+            query?: never;
             header?: never;
             path?: never;
             cookie?: {

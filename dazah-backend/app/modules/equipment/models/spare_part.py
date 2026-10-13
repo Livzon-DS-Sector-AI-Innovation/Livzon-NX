@@ -30,8 +30,11 @@ class SparePart(BaseModel):
 
     __tablename__ = "spare_parts"
     __table_args__ = (
+        # 部分唯一索引：未删除行内同车间同编码唯一；五金物料可同时
+        # 出现在多个车间分布表中，跨车间允许同码
         Index(
-            "uq_spare_parts_code",
+            "uq_spare_parts_workshop_code",
+            "workshop_code",
             "code",
             unique=True,
             postgresql_where=text("is_deleted = false"),

@@ -328,6 +328,117 @@ async def test_update_config_wiki_requires_credentials(
         )
 
 
+# ---------- 视图 ID 自动解析 ----------
+
+
+class _ViewResolvingClient:
+    """模拟 BitableClient：列出数据表并按表返回视图，用于 vew→tbl 解析。"""
+
+    def __init__(self, **kwargs: Any) -> None:
+        self.kwargs = kwargs
+        self.app_token = kwargs.get("app_token")
+        self.client = self
+
+    async def list_tables(self) -> list[dict[str, Any]]:
+        return [
+            {"table_id": "tbl_today"},
+            {"table_id": "tbl_history"},
+            {"table_id": "tbl_devices"},
+        ]
+
+    async def request(
+        self, method: str, path: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        views = {
+            "tbl_today": [{"view_id": "vew_today"}],
+            "tbl_history": [{"view_id": "vew_history"}],
+            "tbl_devices": [{"view_id": "vew_devices"}],
+        }
+        for table_id, items in views.items():
+            if path.endswith(f"/tables/{table_id}/views"):
+                return {"items": items, "has_more": False}
+        return {"items": [], "has_more": False}
+
+
+async def test_update_config_resolves_view_ids_to_table_ids(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """误填视图 ID（vew…）保存时自动解析为所属数据表 ID（tbl…）。
+
+    回归：用户从链接复制了 view= 参数，同步报 WrongTableId。
+    """
+    _patch_env_empty(monkeypatch)
+    monkeypatch.setattr(config_service, "BitableClient", _ViewResolvingClient)
+    detail = await config_service.update_config(
+        db_session,
+        "101-2",
+        EquipmentInspectionFeishuConfigUpdateRequest(
+            app_id="cli_vw",
+            app_secret="vw_secret",
+            app_token="bascn_vw",
+            today_table_id="vew_today",
+            history_table_id="vew_history",
+            device_table_id="vew_devices",
+        ),
+    )
+    assert detail.today_table_id == "tbl_today"
+    assert detail.history_table_id == "tbl_history"
+    assert detail.device_table_id == "tbl_devices"
+
+
+async def test_update_config_unresolvable_view_id_rejected(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """视图 ID 无法定位所属数据表时保存失败，提示改用 tbl 数据表 ID。"""
+
+    class _NoViewClient(_ViewResolvingClient):
+        async def request(
+            self, method: str, path: str, params: dict[str, Any] | None = None
+        ) -> dict[str, Any]:
+            return {"items": [{"view_id": "vew_other"}], "has_more": False}
+
+    _patch_env_empty(monkeypatch)
+    monkeypatch.setattr(config_service, "BitableClient", _NoViewClient)
+    with pytest.raises(AppException, match="数据表 ID"):
+        await config_service.update_config(
+            db_session,
+            "101-2",
+            EquipmentInspectionFeishuConfigUpdateRequest(
+                app_id="cli_vw",
+                app_secret="vw_secret",
+                app_token="bascn_vw",
+                today_table_id="vew_today",
+            ),
+        )
+
+
+async def test_update_config_view_id_requires_credentials(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """凭据不完整时无法自动解析视图 ID，保存失败并说明原因。"""
+    _patch_env_empty(monkeypatch)
+    db_session.add(
+        EquipmentInspectionFeishuConfig(
+            app_id="cli_old",
+            app_secret="stored_secret",
+            app_token="bascn_old",
+        )
+    )
+    await db_session.commit()
+    with pytest.raises(AppException, match="自动解析"):
+        await config_service.update_config(
+            db_session,
+            "201-1",
+            EquipmentInspectionFeishuConfigUpdateRequest(
+                app_id="",
+                app_secret=None,
+                app_token="bascn_old",
+                today_table_id="vew_today",
+                is_enabled=False,
+            ),
+        )
+
+
 # ---------- 连接测试 ----------
 
 
@@ -519,7 +630,8 @@ async def test_mirror_read_endpoints(client: Any, db_session: AsyncSession) -> N
         params={"workshop": "201-1", "keyword": "方锥"},
     )
     assert resp.status_code == 200
-    assert resp.json()["data"][0]["equipment_no"] == "XT1-1-1-129"
+    assert resp.json()["data"]["items"][0]["equipment_no"] == "XT1-1-1-129"
+    assert "last_inspected_date" in resp.json()["data"]["items"][0]
 
     resp = await client.get(
         "/api/v1/equipment/inspection/feishu/today-summary",
@@ -536,6 +648,54 @@ async def test_mirror_records_rejects_unknown_source(client: Any) -> None:
     )
     assert resp.status_code == 400
     assert "source 仅支持" in resp.json()["message"]
+
+
+async def test_today_summaries_lists_enabled_workshops(
+    client: Any,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """汇总接口返回已启用车间的今日进度，未启用车间不出现。"""
+    from datetime import date as date_type
+
+    from app.modules.equipment.models.inspection_feishu_mirror import (
+        EquipmentInspectionFeishuDevice,
+        EquipmentInspectionFeishuRecord,
+    )
+    from app.modules.equipment.service import inspection_feishu_mirror as mirror_svc
+
+    _patch_env(monkeypatch)  # 默认车间 201-1 走环境变量配置启用
+    monkeypatch.setattr(mirror_svc, "_cst_today", lambda: date_type(2026, 10, 12))
+    db_session.add(
+        EquipmentInspectionFeishuDevice(record_id="dev_sum_1", equipment_no="XT-A")
+    )
+    db_session.add(
+        EquipmentInspectionFeishuRecord(
+            source="today",
+            record_id="rec_sum_1",
+            record_date=date_type(2026, 10, 12),
+            equipment_no="XT-A",
+        )
+    )
+    await db_session.commit()
+
+    resp = await client.get("/api/v1/equipment/inspection/feishu/today-summaries")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert [item["workshop_code"] for item in data] == ["201-1"]
+    assert data[0]["date"] == "2026-10-12"
+    assert data[0]["inspected"] == 1
+    assert data[0]["total_devices"] == 1
+    assert data[0]["abnormal"] == 0
+
+
+async def test_today_summaries_empty_when_no_workshop_enabled(
+    client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_env_empty(monkeypatch)
+    resp = await client.get("/api/v1/equipment/inspection/feishu/today-summaries")
+    assert resp.status_code == 200
+    assert resp.json()["data"] == []
 
 
 async def test_mirror_sync_status_and_manual_sync(

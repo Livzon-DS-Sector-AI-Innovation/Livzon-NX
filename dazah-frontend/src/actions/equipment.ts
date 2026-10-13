@@ -3,6 +3,7 @@
 import { getServerApiBaseUrl } from '@/lib/server-api'
 import { revalidatePath } from 'next/cache'
 import { getAuthHeaders } from '@/lib/auth'
+import type { InspectionFeishuWorkshopSummary } from '@/types/inspection-feishu'
 import {
   CreateCategoryInput, UpdateCategoryInput, CreateLocationInput, UpdateLocationInput, CreateEquipmentInput, UpdateEquipmentInput,
   CreateFailureCodeInput, UpdateFailureCodeInput,
@@ -487,10 +488,26 @@ export async function fetchEquipmentStatistics(workshop?: string): Promise<any> 
   const qs = workshop ? `?workshop=${encodeURIComponent(workshop)}` : ''
   const res = await fetch(`${API_BASE_URL}/api/v1/equipment/equipments/statistics${qs}`, {
     cache: 'no-store',
+    headers: await getAuthHeaders(),
   })
   if (!res.ok) return { total: 0, by_status: {}, by_category: {}, by_location: {} }
   const json = await res.json()
   return json.data
+}
+
+/** 各已启用镜像车间的今日巡检进度（设备仪表盘汇总）；失败降级为空列表 */
+export async function fetchInspectionTodaySummaries(): Promise<InspectionFeishuWorkshopSummary[]> {
+  try {
+    const res = await fetch(
+      `${API_BASE_URL}/api/v1/equipment/inspection/feishu/today-summaries`,
+      { cache: 'no-store', headers: await getAuthHeaders() },
+    )
+    if (!res.ok) return []
+    const json = await res.json()
+    return Array.isArray(json.data) ? json.data : []
+  } catch {
+    return []
+  }
 }
 
 export async function fetchDepartments(): Promise<any[]> {
@@ -514,6 +531,7 @@ export async function fetchWorkOrders(filters: any = {}): Promise<any> {
 
   const res = await fetch(`${API_BASE_URL}/api/v1/equipment/maintenance/work-orders/?${params.toString()}`, {
     cache: 'no-store',
+    headers: await getAuthHeaders(),
   })
   if (!res.ok) return { items: [], total: 0, page: 1, page_size: 20 }
   const json = await res.json()
@@ -529,6 +547,7 @@ export async function fetchWorkOrderStatistics(workshop?: string): Promise<any> 
   const qs = workshop ? `?workshop=${encodeURIComponent(workshop)}` : ''
   const res = await fetch(`${API_BASE_URL}/api/v1/equipment/maintenance/work-orders/statistics${qs}`, {
     cache: 'no-store',
+    headers: await getAuthHeaders(),
   })
   if (!res.ok) return { total: 0, by_status: {}, by_type: {}, by_priority: {} }
   const json = await res.json()
@@ -554,6 +573,7 @@ export async function fetchCalibrationPlans(filters: any = {}): Promise<any> {
 
   const res = await fetch(`${API_BASE_URL}/api/v1/equipment/maintenance/calibration/plans?${params.toString()}`, {
     cache: 'no-store',
+    headers: await getAuthHeaders(),
   })
   if (!res.ok) return { items: [], total: 0 }
   const json = await res.json()
@@ -653,6 +673,7 @@ export async function fetchStockWarnings(workshop?: string): Promise<any> {
   const qs = workshop ? `?workshop=${encodeURIComponent(workshop)}` : ''
   const res = await fetch(`${API_BASE_URL}/api/v1/equipment/spare-parts/stock/warnings${qs}`, {
     cache: 'no-store',
+    headers: await getAuthHeaders(),
   })
   if (!res.ok) return []
   const json = await res.json()
@@ -662,6 +683,7 @@ export async function fetchStockWarnings(workshop?: string): Promise<any> {
 export async function fetchOverdueMaintenancePlans(): Promise<any> {
   const res = await fetch(`${API_BASE_URL}/api/v1/equipment/maintenance-plans/overdue`, {
     cache: 'no-store',
+    headers: await getAuthHeaders(),
   })
   if (!res.ok) return []
   const json = await res.json()

@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta, timezone
 from typing import Any
 
@@ -29,6 +30,7 @@ from app.modules.equipment.models.inspection_feishu_mirror import (
 from app.modules.equipment.service.inspection_feishu_config import (
     InspectionFeishuEffectiveConfig,
     get_effective_config,
+    list_enabled_workshops,
 )
 from app.platform.integrations.feishu.bitable import BitableClient
 
@@ -405,7 +407,13 @@ async def sync_table(
     except AppException:
         raise
     except Exception as error:  # noqa: BLE001
-        raise AppException(message=f"飞书多维表格访问失败：{error}") from error
+        hint = ""
+        if "WrongTableId" in str(error) or "1254004" in str(error):
+            hint = (
+                "（Table ID 无效：vew 开头是视图 ID，应为 tbl 开头；"
+                "在配置中重新保存可自动解析）"
+            )
+        raise AppException(message=f"飞书多维表格访问失败：{error}{hint}") from error
 
     synced = 0
     if table_key == SOURCE_DEVICES:
@@ -553,6 +561,74 @@ def _cst_today(now: datetime | None = None) -> date:
     return (now or datetime.now(_CST)).astimezone(_CST).date()
 
 
+def _today_display_order(record: EquipmentInspectionFeishuRecord) -> tuple[int, str]:
+    """今日列表排序：有编号设备按编号升序在前，无编号（含名称粘连的汇总行）排后。"""
+    no = (record.equipment_no or "").strip().lower()
+    if no:
+        return (0, no)
+    return (1, (record.equipment_name or "").strip().lower())
+
+
+async def _list_today_records(
+    db: AsyncSession,
+    *,
+    workshop_code: str | None,
+    date_from: date | None,
+    date_to: date | None,
+    keyword: str | None,
+    abnormal_only: bool,
+    page: int,
+    page_size: int,
+) -> tuple[list[EquipmentInspectionFeishuRecord], int]:
+    """今日巡检列表：只取有效记录行，每台设备保留最新一条。
+
+    同设备一天可能有多条有效提交，飞书分组/引用还会产生关联行；页面按
+    设备呈现当日快照，先按筛选条件过滤再去重，保证“只看异常”等仍可用。
+    """
+    conditions = [
+        EquipmentInspectionFeishuRecord.is_deleted == False,  # noqa: E712
+        EquipmentInspectionFeishuRecord.record_date == _cst_today(),
+    ]
+    if workshop_code:
+        conditions.append(
+            EquipmentInspectionFeishuRecord.workshop_code == workshop_code
+        )
+    if date_from:
+        conditions.append(EquipmentInspectionFeishuRecord.record_date >= date_from)
+    if date_to:
+        conditions.append(EquipmentInspectionFeishuRecord.record_date <= date_to)
+    if keyword:
+        like = f"%{keyword.strip()}%"
+        conditions.append(
+            func.coalesce(EquipmentInspectionFeishuRecord.equipment_name, "").like(like)
+            | func.coalesce(EquipmentInspectionFeishuRecord.equipment_no, "").like(like)
+        )
+    if abnormal_only:
+        conditions.append(EquipmentInspectionFeishuRecord.has_abnormal.is_(True))
+    rows = (
+        await db.execute(
+            select(EquipmentInspectionFeishuRecord)
+            .where(*conditions)
+            .order_by(
+                EquipmentInspectionFeishuRecord.last_modified_at.desc().nulls_last(),
+                EquipmentInspectionFeishuRecord.record_id.desc(),
+            )
+        )
+    ).scalars().all()
+    latest: dict[str, EquipmentInspectionFeishuRecord] = {}
+    for record in _valid_today_rows(rows):
+        key = _device_key(record.equipment_no, record.equipment_name)
+        if key == _NAME_KEY_PREFIX:
+            # 无编号也无名称的行按记录自身保留，避免互相覆盖
+            key = record.record_id
+        if key not in latest:
+            latest[key] = record
+    items = sorted(latest.values(), key=_today_display_order)
+    total = len(items)
+    start = (page - 1) * page_size
+    return items[start : start + page_size], total
+
+
 async def list_records(
     db: AsyncSession,
     *,
@@ -566,6 +642,18 @@ async def list_records(
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[EquipmentInspectionFeishuRecord], int]:
+    if source == SOURCE_TODAY:
+        # 今日口径：仅当天（CST）+ 有效行按设备去重（每设备最新一条）
+        return await _list_today_records(
+            db,
+            workshop_code=workshop_code,
+            date_from=date_from,
+            date_to=date_to,
+            keyword=keyword,
+            abnormal_only=abnormal_only,
+            page=page,
+            page_size=page_size,
+        )
     conditions = [EquipmentInspectionFeishuRecord.is_deleted == False]  # noqa: E712
     # workshop 缺省 = 跨车间查询（设备详情抽屉按设备编号聚合各车间记录）
     if workshop_code:
@@ -611,10 +699,118 @@ async def list_records(
     return list(rows), int(total)
 
 
+# 上午/下午检查项列：任一列有值即视为该时段已巡
+_AM_COLUMNS = (
+    "am_clean", "am_lubrication", "am_fastening", "am_sealing",
+    "am_vibration", "am_sound", "am_surface",
+)
+_PM_COLUMNS = (
+    "pm_clean", "pm_lubrication", "pm_fastening", "pm_sealing",
+    "pm_vibration", "pm_sound", "pm_surface",
+)
+_NAME_KEY_PREFIX = "N:"
+
+
+def _device_key(equipment_no: str | None, equipment_name: str | None) -> str:
+    """设备匹配键：优先编号；无编号回退名称（加前缀避免与编号撞键）。"""
+    no = (equipment_no or "").strip()
+    if no:
+        return no
+    return _NAME_KEY_PREFIX + (equipment_name or "").strip()
+
+
+def _valid_today_rows(
+    records: Sequence[EquipmentInspectionFeishuRecord],
+) -> list[EquipmentInspectionFeishuRecord]:
+    """今日表的有效记录行：排除飞书分组/引用产生的关联行（无处理状态）。
+
+    表未启用“处理状态”字段时没有任何行带该值，回退为全部行有效，
+    兼容历史表和未配置该字段的旧车间表。
+    """
+    valid = [r for r in records if (r.process_status or "").strip()]
+    return valid if valid else list(records)
+
+
+def _period_filled(
+    record: EquipmentInspectionFeishuRecord, columns: tuple[str, ...]
+) -> bool:
+    return any((getattr(record, col) or "").strip() for col in columns)
+
+
+async def _today_device_progress(
+    db: AsyncSession, workshop_code: str
+) -> dict[str, dict[str, Any]]:
+    """今日有效记录按设备聚合：status（已巡/异常）与上午、下午是否有勾。
+
+    匹配键优先设备编号；飞书巡检表部分设备无编号（如尾气塔、泵类），
+    其记录行同样无编号，只能按名称匹配。名称粘连的汇总行匹配不到
+    设备，天然被排除。
+    """
+    today = _cst_today()
+    rows = (
+        await db.execute(
+            select(EquipmentInspectionFeishuRecord)
+            .where(
+                EquipmentInspectionFeishuRecord.workshop_code == workshop_code,
+                EquipmentInspectionFeishuRecord.record_date == today,
+                EquipmentInspectionFeishuRecord.is_deleted == False,  # noqa: E712
+            )
+            .order_by(
+                EquipmentInspectionFeishuRecord.last_modified_at.desc().nulls_last(),
+                EquipmentInspectionFeishuRecord.record_id.desc(),
+            )
+        )
+    ).scalars().all()
+    progress: dict[str, dict[str, Any]] = {}
+    for record in _valid_today_rows(rows):
+        key = _device_key(record.equipment_no, record.equipment_name)
+        if key == _NAME_KEY_PREFIX:
+            continue
+        entry = progress.setdefault(
+            key, {"status": "inspected", "am": False, "pm": False}
+        )
+        if record.has_abnormal:
+            entry["status"] = "abnormal"
+        entry["am"] = entry["am"] or _period_filled(record, _AM_COLUMNS)
+        entry["pm"] = entry["pm"] or _period_filled(record, _PM_COLUMNS)
+    return progress
+
+
+async def _last_inspected_dates(
+    db: AsyncSession, workshop_code: str
+) -> dict[str, date]:
+    """每台设备（编号/名称回退键）在镜像里的最近一次巡检日期。"""
+    key_expr = func.coalesce(
+        func.nullif(func.btrim(EquipmentInspectionFeishuRecord.equipment_no), ""),
+        func.concat(
+            _NAME_KEY_PREFIX,
+            func.coalesce(
+                func.btrim(EquipmentInspectionFeishuRecord.equipment_name), ""
+            ),
+        ),
+    )
+    rows = (
+        await db.execute(
+            select(
+                key_expr, func.max(EquipmentInspectionFeishuRecord.record_date)
+            ).where(
+                EquipmentInspectionFeishuRecord.workshop_code == workshop_code,
+                EquipmentInspectionFeishuRecord.is_deleted == False,  # noqa: E712
+                EquipmentInspectionFeishuRecord.record_date.isnot(None),
+            ).group_by(key_expr)
+        )
+    ).all()
+    return {key: last for key, last in rows}
+
+
 async def list_devices(
     db: AsyncSession, workshop_code: str, *, keyword: str | None = None
-) -> list[dict[str, Any]]:
-    """巡检设备清单 + 台账信息（按编号关联，互不修改）。"""
+) -> dict[str, Any]:
+    """巡检设备清单 + 台账信息（按编号关联，互不修改）。
+
+    返回 {"date": 今日口径日期, "items": [...]}；每台设备带 today_status
+    与 last_inspected_date（镜像里最近一次巡检日期，从未巡检为 None）。
+    """
     conditions = [
         EquipmentInspectionFeishuDevice.workshop_code == workshop_code,
         EquipmentInspectionFeishuDevice.is_deleted == False,  # noqa: E712
@@ -669,78 +865,80 @@ async def list_devices(
         for no, model, loc_id in ledger_rows
     }
 
-    # 今日状态：已巡（有记录）/ 异常（含 ×）/ 未巡
-    today = _cst_today()
-    today_rows = (
-        await db.execute(
-            select(
-                EquipmentInspectionFeishuRecord.equipment_no,
-                EquipmentInspectionFeishuRecord.has_abnormal,
-            ).where(
-                EquipmentInspectionFeishuRecord.workshop_code == workshop_code,
-                EquipmentInspectionFeishuRecord.record_date == today,
-                EquipmentInspectionFeishuRecord.is_deleted == False,  # noqa: E712
-            )
-        )
-    ).all()
-    today_status: dict[str, str] = {}
-    for no, abnormal in today_rows:
-        if no:
-            current = today_status.get(no, "inspected")
-            if abnormal or current == "abnormal":
-                today_status[no] = "abnormal"
-            else:
-                today_status[no] = "inspected"
+    # 今日状态：已巡（有记录）/ 异常（含 ×）/ 未巡；无编号设备按名称匹配
+    progress = await _today_device_progress(db, workshop_code)
+    last_dates = await _last_inspected_dates(db, workshop_code)
 
-    return [
-        {
-            "record_id": device.record_id,
-            "equipment_name": device.equipment_name,
-            "equipment_no": device.equipment_no,
-            "model": ledger_map.get(device.equipment_no, {}).get("model"),
-            "location_name": ledger_map.get(device.equipment_no, {}).get(
-                "location_name"
-            ),
-            "in_ledger": device.equipment_no in ledger_nos,
-            "today_status": today_status.get(device.equipment_no, "pending"),
-        }
-        for device in devices
-    ]
+    return {
+        "date": _cst_today(),
+        "items": [
+            {
+                "record_id": device.record_id,
+                "equipment_name": device.equipment_name,
+                "equipment_no": device.equipment_no,
+                "model": ledger_map.get(device.equipment_no, {}).get("model"),
+                "location_name": ledger_map.get(device.equipment_no, {}).get(
+                    "location_name"
+                ),
+                "in_ledger": device.equipment_no in ledger_nos,
+                "today_status": progress.get(
+                    _device_key(device.equipment_no, device.equipment_name), {}
+                ).get("status", "pending"),
+                "last_inspected_date": last_dates.get(
+                    _device_key(device.equipment_no, device.equipment_name)
+                ),
+            }
+            for device in devices
+        ],
+    }
 
 
 async def today_summary(db: AsyncSession, workshop_code: str) -> dict[str, Any]:
-    """今日进度：应巡（档案表）/ 已巡 / 异常。"""
-    total_devices = (
+    """今日进度：应巡（档案表）/ 已巡 / 异常 / 上午、下午完成数。
+
+    无编号设备按名称匹配记录；已巡、异常与上下午细分都基于有效记录行。
+    """
+    devices = (
         await db.execute(
-            select(func.count(EquipmentInspectionFeishuDevice.id)).where(
+            select(
+                EquipmentInspectionFeishuDevice.equipment_no,
+                EquipmentInspectionFeishuDevice.equipment_name,
+            ).where(
                 EquipmentInspectionFeishuDevice.workshop_code == workshop_code,
                 EquipmentInspectionFeishuDevice.is_deleted == False,  # noqa: E712
             )
         )
-    ).scalar_one()
-    today = _cst_today()
-    rows = (
-        await db.execute(
-            select(
-                EquipmentInspectionFeishuRecord.equipment_no,
-                EquipmentInspectionFeishuRecord.has_abnormal,
-            ).where(
-                EquipmentInspectionFeishuRecord.workshop_code == workshop_code,
-                EquipmentInspectionFeishuRecord.record_date == today,
-                EquipmentInspectionFeishuRecord.is_deleted == False,  # noqa: E712
-            )
-        )
     ).all()
-    inspected: set[str] = set()
-    abnormal: set[str] = set()
-    for no, has_abnormal in rows:
-        if no:
-            inspected.add(no)
-            if has_abnormal:
-                abnormal.add(no)
+    progress = await _today_device_progress(db, workshop_code)
+    inspected = 0
+    abnormal = 0
+    am_done = 0
+    pm_done = 0
+    for equipment_no, equipment_name in devices:
+        entry = progress.get(_device_key(equipment_no, equipment_name))
+        if not entry:
+            continue
+        inspected += 1
+        if entry["status"] == "abnormal":
+            abnormal += 1
+        if entry["am"]:
+            am_done += 1
+        if entry["pm"]:
+            pm_done += 1
     return {
-        "date": today,
-        "total_devices": int(total_devices),
-        "inspected": len(inspected),
-        "abnormal": len(abnormal),
+        "date": _cst_today(),
+        "total_devices": len(devices),
+        "inspected": inspected,
+        "abnormal": abnormal,
+        "am_inspected": am_done,
+        "pm_inspected": pm_done,
     }
+
+
+async def today_summaries_all(db: AsyncSession) -> list[dict[str, Any]]:
+    """各已启用镜像车间的今日巡检进度汇总（设备仪表盘）。"""
+    summaries: list[dict[str, Any]] = []
+    for workshop_code in await list_enabled_workshops(db):
+        summary = await today_summary(db, workshop_code)
+        summaries.append({"workshop_code": workshop_code, **summary})
+    return summaries
