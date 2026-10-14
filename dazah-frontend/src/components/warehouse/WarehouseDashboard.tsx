@@ -13,7 +13,7 @@ import {
   InboxOutlined,
   RiseOutlined,
 } from '@ant-design/icons'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/components/shared/ThemedEChart'
 import { graphic } from 'echarts'
 import type { EChartsOption } from 'echarts'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'

@@ -69,6 +69,9 @@ vi.mock('antd', () => ({
 }))
 
 import { filterMenuItemsByRole, Sidebar } from './Sidebar'
+vi.mock('./AppearanceMenu', () => ({ AppearanceMenu: ({ vertical }: { vertical?: boolean }) =>
+  createElement('div', { 'aria-label': '外观模式', 'data-vertical': String(vertical) }),
+}))
 
 const menuItems: SubMenuItem[] = [
   { key: 'requests', label: '采购申请', path: '/purchasing/request' },
@@ -121,6 +124,7 @@ describe('Sidebar width control', () => {
       expect(host.querySelector('aside')?.classList.contains('w-11')).toBe(true)
       expect(host.querySelector('aside')?.firstElementChild?.querySelector('h2')).toBeNull()
       expect(host.querySelector('[data-menu-key="requests"]')).toBeNull()
+      expect(host.querySelector('[aria-label="外观模式"]')?.getAttribute('data-vertical')).toBe('true')
       expect(window.localStorage.getItem(`dazah-sidebar-collapsed:${user.id}`)).toBe('true')
       await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="展开侧边栏"]')?.click())
       expect(host.querySelector('[data-menu-key="requests"]')).not.toBeNull()
@@ -158,7 +162,18 @@ describe('system settings entry', () => {
       await act(async () => root.render(createElement(Sidebar, {
         user: { ...user, role: 'admin', roles }, modules,
       })))
-      expect(host.textContent?.includes('系统设置')).toBe(visible)
+      const settings = host.querySelector<HTMLButtonElement>('[aria-label="系统设置"]')
+      expect(Boolean(settings)).toBe(visible)
+      expect(host.textContent).not.toContain('v0.1.1')
+      expect(host.querySelector('[aria-label="外观模式"]')).not.toBeNull()
+      if (settings) {
+        expect(settings.textContent).toBe('')
+        expect(settings.previousElementSibling?.getAttribute('aria-label')).toBe('外观模式')
+        await act(async () => settings.click())
+        expect(navigation.push).toHaveBeenCalledWith('/settings')
+        await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="收起侧边栏"]')?.click())
+        expect(host.querySelector('[aria-label="系统设置"]')).not.toBeNull()
+      }
     } finally {
       await act(async () => root.unmount())
     }

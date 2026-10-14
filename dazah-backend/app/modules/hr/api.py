@@ -2116,12 +2116,14 @@ async def list_position_transfer_approvals(
         "my_applications", description="my_applications / pending_approval / approved"
     ),
     page_params: PageParams = Depends(),
+    db: AsyncSession = Depends(get_db),
     service: PositionTransferRecordService = Depends(get_position_transfer_service),
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
     records, total = await service.list_approvals(
         current_user=current_user,
+        dept_alias_set=await _resolve_visible_scope(db, current_user),
         tab=tab,
         page=page_params.page,
         page_size=page_params.page_size,

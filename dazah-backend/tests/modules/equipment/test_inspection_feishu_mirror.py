@@ -1,7 +1,10 @@
 """设备巡检飞书镜像同步测试。"""
 
 from datetime import UTC, date, datetime
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import delete
@@ -16,6 +19,55 @@ from app.modules.equipment.models.inspection_feishu_mirror import (
 )
 from app.modules.equipment.service import inspection_feishu_config as feishu_config
 from app.modules.equipment.service import inspection_feishu_mirror as mirror
+
+
+@pytest.mark.parametrize("sorted_search", [False, True])
+async def test_page_fetch_preserves_pagination_and_incremental_watermark(
+    sorted_search: bool,
+) -> None:
+    first = {"record_id": "first", "last_modified_time": 200}
+    second = {"record_id": "second", "last_modified_time": 150}
+    older = {"record_id": "older", "last_modified_time": 80}
+    fetch = AsyncMock(
+        side_effect=[
+            {"items": [first], "has_more": True, "page_token": "page-2", "total": 3},
+            {
+                "items": [second, older],
+                "has_more": True,
+                "page_token": "page-3",
+                "total": 3,
+            },
+        ]
+    )
+    client = SimpleNamespace(
+        app_token="test-base",
+        client=SimpleNamespace(request=fetch),
+        search_records_page=fetch,
+    )
+    result = await mirror._fetch_pages(
+        client, "test-table", sort_by_modified=sorted_search, stop_before_ms=100
+    )
+    assert result == [first, second]
+    assert fetch.await_count == 2
+    kwargs = fetch.await_args_list[1].kwargs
+    assert (kwargs["params"] if sorted_search else kwargs)["page_token"] == "page-2"
+
+
+async def test_device_without_number_keeps_pending_status(
+    db_session: AsyncSession,
+) -> None:
+    record_id = f"empty-{uuid4().hex}"
+    db_session.add(
+        EquipmentInspectionFeishuDevice(
+            record_id=record_id, equipment_name="尚未编号的设备", equipment_no=None
+        )
+    )
+    await db_session.flush()
+    rows = await mirror.list_devices(db_session, "201-1")
+    record = next(row for row in rows["items"] if row["record_id"] == record_id)
+    assert record["equipment_no"] is None
+    assert record["today_status"] == "pending"
+    assert record["in_ledger"] is False
 
 
 @pytest.fixture(autouse=True)

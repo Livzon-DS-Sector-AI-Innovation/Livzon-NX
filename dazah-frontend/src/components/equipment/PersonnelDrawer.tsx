@@ -95,7 +95,7 @@ export function PersonnelDrawer({ open, onClose, roles: _roles, workshopCode }: 
       size="large"
       closable={false}
       styles={{
-        body: { padding: 0, background: '#f6f5f4' },
+        body: { padding: 0, background: 'var(--color-surface)' },
         header: { display: 'none' },
       }}
       footer={null}
@@ -143,7 +143,7 @@ export function PersonnelDrawer({ open, onClose, roles: _roles, workshopCode }: 
         {/* 搜索提示卡片 */}
         <div style={{
           padding: '14px 18px', marginBottom: 20,
-          background: '#e8ecf2', borderRadius: 10,
+          background: 'var(--color-surface-soft)', borderRadius: 10,
           border: '1px solid #cdd6e3',
           display: 'flex', alignItems: 'center', gap: 12,
         }}>
@@ -182,7 +182,7 @@ export function PersonnelDrawer({ open, onClose, roles: _roles, workshopCode }: 
                 {option.data.label.charAt(0)}
               </Avatar>
               <div style={{ lineHeight: 1.3 }}>
-                <Text style={{ fontSize: 14, fontWeight: 500, color: '#1a1a1a', display: 'block' }}>
+                <Text style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-ink)', display: 'block' }}>
                   {option.data.label}
                 </Text>
                 <Text type="secondary" style={{ fontSize: 12 }}>
@@ -198,12 +198,12 @@ export function PersonnelDrawer({ open, onClose, roles: _roles, workshopCode }: 
       <div style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,
         padding: '14px 24px',
-        background: '#ffffff',
-        borderTop: '1px solid #e5e3df',
+        background: 'var(--color-canvas)',
+        borderTop: '1px solid var(--color-hairline)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         boxShadow: '0 -2px 8px rgba(0,0,0,0.04)',
       }}>
-        <Text style={{ fontSize: 13, color: '#a4a097' }}>
+        <Text style={{ fontSize: 13, color: 'var(--color-stone)' }}>
           {selectedIds.length > 0 ? `已选 ${selectedIds.length} 人` : '请搜索并选择人员'}
         </Text>
         <div style={{ display: 'flex', gap: 10 }}>

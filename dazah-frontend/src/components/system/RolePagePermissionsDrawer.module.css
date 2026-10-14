@@ -43,12 +43,18 @@
   color: var(--editor-primary);
 }
 
-.rulesNotice,
 .changesNotice,
 .moduleNavigation,
 .toolbar,
 .treeToolbar {
   flex: none;
+}
+
+.noticeSummary {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 16px;
+  row-gap: 4px;
 }
 
 .moduleNavigation {

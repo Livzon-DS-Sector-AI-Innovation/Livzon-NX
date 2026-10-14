@@ -399,6 +399,25 @@ class PagePermissionService:
                     ),
                 ],
             )
+        explicit_keys = {canonical_page_key(grant.page_key) for grant in role_grants}
+        explicit_keys.update(canonical_page_key(grant.page_key) for grant in overrides)
+        for legacy_key, legacy in list(outputs.items()):
+            if legacy_key not in {
+                "equipment:assets", "equipment:maintenance", "equipment:inspection",
+                "equipment:spare-parts", "equipment:personnel",
+            }:
+                continue
+            leaf = legacy_key.split(":")[-1]
+            target = f"equipment:workshop-201-1:{leaf}-201-1"
+            if target in active_keys and target not in explicit_keys:
+                outputs[target] = legacy.model_copy(update={"page_key": target})
+            elif target in active_keys and target not in outputs:
+                # Invalid explicit overrides must remain visible as a denial so
+                # clients cannot reconstruct the legacy fallback.
+                outputs[target] = legacy.model_copy(update={
+                    "page_key": target, "permissions": [],
+                    "sensitive_actions": [], "source": "none",
+                })
         return sorted(outputs.values(), key=lambda item: item.page_key)
 
     async def role_permissions_preview(

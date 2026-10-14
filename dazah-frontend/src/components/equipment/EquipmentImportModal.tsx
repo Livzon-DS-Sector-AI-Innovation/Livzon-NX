@@ -201,10 +201,10 @@ export function EquipmentImportModal({ open, onClose, onImported, workshopCode }
         {result && (
           <div
             style={{
-              border: '1px solid #e5e3df',
+              border: '1px solid var(--color-hairline)',
               borderRadius: 8,
               padding: '12px 16px',
-              background: '#fafaf8',
+              background: 'var(--color-surface-soft)',
               fontSize: 13,
             }}
           >

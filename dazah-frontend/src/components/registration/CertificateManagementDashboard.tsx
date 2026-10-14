@@ -255,7 +255,7 @@ export default function CertificateManagementDashboard({
                     body: {
                       padding: 16,
                       background:
-                        'linear-gradient(180deg, rgba(248,250,252,0.98) 0%, rgba(255,255,255,1) 100%)',
+                        'linear-gradient(180deg, var(--color-surface-soft) 0%, var(--color-canvas) 100%)',
                     },
                   }}
                 >

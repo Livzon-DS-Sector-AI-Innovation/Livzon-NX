@@ -8,7 +8,7 @@ import { createInspectionTemplate, updateInspectionTemplate } from '@/actions/eq
 import { fetchInspectionTemplateByIdClient } from '@/lib/api/equipment-client'
 import { CreateInspectionTemplateInput, UpdateInspectionTemplateInput, InspectionTemplate } from '@/types/equipment'
 
-const C = { navy: '#0a1530', purple: '#5645d4', slate: '#5d5b54', stone: '#a4a097', hairline: '#e5e3df', hairlineSoft: '#ede9e4', surface: '#f6f5f4', surfaceSoft: '#fafaf9', canvas: '#ffffff' }
+const C = { navy: '#0a1530', purple: '#5645d4', slate: 'var(--color-slate)', stone: 'var(--color-stone)', hairline: 'var(--color-hairline)', hairlineSoft: 'var(--color-hairline-soft)', surface: 'var(--color-surface)', surfaceSoft: 'var(--color-surface-soft)', canvas: 'var(--color-canvas)' }
 
 interface Props { categories: { id: string; name: string }[]; onRefresh?: () => void }
 

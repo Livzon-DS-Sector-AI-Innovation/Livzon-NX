@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { App, Button, Card, Col, Descriptions, Modal, Row, Space, Statistic, Table, Tag, Typography } from 'antd'
 import { SendOutlined } from '@ant-design/icons'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/components/shared/ThemedEChart'
 import type { EChartsOption } from 'echarts'
 import { useQuery } from '@tanstack/react-query'
 import { fetchItemsDashboard } from '@/lib/api/client/quality'

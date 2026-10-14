@@ -9,7 +9,7 @@ import {
   CheckCircleOutlined, ArrowRightOutlined, SendOutlined, HistoryOutlined, DownloadOutlined
 } from '@ant-design/icons'
 import { useRouter, useSearchParams } from 'next/navigation'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/components/shared/ThemedEChart'
 import { toPng } from 'html-to-image'
 import BATCH_TYPES from '@/components/production/batchTypes'
 import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'

@@ -379,4 +379,21 @@ describe('equipment menu structure', () => {
   ])('maps the nested equipment pages to scoped permission keys: %s', (path, pageKey) => {
     expect(getPageKeyByPath(path)).toBe(pageKey)
   })
+  it('keeps an existing inspection grant limited to the original workshop', () => {
+    const menus = getAuthorizedPageMenus([], [{ page_key: 'equipment:inspection', module_code: 'equipment', permissions: ['access', 'query', 'operate'] }])
+    expect(menus[0]?.children[0]?.children?.map((item) => item.path)).toEqual(['/equipment/inspection/201-1'])
+    expect(getFirstAuthorizedModulePath({ role: 'user', page_permissions: [{ page_key: 'equipment:inspection', module_code: 'equipment', permissions: ['access', 'query'] }] })).toBe('/equipment/inspection/201-1')
+  })
+})
+
+
+describe('legacy equipment grant boundaries', () => {
+  it('preserves an explicit denial of the original workshop and never grants a new workshop', () => {
+    const grants = [
+      { page_key: 'equipment:inspection', module_code: 'equipment', permissions: ['access', 'query'] as const },
+      { page_key: 'equipment:workshop-201-1:inspection-201-1', module_code: 'equipment', permissions: [] },
+    ].map((grant) => ({ ...grant, permissions: [...grant.permissions] }))
+    expect(getAuthorizedPageMenus([], grants)).toEqual([])
+    expect(getFirstAuthorizedModulePath({ role: 'user', page_permissions: grants })).toBe('/no-access')
+  })
 })

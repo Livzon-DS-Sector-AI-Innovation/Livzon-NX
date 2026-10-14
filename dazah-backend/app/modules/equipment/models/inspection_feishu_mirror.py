@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Any
 
 from sqlalchemy import (
     Date,
@@ -85,7 +86,7 @@ class EquipmentInspectionFeishuRecord(BaseModel):
     has_abnormal: Mapped[bool] = mapped_column(
         default=False, comment="任一检查项为 ×"
     )
-    raw_fields: Mapped[dict | None] = mapped_column(
+    raw_fields: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, comment="飞书原始字段（未识别列也保留）"
     )
     last_modified_at: Mapped[datetime | None] = mapped_column(

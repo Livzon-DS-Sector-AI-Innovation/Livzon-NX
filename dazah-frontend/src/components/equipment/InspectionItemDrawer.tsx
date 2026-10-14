@@ -11,7 +11,7 @@ import { linkPrimary, linkDanger } from '@/components/equipment/shared-styles'
 import type { InspectionTemplateItem } from '@/types/equipment'
 
 const { Text } = Typography
-const C = { navy: '#0a1530', purple: '#5645d4', ink: '#1a1a1a', slate: '#5d5b54', stone: '#a4a097', hairline: '#e5e3df', hairlineSoft: '#ede9e4', surface: '#f6f5f4', surfaceSoft: '#fafaf9', canvas: '#ffffff' }
+const C = { navy: '#0a1530', purple: '#5645d4', ink: 'var(--color-ink)', slate: 'var(--color-slate)', stone: 'var(--color-stone)', hairline: 'var(--color-hairline)', hairlineSoft: 'var(--color-hairline-soft)', surface: 'var(--color-surface)', surfaceSoft: 'var(--color-surface-soft)', canvas: 'var(--color-canvas)' }
 
 interface ItemFormValues { item_name: string; item_description: string; expected_result: string; check_method: string; sort_order: number }
 

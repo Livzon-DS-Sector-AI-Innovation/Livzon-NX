@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { App, Button, Dropdown, Form, Input, Modal, Select, Space, Table, Tag, Typography } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
+import { roleTagColor } from '@/lib/role-tag'
 import {
   LockOutlined,
   MoreOutlined,
@@ -226,11 +227,14 @@ export default function UserManagementClient() {
       title: '角色',
       dataIndex: 'role',
       width: 110,
-      render: (role: string, record: UserManagementItem) => (
-        <Tag color={role === 'admin' ? 'purple' : 'default'}>
-          {record.roles?.includes('ordinary_admin') ? '普通管理员' : role === 'admin' ? '系统管理员' : '普通用户'}
+      render: (role: string, record: UserManagementItem) => {
+        const code = record.roles?.includes('super_admin') ? 'super_admin'
+          : record.roles?.includes('ordinary_admin') ? 'ordinary_admin'
+          : role === 'admin' ? 'super_admin' : 'user'
+        return <Tag color={roleTagColor(code)}>
+          {code === 'super_admin' ? '系统管理员' : code === 'ordinary_admin' ? '普通管理员' : '普通用户'}
         </Tag>
-      ),
+      },
     },
     {
       title: '状态',

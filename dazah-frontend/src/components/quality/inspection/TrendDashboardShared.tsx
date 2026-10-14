@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { ColumnsType } from 'antd/es/table'
 import type { EChartsOption, LineSeriesOption } from 'echarts'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/components/shared/ThemedEChart'
 import { Button, Card, Col, Descriptions, Empty, Modal, Row, Space, Spin, Statistic, Table, Tag, Typography } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
 import {

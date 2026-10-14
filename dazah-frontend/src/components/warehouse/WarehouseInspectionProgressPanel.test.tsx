@@ -5,9 +5,10 @@ import { createRoot, type Root } from 'react-dom/client'
 import { App } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setAppearance } from '@/lib/useAppearance'
 
 vi.mock('echarts-for-react', () => ({
-  default: () => <div data-testid="echarts-mock" />,
+  default: ({ theme }: { theme?: string }) => <div data-testid="echarts-mock" data-theme={theme} />,
 }))
 
 const apiClient = vi.hoisted(() => ({
@@ -169,6 +170,9 @@ describe('WarehouseInspectionProgressPanel', () => {
 
   it('renders inspection progress KPIs, chart and oldest pending list', async () => {
     await mount('raw')
+    await act(async () => setAppearance('dark'))
+    expect(container.querySelector('[data-testid="echarts-mock"]')?.getAttribute('data-theme')).toBe('dark')
+    await act(async () => setAppearance('system'))
     expect(apiClient.fetchWarehouseInspectionProgressOverview).toHaveBeenCalledWith('raw', 30)
     const text = container.textContent ?? ''
     expect(text).toContain('近期检验进度')

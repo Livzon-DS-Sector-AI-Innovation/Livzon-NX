@@ -145,7 +145,7 @@ export default function QcInspectionPage() {
   return (
     <div className="p-6">
       <style>{`
-        .qc-ledger-table .ant-table-thead > tr > th { white-space: normal !important; word-break: break-all; line-height: 1.15; padding: 2px 1px !important; font-size: 9px; text-align: center !important; vertical-align: middle !important; background: #fafafa; }
+        .qc-ledger-table .ant-table-thead > tr > th { white-space: normal !important; word-break: break-all; line-height: 1.15; padding: 2px 1px !important; font-size: 9px; text-align: center !important; vertical-align: middle !important; background: var(--color-surface-soft); }
         .qc-ledger-table .ant-table-tbody > tr > td { white-space: normal !important; word-break: break-all; padding: 1px 2px !important; font-size: 10px; text-align: center !important; line-height: 1.2; }
         .qc-ledger-table .ant-input-number { font-size: 10px; width: 100%; } .qc-ledger-table .ant-input-number input { font-size: 10px; padding: 0 2px; text-align: center; height: 20px; }
         .qc-ledger-table .ant-input-number .ant-input-number-handler-wrap { display: none; } .qc-ledger-table .ant-picker { width: 100%; } .qc-ledger-table .ant-picker input { font-size: 10px; padding: 0 2px; text-align: center; height: 20px; }
@@ -179,7 +179,7 @@ export default function QcInspectionPage() {
 
       <Card extra={canOperate ? <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setCreateVisible(true) }}>新建入库单</Button> : null}>
         <Table size="small" rowKey="_key" loading={loading} className="qc-ledger-table" dataSource={flattenData()} scroll={{ x: 1200 }} columns={columns} pagination={false} />
-        <div style={{ padding: '8px 0', display: 'flex', flexWrap: 'wrap', gap: 8, borderTop: '1px solid #f0f0f0', marginTop: 8 }}>
+        <div style={{ padding: '8px 0', display: 'flex', flexWrap: 'wrap', gap: 8, borderTop: '1px solid var(--color-hairline-soft)', marginTop: 8 }}>
           {canOperate && batchInputCounts.map(bic => <Button key={bic.recordId} size="small" type="dashed" loading={saving} onClick={() => addInputRow(bic.batchNo)}>+ 投入 ({bic.batchNo})</Button>)}
           {batchInputCounts.length === 0 && <Text type="secondary">暂无入库记录</Text>}
         </div>

@@ -914,6 +914,19 @@ export type PageAccessSummary = {
   permissions?: Array<"access" | "query" | "operate">
 }
 
+/** Existing equipment grants retain only the original workshop, never all workshops. */
+export function expandEquipmentPagePermissions<T extends PageAccessSummary>(grants: T[] | undefined): T[] {
+  const output = [...(grants || [])]
+  const explicit = new Set(output.map((grant) => grant.page_key))
+  for (const grant of grants || []) {
+    if (!/^equipment:(assets|maintenance|inspection|spare-parts|personnel)$/.test(grant.page_key)) continue
+    const leaf = grant.page_key.split(':')[1]
+    const target = `equipment:workshop-201-1:${leaf}-201-1`
+    if (!explicit.has(target)) output.push({ ...grant, page_key: target })
+  }
+  return output
+}
+
 function filterPageChildren(
   items: SubMenuItem[],
   parentKey: string,
@@ -924,7 +937,8 @@ function filterPageChildren(
     const children = item.children
       ? filterPageChildren(item.children, pageKey, allowedPageKeys)
       : undefined
-    if (!allowedPageKeys.has(pageKey) && !children?.length) return []
+    const accessKey = item.children?.length ? pageKey : getPageKeyByPath(item.path) || pageKey
+    if (!allowedPageKeys.has(accessKey) && !children?.length) return []
     return [{ ...item, children }]
   })
 }
@@ -934,11 +948,12 @@ export function getAuthorizedPageMenus(
   _moduleCodes: string[] | undefined,
   pagePermissions: PageAccessSummary[] | undefined,
 ): ModuleMenu[] {
-  const allowedModules = getAuthorizedModuleMenus((pagePermissions || [])
+  const effectivePermissions = expandEquipmentPagePermissions(pagePermissions)
+  const allowedModules = getAuthorizedModuleMenus(effectivePermissions
     .filter((grant) => grant.permissions?.includes("access"))
     .map((grant) => grant.module_code))
   const allowedPageKeys = new Set(
-    (pagePermissions || [])
+    effectivePermissions
       .filter((grant) => grant.permissions?.includes("access"))
       .map((grant) => grant.page_key),
   )
@@ -960,7 +975,7 @@ export const NO_AUTHORIZED_PAGE_PATH = "/no-access"
 /** 登录后按导航顺序进入首个已授权、可路由的页面。 */
 export function getFirstAuthorizedModulePath(user: ModuleLandingAccess): string {
   if (user.role === "admin") return moduleMenus[0].path
-  const allowedKeys = new Set((user.page_permissions || [])
+  const allowedKeys = new Set(expandEquipmentPagePermissions(user.page_permissions)
     .filter((grant) => grant.permissions?.includes("access"))
     .map((grant) => grant.page_key))
   function firstAuthorizedPage(items: SubMenuItem[]): string | undefined {
@@ -996,6 +1011,13 @@ function collectPageRoutes(
 // aliases. Directory nodes are not permission pages, so their entry route
 // must explicitly inherit a stable leaf page identity.
 const pageRouteAliases: Record<string, string> = {
+  // Legacy redirects retain immutable grant identities. The compatibility
+  // projection above limits their access to the original 201-1 workshop.
+  "/equipment/assets": "equipment:assets",
+  "/equipment/maintenance": "equipment:maintenance",
+  "/equipment/inspection": "equipment:inspection",
+  "/equipment/spare-parts": "equipment:spare-parts",
+  "/equipment/personnel": "equipment:personnel",
   "/quality/deviations": "quality:deviations:deviation-ledger",
   "/quality/capas": "quality:capas:capa-ledger",
   "/quality/complaints": "quality:complaints:complaint-ledger",

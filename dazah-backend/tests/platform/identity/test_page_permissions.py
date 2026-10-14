@@ -957,3 +957,43 @@ async def test_permission_verification_derives_module_access_from_pages(
         SimpleNamespace(effective_module_access_mode="all"),
     )
     assert "实际接口还需核对" in json.loads(allowed.body)["data"]["reason"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("explicit_target", [False, True])
+@pytest.mark.parametrize("scope_type", ["not_applicable", "self"])
+async def test_legacy_equipment_grants_project_only_to_default_workshop(
+    explicit_target: bool, scope_type: str,
+) -> None:
+    target = "equipment:workshop-201-1:inspection-201-1"
+    grants = [
+        SimpleNamespace(
+            page_key="equipment:inspection",
+            permissions=["access", "query", "operate"],
+            sensitive_actions=[],
+            scope_type="not_applicable",
+            department_ids=[],
+        )
+    ]
+    if explicit_target:
+        grants.append(
+            SimpleNamespace(
+                page_key=target,
+                permissions=["access"] if scope_type == "self" else [],
+                sensitive_actions=[],
+                scope_type=scope_type,
+                department_ids=[],
+            )
+        )
+    service = PagePermissionService(repo=_PageRepo(user_grants=grants))
+    result = await service.effective_grants(
+        None,
+        user=SimpleNamespace(id=uuid4(), role="user"),
+        resolved_roles=[],
+    )
+    by_key = {grant.page_key: grant for grant in result}
+    assert by_key[target].permissions == (
+        [] if explicit_target else ["access", "query", "operate"]
+    )
+    assert "equipment:workshop-101-1:inspection-101-1" not in by_key
+    assert by_key["equipment:inspection"].permissions == ["access", "query", "operate"]

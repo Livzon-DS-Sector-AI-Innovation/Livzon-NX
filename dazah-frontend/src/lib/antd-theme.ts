@@ -1,4 +1,6 @@
 import type { ThemeConfig } from 'antd'
+import { theme } from 'antd'
+import type { ColorMode } from './appearance'
 
 /**
  * Ant Design 主题配置
@@ -211,4 +213,49 @@ export const antdTheme: ThemeConfig = {
       colorBgSpotlight: '#0a1530',
     },
   },
+}
+
+// Keep sizes and spacing; let Ant Design derive semantic colors for dark surfaces.
+const darkToken = Object.fromEntries(Object.entries(antdTheme.token ?? {}).filter(([key]) => !key.startsWith('color')))
+const darkTheme: ThemeConfig = {
+  ...antdTheme,
+  token: {
+    ...darkToken,
+    colorPrimary: '#a99bf5',
+    colorInfo: '#69b1ff',
+    colorSuccess: '#73d58b',
+    colorWarning: '#ffb56b',
+    colorError: '#ff8585',
+    colorLink: '#91caff',
+    colorBgLayout: '#171719',
+    colorBgContainer: '#222225',
+    colorBgElevated: '#2b2b30',
+    colorText: '#eeedf1',
+    colorTextSecondary: '#bcb9c3',
+    colorTextTertiary: '#a09ba8',
+    colorBorder: '#45434c',
+    colorBorderSecondary: '#35333b',
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.2)',
+    boxShadowSecondary: '0 4px 16px rgba(0, 0, 0, 0.35)',
+  },
+  components: {
+    ...antdTheme.components,
+    Button: {
+      ...antdTheme.components?.Button,
+      colorPrimary: '#6957c4', colorPrimaryHover: '#7c69d6', colorPrimaryActive: '#5645ad',
+    },
+    Table: {
+      ...antdTheme.components?.Table,
+      headerBg: '#222225', headerColor: '#bcb9c3',
+      headerSortActiveBg: '#2b2b30', rowHoverBg: '#2b2b30', borderColor: '#35333b',
+    },
+    Tabs: {
+      ...antdTheme.components?.Tabs,
+      itemColor: '#a09ba8', itemSelectedColor: '#eeedf1', itemHoverColor: '#eeedf1', inkBarColor: '#eeedf1',
+    },
+  },
+}
+
+export function getAntdTheme(mode: ColorMode): ThemeConfig {
+  return mode === 'dark' ? { ...darkTheme, algorithm: theme.darkAlgorithm } : antdTheme
 }

@@ -6,7 +6,6 @@ import zhCN from 'antd/locale/zh_CN'
 import { PlusOutlined } from '@ant-design/icons'
 import { SparePart, StockWarning } from '@/types/equipment'
 import { useEquipmentStore } from '@/stores/equipment'
-import { antdTheme } from '@/lib/antd-theme'
 import { fetchSparePartsClient, fetchStockWarningsClient } from '@/lib/api/equipment-client'
 import { SparePartTable } from './SparePartTable'
 import { SparePartDrawer } from './SparePartDrawer'
@@ -65,7 +64,7 @@ export function SparePartsPage({
   }, [fetchData])
 
   return (
-    <ConfigProvider theme={antdTheme} locale={zhCN}>
+    <ConfigProvider locale={zhCN}>
       <App>
         <div style={{ marginBottom: 24 }}>
           <h2 style={{

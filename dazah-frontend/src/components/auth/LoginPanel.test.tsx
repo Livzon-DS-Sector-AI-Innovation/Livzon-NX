@@ -31,6 +31,7 @@ describe('LoginPanel', () => {
     )
 
     expect(markup).toContain('使用飞书企业账号登录')
+    expect(markup).not.toContain('推荐')
     expect(markup).not.toContain('本地账号登录')
     expect(markup).not.toContain('管理员应急登录')
     expect(markup).not.toContain('name="username"')
@@ -42,6 +43,8 @@ describe('LoginPanel', () => {
     )
 
     expect(markup).toContain('本地账号登录')
+    expect(markup).toContain('使用丽珠企业账号，安全进入原料药工厂管理平台。')
+    expect(markup).toContain('aria-controls="local-login-form"')
     expect(markup).toContain('aria-expanded="false"')
     expect(markup).not.toContain('name="username"')
   })
@@ -89,7 +92,7 @@ describe('LoginPanel', () => {
         button.textContent?.includes('使用飞书企业账号登录'),
       )
       const localLoginButton = buttons.find(
-        (button) => button.textContent?.trim() === '▶本地账号登录',
+        (button) => button.textContent?.includes('本地账号登录'),
       )
 
       expect(feishuButton).toBeDefined()

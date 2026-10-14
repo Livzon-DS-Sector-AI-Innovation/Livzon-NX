@@ -9,6 +9,24 @@ import pytest
 from app.modules.production import fermentation_board_service as board
 
 
+@pytest.mark.parametrize("planned", [None, "invalid-time"])
+def test_running_tank_with_missing_plan_still_uses_confirmed_actual_time(
+    planned: str | None,
+) -> None:
+    row = {
+        "tank_no": "302A", "status": "running", "batch_no": "FA-TEST",
+        "inoculate_at": planned, "cultured_hours": None, "cycle_hours": 61.0,
+        "dump_at": None, "note": "运行中",
+    }
+    result = board._apply_batch_actual_times(
+        [row], {"FA-TEST": {"inoculated_at": "2026-10-13T08:00:00"}},
+        datetime(2026, 10, 13, 20, 0),
+    )
+    assert result[0]["cultured_hours"] == 12.0
+    assert result[0]["inoculate_at"] == "2026-10-13T08:00:00"
+    assert result[0]["status"] == "running"
+
+
 def test_apply_batch_actual_times_turn_in_pending_not_flipped() -> None:
     """倒罐目的罐待进罐行：来源批的实际移种不得提前翻转或覆盖展示。
 

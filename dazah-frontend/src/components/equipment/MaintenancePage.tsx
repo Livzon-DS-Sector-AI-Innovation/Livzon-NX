@@ -9,7 +9,6 @@ import {
   MaintenancePlan,
 } from '@/types/equipment'
 import { useEquipmentStore } from '@/stores/equipment'
-import { antdTheme } from '@/lib/antd-theme'
 import {
   fetchWorkOrdersClient, fetchWorkOrderStatisticsClient,
   fetchFailureCodesClient, fetchCalibrationPlansClient, fetchCalibrationRecordsClient,
@@ -331,7 +330,7 @@ export function MaintenancePage({
   ]
 
   return (
-    <ConfigProvider theme={antdTheme} locale={zhCN}>
+    <ConfigProvider locale={zhCN}>
       <App>
         <div style={{ marginBottom: 24 }}>
           <h2 style={{

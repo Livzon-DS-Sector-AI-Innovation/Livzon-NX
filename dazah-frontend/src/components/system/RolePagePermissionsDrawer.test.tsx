@@ -38,11 +38,29 @@ function deferred<T>() {
 it('explains that module entries follow final role and user page access', async () => {
   mocks.get.mockResolvedValue(result('A'))
   await show('A')
+  expect(document.querySelectorAll('[data-platform-notice]')).toHaveLength(1)
   const notice = document.querySelector('[data-platform-notice="info"]')!
   expect(notice.textContent).toContain('模块入口随有效页面访问权限自动生效')
+  expect(notice.textContent).toContain('高风险授权依赖普通操作')
+  expect(notice.textContent).toContain('批量仅影响当前筛选，筛选外不变')
   await act(async () => notice.querySelector<HTMLButtonElement>('button')!.click())
   expect(document.querySelector('.ant-modal-body')?.textContent).toContain('系统管理员默认拥有全部模块访问权限')
   expect(document.querySelector('.ant-modal-body')?.textContent).toContain('撤销最后一个可访问页面后关闭入口')
+  expect(document.querySelector('.ant-modal-body')?.textContent).toContain('所有更改在填写调整原因、预览影响并确认保存后生效')
+  expect(mocks.replace).not.toHaveBeenCalled()
+})
+
+it('updates the combined notice count and warning after editing a permission', async () => {
+  mocks.get.mockResolvedValue(result('A'))
+  await show('A')
+  expect(document.querySelector('[role="status"]')?.textContent).toContain('未保存调整 0 个页面')
+  await act(async () => button('展开全部菜单').click())
+  await act(async () => document.querySelector<HTMLInputElement>('[aria-label="权限档位"] input[value="query"]')!.click())
+  expect(document.querySelectorAll('[data-platform-notice]')).toHaveLength(1)
+  const notice = document.querySelector('[data-platform-notice="warning"]')!
+  expect(notice.querySelector('[role="status"]')?.textContent).toContain('未保存调整 1 个页面')
+  expect(notice.textContent).toContain('高风险授权依赖普通操作')
+  expect(notice.querySelector('button')?.textContent).toContain('了解访问规则')
   expect(mocks.replace).not.toHaveBeenCalled()
 })
 

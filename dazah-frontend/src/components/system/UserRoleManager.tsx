@@ -12,6 +12,7 @@ import { DataScopeConfig, type DataScopeSelection } from "./DataScopeConfig"
 import { assignUserRoles, deleteDataScope, saveUserDataScope } from "@/actions/admin"
 import UserModuleAccessDrawer, { type ModuleAccessUser } from "./UserModuleAccessDrawer"
 import styles from "./UserRoleManager.module.css"
+import { roleTagColor } from "@/lib/role-tag"
 
 interface UserRoleManagerProps {
   initialRoles: RoleItem[]
@@ -173,7 +174,7 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
       title={selectedSystemAdmin ? "系统管理员将拥有全部权限" : "多个角色的页面权限合并生效，模块入口随有效页面访问权限自动开通或关闭。"}
       description="角色提供页面权限基线：基础权限与高风险操作取并集，数据范围按页面合并；已有用户页面覆盖仍优先于角色基线。模块内至少一个页面具有有效访问权限时，模块入口自动开通；撤销最后一个可访问页面后，入口自动关闭。系统管理员默认拥有全部模块访问权限。" />
     <div><Typography.Text strong>已选角色：</Typography.Text>{selectedRoleIds.length
-      ? initialRoles.filter((role) => selectedRoleSet.has(role.id)).map((role) => <Tag key={role.id}>{role.name}</Tag>)
+      ? initialRoles.filter((role) => selectedRoleSet.has(role.id)).map((role) => <Tag key={role.id} color={roleTagColor(role.code, role.is_system)}>{role.name}</Tag>)
       : <Typography.Text type="secondary">未分配角色</Typography.Text>}</div>
     <div><Typography.Text strong>新增角色：</Typography.Text>{addedRoles.length
       ? addedRoles.map((role) => <Tag key={role.id} color="green">{role.name}</Tag>)
@@ -259,7 +260,7 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
       render: (_: unknown, record: AdminUserItem) => (
         <div className="flex flex-wrap gap-1">
           {record.roles.map((r) => (
-            <Tag key={r.id} color={r.is_system ? "gold" : "blue"}>
+            <Tag key={r.id} color={roleTagColor(r.code, r.is_system)}>
               {r.name}
             </Tag>
           ))}
@@ -351,7 +352,7 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
           <div className={styles.selectedRoles}>
             {selectedRoleIds.map((id) => {
               const role = initialRoles.find((item) => item.id === id) || editingUser?.roles.find((item) => item.id === id)
-              return <Tag key={id} className={styles.selectedRole} closable={!saving}
+              return <Tag key={id} className={styles.selectedRole} color={role ? roleTagColor(role.code, role.is_system) : undefined} closable={!saving}
                 closeIcon={<button type="button" className={styles.removeRole} aria-label={`移除角色 ${role?.name || id}`} disabled={saving}>×</button>}
                 onClose={() => setSelectedRoleIds((current) => current.filter((roleId) => roleId !== id))}>
                 {role?.name || id}{role?.code ? ` · ${role.code}` : ""}

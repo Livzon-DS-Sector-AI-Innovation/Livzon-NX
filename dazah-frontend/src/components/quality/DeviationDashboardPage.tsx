@@ -4,7 +4,7 @@ import { qualityTokens } from './themeTokens'
 import { useMemo } from 'react'
 import Link from 'next/link'
 import { Button, Card, Col, Empty, Row, Space, Spin, Statistic } from 'antd'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/components/shared/ThemedEChart'
 import { useQuery } from '@tanstack/react-query'
 import { fetchDeviationStatistics } from '@/lib/api/client/quality'
 

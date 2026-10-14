@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException, NotFoundException
 from app.modules.quality import repository
+from app.modules.quality.models import CAPA
 from app.modules.quality.page_access import assert_quality_record_department
 from app.modules.quality.schemas import (
     CapaPlanTrackDetail,
@@ -765,7 +766,7 @@ async def _resolve_capa_for_plan_track(
     capa_id: uuid.UUID | None,
     capa_code: str | None,
     department: str | None,
-):
+) -> CAPA:
     """Resolve the CAPA a plan track belongs to.
 
     Handwritten codes are matched against existing CAPAs first; an unknown

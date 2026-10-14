@@ -13,7 +13,7 @@ import {
   CheckCircleOutlined, ArrowRightOutlined, DownloadOutlined, TrophyOutlined, ReloadOutlined, QuestionCircleOutlined
 } from '@ant-design/icons'
 import { useRouter, useSearchParams } from 'next/navigation'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/components/shared/ThemedEChart'
 import { toPng } from 'html-to-image'
 import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 

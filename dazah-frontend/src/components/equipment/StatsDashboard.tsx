@@ -35,7 +35,6 @@ import type {
 } from '@/types/equipment'
 import type { InspectionFeishuWorkshopSummary } from '@/types/inspection-feishu'
 import { InspectionProgressCard } from './inspection/InspectionProgressCard'
-import { antdTheme } from '@/lib/antd-theme'
 
 // ============================================================
 // 类型定义
@@ -1087,7 +1086,7 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
   ]
 
   return (
-    <ConfigProvider theme={antdTheme}>
+    <ConfigProvider>
       {/* 全局 keyframes */}
       <style>{`
         @keyframes fadeInUp {

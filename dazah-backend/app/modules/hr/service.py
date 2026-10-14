@@ -3829,6 +3829,8 @@ class PositionTransferRecordService:
         tab: str = "my_applications",
         page: int = 1,
         page_size: int = 20,
+        dept_alias_set: set[str] | None = None,
+        allow_name_fallback: bool = True,
     ) -> tuple[list[PositionTransferRecord], int]:
         """获取审批列表（按 tab + 当前用户筛选）。
 
@@ -3839,9 +3841,16 @@ class PositionTransferRecordService:
         user_name = (getattr(current_user, "name", None) or "").strip()
         user_open_id = (getattr(current_user, "feishu_open_id", None) or "").strip()
 
-        stmt = select(PositionTransferRecord).where(
-            PositionTransferRecord.is_deleted.is_(False)
+        stmt = (
+            select(PositionTransferRecord)
+            .where(PositionTransferRecord.is_deleted.is_(False))
+            .options(selectinload(PositionTransferRecord.employee))
         )
+        if dept_alias_set is not None:
+            stmt = stmt.where(
+                PositionTransferRecord.department_before.in_(dept_alias_set)
+                | PositionTransferRecord.apply_department.in_(dept_alias_set)
+            )
 
         if tab == "my_applications":
             stmt = stmt.where(PositionTransferRecord.employee_name == user_name)
@@ -3867,9 +3876,10 @@ class PositionTransferRecordService:
         # 待我审批 / 我审批过的：signer / signer_open_id 存于 approval_flow JSONB，
         # 岗位调动审批记录量小，拉取后按当前用户匹配，避免复杂 JSONB 下标 SQL。
         def _step_matches(step: dict[str, Any]) -> bool:
-            if user_open_id and step.get("signer_open_id") == user_open_id:
-                return True
-            if user_name and step.get("signer") == user_name:
+            assigned_id = step.get("signer_open_id")
+            if assigned_id:
+                return bool(user_open_id and assigned_id == user_open_id)
+            if allow_name_fallback and user_name and step.get("signer") == user_name:
                 return True
             return False
 

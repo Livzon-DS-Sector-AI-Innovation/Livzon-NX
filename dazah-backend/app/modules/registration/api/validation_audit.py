@@ -23,6 +23,7 @@ from app.modules.registration.schemas.validation_audit import (
     ValidationAuditTaskUpdate,
 )
 from app.modules.registration.service.validation_audit import ValidationAuditService
+from app.platform.identity.deps import RequiredUser
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +36,11 @@ router = APIRouter()
 @router.post("/tasks", response_model=dict, summary="创建审核任务")
 async def create_task(
     data: ValidationAuditTaskCreate,
+    user: RequiredUser,
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     service = ValidationAuditService(db)
-    task = await service.create_task(data)
+    task = await service.create_task(data, created_by=user.id)
     return success_response(
         data=ValidationAuditTaskResponse.model_validate(task),
         message="创建成功",

@@ -22,8 +22,8 @@ import type {
 import { InspectionQueryProvider } from './InspectionQueryProvider'
 
 const C = {
-  ink: '#1a1a1a', slate: '#5d5b54', stone: '#a4a097',
-  hairline: '#e5e3df', green: '#1aae39', red: '#c0392b',
+  ink: 'var(--color-ink)', slate: 'var(--color-slate)', stone: 'var(--color-stone)',
+  hairline: 'var(--color-hairline)', green: '#1aae39', red: '#c0392b',
 }
 
 const CONFIG_QUERY_KEY = ['equipment', 'inspection-feishu-config'] as const

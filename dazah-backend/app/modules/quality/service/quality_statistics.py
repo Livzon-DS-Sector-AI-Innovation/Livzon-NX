@@ -81,24 +81,31 @@ async def get_deviation_statistics(
             month_key = occurred_at.strftime("%Y-%m")
             monthly_counter[month_key] = monthly_counter.get(month_key, 0) + 1
 
-    department_distribution = sorted(
-        ({"name": k, "count": v} for k, v in dept_map.items()),
-        key=lambda row: row["count"],
-        reverse=True,
-    )
+    department_distribution = [
+        {"name": name, "count": count}
+        for name, count in sorted(
+            dept_map.items(), key=lambda item: item[1], reverse=True
+        )
+    ]
     level_order = {"minor": 0, "moderate": 1, "major": 2, "未定级": 3}
-    level_distribution = sorted(
-        ({"name": k, "count": v} for k, v in level_map.items()),
-        key=lambda row: (level_order.get(row["name"], len(level_order)), -row["count"]),
-    )
+    level_distribution = [
+        {"name": name, "count": count}
+        for name, count in sorted(
+            level_map.items(),
+            key=lambda item: (level_order.get(item[0], len(level_order)), -item[1]),
+        )
+    ]
     cause_order = {
         name: index
         for index, name in enumerate(deviation_cause_analysis.REASON_CATEGORIES)
     }
-    root_cause_distribution = sorted(
-        ({"name": k, "count": v} for k, v in cause_map.items()),
-        key=lambda row: (cause_order.get(row["name"], len(cause_order)), -row["count"]),
-    )
+    root_cause_distribution = [
+        {"name": name, "count": count}
+        for name, count in sorted(
+            cause_map.items(),
+            key=lambda item: (cause_order.get(item[0], len(cause_order)), -item[1]),
+        )
+    ]
 
     now = datetime.now(UTC)
     monthly_trend: list[dict[str, Any]] = []
@@ -170,18 +177,19 @@ async def get_capa_statistics(
             monthly_counter[month_key] = monthly_counter.get(month_key, 0) + 1
 
     result_order = {"有效": 0, "无效": 1, "进行中": 2, "未填": 3}
-    result_distribution = sorted(
-        ({"name": key, "count": value} for key, value in result_map.items()),
-        key=lambda row: (
-            result_order.get(row["name"], len(result_order)),
-            -row["count"],
-        ),
-    )
-    department_distribution = sorted(
-        ({"name": key, "count": value} for key, value in department_map.items()),
-        key=lambda row: row["count"],
-        reverse=True,
-    )
+    result_distribution = [
+        {"name": name, "count": count}
+        for name, count in sorted(
+            result_map.items(),
+            key=lambda item: (result_order.get(item[0], len(result_order)), -item[1]),
+        )
+    ]
+    department_distribution = [
+        {"name": name, "count": count}
+        for name, count in sorted(
+            department_map.items(), key=lambda item: item[1], reverse=True
+        )
+    ]
 
     now = datetime.now(UTC)
     monthly_trend: list[dict[str, Any]] = []

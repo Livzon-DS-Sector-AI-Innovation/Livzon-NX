@@ -33,6 +33,8 @@ run_quality() {
   uv run --no-sync python -m compileall -q app tests scripts
   echo "== Backend mypy (core infrastructure baseline) =="
   uv run --no-sync mypy app/core
+  echo "== Backend mypy (changed runtime files and dependency chains) =="
+  uv run --no-sync python scripts/mypy_changed.py
   # Unit/core tests run once in run_integration's complete coverage suite.
 }
 

@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { LinkOutlined, MessageOutlined, RightOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
 import dayjs from 'dayjs'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/components/shared/ThemedEChart'
 import {
   fetchAnomalyAnalysisStatus,
   fetchAnomalyDashboard,

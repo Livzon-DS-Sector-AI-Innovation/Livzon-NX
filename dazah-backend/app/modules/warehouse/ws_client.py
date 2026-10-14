@@ -117,14 +117,15 @@ async def start_ws_from_db() -> WarehouseFeishuWsStatus:
             if config and config.encrypted_app_secret
             else ""
         )
+        page_tokens: list[str] = []
+        for item in page_configs:
+            token = item.get("app_token")
+            if isinstance(token, str) and token:
+                page_tokens.append(token)
         app_tokens = {
             f"source_{index + 1}": token
             for index, token in enumerate(
-                dict.fromkeys(
-                    item.get("app_token")
-                    for item in page_configs
-                    if item.get("app_token")
-                )
+                dict.fromkeys(page_tokens)
             )
         }
         if not app_id or not app_secret or not app_tokens:

@@ -1,5 +1,7 @@
 import { createServer } from 'node:http'
 import { operationReceipts } from './operation-receipts.mjs'
+import { handleFeedbackRequest } from './feedback-api.mjs'
+import { businessTodoUser, handleBusinessTodos } from './business-todos-api.mjs'
 
 const port = Number(process.env.E2E_MOCK_API_PORT || 4100)
 
@@ -183,8 +185,10 @@ const recordOperation = operationReceipts()
 const server = createServer(async (request, response) => {
   response.setHeader('Content-Type', 'application/json; charset=utf-8')
   if (recordOperation(request, response)) return
+  if (await handleFeedbackRequest(request, response)) return
   const authorization = request.headers.authorization || ''
   const pageTestToken = authorization.replace('Bearer ', '')
+  if (handleBusinessTodos(request, response, pageTestToken)) return
   if (pageTestToken.startsWith('page-') && request.url?.startsWith('/api/v1/procurement/')) {
     pageBusinessRequests.set(pageTestToken, (pageBusinessRequests.get(pageTestToken) || 0) + 1)
   }
@@ -208,6 +212,14 @@ const server = createServer(async (request, response) => {
   }
 
   if (request.url?.startsWith('/api/v1/identity/me')) {
+    if (pageTestToken === 'ordinary-admin-feedback') {
+      response.end(JSON.stringify({ code: 200, data: { ...currentUser, roles: ['ordinary_admin'] } }))
+      return
+    }
+    if (pageTestToken.startsWith('business-todos')) {
+      response.end(JSON.stringify({ code: 200, data: businessTodoUser(currentUser, pageTestToken) }))
+      return
+    }
     if (pageTestToken === 'admin-no-page-grants') {
       response.end(JSON.stringify({ code: 200, data: { ...currentUser,
         module_codes: [], page_permissions: [],

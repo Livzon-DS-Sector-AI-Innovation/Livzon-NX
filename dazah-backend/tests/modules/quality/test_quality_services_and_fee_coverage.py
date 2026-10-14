@@ -50,6 +50,78 @@ class _Result:
 
 
 @pytest.mark.asyncio
+async def test_statistics_preserve_category_order_counts_and_unknown_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.modules.quality.service.deviation_cause_analysis import REASON_CATEGORIES
+
+    monkeypatch.setattr(
+        "app.modules.quality.service.deviation_cause_analysis.fill_missing_analysis",
+        AsyncMock(),
+    )
+    now = datetime.now(UTC)
+    levels = ["custom", "minor", "major", "minor", None, "moderate"]
+    departments = ["A", "B", "A", "A", "B", None]
+    causes = [REASON_CATEGORIES[1]] * 3 + [REASON_CATEGORIES[0]] + ["custom"] * 2
+    records = [
+        SimpleNamespace(
+            status="draft",
+            department=dept,
+            level=level,
+            root_cause_category=cause,
+            discovery_date=now,
+            created_at=now,
+        )
+        for dept, level, cause in zip(departments, levels, causes, strict=True)
+    ]
+    db = SimpleNamespace(execute=AsyncMock(return_value=_Result(scalars=records)))
+    result = await quality_statistics.get_deviation_statistics(db)
+    assert [(item.name, item.count) for item in result.department_distribution] == [
+        ("A", 3),
+        ("B", 2),
+        ("未知", 1),
+    ]
+    assert [(item.name, item.count) for item in result.level_distribution] == [
+        ("minor", 2),
+        ("moderate", 1),
+        ("major", 1),
+        ("未定级", 1),
+        ("custom", 1),
+    ]
+    assert [(item.name, item.count) for item in result.root_cause_distribution] == [
+        (REASON_CATEGORIES[0], 1),
+        (REASON_CATEGORIES[1], 3),
+        ("custom", 2),
+    ]
+
+    evaluations = ["custom", "有效", "无效", "进行中", "有效", None]
+    capas = [
+        SimpleNamespace(
+            closure_date=None,
+            evaluation_result=value,
+            department=dept,
+            expected_completion_date=now,
+            created_at=now,
+        )
+        for dept, value in zip(departments, evaluations, strict=True)
+    ]
+    db.execute.return_value = _Result(scalars=capas)
+    result = await quality_statistics.get_capa_statistics(db)
+    assert result.result_distribution == [
+        {"name": "有效", "count": 2},
+        {"name": "无效", "count": 1},
+        {"name": "进行中", "count": 1},
+        {"name": "未填", "count": 1},
+        {"name": "custom", "count": 1},
+    ]
+    assert result.department_distribution == [
+        {"name": "A", "count": 3},
+        {"name": "B", "count": 2},
+        {"name": "未填", "count": 1},
+    ]
+
+
+@pytest.mark.asyncio
 async def test_quality_statistics_cover_local_and_feishu_branches(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

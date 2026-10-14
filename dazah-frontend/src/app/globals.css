@@ -1,7 +1,25 @@
 @import "tailwindcss";
 @import "antd/dist/reset.css";
 
-:root {
+:root,
+[data-appearance="fixed-light"] {
+  color-scheme: light;
+  --color-primary-hover: #6b5ddb;
+  --color-primary-border: #b8adeb;
+  --color-primary-soft: #ede9f8;
+  --color-primary-soft-hover: #f0edff;
+  --color-primary-fill: #5645d4;
+  --color-info-soft: #e6f4ff;
+  --color-info: #0075de;
+  --color-success-soft: #e6f7e6;
+  --color-warning-soft: #fff7e6;
+  --color-error-soft: #fff1f0;
+  --color-brand-purple-deep: #3a2a99;
+  --color-text-primary: var(--color-ink);
+  --color-text-secondary: var(--color-slate);
+  --color-text-tertiary: var(--color-steel);
+  --color-bg-secondary: var(--color-surface);
+  --color-border: var(--color-hairline);
   /* UI font: softly rounded, full-bodied Chinese sans serif stack */
   --font-ui: "HarmonyOS Sans SC", "MiSans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
 
@@ -48,6 +66,112 @@
   --rounded-xxxl: 24px;
   --rounded-full: 9999px;
 }
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-primary: #a99bf5;
+  --color-primary-hover: #beb2ff;
+  --color-primary-pressed: #8d7de2;
+  --color-primary-deep: #b6a8fa;
+  --color-primary-border: #51466f;
+  --color-primary-soft: #332b46;
+  --color-primary-soft-hover: #403453;
+  --color-info-soft: #172b44;
+  --color-info: #91caff;
+  --color-success-soft: #172f23;
+  --color-warning-soft: #38281c;
+  --color-error-soft: #3b2022;
+  --color-canvas: #222225;
+  --color-surface: #171719;
+  --color-surface-soft: #2b2b30;
+  --color-hairline: #45434c;
+  --color-hairline-soft: #35333b;
+  --color-hairline-strong: #625d6a;
+  --color-ink-deep: #faf9fc;
+  --color-ink: #eeedf1;
+  --color-charcoal: #dedbe3;
+  --color-slate: #bcb9c3;
+  --color-steel: #a09ba8;
+  --color-stone: #928c9a;
+  --color-muted: #736d7c;
+  --color-success: #73d58b;
+  --color-warning: #ffb56b;
+  --color-error: #ff8585;
+  --color-blue-50: #172b44;
+  --color-blue-100: #203b58;
+  --color-green-50: #172f23;
+  --color-green-100: #204231;
+  --color-red-50: #3b2022;
+  --color-red-100: #51292b;
+  --color-yellow-50: #373019;
+  --color-yellow-100: #4a4020;
+  --color-orange-50: #38281c;
+  --color-orange-100: #4d3423;
+  --color-amber-50: #372c1a;
+  --color-amber-100: #493b22;
+  --color-purple-50: #2c2440;
+  --color-purple-100: #3c3055;
+  --color-indigo-50: #252742;
+  --color-indigo-100: #33365a;
+  --color-emerald-50: #173126;
+  --color-emerald-100: #204434;
+  --color-cyan-50: #173037;
+  --color-cyan-100: #20424b;
+  --color-pink-50: #372236;
+  --color-pink-100: #4a2c45;
+  /* Existing neutral utilities inherit the same surface and text hierarchy. */
+  --color-gray-50: var(--color-surface-soft);
+  --color-gray-100: #303035;
+  --color-gray-200: #45434c;
+  --color-gray-300: #625d6a;
+  --color-gray-400: #928c9a;
+  --color-gray-500: #a09ba8;
+  --color-gray-600: #bcb9c3;
+  --color-gray-700: #dedbe3;
+  --color-gray-800: #eeedf1;
+  --color-gray-900: #faf9fc;
+  --color-slate-50: var(--color-surface-soft);
+  --color-slate-100: #303035;
+  --color-slate-200: #45434c;
+  --color-slate-300: #625d6a;
+  --color-slate-400: #928c9a;
+  --color-slate-500: #a09ba8;
+  --color-slate-600: #bcb9c3;
+  --color-slate-700: #dedbe3;
+  --color-slate-800: #eeedf1;
+  --color-slate-900: #faf9fc;
+}
+
+/* Legacy white surfaces: preserve white text on solid brand/status buttons. */
+:root[data-theme="dark"] .bg-white { background-color: var(--color-canvas); }
+:root[data-theme="dark"] .bg-\[\#fafafa\] { background-color: var(--color-surface-soft); }
+:root[data-theme="dark"] .bg-\[\#eaf1ff\] { background-color: #23344f; }
+:root[data-theme="dark"] .hover\:bg-\[\#f3f0ff\]:hover { background-color: var(--color-primary-soft); }
+:root[data-theme="dark"] .border-\[\#e5e3df\],
+:root[data-theme="dark"] .border-\[\#e8eaef\] { border-color: var(--color-hairline); }
+
+/* Compatibility for existing inline neutral surfaces. These exact values only
+   target legacy light colors; token-based components retain their own states. */
+:root[data-theme="dark"] :is(
+  [style*="background: rgb(255, 255, 255)"],
+  [style*="background-color: rgb(255, 255, 255)"]
+) { background-color: var(--color-canvas) !important; }
+:root[data-theme="dark"] :is(
+  [style*="background: rgb(250, 250, 249)"],
+  [style*="background-color: rgb(250, 250, 249)"],
+  [style*="background: rgb(250, 250, 250)"],
+  [style*="background-color: rgb(250, 250, 250)"],
+  [style*="background: rgb(246, 245, 244)"],
+  [style*="background-color: rgb(246, 245, 244)"]
+) { background-color: var(--color-surface-soft) !important; }
+:root[data-theme="dark"] :is(
+  [style^="color: rgb(26, 26, 26)"], [style*="; color: rgb(26, 26, 26)"],
+  [style^="color: rgb(55, 53, 47)"], [style*="; color: rgb(55, 53, 47)"]
+) { color: var(--color-ink) !important; }
+:root[data-theme="dark"] :is(
+  [style^="color: rgb(93, 91, 84)"], [style*="; color: rgb(93, 91, 84)"],
+  [style^="color: rgb(120, 118, 113)"], [style*="; color: rgb(120, 118, 113)"]
+) { color: var(--color-slate) !important; }
 
 @theme inline {
   --color-primary: var(--color-primary);
@@ -144,70 +268,6 @@ body {
   transition: background-color 160ms ease, color 160ms ease;
 }
 
-.top-nav-search {
-  position: relative;
-  flex: none;
-  width: clamp(36px, calc(100vw - 478px), 200px);
-  height: 36px;
-}
-
-@media (max-width: 767px) {
-  .top-nav-search {
-    width: clamp(36px, calc(100vw - 358px), 200px);
-  }
-}
-
-.top-nav-search-field {
-  position: absolute;
-  z-index: 20;
-  inset: 0;
-  height: 36px;
-  overflow: hidden;
-  border-radius: var(--rounded-sm);
-  background: var(--color-canvas);
-  box-shadow: 0 0 0 1px var(--color-hairline);
-}
-
-.top-nav-search-field .ant-input {
-  height: 36px;
-  padding-right: 42px;
-  border: 0;
-  box-shadow: none;
-}
-
-.top-nav-search-field:focus-within {
-  box-shadow: 0 0 0 2px var(--color-primary);
-}
-
-.top-nav-search-icon {
-  position: absolute;
-  z-index: 21;
-  top: 0;
-  right: 0;
-  display: flex;
-  width: 36px;
-  height: 36px;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-steel);
-  pointer-events: none;
-}
-
-.top-nav-search-results {
-  position: absolute;
-  z-index: 22;
-  top: 42px;
-  right: 0;
-  width: min(240px, calc(100vw - 110px));
-  max-height: min(320px, calc(100vh - 84px));
-  overflow-y: auto;
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--rounded-md);
-  background: var(--color-canvas);
-  padding: 8px;
-  box-shadow: 0 10px 28px rgba(10, 21, 48, 0.12);
-}
-
 .top-nav-exit {
   align-items: center;
   height: 32px;
@@ -217,6 +277,91 @@ body {
   font-size: 12px;
   font-weight: 500;
   transition: background-color 160ms ease, color 160ms ease;
+}
+
+/* Capture final palette colors; the reveal mask controls the visible color change. */
+html[data-appearance-transition],
+html[data-appearance-transition] *,
+html[data-appearance-transition] *::before,
+html[data-appearance-transition] *::after {
+  transition: none !important;
+}
+
+html[data-appearance-transition]::view-transition-group(root) {
+  animation: none;
+}
+
+html[data-appearance-transition]::view-transition-old(root),
+html[data-appearance-transition]::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+html[data-appearance-transition]::view-transition-old(root) { z-index: 1; }
+html[data-appearance-transition]::view-transition-new(root) {
+  z-index: 2;
+}
+
+html[data-appearance-transition="active"]::view-transition-new(root) {
+  will-change: clip-path;
+  clip-path: circle(0px at var(--appearance-reveal-x) var(--appearance-reveal-y));
+}
+
+html[data-appearance-transition="fade"]::view-transition-new(root) {
+  will-change: opacity;
+  opacity: 0;
+}
+
+.appearance-switch.ant-radio-group {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--color-hairline-soft);
+  border-radius: var(--rounded-md);
+  background: var(--color-surface-soft);
+}
+
+.appearance-switch.ant-radio-group .ant-radio-button-wrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--rounded-xs);
+  background: transparent;
+  color: var(--color-slate);
+  box-shadow: none;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.appearance-switch .ant-radio-button-wrapper::before {
+  display: none;
+}
+
+.appearance-switch.ant-radio-group .ant-radio-button-wrapper:hover {
+  background: var(--color-canvas);
+  color: var(--color-primary);
+}
+
+.appearance-switch.ant-radio-group .ant-radio-button-wrapper-checked {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  box-shadow: none;
+}
+
+.appearance-switch.ant-radio-group .ant-radio-button-wrapper:has(input:focus-visible) {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -1px;
+}
+
+.appearance-switch-vertical.ant-radio-group {
+  flex-direction: column;
+}
+
+.appearance-switch-vertical.ant-radio-group .ant-radio-button-wrapper {
+  width: 26px;
 }
 
 /* Sidebar Menu Styles - Following DESIGN.md */
@@ -398,23 +543,23 @@ body {
 
 .ant-table-thead > tr > th,
 .ant-table-thead > tr > td {
-  background: #ffffff;
-  color: #5d5b54;
+  background: var(--color-canvas);
+  color: var(--color-slate);
   font-weight: 500;
   font-size: 13px;
-  border-bottom: 1px solid #ede9e4;
+  border-bottom: 1px solid var(--color-hairline-soft);
   padding: 6px 12px !important;
 }
 
 .ant-table-tbody > tr > td {
-  border-bottom: 1px solid #f0eeec;
+  border-bottom: 1px solid var(--color-hairline-soft);
   padding: 4px 12px !important;
   font-size: 13px;
   line-height: 1.4;
 }
 
 .ant-table-tbody > tr:hover > td {
-  background: #f6f5f4;
+  background: var(--color-surface);
 }
 
 /* small size 进一步压缩 */
@@ -435,24 +580,28 @@ body {
 }
 
 .ant-pagination-item-active {
-  background: #5645d4;
-  border-color: #5645d4;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+:root[data-theme="dark"] .ant-pagination-item-active {
+  background: var(--color-primary-soft);
 }
 
 /* 标签页样式 */
 .ant-tabs-tab {
   font-size: 14px;
   font-weight: 500;
-  color: #787671;
+  color: var(--color-steel);
 }
 
 .ant-tabs-tab-active .ant-tabs-tab-btn {
-  color: #1a1a1a;
+  color: var(--color-ink);
   font-weight: 500;
 }
 
 .ant-tabs-ink-bar {
-  background: #1a1a1a;
+  background: var(--color-ink);
 }
 
 /* 树样式 */
@@ -461,67 +610,67 @@ body {
 }
 
 .ant-tree-treenode-selected .ant-tree-title {
-  color: #5645d4;
+  color: var(--color-primary);
 }
 
 /* 抽屉样式 */
 .ant-drawer-header {
-  border-bottom: 1px solid #e5e3df;
+  border-bottom: 1px solid var(--color-hairline);
 }
 
 .ant-drawer-title {
   font-size: 18px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--color-ink);
 }
 
 /* 表单样式 */
 .ant-form-item-label > label {
   font-size: 14px;
   font-weight: 500;
-  color: #1a1a1a;
+  color: var(--color-ink);
 }
 
 /* 按钮样式
    :where 保持与原规则相同的优先级；排除 ghost 变体：ghost 按钮文字用主色，
    实心背景会把同色文字盖住（表现为按钮"没字"，悬停才显示）。 */
-.ant-btn-primary:where(:not(.ant-btn-background-ghost)) {
-  background: #5645d4;
-  border-color: #5645d4;
+:where(:root:not([data-theme="dark"])) .ant-btn-primary:where(:not(.ant-btn-background-ghost)) {
+  background: var(--color-primary-fill);
+  border-color: var(--color-primary-fill);
   box-shadow: none;
 }
 
-.ant-btn-primary:where(:not(.ant-btn-background-ghost)):hover {
-  background: #6b5ddb;
-  border-color: #6b5ddb;
+:where(:root:not([data-theme="dark"])) .ant-btn-primary:where(:not(.ant-btn-background-ghost)):hover {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
 }
 
-.ant-btn-primary:where(:not(.ant-btn-background-ghost)):active {
-  background: #4534b3;
-  border-color: #4534b3;
+:where(:root:not([data-theme="dark"])) .ant-btn-primary:where(:not(.ant-btn-background-ghost)):active {
+  background: var(--color-primary-pressed);
+  border-color: var(--color-primary-pressed);
 }
 
 /* 卡片样式 */
 .ant-card {
   border-radius: 12px;
-  border: 1px solid #e5e3df;
+  border: 1px solid var(--color-hairline);
 }
 
 .ant-card-hoverable:hover {
-  border-color: #b8adeb;
+  border-color: var(--color-primary-border);
   box-shadow: 0 4px 12px 0 rgba(15, 15, 15, 0.08);
 }
 
 /* 空状态样式 */
 .ant-empty-description {
-  color: #787671;
+  color: var(--color-steel);
   font-size: 14px;
 }
 
 /* 表格固定列样式 */
 .ant-table-cell-fix-left,
 .ant-table-cell-fix-right {
-  background: #ffffff !important;
+  background: var(--color-canvas) !important;
 }
 
 .ant-table-cell-fix-left::after,
@@ -556,7 +705,7 @@ body {
 /* 表格滚动条样式 */
 .ant-table-content {
   scrollbar-width: thin;
-  scrollbar-color: #c8c4be transparent;
+  scrollbar-color: var(--color-hairline-strong) transparent;
 }
 
 .ant-table-content::-webkit-scrollbar {
@@ -569,12 +718,12 @@ body {
 }
 
 .ant-table-content::-webkit-scrollbar-thumb {
-  background-color: #c8c4be;
+  background-color: var(--color-hairline-strong);
   border-radius: 3px;
 }
 
 .ant-table-content::-webkit-scrollbar-thumb:hover {
-  background-color: #a4a097;
+  background-color: var(--color-stone);
 }
 
 .agent-markdown p {
@@ -598,7 +747,7 @@ body {
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: var(--rounded-full);
-  background: linear-gradient(125deg, var(--color-brand-navy-mid), var(--color-primary-deep) 68%, var(--color-primary)) !important;
+  background: linear-gradient(125deg, var(--color-brand-navy-mid), var(--color-brand-purple-deep) 68%, var(--color-primary-fill)) !important;
   color: var(--color-on-primary) !important;
   box-shadow: 0 8px 26px rgba(38, 29, 112, 0.24), 0 2px 6px rgba(10, 21, 48, 0.12);
   animation: agent-entry-button-in 160ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
@@ -645,7 +794,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.14);
-  color: #ffffff;
+  color: var(--color-on-primary);
 }
 
 .agent-entry-emblem svg {
@@ -700,7 +849,7 @@ body {
   max-height: calc(100vh - 48px);
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid #dcd6ef;
+  border: 1px solid var(--color-primary-border);
   border-radius: var(--rounded-xl);
   background: var(--color-canvas);
   box-shadow: rgba(15, 15, 15, 0.16) 0 16px 48px -8px;
@@ -726,7 +875,7 @@ body {
   justify-content: space-between;
   gap: 8px;
   border-bottom: 1px solid var(--color-hairline-soft);
-  background: linear-gradient(110deg, #f3f0ff, #ffffff 68%);
+  background: linear-gradient(110deg, var(--color-primary-soft), var(--color-canvas) 68%);
   padding: 10px 12px;
 }
 
@@ -743,7 +892,7 @@ body {
   flex: none;
   place-items: center;
   border-radius: 12px;
-  background: linear-gradient(135deg, var(--color-brand-navy-mid), var(--color-primary));
+  background: linear-gradient(135deg, var(--color-brand-navy-mid), var(--color-primary-fill));
   color: white;
 }
 
@@ -798,13 +947,13 @@ body {
 }
 
 .ant-btn.agent-header-action:hover {
-  background: #ede9f8;
+  background: var(--color-primary-soft);
   color: var(--color-primary-deep);
 }
 
 .agent-conversation-body {
   min-height: 0;
-  background: linear-gradient(180deg, #f8f7fc, var(--color-surface-soft) 260px);
+  background: var(--color-surface);
 }
 
 .agent-welcome {
@@ -816,10 +965,10 @@ body {
   position: relative;
   overflow: hidden;
   border-radius: var(--rounded-xl);
-  background: linear-gradient(125deg, var(--color-brand-navy-mid), var(--color-primary-deep) 75%, var(--color-primary));
+  background: linear-gradient(125deg, var(--color-primary-soft), var(--color-canvas));
   padding: 16px 18px 13px;
-  color: white;
-  box-shadow: 0 9px 24px rgba(38, 29, 112, 0.15);
+  color: var(--color-ink);
+  border: 1px solid var(--color-primary-border);
 }
 
 .agent-welcome-card::after {
@@ -828,9 +977,8 @@ body {
   right: -58px;
   width: 170px;
   height: 170px;
-  border: 1px solid rgba(255, 255, 255, 0.13);
+  border: 1px solid var(--color-primary-border);
   border-radius: 50%;
-  box-shadow: 0 0 0 30px rgba(255, 255, 255, 0.04), 0 0 0 64px rgba(255, 255, 255, 0.025);
   content: "";
   pointer-events: none;
 }
@@ -839,7 +987,7 @@ body {
   position: absolute;
   top: 18px;
   right: 24px;
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--color-primary);
 }
 
 .agent-welcome-mark svg {
@@ -853,13 +1001,14 @@ body {
   font-size: 18px;
   font-weight: 650;
   line-height: 1.4;
+  color: var(--color-ink);
 }
 
 .agent-welcome-card p {
   position: relative;
   max-width: 40ch;
   margin: 0;
-  color: rgba(255, 255, 255, 0.86);
+  color: var(--color-slate);
   font-size: 13px;
   line-height: 1.65;
 }
@@ -870,9 +1019,9 @@ body {
   align-items: center;
   gap: 6px;
   margin-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  border-top: 1px solid var(--color-primary-border);
   padding-top: 10px;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--color-slate);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -912,16 +1061,21 @@ body {
   gap: 9px;
   border-color: var(--color-hairline);
   border-radius: var(--rounded-lg);
-  background: white;
+  background: var(--color-canvas);
   padding: 10px;
   text-align: left;
   white-space: normal;
 }
 
 .ant-btn.agent-suggestion:hover {
-  border-color: #b8adeb;
-  background: #f9f7ff;
+  border-color: var(--color-primary-border);
+  background: var(--color-primary-soft);
   box-shadow: 0 3px 10px rgba(86, 69, 212, 0.08);
+}
+
+.ant-btn.agent-suggestion:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .agent-suggestion-icon {
@@ -931,7 +1085,7 @@ body {
   flex: none;
   place-items: center;
   border-radius: var(--rounded-md);
-  background: #ede9f8;
+  background: var(--color-primary-soft);
   color: var(--color-primary);
   font-size: 15px;
 }
@@ -948,7 +1102,7 @@ body {
 }
 
 .agent-suggestion-text small {
-  color: var(--color-steel);
+  color: var(--color-slate);
   font-size: 11px;
   font-weight: 400;
   line-height: 1.35;
@@ -977,16 +1131,20 @@ body {
 
 .agent-user-bubble {
   border-bottom-right-radius: 5px;
+  background: var(--color-primary-fill);
+  color: var(--color-on-primary);
 }
 
 .agent-assistant-bubble {
   border-bottom-left-radius: 5px;
+  background: var(--color-canvas);
+  color: var(--color-ink);
 }
 
 .agent-composer-footer {
   flex: none;
   border-top: 1px solid var(--color-hairline-soft);
-  background: white;
+  background: var(--color-canvas);
   padding: 12px 14px 10px;
   box-shadow: 0 -4px 16px rgba(10, 21, 48, 0.03);
 }
@@ -995,7 +1153,7 @@ body {
   overflow: hidden;
   border: 1px solid var(--color-hairline-strong);
   border-radius: var(--rounded-lg);
-  background: white;
+  background: var(--color-surface-soft);
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
@@ -1011,6 +1169,13 @@ body {
   box-shadow: none;
   padding: 12px 13px 4px;
   resize: none;
+  background: transparent;
+  color: var(--color-ink);
+}
+
+.ant-input.agent-composer-input::placeholder {
+  color: var(--color-slate);
+  opacity: 1;
 }
 
 .ant-input.agent-composer-input:focus,
@@ -1041,14 +1206,14 @@ body {
 .ant-btn.agent-send-button:disabled,
 .ant-btn.agent-send-button.ant-btn-disabled {
   border-color: var(--color-hairline) !important;
-  background: #f4f2f8 !important;
-  color: var(--color-stone) !important;
+  background: var(--color-surface) !important;
+  color: var(--color-steel) !important;
   box-shadow: none;
 }
 
 .agent-composer-hint {
   margin-top: 7px;
-  color: var(--color-steel);
+  color: var(--color-slate);
   font-size: 11px;
   text-align: center;
 }
@@ -1100,7 +1265,7 @@ body {
   margin-left: 2px;
   transform: translateY(2px);
   border-radius: 2px;
-  background: #5645d4;
+  background: var(--color-primary);
   animation: agent-cursor-blink 900ms ease-in-out infinite;
 }
 
@@ -1115,7 +1280,7 @@ body {
   width: 6px;
   height: 6px;
   border-radius: 9999px;
-  background: #a4a097;
+  background: var(--color-stone);
   animation: agent-thinking-dot 900ms ease-in-out infinite;
 }
 
@@ -1143,11 +1308,11 @@ body {
   margin: 10px 0;
   overflow-x: auto;
   overflow-y: hidden;
-  border: 1px solid #e5e3df;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--color-canvas);
   scrollbar-width: thin;
-  scrollbar-color: #c8c4be transparent;
+  scrollbar-color: var(--color-hairline-strong) transparent;
 }
 
 .agent-table-scroll::-webkit-scrollbar {
@@ -1159,7 +1324,7 @@ body {
 }
 
 .agent-table-scroll::-webkit-scrollbar-thumb {
-  background-color: #c8c4be;
+  background-color: var(--color-hairline-strong);
   border-radius: 9999px;
 }
 
@@ -1177,12 +1342,12 @@ body {
 .agent-markdown th,
 .agent-markdown td {
   border: 0;
-  border-bottom: 1px solid #ede9e4;
-  border-right: 1px solid #ede9e4;
+  border-bottom: 1px solid var(--color-hairline-soft);
+  border-right: 1px solid var(--color-hairline-soft);
   padding: 8px 10px;
   text-align: left;
   vertical-align: top;
-  color: #37352f;
+  color: var(--color-charcoal);
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -1201,14 +1366,14 @@ body {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: #f7f5f2;
-  color: #5d5b54;
+  background: var(--color-surface);
+  color: var(--color-slate);
   font-weight: 600;
   white-space: nowrap;
 }
 
 .agent-markdown tbody tr:nth-child(even) td {
-  background: #fafaf9;
+  background: var(--color-surface-soft);
 }
 
 .agent-markdown td:nth-child(1),
@@ -1232,20 +1397,20 @@ body {
 }
 
 .agent-markdown td:has(strong) {
-  color: #1a1a1a;
+  color: var(--color-ink);
 }
 
 .agent-markdown strong {
   font-weight: 650;
-  color: #1a1a1a;
+  color: var(--color-ink);
 }
 
 .agent-business-panel {
   margin: 10px 0;
   overflow: hidden;
-  border: 1px solid #e5e3df;
+  border: 1px solid var(--color-hairline);
   border-radius: 10px;
-  background: #ffffff;
+  background: var(--color-canvas);
 }
 
 .agent-business-panel-head {
@@ -1254,9 +1419,9 @@ body {
   justify-content: space-between;
   gap: 12px;
   padding: 8px 10px;
-  border-bottom: 1px solid #ede9e4;
-  background: #fafaf9;
-  color: #5d5b54;
+  border-bottom: 1px solid var(--color-hairline-soft);
+  background: var(--color-surface-soft);
+  color: var(--color-slate);
   font-size: 12px;
   font-weight: 600;
 }
@@ -1271,7 +1436,7 @@ body {
   grid-template-columns: 92px minmax(0, 1fr);
   gap: 10px;
   padding: 9px 10px;
-  border-bottom: 1px solid #f0eeec;
+  border-bottom: 1px solid var(--color-hairline-soft);
 }
 
 .agent-business-kv:last-child {
@@ -1280,7 +1445,7 @@ body {
 
 .agent-business-label {
   min-width: 0;
-  color: #787671;
+  color: var(--color-steel);
   font-size: 12px;
   font-weight: 500;
   line-height: 1.5;
@@ -1288,7 +1453,7 @@ body {
 
 .agent-business-value {
   min-width: 0;
-  color: #1a1a1a;
+  color: var(--color-ink);
   font-size: 13px;
   line-height: 1.55;
   overflow-wrap: anywhere;
@@ -1301,14 +1466,14 @@ body {
 }
 
 .agent-business-card {
-  border: 1px solid #ede9e4;
+  border: 1px solid var(--color-hairline-soft);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--color-canvas);
 }
 
 .agent-business-card-title {
   padding: 8px 10px 6px;
-  color: #1a1a1a;
+  color: var(--color-ink);
   font-size: 13px;
   font-weight: 650;
   line-height: 1.45;
@@ -1325,7 +1490,7 @@ body {
   grid-template-columns: 80px minmax(0, 1fr);
   gap: 8px;
   padding: 5px 0;
-  border-top: 1px solid #f4f2ef;
+  border-top: 1px solid var(--color-hairline-soft);
 }
 
 .agent-business-details {
@@ -1339,7 +1504,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  color: #37352f;
+  color: var(--color-charcoal);
 }
 
 .agent-business-details summary::-webkit-details-marker {
@@ -1348,10 +1513,10 @@ body {
 
 .agent-business-details-action {
   flex: 0 0 auto;
-  border: 1px solid #e5e3df;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   padding: 1px 6px;
-  color: #5645d4;
+  color: var(--color-primary);
   font-size: 11px;
   font-weight: 600;
   line-height: 1.6;
@@ -1360,9 +1525,9 @@ body {
 .agent-business-details-body {
   margin-top: 7px;
   border-radius: 8px;
-  background: #fafaf9;
+  background: var(--color-surface-soft);
   padding: 8px 10px;
-  color: #37352f;
+  color: var(--color-charcoal);
 }
 
 .agent-business-details-body ul,
@@ -1375,17 +1540,17 @@ body {
   width: calc(100% - 20px);
   min-height: 32px;
   margin: 0 10px 10px;
-  border: 1px solid #d8d2ef;
+  border: 1px solid var(--color-primary-border);
   border-radius: 8px;
-  background: #f7f5ff;
-  color: #5645d4;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
 
 .agent-business-more:hover {
-  background: #f0edff;
+  background: var(--color-primary-soft-hover);
 }
 
 .agent-evidence,
@@ -1625,3 +1790,222 @@ body {
 main {
   scrollbar-gutter: stable;
 }
+
+/* Business ledgers with their own stylesheet must also follow the global mode. */
+:root[data-theme="dark"] :is(.wh-table, .project-ledger-table, .project-ledger-history-table, .certificate-dashboard-table) .ant-table-thead > tr > th,
+:root[data-theme="dark"] .project-ledger-detail-modal .ant-descriptions-item-label {
+  background: var(--color-surface-soft);
+  border-color: var(--color-hairline);
+}
+:root[data-theme="dark"] :is(.wh-table, .project-ledger-table, .project-ledger-history-table, .certificate-dashboard-table) .ant-table-tbody > tr:nth-child(even) > td {
+  background: var(--color-surface-soft);
+}
+:root[data-theme="dark"] :is(.project-ledger-table, .project-ledger-history-table, .certificate-dashboard-table) .ant-table-tbody > tr:hover > td {
+  background: var(--color-primary-soft);
+}
+:root[data-theme="dark"] :is(.project-ledger-table, .project-ledger-history-table, .certificate-dashboard-table) .ant-table-tbody > tr > td {
+  border-color: var(--color-hairline-soft);
+}
+:root[data-theme="dark"] .project-ledger-table .ant-table-tbody > tr.project-ledger-row-selected > td {
+  background: var(--color-primary-soft) !important;
+}
+:root[data-theme="dark"] .wh-table .ant-table-tbody > tr.wh-group-row > td {
+  background: var(--color-info-soft) !important;
+  border-color: var(--color-hairline);
+}
+:root[data-theme="dark"] .ledger-pending-row > td {
+  background: var(--color-warning-soft) !important;
+}
+:root[data-theme="dark"] :is(.ledger-owner-deleted-row, .soon-row) > td {
+  background: var(--color-error-soft) !important;
+}
+:root[data-theme="dark"] .pt-card,
+:root[data-theme="dark"] .pt-pill,
+:root[data-theme="dark"] .pt-in:focus {
+  background: var(--color-canvas);
+  border-color: var(--color-hairline);
+}
+:root[data-theme="dark"] :is(.pt-table th, .pt-table td, .pt-toolbar) {
+  color: var(--color-ink);
+  border-color: var(--color-hairline-soft);
+}
+:root[data-theme="dark"] :is(.pt-table th.pt-group, .pt-table th.pt-sub, .pt-table tbody tr:hover td, .pt-in:disabled) {
+  background: var(--color-surface-soft);
+  color: var(--color-slate);
+}
+:root[data-theme="dark"] .pt-pill-on-green {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+:root[data-theme="dark"] .pt-pill-on-red {
+  background: var(--color-error-soft);
+  color: var(--color-error);
+}
+:root[data-theme="dark"] .pt-in::placeholder {
+  color: var(--color-steel);
+}
+:root[data-theme="dark"] a:hover .anticon-right {
+  color: var(--color-slate) !important;
+}
+
+/* Business UI compatibility for fixed legacy colors; document paper keeps its palette. */
+:root[data-theme="dark"] :is(
+  [style*="background: rgb(240, 238, 236)"],
+  [style*="background-color: rgb(240, 238, 236)"],
+  [style*="background: rgb(245, 245, 245)"],
+  [style*="background-color: rgb(245, 245, 245)"],
+  [style*="background: rgb(248, 248, 248)"],
+  [style*="background-color: rgb(248, 248, 248)"],
+  [style*="background: rgb(249, 250, 251)"],
+  [style*="background-color: rgb(249, 250, 251)"],
+  [style*="background: rgb(248, 249, 251)"],
+  [style*="background-color: rgb(248, 249, 251)"],
+  [style*="background: rgb(244, 244, 244)"],
+  [style*="background-color: rgb(244, 244, 244)"],
+  [style*="background: rgb(247, 247, 247)"],
+  [style*="background-color: rgb(247, 247, 247)"],
+  [style*="background: rgb(250, 250, 250)"],
+  [style*="background-color: rgb(250, 250, 250)"],
+  [style*="background: rgb(252, 252, 252)"],
+  [style*="background-color: rgb(252, 252, 252)"]
+):not(.contract-docx-preview *, .docx *) { background-color: var(--color-surface-soft) !important; }
+:root[data-theme="dark"] :is(
+  [style*="background: rgb(243, 240, 255)"],
+  [style*="background-color: rgb(243, 240, 255)"],
+  [style*="background: rgb(238, 234, 255)"],
+  [style*="background-color: rgb(238, 234, 255)"],
+  [style*="background: rgb(230, 224, 245)"],
+  [style*="background-color: rgb(230, 224, 245)"],
+  [style*="background: rgb(250, 247, 255)"],
+  [style*="background-color: rgb(250, 247, 255)"],
+  [style*="background: rgb(250, 248, 255)"],
+  [style*="background-color: rgb(250, 248, 255)"],
+  [style*="background: rgb(247, 245, 255)"],
+  [style*="background-color: rgb(247, 245, 255)"]
+):not(.contract-docx-preview *, .docx *) { background-color: var(--color-primary-soft) !important; }
+:root[data-theme="dark"] :is(
+  [style*="background: rgb(230, 244, 255)"],
+  [style*="background-color: rgb(230, 244, 255)"],
+  [style*="background: rgb(232, 240, 254)"],
+  [style*="background-color: rgb(232, 240, 254)"],
+  [style*="background: rgb(240, 245, 255)"],
+  [style*="background-color: rgb(240, 245, 255)"],
+  [style*="background: rgb(234, 241, 255)"],
+  [style*="background-color: rgb(234, 241, 255)"],
+  [style*="background: rgb(234, 244, 255)"],
+  [style*="background-color: rgb(234, 244, 255)"]
+):not(.contract-docx-preview *, .docx *) { background-color: var(--color-info-soft) !important; }
+:root[data-theme="dark"] :is(
+  [style*="background: rgb(230, 247, 230)"],
+  [style*="background-color: rgb(230, 247, 230)"],
+  [style*="background: rgb(230, 247, 237)"],
+  [style*="background-color: rgb(230, 247, 237)"],
+  [style*="background: rgb(240, 250, 240)"],
+  [style*="background-color: rgb(240, 250, 240)"],
+  [style*="background: rgb(217, 243, 225)"],
+  [style*="background-color: rgb(217, 243, 225)"],
+  [style*="background: rgb(233, 248, 237)"],
+  [style*="background-color: rgb(233, 248, 237)"],
+  [style*="background: rgb(229, 247, 245)"],
+  [style*="background-color: rgb(229, 247, 245)"]
+):not(.contract-docx-preview *, .docx *) { background-color: var(--color-success-soft) !important; }
+:root[data-theme="dark"] :is(
+  [style*="background: rgb(255, 247, 230)"],
+  [style*="background-color: rgb(255, 247, 230)"],
+  [style*="background: rgb(255, 240, 223)"],
+  [style*="background-color: rgb(255, 240, 223)"],
+  [style*="background: rgb(255, 247, 236)"],
+  [style*="background-color: rgb(255, 247, 236)"],
+  [style*="background: rgb(255, 248, 232)"],
+  [style*="background-color: rgb(255, 248, 232)"]
+):not(.contract-docx-preview *, .docx *) { background-color: var(--color-warning-soft) !important; }
+:root[data-theme="dark"] :is(
+  [style*="background: rgb(255, 241, 240)"],
+  [style*="background-color: rgb(255, 241, 240)"],
+  [style*="background: rgb(253, 243, 242)"],
+  [style*="background-color: rgb(253, 243, 242)"],
+  [style*="background: rgb(253, 237, 236)"],
+  [style*="background-color: rgb(253, 237, 236)"],
+  [style*="background: rgb(255, 242, 240)"],
+  [style*="background-color: rgb(255, 242, 240)"],
+  [style*="background: rgb(255, 245, 245)"],
+  [style*="background-color: rgb(255, 245, 245)"]
+):not(.contract-docx-preview *, .docx *) { background-color: var(--color-error-soft) !important; }
+:root[data-theme="dark"] :is(
+  [style^="color: rgb(51, 51, 51)"],
+  [style*="; color: rgb(51, 51, 51)"],
+  [style^="color: rgb(34, 34, 34)"],
+  [style*="; color: rgb(34, 34, 34)"],
+  [style^="color: rgb(17, 17, 17)"],
+  [style*="; color: rgb(17, 17, 17)"],
+  [style^="color: rgb(0, 0, 0)"],
+  [style*="; color: rgb(0, 0, 0)"],
+  [style^="color: rgb(15, 23, 42)"],
+  [style*="; color: rgb(15, 23, 42)"],
+  [style^="color: rgb(31, 41, 55)"],
+  [style*="; color: rgb(31, 41, 55)"],
+  [style^="color: rgb(51, 51, 51)"],
+  [style*="; color: rgb(51, 51, 51)"],
+  [style^="color: rgb(34, 34, 34)"],
+  [style*="; color: rgb(34, 34, 34)"],
+  [style^="color: rgb(17, 17, 17)"],
+  [style*="; color: rgb(17, 17, 17)"],
+  [style^="color: rgb(0, 0, 0)"],
+  [style*="; color: rgb(0, 0, 0)"]
+):not(.contract-docx-preview *, .docx *) { color: var(--color-ink) !important; }
+:root[data-theme="dark"] :is(
+  [style^="color: rgb(102, 102, 102)"],
+  [style*="; color: rgb(102, 102, 102)"],
+  [style^="color: rgb(85, 85, 85)"],
+  [style*="; color: rgb(85, 85, 85)"],
+  [style^="color: rgb(119, 119, 119)"],
+  [style*="; color: rgb(119, 119, 119)"],
+  [style^="color: rgb(102, 102, 102)"],
+  [style*="; color: rgb(102, 102, 102)"],
+  [style^="color: rgb(85, 85, 85)"],
+  [style*="; color: rgb(85, 85, 85)"],
+  [style^="color: rgb(119, 119, 119)"],
+  [style*="; color: rgb(119, 119, 119)"],
+  [style^="color: rgb(100, 116, 139)"],
+  [style*="; color: rgb(100, 116, 139)"],
+  [style^="color: rgb(90, 95, 115)"],
+  [style*="; color: rgb(90, 95, 115)"],
+  [style^="color: rgb(89, 89, 89)"],
+  [style*="; color: rgb(89, 89, 89)"],
+  [style^="color: rgb(75, 85, 99)"],
+  [style*="; color: rgb(75, 85, 99)"],
+  [style^="color: rgb(71, 85, 105)"],
+  [style*="; color: rgb(71, 85, 105)"]
+):not(.contract-docx-preview *, .docx *) { color: var(--color-slate) !important; }
+:root[data-theme="dark"] :is(
+  [style^="color: rgb(136, 136, 136)"],
+  [style*="; color: rgb(136, 136, 136)"],
+  [style^="color: rgb(153, 153, 153)"],
+  [style*="; color: rgb(153, 153, 153)"],
+  [style^="color: rgb(136, 136, 136)"],
+  [style*="; color: rgb(136, 136, 136)"],
+  [style^="color: rgb(153, 153, 153)"],
+  [style*="; color: rgb(153, 153, 153)"],
+  [style^="color: rgb(138, 143, 163)"],
+  [style*="; color: rgb(138, 143, 163)"],
+  [style^="color: rgb(107, 114, 128)"],
+  [style*="; color: rgb(107, 114, 128)"],
+  [style^="color: rgb(148, 163, 184)"],
+  [style*="; color: rgb(148, 163, 184)"]
+):not(.contract-docx-preview *, .docx *) { color: var(--color-steel) !important; }
+:root[data-theme="dark"] :is(
+  [style^="color: rgb(221, 91, 0)"],
+  [style*="; color: rgb(221, 91, 0)"],
+  [style^="color: rgb(121, 52, 0)"],
+  [style*="; color: rgb(121, 52, 0)"],
+  [style^="color: rgb(164, 90, 28)"],
+  [style*="; color: rgb(164, 90, 28)"]
+):not(.contract-docx-preview *, .docx *) { color: var(--color-warning) !important; }
+:root[data-theme="dark"] :is(
+  [style^="color: rgb(86, 69, 212)"],
+  [style*="; color: rgb(86, 69, 212)"],
+  [style^="color: rgb(111, 94, 249)"],
+  [style*="; color: rgb(111, 94, 249)"],
+  [style^="color: rgb(69, 52, 179)"],
+  [style*="; color: rgb(69, 52, 179)"]
+):not(.contract-docx-preview *, .docx *) { color: var(--color-primary) !important; }

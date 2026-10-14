@@ -1,0 +1,172 @@
+import { randomUUID } from 'node:crypto'
+import { expect, test } from '@playwright/test'
+
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aK1cAAAAASUVORK5CYII=', 'base64')
+
+test('ordinary administrators use personal feedback tabs and never read the system inbox', async ({ context, page }) => {
+  await context.addCookies([{ name: 'auth_token', value: 'ordinary-admin-feedback', url: 'http://127.0.0.1:3200' }])
+  const adminReads: string[] = []
+  page.on('request', (request) => { if (request.url().includes('/identity/admin/feedback')) adminReads.push(request.url()) })
+  await page.goto('/production')
+  await page.getByRole('button', { name: '问题反馈', exact: true }).click()
+  const drawer = page.getByRole('dialog', { name: '问题反馈', exact: true })
+  await expect(drawer.getByRole('tab')).toHaveCount(2)
+  await expect(drawer.getByRole('tab', { name: '提交反馈', exact: true })).toBeVisible()
+  await drawer.getByRole('tab', { name: '我的反馈', exact: true }).click()
+  await expect(drawer.getByText('暂无反馈')).toBeVisible()
+  await expect(drawer.getByRole('tab', { name: '收件箱', exact: true })).toHaveCount(0)
+  expect(adminReads).toEqual([])
+})
+
+for (const [title, target] of [['本人偏差调查', '/quality/deviations/ledger'], ['本人注册审核', '/registration/validation-audit'], ['本人培训跟踪', '/hr/training/plan-tracking'], ['本人岗位调动审批', '/hr/position-transfer']]) {
+  test(`scoped business todos display and navigate: ${title}`, async ({ context, page }) => {
+    await context.addCookies([{ name: 'auth_token', value: 'business-todos', url: 'http://127.0.0.1:3200' }])
+    const requests: string[] = []
+    const errors: string[] = []
+    page.on('pageerror', (error) => errors.push(error.message))
+    page.on('request', (request) => { if (request.url().includes('/my-todos?')) requests.push(request.url()) })
+    await page.goto('/quality/deviations/ledger')
+    await page.getByRole('button', { name: '我的待办', exact: true }).click()
+    const drawer = page.getByRole('dialog', { name: '我的待办', exact: true })
+    await expect(drawer.getByText('仅显示当前账号有权处理的待办，处理操作在原业务页面完成。')).toHaveCount(0)
+    for (const text of ['本人偏差调查', '本人注册审核', '本人培训跟踪', '本人岗位调动审批']) await expect(drawer.getByText(text, { exact: true })).toBeVisible()
+    await expect(drawer.getByText('已逾期').first()).toBeVisible()
+    expect(requests.every((url) => /\/(quality|registration|hr)\/my-todos/.test(url))).toBe(true)
+    await drawer.getByText(title, { exact: true }).click()
+    await expect(page).toHaveURL(new RegExp(`${target}$`), { timeout: 30_000 })
+    await expect(drawer).toBeHidden()
+    await expect(page.getByText('无权访问', { exact: true })).toHaveCount(0)
+    expect(errors).toEqual([])
+  })
+}
+
+test('read-only business grants never request todos', async ({ context, page }) => {
+  await context.addCookies([{ name: 'auth_token', value: 'business-todos-readonly', url: 'http://127.0.0.1:3200' }])
+  const requests: string[] = []
+  page.on('request', (request) => { if (request.url().includes('/my-todos?')) requests.push(request.url()) })
+  await page.goto('/quality/deviations/ledger')
+  await page.getByRole('button', { name: '我的待办', exact: true }).click()
+  await expect(page.getByText('当前账号暂无已接入的待办处理权限')).toBeVisible()
+  expect(requests).toEqual([])
+})
+
+test('business permission changes show partial failure and retain other tasks', async ({ context, page }) => {
+  await context.addCookies([{ name: 'auth_token', value: 'business-todos-error', url: 'http://127.0.0.1:3200' }])
+  await page.goto('/quality/deviations/ledger')
+  await page.getByRole('button', { name: '我的待办', exact: true }).click()
+  const drawer = page.getByRole('dialog', { name: '我的待办', exact: true })
+  await expect(drawer.getByText('部分待办读取失败，当前数量不完整，请刷新重试。')).toBeVisible()
+  await expect(drawer.getByText('本人注册审核', { exact: true })).toBeVisible()
+  await expect(drawer.getByText('本人培训跟踪', { exact: true })).toBeVisible()
+  await expect(drawer.getByText('本人偏差调查', { exact: true })).toHaveCount(0)
+})
+
+test('system administrator has only system settings todos and makes no business requests', async ({ context, page }) => {
+  await context.addCookies([{ name: 'auth_token', value: 'admin-no-page-grants', url: 'http://127.0.0.1:3200' }])
+  const requests: string[] = []
+  page.on('request', (request) => { if (/\/my-todos\?|\/purchase-requests/.test(request.url())) requests.push(request.url()) })
+  await page.goto('/production')
+  await page.getByRole('button', { name: '我的待办', exact: true }).click()
+  const drawer = page.getByRole('dialog', { name: '我的待办' })
+  await expect(drawer.getByText('暂无系统设置待办')).toBeVisible()
+  await expect(drawer.getByText('工程设备部 · 采购申请')).toHaveCount(0)
+  expect(requests).toEqual([])
+})
+
+test('feedback requires description time and screenshot, retains failed input and reaches admin inbox', async ({ context, page, browser }) => {
+  const problemDescription = `在生产页面保存时出现错误，无法完成保存。（${randomUUID()}）`
+  await context.addCookies([{ name: 'auth_token', value: 'procurement-only', url: 'http://127.0.0.1:3200' }])
+  await page.goto('/purchasing/supplier')
+  await page.getByRole('button', { name: '问题反馈', exact: true }).click()
+  const drawer = page.getByRole('dialog', { name: '问题反馈', exact: true })
+  await expect(drawer.getByText('请填写问题描述、发生时间，并上传问题截图。')).toBeVisible()
+  await drawer.getByRole('button', { name: '提交反馈', exact: true }).click()
+  await expect(drawer.getByText('请选择问题发生时间')).toBeVisible()
+  const description = drawer.getByPlaceholder('在哪个页面进行了什么操作？预期是什么，实际发生了什么？')
+  await description.fill('失败测试：在生产页面保存时出现错误，无法完成保存。')
+  await drawer.getByPlaceholder('请选择问题发生时间').fill('2026-10-01 09:30')
+  await drawer.getByPlaceholder('请选择问题发生时间').press('Enter')
+  await drawer.locator('input[type=file]').setInputFiles({ name: 'problem.png', mimeType: 'image/png', buffer: png })
+  await drawer.getByRole('button', { name: '提交反馈', exact: true }).click()
+  await expect(drawer.getByText('模拟反馈服务暂不可用，请重试')).toBeVisible()
+  await expect(description).toHaveValue(/失败测试/)
+  await description.fill(problemDescription)
+  await drawer.getByRole('button', { name: '提交反馈', exact: true }).click()
+  await expect(drawer.getByRole('tab', { name: '我的反馈' })).toHaveAttribute('aria-selected', 'true')
+  await expect(drawer.getByRole('tab', { name: '收件箱', exact: true })).toHaveCount(0)
+  const adminContext = await browser.newContext()
+  await adminContext.addCookies([{ name: 'auth_token', value: 'admin-no-page-grants', url: 'http://127.0.0.1:3200' }])
+  const adminPage = await adminContext.newPage()
+  const adminPersonalReads: string[] = []
+  adminPage.on('request', (request) => { if (request.url().includes('/identity/me/feedback')) adminPersonalReads.push(request.url()) })
+  await adminPage.goto('/production')
+  await adminPage.getByRole('button', { name: '问题反馈', exact: true }).click()
+  const adminDrawer = adminPage.getByRole('dialog', { name: '问题反馈', exact: true })
+  await expect(adminDrawer.getByRole('tab')).toHaveCount(1)
+  await expect(adminDrawer.getByRole('tab', { name: '收件箱', exact: true })).toHaveAttribute('aria-selected', 'true')
+  await expect(adminDrawer.getByRole('tab', { name: '提交反馈' })).toHaveCount(0)
+  await expect(adminDrawer.getByRole('tab', { name: '我的反馈' })).toHaveCount(0)
+  await adminDrawer.getByRole('button').filter({ hasText: problemDescription }).click()
+  const detail = adminPage.getByRole('dialog', { name: '反馈详情' })
+  await expect(detail.getByRole('img', { name: '问题截图 1' })).toBeVisible()
+  await detail.getByLabel('管理员回复／处理结果').fill('已修复保存异常，请重新尝试。')
+  await detail.getByLabel('处理状态').click()
+  await adminPage.locator('.ant-select-dropdown').getByText('已解决', { exact: true }).click()
+  await detail.getByRole('button', { name: '保存处理结果' }).click()
+  await expect(detail.getByText('提交者：CI 测试提交者 · 已解决')).toBeVisible()
+  await detail.getByRole('button', { name: /^(关闭|Close)$/ }).click()
+  expect(adminPersonalReads).toEqual([])
+  await adminContext.close()
+  await drawer.getByRole('tabpanel', { name: '我的反馈', exact: true }).getByRole('button', { name: /刷新$/ }).click()
+  await expect(drawer.getByRole('tabpanel', { name: '我的反馈', exact: true }).getByRole('button').filter({ hasText: problemDescription }).getByText('管理员回复：已修复保存异常，请重新尝试。')).toBeVisible()
+})
+
+test('toolbar and feedback form remain usable on a narrow screen', async ({ context, page }) => {
+  await context.addCookies([{ name: 'auth_token', value: 'procurement-only', url: 'http://127.0.0.1:3200' }])
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/purchasing/supplier')
+  const button = page.getByRole('button', { name: '问题反馈', exact: true })
+  await expect(button).toBeInViewport()
+  await expect(page.getByRole('button', { name: '我的待办', exact: true })).toBeInViewport()
+  await button.click()
+  const drawer = page.getByRole('dialog', { name: '问题反馈', exact: true })
+  await expect(drawer.getByRole('button', { name: '提交反馈', exact: true })).toBeVisible()
+  const bounds = await drawer.boundingBox()
+  expect(Math.round(bounds?.width || 0)).toBeLessThanOrEqual(390)
+})
+
+test('ordinary users have no administrator inbox and no unauthorized todo requests', async ({ context, page }) => {
+  await context.addCookies([{ name: 'auth_token', value: 'procurement-only', url: 'http://127.0.0.1:3200' }])
+  const requests: string[] = []
+  page.on('request', (request) => { if (/\/my-todos\?|\/purchase-requests/.test(request.url())) requests.push(request.url()) })
+  await page.goto('/purchasing/supplier')
+  await page.getByRole('button', { name: '我的待办', exact: true }).click()
+  await expect(page.getByText('当前账号暂无已接入的待办处理权限')).toBeVisible()
+  expect(requests).toEqual([])
+  await page.getByRole('dialog', { name: '我的待办' }).getByRole('button', { name: '关闭', exact: true }).click()
+  await page.getByRole('button', { name: '问题反馈', exact: true }).click()
+  await expect(page.getByRole('tab', { name: '收件箱', exact: true })).toHaveCount(0)
+})
+
+
+for (const mode of ['light', 'dark'] as const) {
+  test(`toolbar task and feedback interactions in ${mode} appearance`, async ({ context, page }, testInfo) => {
+    await context.addCookies([{ name: 'auth_token', value: 'business-todos', url: 'http://127.0.0.1:3200' }])
+    await page.addInitScript((appearance) => localStorage.setItem('dazah-appearance', appearance), mode)
+    await page.goto('/quality/deviations/ledger')
+    await expect(page.locator('html')).toHaveAttribute('data-theme', mode)
+    await page.getByRole('button', { name: '我的待办', exact: true }).click()
+    const tasks = page.getByRole('dialog', { name: '我的待办' })
+    await expect(tasks.getByText('本人偏差调查', { exact: true })).toBeVisible()
+    await page.screenshot({ path: testInfo.outputPath(`todos-${mode}.png`), animations: 'disabled' })
+    await tasks.getByRole('button', { name: '关闭', exact: true }).click()
+    const other = mode === 'light' ? 'dark' : 'light'
+    await page.getByTitle(other === 'dark' ? '深色' : '浅色', { exact: true }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', other)
+    await page.getByRole('button', { name: '问题反馈', exact: true }).click()
+    const feedback = page.getByRole('dialog', { name: '问题反馈', exact: true })
+    await expect(feedback.getByRole('button', { name: '提交反馈', exact: true })).toBeVisible()
+    await expect(feedback.getByRole('tab', { name: '收件箱', exact: true })).toHaveCount(0)
+    await page.screenshot({ path: testInfo.outputPath(`feedback-${other}.png`), animations: 'disabled' })
+  })
+}

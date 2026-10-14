@@ -22,14 +22,13 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
-from openpyxl import Workbook
-from openpyxl.utils import get_column_letter
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.modules.production import fermentation_board_service as board
 from app.modules.production import schedule_validation_service as validation
+from app.modules.production.schedule_draft_excel import column_letter, new_workbook
 from app.modules.production.schedule_draft_models import ScheduleDraftRecord
 
 SEED_TIME = time(20, 0)
@@ -549,15 +548,17 @@ def validate_draft(
 
 def build_draft_workbook(result: DraftResult) -> BytesIO:
     """草稿行 → xlsx 工作簿字节流（文本时间保证解析器可读回）。"""
-    workbook = Workbook()
+    workbook = new_workbook()
     sheet = workbook.active
+    if sheet is None:
+        raise RuntimeError("排产草稿工作簿缺少工作表")
     sheet.title = "排产草稿"
     for row in result.rows:
         sheet.append(list(row))
     sheet.column_dimensions["A"].width = 10
     sheet.column_dimensions["B"].width = 10
     for index in range(3, len(result.rows[0]) + 1):
-        sheet.column_dimensions[get_column_letter(index)].width = 8
+        sheet.column_dimensions[column_letter(index)].width = 8
     buffer = BytesIO()
     workbook.save(buffer)
     buffer.seek(0)

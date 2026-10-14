@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react'
 import { Card, Col, Empty, Row, Space, Statistic, Tag, Typography } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/components/shared/ThemedEChart'
 import type { EChartsOption } from 'echarts'
 
 export function OverviewPageShell({

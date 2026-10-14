@@ -2,7 +2,7 @@
 
 import { Card, Col, Empty, Row, Typography } from 'antd'
 import type { EChartsOption } from 'echarts'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/components/shared/ThemedEChart'
 
 export interface RegistrationChartDatum {
   name: string

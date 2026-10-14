@@ -13,7 +13,7 @@ import { Button, Card, DatePicker, Empty, Select, Skeleton, Statistic, Table, Ta
 import Alert from '@/components/shared/PlatformNotice'
 import dayjs, { type Dayjs } from 'dayjs'
 import type { EChartsOption } from 'echarts'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/components/shared/ThemedEChart'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useMemo } from 'react'
 import {
@@ -37,13 +37,13 @@ function metricLabel(metric: { metric_key?: string | null; energy_type: string }
 }
 
 function metricVisual(label: string) {
-  if (label.includes('电')) return { color: '#5645d4', tint: '#eeeaff', icon: <ThunderboltOutlined /> }
-  if (label.includes('蒸汽') || label.includes('锅炉')) return { color: '#dd5b00', tint: '#fff0df', icon: <FireOutlined /> }
-  if (label.includes('饮用水')) return { color: '#0075de', tint: '#eaf4ff', icon: <CloudOutlined /> }
-  if (label.includes('冰水') || label.includes('冷水')) return { color: '#2a9d99', tint: '#e5f7f5', icon: <CloudOutlined /> }
-  if (label.includes('空气')) return { color: '#787671', tint: '#f0eeec', icon: <CloudOutlined /> }
-  if (label.includes('循环水')) return { color: '#1aae39', tint: '#e9f8ed', icon: <CloudOutlined /> }
-  return { color: '#5645d4', tint: '#eeeaff', icon: <DashboardOutlined /> }
+  if (label.includes('电')) return { color: 'var(--color-primary)', tint: 'var(--color-primary-soft)', icon: <ThunderboltOutlined /> }
+  if (label.includes('蒸汽') || label.includes('锅炉')) return { color: 'var(--color-warning)', tint: 'var(--color-warning-soft)', icon: <FireOutlined /> }
+  if (label.includes('饮用水')) return { color: 'var(--color-info)', tint: 'var(--color-info-soft)', icon: <CloudOutlined /> }
+  if (label.includes('冰水') || label.includes('冷水')) return { color: 'var(--color-success)', tint: 'var(--color-success-soft)', icon: <CloudOutlined /> }
+  if (label.includes('空气')) return { color: 'var(--color-steel)', tint: 'var(--color-surface-soft)', icon: <CloudOutlined /> }
+  if (label.includes('循环水')) return { color: 'var(--color-success)', tint: 'var(--color-success-soft)', icon: <CloudOutlined /> }
+  return { color: 'var(--color-primary)', tint: 'var(--color-primary-soft)', icon: <DashboardOutlined /> }
 }
 
 function buildTrendOption(data: EnergyOverviewData['trend']): EChartsOption {
@@ -190,8 +190,8 @@ export function EnergyOverview() {
     <main className={styles.page}>
       <section style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', gap: 20, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ margin: 0, color: '#1a1a1a', fontSize: 30, letterSpacing: '-0.5px' }}>能源总览</h1>
-          <p style={{ margin: '7px 0 0', color: '#787671' }}>
+          <h1 style={{ margin: 0, color: 'var(--color-ink)', fontSize: 30, letterSpacing: '-0.5px' }}>能源总览</h1>
+          <p style={{ margin: '7px 0 0', color: 'var(--color-steel)' }}>
             {isFactoryOverview
               ? '统计已映射能源数据表中的用量、趋势与车间分布，日总量作为全厂统计口径。'
               : `${viewLabel} · ${formatRange(range)}`}
@@ -230,7 +230,7 @@ export function EnergyOverview() {
                 <h2 style={{ margin: 0, fontSize: 18 }}>能源分类汇总</h2>
                 <Tag color="processing">统计结果</Tag>
               </div>
-              <span style={{ color: '#787671', fontSize: 13 }}>
+              <span style={{ color: 'var(--color-steel)', fontSize: 13 }}>
                 统计周期 {formatRange(range)} · 最近有效数据 {headline?.last_observed_at ? dayjs(headline.last_observed_at).format('YYYY-MM-DD') : '暂无'}
               </span>
             </div>
@@ -239,24 +239,24 @@ export function EnergyOverview() {
                 const label = metricLabel(metric)
                 const visual = metricVisual(label)
                 return (
-                  <div key={metricIdentity(metric)} style={{ border: '1px solid #e5e3df', borderRadius: 12, background: visual.tint, padding: 18, minHeight: 166, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div key={metricIdentity(metric)} style={{ border: '1px solid var(--color-hairline)', borderRadius: 12, background: visual.tint, padding: 18, minHeight: 166, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                       <span style={{ color: visual.color, fontSize: 14, fontWeight: 600 }}>{label}</span>
                       <span style={{ color: visual.color, fontSize: 19 }}>{visual.icon}</span>
                     </div>
-                    <Statistic value={metric.total_value} precision={2} suffix={metric.unit} valueStyle={{ color: '#1a1a1a', fontSize: 24, fontWeight: 600 }} />
-                    <span style={{ color: '#787671', fontSize: 12 }}>{metric.record_count} 条有效数据</span>
+                    <Statistic value={metric.total_value} precision={2} suffix={metric.unit} valueStyle={{ color: 'var(--color-ink)', fontSize: 24, fontWeight: 600 }} />
+                    <span style={{ color: 'var(--color-steel)', fontSize: 12 }}>{metric.record_count} 条有效数据</span>
                   </div>
                 )
               })}
               {latestRatio && (
-                <div style={{ border: '1px solid #f3d1ad', borderRadius: 12, background: '#fff7ec', padding: 18, minHeight: 166, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div style={{ border: '1px solid var(--color-hairline)', borderRadius: 12, background: 'var(--color-warning-soft)', padding: 18, minHeight: 166, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                    <span style={{ color: '#793400', fontSize: 14, fontWeight: 600 }}>{metricLabel(latestRatio)}</span>
+                    <span style={{ color: 'var(--color-warning)', fontSize: 14, fontWeight: 600 }}>{metricLabel(latestRatio)}</span>
                     <WarningOutlined style={{ color: '#dd5b00', fontSize: 18 }} />
                   </div>
-                  <Statistic value={latestRatio.value} precision={2} suffix={latestRatio.unit} valueStyle={{ color: '#793400', fontSize: 24, fontWeight: 600 }} />
-                  <span style={{ color: '#a45a1c', fontSize: 12 }}>最新日 {dayjs(latestRatio.observed_at).format('MM-DD')}，不参与累计</span>
+                  <Statistic value={latestRatio.value} precision={2} suffix={latestRatio.unit} valueStyle={{ color: 'var(--color-warning)', fontSize: 24, fontWeight: 600 }} />
+                  <span style={{ color: 'var(--color-warning)', fontSize: 12 }}>最新日 {dayjs(latestRatio.observed_at).format('MM-DD')}，不参与累计</span>
                 </div>
               )}
             </div>
