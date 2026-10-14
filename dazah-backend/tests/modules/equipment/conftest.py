@@ -2,6 +2,9 @@
 
 import uuid
 from collections.abc import AsyncIterator
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -31,6 +34,19 @@ _test_session_factory = async_sessionmaker(
 @pytest.fixture
 def anyio_backend() -> str:
     return "asyncio"
+
+
+@pytest.fixture
+def isolated_equipment_uploads(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> Path:
+    """把设备台账 API 的上传目录隔离到临时目录，避免测试写真实 uploads。"""
+    from app.modules.equipment.api import equipment as equipment_api
+
+    upload_root = tmp_path / "uploads"
+    fake_settings = SimpleNamespace(UPLOAD_DIR=str(upload_root))
+    monkeypatch.setattr(equipment_api, "get_settings", lambda: fake_settings)
+    return upload_root
 
 
 @pytest.fixture

@@ -10,6 +10,9 @@ from app.modules.equipment.models.equipment import (
     EquipmentCategoryLink,
     Location,
 )
+from app.modules.equipment.models.equipment_ledger_archive import (
+    EquipmentLedgerArchive,
+)
 from app.modules.equipment.models.failure_code import (
     FailureAction,
     FailureCause,
@@ -55,6 +58,7 @@ __all__ = [
     "Equipment",
     "EquipmentCategory",
     "EquipmentCategoryLink",
+    "EquipmentLedgerArchive",
     "EquipmentPersonnel",
     "EquipmentPersonnelCategory",
     "EquipmentPersonnelRole",

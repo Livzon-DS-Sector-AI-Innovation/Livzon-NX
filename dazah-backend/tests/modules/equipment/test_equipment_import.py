@@ -147,7 +147,9 @@ def test_template_contains_ledger_headers_and_example() -> None:
 # ---------- API 导入 ----------
 
 
-async def test_import_creates_updates_and_reports_failures(client: AsyncClient) -> Any:
+async def test_import_creates_updates_and_reports_failures(
+    client: AsyncClient, isolated_equipment_uploads: Any
+) -> Any:
     category_id, location_id = await _prepare_category_and_location(
         client, location_name="201二车间"
     )
@@ -242,7 +244,7 @@ async def test_import_creates_updates_and_reports_failures(client: AsyncClient) 
 
 
 async def test_import_fills_merged_cells_and_joins_multirow_equipment(
-    client: AsyncClient,
+    client: AsyncClient, isolated_equipment_uploads: Any,
 ) -> Any:
     """真实台账常见形态：编号/名称纵向合并，参数、备注分行填写。"""
     _, location_id = await _prepare_category_and_location(
@@ -303,7 +305,7 @@ async def test_import_fills_merged_cells_and_joins_multirow_equipment(
 
 
 async def test_import_without_category_creates_uncategorized(
-    client: AsyncClient,
+    client: AsyncClient, isolated_equipment_uploads: Any,
 ) -> Any:
     _, location_id = await _prepare_category_and_location(
         client, location_name="201二车间"
@@ -344,7 +346,9 @@ async def test_import_without_category_creates_uncategorized(
     assert items["IMP-201"]["location_name"] == "201二车间"
 
 
-async def test_import_auto_creates_unmatched_location(client: AsyncClient) -> Any:
+async def test_import_auto_creates_unmatched_location(
+    client: AsyncClient, isolated_equipment_uploads: Any
+) -> Any:
     """安装地点为台账自由文本时自动新建为顶层位置。"""
     category_id, _ = await _prepare_category_and_location(client)
     excel = _ledger_bytes(
@@ -395,7 +399,7 @@ async def test_import_auto_creates_unmatched_location(client: AsyncClient) -> An
 
 
 async def test_import_fails_when_location_empty_and_no_default(
-    client: AsyncClient,
+    client: AsyncClient, isolated_equipment_uploads: Any,
 ) -> Any:
     category_id, _ = await _prepare_category_and_location(client)
     excel = _ledger_bytes(
@@ -418,7 +422,9 @@ async def test_import_fails_when_location_empty_and_no_default(
     assert "安装地点为空" in summary["failures"][0]["reason"]
 
 
-async def test_import_rejects_missing_header(client: AsyncClient) -> Any:
+async def test_import_rejects_missing_header(
+    client: AsyncClient, isolated_equipment_uploads: Any
+) -> Any:
     category_id, _ = await _prepare_category_and_location(client)
     workbook = Workbook()
     workbook.active.append(["序号", "设备名称", "备注"])
