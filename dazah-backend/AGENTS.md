@@ -175,7 +175,7 @@ uv run mypy <相关路径>
 
 根据风险和实际影响扩大验证范围。CI 对应关系如下：
 
-- `Backend Quality`：权限生命周期、V2 残留扫描、变更文件 Ruff、编译和 core Mypy；不启动数据库或重复执行单测。
+- `Backend Quality`：权限生命周期、V2 残留扫描、变更文件 Ruff、编译、core Mypy，以及变更 `app/` Python 文件及其依赖链的 Mypy；不启动数据库或重复执行单测。增量 Mypy 使用默认依赖诊断，不得通过 `silent`、`skip` 或忽略导入错误绕过门禁；Git 变更范围解析失败必须使门禁失败。本地可运行 `uv run python scripts/mypy_changed.py` 检查未提交及未跟踪的运行代码。
 - `Backend Integration`：在独立 PostgreSQL/Redis 环境确认单一 Alembic head，执行迁移、模型漂移和 OpenAPI 检查，然后一次运行全量 Pytest（包含 unit/core）和完整覆盖率门禁。
 - `Backend Image Verify`：构建后端交付镜像，执行安全扫描、隔离数据库迁移和容器健康检查。
 - `CI Gate` 汇总本次范围内的必需任务；全量测试仍由 Integration 保证，不因 Quality 移除重复单测而减少覆盖。

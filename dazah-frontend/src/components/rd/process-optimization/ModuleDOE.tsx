@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import { Card, Button, Space, Tag, Table, Form, Input, InputNumber, Select, App, Tabs, Collapse, Row, Col, Statistic, Descriptions } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
 import { CheckCircleOutlined, PlusOutlined, DeleteOutlined, ExperimentOutlined, BarChartOutlined, TableOutlined, SettingOutlined } from '@ant-design/icons'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/components/shared/ThemedEChart'
 import 'echarts-gl'
 import type { DOEExperiment, DOEFactor, DOEResponse, DOERun, DOEDesignType, DOEAnalysisResult, ReactionStep } from '@/types/rd'
 

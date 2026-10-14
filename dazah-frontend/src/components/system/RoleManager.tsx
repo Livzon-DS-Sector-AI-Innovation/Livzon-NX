@@ -8,6 +8,7 @@ import type { DepartmentItem } from "@/lib/api/server/admin"
 import type { MenuFlatItem } from "@/lib/menu-tree"
 import { createRole, deleteRole, updateRole } from "@/actions/admin"
 import { RolePagePermissionsDrawer } from "./RolePagePermissionsDrawer"
+import { roleTagColor } from "@/lib/role-tag"
 
 interface RoleManagerProps {
   initialRoles: RoleItem[]
@@ -68,14 +69,20 @@ export function RoleManager({ initialRoles, initialDepartments }: RoleManagerPro
     <div className="mb-3"><Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
       新建角色
     </Button></div>
-    <Table rowKey="id" dataSource={roles} pagination={false} scroll={{ x: 980 }} columns={[
-      { title: "角色名称", dataIndex: "name", key: "name" },
-      { title: "角色标识", dataIndex: "code", key: "code" },
-      { title: "类型", dataIndex: "is_system", key: "is_system", render: (value: boolean) =>
-        value ? <Tag color="gold">系统内置</Tag> : <Tag color="blue">自定义</Tag> },
-      { title: "页面授权版本", dataIndex: "grant_version", key: "grant_version" },
-      { title: "描述", dataIndex: "description", key: "description", ellipsis: true },
-      { title: "操作", key: "actions", width: 260, fixed: "right", render: (_: unknown, role: RoleItem) => <div className="flex min-w-max gap-2">
+    <Table rowKey="id" dataSource={roles} pagination={false} tableLayout="fixed" scroll={{ x: 900 }} columns={[
+      { title: "角色名称", dataIndex: "name", key: "name", width: 120, ellipsis: true },
+      { title: "角色标识", dataIndex: "code", key: "code", width: 180, ellipsis: true },
+      { title: "类型", dataIndex: "is_system", key: "is_system", width: 110, render: (value: boolean, role: RoleItem) => {
+        const label = role.code === "super_admin" ? "系统管理员"
+          : role.code === "ordinary_admin" ? "普通管理员" : value ? "系统内置" : "自定义"
+        return <Tag color={roleTagColor(role.code, value)}>{label}</Tag>
+      } },
+      { title: "页面授权版本", dataIndex: "grant_version", key: "grant_version", width: 120 },
+      { title: "描述", dataIndex: "description", key: "description", ellipsis: true,
+        render: (description: RoleItem["description"], role: RoleItem) =>
+          role.is_system && role.code !== "super_admin" && role.code !== "ordinary_admin"
+            ? "系统内置角色，可编辑" : description },
+      { title: "操作", key: "actions", width: 240, fixed: "right", render: (_: unknown, role: RoleItem) => <div className="flex min-w-max gap-2">
         <Button size="small" disabled={role.code === "super_admin" || role.code === "ordinary_admin"} onClick={() => setPageRole(role)}>
           页面权限
         </Button>

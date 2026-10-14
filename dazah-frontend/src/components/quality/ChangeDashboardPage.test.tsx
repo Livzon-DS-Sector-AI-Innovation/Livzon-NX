@@ -3,8 +3,10 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { setAppearance } from '@/lib/useAppearance'
 
 const mocks = vi.hoisted(() => ({
+  chartOptions: [] as object[],
   fetchChangeDashboardStats: vi.fn(),
   fetchChangeActionPlanDueStatus: vi.fn(),
 }))
@@ -13,8 +15,10 @@ vi.mock('@/lib/api/client/quality', () => ({
   fetchChangeActionPlanDueStatus: mocks.fetchChangeActionPlanDueStatus,
 }))
 vi.mock('echarts-for-react', () => ({
-  default: ({ option }: { option?: unknown }) =>
-    React.createElement('pre', { 'data-testid': 'echart' }, JSON.stringify(option ?? {})),
+  default: ({ option }: { option: object }) => {
+    mocks.chartOptions.push(option)
+    return React.createElement('pre', { 'data-testid': 'echart' }, JSON.stringify(option))
+  },
 }))
 vi.mock('next/link', () => ({
   default: ({ children }: { children?: React.ReactNode }) =>
@@ -79,6 +83,7 @@ let container: HTMLDivElement
 let client: QueryClient
 
 beforeEach(() => {
+  mocks.chartOptions = []
   mocks.fetchChangeDashboardStats.mockReset().mockResolvedValue(stats)
   mocks.fetchChangeActionPlanDueStatus.mockReset().mockImplementation(async (d: number) => dueStatus(d))
   container = document.createElement('div')
@@ -122,6 +127,11 @@ function findCardByTitle(text: string): HTMLElement | null {
 
 it('渲染五张指标卡：临期计划卡按选中窗口展示数量并默认 15 天', async () => {
   await renderPageAsync()
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 60)) })
+  await act(async () => setAppearance('dark'))
+  expect(mocks.chartOptions.length).toBeGreaterThan(0)
+  expect(JSON.stringify(mocks.chartOptions.at(-1))).toContain('"color":"#eeedf1"')
+  await act(async () => setAppearance('system'))
   for (const title of ['变更总数', '变更计划总数', '逾期计划', '临期计划', '已确认提醒']) {
     expect(findCardByTitle(title)).toBeTruthy()
   }

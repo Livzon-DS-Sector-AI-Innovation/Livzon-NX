@@ -103,6 +103,8 @@
 - 前端 Quality 执行 lint、类型、全量单测覆盖率、构建与 Docker 验证。E2E 和隔离测试下载同次运行的 tar 包，保留隐藏目录、权限及链接，不重复构建 Next.js。
 - 镜像仍通过真实 Dockerfile 独立构建；前端 Buildx 使用专用缓存 scope，避免与后端缓存互相覆盖。
 - Backend Quality 仅承担静态检查；Integration 保留全量单测、接口测试、迁移、契约与覆盖率，消除 Quality 中重复的 unit/core 测试及数据库启动。
+- 后端类型门禁保留 `mypy app/core`，同时从 Git base/head 选取变更的 `dazah-backend/app/**/*.py`，使用 `--follow-imports=normal` 检查业务、平台代码及其导入依赖。依赖中的错误同样阻断 CI，不能用 `silent` 或 `skip` 隐藏。新增、修改、复制和重命名文件按目标路径检查；删除文件不作为已不存在的 Mypy 入口，缺失导入仍由受影响入口和全应用导入检查发现。首次推送无 base 时检查 head 的全部运行代码；手动运行在主线上时检查最新提交；无法解析范围时失败。仅没有相关文件变更时跳过。
+- 本地运行 `cd dazah-backend && uv run python scripts/mypy_changed.py` 可覆盖当前未提交及未跟踪的运行代码；也可传 `--base <ref> --head <ref>` 复核已提交范围，或传明确的 `app/modules/.../*.py` 文件做定向检查。
 - 源码安全、镜像安全、覆盖率阈值和 Agent/Hermes 契约验证保持启用。构建产物仅保留一天，缺失必须失败，不能跳过 E2E。
 - 优化效果应比较同类 PR 的任务和步骤耗时；本地静态验证不能替代 GitHub 上的 Linux 构建、产物传递与 E2E 实测。
 - PostgreSQL service 使用 `POSTGRES_INITDB_ARGS` 传递 [PostgreSQL 17 的 `initdb -c` 参数](https://www.postgresql.org/docs/17/app-initdb.html)，保留连接数和会话超时配置；不使用 GitHub Actions 不支持的 `services.command`。

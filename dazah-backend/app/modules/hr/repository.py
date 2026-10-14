@@ -639,7 +639,11 @@ class EmployeeRepository:
                 if today <= current_end <= window_90d_end:
                     expiring_90d.append(item)
             planned = getattr(emp, "planned_probation_date", None)
-            if emp.status == "试用期" and _in_window(planned, today, window_30d_end):
+            if (
+                emp.status == "试用期"
+                and isinstance(planned, _date)
+                and _in_window(planned, today, window_30d_end)
+            ):
                 probation_due.append(
                     {
                         "employee_number": emp.employee_number,
@@ -650,7 +654,7 @@ class EmployeeRepository:
                     }
                 )
             review = getattr(emp, "certificate_review_date", None)
-            if _in_window(review, today, window_90d_end):
+            if isinstance(review, _date) and _in_window(review, today, window_90d_end):
                 certificate_due.append(
                     {
                         "employee_number": emp.employee_number,

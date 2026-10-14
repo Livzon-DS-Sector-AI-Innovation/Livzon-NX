@@ -190,7 +190,7 @@ export default function KnowledgeArticleDetail({ article }: KnowledgeArticleDeta
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <div style={{
                         width: 40, height: 40, borderRadius: 8,
-                        background: 'linear-gradient(135deg, #e6e0f5 0%, #dcecfa 100%)',
+                        background: 'linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-info-soft) 100%)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                       }}>
                         <FileOutlined style={{ fontSize: 18, color: 'var(--color-primary)' }} />
@@ -248,7 +248,7 @@ export default function KnowledgeArticleDetail({ article }: KnowledgeArticleDeta
                       style={{
                         marginTop: 12,
                         borderRadius: 8,
-                        background: 'linear-gradient(135deg, #fafaf9 0%, #f8f5e8 100%)',
+                        background: 'linear-gradient(135deg, var(--color-surface-soft) 0%, var(--color-warning-soft) 100%)',
                         border: '1px solid #ede9e4',
                       }}
                       title={<span style={{ fontSize: 13, color: 'var(--color-primary)' }}><ThunderboltOutlined /> AI 结构化摘要</span>}

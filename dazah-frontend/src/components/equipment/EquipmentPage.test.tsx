@@ -46,7 +46,9 @@ vi.mock('antd', async () => {
     createElement('button', { onClick }, children)
   const Tabs = ({ items }: { items: Array<{ children: ReactNode; label: string }> }) =>
     createElement('div', null, items.map((item) => createElement('section', { key: item.label }, item.children)))
-  return { App: Wrapper, Button, ConfigProvider: Wrapper, Tabs }
+  const ConfigProvider = ({ children, theme }: { children?: ReactNode; theme?: unknown }) =>
+    createElement('div', { 'data-theme-source': theme ? 'local' : 'inherited' }, children)
+  return { App: Wrapper, Button, ConfigProvider, Tabs }
 })
 
 vi.mock('@ant-design/icons', () => ({
@@ -145,6 +147,8 @@ describe('EquipmentPage data lifecycle', () => {
       await Promise.resolve()
     })
 
+    expect(container.querySelector('[data-theme-source="inherited"]')).not.toBeNull()
+    expect(container.querySelector('[data-theme-source="local"]')).toBeNull()
     expect(equipmentStore.setCategories).toHaveBeenCalledWith([initialCategory])
     expect(equipmentStore.setLocations).toHaveBeenCalledWith([initialLocation])
     expect(equipmentStore.setTotal).toHaveBeenCalledWith(3)

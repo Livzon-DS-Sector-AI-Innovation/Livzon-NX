@@ -70,10 +70,7 @@
   max-width: 100%;
   margin: 0;
   padding: 8px 14px;
-  border-color: var(--ant-color-primary-border);
   border-radius: var(--ant-border-radius);
-  background: var(--ant-color-primary-bg);
-  color: var(--ant-color-primary);
   font-size: var(--ant-font-size);
   white-space: normal;
   overflow-wrap: anywhere;

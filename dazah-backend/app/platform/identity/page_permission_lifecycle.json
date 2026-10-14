@@ -576,6 +576,14 @@
         "bulk_import": {
           "status": "active",
           "category": "bulk_change"
+        },
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
         }
       }
     },
@@ -1200,6 +1208,10 @@
         "sync_config": {
           "status": "active",
           "category": "integration_admin"
+        },
+        "approve": {
+          "status": "active",
+          "category": "decision"
         }
       }
     },

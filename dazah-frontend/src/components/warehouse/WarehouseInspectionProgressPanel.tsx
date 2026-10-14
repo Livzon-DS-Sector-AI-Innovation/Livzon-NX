@@ -11,7 +11,7 @@ import {
   RightOutlined,
   SafetyCertificateOutlined,
 } from '@ant-design/icons'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/components/shared/ThemedEChart'
 import { graphic } from 'echarts'
 import type { EChartsOption } from 'echarts'
 import { useQuery } from '@tanstack/react-query'

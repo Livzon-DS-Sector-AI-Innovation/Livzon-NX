@@ -7,7 +7,7 @@ import { Card, Row, Col, Typography, Statistic, Button, Tag, Space, Spin, Progre
 import {ExperimentOutlined, FilterOutlined, BulbOutlined,
   CalculatorOutlined, CheckCircleOutlined, DatabaseOutlined,
   ArrowRightOutlined, NodeIndexOutlined, ScheduleOutlined,} from '@ant-design/icons'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/components/shared/ThemedEChart'
 import dayjs, { type Dayjs } from 'dayjs'
 import SyncSettingsButton from '@/components/production/SyncSettingsButton'
 import { PRODUCTION_PAGE_KEYS } from '@/components/production/useProductionPermissions'

@@ -33,6 +33,15 @@ PAGE_SCOPE_TYPES = frozenset(
 )
 FIRST_BATCH_MODULES = frozenset({"hr", "warehouse", "quality", "procurement"})
 PENDING_SCOPE_MODULES = frozenset({"equipment", "energy", "safety", "research"})
+# These pages now have a reviewed personal-task read adapter. Keep the legacy
+# option for existing grants; other endpoints in these modules remain subject
+# to their existing registration checks.
+PERSONAL_TODO_SCOPE_PAGES = frozenset({
+    "equipment:maintenance", "equipment:inspection",
+    "safety:risk-hazard:hazard-inspection:hazard-inspection-ledger",
+    "safety:risk-hazard:ehs-change:ehs-change-apply",
+    "safety:emergency-accident:accident-ledger", "safety:training-check:safety-check",
+})
 QUALITY_INSPECTION_GLOBAL_PAGES = frozenset(
     f"quality:inspection:inspection-items:inspection-items-{suffix}"
     for suffix in ("inventory", "inbound", "outbound")
@@ -492,6 +501,10 @@ def _sensitive_actions(
     # cannot be inferred from the short menu label alone. Keep the reviewed
     # action set explicit so a new API binding cannot silently widen a page.
     explicit_actions = {
+        "safety:risk-hazard:hazard-inspection:hazard-inspection-ledger": (
+            "approve", "reject",
+        ),
+        "quality:capas:capa-plans": ("approve",),
         "quality:documents": ("bulk_import",),
         # 安全知识库：飞书法规库全量同步入口（写入镜像数据）
         "safety:regulation-info:knowledge-base": ("sync_config",),
@@ -659,6 +672,8 @@ def _walk_pages(
                 scopes = ("not_applicable",)
             else:
                 scopes = ("all",)
+            if page_key in PERSONAL_TODO_SCOPE_PAGES:
+                scopes = ("not_applicable", "department_tree", "departments", "all")
             if page_key == "production:overview":
                 # The overview exposes fermentation and extraction data, not
                 # department-owned rows.
@@ -864,6 +879,31 @@ PAGE_API_BINDINGS = _purchase_request_bindings() + tuple(
         ("/export", "operate", "sensitive_export"),
     )
     if "purchasing:order" in PAGES_BY_KEY
+)
+
+PAGE_API_BINDINGS += tuple(
+    PageApiBinding(
+        route_path=f"/api/v1/{module_code}/my-todos", method="GET",
+        page_keys=pages, permission="query", sensitive_action=None,
+        scope_adapter=f"{module_code}.personal_todos",
+    )
+    for module_code, pages in (
+        ("hr", ("hr:training:plan-tracking", "hr:position-transfer")),
+        ("registration", (
+            "registration:project:declaration-progress:international-planned-in-progress",
+        )),
+        ("quality", (
+            "quality:deviations:deviation-ledger", "quality:capas:capa-ledger",
+            "quality:capas:capa-plans", "quality:change:change-action-plans",
+        )),
+        ("equipment", ("equipment:maintenance", "equipment:inspection")),
+        ("safety", (
+            "safety:risk-hazard:hazard-inspection:hazard-inspection-ledger",
+            "safety:risk-hazard:ehs-change:ehs-change-apply",
+            "safety:emergency-accident:accident-ledger",
+            "safety:training-check:safety-check",
+        )),
+    )
 )
 
 PAGE_API_BINDINGS += tuple(

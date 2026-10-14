@@ -899,7 +899,8 @@ function filterPageChildren(
     const children = item.children
       ? filterPageChildren(item.children, pageKey, allowedPageKeys)
       : undefined
-    if (!allowedPageKeys.has(pageKey) && !children?.length) return []
+    const accessKey = item.children?.length ? pageKey : getPageKeyByPath(item.path) || pageKey
+    if (!allowedPageKeys.has(accessKey) && !children?.length) return []
     return [{ ...item, children }]
   })
 }
@@ -971,6 +972,13 @@ function collectPageRoutes(
 // aliases. Directory nodes are not permission pages, so their entry route
 // must explicitly inherit a stable leaf page identity.
 const pageRouteAliases: Record<string, string> = {
+  // Equipment still uses the backend's original stable permission keys;
+  // grouping these entries by workshop does not rename existing grants.
+  "/equipment/assets": "equipment:assets",
+  "/equipment/maintenance": "equipment:maintenance",
+  "/equipment/inspection": "equipment:inspection",
+  "/equipment/spare-parts": "equipment:spare-parts",
+  "/equipment/personnel": "equipment:personnel",
   "/quality/deviations": "quality:deviations:deviation-ledger",
   "/quality/capas": "quality:capas:capa-ledger",
   "/quality/complaints": "quality:complaints:complaint-ledger",

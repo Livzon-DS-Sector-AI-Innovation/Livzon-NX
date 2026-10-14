@@ -615,14 +615,25 @@ async def test_employee_statistics_reminder_and_turnover_metrics() -> None:
         certificate_review_date=None,
         qualification_type=None,
     )
+    missing_dates = SimpleNamespace(
+        **{
+            **probation_member.__dict__,
+            "employee_number": "E304",
+            "planned_probation_date": None,
+            "certificate_review_date": None,
+            "hire_date": None,
+        }
+    )
     results = [
-        SimpleNamespace(scalar=lambda: 3),
-        SimpleNamespace(all=lambda: [("正式", 2), ("试用期", 1)]),
+        SimpleNamespace(scalar=lambda: 4),
+        SimpleNamespace(all=lambda: [("正式", 2), ("试用期", 2)]),
         SimpleNamespace(all=lambda: [("质量部", 1)]),
         SimpleNamespace(all=lambda: []),
         SimpleNamespace(
             scalars=lambda: SimpleNamespace(
-                all=lambda: [contract_due_soon, probation_member, newcomer]
+                all=lambda: [
+                    contract_due_soon, probation_member, newcomer, missing_dates
+                ]
             )
         ),
         SimpleNamespace(scalar=lambda: 2),

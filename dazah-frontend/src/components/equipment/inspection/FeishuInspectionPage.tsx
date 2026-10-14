@@ -25,8 +25,8 @@ import type {
 import { InspectionFeishuConfigDrawer } from './InspectionFeishuConfigDrawer'
 
 const C = {
-  ink: '#1a1a1a', slate: '#5d5b54', stone: '#a4a097',
-  hairline: '#e5e3df', surface: '#f6f5f4', canvas: '#ffffff',
+  ink: 'var(--color-ink)', slate: 'var(--color-slate)', stone: 'var(--color-stone)',
+  hairline: 'var(--color-hairline)', surface: 'var(--color-surface)', canvas: 'var(--color-canvas)',
   green: '#1aae39', red: '#c0392b', purple: '#5645d4',
 }
 
@@ -401,7 +401,7 @@ export function FeishuInspectionPage() {
           activeKey={activeTab}
           onChange={setActiveTab}
           items={tabItems}
-          tabBarStyle={{ borderBottom: '1px solid #ede9e4', marginBottom: 16 }}
+          tabBarStyle={{ borderBottom: '1px solid var(--color-hairline-soft)', marginBottom: 16 }}
           tabBarGutter={32}
         />
       </div>

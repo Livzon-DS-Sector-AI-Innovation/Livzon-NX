@@ -16,7 +16,7 @@ import {
   ExclamationCircleOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/components/shared/ThemedEChart'
 import { fetchSupplierQualifications, fetchSupplierStatistics } from '@/lib/api/client/quality'
 import type { SupplierExpiryBucket } from '@/lib/api/client/quality'
 import type { SupplierDashboardStats, SupplierQualificationItem } from '@/types/quality'

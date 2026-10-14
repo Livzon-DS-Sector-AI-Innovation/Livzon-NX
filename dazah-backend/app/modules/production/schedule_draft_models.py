@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import DateTime, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -36,14 +37,18 @@ class ScheduleDraftRecord(BaseModel):
         comment="产品代码（当前仅 FA）",
     )
     # 归一化后的生成参数（对齐后的周期、批号、跳过日、占用窗口）
-    params: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    params: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     # 参数指纹（md5），同参数重复生成据此去重更新
     params_hash: Mapped[str] = mapped_column(
         String(32), nullable=False, comment="参数指纹，同参数去重用"
     )
-    days: Mapped[list] = mapped_column(JSONB, nullable=False, comment="逐日事件快照")
-    summary: Mapped[dict] = mapped_column(JSONB, nullable=False, comment="摘要快照")
-    validation: Mapped[dict] = mapped_column(
+    days: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, comment="逐日事件快照"
+    )
+    summary: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, comment="摘要快照"
+    )
+    validation: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, comment="一期校验报告快照"
     )
     file_name: Mapped[str | None] = mapped_column(

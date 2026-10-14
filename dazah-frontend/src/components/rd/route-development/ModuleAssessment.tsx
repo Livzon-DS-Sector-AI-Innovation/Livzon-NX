@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import { Card, Slider, Button, Space, Tag, Select, Row, Col, App } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
 import { CheckCircleOutlined, ReloadOutlined, FileTextOutlined, DownloadOutlined } from '@ant-design/icons'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/components/shared/ThemedEChart'
 import type { DimensionAssessment, DimensionWeights, ExperimentRecord } from '@/types/rd'
 
 interface ModuleAssessmentProps {
@@ -256,7 +256,7 @@ export function ModuleAssessment({ routeId, selectedRouteName, experiments = [],
           </Col>
         </Row>
 
-        <Card size="small" style={{ marginTop: 16, textAlign: 'center', background: 'linear-gradient(135deg, #f0f5ff 0%, #e6f7ff 100%)' }}>
+        <Card size="small" style={{ marginTop: 16, textAlign: 'center', background: 'linear-gradient(135deg, var(--color-info-soft) 0%, var(--color-surface-soft) 100%)' }}>
           <div style={{ fontSize: 56, fontWeight: 700, color: weightedTotal >= 70 ? '#52c41a' : weightedTotal >= 50 ? '#faad14' : '#ff4d4f' }}>
             {weightedTotal}
           </div>

@@ -881,7 +881,11 @@ def _apply_batch_actual_times(
         if actual_dump is not None:
             row["dump_actual_at"] = actual_dump.isoformat()
         if row.get("status") in ("running", "dumping"):
-            if actual_inoculate is not None and effective_inoculate <= now:
+            if (
+                actual_inoculate is not None
+                and effective_inoculate is not None
+                and effective_inoculate <= now
+            ):
                 row["cultured_hours"] = round(
                     (now - effective_inoculate).total_seconds() / 3600, 1
                 )
@@ -3117,10 +3121,10 @@ def build_board(
     alerts: list[dict[str, Any]] = []
     for tank in tanks:
         if tank["status"] == "running" and tank["dump_at"]:
-            dump_at = _parse_board_time(tank["dump_at"])
-            if dump_at is None:
+            planned_dump_at = _parse_board_time(tank["dump_at"])
+            if planned_dump_at is None:
                 continue
-            remain_h = int((dump_at - now).total_seconds() // 3600)
+            remain_h = int((planned_dump_at - now).total_seconds() // 3600)
             # 播报只提醒 24h 内将要放罐的批次
             if 0 < remain_h <= 24:
                 alerts.append(

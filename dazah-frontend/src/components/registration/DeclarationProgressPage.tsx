@@ -714,7 +714,7 @@ export default function DeclarationProgressPage({ detail }: DeclarationProgressP
 
       <style jsx global>{`
         .declaration-progress-detail-modal .ant-descriptions-item-label {
-          background: #faf8ff;
+          background: var(--color-primary-soft);
           font-weight: 600;
           font-size: 13px;
           width: 140px;

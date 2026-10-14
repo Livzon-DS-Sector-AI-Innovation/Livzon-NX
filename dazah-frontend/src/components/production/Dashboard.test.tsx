@@ -6,10 +6,11 @@ import { App } from 'antd'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import Dashboard from './Dashboard'
+import { setAppearance } from '@/lib/useAppearance'
 
 // 将 echarts 渲染为占位 div 以便在 DOM 中查询
 vi.mock('echarts-for-react', () => ({
-  default: () => <div data-testid="echarts" />,
+  default: ({ theme }: { theme?: string }) => <div data-testid="echarts" data-theme={theme} />,
 }))
 
 const DATA = [
@@ -57,6 +58,9 @@ describe('Dashboard', () => {
     expect(text).toContain('工段仪表盘')
     expect(text).toContain('总批次')
     expect(text).toContain('3')
+    await act(async () => setAppearance('dark'))
+    expect(container.querySelector('[data-testid="echarts"]')?.getAttribute('data-theme')).toBe('dark')
+    await act(async () => setAppearance('system'))
   })
 
   it('renders all months when externalMonth is 0', async () => {

@@ -26,12 +26,12 @@ import uuid
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from openpyxl import Workbook, load_workbook
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
 from app.modules.equipment import repository as repo
 from app.modules.equipment.models.equipment import Location
+from app.modules.equipment.service.ledger_excel import LedgerSheet, ledger_excel
 
 # 台账模板列（序号仅占位，导入时忽略）
 LEDGER_COLUMNS = [
@@ -149,9 +149,9 @@ def parse_date_cell(value: Any) -> date | None:
             int(year_month_day.group(2)),
             int(year_month_day.group(3)),
         )
-    year_month = _YEAR_MONTH_PATTERN.match(text)
-    if year_month:
-        return date(int(year_month.group(1)), int(year_month.group(2)), 1)
+    year_month_match = _YEAR_MONTH_PATTERN.match(text)
+    if year_month_match:
+        return date(int(year_month_match.group(1)), int(year_month_match.group(2)), 1)
     raise ValueError(
         f"日期格式无法识别：{text}（支持 2024-05-01 / 2024/5/1 / 2024.5.1 / "
         f"2024年5月1日 / 2024年5月 / 2017.11 及 Excel 日期单元格，"
@@ -188,8 +188,10 @@ def parse_tech_params_cell(value: Any) -> dict[str, str] | None:
 
 def build_ledger_template() -> bytes:
     """生成含表头与示例行的导入模板。"""
-    workbook = Workbook()
+    workbook = ledger_excel.Workbook()
     sheet = workbook.active
+    if sheet is None:
+        raise AppException(status_code=500, message="设备台账模板缺少工作表")
     sheet.title = "设备台账"
     sheet.append(["序号", *LEDGER_COLUMNS])
     sheet.append([1, *_TEMPLATE_EXAMPLE_ROW])
@@ -223,9 +225,9 @@ def _collect_location_names(locations: list[Location]) -> dict[str, uuid.UUID]:
     return name_map
 
 
-def _merged_value_map(sheet: Any) -> dict[tuple[int, int], Any]:
+def _merged_value_map(sheet: LedgerSheet) -> dict[tuple[int, int], object]:
     """合并单元格锚点值 → 区域内所有 (行, 列) 的填充映射。"""
-    fill: dict[tuple[int, int], Any] = {}
+    fill: dict[tuple[int, int], object] = {}
     for cell_range in sheet.merged_cells.ranges:
         anchor = sheet.cell(cell_range.min_row, cell_range.min_col).value
         for row in range(cell_range.min_row, cell_range.max_row + 1):
@@ -254,7 +256,7 @@ async def import_equipment_ledger(
     """
     try:
         # 非 read_only 才能读取 merged_cells；台账 ≤2MB/1000 行内存可承受
-        workbook = load_workbook(io.BytesIO(data), data_only=True)
+        workbook = ledger_excel.load_workbook(io.BytesIO(data), data_only=True)
     except Exception as error:  # openpyxl 对损坏文件抛多种异常
         raise AppException(
             status_code=400, message=f"无法读取 Excel 文件：{error}"

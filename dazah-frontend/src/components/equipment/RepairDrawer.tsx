@@ -103,12 +103,12 @@ export function RepairDrawer({ equipments, symptoms, onRefresh }: RepairDrawerPr
     >
       <Form form={form} layout="vertical" requiredMark="optional" preserve={false}>
         <Form.Item name="equipment_id" label="关联设备">
-          <div style={{ padding: '8px 12px', background: '#f5f4f2', borderRadius: 6, fontSize: 14, color: '#37352f' }}>
+          <div style={{ padding: '8px 12px', background: 'var(--color-surface)', borderRadius: 6, fontSize: 14, color: 'var(--color-charcoal)' }}>
             {selectedEquipment ? `${selectedEquipment.equipment_no} - ${selectedEquipment.name}` : '-'}
           </div>
         </Form.Item>
         <Form.Item name="order_type" label="工单类型">
-          <div style={{ padding: '8px 12px', background: '#f5f4f2', borderRadius: 6, fontSize: 14, color: '#dd5b00', fontWeight: 500 }}>
+          <div style={{ padding: '8px 12px', background: 'var(--color-surface)', borderRadius: 6, fontSize: 14, color: '#dd5b00', fontWeight: 500 }}>
             故障维修
           </div>
         </Form.Item>

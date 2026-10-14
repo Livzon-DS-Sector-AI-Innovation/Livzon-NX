@@ -75,7 +75,9 @@ class ValidationAuditService:
 
     # ── 任务 CRUD ─────────────────────────────────────────
 
-    async def create_task(self, data: ValidationAuditTaskCreate) -> ValidationAuditTask:
+    async def create_task(
+        self, data: ValidationAuditTaskCreate, *, created_by: UUID | None = None
+    ) -> ValidationAuditTask:
         task = ValidationAuditTask(
             task_name=data.task_name,
             product_name=data.product_name,
@@ -83,6 +85,7 @@ class ValidationAuditService:
             source_company=data.source_company,
             audit_mode=data.audit_mode.value,
             status=TaskStatus.DRAFT.value,
+            created_by=created_by,
         )
         return await self.task_repo.create(task)
 

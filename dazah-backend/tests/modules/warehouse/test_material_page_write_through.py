@@ -220,6 +220,32 @@ def _mock_service() -> WarehouseService:
     return service
 
 
+@pytest.mark.asyncio
+async def test_field_conversion_retry_returns_record_and_preserves_write_through(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _mock_service()
+    service.repo.get_material_page_snapshot.return_value = _snapshot()
+    expected = {"record_id": "retry-record", "fields": {"名称": "更新名称"}}
+    write_client = _patch_feishu(
+        monkeypatch, service, put_response={}, get_record=expected
+    )
+    write_client.request.side_effect = [
+        RuntimeError("SingleSelectFieldConvFail"),
+        {},
+        RuntimeError("SingleSelectFieldConvFail"),
+        {"record": expected},
+    ]
+    result = await service.update_material_page_record(
+        "raw-summary", "retry-record", {"名称": "更新名称", "状态": "正常"}
+    )
+    assert result == expected
+    assert write_client.request.await_args.kwargs["json_body"] == {
+        "fields": {"名称": "更新名称"}
+    }
+    service.repo.upsert_material_page_row_write_through.assert_awaited_once()
+
+
 def _page_config() -> SimpleNamespace:
     return SimpleNamespace(
         page_key="raw-summary", app_token="app", table_id="tbl", title="原料"

@@ -777,8 +777,8 @@ export default function RegulationTrackerPage({
 
       <style jsx global>{`
         .regulation-tracker-table .ant-table-thead > tr > th {
-          background: #fafafa;
-          border-bottom: 1px solid #e8e8e8;
+          background: var(--color-surface-soft);
+          border-bottom: 1px solid var(--color-hairline);
           text-align: center;
           font-size: 13px;
           line-height: 1.45;
@@ -791,19 +791,19 @@ export default function RegulationTrackerPage({
           font-size: 13px;
           line-height: 1.55;
           padding: 14px 10px;
-          border-bottom: 1px solid #f0f0f0;
+          border-bottom: 1px solid var(--color-hairline-soft);
         }
 
         .regulation-tracker-table .ant-table-tbody > tr.regulation-tracker-row:nth-child(even) > td {
-          background: #fcfcfc;
+          background: var(--color-surface-soft);
         }
 
         .regulation-tracker-table .ant-table-tbody > tr.regulation-tracker-row:hover > td {
-          background: #f7f7f7;
+          background: var(--color-surface);
         }
 
         .regulation-tracker-table .ant-table-tbody > tr.regulation-tracker-row-selected > td {
-          background: #f0f5ff !important;
+          background: var(--color-info-soft) !important;
         }
       `}</style>
     </Space>

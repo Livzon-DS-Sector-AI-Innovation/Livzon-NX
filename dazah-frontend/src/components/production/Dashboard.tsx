@@ -3,7 +3,7 @@
 
 import { useMemo, useState } from 'react'
 import { Card, Row, Col, Select, Space, Typography, Statistic } from 'antd'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/components/shared/ThemedEChart'
 
 const { Text } = Typography
 

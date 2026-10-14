@@ -3,7 +3,7 @@
 import PlatformNotice from '@/components/shared/PlatformNotice'
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowRightOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
+import { ArrowRightOutlined, DownOutlined, InfoCircleOutlined } from '@ant-design/icons'
 
 import type { LocalLoginMode } from '@/lib/local-auth'
 
@@ -95,7 +95,7 @@ export function LoginPanel({
         <div className={styles.panelHeader}>
           <p className={styles.panelEyebrow}>企业身份认证</p>
           <h2>欢迎登录</h2>
-          <p>使用丽珠企业账号，安全进入工厂管理平台。</p>
+          <p>使用丽珠企业账号，安全进入原料药工厂管理平台。</p>
         </div>
 
         {(navigationError || (message && !isBusy)) && (
@@ -104,9 +104,14 @@ export function LoginPanel({
 
         <div className={styles.loginMethod}>
           <div className={styles.methodHeader}>
-            <span className={styles.methodIcon} aria-hidden="true"><SafetyCertificateOutlined /></span>
+            <span className={styles.methodIcon} aria-hidden="true">
+              <svg viewBox="0 0 48 48" width="40" height="40" fill="none">
+                <path d="M9 8h12c7 0 11 4 15 11L25 31 9 8Z" fill="#00D6B9" />
+                <path d="m4 19 14 12c5 4 12 5 18 0l-7 10H15C8 41 4 37 4 30V19Z" fill="#21A9FF" />
+                <path d="M44 17H33c-4 0-7 2-10 6l-7 10c7 7 16 5 21-3l7-13Z" fill="#254FE5" />
+              </svg>
+            </span>
             <div><strong>飞书企业账号</strong><p>使用企业身份完成授权</p></div>
-            <span className={styles.methodBadge}>推荐</span>
           </div>
           <button
             type="button"
@@ -146,6 +151,7 @@ export function LoginPanel({
                 ▶
               </span>
               {emergencyOnly ? '管理员应急登录' : '本地账号登录'}
+              <DownOutlined className={styles.toggleEnd} aria-hidden="true" />
             </button>
 
             {showLocalLogin && (
@@ -188,7 +194,7 @@ export function LoginPanel({
             )}
           </div>
         )}
-        <p className={styles.loginHelp}>如无法登录，请联系企业管理员确认账号与访问权限。</p>
+        <p className={styles.loginHelp}><InfoCircleOutlined aria-hidden="true" />如无法登录，请联系企业管理员确认账号与访问权限。</p>
       </div>
     </AuthLayout>
   )

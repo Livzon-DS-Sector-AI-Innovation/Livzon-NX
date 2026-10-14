@@ -188,7 +188,7 @@ export default function ExtractionPage() {
   return (
     <div className="p-6">
       <style>{`
-        .extraction-ledger-table .ant-table-thead > tr > th { white-space: normal !important; word-break: break-all; line-height: 1.15; padding: 2px 1px !important; font-size: 10px; text-align: center !important; vertical-align: middle !important; background: #fafafa; }
+        .extraction-ledger-table .ant-table-thead > tr > th { white-space: normal !important; word-break: break-all; line-height: 1.15; padding: 2px 1px !important; font-size: 10px; text-align: center !important; vertical-align: middle !important; background: var(--color-surface-soft); }
         .extraction-ledger-table .ant-table-tbody > tr > td { white-space: normal !important; word-break: break-all; padding: 1px 2px !important; font-size: 10px; text-align: center !important; line-height: 1.2; }
         .extraction-ledger-table .ant-input-number { font-size: 10px; width: 100%; } .extraction-ledger-table .ant-input-number input { font-size: 10px; padding: 0 2px; text-align: center; height: 20px; }
         .extraction-ledger-table .ant-input-number .ant-input-number-handler-wrap { display: none; } .extraction-ledger-table .ant-picker { width: 100%; } .extraction-ledger-table .ant-picker input { font-size: 10px; padding: 0 2px; text-align: center; height: 20px; }
@@ -227,7 +227,7 @@ export default function ExtractionPage() {
 
       <Card extra={canOperate ? <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setCreateVisible(true) }}>新建提取记录</Button> : null}>
         <Table size="small" rowKey="_key" loading={loading} className="extraction-ledger-table" dataSource={flattenData()} scroll={{ x: 1800 }} columns={columns} pagination={false} />
-        <div style={{ padding: '8px 0', display: 'flex', flexWrap: 'wrap', gap: 8, borderTop: '1px solid #f0f0f0', marginTop: 8 }}>
+        <div style={{ padding: '8px 0', display: 'flex', flexWrap: 'wrap', gap: 8, borderTop: '1px solid var(--color-hairline-soft)', marginTop: 8 }}>
           {canOperate && batchInputCounts.map(bic => <Button key={bic.recordId} size="small" type="dashed" loading={saving} onClick={() => addInputRow(bic.batchNo, bic.count)}>+ 粗品投入 ({bic.batchNo})</Button>)}
           {batchInputCounts.length === 0 && <Text type="secondary">暂无提取记录</Text>}
         </div>

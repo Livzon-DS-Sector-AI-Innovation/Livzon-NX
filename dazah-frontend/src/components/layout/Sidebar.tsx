@@ -9,6 +9,7 @@ import type { ModuleMenu, SubMenuItem } from "@/lib/menu-config"
 import { LoadingOutlined, MenuFoldOutlined, MenuUnfoldOutlined, SettingOutlined } from "@ant-design/icons"
 import type { User } from "@/types/user"
 import { isSystemAdministrator } from "@/lib/administrator-role"
+import { AppearanceMenu } from "./AppearanceMenu"
 
 type MenuItem = Required<MenuProps>['items'][number]
 const dashboardModules = new Set(['registration', 'quality', 'hr', 'warehouse'])
@@ -346,22 +347,21 @@ export function Sidebar({ user, modules }: SidebarProps) {
         </div>
       )}
 
-      <div className="px-4 py-3 border-t border-[var(--color-hairline-soft)] flex items-center justify-between">
-        <p className="text-[12px] text-[var(--color-stone)]">
-          v0.1.1
-        </p>
+      </>}
+      <div className={`mt-auto border-t border-[var(--color-hairline-soft)] flex items-center gap-1 py-3 ${collapsed ? "flex-col px-1" : "justify-between px-3"}`}>
+        <AppearanceMenu vertical={collapsed} />
         {user && isSystemAdministrator(user) && (
           <button
+            type="button"
             onClick={() => navigateTo("/settings")}
-            className="inline-flex min-h-8 items-center gap-1.5 rounded-[var(--rounded-sm)] px-2 text-[12px] font-medium text-[var(--color-stone)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-primary)]"
+            aria-label="系统设置"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--rounded-sm)] text-[var(--color-steel)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-primary)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]"
             title="系统设置"
           >
-            <SettingOutlined style={{ fontSize: 16 }} />
-            <span>系统设置</span>
+            <SettingOutlined aria-hidden style={{ fontSize: 16 }} />
           </button>
         )}
       </div>
-      </>}
     </aside>
     {pendingHref && (
       <div

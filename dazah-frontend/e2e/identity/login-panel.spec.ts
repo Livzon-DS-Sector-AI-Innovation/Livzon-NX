@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-for (const width of [1280, 375]) {
+for (const width of [1280, 820, 375]) {
   test(`登录入口在 ${width}px 下显示完整布局与错误恢复`, async ({ page, context }) => {
     await context.addCookies([{ name: 'auth_token', value: 'invalid-session', url: 'http://127.0.0.1:3200' }])
     await page.setViewportSize({ width, height: 850 })
@@ -8,6 +8,12 @@ for (const width of [1280, 375]) {
     await expect(page.getByRole('heading', { name: '欢迎登录' })).toBeVisible()
     await expect(page.getByRole('alert').filter({ hasText: '你已取消飞书授权' })).toBeVisible()
     await expect(page.getByRole('list', { name: '登录流程' })).toBeVisible()
+    if (width === 1280) {
+      await expect(page.getByRole('region', { name: '平台介绍' })).toBeVisible()
+      await expect(page.getByRole('list', { name: '平台业务能力' })).toBeVisible()
+    } else {
+      await expect(page.getByRole('region', { name: '平台介绍' })).toBeHidden()
+    }
     const login = page.getByRole('button', { name: '使用飞书企业账号登录' })
     await expect(login).toBeVisible()
     await login.focus()

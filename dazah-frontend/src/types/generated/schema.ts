@@ -3112,6 +3112,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment/my-todos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 本人设备待办 */
+        get: operations["equipment_my_todos_api_v1_equipment_my_todos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment/personnel": {
         parameters: {
             query?: never;
@@ -5411,6 +5428,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/hr/my-todos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 本人人事待办 */
+        get: operations["hr_my_todos_api_v1_hr_my_todos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/hr/new-employee-training/available-trainees": {
         parameters: {
             query?: never;
@@ -7495,6 +7529,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identity/admin/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 系统管理员接收反馈 */
+        get: operations["admin_feedback_api_v1_identity_admin_feedback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity/admin/feedback/{feedback_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** 处理问题反馈 */
+        patch: operations["process_feedback_api_v1_identity_admin_feedback__feedback_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/identity/admin/feedback/{feedback_id}/screenshots/{screenshot_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 系统管理员查看反馈截图 */
+        get: operations["admin_screenshot_api_v1_identity_admin_feedback__feedback_id__screenshots__screenshot_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identity/admin/menus": {
         parameters: {
             query?: never;
@@ -8314,6 +8399,41 @@ export interface paths {
          * @description Return the current platform user.
          */
         get: operations["get_me_api_v1_identity_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity/me/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查看本人反馈 */
+        get: operations["my_feedback_api_v1_identity_me_feedback_get"];
+        put?: never;
+        /** 提交问题反馈 */
+        post: operations["submit_feedback_api_v1_identity_me_feedback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity/me/feedback/{feedback_id}/screenshots/{screenshot_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查看本人反馈截图 */
+        get: operations["my_screenshot_api_v1_identity_me_feedback__feedback_id__screenshots__screenshot_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -17862,6 +17982,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quality/my-todos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 本人质量待办 */
+        get: operations["quality_my_todos_api_v1_quality_my_todos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quality/notification-settings": {
         parameters: {
             query?: never;
@@ -20891,6 +21028,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/registration/my-todos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 本人注册待办 */
+        get: operations["registration_my_todos_api_v1_registration_my_todos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/registration/project-ledger/entries": {
         parameters: {
             query?: never;
@@ -23822,6 +23976,23 @@ export interface paths {
          * @description PDF/图片浏览器内联预览，其余类型回退为下载。
          */
         get: operations["preview_knowledge_local_attachment_api_v1_safety_knowledge_articles__article_id__attachments__token__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/my-todos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 本人安全待办 */
+        get: operations["safety_my_todos_api_v1_safety_my_todos_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -32118,6 +32289,28 @@ export interface components {
              */
             include_details: boolean;
         };
+        /** Body_submit_feedback_api_v1_identity_me_feedback_post */
+        Body_submit_feedback_api_v1_identity_me_feedback_post: {
+            /** Description */
+            description: string;
+            /**
+             * Feedback Id
+             * Format: uuid
+             */
+            feedback_id: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /**
+             * Page Path
+             * @default
+             */
+            page_path: string;
+            /** Screenshots */
+            screenshots: string[];
+        };
         /** Body_upload_asset_api_v1_dossier_writer_chapters__chapter_id__assets_post */
         Body_upload_asset_api_v1_dossier_writer_chapters__chapter_id__assets_post: {
             /** Files */
@@ -32502,6 +32695,28 @@ export interface components {
              * @description 效价(u/mL)
              */
             titer_u_ml?: number | null;
+        };
+        /** BusinessTodoItem */
+        BusinessTodoItem: {
+            /** Detail */
+            detail: string;
+            /** Due Date */
+            due_date?: string | null;
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+        };
+        /** BusinessTodoPage */
+        BusinessTodoPage: {
+            /** Items */
+            items: components["schemas"]["BusinessTodoItem"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
         };
         /** C0 */
         C0: {
@@ -42455,6 +42670,84 @@ export interface components {
              * @description 总金额
              */
             total_amount: string;
+        };
+        /** FeedbackListResponse */
+        FeedbackListResponse: {
+            /** Items */
+            items: components["schemas"]["FeedbackResponse"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Pending Count */
+            pending_count: number;
+            /** Total */
+            total: number;
+        };
+        /** FeedbackResponse */
+        FeedbackResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Page Path */
+            page_path: string;
+            /** Reply */
+            reply: string;
+            /** Reporter Name */
+            reporter_name: string;
+            /** Screenshots */
+            screenshots: components["schemas"]["FeedbackScreenshotResponse"][];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "processing" | "resolved";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Version */
+            version: number;
+        };
+        /** FeedbackScreenshotResponse */
+        FeedbackScreenshotResponse: {
+            /** Content Type */
+            content_type: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
+        /** FeedbackUpdate */
+        FeedbackUpdate: {
+            /**
+             * Reply
+             * @default
+             */
+            reply: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "processing" | "resolved";
+            /** Version */
+            version: number;
         };
         /**
          * FeishuApprovalWebhookPayload
@@ -70195,6 +70488,41 @@ export interface operations {
             };
         };
     };
+    equipment_my_todos_api_v1_equipment_my_todos_get: {
+        parameters: {
+            query: {
+                kind: "maintenance" | "inspection";
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessTodoPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_personnel_api_v1_equipment_personnel_get: {
         parameters: {
             query?: {
@@ -75910,6 +76238,41 @@ export interface operations {
             };
         };
     };
+    hr_my_todos_api_v1_hr_my_todos_get: {
+        parameters: {
+            query: {
+                kind: "plan-tracking" | "position-transfer";
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessTodoPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_available_trainees_api_v1_hr_new_employee_training_available_trainees_get: {
         parameters: {
             query?: {
@@ -81143,6 +81506,112 @@ export interface operations {
             };
         };
     };
+    admin_feedback_api_v1_identity_admin_feedback_get: {
+        parameters: {
+            query?: {
+                status?: ("pending" | "processing" | "resolved") | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    process_feedback_api_v1_identity_admin_feedback__feedback_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feedback_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeedbackUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_screenshot_api_v1_identity_admin_feedback__feedback_id__screenshots__screenshot_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feedback_id: string;
+                screenshot_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_menus_api_v1_identity_admin_menus_get: {
         parameters: {
             query?: never;
@@ -82993,6 +83462,110 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_feedback_api_v1_identity_me_feedback_get: {
+        parameters: {
+            query?: {
+                status?: ("pending" | "processing" | "resolved") | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_feedback_api_v1_identity_me_feedback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_submit_feedback_api_v1_identity_me_feedback_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_screenshot_api_v1_identity_me_feedback__feedback_id__screenshots__screenshot_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feedback_id: string;
+                screenshot_id: string;
+            };
             cookie?: {
                 auth_token?: string | null;
             };
@@ -107758,6 +108331,41 @@ export interface operations {
             };
         };
     };
+    quality_my_todos_api_v1_quality_my_todos_get: {
+        parameters: {
+            query: {
+                kind: "deviations" | "capas" | "capa-plans" | "change-plans";
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessTodoPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_quality_notification_settings_api_v1_quality_notification_settings_get: {
         parameters: {
             query?: never;
@@ -116746,6 +117354,41 @@ export interface operations {
             };
         };
     };
+    registration_my_todos_api_v1_registration_my_todos_get: {
+        parameters: {
+            query: {
+                kind: "validation-audits";
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessTodoPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_project_ledger_entry_api_v1_registration_project_ledger_entries_post: {
         parameters: {
             query?: never;
@@ -123710,6 +124353,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    safety_my_todos_api_v1_safety_my_todos_get: {
+        parameters: {
+            query: {
+                kind: "hazards" | "accidents" | "checks" | "ehs-actions";
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessTodoPage"];
                 };
             };
             /** @description Validation Error */

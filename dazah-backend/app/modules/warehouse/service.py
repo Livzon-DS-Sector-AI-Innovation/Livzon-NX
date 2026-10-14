@@ -2829,7 +2829,9 @@ class WarehouseService:
                 put_url,
                 json_body={"fields": payload},
             )
-            record = data.get("record", {}) if isinstance(data, dict) else {}
+            record: dict[str, Any] = (
+                data.get("record", {}) if isinstance(data, dict) else {}
+            )
         except Exception as exc:
             # 飞书级联单选字段（如原辅料出库总账的「规格」）在 API 元数据中
             # 伪装为普通单选，写入却被 SingleSelectFieldConvFail 拒绝且无法

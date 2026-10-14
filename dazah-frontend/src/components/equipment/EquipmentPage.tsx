@@ -6,7 +6,6 @@ import zhCN from 'antd/locale/zh_CN'
 import { MenuFoldOutlined, MenuUnfoldOutlined, ReloadOutlined } from '@ant-design/icons'
 import { EquipmentCategory, Location, Equipment, EquipmentStatistics } from '@/types/equipment'
 import { useEquipmentStore } from '@/stores/equipment'
-import { antdTheme } from '@/lib/antd-theme'
 import { fetchEquipmentsClient, fetchEquipmentStatisticsClient, fetchCategoriesClient, fetchLocationsClient, fetchDepartmentsClient } from '@/lib/api/equipment-client'
 import { StatsCards } from './StatsCards'
 import { EquipmentTable } from './EquipmentTable'
@@ -199,7 +198,7 @@ export function EquipmentPage({
   const currentStats = statistics ?? initialStatistics
 
   return (
-    <ConfigProvider theme={antdTheme} locale={zhCN}>
+    <ConfigProvider locale={zhCN}>
       <App>
         {/* 标题行 */}
         <div style={{ marginBottom: 24 }}>

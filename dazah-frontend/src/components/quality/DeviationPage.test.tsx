@@ -1,13 +1,14 @@
 /* @vitest-environment happy-dom */
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { renderToString } from 'react-dom/server'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { App } from 'antd'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAuthStore } from '@/stores/auth'
 import { useDeviationStore } from '@/stores/quality'
 import { getPageKeyByPath } from '@/lib/menu-config'
-import { DEVIATION_LEDGER_PAGE } from './useDeviationPermissions'
+import { DEVIATION_LEDGER_PAGE, useDeviationPermissions } from './useDeviationPermissions'
 
 const mocks = vi.hoisted(() => ({ fetchDeviations: vi.fn(), fetchDeviation: vi.fn(), updateDeviation: vi.fn(), createDeviation: vi.fn(), fetchReporters: vi.fn(), batchDelete: vi.fn() }))
 vi.mock('@/lib/api/client/deviation-reporters', () => ({ fetchDeviationReporters: mocks.fetchReporters }))
@@ -66,6 +67,17 @@ it('does not request or retain data with access-only permission', async () => {
   expect(mocks.fetchDeviations).not.toHaveBeenCalled()
   expect(container.textContent).not.toContain('新增台账')
   expect(useDeviationStore.getState().deviations).toEqual([])
+})
+
+it('keeps the server and initial hydration permission view stable before enabling actions', async () => {
+  setGrant(['access', 'query', 'operate'])
+  function PermissionProbe() {
+    const permissions = useDeviationPermissions()
+    return <span>{permissions.canQuery ? '可查询' : '等待授权状态'}</span>
+  }
+  expect(renderToString(<PermissionProbe />)).toContain('等待授权状态')
+  await renderPage(<PermissionProbe />)
+  expect(container.textContent).toContain('可查询')
 })
 
 it('keeps import restricted to administrators even with operate permission', async () => {

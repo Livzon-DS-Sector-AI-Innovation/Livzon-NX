@@ -11,6 +11,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 import pytest
+from openpyxl import load_workbook
 
 from app.modules.production import fermentation_board_service as board
 from app.modules.production import schedule_draft_service as draft
@@ -303,6 +304,13 @@ def test_workbook_round_trip() -> None:
     """生成 xlsx → 现行上传解析器读回 → 事件与预览完全一致。"""
     result, _ = _generate(skip_dates={date(2026, 12, 5)})
     buffer = draft.build_draft_workbook(result)
+    sheet = load_workbook(buffer).active
+    assert sheet is not None
+    assert sheet.title == "排产草稿"
+    assert sheet.column_dimensions["A"].width == 10
+    assert sheet.column_dimensions["B"].width == 10
+    assert sheet.column_dimensions["C"].width == 8
+    buffer.seek(0)
     parsed = schedule_excel_service.parse_workbook_bytes(buffer.getvalue())
     rows = parsed["rows"]
     # 周期块可识别

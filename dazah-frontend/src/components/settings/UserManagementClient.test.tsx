@@ -72,11 +72,17 @@ describe('UserManagementClient permission entry', () => {
     await act(async () => root.unmount())
   })
 
-  it('labels an assigned ordinary administrator accurately', async () => {
+  it.each([
+    ['admin', ['ordinary_admin'], '普通管理员', 'ant-tag-blue'],
+    ['admin', ['super_admin'], '系统管理员', 'ant-tag-purple'],
+    ['admin', ['ordinary_admin', 'super_admin'], '系统管理员', 'ant-tag-purple'],
+    ['admin', [], '系统管理员', 'ant-tag-purple'],
+    ['user', [], '普通用户', 'ant-tag-green'],
+  ])('labels user role %s with codes %s and its identity color', async (role, roles, label, colorClass) => {
     mocks.getUsers.mockResolvedValue({
       items: [{
         id: 'ordinary-1', name: '普通管理员甲', username: 'ordinary',
-        role: 'admin', roles: ['ordinary_admin'], status: 'active', auth_source: 'local',
+        role, roles, status: 'active', auth_source: 'local',
       }],
       total: 1,
     })
@@ -89,7 +95,9 @@ describe('UserManagementClient permission entry', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
     expect(host.textContent).toContain('普通管理员甲')
-    expect(host.textContent).toContain('普通管理员')
+    const roleTag = host.querySelector('tbody td:nth-child(2) .ant-tag')!
+    expect(roleTag.textContent).toBe(label)
+    expect(roleTag.classList.contains(colorClass)).toBe(true)
     expect(host.querySelector('h3')?.textContent).toBe('用户列表')
     await act(async () => root.unmount())
   })

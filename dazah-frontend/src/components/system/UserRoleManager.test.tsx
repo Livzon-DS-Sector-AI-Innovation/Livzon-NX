@@ -86,6 +86,22 @@ async function setInputValue(element: HTMLInputElement | HTMLTextAreaElement, va
   })
 }
 
+it('distinguishes assigned role levels from gray unassigned tags', async () => {
+  mocks.fetchUsers.mockResolvedValue({ items: [
+    { ...user, id: 'admin', roles: [roles[2]] },
+    { ...user, id: 'ordinary', roles: [roles[3]] },
+    { ...user, id: 'custom', roles: [roles[0]] },
+    { ...user, id: 'unassigned', roles: [] },
+  ], total: 4 })
+  await renderManager()
+  const tags = [...host.querySelectorAll('tbody .ant-tag')]
+  expect(tags.map(tag => tag.textContent)).toEqual(['系统管理员', '普通管理员', '物料QA', '未分配'])
+  expect(tags[0].classList.contains('ant-tag-purple')).toBe(true)
+  expect(tags[1].classList.contains('ant-tag-blue')).toBe(true)
+  expect(tags[2].classList.contains('ant-tag-green')).toBe(true)
+  expect(tags[3].className).not.toMatch(/ant-tag-(purple|blue|green|gold)/)
+})
+
 it('opens assignment in a right drawer and cancels without saving', async () => {
   await renderManager()
   await act(async () => button('分配角色').click())

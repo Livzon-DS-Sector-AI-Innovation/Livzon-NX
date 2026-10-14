@@ -225,16 +225,16 @@ async def _fetch_pages(
             has_more = bool(page.get("has_more"))
             page_token = page.get("page_token")
         else:
-            page = await client.search_records_page(
+            record_page = await client.search_records_page(
                 table_id,
                 page_size=500,
                 automatic_fields=True,
                 timeout=60.0,
                 page_token=page_token,
             )
-            items = page["items"]
-            has_more = page["has_more"]
-            page_token = page["page_token"]
+            items = record_page["items"]
+            has_more = record_page["has_more"]
+            page_token = record_page["page_token"]
 
         if stop_before_ms is not None:
             reached = False
@@ -431,20 +431,15 @@ async def sync_table(
             await db.execute(delete(model).where(model.record_id == local_id))
 
     now = datetime.now(UTC)
-    count_model = (
-        EquipmentInspectionFeishuDevice
-        if table_key == SOURCE_DEVICES
-        else EquipmentInspectionFeishuRecord
-    )
     if table_key != SOURCE_DEVICES:
         count_stmt = (
-            select(func.count(count_model.id))
-            .where(count_model.source == table_key)
-            .where(count_model.is_deleted == False)  # noqa: E712
+            select(func.count(EquipmentInspectionFeishuRecord.id))
+            .where(EquipmentInspectionFeishuRecord.source == table_key)
+            .where(EquipmentInspectionFeishuRecord.is_deleted == False)  # noqa: E712
         )
     else:
-        count_stmt = select(func.count(count_model.id)).where(
-            count_model.is_deleted == False  # noqa: E712
+        count_stmt = select(func.count(EquipmentInspectionFeishuDevice.id)).where(
+            EquipmentInspectionFeishuDevice.is_deleted == False  # noqa: E712
         )
     total = (await db.execute(count_stmt)).scalar_one()
     state.total_rows = int(total)
@@ -667,7 +662,7 @@ async def list_devices(
                 "location_name"
             ),
             "in_ledger": device.equipment_no in ledger_nos,
-            "today_status": today_status.get(device.equipment_no, "pending"),
+            "today_status": today_status.get(device.equipment_no or "", "pending"),
         }
         for device in devices
     ]

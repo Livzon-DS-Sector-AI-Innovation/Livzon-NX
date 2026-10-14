@@ -110,7 +110,7 @@ export function PersonnelCategoryDrawer({
       size="large"
       closable={false}
       styles={{
-        body: { padding: 0, background: '#f5f3f0' },
+        body: { padding: 0, background: 'var(--color-surface)' },
         header: { display: 'none' },
       }}
       footer={null}
@@ -161,7 +161,7 @@ export function PersonnelCategoryDrawer({
         {/* 说明卡片 — 工业蓝调 */}
         <div style={{
           padding: '14px 18px', marginBottom: 24,
-          background: '#e8ecf2', borderRadius: 10,
+          background: 'var(--color-surface-soft)', borderRadius: 10,
           border: '1px solid #cdd6e3',
           display: 'flex', alignItems: 'flex-start', gap: 12,
         }}>
@@ -183,8 +183,8 @@ export function PersonnelCategoryDrawer({
           marginBottom: 16,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <ApartmentOutlined style={{ fontSize: 14, color: '#787671' }} />
-            <Text strong style={{ fontSize: 14, color: '#1a1a1a' }}>
+            <ApartmentOutlined style={{ fontSize: 14, color: 'var(--color-steel)' }} />
+            <Text strong style={{ fontSize: 14, color: 'var(--color-ink)' }}>
               约束条目
             </Text>
             {hasItems && (
@@ -205,7 +205,7 @@ export function PersonnelCategoryDrawer({
             style={{
               borderRadius: 8, height: 32,
               fontWeight: 600, fontSize: 12,
-              borderColor: '#c8c4be', color: '#5d5b54',
+              borderColor: '#c8c4be', color: 'var(--color-slate)',
             }}
           >
             添加约束
@@ -217,23 +217,23 @@ export function PersonnelCategoryDrawer({
           <div style={{
             padding: '48px 24px',
             textAlign: 'center',
-            background: '#fff', borderRadius: 12,
+            background: 'var(--color-canvas)', borderRadius: 12,
             border: '1px dashed #d9d5cf',
           }}>
             <div style={{
               width: 56, height: 56, borderRadius: 16,
-              background: '#f5f3f0',
+              background: 'var(--color-surface)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               margin: '0 auto 16px',
             }}>
               <SafetyCertificateOutlined style={{ fontSize: 24, color: '#c8c4be' }} />
             </div>
-            <Text strong style={{ fontSize: 15, color: '#37352f', display: 'block', marginBottom: 6 }}>
+            <Text strong style={{ fontSize: 15, color: 'var(--color-charcoal)', display: 'block', marginBottom: 6 }}>
               未设置分类约束
             </Text>
-            <Text style={{ fontSize: 13, color: '#a4a097', lineHeight: 1.6, display: 'block', maxWidth: 320, margin: '0 auto' }}>
+            <Text style={{ fontSize: 13, color: 'var(--color-stone)', lineHeight: 1.6, display: 'block', maxWidth: 320, margin: '0 auto' }}>
               点击上方「添加约束」为该人员指定
-              <Text strong style={{ color: '#787671' }}>角色 → 分类</Text>
+              <Text strong style={{ color: 'var(--color-steel)' }}>角色 → 分类</Text>
               的访问范围
             </Text>
           </div>
@@ -251,10 +251,10 @@ export function PersonnelCategoryDrawer({
 
               return (
                 <div key={index} style={{
-                  background: '#fff', borderRadius: 12,
+                  background: 'var(--color-canvas)', borderRadius: 12,
                   border: isComplete
                     ? '1px solid #d9f3e1'
-                    : '1px solid #e5e3df',
+                    : '1px solid var(--color-hairline)',
                   boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
                   overflow: 'hidden',
                   transition: 'border-color 0.2s, box-shadow 0.2s',
@@ -263,21 +263,21 @@ export function PersonnelCategoryDrawer({
                   <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     padding: '10px 16px',
-                    background: isComplete ? '#f8fbf8' : '#fafaf9',
-                    borderBottom: '1px solid #ede9e4',
+                    background: isComplete ? '#f8fbf8' : 'var(--color-surface-soft)',
+                    borderBottom: '1px solid var(--color-hairline-soft)',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                         width: 22, height: 22, borderRadius: 6,
-                        background: isComplete ? '#1aae39' : '#787671',
+                        background: isComplete ? '#1aae39' : 'var(--color-steel)',
                         color: '#fff', fontSize: 11, fontWeight: 700,
                         transition: 'background 0.2s',
                       }}>
                         {index + 1}
                       </span>
                       <Text style={{
-                        fontSize: 13, fontWeight: 600, color: '#1a1a1a',
+                        fontSize: 13, fontWeight: 600, color: 'var(--color-ink)',
                       }}>
                         约束 #{index + 1}
                       </Text>
@@ -306,7 +306,7 @@ export function PersonnelCategoryDrawer({
                       style={{
                         width: 28, height: 28, borderRadius: 6,
                         background: 'transparent', border: 'none',
-                        cursor: 'pointer', color: '#a4a097',
+                        cursor: 'pointer', color: 'var(--color-stone)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: 14, transition: 'all 0.15s',
                       }}
@@ -316,7 +316,7 @@ export function PersonnelCategoryDrawer({
                       }}
                       onMouseLeave={e => {
                         e.currentTarget.style.background = 'transparent'
-                        e.currentTarget.style.color = '#a4a097'
+                        e.currentTarget.style.color = 'var(--color-stone)'
                       }}
                     >
                       <DeleteOutlined />
@@ -331,7 +331,7 @@ export function PersonnelCategoryDrawer({
                     {/* 角色选择 */}
                     <div style={{ flex: '0 0 152px' }}>
                       <Text style={{
-                        fontSize: 11, fontWeight: 600, color: '#a4a097',
+                        fontSize: 11, fontWeight: 600, color: 'var(--color-stone)',
                         textTransform: 'uppercase', letterSpacing: 0.5,
                         display: 'block', marginBottom: 6,
                       }}>
@@ -359,7 +359,7 @@ export function PersonnelCategoryDrawer({
                     {/* 分类选择 */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <Text style={{
-                        fontSize: 11, fontWeight: 600, color: '#a4a097',
+                        fontSize: 11, fontWeight: 600, color: 'var(--color-stone)',
                         textTransform: 'uppercase', letterSpacing: 0.5,
                         display: 'block', marginBottom: 6,
                       }}>
@@ -387,12 +387,12 @@ export function PersonnelCategoryDrawer({
       <div style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,
         padding: '14px 24px',
-        background: '#fff',
-        borderTop: '1px solid #e5e3df',
+        background: 'var(--color-canvas)',
+        borderTop: '1px solid var(--color-hairline)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         boxShadow: '0 -2px 8px rgba(0,0,0,0.04)',
       }}>
-        <Text style={{ fontSize: 13, color: '#a4a097' }}>
+        <Text style={{ fontSize: 13, color: 'var(--color-stone)' }}>
           {hasItems
             ? `${validCount} 条有效约束`
             : '未设置约束 — 全部可分配'}

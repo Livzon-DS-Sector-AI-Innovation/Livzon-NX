@@ -347,8 +347,6 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
       <Button className={styles.footerButton} type="primary" loading={saving || pendingAction === "save"} onClick={() => void previewChanges("save")}
         disabled={loading || saving || previewing || !result || result.role_id !== role?.id}>保存</Button>
     </div>}>
-    <Alert className={styles.rulesNotice} title="模块入口随有效页面访问权限自动生效；高风险授权依赖普通操作。"
-      description="保存角色页面权限后，成员的模块入口按多个角色与用户页面覆盖的最终结果自动计算，无需单独开通模块。模块内至少一个页面可访问时开通入口；撤销最后一个可访问页面后关闭入口。用户有精确覆盖时，以用户覆盖为准。系统管理员默认拥有全部模块访问权限。高风险操作是“普通操作”之上的附加授权，勾选时会自动启用普通操作，取消普通操作时会一并撤销。" />
     {errorMessage && <Alert className="mb-4" type="error" showIcon title={errorMessage}
       action={<Button size="small" onClick={() => modal.confirm({ centered: true, title: "重新加载最新角色授权？",
         content: "刷新会放弃未保存的本地调整，请先核对需要保留的更改。", okText: "重新加载", cancelText: "继续编辑",
@@ -383,8 +381,12 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
       </div>
     </div>
     <Alert className={styles.changesNotice} type={changes.length ? "warning" : "info"}
-      title={`未保存调整 ${changes.length} 个页面，批量操作只影响当前筛选结果，筛选外页面保持不变。`}
-      description="批量操作仅调整当前模块的筛选结果；所有更改在填写调整原因、预览影响并确认保存后生效。" />
+      style={{ paddingBlock: token.paddingXS, paddingInline: token.paddingSM }}
+      title={<span className={styles.noticeSummary}>
+        <span>模块入口随有效页面访问权限自动生效；高风险授权依赖普通操作。</span>
+        <span role="status">未保存调整 {changes.length} 个页面；批量仅影响当前筛选，筛选外不变。</span>
+      </span>}
+      description="保存角色页面权限后，成员的模块入口按多个角色与用户页面覆盖的最终结果自动计算，无需单独开通模块。模块内至少一个页面可访问时开通入口；撤销最后一个可访问页面后关闭入口。用户有精确覆盖时，以用户覆盖为准。系统管理员默认拥有全部模块访问权限。高风险操作是“普通操作”之上的附加授权，勾选时会自动启用普通操作，取消普通操作时会一并撤销。批量操作仅调整当前模块的筛选结果，筛选外页面保持不变；所有更改在填写调整原因、预览影响并确认保存后生效。" />
     <div className={styles.treeToolbar}>
       <Button size="small" icon={<DownOutlined />} iconPlacement="end" onClick={() => setExpandedKeys(allGroupKeys(tree))}>展开全部菜单</Button>
       <Button size="small" icon={<UpOutlined />} iconPlacement="end" onClick={() => setExpandedKeys([])}>折叠全部菜单</Button>

@@ -169,7 +169,7 @@ export default function BlendingPage() {
   return (
     <div className="p-6">
       <style>{`
-        .blend-ledger-table .ant-table-thead > tr > th { white-space: normal !important; word-break: break-all; line-height: 1.1; padding: 2px 1px !important; font-size: 9px; text-align: center !important; vertical-align: middle !important; background: #fafafa; }
+        .blend-ledger-table .ant-table-thead > tr > th { white-space: normal !important; word-break: break-all; line-height: 1.1; padding: 2px 1px !important; font-size: 9px; text-align: center !important; vertical-align: middle !important; background: var(--color-surface-soft); }
         .blend-ledger-table .ant-table-tbody > tr > td { white-space: normal !important; word-break: break-all; padding: 1px 2px !important; font-size: 10px; text-align: center !important; line-height: 1.2; }
         .blend-ledger-table .ant-input-number { font-size: 10px; width: 100%; } .blend-ledger-table .ant-input-number input { font-size: 10px; padding: 0 2px; text-align: center; height: 20px; }
         .blend-ledger-table .ant-input-number .ant-input-number-handler-wrap { display: none; }

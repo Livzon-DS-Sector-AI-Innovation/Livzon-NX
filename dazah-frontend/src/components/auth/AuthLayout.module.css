@@ -1,63 +1,25 @@
 .authPage {
   display: grid;
   min-height: 100dvh;
-  grid-template-columns: minmax(0, 44fr) minmax(32rem, 56fr);
+  grid-template-columns: minmax(0, 53.2fr) minmax(0, 46.8fr);
   background: var(--color-canvas);
 }
 .brandPane {
   position: relative;
   min-height: 100%;
   overflow: hidden;
-  border-right: 1px solid rgba(86, 69, 212, 0.1);
-  background:
-    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.88), transparent 25rem),
-    linear-gradient(145deg, #f8f7ff 0%, #eeebfb 58%, #e8eefc 100%);
-}
-
-.brandPane::before,
-.brandPane::after {
-  position: absolute;
-  border: 1px solid rgba(86, 69, 212, 0.08);
-  border-radius: 50%;
-  content: "";
-  pointer-events: none;
-}
-
-.brandPane::before {
-  right: -14rem;
-  bottom: -16rem;
-  width: 36rem;
-  height: 36rem;
-}
-
-.brandPane::after {
-  right: -7rem;
-  bottom: -9rem;
-  width: 23rem;
-  height: 23rem;
-}
-
-.brandGlow {
-  position: absolute;
-  top: 28%;
-  right: -8rem;
-  width: 25rem;
-  height: 25rem;
-  border-radius: 50%;
-  background: rgba(125, 151, 231, 0.12);
-  filter: blur(4rem);
-  pointer-events: none;
+  background: #eeecff url('/brand/login-factory-background.png') center bottom / 100% 100% no-repeat;
 }
 
 .brandContent {
   position: relative;
   z-index: 1;
   display: flex;
-  width: min(100%, 42rem);
+  width: 100%;
   min-height: 100dvh;
   flex-direction: column;
-  justify-content: space-between;
-  padding: clamp(2rem, 5vw, 4.5rem);
+  padding: clamp(2rem, 4.2vw, 4.5rem);
+  padding-block: 3.25rem;
 }
 
 .brand {
@@ -90,9 +52,17 @@
   letter-spacing: 0.18em;
 }
 
+.brandTagline {
+  margin-left: 0.5rem;
+  border-left: 1px solid var(--color-primary-border);
+  padding-left: 1.25rem;
+  color: var(--color-steel);
+  font-size: 0.8125rem;
+  letter-spacing: 0.12em;
+}
+
 .brandMessage {
-  max-width: 32rem;
-  padding-block: 3rem;
+  margin-top: clamp(4rem, 11vh, 7rem);
 }
 
 .internalBadge {
@@ -110,44 +80,88 @@
 }
 
 .brandMessage h1 {
-  max-width: 11em;
   margin: 0;
   color: var(--color-brand-navy);
-  font-size: clamp(2rem, 3.3vw, 3rem);
-  font-weight: 650;
+  font-size: clamp(2rem, 3.3vw, 3.5rem);
+  font-weight: 700;
   letter-spacing: -0.035em;
   line-height: 1.18;
 }
+
+.brandSubtitle {
+  margin-top: 0.875rem;
+  color: var(--color-steel);
+  font-size: clamp(0.625rem, 0.95vw, 1rem);
+  letter-spacing: 0.3em;
+}
+
+.brandFeatures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(1rem, 2.3vw, 2.5rem);
+  margin: 3rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.brandFeatures li { display: flex; align-items: center; gap: 0.75rem; }
+.brandFeatures li > span {
+  display: grid;
+  width: 3.25rem;
+  height: 3.25rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-deep);
+  font-size: 1.625rem;
+}
+.brandFeatures strong { color: var(--color-brand-navy); font-size: 0.9375rem; }
+.brandFeatures small { display: block; margin-top: 0.25rem; color: var(--color-steel); font-size: 0.75rem; }
 
 .brandMessage p {
   max-width: 31rem;
   margin: 1.5rem 0 0;
   color: var(--color-slate);
-  font-size: 1rem;
+  font-size: 1.125rem;
   line-height: 1.85;
 }
 
 .brandFootnote {
-  margin: 0;
+  margin: auto 0 0;
+  padding-top: 3rem;
   color: var(--color-steel);
   font-size: 0.75rem;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.2em;
+  line-height: 1.8;
   text-transform: uppercase;
 }
 
 .accessPane {
+  position: relative;
   display: grid;
   min-width: 0;
   min-height: 100dvh;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: auto 1fr auto;
   align-items: center;
-  background: var(--color-canvas);
-  padding: clamp(2rem, 6vw, 5rem);
+  background: radial-gradient(ellipse at center, var(--color-primary-soft-hover), var(--color-canvas) 75%);
+  padding: 2.75rem clamp(2rem, 5vw, 5.5rem) 3.5rem;
+}
+
+.accessValues {
+  margin: 0 0 2.75rem;
+  color: var(--color-steel);
+  font-size: 0.8125rem;
+  letter-spacing: 0.2em;
+  text-align: right;
 }
 
 .accessContent {
-  width: min(100%, 26.25rem);
+  width: min(100%, 39rem);
   margin: auto;
+  border-radius: var(--rounded-xxl);
+  background: var(--color-canvas);
+  padding: clamp(2rem, 3.6vw, 3.75rem);
+  box-shadow: 0 12px 48px rgba(86, 69, 212, 0.06);
 }
 
 .mobileBrand {
@@ -177,8 +191,8 @@
 .panelHeader h2 {
   margin: 0;
   color: var(--color-ink);
-  font-size: clamp(1.75rem, 2.5vw, 2rem);
-  font-weight: 650;
+  font-size: clamp(1.75rem, 2.5vw, 2.25rem);
+  font-weight: 700;
   letter-spacing: -0.025em;
   line-height: 1.25;
 }
@@ -186,7 +200,7 @@
 .panelHeader p {
   margin: 0.75rem 0 0;
   color: var(--color-slate);
-  font-size: 0.9375rem;
+  font-size: 1.0625rem;
   line-height: 1.7;
 }
 
@@ -199,15 +213,19 @@
 }
 
 .panelHeader .panelEyebrow {
+  display: inline-flex;
+  border-radius: var(--rounded-md);
+  background: var(--color-primary-soft);
+  padding: 0.3rem 0.875rem;
   margin: 0 0 0.875rem;
   color: var(--color-primary);
   font-size: 0.75rem;
 }
 
 .loginMethod {
-  border: 1px solid var(--color-hairline-soft);
+  border: 1px solid var(--color-primary-soft);
   border-radius: var(--rounded-lg);
-  background: var(--color-surface-soft);
+  background: linear-gradient(120deg, var(--color-primary-soft-hover), var(--color-surface-soft));
   padding: 1.5rem;
 }
 
@@ -215,13 +233,13 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
 }
 
 .methodIcon {
   display: grid;
-  flex: 0 0 2.75rem;
-  height: 2.75rem;
+  flex: 0 0 3.75rem;
+  height: 3.75rem;
   place-items: center;
   border: 1px solid var(--color-hairline-soft);
   border-radius: var(--rounded-md);
@@ -232,21 +250,14 @@
 
 .methodHeader strong {
   color: var(--color-ink);
-  font-size: 0.9375rem;
+  font-size: 1.125rem;
   font-weight: 600;
 }
 
 .methodHeader p {
   margin: 0.25rem 0 0;
   color: var(--color-slate);
-  font-size: 0.75rem;
-}
-
-.methodBadge {
-  margin-left: auto;
-  color: var(--color-primary);
-  font-size: 0.75rem;
-  white-space: nowrap;
+  font-size: 0.875rem;
 }
 
 .buttonArrow {
@@ -259,10 +270,10 @@
 }
 
 .loginStatus {
-  min-height: 2.75rem;
+  min-height: 1.25rem;
   margin: 0.875rem 0 0;
   color: var(--color-slate);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   line-height: 1.7;
   text-align: center;
 }
@@ -271,9 +282,17 @@
   display: flex;
   justify-content: space-between;
   gap: 0.5rem;
-  margin: 1.5rem 0 0;
+  margin: 1.75rem 0 0;
   padding: 0;
   list-style: none;
+}
+
+.loginSteps li:not(:last-child)::after {
+  width: clamp(0.75rem, 1.8vw, 2rem);
+  height: 1px;
+  margin-left: 0.75rem;
+  background: var(--color-primary-border);
+  content: '';
 }
 
 .loginSteps li {
@@ -281,15 +300,17 @@
   align-items: center;
   gap: 0.5rem;
   color: var(--color-slate);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
 }
 
 .loginSteps span {
   display: grid;
-  width: 1.5rem;
-  height: 1.5rem;
+  flex: 0 0 2.125rem;
+  width: 2.125rem;
+  height: 2.125rem;
   place-items: center;
-  border: 1px solid var(--color-hairline-strong);
+  border: 2px solid var(--color-primary-border);
+  color: var(--color-primary-deep);
   border-radius: 50%;
   transition: color 180ms ease, background-color 180ms ease;
 }
@@ -301,11 +322,16 @@
 }
 
 .loginHelp {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
   margin: 1.75rem 0 0;
   color: var(--color-steel);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   line-height: 1.8;
 }
+
+.loginHelp > span { margin-top: 0.25rem; font-size: 1.125rem; }
 
 .errorNotice {
   display: flex;
@@ -359,7 +385,9 @@
 .primaryButton {
   width: 100%;
   border: 1px solid var(--color-primary);
-  background: var(--color-primary);
+  min-height: 3.5rem;
+  font-size: 1.125rem;
+  background: linear-gradient(110deg, var(--color-primary), var(--color-primary-pressed));
   color: var(--color-on-primary);
   box-shadow: 0 1px 2px rgba(31, 23, 93, 0.12);
 }
@@ -425,25 +453,28 @@
 }
 
 .emergencyArea {
-  margin-top: 2rem;
-  border-top: 1px solid var(--color-hairline-soft);
-  padding-top: 1.25rem;
+  margin-top: 2.25rem;
 }
 
 .emergencyToggle {
   display: flex;
-  min-height: 2.25rem;
+  width: 100%;
+  min-height: 3.5rem;
   align-items: center;
   gap: 0.5rem;
   border: 0;
-  background: transparent;
-  padding: 0;
-  color: var(--color-slate);
+  border-radius: var(--rounded-lg);
+  background: var(--color-surface-soft);
+  padding: 0.875rem 1.25rem;
+  color: var(--color-ink);
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: 1rem;
   font-weight: 550;
   cursor: pointer;
 }
+
+.toggleEnd { margin-left: auto; color: var(--color-steel); transition: transform 160ms ease; }
+.emergencyToggle[aria-expanded="true"] .toggleEnd { transform: rotate(180deg); }
 
 .toggleChevron {
   color: var(--color-steel);
@@ -613,7 +644,7 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1100px) {
   .authPage {
     display: block;
     background:
@@ -629,6 +660,8 @@
     grid-template-rows: auto 1fr auto;
     padding: 1.5rem;
   }
+
+  .accessValues { display: none; }
 
   .mobileBrand {
     display: flex;
@@ -657,8 +690,16 @@
   }
 
   .accessContent {
-    padding-block: 3rem 2rem;
+    margin-block: 2rem;
+    padding: 2rem;
   }
+}
+
+@media (min-width: 1101px) and (max-height: 900px) {
+  .accessPane { padding-block: 1.75rem 2rem; }
+  .accessValues { margin-bottom: 1.75rem; }
+  .accessContent { padding-block: 2.5rem; }
+  .emergencyArea { margin-top: 1.75rem; }
 }
 
 @media (max-width: 420px) {
@@ -668,6 +709,16 @@
   .accessPane {
     padding: 1.25rem;
   }
+
+  .accessContent { padding: 1.5rem; }
+  .loginSteps { gap: 0.375rem; }
+  .loginSteps li { gap: 0.375rem; font-size: 0.6875rem; }
+  .loginSteps li:not(:last-child)::after { display: none; }
+  .methodHeader { gap: 0.625rem; }
+  .methodHeader strong { font-size: 1rem; }
+  .methodHeader p, .loginStatus { font-size: 0.75rem; }
+  .primaryButton { font-size: 0.9375rem; }
+  .methodIcon { flex-basis: 3rem; height: 3rem; }
 
   .panelHeader {
     margin-bottom: 1.5rem;

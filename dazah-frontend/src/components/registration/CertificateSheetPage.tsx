@@ -94,18 +94,18 @@ function toRequiredString(value: string | number | undefined): string {
 }
 
 const documentTableHeaderStyle = {
-  borderBottom: '1px solid #f0f0f0',
+  borderBottom: '1px solid var(--color-hairline-soft)',
   textAlign: 'center' as const,
   verticalAlign: 'middle' as const,
   padding: '10px 8px',
   fontWeight: 600,
   fontSize: 14,
   lineHeight: 1.75,
-  background: '#fff',
+  background: 'var(--color-canvas)',
 }
 
 const documentTableCellStyle = {
-  borderBottom: '1px solid #f0f0f0',
+  borderBottom: '1px solid var(--color-hairline-soft)',
   textAlign: 'center' as const,
   verticalAlign: 'middle' as const,
   padding: '10px 8px',
@@ -114,7 +114,7 @@ const documentTableCellStyle = {
   whiteSpace: 'pre-wrap' as const,
   wordBreak: 'break-word' as const,
   overflowWrap: 'anywhere' as const,
-  background: '#fff',
+  background: 'var(--color-canvas)',
 }
 
 export default function CertificateSheetPage({
@@ -417,7 +417,7 @@ export default function CertificateSheetPage({
             onClick: () => setSelectedRowId(record.id),
             style: {
               cursor: 'pointer',
-              backgroundColor: record.id === selectedRowId ? '#faf7ff' : '#fff',
+              backgroundColor: record.id === selectedRowId ? 'var(--color-primary-soft)' : 'var(--color-canvas)',
             },
           })}
         />

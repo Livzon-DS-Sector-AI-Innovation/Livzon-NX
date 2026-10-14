@@ -339,13 +339,18 @@ describe('equipment menu structure', () => {
   })
 
   it.each([
-    ['/equipment/assets', 'equipment:workshop-201-2:assets'],
-    ['/equipment/maintenance', 'equipment:workshop-201-2:maintenance'],
-    ['/equipment/inspection', 'equipment:workshop-201-2:inspection'],
-    ['/equipment/spare-parts', 'equipment:workshop-201-2:spare-parts'],
-    ['/equipment/personnel', 'equipment:workshop-201-2:personnel'],
+    ['/equipment/assets', 'equipment:assets'],
+    ['/equipment/maintenance', 'equipment:maintenance'],
+    ['/equipment/inspection', 'equipment:inspection'],
+    ['/equipment/spare-parts', 'equipment:spare-parts'],
+    ['/equipment/personnel', 'equipment:personnel'],
     ['/equipment/stats', 'equipment:stats'],
   ])('maps the nested equipment pages to scoped permission keys: %s', (path, pageKey) => {
     expect(getPageKeyByPath(path)).toBe(pageKey)
+  })
+  it('keeps an existing inspection grant usable after workshop grouping', () => {
+    const menus = getAuthorizedPageMenus([], [{ page_key: 'equipment:inspection', module_code: 'equipment', permissions: ['access', 'query', 'operate'] }])
+    expect(menus[0]?.children[0]?.children?.map((item) => item.path)).toEqual(['/equipment/inspection'])
+    expect(getFirstAuthorizedModulePath({ role: 'user', page_permissions: [{ page_key: 'equipment:inspection', module_code: 'equipment', permissions: ['access', 'query'] }] })).toBe('/equipment/inspection')
   })
 })

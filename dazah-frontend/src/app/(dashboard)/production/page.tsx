@@ -17,7 +17,7 @@ import {
   EditOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/components/shared/ThemedEChart'
 import BoardNavBlocks from '@/components/production/board-nav-blocks'
 import BatchProgressBar from '@/components/production/batch-progress-bar'
 import FlBoardView from '@/components/production/FlBoardView'
