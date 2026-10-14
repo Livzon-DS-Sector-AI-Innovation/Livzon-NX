@@ -29,7 +29,7 @@ describe('globals.css 主按钮样式', () => {
     expect(offenders).toEqual([])
   })
 
-  it('覆盖规则保持原优先级（:where 不提升特异性）', () => {
+  it('浅色覆盖和 ghost 排除均使用 :where 保持原优先级', () => {
     const selectors = parseRules(css)
       .filter((rule) => rule.selector.includes('.ant-btn-primary'))
       .map((rule) => rule.selector)
@@ -37,7 +37,7 @@ describe('globals.css 主按钮样式', () => {
     expect(selectors.length).toBeGreaterThan(0)
     expect(
       selectors.every((selector) =>
-        /^\.ant-btn-primary:where\(:not\(\.ant-btn-background-ghost\)\)(:hover|:active)?$/.test(
+        /^:where\(:root:not\(\[data-theme="dark"\]\)\) \.ant-btn-primary:where\(:not\(\.ant-btn-background-ghost\)\)(:hover|:active)?$/.test(
           selector,
         ),
       ),

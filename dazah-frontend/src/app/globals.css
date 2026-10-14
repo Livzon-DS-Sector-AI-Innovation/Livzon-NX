@@ -634,18 +634,18 @@ html[data-appearance-transition="fade"]::view-transition-new(root) {
 /* 按钮样式
    :where 保持与原规则相同的优先级；排除 ghost 变体：ghost 按钮文字用主色，
    实心背景会把同色文字盖住（表现为按钮"没字"，悬停才显示）。 */
-:root:not([data-theme="dark"]) .ant-btn-primary:where(:not(.ant-btn-background-ghost)) {
+:where(:root:not([data-theme="dark"])) .ant-btn-primary:where(:not(.ant-btn-background-ghost)) {
   background: var(--color-primary-fill);
   border-color: var(--color-primary-fill);
   box-shadow: none;
 }
 
-:root:not([data-theme="dark"]) .ant-btn-primary:where(:not(.ant-btn-background-ghost)):hover {
+:where(:root:not([data-theme="dark"])) .ant-btn-primary:where(:not(.ant-btn-background-ghost)):hover {
   background: var(--color-primary-hover);
   border-color: var(--color-primary-hover);
 }
 
-:root:not([data-theme="dark"]) .ant-btn-primary:where(:not(.ant-btn-background-ghost)):active {
+:where(:root:not([data-theme="dark"])) .ant-btn-primary:where(:not(.ant-btn-background-ghost)):active {
   background: var(--color-primary-pressed);
   border-color: var(--color-primary-pressed);
 }
