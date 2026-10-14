@@ -5,6 +5,21 @@ import { adaptChartAppearance } from './chartAppearance'
 import { getAntdTheme } from './antd-theme'
 
 describe('chart appearance', () => {
+  it('keeps registration labels and warehouse/inspection grid lines readable in dark mode', () => {
+    const option = {
+      series: [{ type: 'bar', label: { color: '#475569' }, data: [0, 12, 42] }],
+      xAxis: { axisLabel: { color: 'rgba(0, 0, 0, 0.65)' }, axisLine: { lineStyle: { color: '#d9d9d9' } } },
+      yAxis: { axisLine: { lineStyle: { color: '#e3e5ef' } }, splitLine: { lineStyle: { color: '#eef0f7' } } },
+    }
+    const token = theme.getDesignToken(getAntdTheme('dark'))
+    expect(adaptChartAppearance(option, 'dark')).toMatchObject({
+      series: [{ label: { color: token.colorTextSecondary }, data: [0, 12, 42] }],
+      xAxis: { axisLabel: { color: token.colorTextSecondary }, axisLine: { lineStyle: { color: token.colorBorderSecondary } } },
+      yAxis: { axisLine: { lineStyle: { color: token.colorBorderSecondary } }, splitLine: { lineStyle: { color: token.colorBorderSecondary } } },
+    })
+    expect(adaptChartAppearance(option, 'light')).toBe(option)
+  })
+
   it('adapts tooltip, axes and neutral labels without mutating business data or gradients', () => {
     const formatter = () => '批次数据'
     const data = [{ name: '#ffffff', value: 15, itemStyle: { color: '#e03131' } }]
@@ -46,11 +61,16 @@ describe('chart appearance', () => {
     const formatter = () => '三维响应'
     const option = { tooltip: [{ formatter }, { backgroundColor: '#fff' }],
       grid3D: { axisLabel: { color: '#333' } },
+      xAxis3D: { type: 'value', name: '温度（℃）' },
+      yAxis3D: [{ type: 'value', nameTextStyle: { color: '#e03131' } }],
       series: [{ type: 'surface', data: [[1, 2, 3]], shading: 'realistic' }],
     }
     const result = adaptChartAppearance(option, 'dark')
     expect(result).toMatchObject({ tooltip: [{ formatter }, { backgroundColor: '#2b2b30' }],
       series: option.series, grid3D: { axisLabel: { color: '#eeedf1' } },
+      xAxis3D: { name: '温度（℃）', nameTextStyle: { color: '#bcb9c3' }, axisLabel: { color: '#bcb9c3' } },
+      yAxis3D: [{ nameTextStyle: { color: '#e03131' }, axisLabel: { color: '#bcb9c3' } }],
     })
+    expect(adaptChartAppearance(option, 'light')).toBe(option)
   })
 })

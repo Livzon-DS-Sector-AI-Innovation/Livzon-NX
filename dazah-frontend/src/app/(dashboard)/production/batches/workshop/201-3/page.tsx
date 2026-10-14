@@ -59,9 +59,9 @@ export default function Workshop2013Page() {
   const currentMonth = selectedMonth.month() + 1
 
   const outputChartOption = useMemo(() => ({
-    tooltip: { trigger: 'axis', formatter: (p: Array<{ name: string; value: number }>) => `${p[0].name}月<br/>产量: ${p[0].value.toLocaleString()} kg` },
+    tooltip: { trigger: 'axis', formatter: (p: Array<{ name: string; value: number }>) => `${p[0].name}<br/>产量: ${p[0].value.toLocaleString()} kg` },
     xAxis: { type: 'category', data: monthlyTrend.map(t => `${t.month}月`) },
-    yAxis: { type: 'value', name: 'kg', axisLabel: { formatter: (v: number) => (v / 1000).toFixed(0) + 't' } },
+    yAxis: { type: 'value', name: 'kg', axisLabel: { formatter: (v: number) => v.toLocaleString('zh-CN', { maximumFractionDigits: 2 }) } },
     series: [{
       type: 'bar', name: '产量', data: monthlyTrend.map(t => {
         const v = t.output_kg || 0

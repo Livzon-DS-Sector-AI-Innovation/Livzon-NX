@@ -15,6 +15,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import ReactECharts from '@/components/shared/ThemedEChart'
 import { toPng } from 'html-to-image'
+import { theme } from 'antd'
 import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
@@ -74,6 +75,7 @@ interface TraceStage {
 }
 
 function FlowNode({ node, isTarget }: { node: TraceNode; isTarget: boolean }) {
+  const { token } = theme.useToken()
   const cfg = STAGE_CONFIG[node.stage] || { color: '#999', bg: '#f5f5f5', icon: null }
   const isSib = node.is_sibling
   // 投入明细（混批展开式）：全部兄弟批 + 投入合计 + 收率对账
@@ -96,14 +98,14 @@ function FlowNode({ node, isTarget }: { node: TraceNode; isTarget: boolean }) {
         size="small"
         style={{
           border: node.broken ? '2px solid #ff4d4f' : isTarget ? `2px solid ${cfg.color}` : isSib ? `1px dashed ${cfg.color}60` : `1px solid ${cfg.color}40`,
-          backgroundColor: node.broken ? '#fff1f0' : isTarget ? cfg.bg : isSib ? '#fafafa' : '#fff',
+          backgroundColor: node.broken ? token.colorErrorBg : isTarget ? token.colorPrimaryBg : isSib ? token.colorFillAlter : token.colorBgContainer,
           borderRadius: 8, width: '100%',
         }}
         bodyStyle={{ padding: '10px 12px' }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
           <span style={{ color: node.broken ? '#ff4d4f' : cfg.color, fontSize: 16 }}>{cfg.icon}</span>
-          <Text strong style={{ fontSize: 12, color: node.broken ? '#ff4d4f' : cfg.color }}>
+          <Text strong style={{ fontSize: 12, color: node.broken ? token.colorError : token.colorText }}>
             {node.broken ? '⚠ ' : ''}{node.label}
           </Text>
         </div>
@@ -376,6 +378,7 @@ function CumulativeYieldBar({ stages }: { stages: any[] }) {
 const LOSS_COLORS = { green: '#52c41a', yellow: '#faad14', red: '#f5222d' }
 
 function LossFunnelCard({ data }: { data: any }) {
+  const { token } = theme.useToken()
   if (!data || !data.layers || data.layers.length === 0) {
     return (
       <PlatformNotice type="warning" style={{ marginTop: 12 }}
@@ -415,8 +418,8 @@ function LossFunnelCard({ data }: { data: any }) {
               ) : <Text type="secondary">起点</Text>}
             </div>
             <div style={{
-              width: `${width}%`, background: l.stage === 'fourth_refinement' ? '#e6fffb' : l.stage === 'chromatography' ? '#f6ffed' : '#f0f0f0',
-              border: '1px solid #d9d9d9', borderRadius: 4, padding: '2px 8px', fontSize: 11, color: '#666',
+              width: `${width}%`, background: l.stage === 'fourth_refinement' ? token.colorInfoBg : l.stage === 'chromatography' ? token.colorSuccessBg : token.colorFillAlter,
+              border: `1px solid ${token.colorBorder}`, borderRadius: 4, padding: '2px 8px', fontSize: 11, color: token.colorTextSecondary,
             }}>
               产出 {l.output_pure?.toFixed(2)}kg
               {l.input_pure != null && <span style={{ color: '#999' }}>（投入 {l.input_pure.toFixed(2)}kg）</span>}
@@ -522,6 +525,7 @@ export default function TraceabilityPageWrapper() {
 }
 
 function TraceabilityPage() {
+  const { token } = theme.useToken()
   const { canExport } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2013)
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -580,7 +584,7 @@ function TraceabilityPage() {
   const exportFlow = useCallback(async () => {
     if (!flowRef.current) return
     try {
-      const dataUrl = await toPng(flowRef.current, { backgroundColor: '#fff', pixelRatio: 2 })
+      const dataUrl = await toPng(flowRef.current, { backgroundColor: token.colorBgContainer, pixelRatio: 2 })
       const a = document.createElement('a'); a.href = dataUrl
       a.download = `追溯_DR_${batchNo}_${new Date().toISOString().slice(0, 10)}.png`; a.click()
     } catch { message.error('导出失败') }

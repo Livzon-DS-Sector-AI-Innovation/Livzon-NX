@@ -11,6 +11,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import ReactECharts from '@/components/shared/ThemedEChart'
 import { toPng } from 'html-to-image'
+import { theme } from 'antd'
 import BATCH_TYPES from '@/components/production/batchTypes'
 import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
@@ -56,6 +57,7 @@ interface TraceStage {
 
 // ── 流程图节点组件 ──
 function FlowNode({ node, isTarget }: { node: TraceNode; isTarget: boolean }) {
+  const { token } = theme.useToken()
   const cfg = STAGE_CONFIG[node.stage] || { color: '#999', bg: '#f5f5f5', icon: null }
   const isSib = node.is_sibling
 
@@ -68,14 +70,14 @@ function FlowNode({ node, isTarget }: { node: TraceNode; isTarget: boolean }) {
         size="small"
         style={{
           border: isTarget ? `2px solid ${cfg.color}` : isSib ? `1px dashed ${cfg.color}60` : `1px solid ${cfg.color}40`,
-          backgroundColor: isTarget ? cfg.bg : isSib ? '#fafafa' : '#fff',
+          backgroundColor: isTarget ? token.colorPrimaryBg : isSib ? token.colorFillAlter : token.colorBgContainer,
           borderRadius: 8, width: '100%',
         }}
         bodyStyle={{ padding: '10px 12px' }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
           <span style={{ color: cfg.color, fontSize: 16 }}>{cfg.icon}</span>
-          <Text strong style={{ fontSize: 12, color: cfg.color }}>{node.label}</Text>
+          <Text strong style={{ fontSize: 12, color: token.colorText }}>{node.label}</Text>
         </div>
         <Tag color={cfg.color} style={{ marginBottom: 4, fontSize: 11 }}>{node.batch_no}</Tag>
         {node.detail && (
@@ -198,6 +200,7 @@ export default function TraceabilityPageWrapper() {
 }
 
 function TraceabilityPage() {
+  const { token } = theme.useToken()
   const router = useRouter()
   const searchParams = useSearchParams()
   const { message } = App.useApp()
@@ -387,7 +390,7 @@ function TraceabilityPage() {
   const exportFlow = useCallback(async () => {
     if (!flowRef.current) return
     try {
-      const dataUrl = await toPng(flowRef.current, { backgroundColor: '#fff', pixelRatio: 2 })
+      const dataUrl = await toPng(flowRef.current, { backgroundColor: token.colorBgContainer, pixelRatio: 2 })
       const a = document.createElement('a'); a.href = dataUrl
       a.download = `追溯_MC_${batchNo}_${new Date().toISOString().slice(0, 10)}.png`; a.click()
     } catch { message.error('导出失败') }

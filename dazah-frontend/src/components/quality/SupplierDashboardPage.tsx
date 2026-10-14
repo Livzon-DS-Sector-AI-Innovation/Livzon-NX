@@ -1,9 +1,10 @@
 'use client'
 
+import PlatformNotice from '@/components/shared/PlatformNotice'
 import { qualityTokens } from './themeTokens'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { App, Col, Empty, Modal, Row, Spin, Table, Tabs, Tag, Tooltip } from 'antd'
+import { App, Button, Col, Empty, Modal, Row, Spin, Table, Tabs, Tag, Tooltip } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import {
@@ -39,7 +40,7 @@ function pct(v: number) {
 }
 
 export function SupplierDashboardPage() {
-  const { data: stats, isLoading: loading } = useQuery<SupplierDashboardStats>({
+  const { data: stats, isLoading: loading, isError, refetch } = useQuery<SupplierDashboardStats>({
     queryKey: ['quality-supplier', 'stats'],
     queryFn: fetchSupplierStatistics,
   })
@@ -97,7 +98,7 @@ export function SupplierDashboardPage() {
         },
       },
       legend: { bottom: 0 },
-      grid: { left: 8, right: 8, top: 8, bottom: 36 },
+      grid: { left: 8, right: 8, top: 16, bottom: 72, containLabel: true },
       xAxis: { type: 'category', data: data.map(d => d.type), axisLabel: { fontWeight: 500 } },
       yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed' } } },
       series: [
@@ -151,7 +152,7 @@ export function SupplierDashboardPage() {
         },
       },
       legend: { bottom: 0 },
-      grid: { left: 8, right: 8, top: 8, bottom: 36 },
+      grid: { left: 8, right: 8, top: 16, bottom: 72, containLabel: true },
       xAxis: { type: 'category', data: names, axisLabel: { rotate: 30, fontSize: 10 } },
       yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed' } } },
       series: [
@@ -165,8 +166,9 @@ export function SupplierDashboardPage() {
   /* ── 到期状态分布 环形图 ── */
   const expiryDonutOption = () => ({
     tooltip: { trigger: 'item' },
-    legend: { bottom: 0 },
+    legend: { type: 'scroll', bottom: 0 },
     color: [C.danger, '#f59e0b', '#fb923c', '#84cc16', '#cbd5e1'],
+    media: [{ query: { maxWidth: 420 }, option: { series: [{ radius: ['32%', '54%'], center: ['50%', '42%'], label: { show: false } }] } }, { option: { series: [{ radius: ['50%', '75%'], center: ['50%', '46%'], label: { show: true } }] } }],
     series: [{
       name: '到期状态', type: 'pie', radius: ['50%', '75%'],
       center: ['50%', '46%'],
@@ -187,7 +189,7 @@ export function SupplierDashboardPage() {
     const data = stats?.expiry_timeline || []
     return {
       tooltip: { trigger: 'axis' },
-      grid: { left: 8, right: 8, top: 12, bottom: 8 },
+      grid: { left: 8, right: 8, top: 12, bottom: 32, containLabel: true },
       xAxis: { type: 'category', data: data.map(d => d.month), axisLabel: { rotate: 45, fontSize: 10 } },
       yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed' } } },
       series: [{
@@ -201,6 +203,11 @@ export function SupplierDashboardPage() {
       }],
     }
   }
+
+  if (loading && !stats) return <div role="status"><Spin /> 正在读取供应商统计数据</div>
+  if (isError && !stats) return <PlatformNotice type="error" title="供应商统计数据加载失败" showIcon
+    description="读取本地统计失败，请重试；请求失败不会被展示为暂无供应商数据。"
+    action={<Button onClick={() => void refetch()}>重试</Button>} />
 
   return (
     <div style={{ maxWidth: 1280, margin: '0 auto', paddingBottom: 40 }}>
@@ -338,6 +345,13 @@ export function SupplierDashboardPage() {
                   <h3 style={{ fontSize: 15, fontWeight: 600, color: qualityTokens.textPrimary, margin: '0 0 4px' }}>到期状态分布</h3>
                   <p style={{ fontSize: 12, color: qualityTokens.textTertiary, margin: '0 0 12px' }}>截止日期与当前时间对比分析，点击扇区查看对应明细</p>
                   <ReactECharts option={expiryDonutOption()} onEvents={{ click: handleDonutClick }} style={{ height: 320 }} />
+                  <div aria-label="到期状态数值" style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', fontSize: 12, color: qualityTokens.textSecondary }}>
+                    <span>已延期 {stats?.expired_count ?? 0}</span>
+                    <span>30天内到期 {stats?.due_30_count ?? 0}</span>
+                    <span>60天内到期 {stats?.due_60_count ?? 0}</span>
+                    <span>90天内到期 {stats?.due_90_count ?? 0}</span>
+                    <span>正常 {stats?.normal_count ?? 0}</span>
+                  </div>
                 </div>
               </Col>
             </Row>

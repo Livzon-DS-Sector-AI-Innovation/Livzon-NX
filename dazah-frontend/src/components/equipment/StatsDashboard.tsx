@@ -467,8 +467,11 @@ function WorkOrderPipeline({ statistics }: { statistics: WorkOrderStatistics }) 
     <div>
       {/* ===== 横向流转卡片 ===== */}
       <div
+        className="equipment-order-pipeline"
+        role="region" aria-label="工单流转图" tabIndex={0}
         style={{
           display: 'flex',
+          overflowX: 'auto',
           alignItems: 'stretch',
           gap: 0,
           marginBottom: 28,
@@ -479,7 +482,7 @@ function WorkOrderPipeline({ statistics }: { statistics: WorkOrderStatistics }) 
           const pct = total > 0 ? ((count / total) * 100).toFixed(0) : '0'
 
           return (
-            <div key={stage.status} style={{ display: 'flex', alignItems: 'stretch', flex: 1 }}>
+            <div key={stage.status} style={{ display: 'flex', alignItems: 'stretch', flex: 1, minWidth: 152 }}>
               {/* 卡片 */}
               <div
                 style={{
@@ -607,7 +610,7 @@ function WorkOrderPipeline({ statistics }: { statistics: WorkOrderStatistics }) 
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
+          gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
           gap: 16,
           borderTop: '1px solid #ede9e4',
           paddingTop: 20,
@@ -680,7 +683,7 @@ function WorkOrderPipeline({ statistics }: { statistics: WorkOrderStatistics }) 
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
+              gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
               gap: 10,
             }}
           >
@@ -851,7 +854,7 @@ function WarningPanels({
   ]
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+    <div className="equipment-warning-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
       {panels.map((panel, pi) => (
         <div
           key={panel.title}
@@ -1089,6 +1092,11 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
     <ConfigProvider>
       {/* 全局 keyframes */}
       <style>{`
+        @media (max-width: 767px) {
+          .equipment-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+          .equipment-chart-grid, .equipment-warning-grid { grid-template-columns: minmax(0, 1fr) !important; }
+        }
+        .equipment-order-pipeline:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
         @keyframes fadeInUp {
           from { opacity: 0; transform: translateY(16px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -1150,6 +1158,7 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
         {/* ========== 快捷入口行 ========== */}
         {/* 模块路由已按车间拆分，入口目标车间未定：暂以占位呈现，不可跳转 */}
         <div
+          className="equipment-summary-grid"
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(4, 1fr)',
@@ -1207,6 +1216,7 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
         {/* ========== KPI 卡片行 ========== */}
         {/* 在线率无真实监测口径、工单与备件模块未启用：相关 KPI 以「待接入」呈现 */}
         <div
+          className="equipment-summary-grid"
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(4, 1fr)',
@@ -1254,9 +1264,10 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
 
         {/* ========== 第二行：设备全景 + 工单概览 ========== */}
         <div
+          className="equipment-chart-grid"
           style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
+            gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
             gap: 16,
             marginBottom: 28,
           }}

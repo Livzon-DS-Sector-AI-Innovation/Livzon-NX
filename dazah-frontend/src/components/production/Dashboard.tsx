@@ -110,7 +110,7 @@ export default function Dashboard({ title, data, dateField, cards, charts, month
       </Row>
       {charts.length > 0 && <>
         <Row className="mb-2"><Col><Text strong>趋势图：</Text>
-          <Select size="small" value={selectedChart} onChange={setSelectedChart} style={{ width: 150, marginLeft: 8 }}
+          <Select aria-label={`${title}趋势指标`} size="small" value={selectedChart} onChange={setSelectedChart} style={{ width: 150, marginLeft: 8 }}
             options={charts.map(c => ({ value: c.key, label: c.label }))} />
         </Col></Row>
         <ReactECharts option={chartOption} style={{ height: 260 }} />

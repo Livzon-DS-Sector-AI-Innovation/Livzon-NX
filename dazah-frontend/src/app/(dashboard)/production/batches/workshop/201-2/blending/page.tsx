@@ -197,10 +197,10 @@ export default function BlendingPage() {
           { title: '总杂均值', value: (_, f) => { let s = 0, n = 0; f.forEach(d => { if (d.total_impurity != null) { s += d.total_impurity; n++ } }); return n > 0 ? Math.round(s / n * 10000) / 10000 : null }, suffix: '', precision: 3, color: (v) => v <= 0.6 ? '#52c41a' : '#f5222d' },
         ]}
         charts={[
-          { key: 'total_impurity', title: '总杂趋势', unit: '%', color: '#f5222d', markLine: 0.6, label: '总杂趋势', field: 'total_impurity' },
-          { key: 'content', title: '含量趋势', unit: '%', color: '#52c41a', markLine: 99, markLineAbove: true, label: '含量趋势', field: 'content' },
-          { key: 'rrt_053', title: 'RRT=0.53趋势', unit: '', color: '#1890ff', markLine: 0.05, label: 'RRT=0.53', field: 'rrt_053' },
-          { key: 'rrt_201', title: 'RRT=2.01趋势', unit: '', color: '#fa8c16', markLine: 0.08, label: 'RRT=2.01', field: 'rrt_201' },
+          { key: 'total_impurity', title: '总杂趋势', unit: '%', color: '#f5222d', markLine: 0.6, markLineAbove: true, label: '总杂趋势', field: 'total_impurity' },
+          { key: 'content', title: '含量趋势', unit: '%', color: '#52c41a', markLine: 99, label: '含量趋势', field: 'content' },
+          { key: 'rrt_053', title: 'RRT=0.53趋势', unit: '', color: '#1890ff', markLine: 0.05, markLineAbove: true, label: 'RRT=0.53', field: 'rrt_053' },
+          { key: 'rrt_201', title: 'RRT=2.01趋势', unit: '', color: '#fa8c16', markLine: 0.08, markLineAbove: true, label: 'RRT=2.01', field: 'rrt_201' },
         ]}
       />
 
