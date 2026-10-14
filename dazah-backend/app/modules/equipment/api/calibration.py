@@ -36,6 +36,9 @@ async def create_calibration_plan(
 async def list_calibration_plans(
     equipment_id: uuid.UUID | None = Query(None, description="设备ID"),
     status: str | None = Query(None, description="状态"),
+    workshop: str | None = Query(
+        None, pattern=r"^\d{3}(-\d)?$", description="车间代码（如 101-1 / 201-1）"
+    ),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=200, description="每页数量"),
     db: AsyncSession = Depends(get_db),
@@ -44,6 +47,7 @@ async def list_calibration_plans(
         db,
         equipment_id=equipment_id,
         status=status,
+        workshop_code=workshop,
         page=page,
         page_size=page_size,
     )
@@ -111,6 +115,9 @@ async def create_calibration_record(
 async def list_calibration_records(
     equipment_id: uuid.UUID | None = Query(None, description="设备ID"),
     plan_id: uuid.UUID | None = Query(None, description="计划ID"),
+    workshop: str | None = Query(
+        None, pattern=r"^\d{3}(-\d)?$", description="车间代码（如 101-1 / 201-1）"
+    ),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=200, description="每页数量"),
     db: AsyncSession = Depends(get_db),
@@ -119,6 +126,7 @@ async def list_calibration_records(
         db,
         equipment_id=equipment_id,
         plan_id=plan_id,
+        workshop_code=workshop,
         page=page,
         page_size=page_size,
     )

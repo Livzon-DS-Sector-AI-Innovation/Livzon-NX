@@ -34,6 +34,8 @@ import { MaintenancePlanDrawer } from './MaintenancePlanDrawer'
 import { InspectionCompleteDrawer } from './InspectionCompleteDrawer'
 
 interface MaintenancePageProps {
+  workshopCode: string
+  workshopLabel: string
   initialEquipments: Equipment[]
   initialWorkOrders: WorkOrder[]
   initialWorkOrderTotal: number
@@ -48,6 +50,8 @@ interface MaintenancePageProps {
 }
 
 export function MaintenancePage({
+  workshopCode,
+  workshopLabel,
   initialEquipments,
   initialWorkOrders, initialWorkOrderTotal, initialWorkOrderStatistics,
   initialFailureCodes,
@@ -99,12 +103,12 @@ export function MaintenancePage({
   useEffect(() => {
     // 如果服务端没拿到设备数据，客户端重新获取
     if (initialEquipments.length === 0) {
-      fetchEquipmentsClient({ page: 1, page_size: 200 }).then((res) => {
+      fetchEquipmentsClient({ workshop: workshopCode, page: 1, page_size: 200 }).then((res) => {
         setEquipmentsState(res.items)
       }).catch(() => {})
     }
     fetchCategoriesClient().then(setCategoriesState).catch(() => {})
-  }, [initialEquipments.length])
+  }, [workshopCode, initialEquipments.length])
 
   // 初始化
   useEffect(() => {
@@ -136,12 +140,13 @@ export function MaintenancePage({
     try {
       const [ordersRes, stats] = await Promise.all([
         fetchWorkOrdersClient({
+          workshop: workshopCode,
           status: workOrderStatusFilter || undefined,
           priority: workOrderPriorityFilter || undefined,
           order_type: workOrderTypeFilter || undefined,
           page: workOrderPage, page_size: workOrderPageSize,
         }),
-        fetchWorkOrderStatisticsClient(),
+        fetchWorkOrderStatisticsClient(workshopCode),
       ])
       setWorkOrders(ordersRes.items)
       setWorkOrderTotal(ordersRes.total)
@@ -151,7 +156,7 @@ export function MaintenancePage({
     } finally {
       setWorkOrderLoading(false)
     }
-  }, [workOrderStatusFilter, workOrderPriorityFilter, workOrderTypeFilter, workOrderPage, workOrderPageSize, setWorkOrders, setWorkOrderTotal, setWorkOrderStatistics, setWorkOrderLoading])
+  }, [workshopCode, workOrderStatusFilter, workOrderPriorityFilter, workOrderTypeFilter, workOrderPage, workOrderPageSize, setWorkOrders, setWorkOrderTotal, setWorkOrderStatistics, setWorkOrderLoading])
 
   const fetchFailureCodeData = useCallback(async () => {
     try {
@@ -172,6 +177,7 @@ export function MaintenancePage({
     setCalibrationPlanLoading(true)
     try {
       const res = await fetchCalibrationPlansClient({
+        workshop: workshopCode,
         status: calibrationPlanStatusFilter || undefined,
         page: calibrationPlanPage, page_size: calibrationPlanPageSize,
       })
@@ -182,12 +188,13 @@ export function MaintenancePage({
     } finally {
       setCalibrationPlanLoading(false)
     }
-  }, [calibrationPlanStatusFilter, calibrationPlanPage, calibrationPlanPageSize, setCalibrationPlans, setCalibrationPlanTotal, setCalibrationPlanLoading])
+  }, [workshopCode, calibrationPlanStatusFilter, calibrationPlanPage, calibrationPlanPageSize, setCalibrationPlans, setCalibrationPlanTotal, setCalibrationPlanLoading])
 
   const fetchCalibrationRecordData = useCallback(async () => {
     setCalibrationRecordLoading(true)
     try {
       const res = await fetchCalibrationRecordsClient({
+        workshop: workshopCode,
         page: calibrationRecordPage, page_size: calibrationRecordPageSize,
       })
       setCalibrationRecords(res.items)
@@ -197,12 +204,13 @@ export function MaintenancePage({
     } finally {
       setCalibrationRecordLoading(false)
     }
-  }, [calibrationRecordPage, calibrationRecordPageSize, setCalibrationRecords, setCalibrationRecordTotal, setCalibrationRecordLoading])
+  }, [workshopCode, calibrationRecordPage, calibrationRecordPageSize, setCalibrationRecords, setCalibrationRecordTotal, setCalibrationRecordLoading])
 
   const fetchMaintenancePlanData = useCallback(async () => {
     setMaintenancePlanLoading(true)
     try {
       const res = await fetchMaintenancePlansClient({
+        workshop: workshopCode,
         status: maintenancePlanStatusFilter || undefined,
         page: maintenancePlanPage, page_size: maintenancePlanPageSize,
       })
@@ -213,7 +221,7 @@ export function MaintenancePage({
     } finally {
       setMaintenancePlanLoading(false)
     }
-  }, [maintenancePlanStatusFilter, maintenancePlanPage, maintenancePlanPageSize, setMaintenancePlans, setMaintenancePlanTotal, setMaintenancePlanLoading])
+  }, [workshopCode, maintenancePlanStatusFilter, maintenancePlanPage, maintenancePlanPageSize, setMaintenancePlans, setMaintenancePlanTotal, setMaintenancePlanLoading])
 
   useEffect(() => {
     if (maintenanceTab === 'work-orders') fetchWorkOrderData()
@@ -329,10 +337,10 @@ export function MaintenancePage({
             fontSize: 22, fontWeight: 600, color: '#1a1a1a',
             margin: 0, marginBottom: 4, lineHeight: 1.3,
           }}>
-            维护保养
+            维护保养 · {workshopLabel}
           </h2>
           <p style={{ fontSize: 14, color: '#787671', margin: 0, lineHeight: 1.5 }}>
-            工单管理 · 故障代码 · 校准计划 · 维护计划
+            {workshopLabel} · 工单管理 · 故障代码 · 校准计划 · 维护计划
           </p>
         </div>
         <div style={{ background: '#ffffff', padding: 20, borderRadius: 12, border: '1px solid #e5e3df' }}>

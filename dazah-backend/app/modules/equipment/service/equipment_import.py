@@ -246,11 +246,13 @@ async def import_equipment_ledger(
     *,
     default_category_id: uuid.UUID | None = None,
     default_location_id: uuid.UUID | None = None,
+    workshop_code: str = "201-1",
 ) -> dict[str, Any]:
     """解析并增量导入设备台账。
 
     按设备编号 upsert：已存在则更新台账字段（分类等系统字段不动），
     不存在则新建（给了默认分类则挂载，暂不分类可不传）。
+    导入设备统一归属 workshop_code 指定车间。
     同一编号占多行时先合并（一般列取首个非空，技术参数/备注拼接）。
     返回总数/新建/更新/失败行明细。
     """
@@ -487,7 +489,7 @@ async def import_equipment_ledger(
                 else:
                     equipment = await repo.create_equipment(
                         db,
-                        payload,
+                        {**payload, "workshop_code": workshop_code},
                         category_ids=[default_category_id]
                         if default_category_id is not None
                         else [],

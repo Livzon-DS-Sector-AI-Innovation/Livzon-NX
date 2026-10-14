@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.modules.equipment.models import WorkOrder
+from app.modules.equipment.repository.workshop import equipment_workshop_filter
 
 if TYPE_CHECKING:
     from app.modules.equipment.models.spare_part import SparePartTransaction
@@ -91,10 +92,11 @@ async def get_work_orders(
     equipment_id: uuid.UUID | None = None,
     priority: str | None = None,
     order_type: str | None = None,
+    workshop_code: str | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[WorkOrder], int]:
-    """获取工单列表"""
+    """获取工单列表（workshop_code 经所属设备派生，缺省跨车间）"""
     query = (
         select(WorkOrder)
         .options(
@@ -110,6 +112,10 @@ async def get_work_orders(
         .where(WorkOrder.is_deleted == False)  # noqa: E712
     )
 
+    if workshop_code:
+        query = query.where(
+            equipment_workshop_filter(WorkOrder.equipment_id, workshop_code)
+        )
     if status:
         query = query.where(WorkOrder.status == status)
     if equipment_id:
@@ -131,30 +137,40 @@ async def get_work_orders(
     return list(result.scalars().all()), total
 
 
-async def get_work_order_statistics(db: AsyncSession) -> dict[str, Any]:
-    """获取工单统计"""
+async def get_work_order_statistics(
+    db: AsyncSession, workshop_code: str | None = None
+) -> dict[str, Any]:
+    """获取工单统计（workshop_code 经所属设备派生，缺省跨车间）"""
+    workshop_filters = (
+        [equipment_workshop_filter(WorkOrder.equipment_id, workshop_code)]
+        if workshop_code
+        else []
+    )
     total_result = await db.execute(
-        select(func.count()).where(WorkOrder.is_deleted == False)  # noqa: E712
+        select(func.count()).where(
+            WorkOrder.is_deleted == False,  # noqa: E712
+            *workshop_filters,
+        )
     )
     total = total_result.scalar() or 0
 
     status_result = await db.execute(
         select(WorkOrder.status, func.count())
-        .where(WorkOrder.is_deleted == False)  # noqa: E712
+        .where(WorkOrder.is_deleted == False, *workshop_filters)  # noqa: E712
         .group_by(WorkOrder.status)
     )
     by_status = {row[0]: row[1] for row in status_result.all()}
 
     type_result = await db.execute(
         select(WorkOrder.order_type, func.count())
-        .where(WorkOrder.is_deleted == False)  # noqa: E712
+        .where(WorkOrder.is_deleted == False, *workshop_filters)  # noqa: E712
         .group_by(WorkOrder.order_type)
     )
     by_type = {row[0]: row[1] for row in type_result.all()}
 
     priority_result = await db.execute(
         select(WorkOrder.priority, func.count())
-        .where(WorkOrder.is_deleted == False)  # noqa: E712
+        .where(WorkOrder.is_deleted == False, *workshop_filters)  # noqa: E712
         .group_by(WorkOrder.priority)
     )
     by_priority = {row[0]: row[1] for row in priority_result.all()}

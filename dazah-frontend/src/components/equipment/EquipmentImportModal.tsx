@@ -46,6 +46,8 @@ interface EquipmentImportModalProps {
   onClose: () => void
   /** 导入产生新建/更新后回调，用于刷新台账列表 */
   onImported: () => void
+  /** 导入设备归属车间（页面所在车间） */
+  workshopCode?: string
 }
 
 // 组装导入请求体（导出便于单测校验字段契约）
@@ -53,9 +55,13 @@ export function buildImportFormData(
   rawFile: File,
   defaultCategoryId?: string,
   defaultLocationId?: string,
+  workshopCode?: string,
 ): FormData {
   const formData = new FormData()
   formData.append('file', rawFile)
+  if (workshopCode) {
+    formData.append('workshop', workshopCode)
+  }
   if (defaultCategoryId) {
     formData.append('default_category_id', defaultCategoryId)
   }
@@ -65,7 +71,7 @@ export function buildImportFormData(
   return formData
 }
 
-export function EquipmentImportModal({ open, onClose, onImported }: EquipmentImportModalProps) {
+export function EquipmentImportModal({ open, onClose, onImported, workshopCode }: EquipmentImportModalProps) {
   const { message } = App.useApp()
   const { categories = [], locations = [] } = useEquipmentStore()
   const [rawFile, setRawFile] = useState<File | null>(null)
@@ -95,7 +101,12 @@ export function EquipmentImportModal({ open, onClose, onImported }: EquipmentImp
     }
     setSubmitting(true)
     try {
-      const formData = buildImportFormData(rawFile, defaultCategoryId, defaultLocationId)
+      const formData = buildImportFormData(
+        rawFile,
+        defaultCategoryId,
+        defaultLocationId,
+        workshopCode,
+      )
       const response = await fetch('/api/v1/equipment/equipments/import', {
         method: 'POST',
         body: formData,

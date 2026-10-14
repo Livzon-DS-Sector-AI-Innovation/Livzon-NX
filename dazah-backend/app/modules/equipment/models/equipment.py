@@ -147,6 +147,12 @@ class Equipment(BaseModel):
 
     equipment_no: Mapped[str] = mapped_column(String(50), comment="设备编号")
     name: Mapped[str] = mapped_column(String(200), comment="设备名称")
+    workshop_code: Mapped[str] = mapped_column(
+        String(10),
+        default="201-1",
+        server_default="201-1",
+        comment="归属车间代码（如 101-1 / 201-1）",
+    )
     location_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("equipment.locations.id"),
         comment="设备位置",

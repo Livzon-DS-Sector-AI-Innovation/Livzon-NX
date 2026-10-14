@@ -15,6 +15,10 @@ vi.mock('@/actions/safety', () => ({
   testRadarNotify: vi.fn(async () => ({ code: 200, data: { sent: 1 } })),
   getSafetyFeishuWsStatus: vi.fn(async () => ({ code: 200, data: null })),
   restartSafetyFeishuWs: vi.fn(async () => ({ code: 200, data: null })),
+  getSafetyPageFeishuConfigs: vi.fn(async () => ({ code: 200, data: { items: [] } })),
+  saveSafetyPageFeishuConfig: vi.fn(async () => ({ code: 200, data: null })),
+  testSafetyPageFeishuConfig: vi.fn(async () => ({ code: 200, data: null })),
+  resolveSafetyPageFeishuUrl: vi.fn(async () => ({ code: 200, data: null })),
 }))
 
 vi.mock('@ant-design/icons', () => {

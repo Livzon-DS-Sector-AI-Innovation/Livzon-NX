@@ -135,6 +135,8 @@ describe('EquipmentPage data lifecycle', () => {
     await act(async () => {
       root.render(
         <EquipmentPage
+          workshopCode="201-1"
+          workshopLabel="201一车间"
           initialCategories={[initialCategory]}
           initialLocations={[initialLocation]}
           initialEquipments={[]}
@@ -156,6 +158,7 @@ describe('EquipmentPage data lifecycle', () => {
     expect(api.fetchLocationsClient).toHaveBeenCalledOnce()
     expect(api.fetchDepartmentsClient).toHaveBeenCalledOnce()
     expect(api.fetchEquipmentsClient).toHaveBeenCalledWith({
+      workshop: '201-1',
       category_id: 'category-1',
       location_id: 'location-1',
       department_id: 'department-1',
@@ -171,6 +174,8 @@ describe('EquipmentPage data lifecycle', () => {
   it('rehydrates when server props change', async () => {
     const renderPage = (id: string) => (
       <EquipmentPage
+        workshopCode="201-1"
+        workshopLabel="201一车间"
         initialCategories={[category(id)]}
         initialLocations={[location(id)]}
         initialEquipments={[]}

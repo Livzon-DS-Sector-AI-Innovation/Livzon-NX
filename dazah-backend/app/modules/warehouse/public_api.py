@@ -17,6 +17,7 @@ __all__ = [
     "get_finished_inbound_batches",
     "get_finished_inbound_kg_total",
     "get_finished_inbound_summary",
+    "get_material_page_rows",
     "update_inbound_inspection_result",
 ]
 
@@ -73,6 +74,40 @@ async def get_finished_inbound_batches(
     return await WarehouseService(session).get_finished_inbound_batches(
         product_name=product_name,
     )
+
+
+async def get_material_page_rows(
+    session: AsyncSession,
+    *,
+    page_key: str,
+) -> tuple[list[dict[str, Any]], datetime.datetime | None]:
+    """物料页（飞书镜像）的原始行内容与最近同步时间。
+
+    行按快照 row_order 升序返回，cells 原样透传（值为飞书原始类型：
+    文本/数字/毫秒时间戳）。页面未绑定或尚未同步时返回 ([], None)。
+    供跨模块消费本地镜像（如设备备件管理读五金各车间表）。
+    """
+    from sqlalchemy import select
+
+    from app.modules.warehouse.models import MaterialPageRow, MaterialPageSnapshot
+
+    snapshot = (
+        await session.execute(
+            select(MaterialPageSnapshot).where(
+                MaterialPageSnapshot.page_key == page_key
+            )
+        )
+    ).scalars().first()
+    if snapshot is None:
+        return [], None
+    rows = (
+        await session.execute(
+            select(MaterialPageRow.cells)
+            .where(MaterialPageRow.page_snapshot_id == snapshot.id)
+            .order_by(MaterialPageRow.row_order.asc())
+        )
+    ).all()
+    return [dict(cells) for (cells,) in rows], snapshot.last_synced_at
 
 
 async def update_inbound_inspection_result(

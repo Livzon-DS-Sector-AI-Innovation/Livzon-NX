@@ -30,8 +30,11 @@ class SparePart(BaseModel):
 
     __tablename__ = "spare_parts"
     __table_args__ = (
+        # 部分唯一索引：未删除行内同车间同编码唯一；五金物料可同时
+        # 出现在多个车间分布表中，跨车间允许同码
         Index(
-            "uq_spare_parts_code",
+            "uq_spare_parts_workshop_code",
+            "workshop_code",
             "code",
             unique=True,
             postgresql_where=text("is_deleted = false"),
@@ -41,6 +44,12 @@ class SparePart(BaseModel):
 
     code: Mapped[str] = mapped_column(String(50), comment="备件编码")
     name: Mapped[str] = mapped_column(String(200), comment="备件名称")
+    workshop_code: Mapped[str] = mapped_column(
+        String(10),
+        default="201-1",
+        server_default="201-1",
+        comment="归属车间代码（如 101-1 / 201-1）",
+    )
     specification: Mapped[str | None] = mapped_column(
         String(200), nullable=True, comment="规格型号"
     )

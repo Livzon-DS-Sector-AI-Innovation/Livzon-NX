@@ -353,24 +353,28 @@ async def get_work_orders(
     equipment_id: uuid.UUID | None = None,
     priority: str | None = None,
     order_type: str | None = None,
+    workshop_code: str | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[WorkOrder], int]:
-    """获取工单列表"""
+    """获取工单列表（workshop_code 经所属设备派生，缺省跨车间）"""
     return await repo.get_work_orders(
         db,
         status=status,
         equipment_id=equipment_id,
         priority=priority,
         order_type=order_type,
+        workshop_code=workshop_code,
         page=page,
         page_size=page_size,
     )
 
 
-async def get_work_order_statistics(db: AsyncSession) -> dict[str, object]:
+async def get_work_order_statistics(
+    db: AsyncSession, workshop_code: str | None = None
+) -> dict[str, object]:
     """获取工单统计"""
-    return await repo.get_work_order_statistics(db)
+    return await repo.get_work_order_statistics(db, workshop_code)
 
 
 async def get_work_order_by_id(

@@ -4704,6 +4704,12 @@
           "category": "integration_admin"
         }
       }
+    },
+    "safety:risk-hazard:hazard-inspection:hazard-duty": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/hazard-duty",
+      "actions": {}
     }
   }
 }

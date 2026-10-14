@@ -19,6 +19,7 @@ import {
   testSafetyFeishuSettings,
 } from '@/actions/safety'
 import PlatformNotice from '@/components/shared/PlatformNotice'
+import PageFeishuTableConfigCard from '@/components/safety/PageFeishuTableConfigCard'
 import type { components } from '@/types/generated/schema'
 
 type SafetyFeishuAppSettingsDetail = components['schemas']['SafetyFeishuAppSettingsDetail']
@@ -467,6 +468,20 @@ export default function FeishuSettingsPage({
         </Space>
       </Card>
       </Space>
+            ),
+          },
+          {
+            key: 'page-tables',
+            label: '页面数据表映射',
+            children: (
+              <Space orientation="vertical" size={16} style={{ display: 'flex' }}>
+                <PlatformNotice
+                  type="info"
+                  title="页面 ↔ 飞书多维表格绑定"
+                  description="镜像页（如「24小时值班隐患」）展示哪张飞书表在这里配置，不写死在代码里；页面列与数据来自飞书实时表结构，页面上的修改会写回该多维表格。"
+                />
+                <PageFeishuTableConfigCard />
+              </Space>
             ),
           },
         ]}

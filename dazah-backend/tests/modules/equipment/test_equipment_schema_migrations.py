@@ -28,6 +28,7 @@ def _mock_ops(monkeypatch, module) -> dict[str, Mock]:
         for name in (
             "create_table", "create_index", "drop_index", "drop_table",
             "add_column", "drop_column", "execute",
+            "drop_constraint", "create_unique_constraint",
         )
     }
     for name, mock in mocks.items():
@@ -132,3 +133,72 @@ def test_inspection_feishu_config_migration(monkeypatch):
     mocks["drop_table"].assert_called_once_with(
         "inspection_feishu_config", schema="equipment"
     )
+
+
+def test_inspection_feishu_per_workshop_migration(monkeypatch):
+    """b4e2f8a1c7d3：巡检四表加 workshop_code，唯一约束改为按车间部分唯一索引。"""
+    module = _load("b4e2f8a1c7d3_inspection_feishu_per_workshop.py")
+    mocks = _mock_ops(monkeypatch, module)
+
+    module.upgrade()
+    # 旧唯一约束全部拆除
+    assert mocks["drop_constraint"].call_count == 3
+    # 四张表都加 workshop_code（NOT NULL，默认 201-1 回填）
+    assert mocks["add_column"].call_count == 4
+    added = {call.args[0] for call in mocks["add_column"].call_args_list}
+    assert added == {
+        "inspection_feishu_config",
+        "inspection_feishu_records",
+        "inspection_feishu_devices",
+        "inspection_feishu_sync_state",
+    }
+    for call in mocks["add_column"].call_args_list:
+        column = call.args[1]
+        assert column.name == "workshop_code"
+        assert column.nullable is False
+        assert column.server_default.arg == "201-1"
+    # 4 个部分唯一索引 + 1 个查询索引
+    assert mocks["create_index"].call_count == 5
+    unique_names = {
+        call.args[0]
+        for call in mocks["create_index"].call_args_list
+        if call.kwargs.get("unique")
+    }
+    assert unique_names == {
+        "uq_inspection_feishu_config_workshop",
+        "uq_inspection_feishu_records_source_record",
+        "uq_inspection_feishu_devices_record",
+        "uq_inspection_feishu_sync_state_ws_table",
+    }
+
+    module.downgrade()
+    assert mocks["drop_index"].call_count == 5
+    assert mocks["drop_column"].call_count == 4
+    assert mocks["create_unique_constraint"].call_count == 3
+
+
+def test_equipment_per_workshop_columns_migration(monkeypatch):
+    """c5f9a3b2d8e4：台账/备件/人员三张主表加 workshop_code 与索引。"""
+    module = _load("c5f9a3b2d8e4_equipment_per_workshop_columns.py")
+    mocks = _mock_ops(monkeypatch, module)
+
+    module.upgrade()
+    assert mocks["add_column"].call_count == 3
+    added = {call.args[0] for call in mocks["add_column"].call_args_list}
+    assert added == {"equipments", "spare_parts", "equipment_personnel"}
+    for call in mocks["add_column"].call_args_list:
+        column = call.args[1]
+        assert column.name == "workshop_code"
+        assert column.nullable is False
+        assert column.server_default.arg == "201-1"
+    assert mocks["create_index"].call_count == 3
+    index_names = {call.args[0] for call in mocks["create_index"].call_args_list}
+    assert index_names == {
+        "ix_equipments_workshop",
+        "ix_spare_parts_workshop",
+        "ix_equipment_personnel_workshop",
+    }
+
+    module.downgrade()
+    assert mocks["drop_index"].call_count == 3
+    assert mocks["drop_column"].call_count == 3

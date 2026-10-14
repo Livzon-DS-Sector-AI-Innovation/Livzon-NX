@@ -323,27 +323,58 @@ describe('production menu structure', () => {
 })
 
 describe('equipment menu structure', () => {
-  it('groups the workshop pages under a path-less 201二车间 submenu', () => {
-    const equipment = moduleMenus.find((menu) => menu.key === 'equipment')
-    const workshop = equipment?.children.find((item) => item.key === 'workshop-201-2')
+  const equipmentWorkshops = [
+    ['101-1', '101一车间'],
+    ['101-2', '101二车间'],
+    ['102-1', '102一车间'],
+    ['102-2', '102二车间'],
+    ['103', '103车间'],
+    ['201-1', '201一车间'],
+    ['201-2', '201二车间'],
+    ['201-3', '201三车间'],
+    ['203', '203车间'],
+  ] as const
 
-    expect(equipment?.children.map((item) => item.key)).toEqual(['stats', 'workshop-201-2'])
-    expect(workshop).toMatchObject({ label: '201二车间', path: '' })
-    expect(workshop?.children?.map((item) => item.path)).toEqual([
-      '/equipment/assets',
-      '/equipment/maintenance',
-      '/equipment/inspection',
-      '/equipment/spare-parts',
-      '/equipment/personnel',
+  it('groups the workshop pages under one path-less submenu per workshop', () => {
+    const equipment = moduleMenus.find((menu) => menu.key === 'equipment')
+
+    expect(equipment?.children.map((item) => item.key)).toEqual([
+      'stats',
+      ...equipmentWorkshops.map(([code]) => `workshop-${code}`),
     ])
+    for (const [code, label] of equipmentWorkshops) {
+      const workshop = equipment?.children.find(
+        (item) => item.key === `workshop-${code}`,
+      )
+      expect(workshop, label).toMatchObject({ label, path: '' })
+      expect(workshop?.children?.map((item) => item.key)).toEqual([
+        `assets-${code}`,
+        `maintenance-${code}`,
+        `inspection-${code}`,
+        `spare-parts-${code}`,
+        `personnel-${code}`,
+      ])
+      expect(workshop?.children?.map((item) => item.path)).toEqual([
+        // 台账/维护/巡检/备件/人员均按车间独立路由
+        `/equipment/assets/${code}`,
+        `/equipment/maintenance/${code}`,
+        `/equipment/inspection/${code}`,
+        `/equipment/spare-parts/${code}`,
+        `/equipment/personnel/${code}`,
+      ])
+    }
   })
 
   it.each([
-    ['/equipment/assets', 'equipment:assets'],
-    ['/equipment/maintenance', 'equipment:maintenance'],
-    ['/equipment/inspection', 'equipment:inspection'],
-    ['/equipment/spare-parts', 'equipment:spare-parts'],
-    ['/equipment/personnel', 'equipment:personnel'],
+    // 全部叶子路由按车间独立，各自解析到本车间的权限身份
+    ['/equipment/assets/101-1', 'equipment:workshop-101-1:assets-101-1'],
+    ['/equipment/assets/201-1', 'equipment:workshop-201-1:assets-201-1'],
+    ['/equipment/maintenance/101-1', 'equipment:workshop-101-1:maintenance-101-1'],
+    ['/equipment/inspection/101-1', 'equipment:workshop-101-1:inspection-101-1'],
+    ['/equipment/inspection/201-1', 'equipment:workshop-201-1:inspection-201-1'],
+    ['/equipment/inspection/201-3', 'equipment:workshop-201-3:inspection-201-3'],
+    ['/equipment/spare-parts/101-1', 'equipment:workshop-101-1:spare-parts-101-1'],
+    ['/equipment/personnel/101-1', 'equipment:workshop-101-1:personnel-101-1'],
     ['/equipment/stats', 'equipment:stats'],
   ])('maps the nested equipment pages to scoped permission keys: %s', (path, pageKey) => {
     expect(getPageKeyByPath(path)).toBe(pageKey)

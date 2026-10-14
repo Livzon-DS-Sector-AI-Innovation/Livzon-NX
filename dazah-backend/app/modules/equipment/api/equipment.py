@@ -32,6 +32,11 @@ from app.modules.equipment.service import equipment_import
 
 router = APIRouter()
 
+# 车间代码形如 101 / 101-1 / 201-3；列表缺省 = 跨车间查询
+WORKSHOP_QUERY = Query(
+    None, pattern=r"^\d{3}(-\d)?$", description="车间代码（如 101-1 / 201-1）"
+)
+
 
 async def _equipment_to_response(
     equipment: Equipment, db: AsyncSession | None = None
@@ -217,13 +222,22 @@ async def get_equipments(
     department_id: uuid.UUID | None = Query(None, description="归属部门ID"),
     status: str | None = Query(None, description="设备状态"),
     keyword: str | None = Query(None, description="关键词搜索"),
+    workshop: str | None = WORKSHOP_QUERY,
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=200, description="每页数量"),
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     """获取设备列表"""
     equipments, total = await service.get_equipments(
-        db, category_id, location_id, department_id, status, keyword, page, page_size
+        db,
+        category_id,
+        location_id,
+        department_id,
+        status,
+        keyword,
+        workshop,
+        page,
+        page_size,
     )
     equipment_responses = []
     for e in equipments:
@@ -238,10 +252,11 @@ async def get_equipments(
 
 @router.get("/equipments/statistics", summary="获取设备统计")
 async def get_equipment_statistics(
+    workshop: str | None = WORKSHOP_QUERY,
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     """获取设备统计"""
-    stats = await service.get_equipment_statistics(db)
+    stats = await service.get_equipment_statistics(db, workshop)
     return success_response(data=EquipmentStatistics(**stats))
 
 
@@ -278,6 +293,9 @@ async def import_equipments(
     default_location_id: uuid.UUID | None = Form(
         None, description="默认安装地点（台账安装地点无法匹配时使用）"
     ),
+    workshop: str | None = Form(
+        "201-1", pattern=r"^\d{3}(-\d)?$", description="归属车间代码"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> JSONResponse:
@@ -303,6 +321,7 @@ async def import_equipments(
         b"".join(chunks),
         default_category_id=default_category_id,
         default_location_id=default_location_id,
+        workshop_code=workshop or "201-1",
     )
     return success_response(data=summary)
 

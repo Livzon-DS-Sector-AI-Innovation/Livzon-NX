@@ -33,6 +33,8 @@ import type {
   CalibrationPlan,
   WorkOrder,
 } from '@/types/equipment'
+import type { InspectionFeishuWorkshopSummary } from '@/types/inspection-feishu'
+import { InspectionProgressCard } from './inspection/InspectionProgressCard'
 
 // ============================================================
 // 类型定义
@@ -44,6 +46,7 @@ interface DashboardData {
   overduePlans: MaintenancePlan[]
   calibrationPlans: CalibrationPlan[]
   recentWorkOrders: WorkOrder[]
+  inspectionSummaries: InspectionFeishuWorkshopSummary[]
 }
 
 interface StatsDashboardProps {
@@ -98,6 +101,8 @@ function KpiCard({
   accentColor,
   trend,
   index,
+  placeholder,
+  note,
 }: {
   label: string
   value: number | string
@@ -106,6 +111,9 @@ function KpiCard({
   accentColor: string
   trend?: { direction: 'up' | 'down'; text: string }
   index: number
+  /** 待接入态：数据源未启用，以置灰文案替代数值 */
+  placeholder?: boolean
+  note?: string
 }) {
   const numericValue = typeof value === 'number' ? value : 0
   const animatedValue = useCountUp(numericValue)
@@ -176,23 +184,36 @@ function KpiCard({
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
             <span
-              style={{
-                fontSize: 36,
-                fontWeight: 700,
-                color: '#1a1a1a',
-                lineHeight: 1,
-                letterSpacing: '-0.02em',
-                fontFeatureSettings: '"tnum"',
-              }}
+              style={
+                placeholder
+                  ? {
+                      fontSize: 22,
+                      fontWeight: 600,
+                      color: '#a4a097',
+                      lineHeight: 1.4,
+                      letterSpacing: '0.02em',
+                    }
+                  : {
+                      fontSize: 36,
+                      fontWeight: 700,
+                      color: '#1a1a1a',
+                      lineHeight: 1,
+                      letterSpacing: '-0.02em',
+                      fontFeatureSettings: '"tnum"',
+                    }
+              }
             >
               {typeof value === 'number' ? animatedValue.toLocaleString() : value}
             </span>
-            {suffix && (
+            {!placeholder && suffix && (
               <span style={{ fontSize: 14, fontWeight: 500, color: '#787671', marginLeft: 2 }}>
                 {suffix}
               </span>
             )}
           </div>
+          {placeholder && note && (
+            <div style={{ marginTop: 8, fontSize: 12, color: '#a4a097' }}>{note}</div>
+          )}
           {trend && (
             <div
               style={{
@@ -1051,20 +1072,17 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
     overduePlans,
     calibrationPlans,
     recentWorkOrders,
+    inspectionSummaries,
   } = initialData
 
   const eq = equipmentStats || { total: 0, by_status: {} as Record<EquipmentStatus, number>, by_category: {} as Record<string, number>, by_location: {} as Record<string, number> }
   const wo = workOrderStats || { total: 0, by_status: {} as Record<WorkOrderStatus, number>, by_type: {} as Record<WorkOrderType, number>, by_priority: {} as Record<WorkOrderPriority, number> }
-  const onlineCount = (eq.by_status['在用'] || 0) + (eq.by_status['备用'] || 0)
-  const onlineRate = eq.total > 0 ? ((onlineCount / eq.total) * 100).toFixed(1) : '0'
-  const pendingOrders = wo.by_status['待处理'] || 0
-  const urgentOrders = wo.by_priority['紧急'] || 0
 
   const quickLinks = [
-    { label: '设备台账', href: '/equipment/assets', icon: <ApartmentOutlined />, accent: '#5645d4', bg: '#ede9f8' },
-    { label: '维护管理', href: '/equipment/maintenance', icon: <ToolFilled />, accent: '#dd5b00', bg: '#fff7e6' },
-    { label: '备件管理', href: '/equipment/spare-parts', icon: <DashboardOutlined />, accent: '#0075de', bg: '#e6f0fa' },
-    { label: '巡检管理', href: '/equipment/inspection', icon: <AimOutlined />, accent: '#1aae39', bg: '#e6f7e6' },
+    { label: '设备台账', icon: <ApartmentOutlined /> },
+    { label: '维护管理', icon: <ToolFilled /> },
+    { label: '备件管理', icon: <DashboardOutlined /> },
+    { label: '巡检管理', icon: <AimOutlined /> },
   ]
 
   return (
@@ -1089,13 +1107,6 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
         }
         .kpi-card:hover .kpi-decor-dot {
           animation: dotFloat 0.6s ease;
-        }
-        a:hover .quick-link-bg-dot {
-          opacity: 0.06 !important;
-        }
-        a:hover .anticon-right {
-          transform: translateX(3px);
-          color: #5d5b54 !important;
         }
       `}</style>
 
@@ -1137,6 +1148,7 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
         </div>
 
         {/* ========== 快捷入口行 ========== */}
+        {/* 模块路由已按车间拆分，入口目标车间未定：暂以占位呈现，不可跳转 */}
         <div
           style={{
             display: 'grid',
@@ -1146,9 +1158,8 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
           }}
         >
           {quickLinks.map((link, i) => (
-            <a
-              key={link.href}
-              href={link.href}
+            <div
+              key={link.label}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -1157,77 +1168,44 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
                 background: '#ffffff',
                 borderRadius: 12,
                 border: '1px solid #e5e3df',
-                textDecoration: 'none',
                 animation: `fadeInUp 0.45s ease both`,
                 animationDelay: `${80 + i * 70}ms`,
-                transition: 'all 0.25s cubic-bezier(0.22, 0.61, 0.36, 1)',
-                position: 'relative',
-                overflow: 'hidden',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = link.accent
-                e.currentTarget.style.boxShadow = `0 4px 16px ${link.accent}18`
-                e.currentTarget.style.transform = 'translateY(-3px)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = '#e5e3df'
-                e.currentTarget.style.boxShadow = 'none'
-                e.currentTarget.style.transform = 'translateY(0)'
+                opacity: 0.8,
               }}
             >
-              {/* 悬浮时显现的背景圆 */}
-              <div
-                style={{
-                  position: 'absolute',
-                  right: -16,
-                  top: -16,
-                  width: 64,
-                  height: 64,
-                  borderRadius: '50%',
-                  background: link.accent,
-                  opacity: 0,
-                  transition: 'opacity 0.25s ease',
-                }}
-                className="quick-link-bg-dot"
-              />
               <div
                 style={{
                   width: 38,
                   height: 38,
                   borderRadius: 10,
-                  background: link.bg,
+                  background: '#f0efec',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontSize: 17,
-                  color: link.accent,
+                  color: '#a4a097',
                   flexShrink: 0,
-                  transition: 'transform 0.25s ease, background 0.25s ease',
                 }}
               >
                 {link.icon}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a', lineHeight: 1.3 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#5d5b54', lineHeight: 1.3 }}>
                   {link.label}
                 </div>
                 <div style={{ fontSize: 12, color: '#a4a097', marginTop: 1 }}>
-                  进入模块
+                  待接入
                 </div>
               </div>
-              <RightOutlined
-                style={{
-                  fontSize: 11,
-                  color: '#c8c4be',
-                  transition: 'transform 0.25s ease, color 0.25s ease',
-                  flexShrink: 0,
-                }}
-              />
-            </a>
+            </div>
           ))}
         </div>
 
+        {/* ========== 今日巡检进度 ========== */}
+        <InspectionProgressCard summaries={inspectionSummaries} />
+
         {/* ========== KPI 卡片行 ========== */}
+        {/* 在线率无真实监测口径、工单与备件模块未启用：相关 KPI 以「待接入」呈现 */}
         <div
           style={{
             display: 'grid',
@@ -1247,28 +1225,29 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
           />
           <KpiCard
             label="设备在线率"
-            value={`${onlineRate}%`}
+            value="待接入"
+            placeholder
+            note="设备在线监测未接入"
             icon={<CheckCircleFilled />}
-            accentColor="#1aae39"
-            trend={{ direction: 'up', text: `在线 ${onlineCount} 台` }}
+            accentColor="#a4a097"
             index={1}
           />
           <KpiCard
             label="待处理工单"
-            value={pendingOrders}
-            suffix="个"
+            value="待接入"
+            placeholder
+            note="工单模块未启用"
             icon={<AlertOutlined />}
-            accentColor="#e03131"
-            trend={urgentOrders > 0 ? { direction: 'down', text: `紧急 ${urgentOrders} 个` } : undefined}
+            accentColor="#a4a097"
             index={2}
           />
           <KpiCard
             label="库存预警"
-            value={stockWarnings.length}
-            suffix="项"
+            value="待接入"
+            placeholder
+            note="备件模块未启用"
             icon={<WarningFilled />}
-            accentColor="#dd5b00"
-            trend={stockWarnings.length > 0 ? { direction: 'down', text: '需及时补货' } : undefined}
+            accentColor="#a4a097"
             index={3}
           />
         </div>

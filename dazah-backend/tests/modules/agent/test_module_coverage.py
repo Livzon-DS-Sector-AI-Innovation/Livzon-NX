@@ -44,7 +44,8 @@ async def test_module_coverage_http_inventory_disabled_and_admin_boundary(
             item["module_name"] for item in data["modules"]
         )
         assert sum(item["registered_count"] > 0 for item in data["modules"]) == 6
-        assert data["total_pages"] == 258
+        # hazard-duty 页面上线后平台页面总数 +1
+        assert data["total_pages"] == 259
         assert data["covered_pages"] == 228
         assert modules["hr"]["registered_count"] == 16
         assert modules["hr"]["covered_pages"] == 17

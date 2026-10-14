@@ -13,6 +13,8 @@ interface Props {
   open: boolean
   onClose: () => void
   roles: EquipmentRole[]
+  /** 页面所在车间：添加的人员归属该车间 */
+  workshopCode?: string
 }
 
 interface UserOption {
@@ -32,7 +34,7 @@ function avatarColor(name: string): string {
   return colors[Math.abs(hash) % colors.length]
 }
 
-export function PersonnelDrawer({ open, onClose, roles: _roles }: Props) {
+export function PersonnelDrawer({ open, onClose, roles: _roles, workshopCode }: Props) {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -66,7 +68,7 @@ export function PersonnelDrawer({ open, onClose, roles: _roles }: Props) {
     }
     setSubmitting(true)
     try {
-      await addPersonnel({ user_ids: selectedIds })
+      await addPersonnel({ user_ids: selectedIds, workshop_code: workshopCode })
       message.success('人员添加成功')
       queryClient.invalidateQueries({ queryKey: ['equipment-personnel'] })
       setSelectedIds([])

@@ -1,9 +1,10 @@
 """设备巡检飞书镜像配置服务。
 
-配置来源优先级：数据库单行配置（App Secret 加密存储）→
-EQUIPMENT_FEISHU_* 环境变量回退。数据库行一旦保存即视为权威，
-环境变量仅在没有数据库行时生效。知识库（/wiki/）链接在保存时
-解析为真实多维表格 App Token，镜像同步运行时不再解析。
+配置按车间一行，来源优先级：数据库该车间行（App Secret 加密存储）→
+EQUIPMENT_FEISHU_* 环境变量回退（仅作用于默认车间 201-1，兼容存量
+单套配置）。车间行一旦保存即视为权威；未配置的非默认车间视为未启用。
+知识库（/wiki/）链接在保存时解析为真实多维表格 App Token，镜像同步
+运行时不再解析。
 """
 
 from __future__ import annotations
@@ -42,6 +43,10 @@ settings = get_settings()
 
 CONFIG_SOURCE_DATABASE = "database"
 CONFIG_SOURCE_ENVIRONMENT = "environment"
+
+# 环境变量回退仅作用于默认车间：存量单套 EQUIPMENT_FEISHU_* 配置
+# 属于 201一车间，不能让其他未配置车间复用同一套表格
+DEFAULT_WORKSHOP_CODE = "201-1"
 
 _FEISHU_IDENTIFIER_PATTERN = re.compile(
     r"\b(?:bascn?|tbl|cli_)[A-Za-z0-9_-]{4,}\b",
@@ -100,9 +105,30 @@ def _decrypt_stored_secret(encrypted: str | None) -> str:
         return ""
 
 
-async def _get_config_row(db: AsyncSession) -> EquipmentInspectionFeishuConfig | None:
-    result = await db.execute(select(EquipmentInspectionFeishuConfig).limit(1))
+async def _get_config_row(
+    db: AsyncSession, workshop_code: str
+) -> EquipmentInspectionFeishuConfig | None:
+    result = await db.execute(
+        select(EquipmentInspectionFeishuConfig).where(
+            EquipmentInspectionFeishuConfig.workshop_code == workshop_code,
+            EquipmentInspectionFeishuConfig.is_deleted == False,  # noqa: E712
+        )
+    )
     return result.scalars().first()
+
+
+def _empty_config() -> InspectionFeishuEffectiveConfig:
+    """未配置的非默认车间：视为未启用，页面展示空态。"""
+    return InspectionFeishuEffectiveConfig(
+        app_id="",
+        app_secret="",
+        app_token="",
+        today_table_id="",
+        history_table_id="",
+        device_table_id="",
+        is_enabled=False,
+        source=CONFIG_SOURCE_ENVIRONMENT,
+    )
 
 
 def _env_config() -> InspectionFeishuEffectiveConfig:
@@ -133,22 +159,48 @@ def _row_config(
     )
 
 
-async def get_effective_config(db: AsyncSession) -> InspectionFeishuEffectiveConfig:
-    """数据库行优先，无行时回退环境变量。"""
-    row = await _get_config_row(db)
-    if row is None:
+async def get_effective_config(
+    db: AsyncSession, workshop_code: str
+) -> InspectionFeishuEffectiveConfig:
+    """该车间数据库行优先；默认车间无行时回退环境变量，其余车间视为未配置。"""
+    row = await _get_config_row(db, workshop_code)
+    if row is not None:
+        return _row_config(row)
+    if workshop_code == DEFAULT_WORKSHOP_CODE:
         return _env_config()
-    return _row_config(row)
+    return _empty_config()
 
 
-async def is_mirror_enabled(db: AsyncSession) -> bool:
-    return (await get_effective_config(db)).enabled
+async def is_mirror_enabled(db: AsyncSession, workshop_code: str) -> bool:
+    return (await get_effective_config(db, workshop_code)).enabled
 
 
-async def get_config_detail(db: AsyncSession) -> EquipmentInspectionFeishuConfigDetail:
-    row = await _get_config_row(db)
-    config = _row_config(row) if row else _env_config()
+async def list_enabled_workshops(db: AsyncSession) -> list[str]:
+    """已启用镜像同步的车间代码（调度器按此生成同步任务）。"""
+    rows = (
+        await db.execute(
+            select(EquipmentInspectionFeishuConfig.workshop_code).where(
+                EquipmentInspectionFeishuConfig.is_deleted == False  # noqa: E712
+            )
+        )
+    ).scalars().all()
+    workshops = set(rows)
+    # 默认车间无行时仍检查环境变量回退
+    workshops.add(DEFAULT_WORKSHOP_CODE)
+    enabled = [code for code in sorted(workshops)
+               if await is_mirror_enabled(db, code)]
+    return enabled
+
+
+async def get_config_detail(
+    db: AsyncSession, workshop_code: str
+) -> EquipmentInspectionFeishuConfigDetail:
+    row = await _get_config_row(db, workshop_code)
+    config = _row_config(row) if row else (
+        _env_config() if workshop_code == DEFAULT_WORKSHOP_CODE else _empty_config()
+    )
     return EquipmentInspectionFeishuConfigDetail(
+        workshop_code=workshop_code,
         app_id=config.app_id,
         app_secret_masked=mask_api_key(config.app_secret) if config.app_secret else "",
         app_secret_configured=bool(config.app_secret),
@@ -170,6 +222,87 @@ async def get_config_detail(db: AsyncSession) -> EquipmentInspectionFeishuConfig
 def _normalized_table_id(value: str) -> str:
     """兼容直接粘贴子表链接 / 带 table 参数的 URL / 裸 table ID。"""
     return normalize_table_id(value) or ""
+
+
+def _is_view_id(value: str) -> bool:
+    """飞书视图 ID 以 vew 开头；数据表 ID 以 tbl 开头。"""
+    return value.startswith("vew")
+
+
+async def _resolve_view_table_ids(
+    client: BitableClient, table_ids: dict[str, str]
+) -> dict[str, str]:
+    """把误填的视图 ID（vew…）解析为所属数据表 ID（tbl…）。
+
+    遍历多维表格的数据表及其视图定位视图所属表；解析不到的保持原值，
+    由调用方决定如何提示。
+    """
+    pending = {value for value in table_ids.values() if _is_view_id(value)}
+    if not pending:
+        return table_ids
+    resolved: dict[str, str] = {}
+    for table in await client.list_tables():
+        table_id = table.get("table_id")
+        if not table_id:
+            continue
+        page_token: str | None = None
+        while True:
+            params: dict[str, object] = {"page_size": 100}
+            if page_token:
+                params["page_token"] = page_token
+            data = await client.client.request(
+                "GET",
+                f"/bitable/v1/apps/{client.app_token}/tables/{table_id}/views",
+                params=params,
+            )
+            for view in data.get("items") or []:
+                view_id = view.get("view_id") if isinstance(view, dict) else None
+                if view_id in pending:
+                    resolved[view_id] = table_id
+            if not data.get("has_more"):
+                break
+            page_token = data.get("page_token")
+            if not page_token:
+                break
+        if not pending - set(resolved):
+            break
+    return {key: resolved.get(value, value) for key, value in table_ids.items()}
+
+
+async def _resolve_view_ids_or_raise(
+    table_ids: dict[str, str], *, app_id: str, app_secret: str, app_token: str
+) -> dict[str, str]:
+    """保存时自动纠正视图 ID（vew…）为数据表 ID（tbl…）。
+
+    误填视图 ID 会导致同步报 WrongTableId；用已配置的应用凭据查询
+    视图所属数据表并替换，无法解析时给出可操作的错误。
+    """
+    if not any(_is_view_id(value) for value in table_ids.values()):
+        return table_ids
+    if not (app_id and app_secret and app_token):
+        raise AppException(
+            message=(
+                "Table ID 以 vew 开头是视图 ID，"
+                "自动解析需完整填写 App ID、App Secret 与 App Token"
+            )
+        )
+    client = BitableClient(app_token=app_token, app_id=app_id, app_secret=app_secret)
+    try:
+        resolved = await _resolve_view_table_ids(client, table_ids)
+    except AppException:
+        raise
+    except Exception as exc:
+        raise AppException(
+            message=f"视图 ID 自动解析失败：{_sanitize_feishu_error_message(str(exc))}"
+        ) from exc
+    if any(_is_view_id(value) for value in resolved.values()):
+        raise AppException(
+            message=(
+                "Table ID 以 vew 开头是视图 ID，且未能在该多维表格中解析到所属数据表；"
+                "请改用数据表 ID（多维表格链接中 table= 参数，以 tbl 开头）"
+            )
+        )
+    return resolved
 
 
 async def _resolve_app_token(
@@ -196,9 +329,11 @@ async def _resolve_app_token(
 
 
 async def update_config(
-    db: AsyncSession, data: EquipmentInspectionFeishuConfigUpdateRequest
+    db: AsyncSession,
+    workshop_code: str,
+    data: EquipmentInspectionFeishuConfigUpdateRequest,
 ) -> EquipmentInspectionFeishuConfigDetail:
-    row = await _get_config_row(db)
+    row = await _get_config_row(db, workshop_code)
     app_id = data.app_id.strip()
     submitted_secret = (data.app_secret or "").strip()
 
@@ -233,7 +368,8 @@ async def update_config(
 
     if row is None:
         row = EquipmentInspectionFeishuConfig(
-            app_secret=encrypt_api_key(current_secret)
+            workshop_code=workshop_code,
+            app_secret=encrypt_api_key(current_secret),
         )
         db.add(row)
     elif secret_changed:
@@ -242,17 +378,29 @@ async def update_config(
     row.app_id = app_id
     row.is_enabled = data.is_enabled
     row.app_token = app_token
-    row.today_table_id = _normalized_table_id(data.today_table_id)
-    row.history_table_id = _normalized_table_id(data.history_table_id)
-    row.device_table_id = _normalized_table_id(data.device_table_id)
+    table_ids = await _resolve_view_ids_or_raise(
+        {
+            "today_table_id": _normalized_table_id(data.today_table_id),
+            "history_table_id": _normalized_table_id(data.history_table_id),
+            "device_table_id": _normalized_table_id(data.device_table_id),
+        },
+        app_id=app_id,
+        app_secret=current_secret,
+        app_token=app_token,
+    )
+    row.today_table_id = table_ids["today_table_id"]
+    row.history_table_id = table_ids["history_table_id"]
+    row.device_table_id = table_ids["device_table_id"]
 
     await db.commit()
-    return await get_config_detail(db)
+    return await get_config_detail(db, workshop_code)
 
 
-async def test_config(db: AsyncSession) -> EquipmentInspectionFeishuConfigTestResult:
-    config = await get_effective_config(db)
-    row = await _get_config_row(db)
+async def test_config(
+    db: AsyncSession, workshop_code: str
+) -> EquipmentInspectionFeishuConfigTestResult:
+    config = await get_effective_config(db, workshop_code)
+    row = await _get_config_row(db, workshop_code)
     checked_at = datetime.now(UTC)
 
     if not config.app_id or not config.app_secret or not config.app_token:

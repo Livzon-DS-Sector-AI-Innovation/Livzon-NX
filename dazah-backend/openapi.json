@@ -6000,6 +6000,244 @@
         "title": "ApiResponseEnvelope[OotLimitProductOut]",
         "type": "object"
       },
+      "ApiResponseEnvelope_PageFeishuConfigItem_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PageFeishuConfigItem"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[PageFeishuConfigItem]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_PageFeishuConfigListResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PageFeishuConfigListResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[PageFeishuConfigListResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_PageFeishuConfigTestResult_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PageFeishuConfigTestResult"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[PageFeishuConfigTestResult]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_PageTableAttachmentUploadResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PageTableAttachmentUploadResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[PageTableAttachmentUploadResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_PageTableRecord_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PageTableRecord"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[PageTableRecord]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_PageTableRecordsResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PageTableRecordsResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[PageTableRecordsResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_PageTableStatsResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PageTableStatsResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[PageTableStatsResponse]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_ProductQualityOut_": {
         "properties": {
           "code": {
@@ -6372,6 +6610,40 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[RegulatoryTrackerNotificationTestResult]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_ResolvedPageFeishuUrl_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ResolvedPageFeishuUrl"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[ResolvedPageFeishuUrl]",
         "type": "object"
       },
       "ApiResponseEnvelope_ReturnRecallOut_": {
@@ -12318,6 +12590,20 @@
             "description": "按模板填写的台账 .xlsx 文件",
             "title": "File",
             "type": "string"
+          },
+          "workshop": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{3}(-\\d)?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "201-1",
+            "description": "归属车间代码",
+            "title": "Workshop"
           }
         },
         "required": [
@@ -12854,6 +13140,20 @@
           "file"
         ],
         "title": "Body_upload_onboarding_attachment_api_v1_hr_onboarding_attachments_post",
+        "type": "object"
+      },
+      "Body_upload_page_table_attachment_api_v1_safety_page_tables__page_key__records__record_id__attachments__field_name__post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_page_table_attachment_api_v1_safety_page_tables__page_key__records__record_id__attachments__field_name__post",
         "type": "object"
       },
       "Body_upload_pilot_workflow_document_api_v1_research_pilot_workflow__workflow_id__upload_post": {
@@ -37216,6 +37516,13 @@
             ],
             "description": "保修到期日",
             "title": "Warranty Expire Date"
+          },
+          "workshop_code": {
+            "default": "201-1",
+            "description": "归属车间代码（如 101-1 / 201-1）",
+            "pattern": "^\\d{3}(-\\d)?$",
+            "title": "Workshop Code",
+            "type": "string"
           }
         },
         "required": [
@@ -56597,6 +56904,223 @@
         "title": "PageDataScopeInput",
         "type": "object"
       },
+      "PageFeishuConfigItem": {
+        "description": "一个镜像页的表格绑定（未配置时也返回，便于设置页展示全部可配页面）。",
+        "properties": {
+          "app_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Token"
+          },
+          "hidden_field_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Hidden Field Names",
+            "type": "array"
+          },
+          "is_configured": {
+            "default": false,
+            "title": "Is Configured",
+            "type": "boolean"
+          },
+          "is_enabled": {
+            "default": true,
+            "title": "Is Enabled",
+            "type": "boolean"
+          },
+          "last_test_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Test Error"
+          },
+          "last_test_field_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Test Field Count"
+          },
+          "last_test_record_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Test Record Count"
+          },
+          "last_test_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Test Status"
+          },
+          "last_tested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Tested At"
+          },
+          "page_key": {
+            "title": "Page Key",
+            "type": "string"
+          },
+          "page_name": {
+            "title": "Page Name",
+            "type": "string"
+          },
+          "route_path": {
+            "title": "Route Path",
+            "type": "string"
+          },
+          "table_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Id"
+          },
+          "view_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "View Id"
+          },
+          "workshop_aliases": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Workshop Aliases",
+            "type": "object"
+          }
+        },
+        "required": [
+          "page_key",
+          "page_name",
+          "route_path"
+        ],
+        "title": "PageFeishuConfigItem",
+        "type": "object"
+      },
+      "PageFeishuConfigListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PageFeishuConfigItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "PageFeishuConfigListResponse",
+        "type": "object"
+      },
+      "PageFeishuConfigTestResult": {
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "field_count": {
+            "default": 0,
+            "title": "Field Count",
+            "type": "integer"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/PageFeishuFieldSummary"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "record_count": {
+            "default": 0,
+            "title": "Record Count",
+            "type": "integer"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success",
+          "message",
+          "checked_at"
+        ],
+        "title": "PageFeishuConfigTestResult",
+        "type": "object"
+      },
+      "PageFeishuFieldSummary": {
+        "properties": {
+          "editable": {
+            "title": "Editable",
+            "type": "boolean"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "editable"
+        ],
+        "title": "PageFeishuFieldSummary",
+        "type": "object"
+      },
       "PageGrantInput": {
         "properties": {
           "data_scope": {
@@ -57431,6 +57955,258 @@
         "title": "PagePermissionSimulationRequest",
         "type": "object"
       },
+      "PageTableAttachmentItem": {
+        "properties": {
+          "file_token": {
+            "title": "File Token",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "type": {
+            "default": "",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_token",
+          "name"
+        ],
+        "title": "PageTableAttachmentItem",
+        "type": "object"
+      },
+      "PageTableAttachmentUploadResponse": {
+        "properties": {
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/PageTableAttachmentItem"
+            },
+            "title": "Attachments",
+            "type": "array"
+          },
+          "field_name": {
+            "title": "Field Name",
+            "type": "string"
+          },
+          "record_id": {
+            "title": "Record Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "record_id",
+          "field_name"
+        ],
+        "title": "PageTableAttachmentUploadResponse",
+        "type": "object"
+      },
+      "PageTableColumn": {
+        "properties": {
+          "editable": {
+            "title": "Editable",
+            "type": "boolean"
+          },
+          "field_id": {
+            "title": "Field Id",
+            "type": "string"
+          },
+          "is_primary": {
+            "title": "Is Primary",
+            "type": "boolean"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Options",
+            "type": "array"
+          },
+          "type": {
+            "title": "Type",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "field_id",
+          "name",
+          "type",
+          "kind",
+          "is_primary",
+          "editable"
+        ],
+        "title": "PageTableColumn",
+        "type": "object"
+      },
+      "PageTableRecord": {
+        "properties": {
+          "fields": {
+            "additionalProperties": true,
+            "title": "Fields",
+            "type": "object"
+          },
+          "record_id": {
+            "title": "Record Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "record_id"
+        ],
+        "title": "PageTableRecord",
+        "type": "object"
+      },
+      "PageTableRecordsResponse": {
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/PageTableColumn"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "page": {
+            "default": 1,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_key": {
+            "title": "Page Key",
+            "type": "string"
+          },
+          "page_name": {
+            "title": "Page Name",
+            "type": "string"
+          },
+          "page_size": {
+            "default": 20,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/PageTableRecord"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "page_key",
+          "page_name"
+        ],
+        "title": "PageTableRecordsResponse",
+        "type": "object"
+      },
+      "PageTableStatBucket": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "count"
+        ],
+        "title": "PageTableStatBucket",
+        "type": "object"
+      },
+      "PageTableStatGroup": {
+        "properties": {
+          "buckets": {
+            "items": {
+              "$ref": "#/components/schemas/PageTableStatBucket"
+            },
+            "title": "Buckets",
+            "type": "array"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "kind",
+          "mode"
+        ],
+        "title": "PageTableStatGroup",
+        "type": "object"
+      },
+      "PageTableStatsResponse": {
+        "properties": {
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/PageTableStatGroup"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "page_key": {
+            "title": "Page Key",
+            "type": "string"
+          },
+          "page_name": {
+            "title": "Page Name",
+            "type": "string"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "page_key",
+          "page_name"
+        ],
+        "title": "PageTableStatsResponse",
+        "type": "object"
+      },
       "PasswordResetRequest": {
         "properties": {
           "password": {
@@ -57709,6 +58485,13 @@
             "minItems": 1,
             "title": "User Ids",
             "type": "array"
+          },
+          "workshop_code": {
+            "default": "201-1",
+            "description": "归属车间代码（如 101-1 / 201-1）",
+            "pattern": "^\\d{3}(-\\d)?$",
+            "title": "Workshop Code",
+            "type": "string"
           }
         },
         "required": [
@@ -66729,6 +67512,85 @@
         "title": "ResolveAttachmentContent",
         "type": "object"
       },
+      "ResolvePageFeishuUrlRequest": {
+        "properties": {
+          "url": {
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "ResolvePageFeishuUrlRequest",
+        "type": "object"
+      },
+      "ResolvedFeishuTable": {
+        "properties": {
+          "table_id": {
+            "title": "Table Id",
+            "type": "string"
+          },
+          "table_name": {
+            "title": "Table Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table_id",
+          "table_name"
+        ],
+        "title": "ResolvedFeishuTable",
+        "type": "object"
+      },
+      "ResolvedPageFeishuUrl": {
+        "properties": {
+          "app_token": {
+            "title": "App Token",
+            "type": "string"
+          },
+          "is_wiki": {
+            "default": false,
+            "title": "Is Wiki",
+            "type": "boolean"
+          },
+          "table_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Id"
+          },
+          "tables": {
+            "items": {
+              "$ref": "#/components/schemas/ResolvedFeishuTable"
+            },
+            "title": "Tables",
+            "type": "array"
+          },
+          "view_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "View Id"
+          }
+        },
+        "required": [
+          "app_token"
+        ],
+        "title": "ResolvedPageFeishuUrl",
+        "type": "object"
+      },
       "ResourceChangeEvent": {
         "properties": {
           "capability": {
@@ -71064,6 +71926,13 @@
             ],
             "description": "参考单价",
             "title": "Unit Price"
+          },
+          "workshop_code": {
+            "default": "201-1",
+            "description": "归属车间代码（如 101-1 / 201-1）",
+            "pattern": "^\\d{3}(-\\d)?$",
+            "title": "Workshop Code",
+            "type": "string"
           }
         },
         "required": [
@@ -71182,6 +72051,19 @@
             ],
             "description": "参考单价",
             "title": "Unit Price"
+          },
+          "workshop_code": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{3}(-\\d)?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "归属车间代码（如 101-1 / 201-1）",
+            "title": "Workshop Code"
           }
         },
         "title": "SparePartUpdate",
@@ -81102,6 +81984,95 @@
           }
         },
         "title": "UpdateOotLimitProductRequest",
+        "type": "object"
+      },
+      "UpdatePageFeishuConfigRequest": {
+        "properties": {
+          "app_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Token"
+          },
+          "hidden_field_names": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hidden Field Names"
+          },
+          "is_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Enabled"
+          },
+          "table_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Id"
+          },
+          "view_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "View Id"
+          },
+          "workshop_aliases": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workshop Aliases"
+          }
+        },
+        "title": "UpdatePageFeishuConfigRequest",
+        "type": "object"
+      },
+      "UpdatePageTableRecordRequest": {
+        "properties": {
+          "fields": {
+            "additionalProperties": true,
+            "title": "Fields",
+            "type": "object"
+          }
+        },
+        "title": "UpdatePageTableRecordRequest",
         "type": "object"
       },
       "UpdateProductQualityRequest": {
@@ -99481,6 +100452,25 @@
             }
           },
           {
+            "description": "车间代码（如 101-1 / 201-1）",
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{3}(-\\d)?$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "车间代码（如 101-1 / 201-1）",
+              "title": "Workshop"
+            }
+          },
+          {
             "description": "页码",
             "in": "query",
             "name": "page",
@@ -99718,6 +100708,25 @@
         "operationId": "get_equipment_statistics_api_v1_equipment_equipments_statistics_get",
         "parameters": [
           {
+            "description": "车间代码（如 101-1 / 201-1）",
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{3}(-\\d)?$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "车间代码（如 101-1 / 201-1）",
+              "title": "Workshop"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,
@@ -99945,6 +100954,18 @@
         "operationId": "get_feishu_config_api_v1_equipment_inspection_feishu_config_get",
         "parameters": [
           {
+            "description": "车间代码（如 101-1 / 201-1）",
+            "in": "query",
+            "name": "workshop",
+            "required": true,
+            "schema": {
+              "description": "车间代码（如 101-1 / 201-1）",
+              "pattern": "^\\d{3}(-\\d)?$",
+              "title": "Workshop",
+              "type": "string"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,
@@ -99989,6 +101010,18 @@
       "put": {
         "operationId": "save_feishu_config_api_v1_equipment_inspection_feishu_config_put",
         "parameters": [
+          {
+            "description": "车间代码（如 101-1 / 201-1）",
+            "in": "query",
+            "name": "workshop",
+            "required": true,
+            "schema": {
+              "description": "车间代码（如 101-1 / 201-1）",
+              "pattern": "^\\d{3}(-\\d)?$",
+              "title": "Workshop",
+              "type": "string"
+            }
+          },
           {
             "in": "cookie",
             "name": "auth_token",
@@ -100047,6 +101080,18 @@
         "operationId": "test_feishu_config_api_v1_equipment_inspection_feishu_config_test_post",
         "parameters": [
           {
+            "description": "车间代码（如 101-1 / 201-1）",
+            "in": "query",
+            "name": "workshop",
+            "required": true,
+            "schema": {
+              "description": "车间代码（如 101-1 / 201-1）",
+              "pattern": "^\\d{3}(-\\d)?$",
+              "title": "Workshop",
+              "type": "string"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,
@@ -100093,6 +101138,18 @@
       "get": {
         "operationId": "list_feishu_devices_api_v1_equipment_inspection_feishu_devices_get",
         "parameters": [
+          {
+            "description": "车间代码（如 101-1 / 201-1）",
+            "in": "query",
+            "name": "workshop",
+            "required": true,
+            "schema": {
+              "description": "车间代码（如 101-1 / 201-1）",
+              "pattern": "^\\d{3}(-\\d)?$",
+              "title": "Workshop",
+              "type": "string"
+            }
+          },
           {
             "description": "设备名称/编号搜索",
             "in": "query",
@@ -100159,7 +101216,26 @@
         "operationId": "list_feishu_records_api_v1_equipment_inspection_feishu_records_get",
         "parameters": [
           {
-            "description": "来源：today=今日巡检 / history=历史记录，缺省全部",
+            "description": "车间代码；缺省跨车间查询",
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{3}(-\\d)?$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "车间代码；缺省跨车间查询",
+              "title": "Workshop"
+            }
+          },
+          {
+            "description": "来源：today=今日巡检（仅当天）/ history=历史记录，缺省全部",
             "in": "query",
             "name": "source",
             "required": false,
@@ -100172,7 +101248,7 @@
                   "type": "null"
                 }
               ],
-              "description": "来源：today=今日巡检 / history=历史记录，缺省全部",
+              "description": "来源：today=今日巡检（仅当天）/ history=历史记录，缺省全部",
               "title": "Source"
             }
           },
@@ -100333,6 +101409,18 @@
         "operationId": "feishu_sync_now_api_v1_equipment_inspection_feishu_sync_post",
         "parameters": [
           {
+            "description": "车间代码（如 101-1 / 201-1）",
+            "in": "query",
+            "name": "workshop",
+            "required": true,
+            "schema": {
+              "description": "车间代码（如 101-1 / 201-1）",
+              "pattern": "^\\d{3}(-\\d)?$",
+              "title": "Workshop",
+              "type": "string"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,
@@ -100380,6 +101468,18 @@
         "operationId": "feishu_sync_status_api_v1_equipment_inspection_feishu_sync_status_get",
         "parameters": [
           {
+            "description": "车间代码（如 101-1 / 201-1）",
+            "in": "query",
+            "name": "workshop",
+            "required": true,
+            "schema": {
+              "description": "车间代码（如 101-1 / 201-1）",
+              "pattern": "^\\d{3}(-\\d)?$",
+              "title": "Workshop",
+              "type": "string"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,
@@ -100422,10 +101522,69 @@
         ]
       }
     },
+    "/api/v1/equipment/inspection/feishu/today-summaries": {
+      "get": {
+        "operationId": "feishu_today_summaries_api_v1_equipment_inspection_feishu_today_summaries_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "各车间今日巡检进度汇总",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
     "/api/v1/equipment/inspection/feishu/today-summary": {
       "get": {
         "operationId": "feishu_today_summary_api_v1_equipment_inspection_feishu_today_summary_get",
         "parameters": [
+          {
+            "description": "车间代码（如 101-1 / 201-1）",
+            "in": "query",
+            "name": "workshop",
+            "required": true,
+            "schema": {
+              "description": "车间代码（如 101-1 / 201-1）",
+              "pattern": "^\\d{3}(-\\d)?$",
+              "title": "Workshop",
+              "type": "string"
+            }
+          },
           {
             "in": "cookie",
             "name": "auth_token",
@@ -101993,6 +103152,25 @@
             }
           },
           {
+            "description": "车间代码（如 101-1 / 201-1）",
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{3}(-\\d)?$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "车间代码（如 101-1 / 201-1）",
+              "title": "Workshop"
+            }
+          },
+          {
             "description": "页码",
             "in": "query",
             "name": "page",
@@ -102394,6 +103572,25 @@
               ],
               "description": "计划ID",
               "title": "Plan Id"
+            }
+          },
+          {
+            "description": "车间代码（如 101-1 / 201-1）",
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{3}(-\\d)?$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "车间代码（如 101-1 / 201-1）",
+              "title": "Workshop"
             }
           },
           {
@@ -104194,6 +105391,25 @@
             }
           },
           {
+            "description": "车间代码（如 101-1 / 201-1）",
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{3}(-\\d)?$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "车间代码（如 101-1 / 201-1）",
+              "title": "Workshop"
+            }
+          },
+          {
             "description": "页码",
             "in": "query",
             "name": "page",
@@ -104609,6 +105825,25 @@
         "operationId": "list_maintainers_api_v1_equipment_maintenance_staff_maintainers_get",
         "parameters": [
           {
+            "description": "车间代码（如 101-1 / 201-1）",
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{3}(-\\d)?$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "车间代码（如 101-1 / 201-1）",
+              "title": "Workshop"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,
@@ -104726,6 +105961,25 @@
               ],
               "description": "工单类型",
               "title": "Order Type"
+            }
+          },
+          {
+            "description": "车间代码（如 101-1 / 201-1）",
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{3}(-\\d)?$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "车间代码（如 101-1 / 201-1）",
+              "title": "Workshop"
             }
           },
           {
@@ -104857,6 +106111,25 @@
       "get": {
         "operationId": "get_work_order_statistics_api_v1_equipment_maintenance_work_orders_statistics_get",
         "parameters": [
+          {
+            "description": "车间代码（如 101-1 / 201-1）",
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{3}(-\\d)?$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "车间代码（如 101-1 / 201-1）",
+              "title": "Workshop"
+            }
+          },
           {
             "in": "cookie",
             "name": "auth_token",
@@ -105922,6 +107195,25 @@
             }
           },
           {
+            "description": "车间代码（如 101-1 / 201-1）",
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{3}(-\\d)?$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "车间代码（如 101-1 / 201-1）",
+              "title": "Workshop"
+            }
+          },
+          {
             "in": "query",
             "name": "page",
             "required": false,
@@ -106077,6 +107369,25 @@
               ],
               "description": "设备分类ID（可选）",
               "title": "Category Id"
+            }
+          },
+          {
+            "description": "车间代码（如 101-1 / 201-1）",
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{3}(-\\d)?$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "车间代码（如 101-1 / 201-1）",
+              "title": "Workshop"
             }
           },
           {
@@ -107007,6 +108318,25 @@
             }
           },
           {
+            "description": "车间代码（如 101-1 / 201-1）",
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{3}(-\\d)?$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "车间代码（如 101-1 / 201-1）",
+              "title": "Workshop"
+            }
+          },
+          {
             "description": "页码",
             "in": "query",
             "name": "page",
@@ -107135,6 +108465,25 @@
       "get": {
         "operationId": "get_stock_warnings_api_v1_equipment_spare_parts_stock_warnings_get",
         "parameters": [
+          {
+            "description": "车间代码（如 101-1 / 201-1）",
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{3}(-\\d)?$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "车间代码（如 101-1 / 201-1）",
+              "title": "Workshop"
+            }
+          },
           {
             "in": "cookie",
             "name": "auth_token",
@@ -215537,6 +216886,836 @@
           }
         },
         "summary": "开始体检",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/page-feishu-configs": {
+      "get": {
+        "operationId": "list_page_feishu_configs_api_v1_safety_page_feishu_configs_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_PageFeishuConfigListResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "列出支持飞书表格镜像的页面及其绑定",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/page-feishu-configs/resolve": {
+      "post": {
+        "operationId": "resolve_page_feishu_url_api_v1_safety_page_feishu_configs_resolve_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolvePageFeishuUrlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ResolvedPageFeishuUrl_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "解析多维表格链接并列出子表",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/page-feishu-configs/{page_key}": {
+      "put": {
+        "operationId": "save_page_feishu_config_api_v1_safety_page_feishu_configs__page_key__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "page_key",
+            "required": true,
+            "schema": {
+              "title": "Page Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePageFeishuConfigRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_PageFeishuConfigItem_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "保存页面的飞书多维表格绑定",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/page-feishu-configs/{page_key}/test": {
+      "post": {
+        "operationId": "test_page_feishu_config_api_v1_safety_page_feishu_configs__page_key__test_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "page_key",
+            "required": true,
+            "schema": {
+              "title": "Page Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_PageFeishuConfigTestResult_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "测试页面的飞书多维表格绑定",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/page-tables/{page_key}/records": {
+      "get": {
+        "operationId": "list_page_table_records_api_v1_safety_page_tables__page_key__records_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "page_key",
+            "required": true,
+            "schema": {
+              "title": "Page Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort_field",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort Field"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort_direction",
+            "required": false,
+            "schema": {
+              "default": "asc",
+              "title": "Sort Direction",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "filter_field",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter Field"
+            }
+          },
+          {
+            "in": "query",
+            "name": "filter_value",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter Value"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_PageTableRecordsResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "读取镜像页的记录（列定义来自飞书实时 schema）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/page-tables/{page_key}/records/{record_id}": {
+      "put": {
+        "operationId": "update_page_table_record_api_v1_safety_page_tables__page_key__records__record_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "page_key",
+            "required": true,
+            "schema": {
+              "title": "Page Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePageTableRecordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_PageTableRecord_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "更新镜像页的记录（回写飞书多维表格）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/page-tables/{page_key}/records/{record_id}/attachments/{field_name}": {
+      "post": {
+        "operationId": "upload_page_table_attachment_api_v1_safety_page_tables__page_key__records__record_id__attachments__field_name__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "page_key",
+            "required": true,
+            "schema": {
+              "title": "Page Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "field_name",
+            "required": true,
+            "schema": {
+              "title": "Field Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_page_table_attachment_api_v1_safety_page_tables__page_key__records__record_id__attachments__field_name__post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_PageTableAttachmentUploadResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "上传附件到记录（追加到飞书附件字段）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/page-tables/{page_key}/records/{record_id}/attachments/{field_name}/{file_token}/content": {
+      "get": {
+        "operationId": "download_page_table_attachment_api_v1_safety_page_tables__page_key__records__record_id__attachments__field_name___file_token__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "page_key",
+            "required": true,
+            "schema": {
+              "title": "Page Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "field_name",
+            "required": true,
+            "schema": {
+              "title": "Field Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_token",
+            "required": true,
+            "schema": {
+              "title": "File Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "inline",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Inline",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "代理下载镜像页记录附件",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/page-tables/{page_key}/records/{record_id}/attachments/{field_name}/{file_token}/thumbnail": {
+      "get": {
+        "operationId": "thumbnail_page_table_attachment_api_v1_safety_page_tables__page_key__records__record_id__attachments__field_name___file_token__thumbnail_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "page_key",
+            "required": true,
+            "schema": {
+              "title": "Page Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "field_name",
+            "required": true,
+            "schema": {
+              "title": "Field Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_token",
+            "required": true,
+            "schema": {
+              "title": "File Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_width",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 512,
+              "minimum": 16,
+              "title": "Max Width",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_height",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 512,
+              "minimum": 16,
+              "title": "Max Height",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "镜像页记录附件缩略图（PIL 缩放为小图，避免列表页拉取原图全量字节）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/page-tables/{page_key}/stats": {
+      "get": {
+        "operationId": "get_page_table_stats_api_v1_safety_page_tables__page_key__stats_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "page_key",
+            "required": true,
+            "schema": {
+              "title": "Page Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "分组字段名，可重复；缺省时自动挑选日期/位置/单选字段",
+            "in": "query",
+            "name": "group_by",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "分组字段名，可重复；缺省时自动挑选日期/位置/单选字段",
+              "title": "Group By"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_PageTableStatsResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "页面仪表盘聚合（默认：日期按月 / 位置文本按车间号归一 / 单选按选项）",
         "tags": [
           "安全管理"
         ]

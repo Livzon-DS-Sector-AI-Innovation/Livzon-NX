@@ -1,4 +1,4 @@
-"""设备巡检飞书镜像只读查询与配置 API。"""
+"""设备巡检飞书镜像只读查询与配置 API（按车间隔离）。"""
 
 from __future__ import annotations
 
@@ -20,6 +20,15 @@ from app.modules.equipment.service import inspection_feishu_mirror as mirror
 
 router = APIRouter()
 
+# 车间代码形如 101 / 101-1 / 201-3
+WORKSHOP_QUERY = Query(
+    ..., pattern=r"^\d{3}(-\d)?$", description="车间代码（如 101-1 / 201-1）"
+)
+# records 支持缺省车间：设备详情抽屉按设备编号跨车间聚合
+WORKSHOP_QUERY_OPTIONAL = Query(
+    None, pattern=r"^\d{3}(-\d)?$", description="车间代码；缺省跨车间查询"
+)
+
 
 def _require_user(current_user: CurrentUser) -> None:
     if current_user is None:
@@ -28,8 +37,10 @@ def _require_user(current_user: CurrentUser) -> None:
 
 @router.get("/feishu/records", summary="巡检记录（飞书镜像）")
 async def list_feishu_records(
+    workshop: str | None = WORKSHOP_QUERY_OPTIONAL,
     source: str | None = Query(
-        None, description="来源：today=今日巡检 / history=历史记录，缺省全部"
+        None,
+        description="来源：today=今日巡检（仅当天）/ history=历史记录，缺省全部",
     ),
     date_from: date | None = Query(None, description="日期起"),
     date_to: date | None = Query(None, description="日期止"),
@@ -44,6 +55,7 @@ async def list_feishu_records(
         raise AppException(message="source 仅支持 today / history")
     items, total = await mirror.list_records(
         db,
+        workshop_code=workshop,
         source=source,
         date_from=date_from,
         date_to=date_to,
@@ -57,6 +69,7 @@ async def list_feishu_records(
         data=[
             {
                 "id": str(item.id),
+                "workshop_code": item.workshop_code,
                 "source": item.source,
                 "record_id": item.record_id,
                 "record_date": item.record_date,
@@ -92,67 +105,87 @@ async def list_feishu_records(
 
 @router.get("/feishu/devices", summary="巡检设备清单（飞书镜像 + 台账关联）")
 async def list_feishu_devices(
+    workshop: str = WORKSHOP_QUERY,
     keyword: str | None = Query(None, description="设备名称/编号搜索"),
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
-    return success_response(data=await mirror.list_devices(db, keyword=keyword))
+    return success_response(
+        data=await mirror.list_devices(db, workshop, keyword=keyword)
+    )
 
 
 @router.get("/feishu/today-summary", summary="今日巡检进度")
 async def feishu_today_summary(
+    workshop: str = WORKSHOP_QUERY,
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
-    return success_response(data=await mirror.today_summary(db))
+    return success_response(data=await mirror.today_summary(db, workshop))
+
+
+@router.get("/feishu/today-summaries", summary="各车间今日巡检进度汇总")
+async def feishu_today_summaries(
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    return success_response(data=await mirror.today_summaries_all(db))
 
 
 @router.get("/feishu/sync-status", summary="镜像同步状态")
 async def feishu_sync_status(
+    workshop: str = WORKSHOP_QUERY,
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     return success_response(
         data={
-            "enabled": await config_service.is_mirror_enabled(db),
-            "tables": await mirror.get_sync_states(db),
+            "enabled": await config_service.is_mirror_enabled(db, workshop),
+            "tables": await mirror.get_sync_states(db, workshop),
         }
     )
 
 
 @router.post("/feishu/sync", summary="手动触发飞书同步")
 async def feishu_sync_now(
+    workshop: str = WORKSHOP_QUERY,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     _require_user(current_user)
-    if not await config_service.is_mirror_enabled(db):
+    if not await config_service.is_mirror_enabled(db, workshop):
         raise AppException(message="巡检飞书镜像同步未配置（缺少应用凭据或表格 ID）")
-    results = await mirror.sync_all(db, incremental=True)
+    results = await mirror.sync_all(db, workshop, incremental=True)
     await db.commit()
     return success_response(data=results)
 
 
 @router.get("/feishu/config", summary="获取设备巡检飞书镜像配置")
 async def get_feishu_config(
+    workshop: str = WORKSHOP_QUERY,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     _require_user(current_user)
-    return success_response(data=await config_service.get_config_detail(db))
+    return success_response(
+        data=await config_service.get_config_detail(db, workshop)
+    )
 
 
 @router.put("/feishu/config", summary="保存设备巡检飞书镜像配置")
 async def save_feishu_config(
     data: EquipmentInspectionFeishuConfigUpdateRequest,
+    workshop: str = WORKSHOP_QUERY,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     _require_user(current_user)
-    return success_response(data=await config_service.update_config(db, data))
+    return success_response(
+        data=await config_service.update_config(db, workshop, data)
+    )
 
 
 @router.post("/feishu/config/test", summary="测试设备巡检飞书镜像连接")
 async def test_feishu_config(
+    workshop: str = WORKSHOP_QUERY,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     _require_user(current_user)
-    return success_response(data=await config_service.test_config(db))
+    return success_response(data=await config_service.test_config(db, workshop))

@@ -5,6 +5,7 @@ export type InspectionFeishuTodayStatus = 'inspected' | 'abnormal' | 'pending'
 
 export interface InspectionFeishuRecord {
   id: string
+  workshop_code: string
   source: InspectionFeishuSource
   record_id: string
   record_date: string | null
@@ -39,6 +40,14 @@ export interface InspectionFeishuDevice {
   location_name: string | null
   in_ledger: boolean
   today_status: InspectionFeishuTodayStatus
+  /** 镜像里最近一次巡检日期；从未巡检为 null */
+  last_inspected_date: string | null
+}
+
+export interface InspectionFeishuDeviceList {
+  /** “今日状态”的口径日期（北京时间） */
+  date: string
+  items: InspectionFeishuDevice[]
 }
 
 export interface InspectionFeishuSyncState {
@@ -60,9 +69,18 @@ export interface InspectionFeishuTodaySummary {
   total_devices: number
   inspected: number
   abnormal: number
+  /** 上午/下午任一检查项有值的设备数（有效记录行口径） */
+  am_inspected: number
+  pm_inspected: number
+}
+
+export interface InspectionFeishuWorkshopSummary extends InspectionFeishuTodaySummary {
+  workshop_code: string
 }
 
 export interface InspectionFeishuRecordFilters {
+  /** 车间代码；缺省跨车间查询（设备详情抽屉按设备编号聚合） */
+  workshop?: string
   source?: InspectionFeishuSource
   date_from?: string
   date_to?: string
@@ -81,6 +99,7 @@ export interface InspectionFeishuRecordListResponse {
 }
 
 export interface InspectionFeishuConfigDetail {
+  workshop_code: string
   app_id: string
   app_secret_masked: string
   app_secret_configured: boolean

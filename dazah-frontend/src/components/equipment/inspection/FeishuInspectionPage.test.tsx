@@ -41,6 +41,7 @@ const device = {
   location_name: '201二车间',
   in_ledger: true,
   today_status: 'abnormal',
+  last_inspected_date: '2026-10-09',
 }
 
 function paged(items: unknown[]) {
@@ -59,7 +60,10 @@ describe('FeishuInspectionPage', () => {
 
   beforeEach(() => {
     api.fetchInspectionFeishuRecords.mockResolvedValue(paged([todayRecord]))
-    api.fetchInspectionFeishuDevices.mockResolvedValue([device])
+    api.fetchInspectionFeishuDevices.mockResolvedValue({
+      date: '2026-10-10',
+      items: [device],
+    })
     api.fetchInspectionFeishuSyncStatus.mockResolvedValue({
       enabled: true,
       tables: [
@@ -84,6 +88,8 @@ describe('FeishuInspectionPage', () => {
       total_devices: 49,
       inspected: 46,
       abnormal: 2,
+      am_inspected: 46,
+      pm_inspected: 45,
     })
     api.triggerInspectionFeishuSync.mockResolvedValue({
       today: { synced: 2, total: 48 },
@@ -103,7 +109,7 @@ describe('FeishuInspectionPage', () => {
     act(() => {
       root.render(
         <AntApp>
-          <FeishuInspectionPage />
+          <FeishuInspectionPage workshopCode="201-1" workshopLabel="201一车间" />
         </AntApp>,
       )
     })
@@ -121,21 +127,35 @@ describe('FeishuInspectionPage', () => {
   it('renders the header, sync bar, summary card and today table', async () => {
     await renderPage()
     const text = document.body.textContent || ''
-    expect(text).toContain('设备巡检')
-    expect(text).toContain('岗位巡检记录（飞书多维表格镜像，只读展示）')
+    expect(text).toContain('设备巡检 · 201一车间')
+    expect(text).toContain('201一车间岗位巡检记录（飞书多维表格镜像，只读展示）')
     expect(text).toContain('巡检数据在飞书多维表格录入，平台每 5 分钟自动同步')
     expect(text).toContain('最近同步')
     expect(text).toContain('镜像 98 行')
     expect(text).toContain('查看原因')
     expect(text).toContain('今日进度（2026-10-10）')
     expect(text).toContain('46 / 49')
+    expect(text).toContain('上午 46/49 · 下午 45/49')
     expect(text).toContain('含异常')
     expect(text).toContain('酸化罐 1')
     expect(text).toContain('XT1-1-1-028')
     expect(text).toContain('下午清洁异常')
+    expect(api.fetchInspectionFeishuSyncStatus).toHaveBeenCalledWith('201-1')
+    expect(api.fetchInspectionFeishuTodaySummary).toHaveBeenCalledWith('201-1')
     expect(api.fetchInspectionFeishuRecords).toHaveBeenCalledWith(
-      expect.objectContaining({ source: 'today' }),
+      expect.objectContaining({ workshop: '201-1', source: 'today' }),
     )
+    // 今日巡检只展示当天记录（后端口径），不提供日期范围筛选
+    expect(document.body.querySelector('.ant-picker-range')).toBeNull()
+    // 同步说明跟随同步栏，位于「飞书同步 / 配置」按钮之后
+    const syncCaption = [...document.body.querySelectorAll('p')].find((p) =>
+      p.textContent?.includes('每 5 分钟自动同步'),
+    )
+    expect(syncCaption).toBeTruthy()
+    expect(
+      (syncCaption!.compareDocumentPosition(findButton('配置'))
+        & Node.DOCUMENT_POSITION_PRECEDING),
+    ).toBeTruthy()
   })
 
   it('triggers a manual sync and refreshes the page data', async () => {
@@ -144,7 +164,7 @@ describe('FeishuInspectionPage', () => {
       findButton('飞书同步').click()
       await new Promise((r) => setTimeout(r, 120))
     })
-    expect(api.triggerInspectionFeishuSync).toHaveBeenCalledTimes(1)
+    expect(api.triggerInspectionFeishuSync).toHaveBeenCalledWith('201-1')
     expect(document.body.textContent).toContain('飞书同步完成，本次更新 2 条')
   })
 
@@ -171,11 +191,13 @@ describe('FeishuInspectionPage', () => {
       await new Promise((r) => setTimeout(r, 80))
     })
     expect(api.fetchInspectionFeishuRecords).toHaveBeenLastCalledWith(
-      expect.objectContaining({ source: 'history' }),
+      expect.objectContaining({ workshop: '201-1', source: 'history' }),
     )
     const text = document.body.textContent || ''
     expect(text).toContain('处理状态')
     expect(text).toContain('已拆分')
+    // 历史记录保留日期范围筛选
+    expect(document.body.querySelector('.ant-picker-range')).not.toBeNull()
   })
 
   it('lists mirrored devices with ledger links and today status', async () => {
@@ -190,12 +212,16 @@ describe('FeishuInspectionPage', () => {
         await new Promise((r) => setTimeout(r, 50))
       }
     })
-    expect(api.fetchInspectionFeishuDevices).toHaveBeenCalled()
+    expect(api.fetchInspectionFeishuDevices).toHaveBeenCalledWith('201-1', undefined)
     const text = document.body.textContent || ''
     expect(text).toContain('已关联')
     expect(text).toContain('PJ-3000L')
     expect(text).toContain('201二车间')
     expect(text).toContain('异常')
+    // 今日状态列头带口径日期，最近巡检为独立列
+    expect(text).toContain('今日状态（10-10）')
+    expect(text).toContain('最近巡检')
+    expect(text).toContain('10-09')
   })
 
   it('reports sync failures with a readable message', async () => {

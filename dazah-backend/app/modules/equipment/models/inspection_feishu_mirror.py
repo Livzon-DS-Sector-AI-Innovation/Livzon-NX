@@ -13,9 +13,10 @@ from typing import Any
 from sqlalchemy import (
     Date,
     DateTime,
+    Index,
     String,
     Text,
-    UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -31,15 +32,24 @@ class EquipmentInspectionFeishuRecord(BaseModel):
 
     __tablename__ = "inspection_feishu_records"
     __table_args__ = (
-        UniqueConstraint(
+        # 部分唯一索引：未删除行内同车间同来源的飞书记录唯一
+        Index(
+            "uq_inspection_feishu_records_source_record",
+            "workshop_code",
             "source",
             "record_id",
-            "is_deleted",
-            name="uq_inspection_feishu_records_source_record",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
         ),
         {"schema": "equipment"},
     )
 
+    workshop_code: Mapped[str] = mapped_column(
+        String(10),
+        default="201-1",
+        server_default="201-1",
+        comment="车间代码（如 101-1 / 201-1）",
+    )
     source: Mapped[str] = mapped_column(
         String(20), comment="来源表：today=今日巡检 / history=设备历史巡检记录"
     )
@@ -89,12 +99,23 @@ class EquipmentInspectionFeishuDevice(BaseModel):
 
     __tablename__ = "inspection_feishu_devices"
     __table_args__ = (
-        UniqueConstraint(
-            "record_id", "is_deleted", name="uq_inspection_feishu_devices_record"
+        # 部分唯一索引：未删除行内同车间的飞书设备档案记录唯一
+        Index(
+            "uq_inspection_feishu_devices_record",
+            "workshop_code",
+            "record_id",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
         ),
         {"schema": "equipment"},
     )
 
+    workshop_code: Mapped[str] = mapped_column(
+        String(10),
+        default="201-1",
+        server_default="201-1",
+        comment="车间代码（如 101-1 / 201-1）",
+    )
     record_id: Mapped[str] = mapped_column(String(64), comment="飞书记录ID")
     equipment_name: Mapped[str | None] = mapped_column(
         String(200), comment="设备名称"
@@ -108,16 +129,27 @@ class EquipmentInspectionFeishuDevice(BaseModel):
 
 
 class EquipmentInspectionFeishuSyncState(BaseModel):
-    """镜像同步状态（每张源表一行）"""
+    """镜像同步状态（每车间每张源表一行）"""
 
     __tablename__ = "inspection_feishu_sync_state"
     __table_args__ = (
-        UniqueConstraint(
-            "table_key", "is_deleted", name="uq_inspection_feishu_sync_state_key"
+        # 部分唯一索引：未删除行内每车间每张源表仅一行状态
+        Index(
+            "uq_inspection_feishu_sync_state_ws_table",
+            "workshop_code",
+            "table_key",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
         ),
         {"schema": "equipment"},
     )
 
+    workshop_code: Mapped[str] = mapped_column(
+        String(10),
+        default="201-1",
+        server_default="201-1",
+        comment="车间代码（如 101-1 / 201-1）",
+    )
     table_key: Mapped[str] = mapped_column(
         String(20), comment="today / history / devices"
     )

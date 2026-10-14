@@ -8,9 +8,11 @@ import { CreateSparePartInput, UpdateSparePartInput } from '@/types/equipment'
 
 interface SparePartDrawerProps {
   onRefresh?: () => void
+  /** 页面所在车间：新建备件归属该车间 */
+  workshopCode?: string
 }
 
-export function SparePartDrawer({ onRefresh }: SparePartDrawerProps) {
+export function SparePartDrawer({ onRefresh, workshopCode }: SparePartDrawerProps) {
   const { message } = App.useApp()
   const [form] = Form.useForm()
   const { sparePartDrawerOpen, editingSparePart, closeSparePartDrawer } = useEquipmentStore()
@@ -55,6 +57,7 @@ export function SparePartDrawer({ onRefresh }: SparePartDrawerProps) {
         const data: CreateSparePartInput = {
           code: values.code,
           name: values.name,
+          workshop_code: workshopCode,
           specification: values.specification || undefined,
           unit: values.unit,
           category: values.category || undefined,

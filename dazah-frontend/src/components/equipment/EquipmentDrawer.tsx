@@ -83,9 +83,11 @@ interface StaffOption {
 
 interface EquipmentDrawerProps {
   onRefresh?: () => void
+  /** 页面所在车间：新建设备归属该车间 */
+  workshopCode?: string
 }
 
-export function EquipmentDrawer({ onRefresh }: EquipmentDrawerProps) {
+export function EquipmentDrawer({ onRefresh, workshopCode }: EquipmentDrawerProps) {
   const [form] = Form.useForm()
   const { message } = App.useApp()
   const [submitting, setSubmitting] = useState(false)
@@ -213,7 +215,7 @@ export function EquipmentDrawer({ onRefresh }: EquipmentDrawerProps) {
         await updateEquipment(editingEquipment.id, submitData)
         message.success('更新设备成功')
       } else {
-        await createEquipment(submitData)
+        await createEquipment({ ...submitData, workshop_code: workshopCode })
         message.success('创建设备成功')
       }
       closeEquipmentDrawer()

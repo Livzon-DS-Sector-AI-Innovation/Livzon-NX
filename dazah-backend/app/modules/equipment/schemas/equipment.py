@@ -108,6 +108,11 @@ class EquipmentCreate(BaseModel):
     equipment_no: str = Field(
         ..., min_length=1, max_length=50, description="设备编号（手动输入，需唯一）"
     )
+    workshop_code: str = Field(
+        default="201-1",
+        pattern=r"^\d{3}(-\d)?$",
+        description="归属车间代码（如 101-1 / 201-1）",
+    )
     category_ids: list[uuid.UUID] = Field(
         ..., min_length=1, description="设备分类ID列表（支持多分类）"
     )
@@ -202,6 +207,7 @@ class EquipmentResponse(BaseModel):
     id: uuid.UUID
     equipment_no: str
     name: str
+    workshop_code: str
     category_ids: list[uuid.UUID] = Field(default_factory=list)
     category_names: str | None = None
     location_id: uuid.UUID

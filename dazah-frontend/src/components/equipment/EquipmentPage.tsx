@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useCallback, useState } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import { App, ConfigProvider, Tabs, Button } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import { MenuFoldOutlined, MenuUnfoldOutlined, ReloadOutlined } from '@ant-design/icons'
@@ -17,6 +17,8 @@ import { LocationDrawer } from './LocationDrawer'
 import { RepairDrawer } from './RepairDrawer'
 
 interface EquipmentPageProps {
+  workshopCode: string
+  workshopLabel: string
   initialCategories: EquipmentCategory[]
   initialLocations: Location[]
   initialEquipments: Equipment[]
@@ -28,6 +30,8 @@ interface EquipmentPageProps {
 const SIDEBAR_WIDTH = 280
 
 export function EquipmentPage({
+  workshopCode,
+  workshopLabel,
   initialCategories,
   initialLocations,
   initialEquipments,
@@ -61,6 +65,8 @@ export function EquipmentPage({
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [resetKey, setResetKey] = useState(0)
+  // 用户当前选择的每页条数：筛选/保存后的刷新沿用，避免分页器显示 N 而数据只有 20
+  const pageSizeRef = useRef(20)
 
   // 初始化 store 数据（包含 SSR 数据）
   useEffect(() => {
@@ -125,6 +131,7 @@ export function EquipmentPage({
     setLoading(true)
     try {
       const equipmentsResponse = await fetchEquipmentsClient({
+        workshop: workshopCode,
         category_id: selectedCategory,
         location_id: selectedLocation,
         department_id: departmentFilter,
@@ -140,15 +147,15 @@ export function EquipmentPage({
     } finally {
       setLoading(false)
     }
-  }, [selectedCategory, selectedLocation, departmentFilter, statusFilter, keyword, setEquipments, setTotal, setLoading])
+  }, [workshopCode, selectedCategory, selectedLocation, departmentFilter, statusFilter, keyword, setEquipments, setTotal, setLoading])
 
   // 单独刷新统计（仅 mount 或需要时使用）
   const refreshStatistics = useCallback(async () => {
     try {
-      const stats = await fetchEquipmentStatisticsClient()
+      const stats = await fetchEquipmentStatisticsClient(workshopCode)
       setStatistics(stats)
     } catch { /* 静默 */ }
-  }, [setStatistics])
+  }, [workshopCode, setStatistics])
 
   // 刷新分类和位置树
   const refreshCategoriesAndLocations = useCallback(async () => {
@@ -163,7 +170,7 @@ export function EquipmentPage({
 
   // 筛选变化时重置到第一页（含首次加载）
   useEffect(() => {
-    fetchData(1, 20)
+    fetchData(1, pageSizeRef.current)
     setResetKey(k => k + 1)
   }, [fetchData])
 
@@ -208,10 +215,10 @@ export function EquipmentPage({
               margin: 0, marginBottom: 4, lineHeight: 1.3,
             }}
           >
-            设备台账
+            设备台账 · {workshopLabel}
           </h2>
           <p style={{ fontSize: 14, color: '#787671', margin: 0, lineHeight: 1.5 }}>
-            分类管理 · 位置管理 · 设备档案 · 状态追踪
+            {workshopLabel} · 分类管理 · 位置管理 · 设备档案 · 状态追踪
           </p>
         </div>
 
@@ -261,13 +268,13 @@ export function EquipmentPage({
 
             {/* 表格区域 */}
             <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
-              <EquipmentTable loading={loading} resetKey={resetKey} onPageChange={(p, ps) => fetchData(p, ps)} />
+              <EquipmentTable loading={loading} resetKey={resetKey} onPageChange={(p, ps) => { pageSizeRef.current = ps; fetchData(p, ps) }} workshopCode={workshopCode} />
             </div>
           </div>
         </div>
 
         {/* 抽屉组件 */}
-        <EquipmentDrawer onRefresh={() => { fetchData(1, 20); setResetKey(k => k + 1) }} />
+        <EquipmentDrawer workshopCode={workshopCode} onRefresh={() => { fetchData(1, pageSizeRef.current); setResetKey(k => k + 1) }} />
         <CategoryDrawer onRefresh={refreshCategoriesAndLocations} />
         <LocationDrawer onRefresh={refreshCategoriesAndLocations} />
         <RepairDrawer
@@ -275,7 +282,7 @@ export function EquipmentPage({
             id: e.id, equipment_no: e.equipment_no, name: e.name, importance: e.importance,
           }))}
           symptoms={failureCodes.symptoms}
-          onRefresh={() => fetchData(1, 20)}
+          onRefresh={() => fetchData(1, pageSizeRef.current)}
         />
       </App>
     </ConfigProvider>
