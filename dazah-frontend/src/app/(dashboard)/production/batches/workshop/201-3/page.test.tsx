@@ -8,8 +8,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
+const chart = vi.hoisted(() => ({ option: null as import('echarts-for-react').EChartsReactProps['option'] | null }))
 vi.mock('echarts-for-react', () => ({
-  default: () => <div data-testid="echarts" />,
+  default: ({ option }: import('echarts-for-react').EChartsReactProps) => { chart.option = option; return <div data-testid="echarts" /> },
 }))
 
 import Workshop2013Page from './page'
@@ -24,7 +25,7 @@ const DASHBOARD = {
   ba_monthly_consume: 100,
   stages: { crude: 5, extraction: 3 },
   status_distribution: [],
-  monthly_trend: [],
+  monthly_trend: [{ month: 1, output_kg: 100 }, { month: 2, output_kg: 1250 }],
   rrt_pass_rates: [],
 }
 
@@ -59,6 +60,10 @@ describe('Workshop2013Page', () => {
     const text = (container.textContent || '') + (document.body.textContent || '')
     expect(text).toContain('多拉菌素')
     expect(text).toContain('本月产量')
+    expect(chart.option.yAxis.name).toBe('kg')
+    expect(chart.option.yAxis.axisLabel.formatter(100)).toBe('100')
+    expect(chart.option.yAxis.axisLabel.formatter(1250)).toBe('1,250')
+    expect(chart.option.tooltip.formatter([{ name: '1月', value: 100 }])).toBe('1月<br/>产量: 100 kg')
   })
 
   it('renders empty when fetch fails', async () => {

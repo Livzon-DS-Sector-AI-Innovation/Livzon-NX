@@ -10,8 +10,9 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/components/production/SyncSettingsButton', () => ({
   default: () => <button>同步设置</button>,
 }))
+const chart = vi.hoisted(() => ({ option: null as import('echarts-for-react').EChartsReactProps['option'] | null }))
 vi.mock('echarts-for-react', () => ({
-  default: () => <div data-testid="echarts" />,
+  default: ({ option }: import('echarts-for-react').EChartsReactProps) => { chart.option = option; return <div data-testid="echarts" /> },
 }))
 
 import Workshop2012Page from './page'
@@ -69,6 +70,11 @@ describe('Workshop2012Page', () => {
 
     const text = container.textContent || ''
     expect(text).toContain('二车间')
+    expect(chart.option.yAxis.name).toBe('kg')
+    expect(chart.option.yAxis.axisLabel.formatter(100)).toBe('100')
+    expect(chart.option.yAxis.axisLabel.formatter(1250)).toBe('1,250')
+    expect(chart.option.yAxis.axisLabel.formatter(12.5)).toBe('12.5')
+    expect(chart.option.tooltip.formatter([{ name: '1月', value: 100 }])).toBe('1月<br/>产量: 100 kg')
     expect(text).toContain('批次状态')
     expect(text).toContain('in_progress')
     expect(text).toContain('completed')

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Card, Col, Row, Space, Statistic, Table, Tag, Typography } from 'antd'
+import { Button, Card, Col, Empty, Row, Space, Spin, Statistic, Table, Tag, Typography } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
 import { RightOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
@@ -142,11 +142,16 @@ function monthLabel(month: string): string {
 
 /** 仪器管理首页：概览 + 校验到期提醒 + 各子表入口（数据读本地镜像）。 */
 export function InstrumentsDashboard() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['quality-instruments', 'dashboard'],
     queryFn: fetchInstrumentsDashboard,
   })
 
+  if (isLoading && !data) return <div role="status"><Spin /> 正在读取仪器统计数据</div>
+  if (isError && !data) return <Alert type="error" title="仪器统计数据加载失败" showIcon
+    description="读取本地统计失败，请重试；失败不会被展示为零值或空数据。"
+    action={<Button onClick={() => void refetch()}>重试</Button>} />
+  if (!data) return <Empty description="暂无仪器统计数据" />
   const calibrationExpired = data?.calibration_expired ?? []
   const calibrationDue = data?.calibration_due ?? []
   const dueRows = [...calibrationExpired, ...calibrationDue]
@@ -176,13 +181,13 @@ export function InstrumentsDashboard() {
         )}
 
         {/* 设备概览 */}
-        <Row gutter={16}>
-          <Col span={6}>
+        <Row gutter={[16, 16]}>
+          <Col xs={12} md={6}>
             <StatCard title="设备总数" value={equipmentTotal}>
               <Text type="secondary">在册仪器设备</Text>
             </StatCard>
           </Col>
-          <Col span={6}>
+          <Col xs={12} md={6}>
             <StatCard
               title="完好"
               value={data?.equipment.ok ?? 0}
@@ -191,7 +196,7 @@ export function InstrumentsDashboard() {
               <Text type="secondary">完好率 {percent(data?.equipment.ok ?? 0, equipmentTotal)}%</Text>
             </StatCard>
           </Col>
-          <Col span={6}>
+          <Col xs={12} md={6}>
             <StatCard
               title="维修中"
               value={data?.equipment.repairing ?? 0}
@@ -202,7 +207,7 @@ export function InstrumentsDashboard() {
               </Text>
             </StatCard>
           </Col>
-          <Col span={6}>
+          <Col xs={12} md={6}>
             <StatCard title="重点设备" value={data?.equipment.key_count ?? 0}>
               <Text type="secondary">
                 占比 {percent(data?.equipment.key_count ?? 0, equipmentTotal)}%
@@ -212,8 +217,8 @@ export function InstrumentsDashboard() {
         </Row>
 
         {/* 待办与风险 */}
-        <Row gutter={16}>
-          <Col span={8}>
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={8}>
             <StatCard
               title="校验到期（30 天内 / 已过期）"
               value={dueRows.length}
@@ -232,7 +237,7 @@ export function InstrumentsDashboard() {
               )}
             </StatCard>
           </Col>
-          <Col span={8}>
+          <Col xs={24} lg={8}>
             <StatCard title="未完成维保记录" value={data?.maintenance.unfinished ?? 0}>
               <Space size={4} wrap>
                 <Text type="secondary">共 {data?.maintenance.total ?? 0} 条</Text>
@@ -244,7 +249,7 @@ export function InstrumentsDashboard() {
               </Space>
             </StatCard>
           </Col>
-          <Col span={8}>
+          <Col xs={24} lg={8}>
             <StatCard title="维保合同" value={data?.contracts.total ?? 0}>
               <Text type="secondary">在管维保合同</Text>
             </StatCard>
@@ -252,8 +257,8 @@ export function InstrumentsDashboard() {
         </Row>
 
         {/* 图表：构成 / 分布 */}
-        <Row gutter={16}>
-          <Col span={8}>
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={8}>
             <Card title="设备状态构成">
               <ReactECharts
                 option={buildStatusOption(data?.equipment_status ?? [])}
@@ -263,7 +268,7 @@ export function InstrumentsDashboard() {
               />
             </Card>
           </Col>
-          <Col span={8}>
+          <Col xs={24} lg={8}>
             <Card title="未来 6 个月校验分布">
               <ReactECharts
                 option={buildBarOption(
@@ -276,7 +281,7 @@ export function InstrumentsDashboard() {
               />
             </Card>
           </Col>
-          <Col span={8}>
+          <Col xs={24} lg={8}>
             <Card title="未完成维保到期分布">
               <ReactECharts
                 option={buildBarOption(
@@ -303,6 +308,7 @@ export function InstrumentsDashboard() {
             dataSource={dueRows}
             loading={isLoading}
             pagination={false}
+            scroll={{ x: 720 }}
             locale={{ emptyText: '暂无 30 天内到期或已过期的校验' }}
           />
         </Card>

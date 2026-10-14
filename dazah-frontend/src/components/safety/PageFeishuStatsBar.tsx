@@ -2,7 +2,7 @@
 
 import { Card, Empty, Typography } from 'antd'
 import type { EChartsOption } from 'echarts'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/components/shared/ThemedEChart'
 
 import type { PageTableStats } from '@/lib/safety-page-tables'
 
@@ -14,8 +14,8 @@ const WORKSHOP_COLOR = '#2563eb'
 const SUCCESS_COLOR = '#1aae39'
 const WARNING_COLOR = '#dd5b00'
 const NEUTRAL_COLOR = '#bfbfbf'
-const SPLIT_LINE_COLOR = '#f0f0f0'
-const AXIS_LINE_COLOR = '#d9d9d9'
+const SPLIT_LINE_COLOR = 'var(--color-hairline-soft)'
+const AXIS_LINE_COLOR = 'var(--color-hairline)'
 
 /** 结论类取值的语义着色：未/不 开头警示，已/完成/合格 正常。 */
 function bucketColor(key: string): string {
@@ -33,12 +33,13 @@ function monthLabel(key: string): string {
 }
 
 function buildMonthOption(buckets: { key: string; count: number }[]): EChartsOption {
+  const showYear = new Set(buckets.map((bucket) => bucket.key.slice(0, 4))).size > 1
   return {
     grid: { left: 8, right: 12, top: 26, bottom: 4, containLabel: true },
     tooltip: { trigger: 'axis' },
     xAxis: {
       type: 'category',
-      data: buckets.map((bucket) => monthLabel(bucket.key)),
+      data: buckets.map((bucket) => showYear ? `${bucket.key.slice(0, 4)}年${monthLabel(bucket.key)}` : monthLabel(bucket.key)),
       axisTick: { show: false },
       axisLine: { lineStyle: { color: AXIS_LINE_COLOR } },
     },
@@ -99,8 +100,8 @@ function buildStatusOption(
       subtext: '隐患总数',
       left: 'center',
       top: '30%',
-      textStyle: { fontSize: 24, fontWeight: 600, color: '#262626' },
-      subtextStyle: { fontSize: 12, color: '#8c8c8c' },
+      textStyle: { fontSize: 24, fontWeight: 600, color: 'var(--color-ink)' },
+      subtextStyle: { fontSize: 12, color: 'var(--color-slate)' },
     },
     legend: {
       bottom: 0,
@@ -134,12 +135,14 @@ function ChartCard({
   hasData,
   onSelect,
   fieldName,
+  selectionKeys,
 }: {
   title: string
   option: EChartsOption
   hasData: boolean
   onSelect?: (field: string, key: string) => void
   fieldName?: string
+  selectionKeys?: string[]
 }) {
   return (
     <Card
@@ -157,8 +160,9 @@ function ChartCard({
             onEvents={
               onSelect && fieldName
                 ? {
-                    click: (params: { name?: string }) => {
-                      if (params.name) onSelect(fieldName, params.name)
+                    click: (params: { name?: string; dataIndex?: number }) => {
+                      const key = params.dataIndex === undefined ? params.name : selectionKeys?.[params.dataIndex] ?? params.name
+                      if (key) onSelect(fieldName, key)
                     },
                   }
                 : undefined
@@ -204,6 +208,7 @@ export default function PageFeishuStatsBar({
         hasData={Boolean(monthGroup?.buckets.length)}
         onSelect={onSelect}
         fieldName={monthGroup?.field}
+        selectionKeys={monthGroup?.buckets.map((bucket) => bucket.key)}
       />
       <ChartCard
         title="车间隐患分布"

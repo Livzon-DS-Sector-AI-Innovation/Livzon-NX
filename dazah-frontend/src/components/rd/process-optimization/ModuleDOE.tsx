@@ -1,13 +1,25 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Card, Button, Space, Tag, Table, Form, Input, InputNumber, Select, App, Tabs, Collapse, Row, Col, Statistic, Descriptions } from 'antd'
+import { Card, Button, Space, Tag, Table, Form, Input, InputNumber, Select, App, Tabs, Collapse, Row, Col } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
 import { CheckCircleOutlined, PlusOutlined, DeleteOutlined, ExperimentOutlined, BarChartOutlined, TableOutlined, SettingOutlined } from '@ant-design/icons'
 import ReactECharts from '@/components/shared/ThemedEChart'
 import 'echarts-gl'
-import type { DOEExperiment, DOEFactor, DOEResponse, DOERun, DOEDesignType, DOEAnalysisResult, ReactionStep } from '@/types/rd'
+import { buildMeasuredDOEOption, completeMeasuredRuns } from './measuredDOE'
+import type { DOEExperiment, DOEFactor, DOEResponse, DOERun, DOEDesignType, ReactionStep } from '@/types/rd'
 
+
+const DEFAULT_FACTORS: DOEFactor[] = [
+    { name: '反应温度', symbol: 'A', type: 'numeric', levels: { lower: 60, upper: 80, steps: 3 }, unit: '°C' },
+    { name: '反应时间', symbol: 'B', type: 'numeric', levels: { lower: 2, upper: 6, steps: 3 }, unit: 'h' },
+    { name: '投料比例', symbol: 'C', type: 'numeric', levels: { lower: 1.0, upper: 1.5, steps: 3 }, unit: 'mol' },
+  ]
+
+const DEFAULT_RESPONSES: DOEResponse[] = [
+    { name: '收率', unit: '%', target: 'maximize', weight: 60 },
+    { name: '纯度', unit: '%', target: 'target_value', target_value: 99.0, weight: 40 },
+  ]
 
 // Helper component to replace deprecated addonBefore
 function LabeledInput({ label, ...props }: { label: string } & React.ComponentProps<typeof Input>) {
@@ -49,21 +61,23 @@ export function ModuleDOE({ optimizationId, initialData, reactionSteps, currentS
 
   // Handle step change
   const handleStepChange = (stepId: string) => {
+    const next = reactionSteps?.find((step) => step.id === stepId)?.doe_experiment
     setSelectedStepId(stepId)
+    setDesignType(next?.design_type || 'orthogonal')
+    setFactors(next?.factors || DEFAULT_FACTORS)
+    setResponses(next?.responses || DEFAULT_RESPONSES)
+    setRuns(next?.runs || [])
+    setMatrixGenerated(Boolean(next?.runs.length))
+    setSelectedResponse(next?.responses[0]?.name || '')
+    setConclusion(next?.conclusion || '')
+    setActiveTab(next?.runs.length ? 'data' : 'design')
     onStepChange?.(stepId)
   }
 
   // DOE 设计状态
   const [designType, setDesignType] = useState<DOEDesignType>(currentDoeData?.design_type || 'orthogonal')
-  const [factors, setFactors] = useState<DOEFactor[]>(currentDoeData?.factors || [
-    { name: '反应温度', symbol: 'A', type: 'numeric', levels: { lower: 60, upper: 80, steps: 3 }, unit: '°C' },
-    { name: '反应时间', symbol: 'B', type: 'numeric', levels: { lower: 2, upper: 6, steps: 3 }, unit: 'h' },
-    { name: '投料比例', symbol: 'C', type: 'numeric', levels: { lower: 1.0, upper: 1.5, steps: 3 }, unit: 'mol' },
-  ])
-  const [responses, setResponses] = useState<DOEResponse[]>(currentDoeData?.responses || [
-    { name: '收率', unit: '%', target: 'maximize', weight: 60 },
-    { name: '纯度', unit: '%', target: 'target_value', target_value: 99.0, weight: 40 },
-  ])
+  const [factors, setFactors] = useState<DOEFactor[]>(currentDoeData?.factors || DEFAULT_FACTORS)
+  const [responses, setResponses] = useState<DOEResponse[]>(currentDoeData?.responses || DEFAULT_RESPONSES)
 
   // 实验矩阵
   const [runs, setRuns] = useState<DOERun[]>(currentDoeData?.runs || [])
@@ -71,8 +85,9 @@ export function ModuleDOE({ optimizationId, initialData, reactionSteps, currentS
   const [trialScheme, setTrialScheme] = useState<string>('auto')
   const [customRuns, setCustomRuns] = useState<number>(12)
 
-  // 分析结果
-  const [analysisResult, setAnalysisResult] = useState<DOEAnalysisResult | undefined>(currentDoeData?.analysis_result)
+  // 实测图表与人工记录
+  const [selectedResponse, setSelectedResponse] = useState(currentDoeData?.responses[0]?.name || '')
+  const completedRuns = useMemo(() => completeMeasuredRuns(factors, responses, runs), [factors, responses, runs])
   const [conclusion, setConclusion] = useState(currentDoeData?.conclusion || '')
 
   // 生成实验矩阵
@@ -220,89 +235,29 @@ export function ModuleDOE({ optimizationId, initialData, reactionSteps, currentS
   }
 
   // 更新实验结果
-  const handleUpdateRun = (runNo: number, field: string, value: number) => {
+  const handleUpdateRun = (runNo: number, field: string, value: number | null) => {
     setRuns(prev => prev.map(r => {
       if (r.run_no === runNo) {
-        return {
-          ...r,
-          response_values: { ...r.response_values, [field]: value },
-          status: 'completed' as const,
-        }
+        const responseValues = { ...r.response_values }
+        if (value === null) delete responseValues[field]
+        else responseValues[field] = value
+        const updated: DOERun = { ...r, response_values: responseValues, status: 'completed' }
+        return { ...updated, status: completeMeasuredRuns(factors, responses, [updated]).length ? 'completed' as const : 'planned' as const }
       }
       return r
     }))
   }
 
-  // 执行统计分析（模拟）
-  const handleAnalyze = () => {
-    const completedRuns = runs.filter(r => r.status === 'completed')
-    if (completedRuns.length < 4) {
-      message.warning('至少需要完成4组实验才能进行统计分析')
-      return
-    }
-
-    // 模拟 ANOVA 分析结果
-    const anovaTable = [
-      { source: '模型', df: factors.length, sum_of_squares: 245.6, mean_square: 81.87, f_value: 12.34, p_value: 0.001, significance: '**' },
-      ...factors.map((f, i) => ({
-        source: f.name,
-        df: 1,
-        sum_of_squares: 50 + Math.random() * 100,
-        mean_square: 50 + Math.random() * 100,
-        f_value: 5 + Math.random() * 20,
-        p_value: Math.random() * 0.05,
-        significance: Math.random() > 0.3 ? '*' : 'ns',
-      })),
-      { source: '残差', df: completedRuns.length - factors.length - 1, sum_of_squares: 33.2, mean_square: 6.64, f_value: 0, p_value: 0, significance: '' },
-      { source: '总计', df: completedRuns.length - 1, sum_of_squares: 278.8, mean_square: 0, f_value: 0, p_value: 0, significance: '' },
-    ]
-
-    // 找最优条件
-    const bestRun = completedRuns.reduce((best, run) => {
-      const bestScore = responses.reduce((s, r) => s + (best.response_values[r.name] || 0) * r.weight / 100, 0)
-      const runScore = responses.reduce((s, r) => s + (run.response_values[r.name] || 0) * r.weight / 100, 0)
-      return runScore > bestScore ? run : best
-    })
-
-    const optimalConditions = { ...bestRun.factor_values } as Record<string, number>
-    const predictedResponse: Record<string, number> = {}
-    responses.forEach(r => {
-      predictedResponse[r.name] = Math.round((bestRun.response_values[r.name] || 0) * 1.05 * 100) / 100
-    })
-
-    const significantFactors = factors.filter((_, i) => anovaTable[i + 1]?.p_value < 0.05).map(f => f.name)
-
-    const result: DOEAnalysisResult = {
-      anova_table: anovaTable,
-      regression_model: `Y = ${Math.round(Math.random() * 10 + 70)} + ${factors.map((f, i) => `${(Math.random() * 5 + 1).toFixed(2)}×${f.symbol}`).join(' + ')}`,
-      r_squared: Math.round((0.85 + Math.random() * 0.1) * 1000) / 1000,
-      adjusted_r_squared: Math.round((0.80 + Math.random() * 0.1) * 1000) / 1000,
-      optimal_conditions: optimalConditions,
-      predicted_response: predictedResponse,
-      significant_factors: significantFactors,
-    }
-
-    setAnalysisResult(result)
-    setActiveTab('analysis')
-    message.success('统计分析完成！')
-  }
-
-  // 确认完成
+  // Statistical fitting is not connected; only recorded measurements can be confirmed.
   const handleConfirm = () => {
-    if (!analysisResult) {
-      message.warning('请先完成统计分析')
+    if (!completedRuns.length) {
+      message.warning('请至少完整录入一组实验的因素和全部响应值')
       return
     }
-    const experiment: DOEExperiment = {
-      id: `doe-${optimizationId}`,
-      design_type: designType,
-      factors,
-      responses,
-      runs,
-      analysis_result: analysisResult,
-      conclusion: conclusion || `DOE优化完成，最优条件：${Object.entries(analysisResult.optimal_conditions).map(([k, v]) => `${k}=${v}`).join(', ')}，R²=${analysisResult.r_squared}`,
-    }
-    onComplete(experiment)
+    onComplete({
+      id: currentDoeData?.id || `doe-${optimizationId}`, design_type: designType,
+      factors, responses, runs, conclusion,
+    })
   }
 
   // 因素管理
@@ -339,17 +294,6 @@ export function ModuleDOE({ optimizationId, initialData, reactionSteps, currentS
     setResponses(prev => prev.filter((_, i) => i !== index))
   }
 
-  // ANOVA 表格列
-  const anovaColumns = [
-    { title: '变异来源', dataIndex: 'source', key: 'source', width: 120 },
-    { title: '自由度', dataIndex: 'df', key: 'df', width: 80 },
-    { title: '平方和', dataIndex: 'sum_of_squares', key: 'sum_of_squares', width: 100, render: (v: number) => v.toFixed(2) },
-    { title: '均方', dataIndex: 'mean_square', key: 'mean_square', width: 100, render: (v: number) => v.toFixed(2) },
-    { title: 'F值', dataIndex: 'f_value', key: 'f_value', width: 80, render: (v: number) => v.toFixed(2) },
-    { title: 'P值', dataIndex: 'p_value', key: 'p_value', width: 80, render: (v: number) => v < 0.001 ? '<0.001' : v.toFixed(3) },
-    { title: '显著性', dataIndex: 'significance', key: 'significance', width: 80, render: (v: string) => <Tag color={v === '**' ? 'red' : v === '*' ? 'orange' : 'default'}>{v || '-'}</Tag> },
-  ]
-
   // 实验矩阵表格列
   const runColumns = [
     { title: '实验号', dataIndex: 'run_no', key: 'run_no', width: 70 },
@@ -371,7 +315,7 @@ export function ModuleDOE({ optimizationId, initialData, reactionSteps, currentS
           size="small"
           style={{ width: 100 }}
           value={record.response_values[r.name]}
-          onChange={(val) => val != null && handleUpdateRun(record.run_no, r.name, val)}
+          onChange={(val) => handleUpdateRun(record.run_no, r.name, val)}
           placeholder="结果"
         />
       ),
@@ -385,41 +329,8 @@ export function ModuleDOE({ optimizationId, initialData, reactionSteps, currentS
     },
   ]
 
-  // 响应面图
-  const responseSurfaceOption = useMemo(() => {
-    if (!analysisResult || factors.length < 2) return null
-    const f1 = factors[0]
-    const f2 = factors[1]
-    const bounds1 = f1.levels as { lower: number; upper: number }
-    const bounds2 = f2.levels as { lower: number; upper: number }
-
-    const xData = Array.from({ length: 10 }, (_, i) => bounds1.lower + (bounds1.upper - bounds1.lower) * i / 9)
-    const yData = Array.from({ length: 10 }, (_, i) => bounds2.lower + (bounds2.upper - bounds2.lower) * i / 9)
-
-    const surfaceData: number[][][] = []
-    for (let i = 0; i < xData.length; i++) {
-      const row: number[][] = []
-      for (let j = 0; j < yData.length; j++) {
-        const val = 70 + 15 * Math.sin(i / 3) * Math.cos(j / 3) + Math.random() * 5
-        row.push([xData[i], yData[j], Math.round(val * 10) / 10])
-      }
-      surfaceData.push(row)
-    }
-
-    return {
-      tooltip: {},
-      xAxis3D: { type: 'value', name: `${f1.name}(${f1.unit})` },
-      yAxis3D: { type: 'value', name: `${f2.name}(${f2.unit})` },
-      zAxis3D: { type: 'value', name: `${responses[0]?.name || '响应'}(${responses[0]?.unit || ''})` },
-      grid3D: { viewControl: { projection: 'perspective' } },
-      series: [{
-        type: 'surface',
-        data: surfaceData.flat(),
-        shading: 'color',
-        itemStyle: { opacity: 0.8 },
-      }],
-    }
-  }, [analysisResult, factors, responses])
+  const responseSurfaceOption = useMemo(() => buildMeasuredDOEOption(factors, responses, runs, selectedResponse),
+    [factors, responses, runs, selectedResponse])
 
   return (
     <div>
@@ -427,6 +338,7 @@ export function ModuleDOE({ optimizationId, initialData, reactionSteps, currentS
         <Card style={{ marginBottom: 16 }}>
           <div style={{ marginBottom: 12, fontWeight: 500 }}>反应步骤选择：</div>
           <Select
+            aria-label="反应步骤"
             value={selectedStepId}
             onChange={handleStepChange}
             style={{ width: '100%' }}
@@ -687,10 +599,10 @@ export function ModuleDOE({ optimizationId, initialData, reactionSteps, currentS
                           <Button
                             type="primary"
                             icon={<BarChartOutlined />}
-                            onClick={handleAnalyze}
-                            disabled={runs.filter(r => r.status === 'completed').length < 4}
+                            onClick={() => setActiveTab('analysis')}
+                            disabled={!completedRuns.length}
                           >
-                            📊 执行统计分析
+                            📊 查看实测图表
                           </Button>
                           <Tag>已完成 {runs.filter(r => r.status === 'completed').length}/{runs.length} 组</Tag>
                         </Space>
@@ -702,211 +614,30 @@ export function ModuleDOE({ optimizationId, initialData, reactionSteps, currentS
             },
             {
               key: 'analysis',
-              label: <span><BarChartOutlined /> 1c. 统计分析与优化</span>,
+              label: <span><BarChartOutlined /> 1c. 实测数据与图表</span>,
               children: (
                 <div>
-                  {!analysisResult ? (
-                    <Alert title="请先完成实验数据录入并执行统计分析" type="warning" showIcon />
-                  ) : (
-                    <>
-                      {/* 模型概览 */}
-                      <Row gutter={16} style={{ marginBottom: 16 }}>
-                        <Col span={6}>
-                          <Card size="small"><Statistic title="R²" value={analysisResult.r_squared} precision={3} /></Card>
-                        </Col>
-                        <Col span={6}>
-                          <Card size="small"><Statistic title="调整R²" value={analysisResult.adjusted_r_squared} precision={3} /></Card>
-                        </Col>
-                        <Col span={6}>
-                          <Card size="small"><Statistic title="显著因素" value={analysisResult.significant_factors.length} suffix={`/ ${factors.length}`} /></Card>
-                        </Col>
-                        <Col span={6}>
-                          <Card size="small"><Statistic title="实验完成" value={runs.filter(r => r.status === 'completed').length} suffix={`/ ${runs.length}`} /></Card>
-                        </Col>
-                      </Row>
-
-                      {/* 回归模型 */}
-                      <Card size="small" title="回归模型" style={{ marginBottom: 16 }}>
-                        <code style={{ fontSize: 14 }}>{analysisResult.regression_model}</code>
-                      </Card>
-
-                      {/* ANOVA 表 */}
-                      <Card size="small" title="方差分析表（ANOVA）" style={{ marginBottom: 16 }}>
-                        <Table
-                          columns={anovaColumns}
-                          dataSource={analysisResult.anova_table}
-                          rowKey="source"
-                          pagination={false}
-                          size="small"
-                        />
-                      </Card>
-
-                      {/* 最优条件 */}
-                      <Card size="small" title="🎯 最优工艺参数" style={{ marginBottom: 16, background: '#f6ffed' }}>
-                        <Descriptions column={3}>
-                          {Object.entries(analysisResult.optimal_conditions).map(([symbol, value]) => {
-                            const factor = factors.find(f => f.symbol === symbol)
-                            return (
-                              <Descriptions.Item key={symbol} label={`${factor?.name || symbol}(${symbol})`}>
-                                <Tag color="blue">{value} {factor?.unit || ''}</Tag>
-                              </Descriptions.Item>
-                            )
-                          })}
-                        </Descriptions>
-                        <div style={{ marginTop: 8 }}>
-                          <strong>预测响应值：</strong>
-                          {Object.entries(analysisResult.predicted_response).map(([name, value]) => (
-                            <Tag key={name} color="green" style={{ marginLeft: 8 }}>{name}: {value}</Tag>
-                          ))}
-                        </div>
-                      </Card>
-
-                      {/* 3D响应面图 */}
-                      {responseSurfaceOption && (
-                        <Card size="small" title="3D响应面图" style={{ marginBottom: 16 }}>
-                          <ReactECharts option={responseSurfaceOption} style={{ height: 400 }} />
-                        </Card>
-                      )}
-
-                      {/* 结论 */}
-                      <div style={{ marginBottom: 16 }}>
-                        <div style={{ fontWeight: 500, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span>优化结论</span>
-                          <Button
-                            size="small"
-                            type="primary"
-                            ghost
-                            onClick={() => {
-                              if (!analysisResult) return
-                              const factorsStr = factors.map(f => {
-                                const opt = analysisResult.optimal_conditions[f.symbol]
-                                return opt != null ? `${f.name}(${f.symbol})=${opt}${f.unit || ''}` : null
-                              }).filter(Boolean).join('、')
-                              
-                              const sigFactors = analysisResult.significant_factors.length > 0
-                                ? analysisResult.significant_factors.join('、')
-                                : '无显著因素'
-                              
-                              const designName = designType === 'orthogonal' ? '正交设计' : '响应面法'
-                              const targetDesc = responses[0]?.target === 'maximize' ? '最大化' : responses[0]?.target === 'minimize' ? '最小化' : '目标值'
-                              const responseName = responses[0]?.name || '目标响应'
-                              
-                              const generatedConclusion = `基于DOE实验设计（${designName}），对${factors.length}个因素进行了优化研究。\n\n统计分析结果显示：\n• 模型拟合度：R²=${analysisResult.r_squared.toFixed(3)}，调整R²=${analysisResult.adjusted_r_squared.toFixed(3)}\n• 显著因素：${sigFactors}\n\n最优工艺条件为：${factorsStr}\n\n在此条件下，预期${responseName}可达到${targetDesc}。\n\n该优化结果具有良好的统计学意义和实际可操作性，建议作为后续工艺开发和放大的基础参数。`
-                              
-                              setConclusion(generatedConclusion)
-                              message.success('AI结论已生成，可根据实际情况调整')
-                            }}
-                          >
-                            🤖 AI生成结论
-                          </Button>
-                        </div>
-                        <Input.TextArea
-                          rows={6}
-                          value={conclusion}
-                          onChange={(e) => setConclusion(e.target.value)}
-                          placeholder="输入DOE优化结论，或点击上方的AI生成按钮自动生成..."
-                        />
-                      </div>
-
-                      {/* CPP评估 */}
-                      <div style={{ marginBottom: 16 }}>
-                        <div style={{ fontWeight: 500, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span>关键工艺参数（CPP）评估</span>
-                          <Button
-                            size="small"
-                            type="primary"
-                            ghost
-                            onClick={() => {
-                              if (!analysisResult) return
-                              
-                              // Auto-generate CPP assessment from significant factors
-                              const criticalParams = analysisResult.significant_factors.length > 0
-                                ? analysisResult.significant_factors
-                                : factors.map(f => f.symbol)
-                              
-                              const controlRanges: Record<string, { min: number; max: number; unit?: string; justification: string }> = {}
-                              criticalParams.forEach(symbol => {
-                                const factor = factors.find(f => f.symbol === symbol)
-                                if (factor && factor.levels && typeof factor.levels === 'object') {
-                                  const levels = factor.levels as { lower: number; upper: number }
-                                  const optimal = analysisResult.optimal_conditions[symbol]
-                                  if (optimal != null) {
-                                    // Set control range as ±10% around optimal
-                                    const range = (levels.upper - levels.lower) * 0.1
-                                    controlRanges[symbol] = {
-                                      min: Math.max(levels.lower, optimal - range),
-                                      max: Math.min(levels.upper, optimal + range),
-                                      unit: factor.unit,
-                                      justification: `基于DOE优化结果，在最优值${optimal}${factor.unit || ''}基础上，考虑工艺稳健性设定控制范围。`
-                                    }
-                                  }
-                                }
-                              })
-                              
-                              const cppAssessment = {
-                                critical_parameters: criticalParams,
-                                control_ranges: controlRanges,
-                                justification: `根据DOE统计分析结果，${criticalParams.join('、')}为关键工艺参数（CPP），对${responses[0]?.name || '目标响应'}有显著影响。这些参数需要在生产过程中严格控制，以确保产品质量的一致性。`,
-                                assessment_date: new Date().toISOString().split('T')[0]
-                              }
-                              
-                              // Update the analysis result with CPP assessment
-                              const updatedResult = { ...analysisResult, cpp_assessment: cppAssessment }
-                              setAnalysisResult(updatedResult)
-                              message.success('CPP评估已生成')
-                            }}
-                          >
-                            🤖 AI生成CPP评估
-                          </Button>
-                        </div>
-                        
-                        {analysisResult?.cpp_assessment ? (
-                          <Card size="small">
-                            <div style={{ marginBottom: 12 }}>
-                              <strong>关键工艺参数：</strong>
-                              <div style={{ marginTop: 4 }}>
-                                {analysisResult.cpp_assessment.critical_parameters.map(param => (
-                                  <Tag key={param} color="blue" style={{ marginBottom: 4 }}>
-                                    {factors.find(f => f.symbol === param)?.name || param} ({param})
-                                  </Tag>
-                                ))}
-                              </div>
-                            </div>
-                            
-                            <div style={{ marginBottom: 12 }}>
-                              <strong>控制范围：</strong>
-                              <div style={{ marginTop: 8 }}>
-                                {Object.entries(analysisResult.cpp_assessment.control_ranges).map(([symbol, range]) => {
-                                  const factor = factors.find(f => f.symbol === symbol)
-                                  return (
-                                    <div key={symbol} style={{ marginBottom: 8, padding: '8px', background: '#f5f5f5', borderRadius: '4px' }}>
-                                      <div style={{ fontWeight: 500 }}>
-                                        {factor?.name || symbol} ({symbol})：{range.min.toFixed(2)} ~ {range.max.toFixed(2)} {range.unit || ''}
-                                      </div>
-                                      <div style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
-                                        {range.justification}
-                                      </div>
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            </div>
-                            
-                            <div>
-                              <strong>评估说明：</strong>
-                              <div style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>
-                                {analysisResult.cpp_assessment.justification}
-                              </div>
-                            </div>
-                          </Card>
-                        ) : (
-                          <div style={{ padding: '20px', textAlign: 'center', color: '#999', background: '#fafafa', borderRadius: '4px' }}>
-                            点击"AI生成CPP评估"按钮，基于DOE分析结果自动生成关键工艺参数评估
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
+                  <Alert type="info" title="统计拟合尚未接入，当前仅展示实测实验数据"
+                    description="图表直接读取已录入的实验点，不生成 ANOVA、R²、预测响应、最优条件或 CPP 判断。历史拟合结果不作为本图数据或确认依据。" showIcon />
+                  <Space style={{ marginBlock: 16 }} wrap>
+                    <span>响应指标：</span>
+                    <Select aria-label="实测响应指标" style={{ minWidth: 160 }}
+                      value={responses.some((response) => response.name === selectedResponse) ? selectedResponse : responses[0]?.name}
+                      options={responses.map((response) => ({ value: response.name, label: response.name }))}
+                      onChange={setSelectedResponse} />
+                    <Tag>完整录入 {completedRuns.length}/{runs.length} 组</Tag>
+                  </Space>
+                  {responseSurfaceOption ? <Card size="small" title="3D 实测实验点" style={{ marginBottom: 16 }}>
+                    <ReactECharts option={responseSurfaceOption} style={{ height: 400 }} notMerge />
+                  </Card> : <Alert type="warning" title="暂无可绘制的实测实验点"
+                    description="三维图需要至少两个数值因素，以及已录入的有限响应值；缺失值、失败或未完成实验不会生成数据点。" showIcon />}
+                  <Table columns={runColumns} dataSource={runs.filter((run) => run.status === 'completed')}
+                    rowKey="run_no" pagination={false} size="small" scroll={{ x: 800 }} />
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ marginBottom: 8 }}>实验记录与人工结论</div>
+                    <Input.TextArea rows={4} value={conclusion} onChange={(event) => setConclusion(event.target.value)}
+                      placeholder="记录实测现象和人工判断；统计拟合尚未接入" />
+                  </div>
                 </div>
               ),
             },
@@ -921,12 +652,12 @@ export function ModuleDOE({ optimizationId, initialData, reactionSteps, currentS
             icon={<CheckCircleOutlined />}
             onClick={handleConfirm}
             size="large"
-            disabled={!analysisResult}
+            disabled={!completedRuns.length}
           >
-            ✓ 确认并进入下一步（杂质研究）
+            ✓ 确认实测记录并进入下一步（杂质研究）
           </Button>
-          {!analysisResult && (
-            <Tag>请先完成DOE设计和统计分析</Tag>
+          {!completedRuns.length && (
+            <Tag>请先完整录入至少一组实验</Tag>
           )}
         </Space>
       </Card>
