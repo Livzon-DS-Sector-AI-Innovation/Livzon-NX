@@ -13,7 +13,7 @@ from datetime import date, datetime, time
 from io import BytesIO
 from typing import Any
 
-from openpyxl import load_workbook
+from openpyxl import load_workbook  # type: ignore[import-untyped]
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 

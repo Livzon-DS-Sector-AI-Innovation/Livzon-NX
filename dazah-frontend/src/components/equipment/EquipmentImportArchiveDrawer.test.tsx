@@ -271,7 +271,7 @@ describe('EquipmentImportArchiveDrawer 操作覆盖', () => {
     await settle()
     const pageTwo = Array.from(
       document.body.querySelectorAll('.ant-pagination li'),
-    ).find((li) => li.title === '2')
+    ).find((li) => li.getAttribute('title') === '2')
     expect(pageTwo).toBeTruthy()
     await act(async () => {
       pageTwo?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
