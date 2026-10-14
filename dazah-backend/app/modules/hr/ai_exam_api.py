@@ -29,6 +29,7 @@ from app.core.redis import cache_incr
 from app.core.response import success_response
 from app.core.upload_security import read_upload_secure
 from app.platform.ai.document_text_extractor import (
+    MAX_TEXT_LEN,
     DocumentParseError,
     extract_document_text,
 )
@@ -262,6 +263,34 @@ async def export_exam(body: ExamExportRequest, current_user: CurrentUser = None)
 # ── 笔试上传文档文本提取 ──────────────────────
 
 
+async def _extract_with_legacy_fallback(file_name: str, content: bytes) -> str:
+    """平台解析失败时，.doc/.wps 走文件管理同一转换管线兜底。
+
+    旧格式 Word 97-2003/WPS 二进制无法被 python-docx 直接读取，但 LibreOffice
+    （soffice）/catdoc 可转换；质量模块文件管理的附件已用该管线稳定转换。
+    soffice 子进程为阻塞调用，放线程执行；兜底仍失败时抛出平台解析原始错误。
+    """
+    from app.modules.quality import public_api as quality_public_api
+
+    try:
+        text = await asyncio.to_thread(
+            quality_public_api.convert_word_attachment_text, file_name, content
+        )
+    except Exception as e:
+        logger.warning(
+            "HR exam legacy word fallback failed",
+            extra={"doc_name": file_name, "error": str(e)},
+        )
+        raise DocumentParseError(
+            "该 .doc/.wps 格式解析失败，请用 WPS/Word 另存为 .docx"
+            " 或 .pdf 后重新上传，或粘贴文本"
+        ) from e
+    text = text.strip()[:MAX_TEXT_LEN]
+    if not text:
+        raise DocumentParseError("文档内容为空")
+    return text
+
+
 @router.post(
     "/ai/exam/extract-text",
     summary="提取上传培训文档的全文（docx/doc/wps/pdf/txt/md）",
@@ -285,7 +314,12 @@ async def extract_exam_document_text(
     try:
         text = extract_document_text(safe_name, content)
     except DocumentParseError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        if not safe_name.lower().endswith((".doc", ".wps")):
+            raise HTTPException(status_code=422, detail=str(e)) from e
+        try:
+            text = await _extract_with_legacy_fallback(safe_name, content)
+        except DocumentParseError as fb_err:
+            raise HTTPException(status_code=422, detail=str(fb_err)) from e
 
     logger.info(
         "HR exam document text extracted",

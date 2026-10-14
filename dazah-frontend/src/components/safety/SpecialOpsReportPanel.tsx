@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Table, Button, Space, Input, Select, DatePicker, Tag, Card,
   Typography, Drawer, App, Tooltip, Modal,
-  Form, Row, Col, Switch,
+  Form, Row, Col,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
@@ -23,7 +23,6 @@ import {
   submitSpecialOperationReport,
   approveSpecialOperationReport,
   rejectSpecialOperationReport,
-  setSpecialOperationReportCritical,
 } from '@/actions/safety'
 import type { SpecialOperationReport, SpecialOperationReportFormData } from '@/types/safety'
 
@@ -188,12 +187,6 @@ export default function SpecialOpsReportPanel() {
     else { message.error(r.message || '驳回失败') }
   }
 
-  const handleToggleCritical = async (id: string, checked: boolean) => {
-    const r = await setSpecialOperationReportCritical(id, checked)
-    if (r.code === 200) { message.success(checked ? '已标记为关键作业' : '已取消关键作业标记'); fetchData() }
-    else { message.error(r.message || '操作失败') }
-  }
-
   // ── Shared card style ──
   const cardStyle: React.CSSProperties = {
     borderRadius: 12,
@@ -306,15 +299,6 @@ export default function SpecialOpsReportPanel() {
               onClick={() => handleDelete(record.id)}
             >删除</Button>
           )}
-          {/* Critical toggle */}
-          <Tooltip title="关键作业">
-            <Switch
-              size="small"
-              checked={record.is_critical}
-              onChange={(v) => handleToggleCritical(record.id, v)}
-              style={{ marginLeft: 4 }}
-            />
-          </Tooltip>
         </Space>
       ),
     },

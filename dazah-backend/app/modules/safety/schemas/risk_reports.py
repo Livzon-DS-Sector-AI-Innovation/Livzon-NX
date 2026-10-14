@@ -130,13 +130,6 @@ class SpecialOperationLedgerStats(BaseModel):
     critical_count: int = Field(0, description="关键作业数")
 
 
-class SetCriticalRequest(BaseModel):
-    """手动设置关键作业标记"""
-
-    is_critical: bool = Field(..., description="是否关键作业")
-    reason: str | None = Field(None, description="修改理由")
-
-
 class LedgerExportRequest(BaseModel):
     """台账导出请求 — AI自然语言筛选"""
 

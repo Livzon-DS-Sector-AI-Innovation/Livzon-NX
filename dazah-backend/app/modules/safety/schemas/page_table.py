@@ -23,6 +23,11 @@ class PageFeishuConfigItem(BaseModel):
     workshop_aliases: dict[str, str] = Field(default_factory=dict)
     is_enabled: bool = True
     is_configured: bool = False
+    is_mirrored: bool = True
+    last_synced_at: datetime | None = None
+    last_sync_status: str | None = None
+    last_sync_error: str | None = None
+    last_sync_record_count: int | None = None
     last_test_status: str | None = None
     last_test_error: str | None = None
     last_tested_at: datetime | None = None
@@ -41,6 +46,7 @@ class UpdatePageFeishuConfigRequest(BaseModel):
     hidden_field_names: list[str] | None = None
     workshop_aliases: dict[str, str] | None = None
     is_enabled: bool | None = None
+    is_mirrored: bool | None = None
 
 
 class PageFeishuFieldSummary(BaseModel):
@@ -91,6 +97,13 @@ class PageTableColumn(BaseModel):
 class PageTableRecord(BaseModel):
     record_id: str
     fields: dict[str, Any] = Field(default_factory=dict)
+
+
+class PageTableRecordCondition(BaseModel):
+    """查询表单的多条件筛选单元（JSON 数组传入，字段间 AND）。"""
+
+    field: str = Field(min_length=1)
+    value: str = Field(min_length=1)
 
 
 class PageTableRecordsResponse(BaseModel):

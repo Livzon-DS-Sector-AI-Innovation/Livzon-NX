@@ -1,7 +1,7 @@
 """Safety ORM models."""
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
@@ -17,7 +17,7 @@ from sqlalchemy import (
     Text,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.shared.base_model import BaseModel
@@ -2903,6 +2903,71 @@ class SafetyPageFeishuConfig(BaseModel):
     )
     last_test_record_count: Mapped[int | None] = mapped_column(
         Integer, nullable=True, comment="最近绑定测试读到的记录数"
+    )
+    is_mirrored: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+        comment="是否使用本地镜像数据源（关闭则实时拉取飞书）",
+    )
+    last_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="最近镜像同步完成时间"
+    )
+    last_sync_status: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, comment="最近镜像同步状态: success/failed"
+    )
+    last_sync_error: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="最近镜像同步错误信息"
+    )
+    last_sync_record_count: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="最近镜像同步记录数"
+    )
+
+
+class SafetyPageTableMirrorRecord(BaseModel):
+    """页面镜像记录（飞书多维表格 → 本地全量副本）。
+
+    ``fields`` 存按当前飞书字段 schema 解码后的值（与页面 API 返回同构），
+    同一时点重写；列结构仍实时来自飞书（Redis 缓存），镜像只存数据行。
+    编辑写回飞书成功后单条写透更新本表。
+    """
+
+    __tablename__ = "page_table_mirror_records"
+    __table_args__ = (
+        Index(
+            "uq_safety_page_table_mirror_records_page_record",
+            "page_key",
+            "record_id",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        Index(
+            "ix_safety_page_table_mirror_records_page",
+            "page_key",
+            "is_deleted",
+        ),
+        {"schema": "safety"},
+    )
+
+    page_key: Mapped[str] = mapped_column(
+        String(160), nullable=False, comment="页面标识（对齐 page_feishu_configs）"
+    )
+    record_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, comment="飞书记录 record_id"
+    )
+    fields: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, comment="解码后的字段值（中文列名为键）"
+    )
+    search_text: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default="", comment="关键字搜索文本"
+    )
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.now(UTC),
+        server_default=text("now()"),
+        comment="该行最近同步/写透时间",
     )
 
 

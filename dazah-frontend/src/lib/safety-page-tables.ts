@@ -10,7 +10,26 @@ import type { components } from '@/types/generated/schema'
 
 export const SAFETY_PAGE_TABLE_KEYS = {
   hazardDuty: 'safety:risk-hazard:hazard-inspection:hazard-duty',
+  dailyRiskReport: 'safety:ops-safety:daily-risk-report',
+  specialDangerWork: 'safety:ops-safety:special-danger-work',
+  riskWorkRegistration: 'safety:ops-safety:risk-work-registration',
+  feedingInspection: 'safety:ops-safety:feeding-inspection',
+  hazchemUnloadingInspection: 'safety:ops-safety:hazchem-unloading-inspection',
+  centrifugeDischargeInspection:
+    'safety:ops-safety:centrifuge-discharge-inspection',
 } as const
+
+/**
+ * 默认按「当天」筛选的镜像页（日报/巡查类，数据量大且只关心当天）。
+ * 不在名单内的页面默认显示全部记录（如报备表：数据量小且历史都要看）。
+ */
+export const SAFETY_PAGE_TABLE_DEFAULT_TODAY = new Set<string>([
+  SAFETY_PAGE_TABLE_KEYS.dailyRiskReport,
+  SAFETY_PAGE_TABLE_KEYS.specialDangerWork,
+  SAFETY_PAGE_TABLE_KEYS.feedingInspection,
+  SAFETY_PAGE_TABLE_KEYS.hazchemUnloadingInspection,
+  SAFETY_PAGE_TABLE_KEYS.centrifugeDischargeInspection,
+])
 
 /** 「安全飞书设置」页（页面表格绑定的配置入口）。 */
 export const SAFETY_FEISHU_SETTINGS_PAGE_KEY =
@@ -153,6 +172,29 @@ export function displayFieldText(value: unknown): string {
   const url = asUrlValue(value)
   if (url) return url.text || url.link
   return ''
+}
+
+/** 默认日期列：优先名称含「日期」的日期字段，否则第一个日期字段。 */
+export function pickDefaultDateColumn(
+  columns: PageTableColumn[] | undefined | null
+): PageTableColumn | null {
+  const dateColumns = (columns ?? []).filter((column) => column.kind === 'date')
+  return (
+    dateColumns.find((column) => column.name.includes('日期')) ??
+    dateColumns[0] ??
+    null
+  )
+}
+
+/** 多条件筛选的候选项：带选项的单选/多选列。 */
+export function pickConditionSelectColumns(
+  columns: PageTableColumn[] | undefined | null
+): PageTableColumn[] {
+  return (columns ?? []).filter(
+    (column) =>
+      (column.kind === 'select' || column.kind === 'multi_select') &&
+      columnOptions(column).length > 0
+  )
 }
 
 /** 可内联预览的附件类型（与后端预览白名单一致）。 */

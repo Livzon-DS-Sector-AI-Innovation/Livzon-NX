@@ -96,6 +96,7 @@ type ChangeHandler = ((event: { target: { value: string } }) => void) | undefine
 
 vi.mock('antd', async () => {
   const { createElement } = await import('react')
+  const dayjs = (await import('dayjs')).default
 
   const Box = ({ children, title, extra }: AnyProps) =>
     createElement('div', null, title as ReactNode, extra as ReactNode, children as ReactNode)
@@ -194,7 +195,18 @@ vi.mock('antd', async () => {
     Avatar: ({ children, src }: AnyProps) =>
       createElement('span', { 'data-avatar-src': (src as string) ?? '' }, children as ReactNode),
     Button,
-    DatePicker: Box,
+    DatePicker: ({ value, onChange, placeholder }: AnyProps) =>
+      createElement('input', {
+        'data-date-picker': String(placeholder ?? ''),
+        value: value ? dayjs(value as string).format('YYYY-MM-DD') : '',
+        ref: (node: HTMLInputElement | null) => {
+          if (!node) return
+          node.onchange = () =>
+            (onChange as unknown as (value: unknown) => void)?.(
+              node.value ? dayjs(node.value) : null
+            )
+        },
+      }),
     Drawer: Box,
     Form: Object.assign(({ children }: AnyProps) => createElement('form', null, children as ReactNode), {
       Item: Box,
@@ -202,7 +214,18 @@ vi.mock('antd', async () => {
     }),
     Input,
     InputNumber: Box,
-    Select: Box,
+    Select: ({ value, onChange, placeholder }: AnyProps) =>
+      createElement('input', {
+        'data-select': String(placeholder ?? ''),
+        value: (value as string) ?? '',
+        ref: (node: HTMLInputElement | null) => {
+          if (!node) return
+          node.onchange = () =>
+            (onChange as unknown as (value: unknown) => void)?.(
+              node.value || undefined
+            )
+        },
+      }),
     Space: Box,
     Switch: Box,
     Table,
@@ -414,7 +437,7 @@ describe('PageFeishuTable（静态渲染）', () => {
     })
     await settle()
 
-    expect(rendered.container.innerHTML).toContain('仅显示前 2000 条')
+    expect(rendered.container.innerHTML).toContain('仅加载最近 2000 条')
   })
 })
 
@@ -431,6 +454,362 @@ describe('PageFeishuTable（交互）', () => {
       expect.objectContaining({ pageKey: PAGE_KEY, page: 1, pageSize: 20 })
     )
     expect(mocks.getSafetyPageTableStats).toHaveBeenCalledWith({ pageKey: PAGE_KEY })
+  })
+
+  it('skips the stats dashboard entirely when showStats is false', async () => {
+    rendered = renderTable({ initialData: null, showStats: false })
+    await settle()
+
+    expect(mocks.getSafetyPageTableRecords).toHaveBeenCalled()
+    expect(mocks.getSafetyPageTableStats).not.toHaveBeenCalled()
+    expect(
+      rendered.container.querySelector('[data-stats-select]')
+    ).toBeNull()
+  })
+
+  it('keeps only summary columns in the table and moves the rest to detail', async () => {
+    const manyColumns = [
+      ...Array.from({ length: 10 }, (_, index) => ({
+        field_id: `fld-biz${index}`,
+        name: `业务列${index + 1}`,
+        type: 1,
+        kind: 'text',
+        is_primary: false,
+        options: [],
+        editable: true,
+      })),
+      {
+        field_id: 'fld-long',
+        name: '准备措施',
+        type: 1,
+        kind: 'text',
+        is_primary: false,
+        options: [],
+        editable: true,
+      },
+      {
+        field_id: 'fld-chk',
+        name: '投料前抽风机是否开启',
+        type: 7,
+        kind: 'checkbox',
+        is_primary: false,
+        options: [],
+        editable: true,
+      },
+    ]
+    const manyRows = [
+      {
+        record_id: 'rec-1',
+        fields: {
+          业务列1: 'A',
+          准备措施: '超'.repeat(120),
+          投料前抽风机是否开启: true,
+        },
+      },
+    ]
+    rendered = renderTable({
+      summarizeColumns: true,
+      initialData: {
+        columns: manyColumns,
+        records: manyRows,
+        total: 1,
+        page: 1,
+        page_size: 20,
+        truncated: false,
+      },
+    })
+    await settle()
+
+    const html = rendered.container.innerHTML
+    // 12 列里表格只渲染 10 个摘要单元格（10 个短文本列）
+    expect(
+      rendered.container.querySelectorAll('tbody tr[data-row="rec-1"] td')
+        .length
+    ).toBe(10)
+    // 勾选清单与长文本列只在详情中查看，不出现在表格里
+    expect(html).not.toContain('准备措施')
+    expect(html).not.toContain('投料前抽风机是否开启')
+    expect(html).toContain('其余 2 个字段')
+  })
+
+  it('wraps long-option select columns instead of tag truncation', async () => {
+    const longOption = '防毒面罩、防静电工作服、酸碱防护服、耐酸碱鞋、耐酸碱手套'
+    const protectColumns = [
+      {
+        field_id: 'fld-1',
+        name: '申请编号',
+        type: 1,
+        kind: 'text',
+        is_primary: true,
+        options: [],
+        editable: true,
+      },
+      {
+        field_id: 'fld-2',
+        name: '个人防护',
+        type: 3,
+        kind: 'select',
+        is_primary: false,
+        options: [longOption, '防毒面罩'],
+        editable: true,
+      },
+    ]
+    rendered = renderTable({
+      summarizeColumns: true,
+      initialData: {
+        columns: protectColumns,
+        records: [
+          { record_id: 'rec-1', fields: { 申请编号: 'A', 个人防护: longOption } },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 20,
+        truncated: false,
+      },
+    })
+    await settle()
+
+    const html = rendered.container.innerHTML
+    // 选项为长句的单选列按长文本渲染：完整内容 + 自动换行样式
+    expect(html).toContain(longOption)
+    expect(html).toContain('pre-wrap')
+  })
+
+  it('always keeps status columns in the summary beyond the cap', async () => {
+    const manyColumns = [
+      ...Array.from({ length: 12 }, (_, index) => ({
+        field_id: `fld-biz${index}`,
+        name: `业务列${index + 1}`,
+        type: 1,
+        kind: 'text',
+        is_primary: false,
+        options: [],
+        editable: true,
+      })),
+      {
+        field_id: 'fld-status',
+        name: '申请状态',
+        type: 3,
+        kind: 'select',
+        is_primary: false,
+        options: ['已通过', '审批中'],
+        editable: true,
+      },
+    ]
+    rendered = renderTable({
+      summarizeColumns: true,
+      initialData: {
+        columns: manyColumns,
+        records: [
+          { record_id: 'rec-1', fields: { 业务列1: 'A', 申请状态: '已通过' } },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 20,
+        truncated: false,
+      },
+    })
+    await settle()
+
+    const tds = rendered.container.querySelectorAll(
+      'tbody tr[data-row="rec-1"] td'
+    )
+    // 摘要仍为 10 列，且最后一列是状态列
+    expect(tds.length).toBe(10)
+    expect(tds[tds.length - 1]?.textContent).toContain('已通过')
+    expect(rendered.container.innerHTML).toContain('其余 3 个字段')
+  })
+
+  it('shows summary-demoted fields in the detail drawer', async () => {
+    const manyColumns = [
+      {
+        field_id: 'fld-biz1',
+        name: '业务列1',
+        type: 1,
+        kind: 'text',
+        is_primary: false,
+        options: [],
+        editable: true,
+      },
+      {
+        field_id: 'fld-long',
+        name: '准备措施',
+        type: 1,
+        kind: 'text',
+        is_primary: false,
+        options: [],
+        editable: true,
+      },
+      {
+        field_id: 'fld-chk',
+        name: '投料前抽风机是否开启',
+        type: 7,
+        kind: 'checkbox',
+        is_primary: false,
+        options: [],
+        editable: true,
+      },
+    ]
+    const manyRows = [
+      {
+        record_id: 'rec-1',
+        fields: {
+          业务列1: 'A',
+          准备措施: '超'.repeat(120),
+          投料前抽风机是否开启: true,
+        },
+      },
+    ]
+    rendered = renderTable({
+      summarizeColumns: true,
+      initialData: {
+        columns: manyColumns,
+        records: manyRows,
+        total: 1,
+        page: 1,
+        page_size: 20,
+        truncated: false,
+      },
+    })
+    await settle()
+
+    act(() =>
+      rendered!.container
+        .querySelector('tr[data-row="rec-1"]')
+        ?.dispatchEvent(new Event('click', { bubbles: true }))
+    )
+    await settle()
+
+    // 详情抽屉覆盖全部字段：被收起的长文本与勾选列都进入了表单初始值
+    expect(mocks.form.setFieldsValue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        业务列1: 'A',
+        准备措施: '超'.repeat(120),
+        投料前抽风机是否开启: true,
+      })
+    )
+  })
+
+  it('renders every column when summarizeColumns is not enabled', async () => {
+    const manyColumns = [
+      ...Array.from({ length: 12 }, (_, index) => ({
+        field_id: `fld-biz${index}`,
+        name: `业务列${index + 1}`,
+        type: 1,
+        kind: 'text',
+        is_primary: false,
+        options: [],
+        editable: true,
+      })),
+    ]
+    const manyRows = [
+      {
+        record_id: 'rec-1',
+        fields: { 业务列1: 'A', 业务列12: '超'.repeat(120) },
+      },
+    ]
+    rendered = renderTable({
+      initialData: {
+        columns: manyColumns,
+        records: manyRows,
+        total: 1,
+        page: 1,
+        page_size: 20,
+        truncated: false,
+      },
+    })
+    await settle()
+
+    // 未启用主要列模式（如 24小时值班隐患页）：全列展示、无收起提示
+    expect(
+      rendered.container.querySelectorAll('tbody tr[data-row="rec-1"] td')
+        .length
+    ).toBe(12)
+    expect(rendered.container.innerHTML).not.toContain('其余')
+  })
+
+  it('combines date and select conditions in summary mode', async () => {
+    const filterColumns = [
+      {
+        field_id: 'fld-1',
+        name: '申请编号',
+        type: 1,
+        kind: 'text',
+        is_primary: true,
+        options: [],
+        editable: true,
+      },
+      {
+        field_id: 'fld-2',
+        name: '作业日期',
+        type: 5,
+        kind: 'date',
+        is_primary: false,
+        options: [],
+        editable: true,
+      },
+      {
+        field_id: 'fld-3',
+        name: '申请状态',
+        type: 3,
+        kind: 'select',
+        is_primary: false,
+        options: ['已通过', '审批中'],
+        editable: true,
+      },
+    ]
+    const filterRows = [{ record_id: 'rec-1', fields: { 申请编号: 'A' } }]
+    rendered = renderTable({
+      summarizeColumns: true,
+      initialDateFilter: { field: '作业日期', value: '2026-10-13' },
+      initialData: {
+        columns: filterColumns,
+        records: filterRows,
+        total: 1,
+        page: 1,
+        page_size: 20,
+        truncated: false,
+      },
+    })
+    await settle()
+
+    // 筛选条渲染：日期控件 + 带选项的下拉
+    const datePicker = rendered.container.querySelector(
+      '[data-date-picker]'
+    ) as HTMLInputElement
+    const statusSelect = rendered.container.querySelector(
+      '[data-select="申请状态"]'
+    ) as HTMLInputElement
+    expect(datePicker).toBeTruthy()
+    expect(datePicker.value).toBe('2026-10-13')
+    expect(statusSelect).toBeTruthy()
+
+    // 选择下拉后按 当天日期 + 选项 组合条件请求
+    act(() => {
+      statusSelect.value = '已通过'
+      statusSelect.dispatchEvent(new Event('change'))
+    })
+    await settle()
+
+    const call = mocks.getSafetyPageTableRecords.mock.calls.at(-1)?.[0] as {
+      conditions?: Array<{ field: string; value: string }>
+    }
+    expect(call.conditions).toEqual([
+      { field: '作业日期', value: '2026-10-13' },
+      { field: '申请状态', value: '已通过' },
+    ])
+
+    // 清空日期后不再带日期条件（查看全部）
+    act(() => {
+      datePicker.value = ''
+      datePicker.dispatchEvent(new Event('change'))
+    })
+    await settle()
+
+    const cleared = mocks.getSafetyPageTableRecords.mock.calls.at(-1)?.[0] as {
+      conditions?: Array<{ field: string; value: string }>
+    }
+    expect(cleared.conditions).toEqual([{ field: '申请状态', value: '已通过' }])
   })
 
   it('reloads with the keyword when 查询 is clicked', async () => {

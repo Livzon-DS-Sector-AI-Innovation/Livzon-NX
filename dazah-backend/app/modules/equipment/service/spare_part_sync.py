@@ -158,7 +158,8 @@ async def sync_workshop(db: AsyncSession, workshop_code: str) -> dict[str, Any]:
             if stock is None:
                 stock = SparePartStock(spare_part_id=part.id, current_qty=0)
                 db.add(stock)
-            stock.current_qty = round(aggregated[code].current_qty, 2)
+            # 库存列为 Integer：聚合结果四舍五入取整
+            stock.current_qty = int(round(aggregated[code].current_qty))
         elif stock is not None and (stock.current_qty or 0) != 0:
             stock.current_qty = 0
             zeroed += 1

@@ -107,9 +107,9 @@ def generate_training_evaluation_doc(values: dict[str, Any]) -> BytesIO:
 
     # R3-R4 培训对象：部门/班组/人员 + 应到/实到/缺席
     fill_after_label(cell(3, 1), f" {v.get('target_dept_person') or ''}")
-    fill_after_phrase(cell(4, 1), "应到", _int(v.get("expected_count")))
-    fill_after_phrase(cell(4, 1), "实到", _int(v.get("actual_count")))
-    fill_after_phrase(cell(4, 1), "缺席", _int(v.get("absent_count")))
+    fill_after_phrase(cell(4, 1), "应到", _int(v.get("expected_count")), center=True)
+    fill_after_phrase(cell(4, 1), "实到", _int(v.get("actual_count")), center=True)
+    fill_after_phrase(cell(4, 1), "缺席", _int(v.get("absent_count")), center=True)
 
     # R5 培训教材
     fill_whole_cell(cell(5, 1), v.get("textbook") or "", fmt_src)
@@ -130,20 +130,26 @@ def generate_training_evaluation_doc(values: dict[str, Any]) -> BytesIO:
     # R7 考核方式(sym)
     set_sym_group(cell(7, 2), v.get("assessment_method") or "", ASSESS_OPTIONS)
 
-    # R8 考核标准及结果：优/良好/合格/不合格/缺考
-    fill_after_phrase(cell(8, 2), "优", _int(v.get("excellent_count")))
-    fill_after_phrase(cell(8, 2), "良好", _int(v.get("good_count")))
-    fill_after_phrase(cell(8, 2), "合格", _int(v.get("pass_count")))
-    fill_after_phrase(cell(8, 2), "不合格", _int(v.get("fail_count")))
-    fill_after_phrase(cell(8, 2), "缺考", _int(v.get("absent_exam_count")))
+    # R8 考核标准及结果：优/良好/合格/不合格/缺考（人数填入空白区居中，不贴左侧冒号）
+    fill_after_phrase(cell(8, 2), "优", _int(v.get("excellent_count")), center=True)
+    fill_after_phrase(cell(8, 2), "良好", _int(v.get("good_count")), center=True)
+    fill_after_phrase(cell(8, 2), "合格", _int(v.get("pass_count")), center=True)
+    fill_after_phrase(cell(8, 2), "不合格", _int(v.get("fail_count")), center=True)
+    fill_after_phrase(cell(8, 2), "缺考", _int(v.get("absent_exam_count")), center=True)
 
     # R9 缺考及不合格人员处理方式
     fill_whole_cell(cell(9, 2), v.get("fail_handling") or "", fmt_src)
 
     # R10 补考结果（未填时显示"-"，不再默认 0；前端支持填数值或"-"）
-    fill_after_phrase(cell(10, 2), "补考", _int(v.get("makeup_count")) or "-")
-    fill_after_phrase(cell(10, 2), "合格", _int(v.get("makeup_pass_count")) or "-")
-    fill_after_phrase(cell(10, 2), "不合格", _int(v.get("makeup_fail_count")) or "-")
+    fill_after_phrase(
+        cell(10, 2), "补考", _int(v.get("makeup_count")) or "-", center=True
+    )
+    fill_after_phrase(
+        cell(10, 2), "合格", _int(v.get("makeup_pass_count")) or "-", center=True
+    )
+    fill_after_phrase(
+        cell(10, 2), "不合格", _int(v.get("makeup_fail_count")) or "-", center=True
+    )
 
     # R11 缺考及补考不合格人员处理方式
     fill_after_phrase(cell(11, 0), "处理方式", v.get("makeup_fail_handling") or "")
