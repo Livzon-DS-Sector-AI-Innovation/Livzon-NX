@@ -150,6 +150,33 @@ export interface EquipmentImportResult {
   failures: EquipmentImportFailure[]
 }
 
+// ==================== 台账上传存档（回看历次上传） ====================
+export interface EquipmentImportArchiveSummary {
+  id: string
+  workshop_code: string
+  file_name: string
+  sheet_name: string
+  row_count: number
+  col_count: number
+  import_summary:
+    | (Partial<EquipmentImportResult> & {
+        failures?: never
+      })
+    | null
+  created_by_name?: string | null
+  created_at?: string | null
+}
+
+export interface EquipmentImportArchive extends EquipmentImportArchiveSummary {
+  /** 全量二维数组快照（不截断），单元格为字符串/数字/布尔 */
+  rows: unknown[][]
+  /** 合并单元格（0-based 行列坐标） */
+  merges: Array<{ s: { r: number; c: number }; e: { r: number; c: number } }>
+  col_widths: number[]
+  original_path?: string
+  updated_at?: string | null
+}
+
 // 列表和筛选
 export interface EquipmentFilters {
   workshop?: string

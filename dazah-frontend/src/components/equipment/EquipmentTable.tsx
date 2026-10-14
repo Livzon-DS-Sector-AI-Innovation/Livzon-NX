@@ -2,13 +2,14 @@
 
 import { useCallback, useState, useEffect, useRef } from 'react'
 import { App, Table, Space, Input, Select, Button } from 'antd'
-import { EditOutlined, DeleteOutlined, SearchOutlined, ToolOutlined, PlusOutlined, EyeOutlined, ImportOutlined } from '@ant-design/icons'
+import { EditOutlined, DeleteOutlined, SearchOutlined, ToolOutlined, PlusOutlined, EyeOutlined, ImportOutlined, HistoryOutlined } from '@ant-design/icons'
 import { Equipment, EquipmentStatus } from '@/types/equipment'
 import { useEquipmentStore } from '@/stores/equipment'
 import { deleteEquipment } from '@/actions/equipment'
 import { linkDanger, linkPrimary, linkWarning } from '@/components/equipment/shared-styles'
 import { EquipmentDetailDrawer } from './EquipmentDetailDrawer'
 import { EquipmentImportModal } from './EquipmentImportModal'
+import { EquipmentImportArchiveDrawer } from './EquipmentImportArchiveDrawer'
 
 const statusOptions: { label: EquipmentStatus; value: EquipmentStatus }[] = (
   ['在用', '备用', '维修中', '停用', '报废'] as EquipmentStatus[]
@@ -76,6 +77,7 @@ export function EquipmentTable({ loading = false, onPageChange, resetKey, worksh
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailEquipment, setDetailEquipment] = useState<Equipment | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [archiveOpen, setArchiveOpen] = useState(false)
 
   // 动态计算 scroll.y，使表头和筛选栏固定，仅表格数据行滚动
   const rootRef = useRef<HTMLDivElement>(null)
@@ -210,6 +212,7 @@ export function EquipmentTable({ loading = false, onPageChange, resetKey, worksh
           style={{ width: 240 }} value={keyword} onChange={(e) => setKeyword(e.target.value)} allowClear />
         <div style={{ flex: 1 }} />
         <Button icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>导入台账</Button>
+        <Button icon={<HistoryOutlined />} onClick={() => setArchiveOpen(true)}>上传历史</Button>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => openEquipmentDrawer()}>新增设备</Button>
       </div>
       <div ref={tableWrapRef} style={{ flex: 1, minHeight: 0 }}>
@@ -244,6 +247,11 @@ export function EquipmentTable({ loading = false, onPageChange, resetKey, worksh
         open={importOpen}
         onClose={() => setImportOpen(false)}
         onImported={() => onPageChange(1, localPageSize)}
+        workshopCode={workshopCode}
+      />
+      <EquipmentImportArchiveDrawer
+        open={archiveOpen}
+        onClose={() => setArchiveOpen(false)}
         workshopCode={workshopCode}
       />
     </div>
