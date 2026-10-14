@@ -27,7 +27,7 @@ function node(item) {
     disabled: Boolean(item.disabled), children: item.children?.map(node) || null }
 }
 const { moduleMenus } = load(path.join(root, 'src/lib/menu-config.ts'))
-const reviewedModules = new Set(['production', 'hr', 'warehouse', 'quality', 'procurement'])
+const reviewedModules = new Set(['production', 'hr', 'warehouse', 'quality', 'procurement', 'equipment'])
 const output = moduleMenus.filter((menuModule) => reviewedModules.has(menuModule.moduleCode)).map(node)
 const target = path.resolve(root, '../dazah-backend/app/platform/identity/page_menu_catalog.json')
 const content = `${JSON.stringify(output, null, 2)}\n`

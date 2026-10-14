@@ -456,7 +456,7 @@ async def sync_table(
             select(func.count(EquipmentInspectionFeishuRecord.id))
             .where(EquipmentInspectionFeishuRecord.workshop_code == workshop_code)
             .where(EquipmentInspectionFeishuRecord.source == table_key)
-            .where(EquipmentInspectionFeishuDevice.is_deleted == False)  # noqa: E712
+            .where(EquipmentInspectionFeishuRecord.is_deleted == False)  # noqa: E712
         )
     else:
         count_stmt = select(func.count(EquipmentInspectionFeishuDevice.id)).where(

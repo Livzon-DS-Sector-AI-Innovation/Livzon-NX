@@ -1,5 +1,6 @@
 """Assigned repair/inspection work, with device department isolation."""
 
+import re
 from datetime import date
 from typing import Literal
 from uuid import UUID
@@ -40,9 +41,15 @@ router = APIRouter()
 
 
 def equipment_todo_query(
-    kind: EquipmentTodoKind, actor: TodoActor, department_ids: set[UUID] | None
+    kind: EquipmentTodoKind,
+    actor: TodoActor,
+    department_ids: set[UUID] | None,
+    workshop_code: str = "201-1",
 ) -> Select[tuple[str, str, str, date | None]] | Select[tuple[str, str, str, date]]:
-    valid_equipment = [Equipment.is_deleted.is_(False)]
+    valid_equipment = [
+        Equipment.is_deleted.is_(False),
+        Equipment.workshop_code == workshop_code,
+    ]
     if department_ids is not None:
         valid_equipment.append(Equipment.department_id.in_(department_ids))
     if kind == "maintenance":
@@ -105,14 +112,6 @@ def equipment_todo_query(
     # Restricted scopes require every linked device to be authorized. Empty
     # or unknown device ownership cannot establish a department grant.
     scope_filter = or_(multi_scope, single_scope)
-    if department_ids is None:
-        scope_filter = or_(
-            scope_filter,
-            and_(
-                func.jsonb_array_length(safe_ids) == 0,
-                InspectionTask.equipment_id.is_(None),
-            ),
-        )
     return select(
         cast(InspectionTask.id, String).label("id"),
         func.concat(InspectionTask.task_no, " · ", InspectionTask.plan_type).label(
@@ -136,8 +135,11 @@ async def list_equipment_todos(
     actor: TodoActor,
     page: int,
     page_size: int,
+    workshop_code: str = "201-1",
 ) -> BusinessTodoPage:
-    stmt = equipment_todo_query(kind, actor, await todo_department_ids(db, actor.scope))
+    stmt = equipment_todo_query(
+        kind, actor, await todo_department_ids(db, actor.scope), workshop_code
+    )
     total = await db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     rows = await db.execute(
         stmt.order_by("due_date", "id").offset((page - 1) * page_size).limit(page_size)
@@ -159,7 +161,13 @@ async def equipment_my_todos(
     page_size: int = Query(5, ge=1, le=50),
     db: AsyncSession = Depends(get_db),
 ) -> BusinessTodoPage:
-    if current_page_key.get() != PAGES[kind]:
+    key = current_page_key.get() or ""
+    matched = re.fullmatch(r"equipment:workshop-([0-9]{3}(?:-[0-9])?):([a-z]+)-\1", key)
+    if key == PAGES[kind]:
+        workshop_code = "201-1"
+    elif matched and matched.group(2) == kind:
+        workshop_code = matched.group(1)
+    else:
         raise HTTPException(403, "当前页面不能读取其他设备业务的待办")
     actor = await resolve_todo_actor(request, db, user)
-    return await list_equipment_todos(db, kind, actor, page, page_size)
+    return await list_equipment_todos(db, kind, actor, page, page_size, workshop_code)

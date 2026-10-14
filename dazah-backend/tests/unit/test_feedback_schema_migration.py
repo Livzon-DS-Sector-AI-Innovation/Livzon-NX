@@ -27,3 +27,21 @@ def test_feedback_migration_matches_model_columns_and_supports_downgrade() -> No
             "feedback_screenshots",
             "user_feedback",
         ]
+
+
+def test_feedback_merge_preserves_both_existing_revision_histories() -> None:
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    scripts = ScriptDirectory.from_config(Config("alembic.ini"))
+    assert scripts.get_heads() == ["807ad84a1158"]
+    merge = scripts.get_revision("807ad84a1158")
+    assert merge is not None
+    assert set(merge.down_revision) == {"b4e9f3d7a2c0", "b8d4f2a6c9e1"}
+    feedback = scripts.get_revision("b4e9f3d7a2c0")
+    assert feedback is not None and feedback.down_revision == "a3d8f2c6e1b9"
+    assert {item.revision for item in scripts.iterate_revisions("heads", "base")} >= {
+        "b4e9f3d7a2c0",
+        "b8d4f2a6c9e1",
+        "b4e2f8a1c7d3",
+    }

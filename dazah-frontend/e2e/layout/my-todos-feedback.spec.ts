@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aK1cAAAAASUVORK5CYII=', 'base64')
@@ -73,6 +74,7 @@ test('system administrator has only system settings todos and makes no business 
 })
 
 test('feedback requires description time and screenshot, retains failed input and reaches admin inbox', async ({ context, page, browser }) => {
+  const problemDescription = `在生产页面保存时出现错误，无法完成保存。（${randomUUID()}）`
   await context.addCookies([{ name: 'auth_token', value: 'procurement-only', url: 'http://127.0.0.1:3200' }])
   await page.goto('/purchasing/supplier')
   await page.getByRole('button', { name: '问题反馈', exact: true }).click()
@@ -88,7 +90,7 @@ test('feedback requires description time and screenshot, retains failed input an
   await drawer.getByRole('button', { name: '提交反馈', exact: true }).click()
   await expect(drawer.getByText('模拟反馈服务暂不可用，请重试')).toBeVisible()
   await expect(description).toHaveValue(/失败测试/)
-  await description.fill('在生产页面保存时出现错误，无法完成保存。')
+  await description.fill(problemDescription)
   await drawer.getByRole('button', { name: '提交反馈', exact: true }).click()
   await expect(drawer.getByRole('tab', { name: '我的反馈' })).toHaveAttribute('aria-selected', 'true')
   await expect(drawer.getByRole('tab', { name: '收件箱', exact: true })).toHaveCount(0)
@@ -104,7 +106,7 @@ test('feedback requires description time and screenshot, retains failed input an
   await expect(adminDrawer.getByRole('tab', { name: '收件箱', exact: true })).toHaveAttribute('aria-selected', 'true')
   await expect(adminDrawer.getByRole('tab', { name: '提交反馈' })).toHaveCount(0)
   await expect(adminDrawer.getByRole('tab', { name: '我的反馈' })).toHaveCount(0)
-  await adminDrawer.getByRole('button').filter({ hasText: '在生产页面保存时出现错误' }).click()
+  await adminDrawer.getByRole('button').filter({ hasText: problemDescription }).click()
   const detail = adminPage.getByRole('dialog', { name: '反馈详情' })
   await expect(detail.getByRole('img', { name: '问题截图 1' })).toBeVisible()
   await detail.getByLabel('管理员回复／处理结果').fill('已修复保存异常，请重新尝试。')
@@ -116,7 +118,7 @@ test('feedback requires description time and screenshot, retains failed input an
   expect(adminPersonalReads).toEqual([])
   await adminContext.close()
   await drawer.getByRole('tabpanel', { name: '我的反馈', exact: true }).getByRole('button', { name: /刷新$/ }).click()
-  await expect(drawer.getByRole('tabpanel', { name: '我的反馈', exact: true }).getByText('管理员回复：已修复保存异常，请重新尝试。')).toBeVisible()
+  await expect(drawer.getByRole('tabpanel', { name: '我的反馈', exact: true }).getByRole('button').filter({ hasText: problemDescription }).getByText('管理员回复：已修复保存异常，请重新尝试。')).toBeVisible()
 })
 
 test('toolbar and feedback form remain usable on a narrow screen', async ({ context, page }) => {
@@ -145,3 +147,26 @@ test('ordinary users have no administrator inbox and no unauthorized todo reques
   await page.getByRole('button', { name: '问题反馈', exact: true }).click()
   await expect(page.getByRole('tab', { name: '收件箱', exact: true })).toHaveCount(0)
 })
+
+
+for (const mode of ['light', 'dark'] as const) {
+  test(`toolbar task and feedback interactions in ${mode} appearance`, async ({ context, page }, testInfo) => {
+    await context.addCookies([{ name: 'auth_token', value: 'business-todos', url: 'http://127.0.0.1:3200' }])
+    await page.addInitScript((appearance) => localStorage.setItem('dazah-appearance', appearance), mode)
+    await page.goto('/quality/deviations/ledger')
+    await expect(page.locator('html')).toHaveAttribute('data-theme', mode)
+    await page.getByRole('button', { name: '我的待办', exact: true }).click()
+    const tasks = page.getByRole('dialog', { name: '我的待办' })
+    await expect(tasks.getByText('本人偏差调查', { exact: true })).toBeVisible()
+    await page.screenshot({ path: testInfo.outputPath(`todos-${mode}.png`), animations: 'disabled' })
+    await tasks.getByRole('button', { name: '关闭', exact: true }).click()
+    const other = mode === 'light' ? 'dark' : 'light'
+    await page.getByTitle(other === 'dark' ? '深色' : '浅色', { exact: true }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', other)
+    await page.getByRole('button', { name: '问题反馈', exact: true }).click()
+    const feedback = page.getByRole('dialog', { name: '问题反馈', exact: true })
+    await expect(feedback.getByRole('button', { name: '提交反馈', exact: true })).toBeVisible()
+    await expect(feedback.getByRole('tab', { name: '收件箱', exact: true })).toHaveCount(0)
+    await page.screenshot({ path: testInfo.outputPath(`feedback-${other}.png`), animations: 'disabled' })
+  })
+}

@@ -1,4 +1,4 @@
-import { getPageKeyByPath, type ModuleMenu, type SubMenuItem } from '@/lib/menu-config'
+import { expandEquipmentPagePermissions, getPageKeyByPath, type ModuleMenu, type SubMenuItem } from '@/lib/menu-config'
 import type { User } from '@/types/user'
 import type { components } from '@/types/generated/schema'
 import { isSystemAdministrator } from '@/lib/administrator-role'
@@ -38,16 +38,19 @@ const businessTodoPages: Record<string, { moduleCode: string; kind: string }> = 
 // responsible person and data range; approvals also require approve permission.
 export function getTodoSources(user: User, modules: ModuleMenu[]): TodoSource[] {
   if (isSystemAdministrator(user)) return []
+  const grants = expandEquipmentPagePermissions(user.page_permissions)
   const sources = new Map<string, TodoSource>()
   const visit = (items: SubMenuItem[], labels: string[]) => {
     for (const item of items) {
       if (item.disabled || (item.adminOnly && user.role !== 'admin')) continue
       const key = getPageKeyByPath(item.path)
-      const grant = user.page_permissions?.find((entry) => entry.page_key === key)
+      const grant = grants.find((entry) => entry.page_key === key)
       const canOperate = user.role === 'admin' ||
         ['access', 'query', 'operate'].every((permission) => grant?.permissions?.some((value) => value === permission))
       const canApprove = user.role === 'admin' || Boolean(grant?.sensitive_actions?.includes('approve'))
-      const business = businessTodoPages[item.path]
+      const equipmentKind = /^\/equipment\/(maintenance|inspection)\/[0-9]{3}(?:-[0-9])?$/.exec(item.path)?.[1]
+      const business = businessTodoPages[item.path] || (equipmentKind
+        ? { moduleCode: 'equipment', kind: equipmentKind } : undefined)
       const approval = item.path === '/hr/position-transfer'
       if (key && business && canOperate && (!approval || canApprove)) {
         const params = new URLSearchParams({ page: '1', page_size: '5' })

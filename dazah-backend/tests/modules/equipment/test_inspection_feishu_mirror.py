@@ -63,8 +63,8 @@ async def test_device_without_number_keeps_pending_status(
         )
     )
     await db_session.flush()
-    rows = await mirror.list_devices(db_session)
-    record = next(row for row in rows if row["record_id"] == record_id)
+    rows = await mirror.list_devices(db_session, "201-1")
+    record = next(row for row in rows["items"] if row["record_id"] == record_id)
     assert record["equipment_no"] is None
     assert record["today_status"] == "pending"
     assert record["in_ledger"] is False

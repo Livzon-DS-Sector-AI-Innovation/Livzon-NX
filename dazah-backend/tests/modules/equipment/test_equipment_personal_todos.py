@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
@@ -159,3 +159,51 @@ async def test_repairs_follow_assignment_and_acceptance_responsibility(
         assert (
             await client.get("/api/v1/equipment/my-todos?kind=inspection")
         ).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_workshop_todos_and_legacy_grants_never_include_other_workshops(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    actor = await make_todo_user(db_session)
+    department, first, second = await devices(db_session)
+    first.workshop_code = "201-1"
+    second.workshop_code = "101-1"
+    second.department_id = department.id
+    tasks = {}
+    for code, device in (("201-1", first), ("101-1", second)):
+        task = InspectionTask(
+            task_no=f"scope-{uuid4().hex[:12]}",
+            equipment_id=device.id,
+            assigned_to=actor.id,
+            planned_time=datetime.now(UTC),
+            status="待执行",
+        )
+        db_session.add(task)
+        await db_session.flush()
+        tasks[code] = str(task.id)
+    for key, code in (
+        (PAGES["inspection"], "201-1"),
+        ("equipment:workshop-201-1:inspection-201-1", "201-1"),
+        ("equipment:workshop-101-1:inspection-101-1", "101-1"),
+    ):
+        async with scoped_todo_client(
+            db_session,
+            actor,
+            router,
+            "equipment",
+            key,
+            DepartmentScope(is_all=True),
+            monkeypatch,
+        ) as client:
+            response = await client.get(
+                "/api/v1/equipment/my-todos?kind=inspection&workshop=203"
+            )
+            assert response.status_code == 200, response.text
+            assert {item["id"] for item in response.json()["items"]} == {tasks[code]}
+            assert response.json()["total"] == 1
+            refused = await client.get(
+                "/api/v1/equipment/my-todos?kind=inspection",
+                headers={"X-Dazah-Page-Key": "equipment:workshop-203:inspection-203"},
+            )
+            assert refused.status_code == 403

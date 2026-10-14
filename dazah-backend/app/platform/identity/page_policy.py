@@ -672,7 +672,10 @@ def _walk_pages(
                 scopes = ("not_applicable",)
             else:
                 scopes = ("all",)
-            if page_key in PERSONAL_TODO_SCOPE_PAGES:
+            if page_key in PERSONAL_TODO_SCOPE_PAGES or (
+                page_key.startswith("equipment:workshop-")
+                and raw_key.startswith(("maintenance-", "inspection-"))
+            ):
                 scopes = ("not_applicable", "department_tree", "departments", "all")
             if page_key == "production:overview":
                 # The overview exposes fermentation and extraction data, not
@@ -896,7 +899,17 @@ PAGE_API_BINDINGS += tuple(
             "quality:deviations:deviation-ledger", "quality:capas:capa-ledger",
             "quality:capas:capa-plans", "quality:change:change-action-plans",
         )),
-        ("equipment", ("equipment:maintenance", "equipment:inspection")),
+        ("equipment", tuple(
+            page.page_key for page in PAGE_DEFINITIONS
+            if page.module_code == "equipment"
+            and (
+                page.page_key in {"equipment:maintenance", "equipment:inspection"}
+                or page.page_key.startswith("equipment:workshop-")
+                and page.route_path.startswith((
+                    "/equipment/maintenance/", "/equipment/inspection/",
+                ))
+            )
+        )),
         ("safety", (
             "safety:risk-hazard:hazard-inspection:hazard-inspection-ledger",
             "safety:risk-hazard:ehs-change:ehs-change-apply",
