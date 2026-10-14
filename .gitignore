@@ -152,3 +152,5 @@ compose.dev.local.yml
 dazah-backend/data/
 dazah-backend/scripts/data/
 dazah-backend/e501_list.txt
+# 本地覆盖率核算产物（check-diff-coverage 本地复现用，勿提交）
+dazah-backend/coverage*.xml
