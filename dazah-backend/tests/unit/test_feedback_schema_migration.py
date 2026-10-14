@@ -34,7 +34,10 @@ def test_feedback_merge_preserves_both_existing_revision_histories() -> None:
     from alembic.script import ScriptDirectory
 
     scripts = ScriptDirectory.from_config(Config("alembic.ini"))
-    assert scripts.get_heads() == ["807ad84a1158"]
+    # 单一 head 随链尾演进（不再硬编码链尾版本），反馈分支经
+    # merge 版本 807ad84a1158 并入主链
+    heads = scripts.get_heads()
+    assert len(heads) == 1
     merge = scripts.get_revision("807ad84a1158")
     assert merge is not None
     assert set(merge.down_revision) == {"b4e9f3d7a2c0", "b8d4f2a6c9e1"}

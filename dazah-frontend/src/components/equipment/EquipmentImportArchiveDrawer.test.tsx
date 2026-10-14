@@ -159,3 +159,129 @@ describe('EquipmentImportArchiveDrawer', () => {
     expect(text).toContain('台账上传历史')
   })
 })
+
+describe('EquipmentImportArchiveDrawer 操作覆盖', () => {
+  let container: HTMLDivElement
+  let root: Root
+  const onClose = vi.fn()
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+  })
+
+  afterEach(() => {
+    act(() => root.unmount())
+    container.remove()
+    vi.clearAllMocks()
+  })
+
+  function render() {
+    act(() => {
+      root.render(
+        <AntApp>
+          <EquipmentImportArchiveDrawer open onClose={onClose} />
+        </AntApp>,
+      )
+    })
+  }
+
+  function findButton(text: string) {
+    return Array.from(document.body.querySelectorAll('button')).find(
+      (button) => button.textContent?.includes(text),
+    )
+  }
+
+  async function settle(ms = 80) {
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, ms))
+    })
+  }
+
+  it('deletes an archive after confirmation and reloads the list', async () => {
+    actionsMock.getEquipmentImportArchives.mockResolvedValue(
+      listEnvelope([archiveItem]),
+    )
+    actionsMock.deleteEquipmentImportArchive.mockResolvedValue(null)
+    render()
+    await settle()
+    const deleteButton = findButton('删除')
+    expect(deleteButton).toBeTruthy()
+    await act(async () => {
+      deleteButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    // 确认弹窗的确定按钮（antd Modal.confirm 渲染在 body）
+    const confirmOk = Array.from(
+      document.body.querySelectorAll('.ant-modal .ant-btn-primary, .ant-modal-confirm-btns .ant-btn-primary'),
+    ).at(-1) as HTMLButtonElement | undefined
+    expect(confirmOk).toBeTruthy()
+    await act(async () => {
+      confirmOk?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(actionsMock.deleteEquipmentImportArchive).toHaveBeenCalledWith(
+      'arc-1',
+    )
+    // 删除成功后重新加载列表（第二次调用）
+    expect(actionsMock.getEquipmentImportArchives).toHaveBeenCalledTimes(2)
+  })
+
+  it('returns from detail view back to the list', async () => {
+    actionsMock.getEquipmentImportArchives.mockResolvedValue(
+      listEnvelope([archiveItem]),
+    )
+    actionsMock.getEquipmentImportArchive.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: archiveDetail,
+    })
+    render()
+    await settle()
+    await act(async () => {
+      findButton('查看')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(document.body.textContent).toContain('FF1-1-1-001')
+    // 抽屉标题里的返回按钮是第一个按钮
+    const backButton = document.querySelector(
+      '.ant-drawer-header button',
+    ) as HTMLButtonElement | null
+    expect(backButton).toBeTruthy()
+    await act(async () => {
+      backButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 40))
+    })
+    // 回到列表：查看按钮重新出现，快照内容消失
+    expect(findButton('查看')).toBeTruthy()
+    expect(document.body.textContent).not.toContain('FF1-1-1-001')
+  })
+
+  it('switches list pages through pagination', async () => {
+    const many = Array.from({ length: 11 }, (_, i) => ({
+      ...archiveItem,
+      id: `arc-${i + 1}`,
+      file_name: `台账第${i + 1}次.xlsx`,
+    }))
+    actionsMock.getEquipmentImportArchives.mockImplementation(async (
+      page: number,
+    ) => listEnvelope(many.slice((page - 1) * 10, page * 10), 11))
+    render()
+    await settle()
+    const pageTwo = Array.from(
+      document.body.querySelectorAll('.ant-pagination li'),
+    ).find((li) => li.title === '2')
+    expect(pageTwo).toBeTruthy()
+    await act(async () => {
+      pageTwo?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(actionsMock.getEquipmentImportArchives).toHaveBeenCalledWith(
+      2,
+      10,
+      undefined,
+    )
+    expect(document.body.textContent).toContain('台账第11次.xlsx')
+  })
+})

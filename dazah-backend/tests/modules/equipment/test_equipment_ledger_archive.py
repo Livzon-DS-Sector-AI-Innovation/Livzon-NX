@@ -198,7 +198,8 @@ async def test_repeated_upload_appends_new_archive(
     assert first.json()["data"]["archive_id"] != second.json()["data"][
         "archive_id"
     ]
-    # 第二次全部转为更新；两份存档并存（新在前）
+    # 第二次全部转为更新；两份存档并存（两次上传时间可能同秒，
+    # 排序不保证稳定，按集合断言）
     assert second.json()["data"]["updated"] == 1
     listing = await client.get(
         "/api/v1/equipment/equipments/import-archives",
@@ -206,7 +207,10 @@ async def test_repeated_upload_appends_new_archive(
     )
     items = listing.json()["data"]
     assert len(items) == 2
-    assert items[0]["id"] == second.json()["data"]["archive_id"]
+    assert {item["id"] for item in items} == {
+        first.json()["data"]["archive_id"],
+        second.json()["data"]["archive_id"],
+    }
 
 
 async def test_failed_import_leaves_no_archive(

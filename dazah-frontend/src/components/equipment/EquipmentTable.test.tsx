@@ -22,8 +22,21 @@ const storeMock = vi.hoisted(() => ({
 }))
 
 vi.mock('@/stores/equipment', () => ({ useEquipmentStore: () => storeMock }))
-vi.mock('@/actions/equipment', () => ({ deleteEquipment: vi.fn() }))
+vi.mock('@/actions/equipment', () => ({
+  deleteEquipment: vi.fn(),
+  getEquipmentImportArchives: vi.fn(),
+  getEquipmentImportArchive: vi.fn(),
+  deleteEquipmentImportArchive: vi.fn(),
+}))
 vi.mock('./EquipmentDetailDrawer', () => ({ EquipmentDetailDrawer: () => null }))
+const archiveDrawerMock = vi.hoisted(() => ({
+  lastProps: null as Record<string, unknown> | null,
+  EquipmentImportArchiveDrawer: (props: Record<string, unknown>) => {
+    archiveDrawerMock.lastProps = props
+    return null
+  },
+}))
+vi.mock('./EquipmentImportArchiveDrawer', () => archiveDrawerMock)
 
 import { EquipmentTable } from './EquipmentTable'
 import type { Equipment } from '@/types/equipment'
@@ -183,5 +196,54 @@ describe('EquipmentTable ledger columns', () => {
     // 其余列不标红
     expect(styledSpan(1)).toBeNull()
     expect(styledSpan(2)).toBeNull()
+  })
+})
+
+describe('EquipmentTable 上传历史入口', () => {
+  let container: HTMLDivElement
+  let root: Root
+
+  beforeEach(() => {
+    globalThis.ResizeObserver =
+      globalThis.ResizeObserver ||
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    archiveDrawerMock.lastProps = null
+  })
+
+  afterEach(() => {
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it('opens and closes the archive drawer from the toolbar button', () => {
+    act(() => {
+      root.render(
+        <AntApp>
+          <EquipmentTable onPageChange={() => {}} resetKey={0} workshopCode="103" />
+        </AntApp>,
+      )
+    })
+    expect(archiveDrawerMock.lastProps?.open).toBe(false)
+    expect(archiveDrawerMock.lastProps?.workshopCode).toBe('103')
+    const button = Array.from(document.querySelectorAll('button')).find(
+      (b) => b.textContent?.includes('上传历史'),
+    )
+    expect(button).toBeTruthy()
+    act(() => {
+      button?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(archiveDrawerMock.lastProps?.open).toBe(true)
+    const onClose = archiveDrawerMock.lastProps?.onClose as () => void
+    act(() => {
+      onClose()
+    })
+    expect(archiveDrawerMock.lastProps?.open).toBe(false)
   })
 })
