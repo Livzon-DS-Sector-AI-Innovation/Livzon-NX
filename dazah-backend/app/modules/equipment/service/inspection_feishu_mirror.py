@@ -60,6 +60,10 @@ _EQUIPMENT_NAME_MAX = 200
 _EQUIPMENT_NO_MAX = 100
 _PROCESS_STATUS_MAX = 20
 
+# 多设备合并填写的原始行被飞书侧拆分后的处理状态；拆分产物已逐设备成行，
+# 今日口径不展示这类原始行
+_STATUS_SPLIT = "已拆分"
+
 
 def _truncate(value: str | None, limit: int) -> str | None:
     if value is None or len(value) <= limit:
@@ -717,13 +721,21 @@ def _device_key(equipment_no: str | None, equipment_name: str | None) -> str:
 def _valid_today_rows(
     records: Sequence[EquipmentInspectionFeishuRecord],
 ) -> list[EquipmentInspectionFeishuRecord]:
-    """今日表的有效记录行：排除飞书分组/引用产生的关联行（无处理状态）。
+    """今日表的有效记录行：排除飞书分组/引用产生的关联行（无处理状态）和
+    多设备合并填写后被拆分的原始行（处理状态=已拆分，已被逐设备行取代）。
 
     表未启用“处理状态”字段时没有任何行带该值，回退为全部行有效，
     兼容历史表和未配置该字段的旧车间表。
     """
-    valid = [r for r in records if (r.process_status or "").strip()]
-    return valid if valid else list(records)
+    rows = list(records)
+    if not any((r.process_status or "").strip() for r in rows):
+        return rows
+    return [
+        r
+        for r in rows
+        if (value := (r.process_status or "").strip())
+        and value != _STATUS_SPLIT
+    ]
 
 
 def _period_filled(

@@ -697,10 +697,63 @@ async def test_list_records_today_falls_back_without_process_status(
     assert [r.record_id for r in rows] == ["rec_e_new", "rec_garbage"]
 
 
+async def test_list_records_today_excludes_split_merged_rows(
+    db_session, monkeypatch
+) -> None:
+    """多设备合并填写的原始行（处理状态=已拆分）不进入今日列表。
+
+    飞书侧把粘连多设备的合并行拆成逐设备有效行后，原始行标记为已拆分；
+    当天只剩已拆分行时同样不得回退把合并行当有效行展示。
+    """
+    monkeypatch.setattr(mirror, "_cst_today", lambda: date(2026, 10, 12))
+    common = {"source": "history", "record_date": date(2026, 10, 12)}
+    for record_id, no in (("rec_dev_a", "XT-A"), ("rec_dev_b", "XT-B")):
+        db_session.add(
+            EquipmentInspectionFeishuRecord(
+                record_id=record_id,
+                equipment_no=no,
+                process_status="有效记录",
+                **common,
+            )
+        )
+    db_session.add(
+        EquipmentInspectionFeishuRecord(
+            record_id="rec_merged_split",
+            equipment_name="A101A102A103A104A",
+            process_status="已拆分",
+            **common,
+        )
+    )
+    # 当天只有已拆分原始行的车间：回退逻辑不得把合并行当有效行展示
+    db_session.add(
+        EquipmentInspectionFeishuRecord(
+            workshop_code="103",
+            record_id="rec_only_split",
+            equipment_name="酸化罐 1酸化罐 2",
+            process_status="已拆分",
+            **common,
+        )
+    )
+    await db_session.flush()
+
+    rows, total = await mirror.list_records(
+        db_session, workshop_code="201-1", source="today"
+    )
+    assert [r.record_id for r in rows] == ["rec_dev_a", "rec_dev_b"]
+    assert total == 2
+
+    only_split_rows, only_split_total = await mirror.list_records(
+        db_session, workshop_code="103", source="today"
+    )
+    assert only_split_rows == []
+    assert only_split_total == 0
+
+
 async def test_list_records_today_source_only_returns_cst_today_rows(
     db_session, monkeypatch
 ) -> None:
-    """「今日巡检」只返回当天（CST）记录：飞书今日表中滞留的旧日期行不出现。"""
+    """「今日巡检」只返回当天（CST）有效记录：今日表滞留的旧日期行、
+    被拆分的合并原始行都不出现。"""
     monkeypatch.setattr(mirror, "_cst_today", lambda: date(2026, 10, 12))
     db_session.add(
         EquipmentInspectionFeishuRecord(
@@ -708,6 +761,7 @@ async def test_list_records_today_source_only_returns_cst_today_rows(
             record_id="rec_today_cur",
             record_date=date(2026, 10, 12),
             equipment_no="XT-A",
+            process_status="有效记录",
         )
     )
     db_session.add(
@@ -716,6 +770,7 @@ async def test_list_records_today_source_only_returns_cst_today_rows(
             record_id="rec_today_stale",
             record_date=date(2026, 10, 11),
             equipment_no="XT-B",
+            process_status="有效记录",
         )
     )
     db_session.add(
@@ -724,28 +779,42 @@ async def test_list_records_today_source_only_returns_cst_today_rows(
             record_id="rec_history_cur",
             record_date=date(2026, 10, 12),
             equipment_no="XT-C",
+            process_status="有效记录",
+        )
+    )
+    # 多设备合并填写后被拆分的原始行：日期仍为当天、名称粘连，不得进入今日列表
+    db_session.add(
+        EquipmentInspectionFeishuRecord(
+            source="history",
+            record_id="rec_history_split",
+            record_date=date(2026, 10, 12),
+            equipment_name="酸化罐 1酸化罐 2酸化罐 3",
+            process_status="已拆分",
         )
     )
     await db_session.flush()
 
-    # 今日口径按日期取数：当天记录无论落在今日表还是历史表（已拆分）都展示，
-    # 且按设备去重后每设备一条
+    # 今日口径按日期取数：当天有效记录无论落在今日表还是历史表都展示，
+    # 已拆分的合并原始行被排除
     rows, total = await mirror.list_records(
         db_session, workshop_code="201-1", source="today"
     )
     assert [r.record_id for r in rows] == ["rec_today_cur", "rec_history_cur"]
     assert total == 2
 
-    # history 来源不套用今日口径，仍按条件过滤
+    # history 来源不套用今日口径，仍按条件过滤（含已拆分的原始行）
     history_rows, history_total = await mirror.list_records(
         db_session, workshop_code="201-1", source="history"
     )
-    assert [r.record_id for r in history_rows] == ["rec_history_cur"]
-    assert history_total == 1
+    assert [r.record_id for r in history_rows] == [
+        "rec_history_cur",
+        "rec_history_split",
+    ]
+    assert history_total == 2
 
     # 缺省 source 不受今日口径限制（设备详情抽屉按设备聚合全部记录）
     _, all_total = await mirror.list_records(db_session, workshop_code="201-1")
-    assert all_total == 3
+    assert all_total == 4
 
 
 # ---------- 车间隔离 ----------
