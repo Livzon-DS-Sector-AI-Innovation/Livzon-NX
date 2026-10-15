@@ -312,9 +312,9 @@ export default function TrainingEvaluationListClient({ sessionData, onSessionCha
               <tr>
                 <td style={eTd} colSpan={6}>
                   <Space size={6} wrap>
-                    <span>应到：</span><Form.Item name="expected_count" noStyle><InputNumber style={{ width: 60 }} min={0} /></Form.Item><span>人，</span>
-                    <span>实到：</span><Form.Item name="actual_count" noStyle><InputNumber style={{ width: 60 }} min={0} /></Form.Item><span>人，</span>
-                    <span>缺席：</span><Form.Item name="absent_count" noStyle><InputNumber style={{ width: 60 }} min={0} /></Form.Item><span>人。</span>
+                    <span>应到：</span><Form.Item name="expected_count" noStyle><InputNumber style={{ width: 60, textAlign: 'center' }} min={0} /></Form.Item><span>人，</span>
+                    <span>实到：</span><Form.Item name="actual_count" noStyle><InputNumber style={{ width: 60, textAlign: 'center' }} min={0} /></Form.Item><span>人，</span>
+                    <span>缺席：</span><Form.Item name="absent_count" noStyle><InputNumber style={{ width: 60, textAlign: 'center' }} min={0} /></Form.Item><span>人。</span>
                   </Space>
                 </td>
               </tr>
@@ -365,11 +365,11 @@ export default function TrainingEvaluationListClient({ sessionData, onSessionCha
                 <td style={eTdLabel} colSpan={2}>考核标准<br />及结果</td>
                 <td style={eTd} colSpan={5}>
                   <Space size={6} wrap>
-                    <span>优:</span><Form.Item name="excellent_count" noStyle><InputNumber style={{ width: 55 }} min={0} /></Form.Item><span>人；</span>
-                    <span>良好:</span><Form.Item name="good_count" noStyle><InputNumber style={{ width: 55 }} min={0} /></Form.Item><span>人；</span>
-                    <span>合格:</span><Form.Item name="pass_count" noStyle><InputNumber style={{ width: 55 }} min={0} /></Form.Item><span>人；</span>
-                    <span>不合格:</span><Form.Item name="fail_count" noStyle><InputNumber style={{ width: 55 }} min={0} /></Form.Item><span>人；</span>
-                    <span>缺考:</span><Form.Item name="absent_exam_count" noStyle><InputNumber style={{ width: 55 }} min={0} /></Form.Item><span>人。</span>
+                    <span>优:</span><Form.Item name="excellent_count" noStyle><InputNumber style={{ width: 55, textAlign: 'center' }} min={0} /></Form.Item><span>人；</span>
+                    <span>良好:</span><Form.Item name="good_count" noStyle><InputNumber style={{ width: 55, textAlign: 'center' }} min={0} /></Form.Item><span>人；</span>
+                    <span>合格:</span><Form.Item name="pass_count" noStyle><InputNumber style={{ width: 55, textAlign: 'center' }} min={0} /></Form.Item><span>人；</span>
+                    <span>不合格:</span><Form.Item name="fail_count" noStyle><InputNumber style={{ width: 55, textAlign: 'center' }} min={0} /></Form.Item><span>人；</span>
+                    <span>缺考:</span><Form.Item name="absent_exam_count" noStyle><InputNumber style={{ width: 55, textAlign: 'center' }} min={0} /></Form.Item><span>人。</span>
                   </Space>
                 </td>
               </tr>
@@ -383,9 +383,9 @@ export default function TrainingEvaluationListClient({ sessionData, onSessionCha
                 <td style={eTdLabel} colSpan={2}>补考结果</td>
                 <td style={eTd} colSpan={5}>
                   <Space size={6} wrap>
-                    <span>补考:</span><Form.Item name="makeup_count" noStyle><Input style={{ width: 60 }} placeholder="数值或-" /></Form.Item><span>人；</span>
-                    <span>合格:</span><Form.Item name="makeup_pass_count" noStyle><Input style={{ width: 60 }} placeholder="数值或-" /></Form.Item><span>人；</span>
-                    <span>不合格:</span><Form.Item name="makeup_fail_count" noStyle><Input style={{ width: 60 }} placeholder="数值或-" /></Form.Item><span>人。</span>
+                    <span>补考:</span><Form.Item name="makeup_count" noStyle><Input style={{ width: 60, textAlign: 'center' }} placeholder="数值或-" /></Form.Item><span>人；</span>
+                    <span>合格:</span><Form.Item name="makeup_pass_count" noStyle><Input style={{ width: 60, textAlign: 'center' }} placeholder="数值或-" /></Form.Item><span>人；</span>
+                    <span>不合格:</span><Form.Item name="makeup_fail_count" noStyle><Input style={{ width: 60, textAlign: 'center' }} placeholder="数值或-" /></Form.Item><span>人。</span>
                   </Space>
                 </td>
               </tr>

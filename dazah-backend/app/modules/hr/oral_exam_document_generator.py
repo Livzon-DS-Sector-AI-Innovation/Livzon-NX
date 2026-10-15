@@ -4,6 +4,8 @@
 仅填充填写区，保留模板 run 格式（字体/字号/加粗），复选框用 run 级文本替换。
 模板自带"限制编辑"保护（settings.xml 随保存继承）；填写区例外标记在填充后
 统一重建——克隆行原样复制模板标记会产生重复 w:id，Word 视为无效导致新行锁定。
+导出时解除文档级只读保护：只读保护会禁止插入表格行，下载的文档无法手工加题
+（在问题区插入新行），与填写区例外标记无法同时满足，故整体放开编辑。
 """
 
 import copy
@@ -92,6 +94,19 @@ def _mark_cell_editable(cell: Any, next_id: Iterator[int]) -> None:
     end = OxmlElement("w:permEnd")
     end.set(qn("w:id"), marker_id)
     paragraphs[-1]._p.append(end)
+
+
+def _remove_document_protection(doc: Any) -> None:
+    """解除模板继承的"限制编辑"文档保护。
+
+    readOnly 保护（即使无密码）会让 Word/WPS 禁止插入表格行：问题区按题目数
+    生成、无预留空行，导出后手工加题必须在表格中插入新行，只靠可编辑例外区
+    做不到。导出的文档是已填写的考核记录，整体放开编辑；已重建的例外标记
+    保留在文档中，内容不受影响。
+    """
+    settings = doc.settings.element
+    for el in settings.findall(qn("w:documentProtection")):
+        settings.remove(el)
 
 
 def _row_unique_cells(row: Any) -> list[Any]:
@@ -213,6 +228,9 @@ def generate_oral_exam_result(data: OralExamExportRequest) -> BytesIO:
             continue
         marked.append(cell._tc)
         _mark_cell_editable(cell, next_id)
+
+    # ── 解除文档级只读保护：导出文件需支持插入行手工加题 ──
+    _remove_document_protection(doc)
 
     # ── 清理模板预置的“……”占位行（导出文档不保留） ──
     for i in range(len(table.rows) - 1, -1, -1):

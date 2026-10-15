@@ -11,12 +11,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.llm import llm_client
 from app.modules.safety.ai_workflow_configs import SAFETY_WORKFLOW_CONFIGS
 from app.modules.safety.models import (
+    SafetyPageTableMirrorRecord,
     SpecialOperationReport,
 )
 from app.modules.safety.repository import SafetyRepository
 from app.modules.safety.schemas import (
     SpecialOperationReportCreate,
     SpecialOperationReportUpdate,
+)
+from app.modules.safety.service.special_operation_critical import (
+    evaluate_from_notes,
+    is_hazardous_confined_level,
 )
 from app.platform.audit.service import record_audit_log
 from app.platform.integrations.ai.prompts import (
@@ -166,26 +171,6 @@ class SpecialOperationReportService:
         return await self.repo.update_special_operation_report(
             report_id,
             {"status": "rejected", "rejection_reason": reason},
-        )
-
-    async def set_critical_manual(
-        self,
-        report_id: uuid.UUID,
-        is_critical: bool,
-        reason: str | None,
-        updated_by: str | None,
-    ) -> SpecialOperationReport | None:
-        """手动修改关键作业标记"""
-        report = await self.repo.get_special_operation_report_by_id(report_id)
-        if not report:
-            return None
-        return await self.repo.update_special_operation_report(
-            report_id,
-            {
-                "is_critical": is_critical,
-                "is_critical_reason": reason,
-                "is_critical_updated_by": updated_by,
-            },
         )
 
     # ── AI 判定 ──
@@ -339,11 +324,96 @@ class SpecialOperationReportService:
             is_critical=is_critical,
         )
 
+    async def recalculate_critical_flags(self) -> dict[str, int]:
+        """按规则重算全部台账记录的关键作业标记（台账只读，无人工开关）。
+
+        受限空间的「涉及有毒有害、易燃易爆」判断取自镜像表里飞书「作业分级」
+        原文，避免转录时丢失该信息。
+        """
+        from sqlalchemy import select
+
+        hazardous_report_nos: set[str] = set()
+        mirror_rows = (
+            (
+                await self.session.execute(
+                    select(SafetyPageTableMirrorRecord.fields).where(
+                        SafetyPageTableMirrorRecord.page_key
+                        == "safety:ops-safety:special-danger-work",
+                        SafetyPageTableMirrorRecord.is_deleted.is_(False),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for fields in mirror_rows:
+            if not isinstance(fields, dict):
+                continue
+            level = fields.get("作业分级")
+            if not is_hazardous_confined_level(
+                level if isinstance(level, str) else None
+            ):
+                continue
+            application_no = fields.get("申请编号")
+            text = (
+                application_no.get("text")
+                if isinstance(application_no, dict)
+                else application_no
+            )
+            if isinstance(text, str) and text.strip():
+                hazardous_report_nos.add(text.strip())
+
+        rows = (
+            (
+                await self.session.execute(
+                    select(SpecialOperationReport).where(
+                        SpecialOperationReport.is_deleted.is_(False)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        critical_count = 0
+        for row in rows:
+            decision = evaluate_from_notes(
+                operation_type=row.operation_type,
+                operation_level=row.operation_level,
+                notes=row.notes,
+                hazardous_confined=row.report_no in hazardous_report_nos,
+            )
+            row.is_critical = decision.is_critical
+            row.is_critical_reason = decision.reason
+            row.is_critical_updated_by = None
+            if decision.is_critical:
+                critical_count += 1
+        await self.session.commit()
+        return {"total": len(rows), "critical": critical_count}
+
     async def get_ledger_stats(
-        self, status_list: list[str] | None = None
+        self,
+        status_list: list[str] | None = None,
+        operation_type: str | None = None,
+        operation_level: str | None = None,
+        risk_level: str | None = None,
+        department: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        keyword: str | None = None,
+        is_critical: bool | None = None,
     ) -> list[dict[str, Any]]:
-        """获取台账统计"""
-        return await self.repo.get_special_operation_ledger_stats(status_list)
+        """获取台账统计（与列表共用筛选口径，仪表盘随筛选联动）"""
+        return await self.repo.get_special_operation_ledger_stats(
+            status_list,
+            operation_type=operation_type,
+            operation_level=operation_level,
+            risk_level=risk_level,
+            department=department,
+            date_from=date_from,
+            date_to=date_to,
+            keyword=keyword,
+            is_critical=is_critical,
+        )
 
     # ── AI 导出 ──
 

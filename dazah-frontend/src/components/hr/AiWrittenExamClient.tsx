@@ -70,6 +70,8 @@ interface UploadedFileItem {
   status: 'parsing' | 'parsed' | 'error'
   text: string
   error?: string
+  /** 草稿恢复的合并内容：走 uploaded_content 单批通道（12 万字符预算），不拆为逐份文件 */
+  merged?: boolean
 }
 
 export default function AiWrittenExamClient({ sessionData, initialPayload, active = true, assessmentMethod, registerDocBuilder, registerExporter }: Props) {
@@ -131,9 +133,9 @@ export default function AiWrittenExamClient({ sessionData, initialPayload, activ
       })))
     }
     setManualContent(initialPayload.manual_content || '')
-    // 上传内容草稿恢复为单个已解析条目
+    // 上传内容草稿恢复为单个已解析条目（合并内容，走 uploaded_content 通道）
     if (initialPayload.uploaded_content) {
-      setUploadedItems([{ uid: 'draft', name: '已恢复的上传内容', status: 'parsed', text: initialPayload.uploaded_content }])
+      setUploadedItems([{ uid: 'draft', name: '已恢复的上传内容', status: 'parsed', text: initialPayload.uploaded_content, merged: true }])
     }
     // 旧版草稿（choice_count/choice_type）兼容映射
     if (initialPayload.single_choice_count === undefined && initialPayload.choice_count !== undefined) {
@@ -203,13 +205,14 @@ export default function AiWrittenExamClient({ sessionData, initialPayload, activ
     }
   }
 
-  // 显式 file input 变更处理：逐文件解析全文，完成后清空 value 允许重复选择同一文件
+  // 显式 file input 变更处理：逐文件解析全文，完成后清空 value 允许重复选择同一文件。
+  // 份数不设上限：可一次多选或分次续传，出题侧按后端素材总量约束兜底
   const handleFileInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []) as File[]
     e.target.value = ''
     for (const file of files) {
       const uid = `up-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-      setUploadedItems((prev) => [...prev.slice(-2), { uid, name: file.name, status: 'parsing', text: '' }])
+      setUploadedItems((prev) => [...prev, { uid, name: file.name, status: 'parsing', text: '' }])
       parseUploadedFile(uid, file)
     }
   }
@@ -222,22 +225,39 @@ export default function AiWrittenExamClient({ sessionData, initialPayload, activ
     setUploadedItems((prev) => prev.map((it) => (it.uid === uid ? { ...it, text: value } : it)))
   }
 
-  // 上传文件合并文本（解析成功的全文 + 解析失败后手动粘贴的兜底文本）
+  // 上传文件合并文本（草稿保存与素材判定用；出题请求中逐份上传改走 files 通道）
   const uploadedContent = uploadedItems
     .filter((it) => it.text.trim())
     .map((it) => `${it.name}：\n${it.text}`)
     .join('\n\n---\n\n')
 
   // ── 构建出题素材 ──
+  // 上传文档逐份并入 files：后端按文件内容分批并行出题、按素材长度加权分配题数，
+  // 份数无上限且内容不因合并截断；uploaded_content 是单批通道，仅 12 万字符预算，
+  // 只用于草稿恢复的合并内容（merged 条目），避免多份上传走它被静默截断。
   const buildGeneratePayload = () => {
-    const files = resolvedFiles
-      .filter((f) => f.content.trim())
-      .map((f) => ({
-        name: f.name,
-        code: f.code ?? null,
-        content: f.content.slice(0, CONTENT_MAX_LEN),
+    const perFileUploads = uploadedItems
+      .filter((it) => !it.merged && it.text.trim())
+      .map((it) => ({
+        name: it.name,
+        code: null,
+        content: it.text.slice(0, CONTENT_MAX_LEN),
       }))
-    const totalContent = (files.map((f) => f.content).join('') + uploadedContent + manualContent).trim()
+    const mergedContent = uploadedItems
+      .filter((it) => it.merged && it.text.trim())
+      .map((it) => `${it.name}：\n${it.text}`)
+      .join('\n\n---\n\n')
+    const files = [
+      ...resolvedFiles
+        .filter((f) => f.content.trim())
+        .map((f) => ({
+          name: f.name,
+          code: f.code ?? null,
+          content: f.content.slice(0, CONTENT_MAX_LEN),
+        })),
+      ...perFileUploads,
+    ]
+    const totalContent = (files.map((f) => f.content).join('') + mergedContent + manualContent).trim()
     if (!totalContent) {
       message.warning('请至少提供一份培训内容（勾选文件/上传文档/粘贴文本）')
       return null
@@ -248,7 +268,7 @@ export default function AiWrittenExamClient({ sessionData, initialPayload, activ
     }
     return {
       files,
-      uploaded_content: uploadedContent.slice(0, CONTENT_MAX_LEN * 4),
+      uploaded_content: mergedContent.slice(0, CONTENT_MAX_LEN * 4),
       manual_content: manualContent.slice(0, CONTENT_MAX_LEN),
       single_choice_count: singleChoiceCount,
       multiple_choice_count: multipleChoiceCount,
@@ -470,7 +490,9 @@ export default function AiWrittenExamClient({ sessionData, initialPayload, activ
 
         {/* 1b. 文件上传区（后端自动解析全文） */}
         <div className="mb-3">
-          <div className="text-[13px] text-gray-500 mb-1">上传培训文档：</div>
+          <div className="text-[13px] text-gray-500 mb-1">
+            上传培训文档{uploadedItems.length > 0 ? `（已上传 ${uploadedItems.length} 份）` : ''}：
+          </div>
           <input
             ref={fileInputRef}
             type="file"
@@ -482,7 +504,9 @@ export default function AiWrittenExamClient({ sessionData, initialPayload, activ
           <Button icon={<UploadOutlined />} size="small" onClick={() => fileInputRef.current?.click()}>
             选择文件
           </Button>
-          <div className="text-[12px] text-gray-400 mt-1">支持 .docx/.doc/.wps/.pdf/.txt/.md，上传后自动解析全文</div>
+          <div className="text-[12px] text-gray-400 mt-1">
+            支持 .docx/.doc/.wps/.pdf/.txt/.md，份数不限，可一次多选或分次续传；每份取前 3 万字，上传后自动解析全文
+          </div>
 
           {uploadedItems.length > 0 && (
             <div className="space-y-2 mt-2">
@@ -498,7 +522,11 @@ export default function AiWrittenExamClient({ sessionData, initialPayload, activ
                     )}
                     <span className="text-[13px] font-medium">{it.name}</span>
                     {it.status === 'parsing' && <Tag color="processing">解析中…</Tag>}
-                    {it.status === 'parsed' && <Tag color="success">已解析（{it.text.length} 字）</Tag>}
+                    {it.status === 'parsed' && (
+                      <Tag color="success">
+                        已解析（{it.text.length} 字{it.text.length > CONTENT_MAX_LEN ? `，仅前 ${CONTENT_MAX_LEN / 10000} 万字用于出题` : ''}）
+                      </Tag>
+                    )}
                     {it.status === 'error' && <Tag color="error">解析失败</Tag>}
                     <Button
                       type="text"

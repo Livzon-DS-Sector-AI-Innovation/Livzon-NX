@@ -24539,6 +24539,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/safety/page-feishu-configs/{page_key}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 立即同步页面的本地镜像（全量拉取飞书记录） */
+        post: operations["sync_page_feishu_mirror_api_v1_safety_page_feishu_configs__page_key__sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/safety/page-feishu-configs/{page_key}/test": {
         parameters: {
             query?: never;
@@ -25173,8 +25190,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 获取特殊作业台账统计
-         * @description 按作业类型统计台账数量和关键作业数量
+         * 获取特殊作业台账统计（随筛选条件联动）
+         * @description 按作业类型统计台账数量和关键作业数量（与列表筛选同口径）
          */
         get: operations["get_special_operation_ledger_stats_api_v1_safety_special_operation_ledger_stats_get"];
         put?: never;
@@ -25475,26 +25492,6 @@ export interface paths {
          * @description 审批通过报备（已提交→已审批）
          */
         post: operations["approve_special_operation_report_api_v1_safety_special_operation_reports__report_id__approve_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/safety/special-operation-reports/{report_id}/critical": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * 手动设置关键作业标记
-         * @description 手动修改特殊作业报备的关键作业标记
-         */
-        put: operations["set_special_operation_report_critical_api_v1_safety_special_operation_reports__report_id__critical_put"];
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -49854,6 +49851,19 @@ export interface components {
              * @default true
              */
             is_enabled: boolean;
+            /**
+             * Is Mirrored
+             * @default true
+             */
+            is_mirrored: boolean;
+            /** Last Sync Error */
+            last_sync_error?: string | null;
+            /** Last Sync Record Count */
+            last_sync_record_count?: number | null;
+            /** Last Sync Status */
+            last_sync_status?: string | null;
+            /** Last Synced At */
+            last_synced_at?: string | null;
             /** Last Test Error */
             last_test_error?: string | null;
             /** Last Test Field Count */
@@ -56048,22 +56058,6 @@ export interface components {
             name: string;
         };
         /**
-         * SetCriticalRequest
-         * @description 手动设置关键作业标记
-         */
-        SetCriticalRequest: {
-            /**
-             * Is Critical
-             * @description 是否关键作业
-             */
-            is_critical: boolean;
-            /**
-             * Reason
-             * @description 修改理由
-             */
-            reason?: string | null;
-        };
-        /**
          * SetExamConclusionRequest
          * @description 设置体检结论请求
          */
@@ -59973,6 +59967,8 @@ export interface components {
             hidden_field_names?: string[] | null;
             /** Is Enabled */
             is_enabled?: boolean | null;
+            /** Is Mirrored */
+            is_mirrored?: boolean | null;
             /** Table Id */
             table_id?: string | null;
             /** View Id */
@@ -126358,6 +126354,39 @@ export interface operations {
             };
         };
     };
+    sync_page_feishu_mirror_api_v1_safety_page_feishu_configs__page_key__sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page_key: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_PageFeishuConfigItem_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     test_page_feishu_config_api_v1_safety_page_feishu_configs__page_key__test_post: {
         parameters: {
             query?: never;
@@ -126401,6 +126430,8 @@ export interface operations {
                 sort_direction?: string;
                 filter_field?: string | null;
                 filter_value?: string | null;
+                /** @description 多条件筛选（JSON 数组，如 [{"field": "作业日期", "value": "2026-10-13"}]，条件间为 AND；日期支持 YYYY / YYYY-MM / YYYY-MM-DD 前缀匹配） */
+                conditions?: string | null;
             };
             header?: never;
             path: {
@@ -127783,7 +127814,19 @@ export interface operations {
     };
     get_special_operation_ledger_stats_api_v1_safety_special_operation_ledger_stats_get: {
         parameters: {
-            query?: never;
+            query?: {
+                operation_type?: string | null;
+                operation_level?: string | null;
+                risk_level?: string | null;
+                department?: string | null;
+                /** @description 计划开始日期起 (YYYY-MM-DD) */
+                date_from?: string | null;
+                /** @description 计划结束日期止 (YYYY-MM-DD) */
+                date_to?: string | null;
+                keyword?: string | null;
+                /** @description 是否关键作业 */
+                is_critical?: boolean | null;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -128564,43 +128607,6 @@ export interface operations {
             };
         };
         requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    set_special_operation_report_critical_api_v1_safety_special_operation_reports__report_id__critical_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                report_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetCriticalRequest"];
-            };
-        };
         responses: {
             /** @description Successful Response */
             200: {

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 
-import { ApiOutlined, LinkOutlined, SaveOutlined } from '@ant-design/icons'
+import { ApiOutlined, LinkOutlined, SaveOutlined, SyncOutlined } from '@ant-design/icons'
 import { App, Button, Card, Input, Select, Space, Switch, Tag, Typography } from 'antd'
 
 /** 把「别名=规范车间名」多行文本解析为映射（容错中文等号/缺失等号）。 */
@@ -30,6 +30,7 @@ import {
   getSafetyPageFeishuConfigs,
   resolveSafetyPageFeishuUrl,
   saveSafetyPageFeishuConfig,
+  syncSafetyPageFeishuConfig,
   testSafetyPageFeishuConfig,
 } from '@/actions/safety'
 import PlatformNotice from '@/components/shared/PlatformNotice'
@@ -51,6 +52,12 @@ function renderTestTag(status: string | null | undefined) {
   return <Tag>未测试</Tag>
 }
 
+function renderSyncTag(status: string | null | undefined) {
+  if (status === 'success') return <Tag color="success">镜像已同步</Tag>
+  if (status === 'failed') return <Tag color="error">镜像同步失败</Tag>
+  return <Tag>镜像未同步</Tag>
+}
+
 function PageTableConfigItem({
   item,
   onSaved,
@@ -67,12 +74,14 @@ function PageTableConfigItem({
     formatWorkshopAliasText(item.workshop_aliases ?? {})
   )
   const [enabled, setEnabled] = useState(item.is_enabled)
+  const [mirrored, setMirrored] = useState(item.is_mirrored)
   const [linkInput, setLinkInput] = useState('')
   const [tables, setTables] = useState<ResolvedFeishuTable[]>([])
   const [fieldOptions, setFieldOptions] = useState<string[]>([])
   const [resolving, setResolving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [syncing, setSyncing] = useState(false)
 
   const handleResolve = useCallback(async () => {
     if (!linkInput.trim()) {
@@ -116,6 +125,20 @@ function PageTableConfigItem({
     }
   }, [item.page_key, message, onSaved])
 
+  const handleSync = useCallback(async () => {
+    setSyncing(true)
+    const res = await syncSafetyPageFeishuConfig(item.page_key)
+    setSyncing(false)
+    if (res.code === 200 && res.data) {
+      message.success(
+        `镜像同步完成（${res.data.last_sync_record_count ?? 0} 条记录）`
+      )
+      onSaved(res.data)
+    } else {
+      message.error(res.message || '镜像同步失败')
+    }
+  }, [item.page_key, message, onSaved])
+
   const handleSave = useCallback(async () => {
     if (!appToken.trim() || !tableId.trim()) {
       message.warning('请填写 App Token 与 Table ID')
@@ -129,6 +152,7 @@ function PageTableConfigItem({
       hidden_field_names: hiddenFields,
       workshop_aliases: parseWorkshopAliasText(aliasesText),
       is_enabled: enabled,
+      is_mirrored: mirrored,
     })
     setSaving(false)
     if (res.code === 200 && res.data) {
@@ -137,13 +161,20 @@ function PageTableConfigItem({
     } else {
       message.error(res.message || '保存失败')
     }
-  }, [aliasesText, appToken, enabled, hiddenFields, item.page_key, message, onSaved, tableId, viewId])
+  }, [aliasesText, appToken, enabled, hiddenFields, item.page_key, message, mirrored, onSaved, tableId, viewId])
 
   return (
     <Card
       title={`${item.page_name}（${item.route_path}）`}
       extra={
         <Space>
+          <Button
+            icon={<SyncOutlined />}
+            onClick={() => void handleSync()}
+            loading={syncing}
+          >
+            立即同步
+          </Button>
           <Button
             icon={<ApiOutlined />}
             onClick={() => void handleTest()}
@@ -220,7 +251,7 @@ function PageTableConfigItem({
           </Button>
           <Input
             value={viewId}
-            placeholder="视图 view_id（仅记录，页面展示该表全部记录）"
+            placeholder="视图 view_id（页面列按该视图对齐，粘贴链接时自动带出）"
             onChange={(event) => setViewId(event.target.value)}
           />
         </Space.Compact>
@@ -268,6 +299,25 @@ function PageTableConfigItem({
               : ''}
           </Typography.Text>
         </Space>
+        <Space size={12} wrap>
+          <Typography.Text>本地镜像数据源（全量同步，页面查询更快更完整）</Typography.Text>
+          <Switch
+            aria-label="启用本地镜像数据源"
+            checked={mirrored}
+            onChange={setMirrored}
+          />
+          {renderSyncTag(item.last_sync_status)}
+          <Typography.Text type="secondary">
+            最近同步：{formatDateTime(item.last_synced_at)}
+            {item.last_sync_record_count != null
+              ? `（${item.last_sync_record_count} 条）`
+              : ''}
+            ；每 15 分钟自动同步，页面编辑即时写回飞书并更新镜像。
+          </Typography.Text>
+        </Space>
+        {item.last_sync_error ? (
+          <PlatformNotice type="warning" title={item.last_sync_error} />
+        ) : null}
         {item.last_test_error ? (
           <PlatformNotice type="warning" title={item.last_test_error} />
         ) : null}
