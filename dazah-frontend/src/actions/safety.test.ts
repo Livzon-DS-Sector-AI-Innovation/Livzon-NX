@@ -21,6 +21,8 @@ import {
   getSafetyPageFeishuConfigs,
   getSafetyPageTableRecords,
   getSafetyPageTableStats,
+  getSpecialOperationLedgerStats,
+  syncSafetyPageFeishuConfig,
   getSafetyFeishuWsStatus,
   resolveSafetyPageFeishuUrl,
   restartSafetyFeishuWs,
@@ -469,5 +471,35 @@ describe('safety page table actions', () => {
       ]).toString()}`,
     )
     expect(init.headers).toMatchObject({ 'X-Dazah-Page-Key': 'k' })
+  })
+})
+
+
+describe('safety special-operation ledger and config sync actions', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('queries ledger stats with date range', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getSpecialOperationLedgerStats({ date_from: '2026-10-10', date_to: '2026-10-11' })
+    const [url] = fetchMock.mock.calls[0] as unknown as [string]
+    expect(url).toContain('/api/v1/safety/special-operation-ledger/stats')
+    expect(url).toContain('date_from=2026-10-10')
+    expect(url).toContain('date_to=2026-10-11')
+  })
+
+  it('syncs a page feishu config by page key', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { page_key: 'k' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await syncSafetyPageFeishuConfig('my-page')
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/safety/page-feishu-configs/my-page/sync`,
+      expect.objectContaining({ method: 'POST' }),
+    )
   })
 })

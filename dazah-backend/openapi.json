@@ -56956,6 +56956,56 @@
             "title": "Is Enabled",
             "type": "boolean"
           },
+          "is_mirrored": {
+            "default": true,
+            "title": "Is Mirrored",
+            "type": "boolean"
+          },
+          "last_sync_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync Error"
+          },
+          "last_sync_record_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync Record Count"
+          },
+          "last_sync_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync Status"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
+          },
           "last_test_error": {
             "anyOf": [
               {
@@ -71143,33 +71193,6 @@
         "title": "SensitiveActionDefinitionOut",
         "type": "object"
       },
-      "SetCriticalRequest": {
-        "description": "手动设置关键作业标记",
-        "properties": {
-          "is_critical": {
-            "description": "是否关键作业",
-            "title": "Is Critical",
-            "type": "boolean"
-          },
-          "reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "修改理由",
-            "title": "Reason"
-          }
-        },
-        "required": [
-          "is_critical"
-        ],
-        "title": "SetCriticalRequest",
-        "type": "object"
-      },
       "SetExamConclusionRequest": {
         "description": "设置体检结论请求",
         "properties": {
@@ -82044,6 +82067,17 @@
               }
             ],
             "title": "Is Enabled"
+          },
+          "is_mirrored": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Mirrored"
           },
           "table_id": {
             "anyOf": [
@@ -217456,6 +217490,64 @@
         ]
       }
     },
+    "/api/v1/safety/page-feishu-configs/{page_key}/sync": {
+      "post": {
+        "operationId": "sync_page_feishu_mirror_api_v1_safety_page_feishu_configs__page_key__sync_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "page_key",
+            "required": true,
+            "schema": {
+              "title": "Page Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_PageFeishuConfigItem_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "立即同步页面的本地镜像（全量拉取飞书记录）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
     "/api/v1/safety/page-feishu-configs/{page_key}/test": {
       "post": {
         "operationId": "test_page_feishu_config_api_v1_safety_page_feishu_configs__page_key__test_post",
@@ -217621,6 +217713,24 @@
                 }
               ],
               "title": "Filter Value"
+            }
+          },
+          {
+            "description": "多条件筛选（JSON 数组，如 [{\"field\": \"作业日期\", \"value\": \"2026-10-13\"}]，条件间为 AND；日期支持 YYYY / YYYY-MM / YYYY-MM-DD 前缀匹配）",
+            "in": "query",
+            "name": "conditions",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "多条件筛选（JSON 数组，如 [{\"field\": \"作业日期\", \"value\": \"2026-10-13\"}]，条件间为 AND；日期支持 YYYY / YYYY-MM / YYYY-MM-DD 前缀匹配）",
+              "title": "Conditions"
             }
           },
           {
@@ -220508,9 +220618,143 @@
     },
     "/api/v1/safety/special-operation-ledger/stats": {
       "get": {
-        "description": "按作业类型统计台账数量和关键作业数量",
+        "description": "按作业类型统计台账数量和关键作业数量（与列表筛选同口径）",
         "operationId": "get_special_operation_ledger_stats_api_v1_safety_special_operation_ledger_stats_get",
         "parameters": [
+          {
+            "in": "query",
+            "name": "operation_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Operation Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "operation_level",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Operation Level"
+            }
+          },
+          {
+            "in": "query",
+            "name": "risk_level",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Risk Level"
+            }
+          },
+          {
+            "in": "query",
+            "name": "department",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Department"
+            }
+          },
+          {
+            "description": "计划开始日期起 (YYYY-MM-DD)",
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "计划开始日期起 (YYYY-MM-DD)",
+              "title": "Date From"
+            }
+          },
+          {
+            "description": "计划结束日期止 (YYYY-MM-DD)",
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "计划结束日期止 (YYYY-MM-DD)",
+              "title": "Date To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "description": "是否关键作业",
+            "in": "query",
+            "name": "is_critical",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "是否关键作业",
+              "title": "Is Critical"
+            }
+          },
           {
             "in": "cookie",
             "name": "auth_token",
@@ -220550,7 +220794,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "获取特殊作业台账统计",
+        "summary": "获取特殊作业台账统计（随筛选条件联动）",
         "tags": [
           "安全管理"
         ]
@@ -222222,76 +222466,6 @@
           }
         },
         "summary": "审批特殊作业报备",
-        "tags": [
-          "安全管理"
-        ]
-      }
-    },
-    "/api/v1/safety/special-operation-reports/{report_id}/critical": {
-      "put": {
-        "description": "手动修改特殊作业报备的关键作业标记",
-        "operationId": "set_special_operation_report_critical_api_v1_safety_special_operation_reports__report_id__critical_put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "report_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Report Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetCriticalRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "手动设置关键作业标记",
         "tags": [
           "安全管理"
         ]

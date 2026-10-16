@@ -1,7 +1,7 @@
 """Safety database queries."""
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import Integer, cast, func, select, update
@@ -31,6 +31,28 @@ from app.modules.safety.models import (
     SpecialOperationReport,
     TrainingRecord,
 )
+
+
+def _special_operation_date_bounds(
+    date_from: str | None, date_to: str | None
+) -> tuple[datetime | None, datetime | None]:
+    """解析日期筛选（YYYY-MM-DD）为 ``[当天0点, 次日0点)`` 的时区感知边界。
+
+    日期字符串直接和 timestamptz 列比较会按 VARCHAR 绑定导致数据库报错；
+    结束侧用「次日 0 点前」保证当天内带时刻的计划结束时间不被漏掉。
+    """
+
+    def _parse(value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            return datetime.strptime(value[:10], "%Y-%m-%d").replace(tzinfo=UTC)
+        except ValueError:
+            return None
+
+    start = _parse(date_from)
+    end = _parse(date_to)
+    return start, (end + timedelta(days=1)) if end is not None else None
 
 
 class SafetyRepository:
@@ -1677,10 +1699,11 @@ class SafetyRepository:
                 q = q.where(SpecialOperationReport.risk_level == risk_level)
             if department:
                 q = q.where(SpecialOperationReport.department == department)
-            if date_from:
-                q = q.where(SpecialOperationReport.planned_start_time >= date_from)
-            if date_to:
-                q = q.where(SpecialOperationReport.planned_end_time <= date_to)
+            bounds = _special_operation_date_bounds(date_from, date_to)
+            if bounds[0] is not None:
+                q = q.where(SpecialOperationReport.planned_start_time >= bounds[0])
+            if bounds[1] is not None:
+                q = q.where(SpecialOperationReport.planned_end_time < bounds[1])
             if is_critical is not None:
                 q = q.where(SpecialOperationReport.is_critical == is_critical)
             if keyword:
@@ -1819,15 +1842,23 @@ class SafetyRepository:
                 SpecialOperationReport.department == department
             )
         if date_from:
-            query = query.where(SpecialOperationReport.planned_start_time >= date_from)
-            count_query = count_query.where(
-                SpecialOperationReport.planned_start_time >= date_from
-            )
+            bounds = _special_operation_date_bounds(date_from, None)
+            if bounds[0] is not None:
+                query = query.where(
+                    SpecialOperationReport.planned_start_time >= bounds[0]
+                )
+                count_query = count_query.where(
+                    SpecialOperationReport.planned_start_time >= bounds[0]
+                )
         if date_to:
-            query = query.where(SpecialOperationReport.planned_end_time <= date_to)
-            count_query = count_query.where(
-                SpecialOperationReport.planned_end_time <= date_to
-            )
+            bounds = _special_operation_date_bounds(None, date_to)
+            if bounds[1] is not None:
+                query = query.where(
+                    SpecialOperationReport.planned_end_time < bounds[1]
+                )
+                count_query = count_query.where(
+                    SpecialOperationReport.planned_end_time < bounds[1]
+                )
         if is_critical is not None:
             query = query.where(SpecialOperationReport.is_critical == is_critical)
             count_query = count_query.where(
@@ -1857,9 +1888,18 @@ class SafetyRepository:
         return items, total or 0
 
     async def get_special_operation_ledger_stats(
-        self, status_list: list[str] | None = None
+        self,
+        status_list: list[str] | None = None,
+        operation_type: str | None = None,
+        operation_level: str | None = None,
+        risk_level: str | None = None,
+        department: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        keyword: str | None = None,
+        is_critical: bool | None = None,
     ) -> list[dict[str, Any]]:
-        """按作业类型统计台账数量和关键作业数量"""
+        """按作业类型统计台账数量和关键作业数量（与列表共用筛选口径）"""
         if status_list is None:
             status_list = ["submitted", "approved"]
 
@@ -1878,6 +1918,30 @@ class SafetyRepository:
             .group_by(SpecialOperationReport.operation_type)
             .order_by(func.count(SpecialOperationReport.id).desc())
         )
+        if operation_type:
+            query = query.where(SpecialOperationReport.operation_type == operation_type)
+        if operation_level:
+            query = query.where(
+                SpecialOperationReport.operation_level == operation_level
+            )
+        if risk_level:
+            query = query.where(SpecialOperationReport.risk_level == risk_level)
+        if department:
+            query = query.where(SpecialOperationReport.department == department)
+        bounds = _special_operation_date_bounds(date_from, date_to)
+        if bounds[0] is not None:
+            query = query.where(SpecialOperationReport.planned_start_time >= bounds[0])
+        if bounds[1] is not None:
+            query = query.where(SpecialOperationReport.planned_end_time < bounds[1])
+        if is_critical is not None:
+            query = query.where(SpecialOperationReport.is_critical == is_critical)
+        if keyword:
+            like = f"%{keyword}%"
+            query = query.where(
+                SpecialOperationReport.report_no.ilike(like)
+                | SpecialOperationReport.work_description.ilike(like)
+                | SpecialOperationReport.location.ilike(like)
+            )
         result = await self.session.execute(query)
         return [
             {"operation_type": r[0], "count": r[1], "critical_count": r[2] or 0}

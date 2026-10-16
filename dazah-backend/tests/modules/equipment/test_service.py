@@ -1,11 +1,13 @@
 """Tests for equipment service layer."""
 
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException, DuplicateException, NotFoundException
+from app.modules.equipment.models.inspection import InspectionTask
 from app.modules.equipment.schemas import (
     EquipmentCategoryCreate,
     EquipmentCategoryUpdate,
@@ -138,4 +140,51 @@ async def test_create_task_requires_template_binding(db_session: AsyncSession) -
                 "equipment_ids": [str(uuid_mod.uuid4())],
                 "planned_time": "2026-10-10T08:00:00",
             },
+        )
+
+
+async def test_submit_route_check_completes_task_with_given_result(
+    db_session: AsyncSession,
+) -> None:
+    """线路巡检提交：总体结果来自飞书侧判定，直接落库并完成。"""
+    from app.modules.equipment.service import inspection as inspection_svc
+
+    task = InspectionTask(
+        task_no=f"I-{uuid.uuid4().hex[:15]}",
+        planned_time=datetime(2026, 10, 15, 8, 0, tzinfo=UTC),
+        status="执行中",
+    )
+    db_session.add(task)
+    await db_session.flush()
+
+    completed = await inspection_svc.submit_route_check(
+        db_session, task.id, overall_result="正常"
+    )
+    assert completed.status == "已完成"
+    assert completed.overall_result == "正常"
+    assert completed.completed_at is not None
+
+    with pytest.raises(AppException):
+        # 已完成的任务不允许再次提交
+        await inspection_svc.submit_route_check(
+            db_session, task.id, overall_result="正常"
+        )
+
+
+async def test_submit_route_check_rejects_pending_task(
+    db_session: AsyncSession,
+) -> None:
+    from app.modules.equipment.service import inspection as inspection_svc
+
+    task = InspectionTask(
+        task_no=f"I-{uuid.uuid4().hex[:15]}",
+        planned_time=datetime(2026, 10, 15, 8, 0, tzinfo=UTC),
+        status="待执行",
+    )
+    db_session.add(task)
+    await db_session.flush()
+
+    with pytest.raises(AppException, match="状态不允许"):
+        await inspection_svc.submit_route_check(
+            db_session, task.id, overall_result="正常"
         )

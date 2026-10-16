@@ -206,6 +206,11 @@ export const moduleMenus: ModuleMenu[] = [
         children: [
           { key: "special-ops-mgmt", label: "特殊作业管理", path: "/safety/special-ops" },
           { key: "daily-risk-report", label: "关键风险作业报备", path: "/safety/risk-reporting" },
+          { key: "special-danger-work", label: "次日特殊危险作业审批", path: "/safety/special-danger-work" },
+          { key: "risk-work-registration", label: "关键风险作业报备表", path: "/safety/risk-work-registration" },
+          { key: "feeding-inspection", label: "投料巡查表", path: "/safety/feeding-inspection" },
+          { key: "hazchem-unloading-inspection", label: "危险化学品卸车巡查表", path: "/safety/hazchem-unloading-inspection" },
+          { key: "centrifuge-discharge-inspection", label: "离心出料风险巡查表", path: "/safety/centrifuge-discharge-inspection" },
         ],
       },
       // ── 风险与隐患 ──

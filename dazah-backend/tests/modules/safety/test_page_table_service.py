@@ -10,6 +10,7 @@ from sqlalchemy.exc import OperationalError
 
 from app.core.exceptions import AppException
 from app.modules.safety.models import SafetyPageFeishuConfig
+from app.modules.safety.page_tables import PAGE_TABLE_DEFINITIONS
 from app.modules.safety.service import page_table
 
 PAGE_KEY = "safety:risk-hazard:hazard-inspection:hazard-duty"
@@ -89,6 +90,7 @@ class _FakeClient:
         update_result: tuple[bool, str | None] = (True, None),
         upload_token: str | None = "tok-new",
         download: bytes | None = b"file-bytes",
+        tmp_download: bytes | None | object = ...,
     ) -> None:
         self.fields = _FIELDS if fields is None else fields
         self.rows = rows or []
@@ -97,8 +99,12 @@ class _FakeClient:
         self.update_result = update_result
         self.upload_token = upload_token
         self.download = download
+        # tmp_url 优先路径：默认与 download 一致；显式传 None/bytes 覆盖
+        self.tmp_download = download if tmp_download is ... else tmp_download
+        self.tmp_calls: list[str] = []
         self.updates: list[tuple[str, dict]] = []
         self.uploads: list[str] = []
+        self.search_kwargs: list[dict] = []
 
     async def list_fields(self, table_id: str | None = None) -> list[dict]:
         return self.fields
@@ -106,6 +112,7 @@ class _FakeClient:
     async def search_records_with_result(
         self, **kwargs: object
     ) -> tuple[list[dict], str | None]:
+        self.search_kwargs.append(dict(kwargs))
         return self.rows, self.search_error
 
     async def update_record_with_result(
@@ -125,6 +132,10 @@ class _FakeClient:
         self.uploads.append(file_name)
         return self.upload_token
 
+    async def download_attachment_via_tmp_url(self, tmp_url: str) -> bytes | None:
+        self.tmp_calls.append(tmp_url)
+        return self.tmp_download
+
     async def download_attachment_from_url(self, download_url: str) -> bytes | None:
         return self.download
 
@@ -141,9 +152,36 @@ def _config(**overrides: object) -> SafetyPageFeishuConfig:
         "table_id": TABLE_ID,
         "is_enabled": True,
         "hidden_field_names": [],
+        # 单测默认走实时路径；镜像用例显式打开
+        "is_mirrored": False,
+        "last_synced_at": None,
+        "last_sync_status": None,
+        "last_sync_error": None,
+        "last_sync_record_count": None,
     }
     values.update(overrides)
     return SafetyPageFeishuConfig(**values)
+
+
+class _NullSessionCtx:
+    """写透独立会话的空实现：任何查询都返回 None。"""
+
+    def __init__(self) -> None:
+        self.added: list[object] = []
+
+    async def __aenter__(self):
+        return SimpleNamespace(
+            execute=AsyncMock(return_value=_FakeResult(None)),
+            add=self.added.append,
+            commit=AsyncMock(return_value=None),
+        )
+
+    async def __aexit__(self, *args: object) -> None:
+        return None
+
+
+def _null_session_factory() -> _NullSessionCtx:
+    return _NullSessionCtx()
 
 
 def _install_client(monkeypatch, client: _FakeClient) -> _FakeClient:
@@ -155,6 +193,8 @@ def _install_client(monkeypatch, client: _FakeClient) -> _FakeClient:
     monkeypatch.setattr(page_table, "cache_set", AsyncMock(return_value=None))
     monkeypatch.setattr(page_table, "cache_delete", AsyncMock(return_value=None))
     monkeypatch.setattr(page_table, "record_audit_log", AsyncMock(return_value=None))
+    # 写透路径的独立会话：查不到配置即安静返回 False，不触真实数据库
+    monkeypatch.setattr(page_table, "async_session_factory", _null_session_factory)
     # AI 兜底默认关闭（不触发 LLM）；需要时在用例内单独 mock _ai_classify_workshops
     monkeypatch.setattr(
         page_table, "_load_classifications", AsyncMock(return_value={})
@@ -427,7 +467,7 @@ async def test_fetch_attachment_rejects_token_not_on_record(monkeypatch) -> None
 
 
 async def test_fetch_attachment_returns_bytes_for_owned_token(monkeypatch) -> None:
-    _install_client(
+    client = _install_client(
         monkeypatch,
         _FakeClient(
             record_fields={
@@ -437,6 +477,7 @@ async def test_fetch_attachment_returns_bytes_for_owned_token(monkeypatch) -> No
                         "name": "a.jpg",
                         "type": "image/jpeg",
                         "url": "https://open/x",
+                        "tmp_url": "https://open/batch_get_tmp_download_url?file_tokens=tok-owned",
                     }
                 ]
             }
@@ -449,6 +490,37 @@ async def test_fetch_attachment_returns_bytes_for_owned_token(monkeypatch) -> No
     assert content == b"file-bytes"
     assert content_type == "image/jpeg"
     assert filename == "a.jpg"
+    # tmp_url（batch_get_tmp_download_url）是首选下载路径
+    assert client.tmp_calls == [
+        "https://open/batch_get_tmp_download_url?file_tokens=tok-owned"
+    ]
+
+
+async def test_fetch_attachment_falls_back_when_tmp_url_fails(monkeypatch) -> None:
+    """tmp_url 换取失败时回退附件 url / 直接下载，不中断代理。"""
+    _install_client(
+        monkeypatch,
+        _FakeClient(
+            record_fields={
+                "照片": [
+                    {
+                        "file_token": "tok-1",
+                        "name": "a.jpg",
+                        "type": "image/jpeg",
+                        "url": "https://open/x",
+                        "tmp_url": "https://open/batch_get_tmp_download_url?file_tokens=tok-1",
+                    }
+                ]
+            },
+            tmp_download=None,
+            download=b"file-bytes",
+        ),
+    )
+    db = _FakeSession(_config())
+    content, _, _ = await page_table.fetch_page_table_attachment(
+        db, PAGE_KEY, "rec-1", "照片", "tok-1"
+    )
+    assert content == b"file-bytes"
 
 
 async def test_test_binding_reports_failure_when_fields_unreadable(monkeypatch) -> None:
@@ -507,9 +579,133 @@ async def test_save_config_persists_binding_and_clears_test_state(monkeypatch) -
 async def test_list_configs_includes_unconfigured_pages() -> None:
     db = _FakeSession(None)
     result = await page_table.list_page_feishu_configs(db)
-    assert [item.page_key for item in result.items] == [PAGE_KEY]
-    assert result.items[0].is_configured is False
-    assert result.items[0].page_name == "24小时值班隐患"
+    # 未配置绑定的镜像页也会出现在列表里（设置页据此集中维护）
+    assert [item.page_key for item in result.items] == [
+        definition.page_key for definition in PAGE_TABLE_DEFINITIONS
+    ]
+    duty = next(item for item in result.items if item.page_key == PAGE_KEY)
+    assert duty.is_configured is False
+    assert duty.page_name == "24小时值班隐患"
+
+
+async def test_list_records_view_id_is_record_only(monkeypatch) -> None:
+    """飞书无「视图字段」开放接口：view_id 仅记录，列由隐藏字段配置控制。
+
+    /views/:id/fields 端点在飞书网关层返回 404 page not found，历史上对它
+    的调用从未成功过，现在不再发起请求。
+    """
+    rows = [
+        {
+            "record_id": "rec-1",
+            "fields": {
+                "记录编号": [{"text": "YH-1"}],
+                "值班日期": 1770652800000,
+                "照片": [{"file_token": "tok-1"}],
+            },
+        }
+    ]
+    _install_client(monkeypatch, _FakeClient(rows=rows))
+    db = _FakeSession(_config(view_id="vewOps"))
+
+    result = await page_table.list_page_table_records(db, PAGE_KEY)
+
+    # 列 = 全量字段 − 隐藏字段（本配置未隐藏任何字段）
+    assert [column.name for column in result.columns] == [
+        field["field_name"] for field in _FIELDS
+    ]
+
+
+async def test_list_records_hides_fields_from_binding(monkeypatch) -> None:
+    """隐藏字段配置承担视图对齐：配置内的字段从列与记录中裁掉。"""
+    rows = [
+        {
+            "record_id": "rec-1",
+            "fields": {
+                "记录编号": [{"text": "YH-1"}],
+                "值班日期": 1770652800000,
+                "照片": [{"file_token": "tok-1"}],
+            },
+        }
+    ]
+    _install_client(monkeypatch, _FakeClient(rows=rows))
+    db = _FakeSession(_config(hidden_field_names=["照片"]))
+
+    result = await page_table.list_page_table_records(db, PAGE_KEY)
+
+    assert "照片" not in {column.name for column in result.columns}
+    assert "照片" not in result.records[0].fields
+
+
+async def test_stats_respects_hidden_columns(monkeypatch) -> None:
+    """统计分组同样基于可见列，隐藏字段不能作为分组维度。"""
+    _install_client(monkeypatch, _FakeClient())
+    db = _FakeSession(_config(hidden_field_names=["照片"]))
+
+    with pytest.raises(AppException) as excinfo:
+        await page_table.get_page_table_stats(db, PAGE_KEY, group_by=["照片"])
+    assert excinfo.value.status_code == 400
+    assert "照片" in excinfo.value.message
+
+
+async def test_list_records_conditions_combine_with_and(monkeypatch) -> None:
+    """多条件筛选：字段间 AND；选项精确匹配，日期按天前缀匹配。"""
+    rows = [
+        {
+            "record_id": "rec-1",
+            "fields": {"整改情况": "未整改", "值班日期": 1770595200000},
+        },
+        {
+            "record_id": "rec-2",
+            "fields": {"整改情况": "已整改", "值班日期": 1770595200000},
+        },
+        {
+            "record_id": "rec-3",
+            "fields": {"整改情况": "未整改", "值班日期": 1770681600000},
+        },
+    ]
+    _install_client(monkeypatch, _FakeClient(rows=rows))
+    db = _FakeSession(_config())
+
+    result = await page_table.list_page_table_records(
+        db,
+        PAGE_KEY,
+        conditions=[("整改情况", "未整改"), ("值班日期", "2026-02-09")],
+    )
+
+    # 1770595200000 = 2026-02-09；条件组合后只剩 rec-1
+    assert [record.record_id for record in result.records] == ["rec-1"]
+
+    month_only = await page_table.list_page_table_records(
+        db, PAGE_KEY, conditions=[("值班日期", "2026-02")]
+    )
+    assert [record.record_id for record in month_only.records] == [
+        "rec-1",
+        "rec-2",
+        "rec-3",
+    ]
+
+
+async def test_list_records_conditions_reject_unknown_field(monkeypatch) -> None:
+    _install_client(monkeypatch, _FakeClient())
+    db = _FakeSession(_config())
+
+    with pytest.raises(AppException) as excinfo:
+        await page_table.list_page_table_records(
+            db, PAGE_KEY, conditions=[("不存在的字段", "x")]
+        )
+    assert excinfo.value.status_code == 400
+
+
+async def test_list_records_fetches_newest_first_by_date(monkeypatch) -> None:
+    """超过条数上限时按日期倒序拉取，确保最新记录进入加载窗口。"""
+    client = _install_client(monkeypatch, _FakeClient())
+    db = _FakeSession(_config())
+
+    await page_table.list_page_table_records(db, PAGE_KEY)
+
+    assert client.search_kwargs[0]["sort"] == [
+        {"field_name": "值班日期", "desc": True}
+    ]
 
 
 # ── 车间号识别归一 ──
@@ -1143,6 +1339,7 @@ async def test_fetch_attachment_surfaces_download_failure(monkeypatch) -> None:
                     }
                 ]
             },
+            tmp_download=None,
             download=None,  # 下载失败
         ),
     )

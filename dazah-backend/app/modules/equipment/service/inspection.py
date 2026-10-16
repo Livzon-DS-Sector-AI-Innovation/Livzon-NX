@@ -180,6 +180,24 @@ async def complete_task(db: AsyncSession, task_id: uuid.UUID) -> InspectionTask:
     return await _refetch_task(db, task_id)
 
 
+async def submit_route_check(
+    db: AsyncSession, task_id: uuid.UUID, *, overall_result: str
+) -> InspectionTask:
+    """线路巡检提交完成：总体结果由飞书侧已收集的记录判定后显式传入。
+
+    与 complete_task 的差异仅在结果来源——线路巡检的记录由飞书侧逐点
+    收集后统一判定，这里不再重复聚合。
+    """
+    task = await _get_task(db, task_id)
+    _validate_transition(task.status, "已完成")
+
+    task.overall_result = overall_result
+    task.status = "已完成"
+    task.completed_at = datetime.now(UTC)
+    await db.flush()
+    return await _refetch_task(db, task_id)
+
+
 async def close_task(
     db: AsyncSession, task_id: uuid.UUID, remark: str | None = None
 ) -> InspectionTask:

@@ -1534,16 +1534,6 @@ export async function rejectSpecialOperationReport(id: string, reason: string) {
   return response
 }
 
-export async function setSpecialOperationReportCritical(id: string, is_critical: boolean, reason?: string) {
-  const response = await fetchApi<SpecialOperationReport>(`/safety/special-operation-reports/${id}/critical`, {
-    method: 'PUT',
-    body: JSON.stringify({ is_critical, reason }),
-  })
-  revalidatePath('/safety/special-ops')
-
-  return response
-}
-
 // ==================== 特殊作业台账 Actions ====================
 
 export async function getSpecialOperationLedger(params?: SpecialOperationLedgerQueryParams) {
@@ -1565,8 +1555,29 @@ export async function getSpecialOperationLedger(params?: SpecialOperationLedgerQ
   return response
 }
 
-export async function getSpecialOperationLedgerStats() {
-  const response = await fetchApi<SpecialOperationLedgerStats[]>('/safety/special-operation-ledger/stats')
+export async function getSpecialOperationLedgerStats(params?: {
+  operation_type?: string
+  operation_level?: string
+  risk_level?: string
+  department?: string
+  date_from?: string
+  date_to?: string
+  keyword?: string
+  is_critical?: boolean
+}) {
+  const search = new URLSearchParams()
+  if (params?.operation_type) search.set('operation_type', params.operation_type)
+  if (params?.operation_level) search.set('operation_level', params.operation_level)
+  if (params?.risk_level) search.set('risk_level', params.risk_level)
+  if (params?.department) search.set('department', params.department)
+  if (params?.date_from) search.set('date_from', params.date_from)
+  if (params?.date_to) search.set('date_to', params.date_to)
+  if (params?.keyword) search.set('keyword', params.keyword)
+  if (params?.is_critical !== undefined) search.set('is_critical', String(params.is_critical))
+  const query = search.toString()
+  const response = await fetchApi<SpecialOperationLedgerStats[]>(
+    `/safety/special-operation-ledger/stats${query ? `?${query}` : ''}`
+  )
   return response
 }
 
@@ -2125,6 +2136,7 @@ export async function getSafetyPageTableRecords(params: {
   sortDirection?: 'asc' | 'desc'
   filterField?: string | null
   filterValue?: string | null
+  conditions?: Array<{ field: string; value: string }>
 }) {
   const search = new URLSearchParams()
   if (params.page) search.set('page', String(params.page))
@@ -2134,6 +2146,9 @@ export async function getSafetyPageTableRecords(params: {
   if (params.sortDirection) search.set('sort_direction', params.sortDirection)
   if (params.filterField) search.set('filter_field', params.filterField)
   if (params.filterValue) search.set('filter_value', params.filterValue)
+  if (params.conditions?.length) {
+    search.set('conditions', JSON.stringify(params.conditions))
+  }
   const query = search.toString()
   const res = await fetchApi<PageTableRecordsResponse>(
     `/safety/page-tables/${encodeURIComponent(params.pageKey)}/records${query ? `?${query}` : ''}`,
@@ -2220,6 +2235,17 @@ export async function saveSafetyPageFeishuConfig(
 export async function testSafetyPageFeishuConfig(pageKey: string) {
   const res = await fetchApi<PageFeishuConfigTestResult>(
     `/safety/page-feishu-configs/${encodeURIComponent(pageKey)}/test`,
+    {
+      method: 'POST',
+      headers: { 'X-Dazah-Page-Key': SAFETY_FEISHU_SETTINGS_PAGE_KEY },
+    }
+  )
+  return res
+}
+
+export async function syncSafetyPageFeishuConfig(pageKey: string) {
+  const res = await fetchApi<PageFeishuConfigItem>(
+    `/safety/page-feishu-configs/${encodeURIComponent(pageKey)}/sync`,
     {
       method: 'POST',
       headers: { 'X-Dazah-Page-Key': SAFETY_FEISHU_SETTINGS_PAGE_KEY },

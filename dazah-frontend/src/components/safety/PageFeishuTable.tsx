@@ -39,6 +39,8 @@ import {
   asUrlValue,
   columnOptions,
   displayFieldText,
+  pickConditionSelectColumns,
+  pickDefaultDateColumn,
   toPageTableStats,
   toRecordRows,
   type PageTableColumn,
@@ -47,6 +49,48 @@ import {
 } from '@/lib/safety-page-tables'
 
 const PAGE_SIZE_OPTIONS = ['20', '50', '100']
+
+/** 表格最多展示的摘要列数；其余字段点击行后在详情抽屉里查看。 */
+const MAX_SUMMARY_COLUMNS = 10
+/** 文本列超过该长度视为长文本（措施说明等），只在详情中查看。 */
+const LONG_TEXT_THRESHOLD = 80
+/** 单选/多选列的选项超过该长度（防护、措施类长句）时按长文本换行渲染。 */
+const LONG_OPTION_THRESHOLD = 20
+
+/** 状态列（申请状态/巡查状态等）：始终保留在摘要列，方便一眼看到结果。 */
+function isStatusColumn(column: PageTableColumn): boolean {
+  return (
+    (column.kind === 'select' || column.kind === 'multi_select') &&
+    column.name.includes('状态')
+  )
+}
+
+/** 计算表格摘要列：剔除勾选清单与长文本列后，状态列保底保留。 */
+function buildSummaryColumns(
+  columns: PageTableColumn[],
+  rows: PageTableRecordRow[]
+): PageTableColumn[] {
+  const longTextNames = new Set(
+    columns
+      .filter((column) => column.kind === 'text')
+      .map((column) => column.name)
+      .filter((name) =>
+        rows.some(
+          (row) =>
+            displayFieldText(row.fields[name]).length > LONG_TEXT_THRESHOLD
+        )
+      )
+  )
+  const eligible = columns.filter(
+    (column) => column.kind !== 'checkbox' && !longTextNames.has(column.name)
+  )
+  const statusColumns = eligible.filter(isStatusColumn)
+  const others = eligible.filter((column) => !isStatusColumn(column))
+  return [
+    ...others.slice(0, Math.max(0, MAX_SUMMARY_COLUMNS - statusColumns.length)),
+    ...statusColumns,
+  ]
+}
 
 function attachmentUrl(
   pageKey: string,
@@ -105,12 +149,48 @@ function renderPlainCellValue(column: PageTableColumn, value: unknown) {
   return text
 }
 
+/** 内容较长的文本类列：单元格自动换行（保留换行符），不做省略号截断。 */
+function isWrappableColumn(column: PageTableColumn): boolean {
+  if (column.kind === 'text' || column.kind === 'readonly') return true
+  if (column.kind === 'select' || column.kind === 'multi_select') {
+    // 防护/措施类字段的选项本身是长句，按长文本换行渲染而不是 Tag 截断
+    return columnOptions(column).some(
+      (option) => option.length > LONG_OPTION_THRESHOLD
+    )
+  }
+  return false
+}
+
+/** 查询表单的多条件（字段间 AND）。 */
+type RecordCondition = { field: string; value: string }
+
+/** 由筛选状态构造查询条件（仅主要列模式使用）。 */
+function buildConditions(
+  summarize: boolean,
+  dateColumn: PageTableColumn | null,
+  date: dayjs.Dayjs | null,
+  selects: Record<string, string>
+): RecordCondition[] {
+  if (!summarize) return []
+  const conditions: RecordCondition[] = []
+  if (dateColumn && date) {
+    conditions.push({ field: dateColumn.name, value: date.format('YYYY-MM-DD') })
+  }
+  for (const [field, value] of Object.entries(selects)) {
+    if (value) conditions.push({ field, value })
+  }
+  return conditions
+}
+
 export default function PageFeishuTable({
   pageKey,
   pageName,
   initialData = null,
   initialStats = null,
   initialError = null,
+  showStats = true,
+  summarizeColumns = false,
+  initialDateFilter = null,
 }: {
   pageKey: string
   pageName: string
@@ -124,6 +204,15 @@ export default function PageFeishuTable({
   } | null
   initialStats?: PageTableStats | null
   initialError?: string | null
+  /** 是否展示顶部统计仪表盘（下钻筛选依赖它；仅仪表盘所属页面开启）。 */
+  showStats?: boolean
+  /**
+   * 表格是否只显示主要列（勾选清单/长文本收进详情，最多 10 列）。
+   * 仅作业安全镜像页启用；不传保持全列展示的原有行为。
+   */
+  summarizeColumns?: boolean
+  /** 服务端首屏已应用的日期条件（默认当天），客户端以此初始化日期筛选。 */
+  initialDateFilter?: RecordCondition | null
 }) {
   const { message } = App.useApp()
   const { canOperate } = usePagePermissions(pageKey)
@@ -157,6 +246,28 @@ export default function PageFeishuTable({
     () => columns.filter((column) => column.kind === 'attachment'),
     [columns]
   )
+  // 主要列模式（仅作业安全镜像页开启）：勾选清单与长文本收进详情，截前 N 列
+  const summaryColumns = useMemo(
+    () =>
+      summarizeColumns ? buildSummaryColumns(columns, rows) : columns,
+    [summarizeColumns, columns, rows]
+  )
+  const detailOnlyCount = summarizeColumns
+    ? Math.max(0, columns.length - summaryColumns.length)
+    : 0
+  const dateColumn = useMemo(
+    () => pickDefaultDateColumn(columns),
+    [columns]
+  )
+  const conditionSelects = useMemo(
+    () =>
+      summarizeColumns ? pickConditionSelectColumns(summaryColumns) : [],
+    [summarizeColumns, summaryColumns]
+  )
+  const [dateFilter, setDateFilter] = useState<dayjs.Dayjs | null>(() =>
+    initialDateFilter ? dayjs(initialDateFilter.value) : null
+  )
+  const [selectFilters, setSelectFilters] = useState<Record<string, string>>({})
 
   /**
    * 人员字段的候选项来自当前表格已出现过的人员（含 open_id 与头像）。
@@ -185,6 +296,7 @@ export default function PageFeishuTable({
       sortField?: string | null
       sortDirection?: 'asc' | 'desc'
       filter?: { field: string; value: string } | null
+      conditions?: RecordCondition[]
     }) => {
       const next = {
         page: override?.page ?? page,
@@ -194,6 +306,15 @@ export default function PageFeishuTable({
         sortDirection: override?.sortDirection ?? sortDirection,
         filter:
           override?.filter !== undefined ? override.filter : dimensionFilter,
+        conditions:
+          override?.conditions !== undefined
+            ? override.conditions
+            : buildConditions(
+                summarizeColumns,
+                dateColumn,
+                dateFilter,
+                selectFilters
+              ),
       }
       const seq = requestSeq.current + 1
       requestSeq.current = seq
@@ -208,12 +329,17 @@ export default function PageFeishuTable({
           sortDirection: next.sortDirection,
           filterField: next.filter?.field || undefined,
           filterValue: next.filter?.value || undefined,
+          conditions: next.conditions.length ? next.conditions : undefined,
         }),
-        getSafetyPageTableStats({ pageKey }),
+        showStats
+          ? getSafetyPageTableStats({ pageKey })
+          : Promise.resolve({ code: 200 as const, data: null }),
       ])
       if (seq !== requestSeq.current) return
       setLoading(false)
-      if (statsRes.code === 200) setStats(toPageTableStats(statsRes.data))
+      if (showStats && statsRes.code === 200) {
+        setStats(toPageTableStats(statsRes.data))
+      }
       if (res.code === 200 && res.data) {
         setColumns(res.data.columns ?? [])
         setRows(toRecordRows(res.data.records))
@@ -226,7 +352,7 @@ export default function PageFeishuTable({
         setLoadError(res.message || '读取多维表格数据失败')
       }
     },
-    [dimensionFilter, keyword, page, pageSize, pageKey, sortDirection, sortField]
+    [dateColumn, dateFilter, dimensionFilter, keyword, page, pageSize, pageKey, selectFilters, showStats, sortDirection, sortField, summarizeColumns]
   )
 
   const openDetail = useCallback(
@@ -338,43 +464,64 @@ export default function PageFeishuTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const tableColumns: ColumnsType<PageTableRecordRow> = columns.map((column) => ({
-    title: column.name,
-    dataIndex: ['fields', column.name],
-    key: column.field_id || column.name,
-    ellipsis: column.kind !== 'attachment',
-    width: column.kind === 'attachment' ? 220 : undefined,
-    sorter: true,
-    render: (_: unknown, row: PageTableRecordRow) => {
-      if (column.kind === 'attachment') {
-        // 图片点击是放大预览，不能冒泡到行上误开详情抽屉
-        return (
-          <div onClick={(event) => event.stopPropagation()}>
-            {renderFeishuColumnValue(
-              column,
-              row.fields[column.name],
-              row,
-              pageKey,
-              message
-            )}
-          </div>
+  const tableColumns: ColumnsType<PageTableRecordRow> = summaryColumns.map((column) => {
+    const wrappable = summarizeColumns && isWrappableColumn(column)
+    return {
+      title: column.name,
+      dataIndex: ['fields', column.name],
+      key: column.field_id || column.name,
+      ellipsis: column.kind !== 'attachment' && !wrappable,
+      width: column.kind === 'attachment' ? 220 : undefined,
+      sorter: true,
+      render: (_: unknown, row: PageTableRecordRow) => {
+        if (column.kind === 'attachment') {
+          // 图片点击是放大预览，不能冒泡到行上误开详情抽屉
+          return (
+            <div onClick={(event) => event.stopPropagation()}>
+              {renderFeishuColumnValue(
+                column,
+                row.fields[column.name],
+                row,
+                pageKey,
+                message
+              )}
+            </div>
+          )
+        }
+        const rendered = renderFeishuColumnValue(
+          column,
+          row.fields[column.name],
+          row,
+          pageKey,
+          message
         )
-      }
-      const rendered = renderFeishuColumnValue(
-        column,
-        row.fields[column.name],
-        row,
-        pageKey,
-        message
-      )
-      if (rendered !== undefined) return rendered
-      return renderPlainCellValue(column, row.fields[column.name])
-    },
-  }))
+        if (rendered !== undefined) return rendered
+        if (wrappable) {
+          // td 的 max-width 在表格布局里不可靠，用单元格内 div 限宽自动换行
+          const text = displayFieldText(row.fields[column.name])
+          if (!text) return <Typography.Text type="secondary">—</Typography.Text>
+          return (
+            <div
+              style={{
+                maxWidth: 320,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}
+            >
+              {text}
+            </div>
+          )
+        }
+        return renderPlainCellValue(column, row.fields[column.name])
+      },
+    }
+  })
 
   return (
     <Space orientation="vertical" size={16} style={{ display: 'flex' }}>
-      <PageFeishuStatsBar stats={stats} onSelect={handleSelectDimension} />
+      {showStats ? (
+        <PageFeishuStatsBar stats={stats} onSelect={handleSelectDimension} />
+      ) : null}
       {dimensionFilter ? (
         <Space size={8} wrap>
           <Typography.Text type="secondary">当前筛选：</Typography.Text>
@@ -401,9 +548,82 @@ export default function PageFeishuTable({
       {truncated ? (
         <PlatformNotice
           type="info"
-          title="记录较多，仅显示前 2000 条"
-          description="请用关键字缩小范围后再查看或编辑。"
+          title="记录较多，仅加载最近 2000 条"
+          description="列表按日期优先加载最新记录，更早的历史记录请到飞书多维表格中查看。"
         />
+      ) : null}
+      {summarizeColumns ? (
+        <Space size={12} wrap>
+          {dateColumn ? (
+            <DatePicker
+              allowClear
+              value={dateFilter}
+              placeholder={
+                initialDateFilter
+                  ? `${dateColumn.name}（默认当天，清空看全部）`
+                  : `${dateColumn.name}（可选）`
+              }
+              onChange={(value) => {
+                setDateFilter(value)
+                void load({
+                  page: 1,
+                  conditions: buildConditions(
+                    summarizeColumns,
+                    dateColumn,
+                    value,
+                    selectFilters
+                  ),
+                })
+              }}
+            />
+          ) : null}
+          {conditionSelects.map((column) => (
+            <Select
+              key={column.name}
+              allowClear
+              placeholder={column.name}
+              style={{ minWidth: 150 }}
+              value={selectFilters[column.name] || undefined}
+              options={columnOptions(column).map((option) => ({
+                value: option,
+                label: option,
+              }))}
+              onChange={(value) => {
+                const next = { ...selectFilters, [column.name]: value ?? '' }
+                setSelectFilters(next)
+                void load({
+                  page: 1,
+                  conditions: buildConditions(
+                    summarizeColumns,
+                    dateColumn,
+                    dateFilter,
+                    next
+                  ),
+                })
+              }}
+            />
+          ))}
+          <Button
+            onClick={() => {
+              const resetDate = initialDateFilter
+                ? dayjs(initialDateFilter.value)
+                : null
+              setDateFilter(resetDate)
+              setSelectFilters({})
+              void load({
+                page: 1,
+                conditions: buildConditions(
+                  summarizeColumns,
+                  dateColumn,
+                  resetDate,
+                  {}
+                ),
+              })
+            }}
+          >
+            重置
+          </Button>
+        </Space>
       ) : null}
       <Space size={12} wrap>
         <Input
@@ -423,6 +643,9 @@ export default function PageFeishuTable({
         </Button>
         <Typography.Text type="secondary">
           共 {total} 条；列与数据来自飞书多维表格，修改会直接写回飞书。
+          {detailOnlyCount > 0
+            ? ` 表格仅显示主要列，其余 ${detailOnlyCount} 个字段点击行后在详情中查看。`
+            : ''}
         </Typography.Text>
       </Space>
       <Table<PageTableRecordRow>

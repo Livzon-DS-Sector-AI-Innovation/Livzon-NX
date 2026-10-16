@@ -353,6 +353,66 @@ class SafetyBitableClient:
 
         return None
 
+    async def download_attachment_via_tmp_url(self, tmp_url: str) -> bytes | None:
+        """通过 Bitable 记录返回的 ``tmp_url`` 换取临时下载地址后下载。
+
+        ``tmp_url`` 指向 ``medias/batch_get_tmp_download_url``：携带 tenant
+        token 调用后返回内嵌鉴权的内部下载地址（internal-api-drive-stream）。
+        部分多维表格/应用组合下，附件 ``url`` 直接下载会 403，这是唯一可用路径。
+        """
+        if not tmp_url:
+            return None
+        token = await self._token()
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as http:
+            resp = await http.get(
+                tmp_url, headers={"Authorization": f"Bearer {token}"}
+            )
+            if resp.status_code != 200:
+                logger.warning(
+                    "Bitable tmp_url 换取下载地址失败: status=%s body=%s",
+                    resp.status_code,
+                    (resp.text or "")[:200],
+                )
+                return None
+            try:
+                payload = resp.json()
+            except ValueError:
+                logger.warning("Bitable tmp_url 返回非 JSON 响应")
+                return None
+            entries = (payload.get("data") or {}).get("tmp_download_urls") or []
+            download_url = next(
+                (
+                    entry.get("tmp_download_url")
+                    for entry in entries
+                    if isinstance(entry, dict) and entry.get("tmp_download_url")
+                ),
+                None,
+            )
+            if not download_url:
+                logger.warning(
+                    "Bitable tmp_url 响应中无下载地址: %s", str(payload)[:200]
+                )
+                return None
+            download = await http.get(download_url)
+            if download.status_code != 200:
+                logger.warning(
+                    "Bitable tmp_download_url 下载失败: status=%s",
+                    download.status_code,
+                )
+                return None
+            content = download.content
+            content_type = download.headers.get("content-type", "")
+            if (
+                not content
+                or content_type.startswith("application/json")
+                or content_type.startswith("text/html")
+            ):
+                logger.warning(
+                    "Bitable tmp_download_url 返回非文件内容(ct=%s)", content_type
+                )
+                return None
+            return content
+
     async def search_records(
         self,
         table_id: str | None = None,
@@ -360,6 +420,7 @@ class SafetyBitableClient:
         filter_str: str | None = None,
         page_size: int = 100,
         max_pages: int = 50,
+        sort: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
         """搜索记录（自动翻页），返回 [{"record_id": "...", "fields": {...}}, ...]."""
         rows, _ = await self.search_records_with_result(
@@ -367,6 +428,7 @@ class SafetyBitableClient:
             filter_str=filter_str,
             page_size=page_size,
             max_pages=max_pages,
+            sort=sort,
         )
         return rows
 
@@ -377,11 +439,14 @@ class SafetyBitableClient:
         filter_str: str | None = None,
         page_size: int = 100,
         max_pages: int = 50,
+        sort: list[dict[str, Any]] | None = None,
     ) -> tuple[list[dict[str, Any]], str | None]:
         """搜索记录，返回 ``(记录列表, 飞书错误信息)``。
 
         与 ``search_records`` 并存：既有调用方只需要列表，页面则需要区分
         「表里确实没有数据」和「读取失败」，否则会把故障显示成空表。
+        ``sort`` 形如 ``[{"field_name": "作业日期", "desc": True}]``；缺省时
+        飞书按默认顺序（通常为创建先后）返回，配合 max_pages 截断会丢新记录。
         """
         token = await self._token()
         tid = table_id or self.table_id
@@ -389,17 +454,23 @@ class SafetyBitableClient:
         page_token: str | None = None
         async with httpx.AsyncClient(timeout=30) as http:
             for _ in range(max_pages):
-                payload: dict[str, Any] = {"page_size": page_size}
+                # page_size/page_token 是 query 参数：放进 body 会被服务端忽略，
+                # 每页都返回第一页（表现为翻页内容整页重复）
+                params: dict[str, Any] = {"page_size": page_size}
+                if page_token:
+                    params["page_token"] = page_token
+                payload: dict[str, Any] = {}
                 if filter_str:
                     payload["filter"] = filter_str
-                if page_token:
-                    payload["page_token"] = page_token
+                if sort:
+                    payload["sort"] = sort
                 resp = await http.post(
                     f"{BITABLE_BASE}/apps/{self.app_token}/tables/{tid}/records/search",
                     headers={
                         "Authorization": f"Bearer {token}",
                         "Content-Type": "application/json; charset=utf-8",
                     },
+                    params=params,
                     json=payload,
                 )
                 data = resp.json()

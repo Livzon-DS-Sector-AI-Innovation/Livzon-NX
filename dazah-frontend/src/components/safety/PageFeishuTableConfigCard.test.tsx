@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   getSafetyPageFeishuConfigs: vi.fn(),
   resolveSafetyPageFeishuUrl: vi.fn(),
   saveSafetyPageFeishuConfig: vi.fn(),
+  syncSafetyPageFeishuConfig: vi.fn(),
   testSafetyPageFeishuConfig: vi.fn(),
 }))
 
@@ -16,6 +17,7 @@ vi.mock('@/actions/safety', () => ({
   getSafetyPageFeishuConfigs: mocks.getSafetyPageFeishuConfigs,
   resolveSafetyPageFeishuUrl: mocks.resolveSafetyPageFeishuUrl,
   saveSafetyPageFeishuConfig: mocks.saveSafetyPageFeishuConfig,
+  syncSafetyPageFeishuConfig: mocks.syncSafetyPageFeishuConfig,
   testSafetyPageFeishuConfig: mocks.testSafetyPageFeishuConfig,
 }))
 
@@ -34,7 +36,7 @@ vi.mock('@/components/shared/PlatformNotice', async () => {
 
 vi.mock('@ant-design/icons', () => {
   const Icon = () => null
-  return { ApiOutlined: Icon, LinkOutlined: Icon, SaveOutlined: Icon }
+  return { ApiOutlined: Icon, LinkOutlined: Icon, SaveOutlined: Icon, SyncOutlined: Icon }
 })
 
 vi.mock('antd', async () => {
@@ -108,6 +110,11 @@ const configItem = {
   hidden_field_names: ['公式列'],
   workshop_aliases: { DR提炼: '201二车间（DR）' },
   is_enabled: true,
+  is_mirrored: true,
+  last_synced_at: '2026-10-13T02:00:00.000Z',
+  last_sync_status: 'success',
+  last_sync_error: null,
+  last_sync_record_count: 20,
   last_test_status: 'success',
   last_tested_at: '2026-10-10T02:00:00.000Z',
   last_test_error: null,
@@ -163,6 +170,10 @@ beforeEach(() => {
   mocks.testSafetyPageFeishuConfig.mockResolvedValue({
     code: 200,
     data: { success: true, message: '绑定正常', fields: [{ name: '记录编号' }] },
+  })
+  mocks.syncSafetyPageFeishuConfig.mockResolvedValue({
+    code: 200,
+    data: { ...configItem, last_sync_record_count: 21 },
   })
   mocks.resolveSafetyPageFeishuUrl.mockResolvedValue({
     code: 200,
@@ -266,9 +277,23 @@ describe('PageFeishuTableConfigCard', () => {
         table_id: 'tblOld',
         workshop_aliases: { 新别名: '一车间' },
         is_enabled: false,
+        is_mirrored: true,
       })
     )
     expect(mocks.message.success).toHaveBeenCalledWith('页面数据表绑定已保存')
+  })
+
+  it('syncs the mirror on demand and reports the record count', async () => {
+    rendered = renderCard()
+    await settle()
+
+    act(() => findButton(rendered!.container, '立即同步')?.click())
+    await settle()
+
+    expect(mocks.syncSafetyPageFeishuConfig).toHaveBeenCalledWith(
+      'safety:risk-hazard:hazard-inspection:hazard-duty'
+    )
+    expect(mocks.message.success).toHaveBeenCalledWith('镜像同步完成（21 条记录）')
   })
 
   it('resolves a pasted link and reports failures', async () => {

@@ -350,3 +350,94 @@ async def test_service_errors_become_http_status(
         headers={"X-Dazah-Page-Key": PAGE_KEY},
     )
     assert resp.status_code == 503
+
+
+async def test_sync_endpoint_invokes_mirror_sync_and_returns_item(
+    client: AsyncClient, monkeypatch
+) -> None:
+    """立即同步归设置页调用：执行同步并回读绑定（含最近同步状态）。"""
+    sync = AsyncMock(return_value=42)
+    monkeypatch.setattr(api.page_table, "sync_page_table_mirror", sync)
+    listing = AsyncMock(
+        return_value=PageFeishuConfigListResponse(
+            items=[
+                PageFeishuConfigItem(
+                    page_key=PAGE_KEY,
+                    page_name="24小时值班隐患",
+                    route_path="/safety/hazard-duty",
+                    is_configured=True,
+                    is_mirrored=True,
+                    last_sync_status="success",
+                    last_sync_record_count=42,
+                )
+            ]
+        )
+    )
+    monkeypatch.setattr(api.page_table, "list_page_feishu_configs", listing)
+
+    resp = await client.post(
+        f"/api/v1/safety/page-feishu-configs/{PAGE_KEY}/sync",
+        headers={"X-Dazah-Page-Key": SETTINGS_PAGE_KEY},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["last_sync_status"] == "success"
+    assert data["last_sync_record_count"] == 42
+    assert sync.await_args.args[1] == PAGE_KEY
+
+
+async def test_sync_endpoint_surfaces_conflict(
+    client: AsyncClient, monkeypatch
+) -> None:
+    from app.core.exceptions import AppException
+
+    monkeypatch.setattr(
+        api.page_table,
+        "sync_page_table_mirror",
+        AsyncMock(side_effect=AppException(status_code=409, message="同步已在执行")),
+    )
+
+    resp = await client.post(
+        f"/api/v1/safety/page-feishu-configs/{PAGE_KEY}/sync",
+        headers={"X-Dazah-Page-Key": SETTINGS_PAGE_KEY},
+    )
+    assert resp.status_code == 409
+
+
+def test_parse_conditions_rejects_invalid_json() -> None:
+    from fastapi import HTTPException
+
+    from app.modules.safety.api.page_table import _parse_conditions
+
+    assert _parse_conditions(None) == []
+    assert _parse_conditions("[]") == []
+    with pytest.raises(HTTPException) as excinfo:
+        _parse_conditions("not-json")
+    assert excinfo.value.status_code == 400
+    assert "conditions" in excinfo.value.detail
+
+
+@pytest.mark.anyio
+async def test_sync_endpoint_returns_404_when_binding_missing(
+    sub_app: FastAPI, monkeypatch
+) -> None:
+    from unittest.mock import AsyncMock
+
+    from app.modules.safety.schemas.page_table import PageFeishuConfigListResponse
+    from app.modules.safety.service import page_table as service
+
+    monkeypatch.setattr(
+        service, "sync_page_table_mirror", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(
+        service,
+        "list_page_feishu_configs",
+        AsyncMock(return_value=PageFeishuConfigListResponse(items=[], total=0)),
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=sub_app), base_url="http://test"
+    ) as client:
+        resp = await client.post("/api/v1/safety/page-feishu-configs/k/sync")
+    assert resp.status_code == 404

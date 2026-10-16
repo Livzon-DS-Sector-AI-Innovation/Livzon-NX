@@ -61,7 +61,8 @@ async def test_module_coverage_http_inventory_disabled_and_admin_boundary(
         }
         assert modules["equipment"]["registered_count"] == 0
         assert modules["equipment"]["covered_pages"] == 0
-        assert data["total_pages"] == 304
+        # 作业安全 5 个镜像子页面上线后平台页面总数 +5
+        assert data["total_pages"] == 309
         assert data["covered_pages"] == 228
         assert modules["hr"]["registered_count"] == 16
         assert modules["hr"]["covered_pages"] == 17

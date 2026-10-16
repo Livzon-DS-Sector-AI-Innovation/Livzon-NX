@@ -12,11 +12,21 @@
 
 from __future__ import annotations
 
+from typing import Any
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+)
 from fastapi import status as http_status
 from fastapi.responses import StreamingResponse
+from pydantic import TypeAdapter, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -27,6 +37,7 @@ from app.modules.safety.schemas.page_table import (
     PageFeishuConfigTestResult,
     PageTableAttachmentUploadResponse,
     PageTableRecord,
+    PageTableRecordCondition,
     PageTableRecordsResponse,
     PageTableStatsResponse,
     ResolvedPageFeishuUrl,
@@ -39,6 +50,25 @@ from app.platform.identity.data_scope import current_page_key
 from app.shared.schemas import ApiResponseEnvelope
 
 page_table_router = APIRouter()
+
+_conditions_adapter: TypeAdapter[list[PageTableRecordCondition]] = TypeAdapter(
+    list[PageTableRecordCondition]
+)
+
+
+def _parse_conditions(raw: str | None) -> list[tuple[str, str]]:
+    """把查询表单传入的 conditions JSON 解析为 (字段, 值) 列表。"""
+    if not raw:
+        return []
+    try:
+        parsed: Any = _conditions_adapter.validate_json(raw)
+    except (ValueError, ValidationError) as exc:
+        raise HTTPException(
+            http_status.HTTP_400_BAD_REQUEST,
+            "conditions 参数格式无效：应为 "
+            '[{"field": "字段名", "value": "值"}] 形式的 JSON 数组',
+        ) from exc
+    return [(item.field, item.value) for item in parsed]
 
 
 def _require_page_context(page_key: str) -> None:
@@ -97,6 +127,26 @@ async def test_page_feishu_config(
 
 
 @page_table_router.post(
+    "/page-feishu-configs/{page_key}/sync",
+    response_model=ApiResponseEnvelope[PageFeishuConfigItem],
+    summary="立即同步页面的本地镜像（全量拉取飞书记录）",
+)
+async def sync_page_feishu_mirror(
+    page_key: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> ApiResponseEnvelope[PageFeishuConfigItem]:
+    await page_table.sync_page_table_mirror(db, page_key)
+    configs = await page_table.list_page_feishu_configs(db)
+    item = next(
+        (entry for entry in configs.items if entry.page_key == page_key), None
+    )
+    if item is None:
+        raise HTTPException(http_status.HTTP_404_NOT_FOUND, "页面绑定不存在")
+    return ApiResponseEnvelope(data=item)
+
+
+@page_table_router.post(
     "/page-feishu-configs/resolve",
     response_model=ApiResponseEnvelope[ResolvedPageFeishuUrl],
     summary="解析多维表格链接并列出子表",
@@ -127,6 +177,14 @@ async def list_page_table_records(
     sort_direction: str = Query("asc"),
     filter_field: str | None = Query(None),
     filter_value: str | None = Query(None),
+    conditions: str | None = Query(
+        None,
+        description=(
+            "多条件筛选（JSON 数组，如 "
+            '[{"field": "作业日期", "value": "2026-10-13"}]，条件间为 AND；'
+            "日期支持 YYYY / YYYY-MM / YYYY-MM-DD 前缀匹配）"
+        ),
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> ApiResponseEnvelope[PageTableRecordsResponse]:
@@ -141,6 +199,7 @@ async def list_page_table_records(
         sort_direction=sort_direction,
         filter_field=filter_field,
         filter_value=filter_value,
+        conditions=_parse_conditions(conditions),
     )
     return ApiResponseEnvelope(data=result)
 

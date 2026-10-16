@@ -35,7 +35,7 @@ def test_feedback_merge_preserves_both_existing_revision_histories() -> None:
 
     scripts = ScriptDirectory.from_config(Config("alembic.ini"))
     # 单一 head 随链尾演进（不再硬编码链尾版本），反馈分支经
-    # merge 版本 807ad84a1158 并入主链
+    # merge 版本 807ad84a1158 并入主链；本批在其上追加镜像迁移
     heads = scripts.get_heads()
     assert len(heads) == 1
     merge = scripts.get_revision("807ad84a1158")
