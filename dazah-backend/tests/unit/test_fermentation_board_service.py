@@ -749,11 +749,12 @@ def test_build_dr_board_trend_and_collect_dump_tanks() -> None:
     payload = board.build_dr_board(rows, [], now, actuals=actuals)
     assert payload is not None
     # 趋势按放罐日期升序，仅含周期内已放罐且有产量的正式批；
-    # 平均单产 = 大罐批已录产量均值（中试线不计入）
+    # 平均单产 = 周期总产量 ÷ 大罐已录批次数（本例无中试批，两口径一致）
     assert payload["trend"] == {
         "batches": ["DR-2617", "DR-26035"],
         "outputs": [100.5, 88.0],
         "avg_yield_kg": 94.25,
+        "avg_yield_kg_excl_pilot": 94.25,
     }
     # 无产量录入时趋势为 None（不返回空对象）
     empty = board.build_dr_board(rows, [], now)
@@ -779,8 +780,8 @@ def test_build_dr_board_trend_and_collect_dump_tanks() -> None:
 
 
 def test_build_dr_board_pilot_batch_kpi_and_trend() -> None:
-    """中试（按罐线：小罐 B30x）：不占 KPI 批次名额、不进条形图、
-    不计入平均单产，产量累积进总产量。"""
+    """中试（按罐线：小罐 B30x）：不占 KPI 批次名额、不进条形图，
+    产量计入总产量并进入平均单产分子（分母只数大罐批）。"""
     rows = _dr_rows()
     sep = rows[12:]
     # 追加中试批 ZS-007：9/1 进罐 B303、9/10 放罐（周期内、now 之前）
@@ -803,16 +804,18 @@ def test_build_dr_board_pilot_batch_kpi_and_trend() -> None:
     # （DR-2619 走 B305 小罐归中试线；3 批大罐批全放罐）
     assert kpis["month_planned"] == 3
     assert kpis["month_done_planned"] == 3
-    # 中试产量累积进总产量：100.5 + 88.0 + 60.0
+    # 产量口径含中试：总产量 = 100.5 + 88.0 + 60.0
     assert kpis["month_done_yield_kg"] == 248.5
-    # 录入口径含中试：已录 3（含 ZS-007）、待录 2（DR-2619 / DR-26036）
-    assert kpis["done_with_yield"] == 3
-    assert kpis["yield_pending"] == 2
-    # 条形图只画大罐正式批；平均单产 = 大罐批均值
-    # （中试线 ZS-007 的 60 kg 不计入：(100.5+88.0)/2）
+    # 批次口径不含中试：已录/待录只数大罐正式批（ZS-007、DR-2619 不占）
+    assert kpis["done_with_yield"] == 2
+    assert kpis["yield_pending"] == 1
+    # 条形图只画大罐正式批；平均单产 = 总产量 ÷ 大罐批数
+    # （中试线 ZS-007 的 60 kg 进分子不进分母：248.5/2）
     assert payload["trend"]["batches"] == ["DR-2617", "DR-26035"]
     assert payload["trend"]["outputs"] == [100.5, 88.0]
-    assert payload["trend"]["avg_yield_kg"] == 94.25
+    assert payload["trend"]["avg_yield_kg"] == 124.25
+    # 不含中试口径：大罐批均值（中试产量不进分子也不进分母）
+    assert payload["trend"]["avg_yield_kg_excl_pilot"] == 94.25
     # 产量录入下拉仍含中试批
     assert {
         "batch_no": "ZS-007",

@@ -811,11 +811,13 @@ export interface FermentationBoard {
   tanks: BoardTank[]
   recent: BoardRecentBatch[]
   /** 已录入实际产量的最近 12 批（按批次顺序升序），outputs 单位 kg；
-   * avg_yield_kg 为后端口径的平均单产（DR 含中试产量摊入正式批），缺省时前端按柱子自算 */
+   * avg_yield_kg 为后端口径的平均单产（DR 含中试产量摊入正式批），缺省时前端按柱子自算；
+   * avg_yield_kg_excl_pilot 为不含中试产量的大罐批均值（仅 DR 提供，口径切换用） */
   trend: {
     batches: string[]
     outputs: number[]
     avg_yield_kg?: number | null
+    avg_yield_kg_excl_pilot?: number | null
   } | null
   /** 当前周期内已放罐（放罐窗口已结束或放罐日已到）的批次，供产量录入下拉 */
   dumped_batches: {

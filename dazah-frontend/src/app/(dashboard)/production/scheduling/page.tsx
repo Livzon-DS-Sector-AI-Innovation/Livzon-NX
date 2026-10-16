@@ -89,7 +89,9 @@ const MergeChangeTable = memo(function MergeChangeTable({
       size="small"
       pagination={{ pageSize: 10, showSizeChanger: false, hideOnSinglePage: true }}
       dataSource={rows}
-      rowKey={(_: ScheduleMergeChange, index?: number) => String(index)}
+      rowKey={(c: ScheduleMergeChange) =>
+        `${c.block}|${c.row}|${c.date}|${c.column}`
+      }
       columns={changeColumns}
     />
   )
@@ -142,7 +144,9 @@ const ValidationIssueTable = memo(function ValidationIssueTable({
       size="small"
       pagination={{ pageSize: 10, showSizeChanger: false, hideOnSinglePage: true }}
       dataSource={issues}
-      rowKey={(_: ScheduleValidationIssue, index?: number) => String(index)}
+      rowKey={(issue: ScheduleValidationIssue) =>
+        `${issue.rule}|${issue.block ?? ''}|${issue.date ?? ''}|${issue.tank_no ?? ''}|${issue.batch_no ?? ''}`
+      }
       columns={issueColumns}
     />
   )

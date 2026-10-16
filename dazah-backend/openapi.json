@@ -11878,6 +11878,27 @@
         "title": "BindingReplace",
         "type": "object"
       },
+      "BoardPreferenceBody": {
+        "properties": {
+          "avg_note": {
+            "default": "",
+            "description": "含中试模式下的平均线标签后缀；空串=无后缀",
+            "maxLength": 64,
+            "title": "Avg Note",
+            "type": "string"
+          },
+          "avg_pilot_incl": {
+            "description": "平均单产口径：true=含中试（总产量÷大罐批数）",
+            "title": "Avg Pilot Incl",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "avg_pilot_incl"
+        ],
+        "title": "BoardPreferenceBody",
+        "type": "object"
+      },
       "Body_analyze_ich_combined_api_v1_research_ich_analyze_post": {
         "properties": {
           "file": {
@@ -138603,6 +138624,114 @@
         "summary": "更新批次状态",
         "tags": [
           "生产管理"
+        ]
+      }
+    },
+    "/api/v1/production/board-preferences": {
+      "get": {
+        "operationId": "get_board_preferences_api_v1_production_board_preferences_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Board Preferences Api V1 Production Board Preferences Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "生产看板个人偏好（平均单产口径与标签后缀）",
+        "tags": [
+          "生产管理",
+          "生产管理 - 看板偏好"
+        ]
+      },
+      "post": {
+        "operationId": "save_board_preferences_api_v1_production_board_preferences_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoardPreferenceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Save Board Preferences Api V1 Production Board Preferences Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "保存生产看板个人偏好",
+        "tags": [
+          "生产管理",
+          "生产管理 - 看板偏好"
         ]
       }
     },

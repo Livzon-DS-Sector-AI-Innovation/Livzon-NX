@@ -9731,6 +9731,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/production/board-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 生产看板个人偏好（平均单产口径与标签后缀） */
+        get: operations["get_board_preferences_api_v1_production_board_preferences_get"];
+        put?: never;
+        /** 保存生产看板个人偏好 */
+        post: operations["save_board_preferences_api_v1_production_board_preferences_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/production/broth-receives": {
         parameters: {
             query?: never;
@@ -32245,6 +32263,20 @@ export interface components {
         BindingReplace: {
             /** Bindings */
             bindings: components["schemas"]["BindingItem"][];
+        };
+        /** BoardPreferenceBody */
+        BoardPreferenceBody: {
+            /**
+             * Avg Note
+             * @description 含中试模式下的平均线标签后缀；空串=无后缀
+             * @default
+             */
+            avg_note: string;
+            /**
+             * Avg Pilot Incl
+             * @description 平均单产口径：true=含中试（总产量÷大罐批数）
+             */
+            avg_pilot_incl: boolean;
         };
         /** Body_analyze_ich_combined_api_v1_research_ich_analyze_post */
         Body_analyze_ich_combined_api_v1_research_ich_analyze_post: {
@@ -87210,6 +87242,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_board_preferences_api_v1_production_board_preferences_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_board_preferences_api_v1_production_board_preferences_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardPreferenceBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
