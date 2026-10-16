@@ -56,3 +56,12 @@ def test_board_preferences_migration_creates_table_with_defaults(monkeypatch):
     drop_table.assert_called_once_with(
         "user_board_preferences", schema="production"
     )
+
+
+def test_merge_revision_joins_safety_mirror_and_board_prefs():
+    """合并节点收拢双头：a3c8e5f7b9d1（上游安全镜像表）与
+    c9d400000059（本表）汇合为单一 head，upgrade/downgrade 均为空操作。"""
+    module = _load("c9d400000060_merge_safety_mirror_and_board_prefs.py")
+    assert module.down_revision == ("a3c8e5f7b9d1", "c9d400000059")
+    module.upgrade()
+    module.downgrade()

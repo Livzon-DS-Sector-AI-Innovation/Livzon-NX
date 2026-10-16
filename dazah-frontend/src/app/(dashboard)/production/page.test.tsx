@@ -1047,14 +1047,24 @@ describe('ProductionHomePage (fermentation board)', () => {
     expect(bodyText()).toContain('平均产量 94.25 kg')
     expect(container.querySelectorAll('input[placeholder="标签后缀"]').length).toBe(0)
     expect(actions.saveProductionBoardPreferences).not.toHaveBeenCalled()
-    // 切回含中试：防抖后按新口径保存到账户偏好
+    // 切回含中试：防抖 600ms 后保存到账户偏好；CI 慢机事件循环可能
+    // 拉长定时器触发，轮询等待保存调用而非固定时长等待
     const swapBtn = Array.from(container.querySelectorAll('button')).find((b) =>
       b.querySelector('.anticon-swap'),
     ) as HTMLElement
     await act(async () => {
       swapBtn.click()
-      await new Promise((r) => setTimeout(r, 700))
+      await new Promise((r) => setTimeout(r, 60))
     })
+    for (
+      let i = 0;
+      i < 40 && actions.saveProductionBoardPreferences.mock.calls.length === 0;
+      i++
+    ) {
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 100))
+      })
+    }
     expect(actions.saveProductionBoardPreferences).toHaveBeenCalledWith({
       avg_pilot_incl: true,
       avg_note: '大罐均值口径',
