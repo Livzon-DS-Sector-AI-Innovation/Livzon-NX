@@ -83,6 +83,7 @@ vi.mock('antd', async () => {
   const Input = Object.assign((props: AnyProps) => textInput(props), {
     Password: (props: AnyProps) => textInput(props, { type: 'password' }),
   })
+  const InputNumber = (props: AnyProps) => textInput(props)
   const Switch = ({
     checked,
     onChange,
@@ -113,6 +114,7 @@ vi.mock('antd', async () => {
         ),
       ),
     Input,
+    InputNumber,
     Space: Object.assign(Box, { Compact: Box }),
     Switch,
     Tag: Text,

@@ -493,14 +493,22 @@ async def test_update_settings_persists_radar_notify_targets(
             radar_notify_enabled=True,
             radar_notify_chat_ids=["oc_a", "oc_b"],
             radar_notify_user_ids=["ou_a"],
+            hazard_due_notify_enabled=True,
+            hazard_due_notify_milestones=[30, 15, 7],
+            hazard_due_notify_chat_ids=["oc_due"],
+            hazard_due_notify_user_ids=["ou_due"],
         ),
     )
     assert detail.radar_scan_enabled is True
     assert detail.radar_notify_enabled is True
     assert detail.radar_notify_chat_ids == ["oc_a", "oc_b"]
     assert detail.radar_notify_user_ids == ["ou_a"]
+    assert detail.hazard_due_notify_enabled is True
+    assert detail.hazard_due_notify_milestones == [30, 15, 7]
+    assert detail.hazard_due_notify_chat_ids == ["oc_due"]
+    assert detail.hazard_due_notify_user_ids == ["ou_due"]
 
-    # 只提交通知目标：未提交的字段保持原值
+    # 只提交通知目标：未提交的字段保持原值（含到期提醒配置）
     trimmed = await feishu_settings.update_safety_feishu_app_settings(
         db_session,
         UpdateSafetyFeishuAppSettingsRequest(
@@ -512,6 +520,9 @@ async def test_update_settings_persists_radar_notify_targets(
     assert trimmed.radar_scan_enabled is False
     assert trimmed.radar_notify_chat_ids == ["oc_only"]
     assert trimmed.radar_notify_user_ids == ["ou_a"]
+    assert trimmed.hazard_due_notify_enabled is True
+    assert trimmed.hazard_due_notify_milestones == [30, 15, 7]
+    assert trimmed.hazard_due_notify_user_ids == ["ou_due"]
 
 
 def test_crawled_regulation_contract_properties() -> None:

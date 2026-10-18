@@ -79,6 +79,9 @@ type SafetyFeishuSettingsTestResult = components['schemas']['SafetyFeishuSetting
 type UpdateSafetyFeishuAppSettingsRequest = components['schemas']['UpdateSafetyFeishuAppSettingsRequest']
 type PageTableRecordsResponse = components['schemas']['PageTableRecordsResponse']
 type PageTableStatsResponse = components['schemas']['PageTableStatsResponse']
+type PageTableTabListResponse = components['schemas']['PageTableTabListResponse']
+type PageTableFieldValuesResponse =
+  components['schemas']['PageTableFieldValuesResponse']
 type PageTableRecord = components['schemas']['PageTableRecord']
 type PageTableAttachmentUploadResponse = components['schemas']['PageTableAttachmentUploadResponse']
 type PageFeishuConfigItem = components['schemas']['PageFeishuConfigItem']
@@ -1427,6 +1430,17 @@ export async function testRadarNotify() {
   return res
 }
 
+export async function testHazardDueNotify() {
+  const res = await fetchApi<{ sent: number; errors?: string[] }>(
+    '/safety/feishu-settings/hazard-due-notify/test',
+    {
+      method: 'POST',
+      headers: { 'X-Dazah-Page-Key': 'safety:system-config:safety-feishu-settings' },
+    },
+  )
+  return res
+}
+
 export async function getRadarRunDetail(runId: string) {
   const res = await fetchApi<RadarRunDetail>(
     `/safety/knowledge-articles/radar/runs/${runId}`,
@@ -2127,6 +2141,13 @@ export async function restartSafetyFeishuWs() {
 
 // ============ 页面飞书多维表格镜像 ============
 
+export async function getSafetyPageTableTabs(params: { pageKey: string }) {
+  return fetchApi<PageTableTabListResponse>(
+    `/safety/page-tables/${encodeURIComponent(params.pageKey)}/tabs`,
+    { headers: { 'X-Dazah-Page-Key': params.pageKey } }
+  )
+}
+
 export async function getSafetyPageTableRecords(params: {
   pageKey: string
   page?: number
@@ -2136,7 +2157,8 @@ export async function getSafetyPageTableRecords(params: {
   sortDirection?: 'asc' | 'desc'
   filterField?: string | null
   filterValue?: string | null
-  conditions?: Array<{ field: string; value: string }>
+  conditions?: Array<{ field: string; value: string; op?: 'eq' | 'gte' | 'lte' }>
+  tableId?: string | null
 }) {
   const search = new URLSearchParams()
   if (params.page) search.set('page', String(params.page))
@@ -2149,6 +2171,7 @@ export async function getSafetyPageTableRecords(params: {
   if (params.conditions?.length) {
     search.set('conditions', JSON.stringify(params.conditions))
   }
+  if (params.tableId) search.set('table_id', params.tableId)
   const query = search.toString()
   const res = await fetchApi<PageTableRecordsResponse>(
     `/safety/page-tables/${encodeURIComponent(params.pageKey)}/records${query ? `?${query}` : ''}`,
@@ -2160,9 +2183,21 @@ export async function getSafetyPageTableRecords(params: {
 export async function getSafetyPageTableStats(params: {
   pageKey: string
   groupBy?: string[]
+  tableId?: string | null
+  keyword?: string
+  conditions?: Array<{ field: string; value: string; op?: 'eq' | 'neq' | 'gte' | 'lte' }>
+  dueField?: string
+  closeField?: string
 }) {
   const search = new URLSearchParams()
   for (const field of params.groupBy ?? []) search.append('group_by', field)
+  if (params.tableId) search.set('table_id', params.tableId)
+  if (params.keyword) search.set('keyword', params.keyword)
+  if (params.conditions?.length) {
+    search.set('conditions', JSON.stringify(params.conditions))
+  }
+  if (params.dueField) search.set('due_field', params.dueField)
+  if (params.closeField) search.set('close_field', params.closeField)
   const query = search.toString()
   return fetchApi<PageTableStatsResponse>(
     `/safety/page-tables/${encodeURIComponent(params.pageKey)}/stats${query ? `?${query}` : ''}`,
@@ -2170,13 +2205,51 @@ export async function getSafetyPageTableStats(params: {
   )
 }
 
+export async function getSafetyPageTableFieldValues(params: {
+  pageKey: string
+  field: string
+  tableId?: string | null
+}) {
+  const search = new URLSearchParams()
+  search.set('field', params.field)
+  if (params.tableId) search.set('table_id', params.tableId)
+  const query = search.toString()
+  return fetchApi<PageTableFieldValuesResponse>(
+    `/safety/page-tables/${encodeURIComponent(params.pageKey)}/values${query ? `?${query}` : ''}`,
+    { headers: { 'X-Dazah-Page-Key': params.pageKey } }
+  )
+}
+
+export async function createSafetyPageTableRecord(params: {
+  pageKey: string
+  fields: Record<string, unknown>
+  tableId?: string | null
+}) {
+  const search = new URLSearchParams()
+  if (params.tableId) search.set('table_id', params.tableId)
+  const query = search.toString()
+  const res = await fetchApi<PageTableRecord>(
+    `/safety/page-tables/${encodeURIComponent(params.pageKey)}/records${query ? `?${query}` : ''}`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ fields: params.fields }),
+      headers: { 'X-Dazah-Page-Key': params.pageKey },
+    }
+  )
+  return res
+}
+
 export async function updateSafetyPageTableRecord(params: {
   pageKey: string
   recordId: string
   fields: Record<string, unknown>
+  tableId?: string | null
 }) {
+  const search = new URLSearchParams()
+  if (params.tableId) search.set('table_id', params.tableId)
+  const query = search.toString()
   const res = await fetchApi<PageTableRecord>(
-    `/safety/page-tables/${encodeURIComponent(params.pageKey)}/records/${encodeURIComponent(params.recordId)}`,
+    `/safety/page-tables/${encodeURIComponent(params.pageKey)}/records/${encodeURIComponent(params.recordId)}${query ? `?${query}` : ''}`,
     {
       method: 'PUT',
       body: JSON.stringify({ fields: params.fields }),
@@ -2191,13 +2264,17 @@ export async function uploadSafetyPageTableAttachment(params: {
   recordId: string
   fieldName: string
   file: File
+  tableId?: string | null
 }) {
   const formData = new FormData()
   formData.append('file', params.file)
+  const search = new URLSearchParams()
+  if (params.tableId) search.set('table_id', params.tableId)
+  const query = search.toString()
   const authHeaders = await getAuthHeaders()
   const { 'Content-Type': _, ...uploadHeaders } = authHeaders
   const response = await fetch(
-    `${API_BASE}/safety/page-tables/${encodeURIComponent(params.pageKey)}/records/${encodeURIComponent(params.recordId)}/attachments/${encodeURIComponent(params.fieldName)}`,
+    `${API_BASE}/safety/page-tables/${encodeURIComponent(params.pageKey)}/records/${encodeURIComponent(params.recordId)}/attachments/${encodeURIComponent(params.fieldName)}${query ? `?${query}` : ''}`,
     {
       method: 'POST',
       headers: { ...uploadHeaders, 'X-Dazah-Page-Key': params.pageKey },

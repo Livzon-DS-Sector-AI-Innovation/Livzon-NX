@@ -69,6 +69,7 @@ vi.mock('antd', async () => {
         ),
       ),
     Input: Object.assign(Box, { Password: Box }),
+    InputNumber: Box,
     Modal: Box,
     Space: Object.assign(Box, { Compact: Box }),
     Switch: Box,

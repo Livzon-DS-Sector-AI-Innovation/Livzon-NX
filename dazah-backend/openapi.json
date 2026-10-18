@@ -6136,6 +6136,40 @@
         "title": "ApiResponseEnvelope[PageTableAttachmentUploadResponse]",
         "type": "object"
       },
+      "ApiResponseEnvelope_PageTableFieldValuesResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PageTableFieldValuesResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[PageTableFieldValuesResponse]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_PageTableRecord_": {
         "properties": {
           "code": {
@@ -6236,6 +6270,40 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[PageTableStatsResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_PageTableTabListResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PageTableTabListResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[PageTableTabListResponse]",
         "type": "object"
       },
       "ApiResponseEnvelope_ProductQualityOut_": {
@@ -57074,6 +57142,13 @@
             "title": "Route Path",
             "type": "string"
           },
+          "sub_tables": {
+            "items": {
+              "$ref": "#/components/schemas/PageFeishuSubTable"
+            },
+            "title": "Sub Tables",
+            "type": "array"
+          },
           "table_id": {
             "anyOf": [
               {
@@ -57190,6 +57265,32 @@
           "editable"
         ],
         "title": "PageFeishuFieldSummary",
+        "type": "object"
+      },
+      "PageFeishuSubTable": {
+        "description": "附加子表页签（主绑定是第一个页签，本结构描述其余页签）。",
+        "properties": {
+          "hidden_field_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Hidden Field Names",
+            "type": "array"
+          },
+          "tab_name": {
+            "title": "Tab Name",
+            "type": "string"
+          },
+          "table_id": {
+            "title": "Table Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table_id",
+          "tab_name"
+        ],
+        "title": "PageFeishuSubTable",
         "type": "object"
       },
       "PageGrantInput": {
@@ -58130,6 +58231,82 @@
         "title": "PageTableColumn",
         "type": "object"
       },
+      "PageTableDueSummary": {
+        "description": "未关闭记录按「目标完成日期」的到期分布（仪表盘到期卡片）。",
+        "properties": {
+          "overdue": {
+            "default": 0,
+            "title": "Overdue",
+            "type": "integer"
+          },
+          "within_15": {
+            "default": 0,
+            "title": "Within 15",
+            "type": "integer"
+          },
+          "within_30": {
+            "default": 0,
+            "title": "Within 30",
+            "type": "integer"
+          },
+          "within_7": {
+            "default": 0,
+            "title": "Within 7",
+            "type": "integer"
+          }
+        },
+        "title": "PageTableDueSummary",
+        "type": "object"
+      },
+      "PageTableFieldValueCount": {
+        "description": "字段可选值（用于筛选下拉框的选项与计数）。",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "count"
+        ],
+        "title": "PageTableFieldValueCount",
+        "type": "object"
+      },
+      "PageTableFieldValuesResponse": {
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "page_key": {
+            "title": "Page Key",
+            "type": "string"
+          },
+          "table_id": {
+            "title": "Table Id",
+            "type": "string"
+          },
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/PageTableFieldValueCount"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "page_key",
+          "field",
+          "table_id"
+        ],
+        "title": "PageTableFieldValuesResponse",
+        "type": "object"
+      },
       "PageTableRecord": {
         "properties": {
           "fields": {
@@ -58250,6 +58427,16 @@
       },
       "PageTableStatsResponse": {
         "properties": {
+          "due_summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageTableDueSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "groups": {
             "items": {
               "$ref": "#/components/schemas/PageTableStatGroup"
@@ -58276,6 +58463,60 @@
           "page_name"
         ],
         "title": "PageTableStatsResponse",
+        "type": "object"
+      },
+      "PageTableTab": {
+        "description": "多页签页面的一个子表页签。",
+        "properties": {
+          "is_primary": {
+            "default": false,
+            "title": "Is Primary",
+            "type": "boolean"
+          },
+          "record_count": {
+            "default": 0,
+            "title": "Record Count",
+            "type": "integer"
+          },
+          "tab_name": {
+            "title": "Tab Name",
+            "type": "string"
+          },
+          "table_id": {
+            "title": "Table Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table_id",
+          "tab_name"
+        ],
+        "title": "PageTableTab",
+        "type": "object"
+      },
+      "PageTableTabListResponse": {
+        "properties": {
+          "page_key": {
+            "title": "Page Key",
+            "type": "string"
+          },
+          "page_name": {
+            "title": "Page Name",
+            "type": "string"
+          },
+          "tabs": {
+            "items": {
+              "$ref": "#/components/schemas/PageTableTab"
+            },
+            "title": "Tabs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "page_key",
+          "page_name"
+        ],
+        "title": "PageTableTabListResponse",
         "type": "object"
       },
       "PasswordResetRequest": {
@@ -68732,6 +68973,32 @@
               }
             ],
             "title": "Bitable Hazard Table Id"
+          },
+          "hazard_due_notify_chat_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Hazard Due Notify Chat Ids",
+            "type": "array"
+          },
+          "hazard_due_notify_enabled": {
+            "default": false,
+            "title": "Hazard Due Notify Enabled",
+            "type": "boolean"
+          },
+          "hazard_due_notify_milestones": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Hazard Due Notify Milestones",
+            "type": "array"
+          },
+          "hazard_due_notify_user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Hazard Due Notify User Ids",
+            "type": "array"
           },
           "is_enabled": {
             "default": true,
@@ -82079,6 +82346,20 @@
             ],
             "title": "Is Mirrored"
           },
+          "sub_tables": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PageFeishuSubTable"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Tables"
+          },
           "table_id": {
             "anyOf": [
               {
@@ -82940,6 +83221,32 @@
               }
             ],
             "title": "Bitable Hazard Table Id"
+          },
+          "hazard_due_notify_chat_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Hazard Due Notify Chat Ids",
+            "type": "array"
+          },
+          "hazard_due_notify_enabled": {
+            "default": false,
+            "title": "Hazard Due Notify Enabled",
+            "type": "boolean"
+          },
+          "hazard_due_notify_milestones": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Hazard Due Notify Milestones",
+            "type": "array"
+          },
+          "hazard_due_notify_user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Hazard Due Notify User Ids",
+            "type": "array"
           },
           "is_enabled": {
             "default": true,
@@ -211967,6 +212274,56 @@
         ]
       }
     },
+    "/api/v1/safety/feishu-settings/hazard-due-notify/test": {
+      "post": {
+        "description": "向已配置的群/个人发送一条样例卡片，验证提醒目标配置。",
+        "operationId": "test_hazard_due_notify_api_v1_safety_feishu_settings_hazard_due_notify_test_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_dict_str__Any__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "测试隐患到期提醒推送发送",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
     "/api/v1/safety/feishu/ws/restart": {
       "post": {
         "description": "WS 因重试次数耗尽（3 次）自动停止后，手动重新建立连接。\n\n无需传参，调用即重置重试计数并创建新的 WS 任务。\n返回当前已注册的事件类型列表。",
@@ -217734,6 +218091,24 @@
             }
           },
           {
+            "description": "子表页签 table_id；缺省主绑定表",
+            "in": "query",
+            "name": "table_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "子表页签 table_id；缺省主绑定表",
+              "title": "Table Id"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,
@@ -217776,6 +218151,90 @@
         "tags": [
           "安全管理"
         ]
+      },
+      "post": {
+        "operationId": "create_page_table_record_api_v1_safety_page_tables__page_key__records_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "page_key",
+            "required": true,
+            "schema": {
+              "title": "Page Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "子表 table_id；缺省主绑定表",
+            "in": "query",
+            "name": "table_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "子表 table_id；缺省主绑定表",
+              "title": "Table Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePageTableRecordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_PageTableRecord_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "在镜像页新建记录（写入当前选中子表并回写飞书）",
+        "tags": [
+          "安全管理"
+        ]
       }
     },
     "/api/v1/safety/page-tables/{page_key}/records/{record_id}": {
@@ -217798,6 +218257,24 @@
             "schema": {
               "title": "Record Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "子表页签 table_id；缺省主绑定表",
+            "in": "query",
+            "name": "table_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "子表页签 table_id；缺省主绑定表",
+              "title": "Table Id"
             }
           },
           {
@@ -217884,6 +218361,24 @@
             "schema": {
               "title": "Field Name",
               "type": "string"
+            }
+          },
+          {
+            "description": "子表页签 table_id；缺省主绑定表",
+            "in": "query",
+            "name": "table_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "子表页签 table_id；缺省主绑定表",
+              "title": "Table Id"
             }
           },
           {
@@ -217989,6 +218484,24 @@
               "default": false,
               "title": "Inline",
               "type": "boolean"
+            }
+          },
+          {
+            "description": "子表页签 table_id；缺省主绑定表",
+            "in": "query",
+            "name": "table_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "子表页签 table_id；缺省主绑定表",
+              "title": "Table Id"
             }
           },
           {
@@ -218099,6 +218612,24 @@
             }
           },
           {
+            "description": "子表页签 table_id；缺省主绑定表",
+            "in": "query",
+            "name": "table_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "子表页签 table_id；缺省主绑定表",
+              "title": "Table Id"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,
@@ -218176,6 +218707,96 @@
             }
           },
           {
+            "description": "子表页签 table_id；缺省时单表页面取主绑定表，多页签页面跨全部子表聚合",
+            "in": "query",
+            "name": "table_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "子表页签 table_id；缺省时单表页面取主绑定表，多页签页面跨全部子表聚合",
+              "title": "Table Id"
+            }
+          },
+          {
+            "description": "与列表查询同口径的关键字筛选（仪表盘联动）",
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "与列表查询同口径的关键字筛选（仪表盘联动）",
+              "title": "Keyword"
+            }
+          },
+          {
+            "description": "与列表查询同口径的多条件筛选（JSON 数组，条件间 AND；仪表盘随筛选联动，不含图表下钻）",
+            "in": "query",
+            "name": "conditions",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "与列表查询同口径的多条件筛选（JSON 数组，条件间 AND；仪表盘随筛选联动，不含图表下钻）",
+              "title": "Conditions"
+            }
+          },
+          {
+            "description": "到期统计字段（日期型，如 目标完成日期）",
+            "in": "query",
+            "name": "due_field",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "到期统计字段（日期型，如 目标完成日期）",
+              "title": "Due Field"
+            }
+          },
+          {
+            "description": "关闭状态字段（如 关闭状态，值为「已关闭」视为已闭环）",
+            "in": "query",
+            "name": "close_field",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "关闭状态字段（如 关闭状态，值为「已关闭」视为已闭环）",
+              "title": "Close Field"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,
@@ -218214,7 +218835,152 @@
             "description": "Validation Error"
           }
         },
-        "summary": "页面仪表盘聚合（默认：日期按月 / 位置文本按车间号归一 / 单选按选项）",
+        "summary": "页面仪表盘聚合（默认：日期按月 / 位置文本按车间号归一 / 单选按选项）；多页签页面不传 table_id 时跨全部子表聚合",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/page-tables/{page_key}/tabs": {
+      "get": {
+        "operationId": "list_page_table_tabs_api_v1_safety_page_tables__page_key__tabs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "page_key",
+            "required": true,
+            "schema": {
+              "title": "Page Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_PageTableTabListResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "多页签页面的子表清单（主绑定在前，含各子表镜像记录数）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/page-tables/{page_key}/values": {
+      "get": {
+        "operationId": "list_page_table_field_values_api_v1_safety_page_tables__page_key__values_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "page_key",
+            "required": true,
+            "schema": {
+              "title": "Page Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "字段名（如 部门/车间、负责人）",
+            "in": "query",
+            "name": "field",
+            "required": true,
+            "schema": {
+              "description": "字段名（如 部门/车间、负责人）",
+              "title": "Field",
+              "type": "string"
+            }
+          },
+          {
+            "description": "子表页签 table_id；缺省主绑定表",
+            "in": "query",
+            "name": "table_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "子表页签 table_id；缺省主绑定表",
+              "title": "Table Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_PageTableFieldValuesResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "字段去重可选值（含计数），供筛选下拉框选项使用",
         "tags": [
           "安全管理"
         ]

@@ -1265,6 +1265,14 @@ PAGE_API_BINDINGS += _module_api_bindings(
         ),
         (
             "POST",
+            "/feishu-settings/hazard-due-notify/test",
+            ("safety:system-config:safety-feishu-settings",),
+            "operate",
+            "sync_config",
+            "not_applicable",
+        ),
+        (
+            "POST",
             "/knowledge-articles/feishu/sync",
             ("safety:regulation-info:knowledge-base",),
             "operate",
@@ -1333,6 +1341,7 @@ SAFETY_PAGE_TABLE_PAGES = (
     "safety:ops-safety:hazchem-unloading-inspection",
     "safety:ops-safety:centrifuge-discharge-inspection",
     "safety:risk-hazard:hazard-inspection:hazard-duty",
+    "safety:risk-hazard:hazard-inspection:hazard-quick-report",
 )
 
 PAGE_API_BINDINGS += _module_api_bindings(
@@ -1380,7 +1389,15 @@ PAGE_API_BINDINGS += _module_api_bindings(
             "sync_config",
             "not_applicable",
         ),
-        # 镜像页数据：读记录/统计，可改记录、可上传附件（回写飞书）。
+        # 镜像页数据：读记录/统计/子表页签，可改记录、可上传附件（回写飞书）。
+        (
+            "GET",
+            "/page-tables/{page_key}/tabs",
+            SAFETY_PAGE_TABLE_PAGES,
+            "query",
+            None,
+            "not_applicable",
+        ),
         (
             "GET",
             "/page-tables/{page_key}/records",
@@ -1394,6 +1411,22 @@ PAGE_API_BINDINGS += _module_api_bindings(
             "/page-tables/{page_key}/stats",
             SAFETY_PAGE_TABLE_PAGES,
             "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/page-tables/{page_key}/values",
+            SAFETY_PAGE_TABLE_PAGES,
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/page-tables/{page_key}/records",
+            SAFETY_PAGE_TABLE_PAGES,
+            "operate",
             None,
             "not_applicable",
         ),

@@ -1005,7 +1005,7 @@ export default function HazardLedgerPage() {
       {/* ── 页面头部 ── */}
       <div style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 22, fontWeight: 600, color: '#1a1a1a', margin: 0, marginBottom: 4, lineHeight: 1.3 }}>
-          隐患台账
+          隐患随手拍
         </h2>
         <p style={{ fontSize: 14, color: '#787671', margin: 0, lineHeight: 1.5 }}>
           AI识别 · 整改追踪 · 三级复核 · 闭环管理

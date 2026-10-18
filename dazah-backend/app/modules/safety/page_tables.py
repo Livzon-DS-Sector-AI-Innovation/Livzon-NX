@@ -59,6 +59,11 @@ PAGE_TABLE_DEFINITIONS: tuple[PageTableDefinition, ...] = (
         page_name="24小时值班隐患",
         route_path="/safety/hazard-duty",
     ),
+    PageTableDefinition(
+        page_key="safety:risk-hazard:hazard-inspection:hazard-quick-report",
+        page_name="隐患台账",
+        route_path="/safety/hazard-quick-report",
+    ),
 )
 
 PAGE_TABLES_BY_KEY: dict[str, PageTableDefinition] = {

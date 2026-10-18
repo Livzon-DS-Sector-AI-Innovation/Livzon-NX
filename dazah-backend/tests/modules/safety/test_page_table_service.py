@@ -11,6 +11,7 @@ from sqlalchemy.exc import OperationalError
 from app.core.exceptions import AppException
 from app.modules.safety.models import SafetyPageFeishuConfig
 from app.modules.safety.page_tables import PAGE_TABLE_DEFINITIONS
+from app.modules.safety.schemas.page_table import PageTableRecordCondition
 from app.modules.safety.service import page_table
 
 PAGE_KEY = "safety:risk-hazard:hazard-inspection:hazard-duty"
@@ -29,6 +30,7 @@ _FIELDS = [
     },
     {"field_id": "fld5", "field_name": "公式列", "type": 20},
     {"field_id": "fld6", "field_name": "车间/位置", "type": 1},
+    {"field_id": "fld7", "field_name": "父记录", "type": 18},
 ]
 
 
@@ -88,6 +90,7 @@ class _FakeClient:
         search_error: str | None = None,
         record_fields: dict | None = None,
         update_result: tuple[bool, str | None] = (True, None),
+        create_result: tuple[str | None, str | None] = ("rec-new", None),
         upload_token: str | None = "tok-new",
         download: bytes | None = b"file-bytes",
         tmp_download: bytes | None | object = ...,
@@ -97,12 +100,14 @@ class _FakeClient:
         self.search_error = search_error
         self.record_fields = record_fields or {}
         self.update_result = update_result
+        self.create_result = create_result
         self.upload_token = upload_token
         self.download = download
         # tmp_url 优先路径：默认与 download 一致；显式传 None/bytes 覆盖
         self.tmp_download = download if tmp_download is ... else tmp_download
         self.tmp_calls: list[str] = []
         self.updates: list[tuple[str, dict]] = []
+        self.creates: list[dict] = []
         self.uploads: list[str] = []
         self.search_kwargs: list[dict] = []
 
@@ -114,6 +119,12 @@ class _FakeClient:
     ) -> tuple[list[dict], str | None]:
         self.search_kwargs.append(dict(kwargs))
         return self.rows, self.search_error
+
+    async def create_record_with_result(
+        self, fields: dict, table_id: str | None = None
+    ) -> tuple[str | None, str | None]:
+        self.creates.append(dict(fields))
+        return self.create_result
 
     async def update_record_with_result(
         self, record_id: str, fields: dict, table_id: str | None = None
@@ -669,14 +680,19 @@ async def test_list_records_conditions_combine_with_and(monkeypatch) -> None:
     result = await page_table.list_page_table_records(
         db,
         PAGE_KEY,
-        conditions=[("整改情况", "未整改"), ("值班日期", "2026-02-09")],
+        conditions=[
+            PageTableRecordCondition(field="整改情况", value="未整改"),
+            PageTableRecordCondition(field="值班日期", value="2026-02-09"),
+        ],
     )
 
     # 1770595200000 = 2026-02-09；条件组合后只剩 rec-1
     assert [record.record_id for record in result.records] == ["rec-1"]
 
     month_only = await page_table.list_page_table_records(
-        db, PAGE_KEY, conditions=[("值班日期", "2026-02")]
+        db,
+        PAGE_KEY,
+        conditions=[PageTableRecordCondition(field="值班日期", value="2026-02")],
     )
     assert [record.record_id for record in month_only.records] == [
         "rec-1",
@@ -691,7 +707,9 @@ async def test_list_records_conditions_reject_unknown_field(monkeypatch) -> None
 
     with pytest.raises(AppException) as excinfo:
         await page_table.list_page_table_records(
-            db, PAGE_KEY, conditions=[("不存在的字段", "x")]
+            db,
+            PAGE_KEY,
+            conditions=[PageTableRecordCondition(field="不存在的字段", value="x")],
         )
     assert excinfo.value.status_code == 400
 
@@ -1174,7 +1192,9 @@ async def test_attachment_thumbnail_validates_token_ownership(monkeypatch) -> No
 
     called: list[tuple[str, str]] = []
 
-    async def _fake_fetch(_db, page_key, record_id, field_name, file_token):
+    async def _fake_fetch(
+        _db, page_key, record_id, field_name, file_token, table_id=None
+    ):
         called.append((record_id, file_token))
         return _png_bytes(), "image/png", "photo.png"
 
@@ -1423,3 +1443,387 @@ async def test_resolve_page_feishu_url_parses_base_and_wiki_links(monkeypatch) -
     assert wiki_result.is_wiki is True
     assert wiki_result.app_token == "bascnFromWiki"
     assert wiki_result.table_id == "tblW"
+
+
+# ── 部门继承（父记录值下放，仅展示与统计） ──
+
+
+def _ledger_rows() -> list[dict]:
+    """公司总台账形态：父记录带部门，子记录部门为空。"""
+    return [
+        {
+            "record_id": "parent-1",
+            "fields": {"车间/位置": [{"text": "201一车间"}], "父记录": None},
+        },
+        {
+            "record_id": "child-1",
+            "fields": {
+                "车间/位置": None,
+                "父记录": {"link_record_ids": ["parent-1"]},
+                "整改情况": "未整改",
+            },
+        },
+        {
+            "record_id": "child-2",
+            "fields": {
+                "车间/位置": [{"text": "203车间"}],  # 自带部门：不覆盖
+                "父记录": {"link_record_ids": ["parent-1"]},
+            },
+        },
+        {
+            "record_id": "orphan-1",
+            "fields": {"车间/位置": None, "父记录": None},
+        },
+    ]
+
+
+def test_resolve_dept_inheritance_fills_children_from_parent() -> None:
+    schema = page_table.build_field_schema(_FIELDS)
+    dept_map = page_table._resolve_dept_inheritance(schema, _ledger_rows())
+
+    assert dept_map["parent-1"] == "201一车间"
+    assert dept_map["child-1"] == "201一车间"  # 继承
+    assert dept_map["child-2"] == "203车间"  # 自带值优先
+    assert "orphan-1" not in dept_map  # 无父也无部门：不造值
+
+
+def test_resolve_dept_inheritance_two_level_chain() -> None:
+    """父记录自身也靠继承（孙记录场景）：两轮迭代收敛。"""
+    rows = [
+        {"record_id": "top", "fields": {"车间/位置": [{"text": "103车间"}]}},
+        {
+            "record_id": "mid",
+            "fields": {
+                "车间/位置": None,
+                "父记录": {"link_record_ids": ["top"]},
+            },
+        },
+        {
+            "record_id": "leaf",
+            "fields": {
+                "车间/位置": None,
+                "父记录": {"link_record_ids": ["mid"]},
+            },
+        },
+    ]
+    schema = page_table.build_field_schema(_FIELDS)
+    dept_map = page_table._resolve_dept_inheritance(schema, rows)
+
+    assert dept_map["mid"] == "103车间"
+    assert dept_map["leaf"] == "103车间"
+
+
+def test_resolve_dept_inheritance_without_dept_field() -> None:
+    fields = [f for f in _FIELDS if f["field_name"] != "车间/位置"]
+    schema = page_table.build_field_schema(fields)
+    assert page_table._resolve_dept_inheritance(schema, _ledger_rows()) == {}
+
+
+async def test_list_records_applies_dept_inheritance(monkeypatch) -> None:
+    _install_client(monkeypatch, _FakeClient(rows=_ledger_rows()))
+    db = _FakeSession(_config())
+
+    result = await page_table.list_page_table_records(
+        db, PAGE_KEY, page=1, page_size=10
+    )
+
+    by_id = {record.record_id: record.fields for record in result.records}
+    assert by_id["child-1"]["车间/位置"] == "201一车间"
+    assert by_id["child-2"]["车间/位置"] == "203车间"
+    assert "车间/位置" not in by_id["orphan-1"] or not by_id["orphan-1"]["车间/位置"]
+
+
+async def test_stats_count_inherited_dept(monkeypatch) -> None:
+    _install_client(monkeypatch, _FakeClient(rows=_ledger_rows()))
+    db = _FakeSession(_config())
+
+    result = await page_table.get_page_table_stats(
+        db, PAGE_KEY, group_by=["车间/位置"]
+    )
+
+    buckets = {b.key: b.count for b in result.groups[0].buckets}
+    # child-1 继承计入 201一车间；orphan 无部门计入（未填写）
+    assert buckets["201一车间"] == 2
+    assert buckets["203车间"] == 1
+    assert buckets["（未填写）"] == 1
+
+
+def test_link_field_decodes_to_none_not_dict_garbage() -> None:
+    """link 字段（type 18）是结构对象：解码为 None 而不是 str(dict) 垃圾串。"""
+    from app.modules.safety.feishu.field_codec import build_field_schema, decode_value
+
+    schema = {f.name: f for f in build_field_schema(_FIELDS)}
+    value = decode_value(
+        schema["父记录"], {"link_record_ids": ["parent-1"]}
+    )
+    assert value is None
+
+
+# ── 多子表页签（一页多 Tab + 跨表聚合） ──
+
+_SUB_FIELDS = [
+    {"field_id": "sf1", "field_name": "部门/车间", "type": 1},
+    {"field_id": "sf2", "field_name": "隐患内容", "type": 1},
+    {
+        "field_id": "sf3",
+        "field_name": "关闭状态",
+        "type": 3,
+        "property": {"options": [{"name": "已关闭"}, {"name": "未关闭"}]},
+    },
+    {"field_id": "sf4", "field_name": "检查内容", "type": 1},  # 文本型检查内容
+]
+
+
+class _FakeMultiClient:
+    """按 table_id 返回不同 schema/记录的假客户端。"""
+
+    def __init__(self, schemas: dict[str, list[dict]], rows: dict[str, list[dict]]):
+        self.schemas = schemas
+        self.rows = rows
+        self.updates: list[tuple[str, dict]] = []
+
+    async def list_fields(self, table_id=None):
+        return self.schemas.get(table_id, [])
+
+    async def search_records_with_result(self, table_id=None, **kwargs):
+        return self.rows.get(table_id, []), None
+
+    async def get_record(self, record_id, table_id=None, **kwargs):
+        for row in self.rows.get(table_id or "", []):
+            if row.get("record_id") == record_id:
+                return row.get("fields") or {}
+        return {}
+
+    async def update_record_with_result(self, record_id, fields, table_id=None):
+        self.updates.append((record_id, fields))
+        return True, None
+
+    async def upload_media(self, file_bytes, file_name, parent_type="bitable_file"):
+        return f"tok-{file_name}"
+
+
+def _multi_install(monkeypatch, client):
+    monkeypatch.setattr(
+        page_table, "SafetyBitableClient", lambda **kwargs: client
+    )
+    monkeypatch.setattr(page_table, "cache_get", AsyncMock(return_value=None))
+    monkeypatch.setattr(page_table, "cache_set", AsyncMock(return_value=None))
+    monkeypatch.setattr(page_table, "cache_delete", AsyncMock(return_value=None))
+    monkeypatch.setattr(page_table, "record_audit_log", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        page_table, "_load_classifications", AsyncMock(return_value={})
+    )
+    monkeypatch.setattr(
+        page_table, "_save_classifications", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(
+        page_table, "_ai_classify_workshops", AsyncMock(return_value={})
+    )
+    return client
+
+
+def _multi_binding(**overrides):
+    values = dict(
+        page_key=PAGE_KEY,
+        app_token="bascnMulti",
+        table_id="tblMain",
+        hidden_field_names=["父记录"],
+        is_enabled=True,
+        is_mirrored=False,
+        sub_tables=[
+            {"table_id": "tblSub", "tab_name": "2024年公司级检查"},
+        ],
+    )
+    values.update(overrides)
+    return SafetyPageFeishuConfig(**values)
+
+
+async def test_list_records_selects_sub_table(monkeypatch) -> None:
+    """table_id 指定子表时返回该子表的列与记录；未知子表 404。"""
+    schemas = {
+        "tblMain": _FIELDS,
+        "tblSub": _SUB_FIELDS,
+    }
+    rows = {
+        "tblMain": [
+            {"record_id": "m1", "fields": {"部门/车间": [{"text": "201一车间"}]}}
+        ],
+        "tblSub": [
+            {"record_id": "s1", "fields": {"部门/车间": [{"text": "103车间"}]}}
+        ],
+    }
+    _multi_install(monkeypatch, _FakeMultiClient(schemas, rows))
+    db = _FakeSession(_multi_binding())
+
+    sub = await page_table.list_page_table_records(
+        db, PAGE_KEY, page=1, page_size=10, table_id="tblSub"
+    )
+    assert [record.record_id for record in sub.records] == ["s1"]
+    assert "父记录" not in {c.name for c in sub.columns}
+
+    with pytest.raises(AppException) as excinfo:
+        await page_table.list_page_table_records(
+            db, PAGE_KEY, page=1, page_size=10, table_id="tblUnknown"
+        )
+    assert excinfo.value.status_code == 404
+
+
+async def test_aggregate_stats_cross_sub_tables(monkeypatch) -> None:
+    """不传 table_id 时跨全部子表聚合：值分组合并计数、日期分组只取日期型子表。"""
+    # 主表构造为「检查内容=日期型」，模拟 2026 公司级检查；
+    # 子表为「检查内容=文本型」，模拟 2024/2025 年检查（同名字段不同类型）。
+    main_fields = [f for f in _FIELDS if f["field_name"] != "值班日期"] + [
+        {"field_id": "fldX", "field_name": "检查内容", "type": 5}
+    ]
+    schemas = {"tblMain": main_fields, "tblSub": _SUB_FIELDS}
+    rows = {
+        "tblMain": [
+            {
+                "record_id": "m1",
+                "fields": {
+                    "车间/位置": [{"text": "201一车间"}],
+                    "检查内容": 1791561600000,
+                    "整改情况": "未整改",
+                },
+            }
+        ],
+        "tblSub": [
+            {
+                "record_id": "s1",
+                "fields": {
+                    "部门/车间": [{"text": "103车间"}],
+                    "检查内容": [{"text": "2024年10月18日消防安全检查台账"}],
+                    "关闭状态": "未关闭",
+                },
+            }
+        ],
+    }
+    _multi_install(monkeypatch, _FakeMultiClient(schemas, rows))
+    db = _FakeSession(_multi_binding())
+
+    result = await page_table.get_page_table_stats(
+        db,
+        PAGE_KEY,
+        group_by=["检查内容", "关闭状态", "部门/车间", "车间/位置", "整改情况"],
+    )
+
+    assert result.total == 2  # 两张子表各 1 条
+    by_field = {g.field: {b.key: b.count for b in g.buckets} for g in result.groups}
+    # 检查内容：主表日期型→月份桶；子表文本型→不参与月份分组
+    check_group = next(g for g in result.groups if g.field == "检查内容")
+    assert check_group.kind == "date"
+    assert by_field["检查内容"] == {"2026-10": 1}
+    # 各自的位置字段名独立分组（实际 9 张检查子表同名「部门/车间」会合并）
+    assert by_field["车间/位置"] == {"201一车间": 1}
+    assert by_field["部门/车间"] == {"103车间": 1}
+    assert by_field["整改情况"] == {"未整改": 1}
+    assert by_field["关闭状态"] == {"未关闭": 1}
+
+
+async def test_per_table_stats_isolated(monkeypatch) -> None:
+    """传 table_id 时只聚合该子表。"""
+    schemas = {"tblMain": _FIELDS, "tblSub": _SUB_FIELDS}
+    rows = {
+        "tblMain": [
+            {"record_id": "m1", "fields": {"车间/位置": [{"text": "201一车间"}]}}
+        ],
+        "tblSub": [
+            {"record_id": "s1", "fields": {"部门/车间": [{"text": "103车间"}]}}
+        ],
+    }
+    _multi_install(monkeypatch, _FakeMultiClient(schemas, rows))
+    db = _FakeSession(_multi_binding())
+
+    result = await page_table.get_page_table_stats(
+        db, PAGE_KEY, group_by=["部门/车间"], table_id="tblSub"
+    )
+    assert result.total == 1
+
+
+async def test_update_record_targets_sub_table(monkeypatch) -> None:
+    """回写带 table_id 时按该子表 schema 编码并写回该表。"""
+    schemas = {"tblMain": _FIELDS, "tblSub": _SUB_FIELDS}
+    rows = {"tblMain": [], "tblSub": []}
+    client = _multi_install(monkeypatch, _FakeMultiClient(schemas, rows))
+    db = _FakeSession(_multi_binding())
+
+    await page_table.update_page_table_record(
+        db,
+        PAGE_KEY,
+        "s1",
+        {"隐患内容": "新内容", "关闭状态": "未关闭"},
+        table_id="tblSub",
+    )
+    assert client.updates == [("s1", {"隐患内容": "新内容", "关闭状态": "未关闭"})]
+
+
+async def test_list_tabs_returns_bound_tables(monkeypatch) -> None:
+    """页签清单：主绑定在前 + sub_tables 顺序，主表标记 is_primary。"""
+    class _CountSession(_FakeSession):
+        def __init__(self, binding):
+            super().__init__(binding)
+
+    _multi_install(monkeypatch, _FakeMultiClient({}, {}))
+    db = _CountSession(_multi_binding())
+
+    tabs = await page_table.list_page_table_tabs(db, PAGE_KEY)
+
+    assert [t.table_id for t in tabs] == ["tblMain", "tblSub"]
+    assert tabs[0].is_primary is True and tabs[0].tab_name == "24小时值班隐患"
+    assert tabs[1].is_primary is False and tabs[1].tab_name == "2024年公司级检查"
+
+
+# ── 新建记录（写透飞书 + 镜像） ──
+
+
+async def test_create_record_encodes_writes_and_returns_decoded(monkeypatch) -> None:
+    client = _install_client(
+        monkeypatch,
+        _FakeClient(
+            create_result=("rec-new", None),
+            record_fields={
+                "记录编号": [{"text": "XH-2026-001"}],
+                "整改情况": "未整改",
+            },
+        ),
+    )
+    db = _FakeSession(_config())
+
+    result = await page_table.create_page_table_record(
+        db,
+        PAGE_KEY,
+        {"记录编号": "XH-2026-001", "整改情况": "未整改", "值班日期": None},
+    )
+
+    # 主字段文本按纯字符串编码，空值字段不写入
+    assert client.creates == [{"记录编号": "XH-2026-001", "整改情况": "未整改"}]
+    assert result.record_id == "rec-new"
+    assert result.fields["记录编号"] == "XH-2026-001"
+
+
+async def test_create_record_surfaces_feishu_error(monkeypatch) -> None:
+    client = _install_client(
+        monkeypatch,
+        _FakeClient(create_result=(None, "字段权限不足")),
+    )
+    db = _FakeSession(_config())
+
+    with pytest.raises(AppException) as excinfo:
+        await page_table.create_page_table_record(
+            db, PAGE_KEY, {"整改情况": "未整改"}
+        )
+    assert excinfo.value.status_code == 502
+    assert "字段权限不足" in excinfo.value.message
+    assert client.creates
+
+
+async def test_create_record_rejects_all_empty_values(monkeypatch) -> None:
+    client = _install_client(monkeypatch, _FakeClient())
+    db = _FakeSession(_config())
+
+    with pytest.raises(AppException) as excinfo:
+        await page_table.create_page_table_record(
+            db, PAGE_KEY, {"记录编号": None, "整改情况": None}
+        )
+    assert excinfo.value.status_code == 400
+    assert client.creates == []

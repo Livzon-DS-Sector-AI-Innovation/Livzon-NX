@@ -200,6 +200,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     scheduler_task = asyncio.create_task(scheduled_task_loop())
 
+    # ── 安全模块页面镜像独立同步循环（不依赖统一调度引擎，见 scheduled.py 注释） ──
+    from app.modules.safety.scheduled import mirror_sync_loop
+
+    safety_mirror_sync_task = asyncio.create_task(mirror_sync_loop())
+
     # ── 统一调度引擎（平台级，各模块可渐进迁移）──
     from app.platform.scheduler import SchedulerEngine, SchedulerRegistry
 
@@ -310,6 +315,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception:
         logger.exception("注册安全模块页面镜像同步调度任务失败")
 
+    # ── 安全模块隐患到期提醒（每天 08:00） ──
+    try:
+        from app.modules.safety.scheduled import SafetyHazardDueReminderGenerator
+
+        scheduler_registry.register_generator(SafetyHazardDueReminderGenerator())
+    except Exception:
+        logger.exception("注册安全模块隐患到期提醒调度任务失败")
+
     # ── 法规跟踪三阶段流水线（00:10 抓取 / 02:00 AI 分析 / 10:00 推送） ──
     try:
         from app.modules.regulatory_tracker.scheduled import (
@@ -372,6 +385,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # 停止定时任务调度引擎
     stop_scheduled_task_flag.set()
     scheduler_task.cancel()
+
+    # ── 停止页面镜像独立同步循环 ──
+    from app.modules.safety.scheduled import _mirror_sync_stop
+
+    _mirror_sync_stop.set()
+    safety_mirror_sync_task.cancel()
 
     # ── 停止统一调度引擎 ──
     scheduler_engine.stop()

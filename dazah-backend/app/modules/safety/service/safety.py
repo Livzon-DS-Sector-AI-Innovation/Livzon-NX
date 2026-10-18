@@ -387,9 +387,10 @@ class _SafetyCoreService:
                 "reply_rectification", "hazard_report", resource_id=hazard_id
             )
 
-        # 整改回复后，异步通知一级复核人（部门负责人）
+        # 整改回复后，异步通知一级复核人（部门负责人）并同步总台账进度
         if updated:
             await submit_job(lambda: _send_verify_notification(updated, 1))
+            await submit_job(lambda: _sync_hazard_ledger_progress(hazard_id))
 
         return updated
 
@@ -434,7 +435,10 @@ class _SafetyCoreService:
                 "rectification_status": "rejected",
                 f"verify_level_{level}_status": "rejected",
             }
-            return await self.repo.update_hazard(hazard_id, rejected_update)
+            rejected = await self.repo.update_hazard(hazard_id, rejected_update)
+            if rejected:
+                await submit_job(lambda: _sync_hazard_ledger_progress(hazard_id))
+            return rejected
 
         # action == "approved"
         if level == 1 and is_general:
@@ -468,7 +472,9 @@ class _SafetyCoreService:
                 extra={"level": level, "action": action},
             )
 
-        # 审核通过后，异步通知下一级复核人
+        # 审核通过后，异步通知下一级复核人；状态变化同步总台账进度
+        if updated:
+            await submit_job(lambda: _sync_hazard_ledger_progress(hazard_id))
         if updated and action == "approved":
             if level == 1 and is_general:
                 # 一般隐患：跳过二级，直接通知三级
@@ -501,9 +507,10 @@ class _SafetyCoreService:
             update_data["rectification_photos"] = rectification_photos
         updated = await self.repo.update_hazard(hazard_id, update_data)
 
-        # 重新整改回复后，异步通知一级复核人
+        # 重新整改回复后，异步通知一级复核人并同步总台账进度
         if updated:
             await submit_job(lambda: _send_verify_notification(updated, 1))
+            await submit_job(lambda: _sync_hazard_ledger_progress(hazard_id))
 
         return updated
 
@@ -688,7 +695,12 @@ class _SafetyCoreService:
             logger.error(f"Hazard script {script_number} 执行异常: {e}")
             update_data["ai_error_message"] = f"AI 服务调用失败：{e}"
 
-        return await self.repo.update_hazard(hazard_id, update_data)
+        updated = await self.repo.update_hazard(hazard_id, update_data)
+        # 随手拍登记链路：创建时的自动执行与照片补传后的重跑都会经过这里；
+        # 汇总写入幂等（首次建行，重跑走进度同步并补传照片）
+        if updated:
+            await submit_job(lambda: _project_hazard_to_ledger(hazard_id))
+        return updated
 
     # ── AI 输出字段约束（DB Enum 限制）──
     _VALID_HAZARD_TYPES = {
@@ -1019,6 +1031,20 @@ async def _build_verify_card_content(
         else f"🔔 隐患复核通知{level_text} — 已处理"
     )
     return title, content, elements
+
+
+async def _project_hazard_to_ledger(hazard_id: uuid.UUID) -> None:
+    """随手拍登记 → 公司隐患总台账汇总写入（异步钩子，见 hazard_ledger_projection）。"""
+    from app.modules.safety.service import hazard_ledger_projection
+
+    await hazard_ledger_projection.project_hazard_to_company_ledger(hazard_id)
+
+
+async def _sync_hazard_ledger_progress(hazard_id: uuid.UUID) -> None:
+    """整改回复/复核关闭 → 公司隐患总台账进度同步（异步钩子）。"""
+    from app.modules.safety.service import hazard_ledger_projection
+
+    await hazard_ledger_projection.sync_hazard_progress_to_company_ledger(hazard_id)
 
 
 async def _send_verify_notification(hazard: HazardReport, level: int) -> None:

@@ -181,8 +181,18 @@ function ChartCard({
   )
 }
 
-/** 页面顶部仪表盘：一行三图（月度趋势柱状 / 车间分布条形 / 整改情况环形）。
- * 点击图中分类可下钻筛选下方明细列表。 */
+/** 分组卡片标题：月度趋势固定；单选环形用字段名（关闭状态沿用「整改情况」）；
+ * 人员/文本等分布类加「分布」后缀。 */
+function groupTitle(group: PageTableStats['groups'][number]): string {
+  if (group.mode === 'month') return '月度隐患趋势'
+  if (group.kind === 'select' || group.kind === 'multi_select') {
+    return group.field === '关闭状态' ? '整改情况' : group.field
+  }
+  return `${group.field}分布`
+}
+
+/** 页面顶部仪表盘：按统计分组渲染一行图表卡（月份柱状 / 单选环形 /
+ * 人员、文本等横向条形），点击图中分类可下钻筛选下方明细列表。 */
 export default function PageFeishuStatsBar({
   stats,
   onSelect,
@@ -192,38 +202,28 @@ export default function PageFeishuStatsBar({
 }) {
   if (!stats || stats.groups.length === 0) return null
 
-  const monthGroup = stats.groups.find((group) => group.mode === 'month')
-  const workshopGroup = stats.groups.find(
-    (group) => group.mode === 'value' && group.kind === 'text'
-  )
-  const statusGroup = stats.groups.find(
-    (group) => group.kind === 'select' || group.kind === 'multi_select'
-  )
-
   return (
     <div style={{ display: 'flex', gap: 12, alignItems: 'stretch', overflowX: 'auto' }}>
-      <ChartCard
-        title="月度隐患趋势"
-        option={buildMonthOption(monthGroup?.buckets ?? [])}
-        hasData={Boolean(monthGroup?.buckets.length)}
-        onSelect={onSelect}
-        fieldName={monthGroup?.field}
-        selectionKeys={monthGroup?.buckets.map((bucket) => bucket.key)}
-      />
-      <ChartCard
-        title="车间隐患分布"
-        option={buildWorkshopOption(workshopGroup?.buckets ?? [])}
-        hasData={Boolean(workshopGroup?.buckets.length)}
-        onSelect={onSelect}
-        fieldName={workshopGroup?.field}
-      />
-      <ChartCard
-        title="整改情况"
-        option={buildStatusOption(statusGroup?.buckets ?? [], stats.total)}
-        hasData={Boolean(statusGroup?.buckets.length)}
-        onSelect={onSelect}
-        fieldName={statusGroup?.field}
-      />
+      {stats.groups.map((group) => {
+        const isDonut = group.kind === 'select' || group.kind === 'multi_select'
+        return (
+          <ChartCard
+            key={group.field}
+            title={groupTitle(group)}
+            option={
+              group.mode === 'month'
+                ? buildMonthOption(group.buckets)
+                : isDonut
+                  ? buildStatusOption(group.buckets, stats.total)
+                  : buildWorkshopOption(group.buckets)
+            }
+            hasData={Boolean(group.buckets.length)}
+            onSelect={onSelect}
+            fieldName={group.field}
+            selectionKeys={group.buckets.map((bucket) => bucket.key)}
+          />
+        )
+      })}
     </div>
   )
 }

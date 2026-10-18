@@ -159,8 +159,21 @@ class SafetyBitableClient:
         table_id: str | None = None,
     ) -> str | None:
         """新增一条记录，成功返回 record_id，失败返回 None。"""
+        record_id, _ = await self.create_record_with_result(fields, table_id)
+        return record_id
+
+    async def create_record_with_result(
+        self,
+        fields: dict[str, Any],
+        table_id: str | None = None,
+    ) -> tuple[str | None, str | None]:
+        """新增一条记录，返回 ``(record_id, 飞书错误信息)``。
+
+        页面新建需要把失败原因透出给用户（必填缺失、选项非法等），
+        因此与 ``create_record`` 并存，后者保持既有调用方的布尔语义。
+        """
         if not fields:
-            return None
+            return None, "没有需要写入的字段"
         token = await self._token()
         async with httpx.AsyncClient(timeout=15) as http:
             resp = await http.post(
@@ -173,20 +186,23 @@ class SafetyBitableClient:
             )
             data = resp.json()
             if data.get("code") != 0:
+                message = str(data.get("msg") or "飞书返回未知错误")
                 logger.error(
                     "Bitable create_record 失败: code=%s msg=%s fields=%s",
                     data.get("code"),
-                    data.get("msg"),
+                    message,
                     list(fields.keys()),
                 )
-                return None
+                return None, message
             record_id = (data.get("data") or {}).get("record", {}).get("record_id")
             logger.info(
                 "Bitable create_record 成功: record_id=%s fields=%s",
                 record_id,
                 list(fields.keys()),
             )
-            return str(record_id) if record_id else None
+            return (str(record_id) if record_id else None), (
+                None if record_id else "飞书未返回 record_id"
+            )
 
     async def upload_media(
         self,

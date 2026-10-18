@@ -23288,6 +23288,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/safety/feishu-settings/hazard-due-notify/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 测试隐患到期提醒推送发送
+         * @description 向已配置的群/个人发送一条样例卡片，验证提醒目标配置。
+         */
+        post: operations["test_hazard_due_notify_api_v1_safety_feishu_settings_hazard_due_notify_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/safety/feishu/ws/restart": {
         parameters: {
             query?: never;
@@ -24601,7 +24621,8 @@ export interface paths {
         /** 读取镜像页的记录（列定义来自飞书实时 schema） */
         get: operations["list_page_table_records_api_v1_safety_page_tables__page_key__records_get"];
         put?: never;
-        post?: never;
+        /** 在镜像页新建记录（写入当前选中子表并回写飞书） */
+        post: operations["create_page_table_record_api_v1_safety_page_tables__page_key__records_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -24683,8 +24704,42 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 页面仪表盘聚合（默认：日期按月 / 位置文本按车间号归一 / 单选按选项） */
+        /** 页面仪表盘聚合（默认：日期按月 / 位置文本按车间号归一 / 单选按选项）；多页签页面不传 table_id 时跨全部子表聚合 */
         get: operations["get_page_table_stats_api_v1_safety_page_tables__page_key__stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/page-tables/{page_key}/tabs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 多页签页面的子表清单（主绑定在前，含各子表镜像记录数） */
+        get: operations["list_page_table_tabs_api_v1_safety_page_tables__page_key__tabs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/page-tables/{page_key}/values": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 字段去重可选值（含计数），供筛选下拉框选项使用 */
+        get: operations["list_page_table_field_values_api_v1_safety_page_tables__page_key__values_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -29478,6 +29533,24 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[PageTableFieldValuesResponse] */
+        ApiResponseEnvelope_PageTableFieldValuesResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["PageTableFieldValuesResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[PageTableRecord] */
         ApiResponseEnvelope_PageTableRecord_: {
             /**
@@ -29522,6 +29595,24 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["PageTableStatsResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[PageTableTabListResponse] */
+        ApiResponseEnvelope_PageTableTabListResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["PageTableTabListResponse"];
             /**
              * Message
              * @default success
@@ -49912,6 +50003,8 @@ export interface components {
             page_name: string;
             /** Route Path */
             route_path: string;
+            /** Sub Tables */
+            sub_tables?: components["schemas"]["PageFeishuSubTable"][];
             /** Table Id */
             table_id?: string | null;
             /** View Id */
@@ -49958,6 +50051,18 @@ export interface components {
             kind: string;
             /** Name */
             name: string;
+        };
+        /**
+         * PageFeishuSubTable
+         * @description 附加子表页签（主绑定是第一个页签，本结构描述其余页签）。
+         */
+        PageFeishuSubTable: {
+            /** Hidden Field Names */
+            hidden_field_names?: string[];
+            /** Tab Name */
+            tab_name: string;
+            /** Table Id */
+            table_id: string;
         };
         /** PageGrantInput */
         PageGrantInput: {
@@ -50317,6 +50422,53 @@ export interface components {
             /** Type */
             type: number;
         };
+        /**
+         * PageTableDueSummary
+         * @description 未关闭记录按「目标完成日期」的到期分布（仪表盘到期卡片）。
+         */
+        PageTableDueSummary: {
+            /**
+             * Overdue
+             * @default 0
+             */
+            overdue: number;
+            /**
+             * Within 15
+             * @default 0
+             */
+            within_15: number;
+            /**
+             * Within 30
+             * @default 0
+             */
+            within_30: number;
+            /**
+             * Within 7
+             * @default 0
+             */
+            within_7: number;
+        };
+        /**
+         * PageTableFieldValueCount
+         * @description 字段可选值（用于筛选下拉框的选项与计数）。
+         */
+        PageTableFieldValueCount: {
+            /** Count */
+            count: number;
+            /** Value */
+            value: string;
+        };
+        /** PageTableFieldValuesResponse */
+        PageTableFieldValuesResponse: {
+            /** Field */
+            field: string;
+            /** Page Key */
+            page_key: string;
+            /** Table Id */
+            table_id: string;
+            /** Values */
+            values?: components["schemas"]["PageTableFieldValueCount"][];
+        };
         /** PageTableRecord */
         PageTableRecord: {
             /** Fields */
@@ -50377,6 +50529,7 @@ export interface components {
         };
         /** PageTableStatsResponse */
         PageTableStatsResponse: {
+            due_summary?: components["schemas"]["PageTableDueSummary"] | null;
             /** Groups */
             groups?: components["schemas"]["PageTableStatGroup"][];
             /** Page Key */
@@ -50388,6 +50541,35 @@ export interface components {
              * @default 0
              */
             total: number;
+        };
+        /**
+         * PageTableTab
+         * @description 多页签页面的一个子表页签。
+         */
+        PageTableTab: {
+            /**
+             * Is Primary
+             * @default false
+             */
+            is_primary: boolean;
+            /**
+             * Record Count
+             * @default 0
+             */
+            record_count: number;
+            /** Tab Name */
+            tab_name: string;
+            /** Table Id */
+            table_id: string;
+        };
+        /** PageTableTabListResponse */
+        PageTableTabListResponse: {
+            /** Page Key */
+            page_key: string;
+            /** Page Name */
+            page_name: string;
+            /** Tabs */
+            tabs?: components["schemas"]["PageTableTab"][];
         };
         /** PasswordResetRequest */
         PasswordResetRequest: {
@@ -55067,6 +55249,17 @@ export interface components {
             bitable_app_token?: string | null;
             /** Bitable Hazard Table Id */
             bitable_hazard_table_id?: string | null;
+            /** Hazard Due Notify Chat Ids */
+            hazard_due_notify_chat_ids?: string[];
+            /**
+             * Hazard Due Notify Enabled
+             * @default false
+             */
+            hazard_due_notify_enabled: boolean;
+            /** Hazard Due Notify Milestones */
+            hazard_due_notify_milestones?: number[];
+            /** Hazard Due Notify User Ids */
+            hazard_due_notify_user_ids?: string[];
             /**
              * Is Enabled
              * @default true
@@ -60001,6 +60194,8 @@ export interface components {
             is_enabled?: boolean | null;
             /** Is Mirrored */
             is_mirrored?: boolean | null;
+            /** Sub Tables */
+            sub_tables?: components["schemas"]["PageFeishuSubTable"][] | null;
             /** Table Id */
             table_id?: string | null;
             /** View Id */
@@ -60218,6 +60413,17 @@ export interface components {
             bitable_app_token?: string | null;
             /** Bitable Hazard Table Id */
             bitable_hazard_table_id?: string | null;
+            /** Hazard Due Notify Chat Ids */
+            hazard_due_notify_chat_ids?: string[];
+            /**
+             * Hazard Due Notify Enabled
+             * @default false
+             */
+            hazard_due_notify_enabled: boolean;
+            /** Hazard Due Notify Milestones */
+            hazard_due_notify_milestones?: number[];
+            /** Hazard Due Notify User Ids */
+            hazard_due_notify_user_ids?: string[];
             /**
              * Is Enabled
              * @default true
@@ -123739,6 +123945,37 @@ export interface operations {
             };
         };
     };
+    test_hazard_due_notify_api_v1_safety_feishu_settings_hazard_due_notify_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     restart_feishu_ws_api_v1_safety_feishu_ws_restart_post: {
         parameters: {
             query?: never;
@@ -126530,6 +126767,8 @@ export interface operations {
                 filter_value?: string | null;
                 /** @description 多条件筛选（JSON 数组，如 [{"field": "作业日期", "value": "2026-10-13"}]，条件间为 AND；日期支持 YYYY / YYYY-MM / YYYY-MM-DD 前缀匹配） */
                 conditions?: string | null;
+                /** @description 子表页签 table_id；缺省主绑定表 */
+                table_id?: string | null;
             };
             header?: never;
             path: {
@@ -126561,9 +126800,52 @@ export interface operations {
             };
         };
     };
+    create_page_table_record_api_v1_safety_page_tables__page_key__records_post: {
+        parameters: {
+            query?: {
+                /** @description 子表 table_id；缺省主绑定表 */
+                table_id?: string | null;
+            };
+            header?: never;
+            path: {
+                page_key: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePageTableRecordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_PageTableRecord_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_page_table_record_api_v1_safety_page_tables__page_key__records__record_id__put: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 子表页签 table_id；缺省主绑定表 */
+                table_id?: string | null;
+            };
             header?: never;
             path: {
                 page_key: string;
@@ -126601,7 +126883,10 @@ export interface operations {
     };
     upload_page_table_attachment_api_v1_safety_page_tables__page_key__records__record_id__attachments__field_name__post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 子表页签 table_id；缺省主绑定表 */
+                table_id?: string | null;
+            };
             header?: never;
             path: {
                 page_key: string;
@@ -126642,6 +126927,8 @@ export interface operations {
         parameters: {
             query?: {
                 inline?: boolean;
+                /** @description 子表页签 table_id；缺省主绑定表 */
+                table_id?: string | null;
             };
             header?: never;
             path: {
@@ -126681,6 +126968,8 @@ export interface operations {
             query?: {
                 max_width?: number;
                 max_height?: number;
+                /** @description 子表页签 table_id；缺省主绑定表 */
+                table_id?: string | null;
             };
             header?: never;
             path: {
@@ -126720,6 +127009,16 @@ export interface operations {
             query?: {
                 /** @description 分组字段名，可重复；缺省时自动挑选日期/位置/单选字段 */
                 group_by?: string[] | null;
+                /** @description 子表页签 table_id；缺省时单表页面取主绑定表，多页签页面跨全部子表聚合 */
+                table_id?: string | null;
+                /** @description 与列表查询同口径的关键字筛选（仪表盘联动） */
+                keyword?: string | null;
+                /** @description 与列表查询同口径的多条件筛选（JSON 数组，条件间 AND；仪表盘随筛选联动，不含图表下钻） */
+                conditions?: string | null;
+                /** @description 到期统计字段（日期型，如 目标完成日期） */
+                due_field?: string | null;
+                /** @description 关闭状态字段（如 关闭状态，值为「已关闭」视为已闭环） */
+                close_field?: string | null;
             };
             header?: never;
             path: {
@@ -126738,6 +127037,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponseEnvelope_PageTableStatsResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_page_table_tabs_api_v1_safety_page_tables__page_key__tabs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page_key: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_PageTableTabListResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_page_table_field_values_api_v1_safety_page_tables__page_key__values_get: {
+        parameters: {
+            query: {
+                /** @description 字段名（如 部门/车间、负责人） */
+                field: string;
+                /** @description 子表页签 table_id；缺省主绑定表 */
+                table_id?: string | null;
+            };
+            header?: never;
+            path: {
+                page_key: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_PageTableFieldValuesResponse_"];
                 };
             };
             /** @description Validation Error */

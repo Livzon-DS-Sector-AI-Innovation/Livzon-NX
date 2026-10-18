@@ -18,7 +18,7 @@ _SETTINGS_PAGE = "safety:system-config:safety-feishu-settings"
 
 def test_page_table_registry_matches_registered_page_definition() -> None:
     """注册表里的页面标识必须与菜单派生的页面定义一致，否则权限绑定无从生效。"""
-    assert len(PAGE_TABLE_DEFINITIONS) == 7
+    assert len(PAGE_TABLE_DEFINITIONS) == 8
     definition = get_page_table(_PAGE)
     assert definition is not None
     assert definition.page_name == "24小时值班隐患"
@@ -116,8 +116,11 @@ def test_config_routes_bound_to_feishu_settings_page() -> None:
 
 def test_data_routes_bound_to_duty_hazard_page() -> None:
     routes = [
+        ("GET", "/api/v1/safety/page-tables/{page_key}/tabs", "query"),
         ("GET", "/api/v1/safety/page-tables/{page_key}/records", "query"),
         ("GET", "/api/v1/safety/page-tables/{page_key}/stats", "query"),
+        ("GET", "/api/v1/safety/page-tables/{page_key}/values", "query"),
+        ("POST", "/api/v1/safety/page-tables/{page_key}/records", "operate"),
         ("PUT", "/api/v1/safety/page-tables/{page_key}/records/{record_id}", "operate"),
         (
             "POST",
@@ -158,3 +161,54 @@ def test_duty_hazard_page_registered_in_lifecycle_ledger() -> None:
     assert entry["module_code"] == "safety"
     assert entry["route_path"] == "/safety/hazard-duty"
     assert entry["actions"] == {}
+
+
+_QUICK_REPORT_PAGE = "safety:risk-hazard:hazard-inspection:hazard-quick-report"
+
+
+def test_hazard_quick_report_page_registered() -> None:
+    """「隐患台账」（公司总台账镜像页，wiki 表）登记与生命周期账本一致。"""
+    definition = get_page_table(_QUICK_REPORT_PAGE)
+    assert definition is not None
+    assert definition.page_name == "隐患台账"
+    assert definition.route_path == "/safety/hazard-quick-report"
+
+    page = PAGES_BY_KEY[_QUICK_REPORT_PAGE]
+    assert page.module_code == "safety"
+    assert page.page_name == "隐患台账"
+    assert page.route_path == "/safety/hazard-quick-report"
+    # 键与路径不含台账/记录/设置等关键词：推导不出敏感动作
+    assert _sensitive_actions(
+        _QUICK_REPORT_PAGE, "/safety/hazard-quick-report", "隐患台账"
+    ) == ()
+    assert page_lifecycle_errors(page) == []
+
+    ledger = load_ledger()
+    entry = ledger["pages"][_QUICK_REPORT_PAGE]
+    assert entry["status"] == "active"
+    assert entry["module_code"] == "safety"
+    assert entry["route_path"] == "/safety/hazard-quick-report"
+    assert entry["actions"] == {}
+
+
+def test_every_page_table_api_route_has_a_binding() -> None:
+    """路由↔绑定对等：镜像页新增端点必须同步登记权限绑定。
+
+    未登记的端点对管理员和普通用户都会被 403（页面上下文无法建立），
+    服务层与 API 层的测试都发现不了，只有对等校验能拦住。
+    """
+    from app.main import app
+
+    route_paths = {
+        (method, route.path)
+        for route in app.routes
+        if getattr(route, "path", "").startswith("/api/v1/safety/page-tables/")
+        for method in (getattr(route, "methods", None) or ())
+    }
+    assert route_paths, "未收集到 page-tables 路由"
+    missing = [
+        f"{method} {path}"
+        for method, path in sorted(route_paths)
+        if api_binding_for_route(method, path) is None
+    ]
+    assert missing == []
