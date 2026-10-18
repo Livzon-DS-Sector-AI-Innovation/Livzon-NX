@@ -1,12 +1,14 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: 'Bearer test-token' }),
+  getAuthHeaders: vi
+    .fn()
+    .mockResolvedValue({ Authorization: "Bearer test-token" }),
   revalidatePath: vi.fn(),
-}))
+}));
 
-vi.mock('@/lib/auth', () => ({ getAuthHeaders: mocks.getAuthHeaders }))
-vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
+vi.mock("@/lib/auth", () => ({ getAuthHeaders: mocks.getAuthHeaders }));
+vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 
 import {
   createCheck,
@@ -19,8 +21,11 @@ import {
   getRadarRuns,
   getSafetyFeishuSettings,
   getSafetyPageFeishuConfigs,
+  createSafetyPageTableRecord,
+  getSafetyPageTableFieldValues,
   getSafetyPageTableRecords,
   getSafetyPageTableStats,
+  getSafetyPageTableTabs,
   getSpecialOperationLedgerStats,
   syncSafetyPageFeishuConfig,
   getSafetyFeishuWsStatus,
@@ -31,476 +36,663 @@ import {
   saveSafetyPageFeishuConfig,
   submitCheck,
   syncSafetyKnowledge,
+  testHazardDueNotify,
   testRadarNotify,
   testSafetyFeishuSettings,
   testSafetyPageFeishuConfig,
   updateSafetyPageTableRecord,
   uploadKnowledgeAttachments,
   uploadSafetyPageTableAttachment,
-} from './safety'
+} from "./safety";
 
-const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000'
+const API_BASE = process.env.API_BASE_URL || "http://localhost:8000";
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json' },
-  })
+    headers: { "content-type": "application/json" },
+  });
 }
 
-describe('safety actions', () => {
+describe("safety actions", () => {
   afterEach(() => {
-    vi.unstubAllGlobals()
-    vi.clearAllMocks()
-  })
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
 
-  it('lists safety checks with query params', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { items: [], total: 0 } }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("lists safety checks with query params", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { items: [], total: 0 } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
-    await getChecks({ page: 1, page_size: 20, status: 'pending' })
+    await getChecks({ page: 1, page_size: 20, status: "pending" });
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/api/v1/safety/checks?'),
+      expect.stringContaining("/api/v1/safety/checks?"),
       expect.anything(),
-    )
-  })
+    );
+  });
 
-  it('creates a safety check', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { id: 'ck-1' } }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("creates a safety check", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { id: "ck-1" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
-    const payload = { check_type: '日常巡检', location: '102车间' }
-    await createCheck(payload as never)
+    const payload = { check_type: "日常巡检", location: "102车间" };
+    await createCheck(payload as never);
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/safety/checks`,
-      expect.objectContaining({ method: 'POST' }),
-    )
-  })
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
 
-  it('submits a check', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("submits a check", async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }));
+    vi.stubGlobal("fetch", fetchMock);
 
-    await submitCheck('ck-1')
+    await submitCheck("ck-1");
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/safety/checks/ck-1/submit`,
-      expect.objectContaining({ method: 'POST' }),
-    )
-  })
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
 
-  it('fetches hazard stats', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { total: 5 } }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("fetches hazard stats", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { total: 5 } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
-    const res = await fetchHazardStats()
+    const res = await fetchHazardStats();
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/api/v1/safety/hazards/stats'),
+      expect.stringContaining("/api/v1/safety/hazards/stats"),
       expect.anything(),
-    )
-    expect(res).toMatchObject({ code: 200 })
-  })
+    );
+    expect(res).toMatchObject({ code: 200 });
+  });
 
-  it('fetches a single hazard', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { id: 'hz-1' } }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("fetches a single hazard", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { id: "hz-1" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
-    await getHazard('hz-1')
+    await getHazard("hz-1");
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/safety/hazards/hz-1`,
       expect.anything(),
-    )
-  })
-})
+    );
+  });
+});
 
-const KNOWLEDGE_PAGE_KEY = 'safety:regulation-info:knowledge-base'
-const SETTINGS_PAGE_KEY = 'safety:system-config:safety-feishu-settings'
+const KNOWLEDGE_PAGE_KEY = "safety:regulation-info:knowledge-base";
+const SETTINGS_PAGE_KEY = "safety:system-config:safety-feishu-settings";
 
-describe('safety knowledge actions', () => {
+describe("safety knowledge actions", () => {
   afterEach(() => {
-    vi.unstubAllGlobals()
-    vi.clearAllMocks()
-  })
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
 
-  it('lists knowledge articles with regulation status and keyword filters', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: [], meta: { total: 0 } }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("lists knowledge articles with regulation status and keyword filters", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: [], meta: { total: 0 } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
     await getKnowledgeArticles({
       page: 2,
       page_size: 20,
-      regulation_status: '现行有效',
-      keyword: '安全',
-    })
-    const [url] = fetchMock.mock.calls[0] as unknown as [string]
-    expect(url).toContain('/api/v1/safety/knowledge-articles?')
-    expect(url).toContain('regulation_status=%E7%8E%B0%E8%A1%8C%E6%9C%89%E6%95%88')
-    expect(url).toContain('keyword=%E5%AE%89%E5%85%A8')
-  })
+      regulation_status: "现行有效",
+      keyword: "安全",
+    });
+    const [url] = fetchMock.mock.calls[0] as unknown as [string];
+    expect(url).toContain("/api/v1/safety/knowledge-articles?");
+    expect(url).toContain(
+      "regulation_status=%E7%8E%B0%E8%A1%8C%E6%9C%89%E6%95%88",
+    );
+    expect(url).toContain("keyword=%E5%AE%89%E5%85%A8");
+  });
 
-  it('skips the request when no attachment files are provided', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("skips the request when no attachment files are provided", async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }));
+    vi.stubGlobal("fetch", fetchMock);
 
-    await expect(uploadKnowledgeAttachments('doc-1', [])).resolves.toEqual({
+    await expect(uploadKnowledgeAttachments("doc-1", [])).resolves.toEqual({
       code: 200,
       data: null,
-    })
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 
-  it('uploads attachments as multipart without a JSON content type', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { id: 'doc-1' } }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("uploads attachments as multipart without a JSON content type", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { id: "doc-1" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
-    const file = new File(['abc'], 'sop.pdf', { type: 'application/pdf' })
-    await uploadKnowledgeAttachments('doc-1', [file])
+    const file = new File(["abc"], "sop.pdf", { type: "application/pdf" });
+    await uploadKnowledgeAttachments("doc-1", [file]);
 
-    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-    expect(url).toBe(`${API_BASE}/api/v1/safety/knowledge-articles/doc-1/attachments`)
-    expect(init.method).toBe('POST')
-    expect(init.body).toBeInstanceOf(FormData)
-    const headers = init.headers as Record<string, string>
-    expect(headers['X-Dazah-Page-Key']).toBe(KNOWLEDGE_PAGE_KEY)
-    expect(headers.Authorization).toBe('Bearer test-token')
-    expect(headers['Content-Type']).toBeUndefined()
-  })
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe(
+      `${API_BASE}/api/v1/safety/knowledge-articles/doc-1/attachments`,
+    );
+    expect(init.method).toBe("POST");
+    expect(init.body).toBeInstanceOf(FormData);
+    const headers = init.headers as Record<string, string>;
+    expect(headers["X-Dazah-Page-Key"]).toBe(KNOWLEDGE_PAGE_KEY);
+    expect(headers.Authorization).toBe("Bearer test-token");
+    expect(headers["Content-Type"]).toBeUndefined();
+  });
 
-  it('deletes a local attachment with the knowledge page key', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { id: 'doc-1' } }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("deletes a local attachment with the knowledge page key", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { id: "doc-1" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
-    await deleteKnowledgeAttachment('doc-1', 'tok-1')
+    await deleteKnowledgeAttachment("doc-1", "tok-1");
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/safety/knowledge-articles/doc-1/attachments/tok-1`,
       expect.objectContaining({
-        method: 'DELETE',
-        headers: expect.objectContaining({ 'X-Dazah-Page-Key': KNOWLEDGE_PAGE_KEY }),
+        method: "DELETE",
+        headers: expect.objectContaining({
+          "X-Dazah-Page-Key": KNOWLEDGE_PAGE_KEY,
+        }),
       }),
-    )
-  })
+    );
+  });
 
-  it('syncs the feishu regulation mirror', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { created: 1 } }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("syncs the feishu regulation mirror", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { created: 1 } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
-    await syncSafetyKnowledge()
+    await syncSafetyKnowledge();
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/safety/knowledge-articles/feishu/sync`,
       expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({ 'X-Dazah-Page-Key': KNOWLEDGE_PAGE_KEY }),
+        method: "POST",
+        headers: expect.objectContaining({
+          "X-Dazah-Page-Key": KNOWLEDGE_PAGE_KEY,
+        }),
       }),
-    )
-  })
-})
+    );
+  });
+});
 
-describe('safety feishu settings actions', () => {
+describe("safety feishu settings actions", () => {
   afterEach(() => {
-    vi.unstubAllGlobals()
-    vi.clearAllMocks()
-  })
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
 
-  it('loads the app settings with the settings page key', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { app_id: 'cli_x' } }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("loads the app settings with the settings page key", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { app_id: "cli_x" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
-    const res = await getSafetyFeishuSettings()
+    const res = await getSafetyFeishuSettings();
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/safety/feishu-settings/app`,
       expect.objectContaining({
-        headers: expect.objectContaining({ 'X-Dazah-Page-Key': SETTINGS_PAGE_KEY }),
+        headers: expect.objectContaining({
+          "X-Dazah-Page-Key": SETTINGS_PAGE_KEY,
+        }),
       }),
-    )
-    expect(res).toMatchObject({ code: 200 })
-  })
+    );
+    expect(res).toMatchObject({ code: 200 });
+  });
 
-  it('saves the app settings as JSON', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { app_id: 'cli_x' } }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("saves the app settings as JSON", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { app_id: "cli_x" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
-    const payload = { app_id: 'cli_x', app_secret: 'secret',
-      radar_notify_enabled: false, radar_scan_enabled: true, is_enabled: true,
-      hazard_due_notify_enabled: false, hazard_due_notify_milestones: [30, 15, 7] }
-    await saveSafetyFeishuSettings(payload)
+    const payload = {
+      app_id: "cli_x",
+      app_secret: "secret",
+      radar_notify_enabled: false,
+      radar_scan_enabled: true,
+      is_enabled: true,
+      hazard_due_notify_enabled: false,
+      hazard_due_notify_milestones: [30, 15, 7],
+    };
+    await saveSafetyFeishuSettings(payload);
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/safety/feishu-settings/app`,
       expect.objectContaining({
-        method: 'PUT',
+        method: "PUT",
         body: JSON.stringify(payload),
-        headers: expect.objectContaining({ 'X-Dazah-Page-Key': SETTINGS_PAGE_KEY }),
+        headers: expect.objectContaining({
+          "X-Dazah-Page-Key": SETTINGS_PAGE_KEY,
+        }),
       }),
-    )
-  })
+    );
+  });
 
-  it('tests the app credentials', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { success: true } }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("tests the app credentials", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { success: true } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
-    await testSafetyFeishuSettings()
+    await testSafetyFeishuSettings();
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/safety/feishu-settings/app/test`,
       expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({ 'X-Dazah-Page-Key': SETTINGS_PAGE_KEY }),
+        method: "POST",
+        headers: expect.objectContaining({
+          "X-Dazah-Page-Key": SETTINGS_PAGE_KEY,
+        }),
       }),
-    )
-  })
+    );
+  });
 
-  it('reads and restarts the feishu websocket subscription', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { connected: true } }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("reads and restarts the feishu websocket subscription", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { connected: true } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
-    await getSafetyFeishuWsStatus()
+    await getSafetyFeishuWsStatus();
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/safety/feishu/ws/status`,
       expect.anything(),
-    )
+    );
 
-    await restartSafetyFeishuWs()
+    await restartSafetyFeishuWs();
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/safety/feishu/ws/restart`,
-      expect.objectContaining({ method: 'POST' }),
-    )
-  })
-})
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+});
 
-describe('regulation radar actions', () => {
+describe("regulation radar actions", () => {
   afterEach(() => {
-    vi.unstubAllGlobals()
-    vi.clearAllMocks()
-  })
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
 
-  it('lists radar runs with the knowledge page key and limit', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: [] }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("lists radar runs with the knowledge page key and limit", async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: [] }));
+    vi.stubGlobal("fetch", fetchMock);
 
-    await getRadarRuns(5)
+    await getRadarRuns(5);
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/safety/knowledge-articles/radar/runs?limit=5`,
       expect.objectContaining({
-        headers: expect.objectContaining({ 'X-Dazah-Page-Key': KNOWLEDGE_PAGE_KEY }),
+        headers: expect.objectContaining({
+          "X-Dazah-Page-Key": KNOWLEDGE_PAGE_KEY,
+        }),
       }),
-    )
-  })
+    );
+  });
 
-  it('loads a single radar run detail', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { id: 'run-1' } }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("loads a single radar run detail", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { id: "run-1" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
-    await getRadarRunDetail('run-1')
+    await getRadarRunDetail("run-1");
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/safety/knowledge-articles/radar/runs/run-1`,
       expect.objectContaining({
-        headers: expect.objectContaining({ 'X-Dazah-Page-Key': KNOWLEDGE_PAGE_KEY }),
+        headers: expect.objectContaining({
+          "X-Dazah-Page-Key": KNOWLEDGE_PAGE_KEY,
+        }),
       }),
-    )
-  })
+    );
+  });
 
-  it('starts a radar scan and forwards the dry-run flag', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { status: 'success' } }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("starts a radar scan and forwards the dry-run flag", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { status: "success" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
-    await runRadarScan(true)
+    await runRadarScan(true);
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/safety/knowledge-articles/radar/run?dry_run=true`,
       expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({ 'X-Dazah-Page-Key': KNOWLEDGE_PAGE_KEY }),
+        method: "POST",
+        headers: expect.objectContaining({
+          "X-Dazah-Page-Key": KNOWLEDGE_PAGE_KEY,
+        }),
       }),
-    )
+    );
 
-    await runRadarScan()
+    await runRadarScan();
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/safety/knowledge-articles/radar/run?dry_run=false`,
-      expect.objectContaining({ method: 'POST' }),
-    )
-  })
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
 
-  it('sends the radar notify test with the settings page key', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { sent: 1 } }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("sends the radar notify test with the settings page key", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { sent: 1 } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
-    await testRadarNotify()
+    await testRadarNotify();
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/safety/knowledge-articles/radar/notify/test`,
       expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({ 'X-Dazah-Page-Key': SETTINGS_PAGE_KEY }),
+        method: "POST",
+        headers: expect.objectContaining({
+          "X-Dazah-Page-Key": SETTINGS_PAGE_KEY,
+        }),
       }),
-    )
-  })
-})
+    );
+  });
+});
 
-const HAZARD_DUTY_PAGE_KEY = 'safety:risk-hazard:hazard-inspection:hazard-duty'
+const HAZARD_DUTY_PAGE_KEY = "safety:risk-hazard:hazard-inspection:hazard-duty";
 
-describe('safety page table mirror actions', () => {
+describe("safety page table mirror actions", () => {
   afterEach(() => {
-    vi.unstubAllGlobals()
-    vi.clearAllMocks()
-  })
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
 
-  it('reads page table records with the page key header and query params', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { records: [] } }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("reads page table records with the page key header and query params", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { records: [] } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
     await getSafetyPageTableRecords({
       pageKey: HAZARD_DUTY_PAGE_KEY,
       page: 2,
       pageSize: 50,
-      keyword: '萃取罐',
-      sortField: '值班日期',
-      sortDirection: 'desc',
-    })
+      keyword: "萃取罐",
+      sortField: "值班日期",
+      sortDirection: "desc",
+    });
 
-    const [url, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    const [url, options] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
     expect(url).toContain(
       `/api/v1/safety/page-tables/${encodeURIComponent(HAZARD_DUTY_PAGE_KEY)}/records?`,
-    )
-    expect(url).toContain('page=2')
-    expect(url).toContain('page_size=50')
-    expect(url).toContain(`keyword=${encodeURIComponent('萃取罐')}`)
-    expect(url).toContain('sort_direction=desc')
-    expect((options.headers as Record<string, string>)['X-Dazah-Page-Key']).toBe(
-      HAZARD_DUTY_PAGE_KEY,
-    )
-  })
+    );
+    expect(url).toContain("page=2");
+    expect(url).toContain("page_size=50");
+    expect(url).toContain(`keyword=${encodeURIComponent("萃取罐")}`);
+    expect(url).toContain("sort_direction=desc");
+    expect(
+      (options.headers as Record<string, string>)["X-Dazah-Page-Key"],
+    ).toBe(HAZARD_DUTY_PAGE_KEY);
+  });
 
-  it('writes back a record with PUT and the page key header', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { record_id: 'rec-1' } }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("writes back a record with PUT and the page key header", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { record_id: "rec-1" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
     await updateSafetyPageTableRecord({
       pageKey: HAZARD_DUTY_PAGE_KEY,
-      recordId: 'rec-1',
-      fields: { 整改情况: '已整改' },
-    })
+      recordId: "rec-1",
+      fields: { 整改情况: "已整改" },
+    });
 
-    const [url, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    const [url, options] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
     expect(url).toBe(
       `${API_BASE}/api/v1/safety/page-tables/${encodeURIComponent(HAZARD_DUTY_PAGE_KEY)}/records/rec-1`,
-    )
-    expect(options.method).toBe('PUT')
+    );
+    expect(options.method).toBe("PUT");
     expect(JSON.parse(String(options.body))).toEqual({
-      fields: { 整改情况: '已整改' },
-    })
-    expect((options.headers as Record<string, string>)['X-Dazah-Page-Key']).toBe(
-      HAZARD_DUTY_PAGE_KEY,
-    )
-  })
+      fields: { 整改情况: "已整改" },
+    });
+    expect(
+      (options.headers as Record<string, string>)["X-Dazah-Page-Key"],
+    ).toBe(HAZARD_DUTY_PAGE_KEY);
+  });
 
-  it('uploads an attachment as multipart without a JSON content type', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { attachments: [] } }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("uploads an attachment as multipart without a JSON content type", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { attachments: [] } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
-    const file = new File([new Uint8Array([1, 2, 3])], 'a.jpg', { type: 'image/jpeg' })
+    const file = new File([new Uint8Array([1, 2, 3])], "a.jpg", {
+      type: "image/jpeg",
+    });
     await uploadSafetyPageTableAttachment({
       pageKey: HAZARD_DUTY_PAGE_KEY,
-      recordId: 'rec-1',
-      fieldName: '照片',
+      recordId: "rec-1",
+      fieldName: "照片",
       file,
-    })
+    });
 
-    const [url, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    const [url, options] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
     expect(url).toBe(
-      `${API_BASE}/api/v1/safety/page-tables/${encodeURIComponent(HAZARD_DUTY_PAGE_KEY)}/records/rec-1/attachments/${encodeURIComponent('照片')}`,
-    )
-    expect(options.method).toBe('POST')
-    expect(options.body).toBeInstanceOf(FormData)
-    const headers = options.headers as Record<string, string>
-    expect(headers['Content-Type']).toBeUndefined()
-    expect(headers['X-Dazah-Page-Key']).toBe(HAZARD_DUTY_PAGE_KEY)
-  })
+      `${API_BASE}/api/v1/safety/page-tables/${encodeURIComponent(HAZARD_DUTY_PAGE_KEY)}/records/rec-1/attachments/${encodeURIComponent("照片")}`,
+    );
+    expect(options.method).toBe("POST");
+    expect(options.body).toBeInstanceOf(FormData);
+    const headers = options.headers as Record<string, string>;
+    expect(headers["Content-Type"]).toBeUndefined();
+    expect(headers["X-Dazah-Page-Key"]).toBe(HAZARD_DUTY_PAGE_KEY);
+  });
 
-  it('manages the page binding config with the settings page key', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { items: [] } }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("manages the page binding config with the settings page key", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { items: [] } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
-    await getSafetyPageFeishuConfigs()
+    await getSafetyPageFeishuConfigs();
     await saveSafetyPageFeishuConfig(HAZARD_DUTY_PAGE_KEY, {
-      app_token: 'bascnX',
-      table_id: 'tblX',
-    })
-    await testSafetyPageFeishuConfig(HAZARD_DUTY_PAGE_KEY)
-    await resolveSafetyPageFeishuUrl('https://x.feishu.cn/base/bascnX?table=tblX')
+      app_token: "bascnX",
+      table_id: "tblX",
+    });
+    await testSafetyPageFeishuConfig(HAZARD_DUTY_PAGE_KEY);
+    await resolveSafetyPageFeishuUrl(
+      "https://x.feishu.cn/base/bascnX?table=tblX",
+    );
 
-    for (const [, options] of fetchMock.mock.calls as unknown as [string, RequestInit][]) {
-      expect((options.headers as Record<string, string>)['X-Dazah-Page-Key']).toBe(
-        SETTINGS_PAGE_KEY,
-      )
+    for (const [, options] of fetchMock.mock.calls as unknown as [
+      string,
+      RequestInit,
+    ][]) {
+      expect(
+        (options.headers as Record<string, string>)["X-Dazah-Page-Key"],
+      ).toBe(SETTINGS_PAGE_KEY);
     }
-    const urls = (fetchMock.mock.calls as unknown as [string, RequestInit][]).map(
-      ([url]) => url,
-    )
-    expect(urls[0]).toBe(`${API_BASE}/api/v1/safety/page-feishu-configs`)
+    const urls = (
+      fetchMock.mock.calls as unknown as [string, RequestInit][]
+    ).map(([url]) => url);
+    expect(urls[0]).toBe(`${API_BASE}/api/v1/safety/page-feishu-configs`);
     expect(urls[1]).toBe(
       `${API_BASE}/api/v1/safety/page-feishu-configs/${encodeURIComponent(HAZARD_DUTY_PAGE_KEY)}`,
-    )
+    );
     expect(urls[2]).toBe(
       `${API_BASE}/api/v1/safety/page-feishu-configs/${encodeURIComponent(HAZARD_DUTY_PAGE_KEY)}/test`,
-    )
-    expect(urls[3]).toBe(`${API_BASE}/api/v1/safety/page-feishu-configs/resolve`)
-  })
-})
+    );
+    expect(urls[3]).toBe(
+      `${API_BASE}/api/v1/safety/page-feishu-configs/resolve`,
+    );
+  });
+});
 
-
-describe('safety page table actions', () => {
+describe("safety page table actions", () => {
   afterEach(() => {
-    vi.unstubAllGlobals()
-    vi.clearAllMocks()
-  })
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
 
-  it('lists page table records with the page key header', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("lists page table records with the page key header", async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }));
+    vi.stubGlobal("fetch", fetchMock);
 
-    await getSafetyPageTableRecords({ pageKey: 'k', page: 2, keyword: 'YH' })
-    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-    expect(url).toContain('/api/v1/safety/page-tables/k/records')
-    expect(init.headers).toMatchObject({ 'X-Dazah-Page-Key': 'k' })
-  })
+    await getSafetyPageTableRecords({ pageKey: "k", page: 2, keyword: "YH" });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toContain("/api/v1/safety/page-tables/k/records");
+    expect(init.headers).toMatchObject({ "X-Dazah-Page-Key": "k" });
+  });
 
-  it('encodes group_by dimensions into the stats query', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("encodes filter conditions and due/close fields into the stats query", async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }));
+    vi.stubGlobal("fetch", fetchMock);
 
-    await getSafetyPageTableStats({ pageKey: 'k', groupBy: ['值班日期', '整改情况'] })
-    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    await getSafetyPageTableStats({
+      pageKey: "k",
+      keyword: "车间",
+      conditions: [{ field: "状态", value: "open" }],
+      dueField: "整改期限",
+      closeField: "关闭时间",
+    });
+    const [url] = fetchMock.mock.calls[0] as unknown as [string];
+    expect(url).toContain("keyword=");
+    expect(url).toContain("conditions=");
+    expect(url).toContain("due_field=");
+    expect(url).toContain("close_field=");
+  });
+
+  it("loads page table tabs with the page key header", async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getSafetyPageTableTabs({ pageKey: "k" });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toContain("/api/v1/safety/page-tables/k/tabs");
+    expect(init.headers).toMatchObject({ "X-Dazah-Page-Key": "k" });
+  });
+
+  it("fetches field values with optional table id", async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getSafetyPageTableFieldValues({
+      pageKey: "k",
+      field: "车间",
+      tableId: "tbl9",
+    });
+    const [url] = fetchMock.mock.calls[0] as unknown as [string];
+    expect(url).toContain("/api/v1/safety/page-tables/k/values");
+    expect(url).toContain("field=");
+    expect(url).toContain("table_id=tbl9");
+  });
+
+  it("creates a record with optional table id", async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createSafetyPageTableRecord({
+      pageKey: "k",
+      fields: { 车间: "一车间" },
+      tableId: "tbl9",
+    });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toContain("/api/v1/safety/page-tables/k/records?table_id=tbl9");
+    expect(init.method).toBe("POST");
+    expect(init.headers).toMatchObject({ "X-Dazah-Page-Key": "k" });
+  });
+  it("encodes group_by dimensions into the stats query", async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getSafetyPageTableStats({
+      pageKey: "k",
+      groupBy: ["值班日期", "整改情况"],
+    });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
     expect(url).toBe(
       `${API_BASE}/api/v1/safety/page-tables/k/stats?${new URLSearchParams([
-        ['group_by', '值班日期'],
-        ['group_by', '整改情况'],
+        ["group_by", "值班日期"],
+        ["group_by", "整改情况"],
       ]).toString()}`,
-    )
-    expect(init.headers).toMatchObject({ 'X-Dazah-Page-Key': 'k' })
-  })
-})
+    );
+    expect(init.headers).toMatchObject({ "X-Dazah-Page-Key": "k" });
+  });
+});
 
-
-describe('safety special-operation ledger and config sync actions', () => {
+describe("safety hazard due notify actions", () => {
   afterEach(() => {
-    vi.unstubAllGlobals()
-    vi.clearAllMocks()
-  })
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
 
-  it('queries ledger stats with date range', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: [] }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("posts the hazard due notify test push", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { sent: 1 } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
-    await getSpecialOperationLedgerStats({ date_from: '2026-10-10', date_to: '2026-10-11' })
-    const [url] = fetchMock.mock.calls[0] as unknown as [string]
-    expect(url).toContain('/api/v1/safety/special-operation-ledger/stats')
-    expect(url).toContain('date_from=2026-10-10')
-    expect(url).toContain('date_to=2026-10-11')
-  })
+    const res = await testHazardDueNotify();
+    expect(res).toEqual({ code: 200, data: { sent: 1 } });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toContain(
+      "/api/v1/safety/feishu-settings/hazard-due-notify/test",
+    );
+    expect(init.method).toBe("POST");
+  });
+});
+describe("safety special-operation ledger and config sync actions", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
 
-  it('syncs a page feishu config by page key', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { page_key: 'k' } }))
-    vi.stubGlobal('fetch', fetchMock)
+  it("queries ledger stats with date range", async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: [] }));
+    vi.stubGlobal("fetch", fetchMock);
 
-    await syncSafetyPageFeishuConfig('my-page')
+    await getSpecialOperationLedgerStats({
+      date_from: "2026-10-10",
+      date_to: "2026-10-11",
+    });
+    const [url] = fetchMock.mock.calls[0] as unknown as [string];
+    expect(url).toContain("/api/v1/safety/special-operation-ledger/stats");
+    expect(url).toContain("date_from=2026-10-10");
+    expect(url).toContain("date_to=2026-10-11");
+  });
+
+  it("syncs a page feishu config by page key", async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { page_key: "k" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await syncSafetyPageFeishuConfig("my-page");
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/safety/page-feishu-configs/my-page/sync`,
-      expect.objectContaining({ method: 'POST' }),
-    )
-  })
-})
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+});

@@ -9,8 +9,9 @@ Create Date: 2026-10-17
 
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = "d4e7f1a9c3b5"
 down_revision = "c9f1a5e3b8d2"
@@ -36,7 +37,9 @@ def upgrade() -> None:
             "hazard_due_notify_milestones",
             sa.JSON(),
             nullable=True,
-            comment="提醒节点天数列表（如 [30,15,7]：到期前一个月/半个月/一周各提醒一次）",
+            comment=(
+                "提醒节点天数列表（如 [30,15,7]：到期前一个月/半个月/一周各提醒一次）"
+            ),
         ),
         schema="safety",
     )
@@ -72,7 +75,9 @@ def upgrade() -> None:
             comment="触发的提醒节点天数；0 表示已逾期节点",
         ),
         sa.Column(
-            "notified_at", sa.DateTime(timezone=True), nullable=False,
+            "notified_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
         ),
         sa.Column("is_deleted", sa.Boolean(), nullable=False, server_default="false"),
         sa.Column(

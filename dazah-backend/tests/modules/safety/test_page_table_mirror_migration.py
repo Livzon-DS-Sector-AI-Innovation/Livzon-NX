@@ -93,7 +93,9 @@ def test_downgrade_drops_columns_then_table(monkeypatch) -> None:
 # ── 批次 2：ledger_record_id / 多子表页签 / 隐患到期提醒设置 ──
 
 _BATCH2_CHAIN = [
-    ("b7d9e2f4a6c8_add_hazard_ledger_record_id", "b7d9e2f4a6c8", "a3c8e5f7b9d1"),
+    # 主线 #156 在 a3c8e5f7b9d1 之后合入 board_prefs 链并以 c9d400000060
+    # 合并；本批改接该合并节点保持单链
+    ("b7d9e2f4a6c8_add_hazard_ledger_record_id", "b7d9e2f4a6c8", "c9d400000060"),
     (
         "c9f1a5e3b8d2_multi_table_tabs_for_page_mirror",
         "c9f1a5e3b8d2",
