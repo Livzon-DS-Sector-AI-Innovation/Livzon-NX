@@ -1129,24 +1129,28 @@ def build_dr_board(
     tanks = _apply_batch_actual_times(tanks, actual_by_batch, now)
 
     # ── KPI / 最近完成 / 录入下拉 ──
-    # 产量口径含中试批（累积进总产量）；批次计数口径见上方 formal_batches
+    # 两种口径分开表述：产量口径含中试批产量（总产量/平均单产分子，
+    # 基于 done_all）；批次口径（进度条四段/计划达成/进度预警）只数
+    # 大罐正式批（基于 done），四段批次数之和 = 计划批次数
     with_yield = [
         b
         for b in done_all
         if actual_by_batch.get(b["batch_no"], {}).get("yield_kg")
     ]
+    total_yield_kg = sum(
+        float(actual_by_batch[b["batch_no"]]["yield_kg"]) for b in with_yield
+    )
+    formal_with_yield = [
+        b
+        for b in done
+        if actual_by_batch.get(b["batch_no"], {}).get("yield_kg")
+    ]
     kpis = {
         "month_planned": len(planned_dump),
         "month_done_planned": len(done),
-        "done_with_yield": len(with_yield),
-        "yield_pending": len(done_all) - len(with_yield),
-        "month_done_yield_kg": (
-            sum(
-                actual_by_batch[b["batch_no"]]["yield_kg"]
-                for b in with_yield
-            )
-            or None
-        ),
+        "done_with_yield": len(formal_with_yield),
+        "yield_pending": len(done) - len(formal_with_yield),
+        "month_done_yield_kg": total_yield_kg or None,
         "running": len(running),
         "pending": len(pending),
     }
@@ -1232,8 +1236,8 @@ def build_dr_board(
 
     tanks.sort(key=_tank_order)
     # 单批产量趋势：周期内已放罐且有产量的批次，按放罐日期升序取最近 31 批。
-    # 中试线小罐批不画柱（大罐正式批 only）；平均单产 = 大罐批已录产量
-    # 的均值（中试线产量不计入，与柱状图口径一致）
+    # 中试线小罐批不画柱（大罐正式批 only）；平均单产 = 周期总产量（含中试
+    # 批产量，与总产量 KPI 同口径）÷ 大罐已录批次数（中试批不占名额）
     done_dump = {b["batch_no"]: b["dump"] for b in done}
     measured = sorted(
         (
@@ -1244,7 +1248,14 @@ def build_dr_board(
         key=lambda a: (done_dump[a["batch_no"]], str(a["batch_no"])),
     )
     recent_measured = measured[-31:]
+    # 两口径平均单产：含中试（周期总产量÷大罐已录批数，avg_yield_kg）与
+    # 不含中试（大罐批均值）；无中试产量时两者相等，前端切换无视觉差异
     avg_yield_kg = (
+        round(total_yield_kg / len(measured), 2)
+        if measured
+        else None
+    )
+    avg_yield_kg_excl_pilot = (
         round(sum(float(a["yield_kg"]) for a in measured) / len(measured), 2)
         if measured
         else None
@@ -1254,6 +1265,7 @@ def build_dr_board(
             "batches": [a["batch_no"] for a in recent_measured],
             "outputs": [round(float(a["yield_kg"]), 2) for a in recent_measured],
             "avg_yield_kg": avg_yield_kg,
+            "avg_yield_kg_excl_pilot": avg_yield_kg_excl_pilot,
         }
         if recent_measured
         else None

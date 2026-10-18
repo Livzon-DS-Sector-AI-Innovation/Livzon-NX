@@ -2345,6 +2345,20 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
         overview,
         scope_adapter="production.dashboard",
     )
+    # 看板个人偏好（平均单产口径与标签后缀）：仅当前账户自己的数据，
+    # 读写都挂在概览页 query 口径——看板可见即可自定义，不需操作权限
+    add_many(
+        "GET",
+        ("/board-preferences",),
+        overview,
+        scope_adapter="production.dashboard",
+    )
+    add_many(
+        "POST",
+        ("/board-preferences",),
+        overview,
+        scope_adapter="production.dashboard",
+    )
     # The extraction daily report is edited from the production dashboard and
     # keeps its finer-grained extraction-yield check inside the module API.
     add(

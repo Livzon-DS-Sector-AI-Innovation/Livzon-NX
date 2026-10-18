@@ -1132,3 +1132,9 @@ from app.modules.production.fl_board_api import (  # noqa: E402
 )
 
 router.include_router(fl_board_router, tags=["生产管理 - 氟苯尼考看板"])
+
+from app.modules.production.board_preferences_api import (  # noqa: E402
+    router as board_preferences_router,
+)
+
+router.include_router(board_preferences_router, tags=["生产管理 - 看板偏好"])

@@ -24,6 +24,8 @@ const actions = vi.hoisted(() => ({
   getProductionLineStatus: vi.fn(),
   setProductionLineStatus: vi.fn(),
   getLineHaltEvents: vi.fn(),
+  getProductionBoardPreferences: vi.fn(),
+  saveProductionBoardPreferences: vi.fn(),
 }))
 
 vi.mock('@/actions/production', () => actions)
@@ -169,10 +171,21 @@ describe('ProductionHomePage (fermentation board)', () => {
     authStore.state.user.role = 'admin'
     authStore.state.user.permissions = ['*']
     authStore.state.user.page_permissions = []
+    actions.saveProductionBoardPreferences.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: null,
+    })
     actions.getFermentationBoard.mockResolvedValue({
       code: 200,
       message: 'success',
       data: BOARD,
+    })
+    // 看板偏好默认：与组件默认一致（不触发额外渲染分支）
+    actions.getProductionBoardPreferences.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: { avg_pilot_incl: true, avg_note: '含中试' },
     })
     // FL 视图默认空看板：未同步时不渲染批次表格（FL 分支用例自行覆盖数据态）
     actions.getFlBoard.mockResolvedValue({
@@ -304,7 +317,7 @@ describe('ProductionHomePage (fermentation board)', () => {
   it('renders the production chart card and empty hint', async () => {
     await render()
     const text = (container.textContent || '') + (document.body.textContent || '')
-    expect(text).toContain('单批产量（最多 31 批）')
+    expect(text).toContain('单批产量')
     expect(text).toContain('暂无录入数据，请点击右上角「历史数据」录入批次产量')
   })
 
@@ -1006,6 +1019,109 @@ describe('ProductionHomePage (fermentation board)', () => {
     const text = (container.textContent || '') + (document.body.textContent || '')
     expect(text).toContain('FA26229')
     expect(text).toContain('平均产量 30750.00 kg')
+  })
+
+  it('loads per-user preferences and persists caliber changes', async () => {
+    // 服务端记忆了该账户的偏好：不含中试口径 + 自定义后缀
+    actions.getProductionBoardPreferences.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: { avg_pilot_incl: false, avg_note: '大罐均值口径' },
+    })
+    actions.getFermentationBoard.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: {
+        ...BOARD,
+        trend: {
+          batches: ['DR-2617', 'DR-26035'],
+          outputs: [100.5, 88.0],
+          avg_yield_kg: 124.25,
+          avg_yield_kg_excl_pilot: 94.25,
+        },
+      },
+    })
+    await render()
+    const bodyText = () => (container.textContent || '') + (document.body.textContent || '')
+    // 载入即应用：不含中试口径（无后缀、输入框隐藏），且不回写保存
+    expect(bodyText()).toContain('平均产量 94.25 kg')
+    expect(container.querySelectorAll('input[placeholder="标签后缀"]').length).toBe(0)
+    expect(actions.saveProductionBoardPreferences).not.toHaveBeenCalled()
+    // 切回含中试：防抖 600ms 后保存到账户偏好；CI 慢机事件循环可能
+    // 拉长定时器触发，轮询等待保存调用而非固定时长等待
+    const swapBtn = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.querySelector('.anticon-swap'),
+    ) as HTMLElement
+    await act(async () => {
+      swapBtn.click()
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    for (
+      let i = 0;
+      i < 40 && actions.saveProductionBoardPreferences.mock.calls.length === 0;
+      i++
+    ) {
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 100))
+      })
+    }
+    expect(actions.saveProductionBoardPreferences).toHaveBeenCalledWith({
+      avg_pilot_incl: true,
+      avg_note: '大罐均值口径',
+    })
+    // 应用含中试口径后，后缀用账户保存的文字
+    expect(bodyText()).toContain('平均产量 124.25 kg（大罐均值口径）')
+  })
+
+  it('toggles the average caliber and edits the incl-pilot suffix note', async () => {
+    actions.getFermentationBoard.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: {
+        ...BOARD,
+        trend: {
+          batches: ['DR-2617', 'DR-26035'],
+          outputs: [100.5, 88.0],
+          avg_yield_kg: 124.25,
+          avg_yield_kg_excl_pilot: 94.25,
+        },
+      },
+    })
+    await render()
+    const bodyText = () => (container.textContent || '') + (document.body.textContent || '')
+    // 默认含中试：标签带默认后缀，且提供可编辑后缀输入框
+    expect(bodyText()).toContain('平均产量 124.25 kg（含中试）')
+    const swapBtn = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.querySelector('.anticon-swap'),
+    ) as HTMLElement | undefined
+    expect(swapBtn).toBeTruthy()
+    // 切到不含中试：数值切换、无后缀、输入框隐藏
+    await act(async () => { swapBtn!.click(); await new Promise((r) => setTimeout(r, 80)) })
+    expect(bodyText()).toContain('平均产量 94.25 kg')
+    expect(container.querySelectorAll('input[placeholder="标签后缀"]').length).toBe(0)
+    // 切回含中试：输入框恢复，后缀文字可修改
+    const swapBack = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.querySelector('.anticon-swap'),
+    ) as HTMLElement
+    await act(async () => { swapBack.click(); await new Promise((r) => setTimeout(r, 80)) })
+    const noteInput = container.querySelector('input[placeholder="标签后缀"]') as HTMLInputElement
+    expect(noteInput).toBeTruthy()
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+      setter?.call(noteInput, '试验批摊入')
+      noteInput.dispatchEvent(new Event('input', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(bodyText()).toContain('平均产量 124.25 kg（试验批摊入）')
+    // 清空后缀：标签回到无后缀
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+      setter?.call(noteInput, '')
+      noteInput.dispatchEvent(new Event('input', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(bodyText()).toContain('平均产量 124.25 kg')
+    expect(bodyText()).not.toContain('（试验批摊入）')
   })
 
   async function openHistoryDrawer() {
@@ -1781,7 +1897,7 @@ describe('ProductionHomePage (fermentation board)', () => {
     // 发酵模块（KPI/罐状态/图表）对提炼岗不可见
     expect(text).not.toContain('本月计划批次')
     expect(text).not.toContain('发酵罐实时状态')
-    expect(text).not.toContain('单批产量（最多 31 批）')
+    expect(text).not.toContain('单批产量')
     expect(text).not.toContain('提炼计划产量')
     expect(text).not.toContain('提炼收率（实时）')
   })
