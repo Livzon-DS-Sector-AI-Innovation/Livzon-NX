@@ -24,6 +24,7 @@ it('switches all safety charts immediately and drills into the original month ke
   try {
     await act(async () => root.render(<AntdProvider><PageFeishuStatsBar onSelect={onSelect} stats={{
       page_key: 'safety:test', page_name: '验收数据', total: 12,
+      due_summary: null,
       groups: [
         { field: '日期', kind: 'date', mode: 'month', buckets: [{ key: '2025-07', count: 5 }, { key: '2026-07', count: 7 }] },
         { field: '车间', kind: 'text', mode: 'value', buckets: [{ key: '201-1', count: 12 }] },

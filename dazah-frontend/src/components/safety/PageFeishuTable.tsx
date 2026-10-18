@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { CloudUploadOutlined, ReloadOutlined, SaveOutlined, SearchOutlined } from '@ant-design/icons'
+import { CloudUploadOutlined, PlusOutlined, ReloadOutlined, SaveOutlined, SearchOutlined } from '@ant-design/icons'
 import {
   App,
   Avatar,
@@ -20,16 +20,21 @@ import {
   Typography,
   Upload,
 } from 'antd'
+
+const { RangePicker } = DatePicker
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 
 import {
+  createSafetyPageTableRecord,
+  getSafetyPageTableFieldValues,
   getSafetyPageTableRecords,
   getSafetyPageTableStats,
   updateSafetyPageTableRecord,
   uploadSafetyPageTableAttachment,
 } from '@/actions/safety'
 import { renderFeishuValue } from '@/components/quality/inspection/renderFeishuValue'
+import PageDueReminderCard from '@/components/safety/PageDueReminderCard'
 import PageFeishuStatsBar from '@/components/safety/PageFeishuStatsBar'
 import PlatformNotice from '@/components/shared/PlatformNotice'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
@@ -39,6 +44,7 @@ import {
   asUrlValue,
   columnOptions,
   displayFieldText,
+  pageTableAttachmentUrl,
   pickConditionSelectColumns,
   pickDefaultDateColumn,
   toPageTableStats,
@@ -46,6 +52,7 @@ import {
   type PageTableColumn,
   type PageTableRecordRow,
   type PageTableStats,
+  type PageTableTab,
 } from '@/lib/safety-page-tables'
 
 const PAGE_SIZE_OPTIONS = ['20', '50', '100']
@@ -56,6 +63,8 @@ const MAX_SUMMARY_COLUMNS = 10
 const LONG_TEXT_THRESHOLD = 80
 /** 单选/多选列的选项超过该长度（防护、措施类长句）时按长文本换行渲染。 */
 const LONG_OPTION_THRESHOLD = 20
+/** 换行列的固定宽度（约每行 10 个汉字，超长内容折行而不是撑宽表格）。 */
+const WRAPPED_COLUMN_WIDTH = 150
 
 /** 状态列（申请状态/巡查状态等）：始终保留在摘要列，方便一眼看到结果。 */
 function isStatusColumn(column: PageTableColumn): boolean {
@@ -63,6 +72,29 @@ function isStatusColumn(column: PageTableColumn): boolean {
     (column.kind === 'select' || column.kind === 'multi_select') &&
     column.name.includes('状态')
   )
+}
+
+/** 全列模式下需要定宽换行的列：文本列一律换行（短值也不撑宽表格）；
+ * 单/多选列按「选项为长句」判定。 */
+function buildWrappedColumnNames(columns: PageTableColumn[]): Set<string> {
+  const names = new Set<string>()
+  for (const column of columns) {
+    if (column.kind === 'text' || column.kind === 'readonly') {
+      names.add(column.name)
+    } else if (
+      column.kind === 'select' ||
+      column.kind === 'multi_select'
+    ) {
+      if (
+        columnOptions(column).some(
+          (option) => option.length > LONG_OPTION_THRESHOLD
+        )
+      ) {
+        names.add(column.name)
+      }
+    }
+  }
+  return names
 }
 
 /** 计算表格摘要列：剔除勾选清单与长文本列后，状态列保底保留。 */
@@ -96,10 +128,13 @@ function attachmentUrl(
   pageKey: string,
   recordId: string,
   fieldName: string,
-  fileToken: string
+  fileToken: string,
+  tableId?: string | null
 ): string {
   // 以 /content 结尾：共享渲染器会把 /content 重写为 /thumbnail 取小图
-  return `/api/v1/safety/page-tables/${encodeURIComponent(pageKey)}/records/${encodeURIComponent(recordId)}/attachments/${encodeURIComponent(fieldName)}/${encodeURIComponent(fileToken)}/content`
+  return pageTableAttachmentUrl(pageKey, recordId, fieldName, fileToken, {
+    tableId: tableId || undefined,
+  })
 }
 
 /** 附件/人员单元格与详情统一走 QC 验证的共享渲染器（缩略图、头像）。 */
@@ -108,14 +143,15 @@ function renderFeishuColumnValue(
   value: unknown,
   row: PageTableRecordRow,
   pageKey: string,
-  message: ReturnType<typeof App.useApp>['message']
+  message: ReturnType<typeof App.useApp>['message'],
+  tableId?: string | null
 ) {
   if (column.kind === 'attachment') {
     const items = asAttachmentList(value)
     if (!items.length) return <Typography.Text type="secondary">—</Typography.Text>
     return renderFeishuValue(items, { record_id: row.record_id }, undefined, message, {
       attachmentUrlBuilder: (_entity, recordId, fileToken) =>
-        attachmentUrl(pageKey, recordId, column.name, fileToken),
+        attachmentUrl(pageKey, recordId, column.name, fileToken, tableId),
     })
   }
   if (column.kind === 'person') {
@@ -182,6 +218,44 @@ function buildConditions(
   return conditions
 }
 
+/** 高级筛选栏（下拉字段 + 时间范围）的条件（字段间 AND）。 */
+function buildAdvancedConditions(
+  fieldFilters: Record<string, string>,
+  dateRange: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null,
+  dateField: string | null
+): Array<{ field: string; value: string; op: 'eq' | 'gte' | 'lte' }> {
+  const conditions: Array<{ field: string; value: string; op: 'eq' | 'gte' | 'lte' }> = []
+  for (const [field, value] of Object.entries(fieldFilters)) {
+    if (value) conditions.push({ field, value, op: 'eq' })
+  }
+  if (dateField && dateRange) {
+    const [from, to] = dateRange
+    if (from) conditions.push({ field: dateField, value: from.format('YYYY-MM-DD'), op: 'gte' })
+    if (to) conditions.push({ field: dateField, value: to.format('YYYY-MM-DD'), op: 'lte' })
+  }
+  return conditions
+}
+
+/** 把详情抽屉表单值编码为提交给后端的字段负载（日期转字符串、人员取 id）。 */
+function buildFormPayload(
+  values: Record<string, unknown>,
+  editableColumns: PageTableColumn[]
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = {}
+  for (const column of editableColumns) {
+    if (column.kind === 'attachment') continue
+    const current = values[column.name]
+    if (column.kind === 'date') {
+      payload[column.name] = current ? dayjs(current as never).format('YYYY-MM-DD') : null
+    } else if (column.kind === 'person') {
+      payload[column.name] = ((current as string[]) ?? []).map((id) => ({ id }))
+    } else {
+      payload[column.name] = current ?? null
+    }
+  }
+  return payload
+}
+
 export default function PageFeishuTable({
   pageKey,
   pageName,
@@ -191,6 +265,14 @@ export default function PageFeishuTable({
   showStats = true,
   summarizeColumns = false,
   initialDateFilter = null,
+  statsGroupBy,
+  tabs,
+  defaultSortField = null,
+  filterFields,
+  filterDateField,
+  dueField,
+  closeField = '关闭状态',
+  allowCreate = false,
 }: {
   pageKey: string
   pageName: string
@@ -213,9 +295,43 @@ export default function PageFeishuTable({
   summarizeColumns?: boolean
   /** 服务端首屏已应用的日期条件（默认当天），客户端以此初始化日期筛选。 */
   initialDateFilter?: RecordCondition | null
+  /**
+   * 统计分组字段（服务端口径）。表里有多个日期字段时必须显式指定，
+   * 否则自动挑选会取 schema 顺序的第一个日期字段（可能是错误的那一个）。
+   */
+  statsGroupBy?: string[]
+  /**
+   * 子表清单（多子表页面）。传入后工具栏渲染「数据表」筛选下拉框，切换时
+   * 按 table_id 重查记录；不传保持单表页面的原有行为。
+   */
+  tabs?: PageTableTab[]
+  /**
+   * 默认排序列（如台账页按「部门/车间」归组）。服务端排序；表格无该字段
+   * 的子表由后端自动回退默认顺序。表头点击排序仍可覆盖。
+   */
+  defaultSortField?: string | null
+  /**
+   * 筛选栏下拉字段（如 ['部门/车间', '负责人', '关闭状态']）。选项来自
+   * /values 接口（按出现次数排序），选择后立即生效并同步到仪表盘。
+   */
+  filterFields?: string[]
+  /** 时间范围筛选字段（日期列），与筛选下拉一起构成列表与仪表盘的过滤。 */
+  filterDateField?: string
+  /** 到期统计字段（日期列，如 目标完成日期）；传入后仪表盘渲染到期提醒卡。 */
+  dueField?: string
+  /** 关闭状态字段（默认 关闭状态；值为「已关闭」视为已闭环，不计入到期）。 */
+  closeField?: string
+  /** 是否允许新建记录（写入当前选中的子表并回写飞书），需操作权限。 */
+  allowCreate?: boolean
 }) {
   const { message } = App.useApp()
   const { canOperate } = usePagePermissions(pageKey)
+  // 当前激活子表（table_id；主表页签用 undefined 走主绑定）
+  const primaryTab = tabs?.find((tab) => tab.is_primary)
+  const [activeTableId, setActiveTableId] = useState<string | undefined>(
+    primaryTab?.table_id
+  )
+  const activeTableIdRef = useRef<string | undefined>(primaryTab?.table_id)
   const [columns, setColumns] = useState<PageTableColumn[]>(initialData?.columns ?? [])
   const [rows, setRows] = useState<PageTableRecordRow[]>(initialData?.records ?? [])
   const [total, setTotal] = useState(initialData?.total ?? 0)
@@ -223,7 +339,7 @@ export default function PageFeishuTable({
   const [pageSize, setPageSize] = useState(initialData?.page_size ?? 20)
   const [stats, setStats] = useState<PageTableStats | null>(initialStats)
   const [keyword, setKeyword] = useState('')
-  const [sortField, setSortField] = useState<string | null>(null)
+  const [sortField, setSortField] = useState<string | null>(defaultSortField)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [loading, setLoading] = useState(false)
   const [truncated, setTruncated] = useState(initialData?.truncated ?? false)
@@ -233,6 +349,7 @@ export default function PageFeishuTable({
     value: string
   } | null>(null)
   const [detail, setDetail] = useState<PageTableRecordRow | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
   const [form] = Form.useForm()
   const [saving, setSaving] = useState(false)
   const [uploadingField, setUploadingField] = useState<string | null>(null)
@@ -252,6 +369,11 @@ export default function PageFeishuTable({
       summarizeColumns ? buildSummaryColumns(columns, rows) : columns,
     [summarizeColumns, columns, rows]
   )
+  // 全列模式：长内容列（隐患内容/改善行动/措施等）定宽换行，避免撑宽表格
+  const wrappedColumnNames = useMemo(
+    () => buildWrappedColumnNames(columns),
+    [columns]
+  )
   const detailOnlyCount = summarizeColumns
     ? Math.max(0, columns.length - summaryColumns.length)
     : 0
@@ -268,6 +390,29 @@ export default function PageFeishuTable({
     initialDateFilter ? dayjs(initialDateFilter.value) : null
   )
   const [selectFilters, setSelectFilters] = useState<Record<string, string>>({})
+  // 高级筛选栏：字段下拉 + 时间范围（选项来自 /values，条件同步到仪表盘）
+  const [fieldFilters, setFieldFilters] = useState<Record<string, string>>({})
+  const [dateRange, setDateRange] = useState<
+    [dayjs.Dayjs | null, dayjs.Dayjs | null]
+  >([null, null])
+  const [filterOptions, setFilterOptions] = useState<
+    Record<string, Array<{ value: string; count: number }>>
+  >({})
+  // 到期提醒卡：时间窗（7/15/30 天）与下钻开关（下钻只作用于列表）
+  const [dueWindow, setDueWindow] = useState(7)
+  const [dueDrill, setDueDrill] = useState(false)
+  // 仅启用高级筛选栏的页面让仪表盘跟随数据表/筛选联动
+  const advancedFilterEnabled = Boolean(filterFields?.length || filterDateField)
+  // 时间范围筛选只在目标字段确实是日期列的子表展示（如 2024 表的检查内容是文本）
+  const filterDateColumn = useMemo(
+    () =>
+      filterDateField
+        ? columns.find(
+            (column) => column.name === filterDateField && column.kind === 'date'
+          ) ?? null
+        : null,
+    [columns, filterDateField]
+  )
 
   /**
    * 人员字段的候选项来自当前表格已出现过的人员（含 open_id 与头像）。
@@ -297,7 +442,43 @@ export default function PageFeishuTable({
       sortDirection?: 'asc' | 'desc'
       filter?: { field: string; value: string } | null
       conditions?: RecordCondition[]
+      tableId?: string | null
+      fieldFilters?: Record<string, string>
+      dateRange?: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null
+      dueDrill?: boolean
+      dueWindow?: number
     }) => {
+      const nextFieldFilters = override?.fieldFilters ?? fieldFilters
+      const nextDateRange =
+        override?.dateRange !== undefined ? override.dateRange : dateRange
+      const nextDueDrill = override?.dueDrill ?? dueDrill
+      const nextDueWindow = override?.dueWindow ?? dueWindow
+      const advancedConditions = buildAdvancedConditions(
+        nextFieldFilters,
+        nextDateRange,
+        filterDateField ?? null
+      )
+      const baseConditions =
+        override?.conditions !== undefined
+          ? override.conditions
+          : buildConditions(
+              summarizeColumns,
+              dateColumn,
+              dateFilter,
+              selectFilters
+            )
+      // 到期下钻只过滤列表：目标完成日期 ≤ 今天+N（含逾期）且未关闭
+      const dueDrillConditions =
+        nextDueDrill && dueField
+          ? [
+              {
+                field: dueField,
+                value: dayjs().add(nextDueWindow, 'day').format('YYYY-MM-DD'),
+                op: 'lte' as const,
+              },
+              { field: closeField, value: '已关闭', op: 'neq' as const },
+            ]
+          : []
       const next = {
         page: override?.page ?? page,
         pageSize: override?.pageSize ?? pageSize,
@@ -306,15 +487,11 @@ export default function PageFeishuTable({
         sortDirection: override?.sortDirection ?? sortDirection,
         filter:
           override?.filter !== undefined ? override.filter : dimensionFilter,
-        conditions:
-          override?.conditions !== undefined
-            ? override.conditions
-            : buildConditions(
-                summarizeColumns,
-                dateColumn,
-                dateFilter,
-                selectFilters
-              ),
+        conditions: [...baseConditions, ...advancedConditions, ...dueDrillConditions],
+        tableId:
+          override?.tableId !== undefined
+            ? override.tableId ?? undefined
+            : activeTableIdRef.current,
       }
       const seq = requestSeq.current + 1
       requestSeq.current = seq
@@ -330,9 +507,22 @@ export default function PageFeishuTable({
           filterField: next.filter?.field || undefined,
           filterValue: next.filter?.value || undefined,
           conditions: next.conditions.length ? next.conditions : undefined,
+          tableId: next.tableId,
         }),
         showStats
-          ? getSafetyPageTableStats({ pageKey })
+          ? getSafetyPageTableStats({
+              pageKey,
+              groupBy: statsGroupBy,
+              // 仪表盘跟随所选数据表与筛选条件联动（图表下钻除外）
+              tableId: advancedFilterEnabled ? next.tableId : undefined,
+              keyword: advancedFilterEnabled ? next.keyword || undefined : undefined,
+              conditions: advancedFilterEnabled &&
+                (baseConditions.length || advancedConditions.length)
+                ? [...baseConditions, ...advancedConditions]
+                : undefined,
+              dueField,
+              closeField: dueField ? closeField : undefined,
+            })
           : Promise.resolve({ code: 200 as const, data: null }),
       ])
       if (seq !== requestSeq.current) return
@@ -341,18 +531,66 @@ export default function PageFeishuTable({
         setStats(toPageTableStats(statsRes.data))
       }
       if (res.code === 200 && res.data) {
-        setColumns(res.data.columns ?? [])
+        const nextColumns = res.data.columns ?? []
+        setColumns(nextColumns)
         setRows(toRecordRows(res.data.records))
         setTotal(res.data.total)
         setPage(res.data.page)
         setPageSize(res.data.page_size)
         setTruncated(res.data.truncated)
         setLoadError(null)
+        // 结构不同的子表（不符合项/观察项）没有统计维度字段，首轮 stats
+        // 会 400：按该表实际存在的维度回退重查；一个都没有时清空仪表盘
+        const columnNames = new Set(nextColumns.map((column) => column.name))
+        const missingDimension = statsGroupBy?.some((name) => !columnNames.has(name))
+        if (showStats && statsGroupBy?.length && (statsRes.code !== 200 || missingDimension)) {
+          const present = statsGroupBy.filter((name) => columnNames.has(name))
+          if (!present.length) {
+            setStats(null)
+          } else {
+            const retry = await getSafetyPageTableStats({
+              pageKey,
+              groupBy: present,
+              tableId: advancedFilterEnabled ? next.tableId : undefined,
+              keyword: advancedFilterEnabled ? next.keyword || undefined : undefined,
+              conditions:
+                advancedFilterEnabled &&
+                next.conditions.every((condition) => present.includes(condition.field))
+                  ? next.conditions
+                  : undefined,
+            })
+            if (seq === requestSeq.current && retry.code === 200) {
+              setStats(toPageTableStats(retry.data))
+            }
+          }
+        }
       } else {
         setLoadError(res.message || '读取多维表格数据失败')
       }
     },
-    [dateColumn, dateFilter, dimensionFilter, keyword, page, pageSize, pageKey, selectFilters, showStats, sortDirection, sortField, summarizeColumns]
+    [
+      advancedFilterEnabled,
+      closeField,
+      dateColumn,
+      dateFilter,
+      dateRange,
+      dimensionFilter,
+      dueDrill,
+      dueField,
+      dueWindow,
+      fieldFilters,
+      filterDateField,
+      keyword,
+      page,
+      pageSize,
+      pageKey,
+      selectFilters,
+      showStats,
+      sortDirection,
+      sortField,
+      statsGroupBy,
+      summarizeColumns,
+    ]
   )
 
   const openDetail = useCallback(
@@ -379,23 +617,13 @@ export default function PageFeishuTable({
   const handleSave = useCallback(async () => {
     if (!detail) return
     const values = (await form.validateFields()) as Record<string, unknown>
-    const payload: Record<string, unknown> = {}
-    for (const column of editableColumns) {
-      if (column.kind === 'attachment') continue
-      const current = values[column.name]
-      if (column.kind === 'date') {
-        payload[column.name] = current ? dayjs(current as never).format('YYYY-MM-DD') : null
-      } else if (column.kind === 'person') {
-        payload[column.name] = ((current as string[]) ?? []).map((id) => ({ id }))
-      } else {
-        payload[column.name] = current ?? null
-      }
-    }
+    const payload = buildFormPayload(values, editableColumns)
     setSaving(true)
     const res = await updateSafetyPageTableRecord({
       pageKey,
       recordId: detail.record_id,
       fields: payload,
+      tableId: activeTableId ?? null,
     })
     setSaving(false)
     if (res.code === 200 && res.data) {
@@ -409,7 +637,37 @@ export default function PageFeishuTable({
     } else {
       message.error(res.message || '保存失败')
     }
-  }, [detail, editableColumns, form, message, openDetail, pageKey])
+  }, [activeTableId, detail, editableColumns, form, message, openDetail, pageKey])
+
+  /** 新建记录：写入当前选中的子表并回写飞书，成功后刷新列表与仪表盘。 */
+  const handleCreate = useCallback(async () => {
+    const values = (await form.validateFields()) as Record<string, unknown>
+    const payload = buildFormPayload(values, editableColumns)
+    // 新建时空值不提交（清空字段是更新语义），避免把一串 null 写进飞书
+    const cleaned = Object.fromEntries(
+      Object.entries(payload).filter(
+        ([, value]) =>
+          value !== null &&
+          value !== '' &&
+          !(Array.isArray(value) && value.length === 0)
+      )
+    )
+    setSaving(true)
+    const res = await createSafetyPageTableRecord({
+      pageKey,
+      fields: cleaned,
+      tableId: activeTableId ?? null,
+    })
+    setSaving(false)
+    if (res.code === 200 && res.data) {
+      message.success('已新建记录并写入飞书多维表格')
+      setCreateOpen(false)
+      form.resetFields()
+      await load({ page: 1 })
+    } else {
+      message.error(res.message || '新建失败')
+    }
+  }, [activeTableId, editableColumns, form, load, message, pageKey])
 
   const handleUpload = useCallback(
     async (column: PageTableColumn, file: File) => {
@@ -420,6 +678,7 @@ export default function PageFeishuTable({
         recordId: detail.record_id,
         fieldName: column.name,
         file,
+        tableId: activeTableId ?? null,
       })
       setUploadingField(null)
       if (res.code === 200 && res.data) {
@@ -441,7 +700,7 @@ export default function PageFeishuTable({
         message.error(res.message || '附件上传失败')
       }
     },
-    [detail, message, pageKey]
+    [activeTableId, detail, message, pageKey]
   )
 
   /** 图表下钻：再次点击同一分类取消筛选。 */
@@ -458,6 +717,59 @@ export default function PageFeishuTable({
     [dimensionFilter, load]
   )
 
+  /** 切换子表：重置筛选/分页后按该子表重查；仪表盘跟随所选数据表。 */
+  const handleTabChange = useCallback(
+    (tableId: string) => {
+      setActiveTableId(tableId)
+      activeTableIdRef.current = tableId
+      setKeyword('')
+      setSortField(defaultSortField)
+      setDimensionFilter(null)
+      setFieldFilters({})
+      setDateRange([null, null])
+      setDueDrill(false)
+      setDetail(null)
+      setCreateOpen(false)
+      form.resetFields()
+      setPage(1)
+      void load({
+        page: 1,
+        tableId,
+        filter: null,
+        sortField: defaultSortField,
+        sortDirection: 'asc',
+        fieldFilters: {},
+        dateRange: null,
+      })
+    },
+    [defaultSortField, form, load]
+  )
+
+  // 筛选下拉的选项：随数据表切换重新拉取（各子表字段值不同）
+  useEffect(() => {
+    if (!filterFields?.length) return
+    let cancelled = false
+    void (async () => {
+      const entries = await Promise.all(
+        filterFields.map(async (name) => {
+          const res = await getSafetyPageTableFieldValues({
+            pageKey,
+            field: name,
+            tableId: activeTableIdRef.current,
+          })
+          return [
+            name,
+            res.code === 200 && res.data ? (res.data.values ?? []) : [],
+          ] as const
+        })
+      )
+      if (!cancelled) setFilterOptions(Object.fromEntries(entries))
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [filterFields, pageKey, activeTableId])
+
   useEffect(() => {
     // 首屏数据由服务端注入；仅在缺失时兜底拉取
     if (!initialData) void load()
@@ -465,14 +777,27 @@ export default function PageFeishuTable({
   }, [])
 
   const tableColumns: ColumnsType<PageTableRecordRow> = summaryColumns.map((column) => {
-    const wrappable = summarizeColumns && isWrappableColumn(column)
+    const wrappable = summarizeColumns
+      ? isWrappableColumn(column)
+      : wrappedColumnNames.has(column.name)
     return {
       title: column.name,
       dataIndex: ['fields', column.name],
       key: column.field_id || column.name,
       ellipsis: column.kind !== 'attachment' && !wrappable,
-      width: column.kind === 'attachment' ? 220 : undefined,
+      width:
+        column.kind === 'attachment'
+          ? 220
+          : wrappable && !summarizeColumns
+            ? WRAPPED_COLUMN_WIDTH
+            : undefined,
       sorter: true,
+      sortOrder:
+        sortField === column.name
+          ? sortDirection === 'desc'
+            ? 'descend'
+            : 'ascend'
+          : null,
       render: (_: unknown, row: PageTableRecordRow) => {
         if (column.kind === 'attachment') {
           // 图片点击是放大预览，不能冒泡到行上误开详情抽屉
@@ -483,7 +808,8 @@ export default function PageFeishuTable({
                 row.fields[column.name],
                 row,
                 pageKey,
-                message
+                message,
+                activeTableId
               )}
             </div>
           )
@@ -493,7 +819,8 @@ export default function PageFeishuTable({
           row.fields[column.name],
           row,
           pageKey,
-          message
+          message,
+          activeTableId
         )
         if (rendered !== undefined) return rendered
         if (wrappable) {
@@ -503,7 +830,7 @@ export default function PageFeishuTable({
           return (
             <div
               style={{
-                maxWidth: 320,
+                maxWidth: WRAPPED_COLUMN_WIDTH,
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word',
               }}
@@ -520,7 +847,45 @@ export default function PageFeishuTable({
   return (
     <Space orientation="vertical" size={16} style={{ display: 'flex' }}>
       {showStats ? (
-        <PageFeishuStatsBar stats={stats} onSelect={handleSelectDimension} />
+        <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
+          <div style={{ display: 'flex', gap: 12, flex: 1, overflowX: 'auto' }}>
+            <PageFeishuStatsBar stats={stats} onSelect={handleSelectDimension} />
+          </div>
+          {dueField && stats?.due_summary ? (
+            <PageDueReminderCard
+              summary={stats.due_summary}
+              window={dueWindow}
+              drilling={dueDrill}
+              onWindowChange={(days) => {
+                setDueWindow(days)
+                // 切窗即时生效（drilling 中带上新窗口重查）
+                if (dueDrill) void load({ page: 1, dueWindow: days, dueDrill: true })
+              }}
+              onToggleDrill={() => {
+                const next = !dueDrill
+                setDueDrill(next)
+                setPage(1)
+                void load({ page: 1, dueDrill: next })
+              }}
+            />
+          ) : null}
+        </div>
+      ) : null}
+      {dueDrill && dueField ? (
+        <Space size={8} wrap>
+          <Typography.Text type="secondary">当前筛选：</Typography.Text>
+          <Tag
+            closable
+            color="warning"
+            onClose={() => {
+              setDueDrill(false)
+              setPage(1)
+              void load({ page: 1, dueDrill: false })
+            }}
+          >
+            {dueWindow} 天内到期（含逾期）· 未关闭
+          </Tag>
+        </Space>
       ) : null}
       {dimensionFilter ? (
         <Space size={8} wrap>
@@ -625,7 +990,79 @@ export default function PageFeishuTable({
           </Button>
         </Space>
       ) : null}
+      {advancedFilterEnabled ? (
+        <Space size={12} wrap>
+          {filterFields?.map((name) => (
+            <Select
+              key={name}
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder={`${name}筛选`}
+              style={{ minWidth: 170 }}
+              value={fieldFilters[name] || undefined}
+              options={(filterOptions[name] ?? []).map((option) => ({
+                value: option.value,
+                label: `${option.value}（${option.count}）`,
+              }))}
+              onChange={(value) => {
+                const next = { ...fieldFilters, [name]: value ?? '' }
+                setFieldFilters(next)
+                setPage(1)
+                void load({ page: 1, fieldFilters: next })
+              }}
+            />
+          ))}
+          {filterDateColumn ? (
+            <RangePicker
+              allowEmpty={[true, true]}
+              placeholder={['开始日期', '结束日期']}
+              value={[dateRange[0], dateRange[1]]}
+              onChange={(value) => {
+                const next: [dayjs.Dayjs | null, dayjs.Dayjs | null] = [
+                  value?.[0] ?? null,
+                  value?.[1] ?? null,
+                ]
+                setDateRange(next)
+                setPage(1)
+                void load({ page: 1, dateRange: next })
+              }}
+            />
+          ) : null}
+          <Button
+            onClick={() => {
+              setFieldFilters({})
+              setDateRange([null, null])
+              setDueDrill(false)
+              setPage(1)
+              void load({
+                page: 1,
+                fieldFilters: {},
+                dateRange: null,
+                dueDrill: false,
+              })
+            }}
+          >
+            重置筛选
+          </Button>
+        </Space>
+      ) : null}
       <Space size={12} wrap>
+        {tabs && tabs.length > 0 ? (
+          <>
+            <Typography.Text type="secondary">数据表</Typography.Text>
+            <Select
+              style={{ minWidth: 240 }}
+              placeholder="选择数据表"
+              value={activeTableId ?? primaryTab?.table_id ?? tabs[0].table_id}
+              options={tabs.map((tab) => ({
+                value: tab.table_id,
+                label: `${tab.tab_name}（${tab.record_count}）`,
+              }))}
+              onChange={(key) => handleTabChange(key)}
+            />
+          </>
+        ) : null}
         <Input
           allowClear
           prefix={<SearchOutlined />}
@@ -641,6 +1078,19 @@ export default function PageFeishuTable({
         <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
           刷新
         </Button>
+        {allowCreate ? (
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            disabled={!canOperate}
+            onClick={() => {
+              form.resetFields()
+              setCreateOpen(true)
+            }}
+          >
+            新建记录
+          </Button>
+        ) : null}
         <Typography.Text type="secondary">
           共 {total} 条；列与数据来自飞书多维表格，修改会直接写回飞书。
           {detailOnlyCount > 0
@@ -683,10 +1133,13 @@ export default function PageFeishuTable({
         })}
       />
       <Drawer
-        title={`${pageName} · 记录详情`}
+        title={createOpen ? `${pageName} · 新建记录` : `${pageName} · 记录详情`}
         width={720}
-        open={detail !== null}
-        onClose={() => setDetail(null)}
+        open={detail !== null || createOpen}
+        onClose={() => {
+          setDetail(null)
+          setCreateOpen(false)
+        }}
         destroyOnHidden
         extra={
           <Button
@@ -694,13 +1147,13 @@ export default function PageFeishuTable({
             icon={<SaveOutlined />}
             loading={saving}
             disabled={!canOperate}
-            onClick={() => void handleSave()}
+            onClick={() => void (createOpen ? handleCreate() : handleSave())}
           >
             保存
           </Button>
         }
       >
-        {detail ? (
+        {detail || createOpen ? (
           <Space orientation="vertical" size={16} style={{ display: 'flex' }}>
             {!canOperate ? (
               <PlatformNotice
@@ -708,6 +1161,19 @@ export default function PageFeishuTable({
                 title="当前账号只有查看权限"
                 description="保存与上传附件需要该页面的操作权限。"
               />
+            ) : null}
+            {createOpen ? (
+              <Typography.Text type="secondary">
+                新记录将写入当前选中的数据表
+                {tabs && tabs.length > 0
+                  ? `「${
+                      tabs.find((tab) => tab.table_id === activeTableId)?.tab_name ??
+                      primaryTab?.tab_name ??
+                      ''
+                    }」`
+                  : ''}
+                ，保存后立即写回飞书多维表格。
+              </Typography.Text>
             ) : null}
             <Form form={form} layout="vertical" disabled={!canOperate}>
               {editableColumns
@@ -767,8 +1233,10 @@ export default function PageFeishuTable({
                 ))}
             </Form>
 
-            {attachmentColumns.map((column) => {
-              const items = asAttachmentList(detail.fields[column.name])
+            {/* 附件区只在编辑已有记录时展示（新建记录先保存后再传附件） */}
+            {!createOpen
+              ? attachmentColumns.map((column) => {
+              const items = asAttachmentList(detail?.fields[column.name])
               return (
                 <div key={column.name}>
                   <Typography.Text strong>{column.name}</Typography.Text>
@@ -776,12 +1244,18 @@ export default function PageFeishuTable({
                     {items.length ? (
                       renderFeishuValue(
                         items,
-                        { record_id: detail.record_id },
+                        { record_id: detail?.record_id ?? '' },
                         undefined,
                         message,
                         {
                           attachmentUrlBuilder: (_entity, recordId, fileToken) =>
-                            attachmentUrl(pageKey, recordId, column.name, fileToken),
+                            attachmentUrl(
+                              pageKey,
+                              recordId,
+                              column.name,
+                              fileToken,
+                              activeTableId
+                            ),
                         }
                       )
                     ) : (
@@ -808,7 +1282,8 @@ export default function PageFeishuTable({
                   </Upload>
                 </div>
               )
-            })}
+            })
+              : null}
           </Space>
         ) : null}
       </Drawer>

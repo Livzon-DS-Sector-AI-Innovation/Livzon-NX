@@ -17,14 +17,15 @@ import logging
 import re
 import uuid
 from collections import Counter
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import Numeric, case, func, select
+from sqlalchemy import Numeric, and_, case, func, or_, select
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import async_session_factory
+from app.core.database import async_session_factory as async_session_factory
 from app.core.exceptions import AppException
 from app.core.redis import (
     acquire_lock,
@@ -49,6 +50,7 @@ from app.modules.safety.feishu.field_codec import (
     attachment_field_or_error,
     build_field_schema,
     decode_record_fields,
+    decode_value,
     encode_record_fields,
     existing_attachment_tokens,
 )
@@ -68,14 +70,20 @@ from app.modules.safety.schemas.page_table import (
     PageFeishuConfigListResponse,
     PageFeishuConfigTestResult,
     PageFeishuFieldSummary,
+    PageFeishuSubTable,
     PageTableAttachmentItem,
     PageTableAttachmentUploadResponse,
     PageTableColumn,
+    PageTableDueSummary,
+    PageTableFieldValueCount,
+    PageTableFieldValuesResponse,
     PageTableRecord,
+    PageTableRecordCondition,
     PageTableRecordsResponse,
     PageTableStatBucket,
     PageTableStatGroup,
     PageTableStatsResponse,
+    PageTableTab,
     ResolvedFeishuTable,
     ResolvedPageFeishuUrl,
     UpdatePageFeishuConfigRequest,
@@ -136,6 +144,8 @@ _FULLWIDTH_TRANS = str.maketrans(
 _STATS_LOCATION_NAME_KEYS = ("车间", "位置", "区域", "地点", "工段")
 STATS_GROUP_LIMIT = 10
 STATS_MONTH_LIMIT = 12
+# 筛选下拉框的选项上限（按出现次数取前 N）
+MAX_FIELD_VALUES = 200
 _UNFILLED_KEY = "（未填写）"
 # AI 兜底归类的后台任务状态（进程内防重入；跨实例由 Redis 锁兜底）
 _ai_classify_task: asyncio.Task[None] | None = None
@@ -268,6 +278,10 @@ def _build_config_item(
         view_id=model.view_id,
         hidden_field_names=list(model.hidden_field_names or []),
         workshop_aliases=_workshop_aliases_of(model.workshop_aliases),
+        sub_tables=[
+            PageFeishuSubTable(**entry)
+            for entry in _clean_sub_tables(model.sub_tables)
+        ],
         is_enabled=model.is_enabled,
         is_configured=bool(_clean(model.app_token) and _clean(model.table_id)),
         is_mirrored=model.is_mirrored,
@@ -308,12 +322,6 @@ async def save_page_feishu_config(
 ) -> PageFeishuConfigItem:
     """保存某个页面的多维表格绑定（仅更新请求中显式给出的字段）。"""
     definition = _require_definition(page_key)
-    logger.info(
-        "DEBUG 保存页面绑定入口: page=%s fields_set=%s 别名条数=%s",
-        page_key,
-        sorted(data.model_fields_set),
-        len(data.workshop_aliases or {}),
-    )
     try:
         model = await _get_config_model(db, page_key)
         if model is None:
@@ -339,6 +347,10 @@ async def save_page_feishu_config(
                 len(data.workshop_aliases or {}),
                 len(model.workshop_aliases or {}),
             )
+        if "sub_tables" in data.model_fields_set:
+            model.sub_tables = _clean_sub_tables(
+                [entry.model_dump() for entry in (data.sub_tables or [])]
+            )
         if "is_enabled" in data.model_fields_set and data.is_enabled is not None:
             model.is_enabled = data.is_enabled
         if "is_mirrored" in data.model_fields_set and data.is_mirrored is not None:
@@ -349,8 +361,12 @@ async def save_page_feishu_config(
         model.last_tested_at = None
         model.last_test_field_count = None
         model.last_test_record_count = None
-        if "app_token" in data.model_fields_set or "table_id" in data.model_fields_set:
-            # 绑定换了表：旧镜像数据与同步结论全部失效，读取回退实时并待重同步
+        if (
+            "app_token" in data.model_fields_set
+            or "table_id" in data.model_fields_set
+            or "sub_tables" in data.model_fields_set
+        ):
+            # 绑定换了表（含子表页签变化）：旧镜像数据与同步结论全部失效
             model.last_synced_at = None
             model.last_sync_status = None
             model.last_sync_error = None
@@ -359,6 +375,10 @@ async def save_page_feishu_config(
         await db.refresh(model)
         if model.app_token and model.table_id:
             await cache_delete(_field_cache_key(model.app_token, model.table_id))
+            for entry in _clean_sub_tables(model.sub_tables):
+                await cache_delete(
+                    _field_cache_key(model.app_token, entry["table_id"])
+                )
         return _build_config_item(definition, model)
     except (OperationalError, ProgrammingError) as exc:
         if _is_config_table_missing(exc):
@@ -413,6 +433,95 @@ async def _load_config_or_raise(
     return definition, model, app_token, table_id
 
 
+# ── 多子表页签（一页绑定多张子表，主绑定是第一个页签） ──
+
+
+@dataclass(frozen=True, slots=True)
+class BoundTable:
+    """页面绑定的一张子表（页签）。"""
+
+    table_id: str
+    tab_name: str
+    hidden_field_names: tuple[str, ...]
+    is_primary: bool
+
+
+def _clean_sub_tables(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    cleaned: list[dict[str, Any]] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        table_id = str(entry.get("table_id") or "").strip()
+        if not table_id:
+            continue
+        cleaned.append(
+            {
+                "table_id": table_id,
+                "tab_name": str(entry.get("tab_name") or table_id).strip()
+                or table_id,
+                "hidden_field_names": [
+                    str(name).strip()
+                    for name in (entry.get("hidden_field_names") or [])
+                    if str(name).strip()
+                ],
+            }
+        )
+    return cleaned
+
+
+def _bound_tables(
+    definition: PageTableDefinition, model: SafetyPageFeishuConfig
+) -> list[BoundTable]:
+    """页签清单：主绑定在前，sub_tables 依次在后（table_id 去重）。"""
+    primary_hidden = tuple(
+        str(name) for name in (model.hidden_field_names or [])
+    )
+    tables = [
+        BoundTable(
+            table_id=(model.table_id or "").strip(),
+            tab_name=definition.page_name,
+            hidden_field_names=primary_hidden,
+            is_primary=True,
+        )
+    ]
+    seen = {tables[0].table_id}
+    for entry in _clean_sub_tables(model.sub_tables):
+        if entry["table_id"] in seen:
+            continue
+        seen.add(entry["table_id"])
+        # 子表未单独配置隐藏字段时沿用主表配置（父记录列通常每张表都要隐藏）
+        hidden = entry["hidden_field_names"] or list(primary_hidden)
+        tables.append(
+            BoundTable(
+                table_id=entry["table_id"],
+                tab_name=entry["tab_name"],
+                hidden_field_names=tuple(hidden),
+                is_primary=False,
+            )
+        )
+    return tables
+
+
+def _resolve_bound_table(
+    definition: PageTableDefinition,
+    model: SafetyPageFeishuConfig,
+    table_id: str | None,
+) -> BoundTable:
+    """按 table_id 取页签；缺省返回主绑定，未知 table_id 报 404。"""
+    tables = _bound_tables(definition, model)
+    wanted = (table_id or "").strip()
+    if not wanted:
+        return tables[0]
+    for item in tables:
+        if item.table_id == wanted:
+            return item
+    raise AppException(
+        message=f"子表 {wanted} 未绑定到该页面", status_code=404
+    )
+
+
 # ── 字段 schema ──
 
 
@@ -435,7 +544,7 @@ async def _load_field_schema(
             if isinstance(payload, list):
                 return build_field_schema(payload)
     client = SafetyBitableClient(app_token=app_token, table_id=table_id)
-    raw_fields = await client.list_fields()
+    raw_fields = await client.list_fields(table_id=table_id)
     if not raw_fields:
         raise AppException(
             message=(
@@ -474,6 +583,7 @@ async def _fetch_raw_records(
         else None
     )
     rows, error = await client.search_records_with_result(
+        table_id=table_id,
         page_size=100,
         max_pages=max(1, MAX_RECORDS // 100),
         sort=sort,
@@ -492,10 +602,110 @@ async def _visible_columns(
 
     飞书没有「列出视图下字段」的开放接口（/views/:id/fields 返回网关 404），
     视图对齐由设置页的隐藏字段配置承担；绑定的 view_id 仅作记录。
+    多页签页面子表未单独配置隐藏字段时沿用主表配置。
     """
     schema = await _load_field_schema(app_token, table_id)
-    hidden = {str(name) for name in (model.hidden_field_names or [])}
+    definition = get_page_table(model.page_key)
+    if definition is not None:
+        bound = _resolve_bound_table(definition, model, table_id)
+        hidden = set(bound.hidden_field_names)
+    else:  # pragma: no cover —— 配置行必来自已登记页面
+        hidden = {str(name) for name in (model.hidden_field_names or [])}
     return [field for field in schema if field.name not in hidden]
+
+
+# ── 部门继承（父记录值下放，仅展示与统计，不回写飞书） ──
+
+
+def _dept_field_of(schema: list[FieldSchema]) -> FieldSchema | None:
+    """位置类文本字段（部门/车间 等），继承与统计都以它为目标。"""
+    for field in schema:
+        if field.kind == KIND_TEXT and any(
+            key in field.name for key in _STATS_LOCATION_NAME_KEYS
+        ):
+            return field
+    return None
+
+
+def _link_parent_ids(raw_fields: dict[str, Any]) -> list[str]:
+    """从原始字段值里提取 link 字段（type 18/21）指向的父记录 id。"""
+    ids: list[str] = []
+    for value in raw_fields.values():
+        if not isinstance(value, dict):
+            continue
+        raw_ids = value.get("link_record_ids")
+        if isinstance(raw_ids, list):
+            ids.extend(str(item) for item in raw_ids if item)
+    return ids
+
+
+def _resolve_dept_inheritance(
+    schema: list[FieldSchema], raw_rows: list[dict[str, Any]]
+) -> dict[str, str]:
+    """计算每条记录继承后的部门值：部门为空时取 link 父记录的部门。
+
+    公司隐患总台账约 80% 记录的「部门/车间」填在父记录上；继承让列表列
+    显示与车间统计完整。两轮迭代覆盖「父记录自身也靠继承」的情况。
+    返回 {record_id: 部门}（仅含有值的记录）。
+    """
+    dept_field = _dept_field_of(schema)
+    if dept_field is None:
+        return {}
+    dept_of: dict[str, str] = {}
+    parent_of: dict[str, str] = {}
+    for raw in raw_rows:
+        record_id = str(raw.get("record_id") or "")
+        if not record_id:
+            continue
+        raw_fields = raw.get("fields")
+        if not isinstance(raw_fields, dict):
+            continue
+        dept = str(
+            decode_value(dept_field, raw_fields.get(dept_field.name)) or ""
+        ).strip()
+        if dept:
+            dept_of[record_id] = dept
+        parents = _link_parent_ids(raw_fields)
+        if parents:
+            parent_of[record_id] = parents[0]
+    for _ in range(2):
+        changed = False
+        for record_id, parent in parent_of.items():
+            if record_id in dept_of:
+                continue
+            inherited = dept_of.get(parent)
+            if inherited:
+                dept_of[record_id] = inherited
+                changed = True
+        if not changed:
+            break
+    return dept_of
+
+
+def _apply_inherited_dept(
+    dept_field: FieldSchema | None,
+    dept_map: dict[str, str],
+    record_id: str,
+    decoded: dict[str, Any],
+) -> None:
+    """把继承到的部门补进解码结果（仅在原值为空时）。"""
+    if dept_field is None:
+        return
+    if str(decoded.get(dept_field.name) or "").strip():
+        return
+    inherited = dept_map.get(record_id)
+    if inherited:
+        decoded[dept_field.name] = inherited
+
+
+def _mirror_fields_for_response(
+    fields: dict[str, Any] | None, columns: list[FieldSchema]
+) -> dict[str, Any]:
+    """镜像副本存了全量字段（含隐藏列），响应只输出页面可见列。"""
+    if not fields:
+        return {}
+    visible = {field.name for field in columns}
+    return {name: value for name, value in fields.items() if name in visible}
 
 
 # ── 本地镜像（全量副本 + 定时同步 + 编辑写透） ──
@@ -521,84 +731,123 @@ def _mirror_search_text(schema: list[FieldSchema], decoded: dict[str, Any]) -> s
 
 
 async def sync_page_table_mirror(db: AsyncSession, page_key: str) -> int:
-    """全量同步一个镜像页：拉取全部记录 upsert，并软删远端已消失的记录。
+    """全量同步一个镜像页的全部绑定子表：拉取记录 upsert 并软删消失记录。
 
-    成功返回同步记录数；失败回写 ``last_sync_status=failed`` 后抛出业务异常。
+    多页签页面逐表同步（单表失败不影响其它表，整体状态记 partial/failed）；
+    成功返回全部子表同步记录数；失败回写 ``last_sync_status`` 后抛业务异常。
     """
-    _require_definition(page_key)
-    _, model, app_token, table_id = await _load_config_or_raise(db, page_key)
+    definition, model, app_token, _ = await _load_config_or_raise(db, page_key)
+    tables = _bound_tables(definition, model)
     lock_key = _MIRROR_SYNC_LOCK_TEMPLATE.format(page_key=page_key)
     if not await acquire_lock(lock_key, timeout=MIRROR_SYNC_LOCK_TIMEOUT):
         raise AppException(
             message="该页面的镜像同步正在执行，请稍后再试", status_code=409
         )
     try:
-        schema = await _load_field_schema(app_token, table_id)
-        client = SafetyBitableClient(app_token=app_token, table_id=table_id)
-        raw_rows, error = await client.search_records_with_result(
-            page_size=100,
-            max_pages=MIRROR_SYNC_MAX_RECORDS // 100,
-        )
-        if error:
-            raise AppException(
-                message=f"读取多维表格记录失败：{error}", status_code=502
-            )
-        existing_rows = (
-            (
-                await db.execute(
-                    select(SafetyPageTableMirrorRecord).where(
-                        SafetyPageTableMirrorRecord.page_key == page_key
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        existing_by_record = {row.record_id: row for row in existing_rows}
+        client = SafetyBitableClient(app_token=app_token, table_id="")
         now = datetime.now(UTC)
-        seen: set[str] = set()
-        kept = 0
-        for raw in raw_rows[:MIRROR_SYNC_MAX_RECORDS]:
-            record_id = str(raw.get("record_id") or "")
-            if not record_id or record_id in seen:
-                # 飞书翻页可能跨页返回同一条记录，重复插入会撞唯一索引
-                continue
-            seen.add(record_id)
-            kept += 1
-            raw_fields = raw.get("fields")
-            decoded = decode_record_fields(
-                schema, raw_fields if isinstance(raw_fields, dict) else {}
-            )
-            current = existing_by_record.pop(record_id, None)
-            if current is None:
-                db.add(
-                    SafetyPageTableMirrorRecord(
-                        page_key=page_key,
-                        record_id=record_id,
-                        fields=decoded,
-                        search_text=_mirror_search_text(schema, decoded),
-                        synced_at=now,
-                    )
+        total_kept = 0
+        errors: list[str] = []
+        for bound in tables:
+            try:
+                schema = await _load_field_schema(app_token, bound.table_id)
+                raw_rows, error = await client.search_records_with_result(
+                    table_id=bound.table_id,
+                    page_size=100,
+                    max_pages=MIRROR_SYNC_MAX_RECORDS // 100,
                 )
-            else:
-                current.fields = decoded
-                current.search_text = _mirror_search_text(schema, decoded)
-                current.synced_at = now
-                current.is_deleted = False
-        for stale in existing_by_record.values():
-            stale.is_deleted = True
+                if error:
+                    errors.append(f"{bound.tab_name}: {error}")
+                    continue
+                existing_rows = (
+                    (
+                        await db.execute(
+                            select(SafetyPageTableMirrorRecord).where(
+                                SafetyPageTableMirrorRecord.page_key == page_key,
+                                SafetyPageTableMirrorRecord.table_id
+                                == bound.table_id,
+                            )
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                existing_by_record = {
+                    row.record_id: row for row in existing_rows
+                }
+                dept_field = _dept_field_of(schema)
+                dept_map = _resolve_dept_inheritance(schema, raw_rows)
+                seen: set[str] = set()
+                kept = 0
+                for raw in raw_rows[:MIRROR_SYNC_MAX_RECORDS]:
+                    record_id = str(raw.get("record_id") or "")
+                    if not record_id or record_id in seen:
+                        # 飞书翻页可能跨页返回同一条记录，重复插入会撞唯一索引
+                        continue
+                    seen.add(record_id)
+                    kept += 1
+                    raw_fields = raw.get("fields")
+                    decoded = decode_record_fields(
+                        schema, raw_fields if isinstance(raw_fields, dict) else {}
+                    )
+                    _apply_inherited_dept(
+                        dept_field, dept_map, record_id, decoded
+                    )
+                    current = existing_by_record.pop(record_id, None)
+                    if current is None:
+                        db.add(
+                            SafetyPageTableMirrorRecord(
+                                page_key=page_key,
+                                table_id=bound.table_id,
+                                record_id=record_id,
+                                fields=decoded,
+                                search_text=_mirror_search_text(schema, decoded),
+                                synced_at=now,
+                            )
+                        )
+                    else:
+                        current.fields = decoded
+                        current.search_text = _mirror_search_text(
+                            schema, decoded
+                        )
+                        current.synced_at = now
+                        current.is_deleted = False
+                for stale in existing_by_record.values():
+                    stale.is_deleted = True
+                total_kept += kept
+                logger.info(
+                    "页面镜像同步: page=%s 表=%s 记录=%s",
+                    page_key,
+                    bound.tab_name,
+                    kept,
+                )
+            except Exception as exc:  # noqa: BLE001 —— 单表失败不中断其它表
+                await db.rollback()
+                errors.append(f"{bound.tab_name}: {exc}")
         model.last_synced_at = now
-        model.last_sync_status = "success"
-        model.last_sync_error = None
-        model.last_sync_record_count = kept
+        if errors:
+            model.last_sync_status = "failed" if not total_kept else "partial"
+            model.last_sync_error = "; ".join(errors)[:500]
+        else:
+            model.last_sync_status = "success"
+            model.last_sync_error = None
+        model.last_sync_record_count = total_kept
+        if errors and not total_kept:
+            # 全部子表失败：先回滚本会话，再经独立会话记录失败状态后抛出
+            await db.rollback()
+            raise AppException(
+                message=f"镜像同步失败：{errors[0]}", status_code=502
+            )
         await db.commit()
         logger.info(
-            "页面镜像同步完成: page=%s 记录=%s", page_key, kept
+            "页面镜像同步完成: page=%s 子表=%s 记录=%s 错误=%s",
+            page_key,
+            len(tables),
+            total_kept,
+            len(errors),
         )
-        return kept
-    except AppException as exc:
-        await db.rollback()
-        await _record_mirror_sync_failure(page_key, exc.message)
+        return total_kept
+    except AppException:
         raise
     except Exception as exc:
         await db.rollback()
@@ -648,24 +897,30 @@ async def _run_mirror_sync_once(page_key: str) -> None:
 
 
 async def _write_through_mirror(
-    page_key: str, record_id: str, raw_fields: dict[str, Any]
+    page_key: str,
+    record_id: str,
+    raw_fields: dict[str, Any],
+    table_id: str | None = None,
 ) -> bool:
     """编辑写透：用飞书侧最新字段值 upsert 镜像行（独立会话）。
 
     失败只记日志并返回 False，不影响已提交到飞书的修改。
+    ``table_id`` 缺省用页面主绑定表（兼容单表页面）。
     """
     try:
         async with async_session_factory() as session:
             model = await _get_config_model(session, page_key)
             if model is None or not model.is_mirrored:
                 return False
+            effective_table = (table_id or model.table_id or "").strip()
             schema = await _load_field_schema(
-                model.app_token or "", model.table_id or ""
+                model.app_token or "", effective_table
             )
             decoded = decode_record_fields(schema, raw_fields)
             result = await session.execute(
                 select(SafetyPageTableMirrorRecord).where(
                     SafetyPageTableMirrorRecord.page_key == page_key,
+                    SafetyPageTableMirrorRecord.table_id == effective_table,
                     SafetyPageTableMirrorRecord.record_id == record_id,
                 )
             )
@@ -674,6 +929,7 @@ async def _write_through_mirror(
                 session.add(
                     SafetyPageTableMirrorRecord(
                         page_key=page_key,
+                        table_id=effective_table,
                         record_id=record_id,
                         fields=decoded,
                         search_text=_mirror_search_text(schema, decoded),
@@ -696,7 +952,7 @@ async def _write_through_mirror(
 
 
 async def upsert_page_table_mirror_record(
-    page_key: str, record_id: str
+    page_key: str, record_id: str, table_id: str | None = None
 ) -> bool:
     """按 record_id 拉取飞书最新值并写透镜像（附件上传后使用）。"""
     try:
@@ -704,13 +960,16 @@ async def upsert_page_table_mirror_record(
             model = await _get_config_model(session, page_key)
             if model is None or not model.is_mirrored:
                 return False
+            effective_table = (table_id or model.table_id or "").strip()
             client = SafetyBitableClient(
-                app_token=model.app_token, table_id=model.table_id
+                app_token=model.app_token, table_id=effective_table
             )
             raw_fields = await client.get_record(record_id)
         if not isinstance(raw_fields, dict):
             return False
-        return await _write_through_mirror(page_key, record_id, raw_fields)
+        return await _write_through_mirror(
+            page_key, record_id, raw_fields, effective_table
+        )
     except Exception:
         logger.exception(
             "镜像写透（单条拉取）失败: page=%s record=%s", page_key, record_id
@@ -719,16 +978,33 @@ async def upsert_page_table_mirror_record(
 
 
 def _mirror_condition_expr(
-    field: FieldSchema, expected: str
+    field: FieldSchema, expected: str, op: str = "eq"
 ) -> Any:
-    """镜像查询的条件表达式（语义与实时路径 _condition_matches 一致）。"""
+    """镜像查询的条件表达式（语义与实时路径 _condition_matches 一致）。
+
+    日期字段支持 ``gte``/``lte``（ISO 文本比较，构成时间范围）；
+    ``neq`` 表示「不等于且含未填写」（NULL 也命中，与「关闭状态 ≠
+    已关闭」的到期下钻口径一致）；人员字段按 JSON 数组内的姓名引号
+    包含匹配。
+    """
     cell = SafetyPageTableMirrorRecord.fields[field.name].astext
     escaped = _ilike_escape(expected)
+    if op == "neq":
+        # NULL（字段缺失/未填写）与不相等的值都命中；多选列的 JSON 数组
+        # 里含该选项也算相等（如关闭状态 ['已关闭']），需一并排除
+        return or_(
+            cell.is_(None),
+            and_(cell != expected, ~cell.ilike(f'%"{escaped}"%')),
+        )
     if field.kind == KIND_DATE:
+        if op == "gte":
+            return cell >= expected
+        if op == "lte":
+            return cell <= expected
         return cell.like(f"{escaped}%")
     if field.kind == KIND_CHECKBOX:
         return cell == ("true" if expected == "是" else "false")
-    if field.kind == KIND_MULTI_SELECT:
+    if field.kind in (KIND_MULTI_SELECT, KIND_PERSON):
         return cell.ilike(f'%"{escaped}"%')
     if field.kind == KIND_SELECT:
         return cell == expected
@@ -795,15 +1071,28 @@ def _sort_key(field: FieldSchema, value: Any) -> tuple[int, Any]:
     return (0, _search_text(field, value))
 
 
-def _condition_matches(field: FieldSchema, value: Any, expected: str) -> bool:
+def _condition_matches(
+    field: FieldSchema, value: Any, expected: str, op: str = "eq"
+) -> bool:
     """多条件筛选的单条匹配规则（与下钻口径独立，面向查询表单）。
 
-    日期：解码文本（YYYY-MM-DD）等于或前缀匹配（支持按月）；
-    选项/多选：选项名精确相等；文本：不区分大小写包含；勾选：是/否。
+    日期：解码文本（YYYY-MM-DD）等于/前缀匹配，``gte``/``lte`` 按 ISO
+    文本比较构成时间范围；``neq`` 对 ``eq`` 取反（空值也命中，服务
+    「关闭状态 ≠ 已关闭」的到期下钻）；
+    选项/多选：选项名精确相等；人员：任一姓名相等；
+    文本：不区分大小写包含；勾选：是/否。
     """
+    if op == "neq":
+        return not _condition_matches(field, value, expected, "eq")
     text = _search_text(field, value).strip()
     if field.kind == KIND_DATE:
-        return bool(text) and (text == expected or text.startswith(expected))
+        if not text:
+            return False
+        if op == "gte":
+            return text >= expected
+        if op == "lte":
+            return text <= expected
+        return text == expected or text.startswith(expected)
     if field.kind == KIND_CHECKBOX:
         return ("是" if value else "否") == expected
     if isinstance(value, list):
@@ -884,16 +1173,22 @@ async def _list_records_from_mirror(
     sort_direction: str,
     filter_field: str | None,
     filter_value: str | None,
-    conditions: list[tuple[str, str]] | None,
+    conditions: list[PageTableRecordCondition] | None,
+    table_id: str | None = None,
 ) -> PageTableRecordsResponse:
     """镜像数据源：SQL 过滤/排序/分页（本地全量，无条数窗口）。
 
     仪表盘下钻（车间归一/AI 口径）无法下推 SQL：命中该场景时先取回全部
     匹配行，Python 端过滤排序后再分页，与实时路径语义一致。
+    ``table_id`` 选择页签对应子表的镜像行；缺省主绑定表。
     """
     record_model = SafetyPageTableMirrorRecord
+    effective_table = (
+        table_id or model.table_id or ""
+    ).strip()
     stmt = select(record_model).where(
         record_model.page_key == definition.page_key,
+        record_model.table_id == effective_table,
         record_model.is_deleted.is_(False),
     )
     needle = (keyword or "").strip()
@@ -901,23 +1196,39 @@ async def _list_records_from_mirror(
         stmt = stmt.where(
             record_model.search_text.ilike(f"%{_ilike_escape(needle)}%")
         )
-    for condition_field, condition_value in conditions or []:
-        expected = condition_value.strip()
-        if not expected:
-            continue
+    # 文本类条件（部门/车间）按图表桶归一口径匹配，SQL 的包含匹配会把
+    # 「DR提炼→201二车间（DR）」这类别名原始写法漏掉，因此这类条件不下推
+    # SQL，改为取回后统一走 _filter_decoded_records。
+    active_conditions = [
+        condition for condition in (conditions or []) if condition.value.strip()
+    ]
+    sql_conditions: list[PageTableRecordCondition] = []
+    for condition in active_conditions:
         target = next(
-            (field for field in columns if field.name == condition_field), None
+            (field for field in columns if field.name == condition.field), None
         )
         if target is None:
             raise AppException(
-                message=f"筛选字段「{condition_field}」不在当前表格中",
+                message=f"筛选字段「{condition.field}」不在当前表格中",
                 status_code=400,
             )
-        stmt = stmt.where(_mirror_condition_expr(target, expected))
+        if target.kind != KIND_TEXT:
+            sql_conditions.append(condition)
+
+    for condition in sql_conditions:
+        target = next(
+            (field for field in columns if field.name == condition.field), None
+        )
+        assert target is not None
+        stmt = stmt.where(
+            _mirror_condition_expr(target, condition.value.strip(), condition.op)
+        )
 
     dimension = (filter_field or "").strip()
     dimension_value = (filter_value or "").strip()
     drill_down = bool(dimension and dimension_value)
+    # 命中文本条件或下钻时需要全量取回后 Python 过滤，不能再 SQL 分页
+    python_filter = drill_down or len(sql_conditions) < len(active_conditions)
 
     sort_target = next(
         (field for field in columns if field.name == sort_field), None
@@ -925,15 +1236,30 @@ async def _list_records_from_mirror(
     safe_size = max(1, min(page_size, MAX_PAGE_SIZE))
     safe_page = max(1, page)
 
-    if drill_down:
+    if python_filter:
         rows = (await db.execute(stmt)).scalars().all()
         decoded_rows = [
-            PageTableRecord(record_id=row.record_id, fields=dict(row.fields or {}))
+            PageTableRecord(
+                record_id=row.record_id,
+                fields=_mirror_fields_for_response(row.fields, columns),
+            )
             for row in rows
         ]
-        decoded_rows = await _apply_dimension_filter(
-            db, decoded_rows, columns, aliases, dimension, dimension_value
-        )
+        if drill_down:
+            decoded_rows = await _apply_dimension_filter(
+                db, decoded_rows, columns, aliases, dimension, dimension_value
+            )
+        if active_conditions:
+            by_fields = {id(record.fields): record for record in decoded_rows}
+            kept = await _filter_decoded_records(
+                db,
+                [record.fields for record in decoded_rows],
+                columns,
+                keyword=None,  # 关键字已在 SQL 应用
+                conditions=active_conditions,
+                aliases=aliases,
+            )
+            decoded_rows = [by_fields[id(fields)] for fields in kept]
         if sort_target is not None:
             reverse = sort_direction.lower() == "desc"
             decoded_rows.sort(
@@ -961,7 +1287,10 @@ async def _list_records_from_mirror(
             .all()
         )
         page_rows = [
-            PageTableRecord(record_id=row.record_id, fields=dict(row.fields or {}))
+            PageTableRecord(
+                record_id=row.record_id,
+                fields=_mirror_fields_for_response(row.fields, columns),
+            )
             for row in rows
         ]
 
@@ -988,17 +1317,31 @@ async def list_page_table_records(
     sort_direction: str = "asc",
     filter_field: str | None = None,
     filter_value: str | None = None,
-    conditions: list[tuple[str, str]] | None = None,
+    conditions: list[PageTableRecordCondition] | None = None,
+    table_id: str | None = None,
 ) -> PageTableRecordsResponse:
-    """返回列定义与分页记录。
+    """返回列定义与分页记录（多页签页面用 ``table_id`` 选择子表）。
 
     镜像开启且已同步过时查本地镜像（全量、无条数窗口）；未同步过先触发
     后台同步并回退实时拉取，保证首屏可用。``filter_field``/``filter_value``
     服务于仪表盘下钻，``conditions`` 是查询表单的多条件（字段间 AND）。
     """
-    definition, model, app_token, table_id = await _load_config_or_raise(db, page_key)
-    columns = await _visible_columns(model, app_token, table_id)
+    definition, model, app_token, _primary = await _load_config_or_raise(
+        db, page_key
+    )
+    bound = _resolve_bound_table(definition, model, table_id)
+    effective_table = bound.table_id
+    columns = await _visible_columns(model, app_token, effective_table)
     aliases = _workshop_aliases_of(model.workshop_aliases)
+    # 条件字段必须在当前表格中（统计聚合路径宽松跳过，列表路径严格校验）
+    for condition in conditions or []:
+        if condition.value.strip() and not any(
+            field.name == condition.field for field in columns
+        ):
+            raise AppException(
+                message=f"筛选字段「{condition.field}」不在当前表格中",
+                status_code=400,
+            )
 
     if model.is_mirrored:
         if model.last_synced_at is None:
@@ -1019,13 +1362,18 @@ async def list_page_table_records(
                 filter_field=filter_field,
                 filter_value=filter_value,
                 conditions=conditions,
+                table_id=effective_table,
             )
 
     raw_rows = await _fetch_raw_records(
-        app_token, table_id, fetch_sort_field=_default_date_field(columns)
+        app_token, effective_table, fetch_sort_field=_default_date_field(columns)
     )
     truncated = len(raw_rows) > MAX_RECORDS
     raw_rows = raw_rows[:MAX_RECORDS]
+
+    full_schema = await _load_field_schema(app_token, effective_table)
+    dept_field = _dept_field_of(full_schema)
+    dept_map = _resolve_dept_inheritance(full_schema, raw_rows)
 
     decoded_rows: list[PageTableRecord] = []
     for row in raw_rows:
@@ -1033,14 +1381,11 @@ async def list_page_table_records(
         if not record_id:
             continue
         raw_fields = row.get("fields")
-        decoded_rows.append(
-            PageTableRecord(
-                record_id=record_id,
-                fields=decode_record_fields(
-                    columns, raw_fields if isinstance(raw_fields, dict) else {}
-                ),
-            )
+        decoded = decode_record_fields(
+            columns, raw_fields if isinstance(raw_fields, dict) else {}
         )
+        _apply_inherited_dept(dept_field, dept_map, record_id, decoded)
+        decoded_rows.append(PageTableRecord(record_id=record_id, fields=decoded))
 
     needle = (keyword or "").strip().lower()
     if needle:
@@ -1053,23 +1398,20 @@ async def list_page_table_records(
             )
         ]
 
-    for condition_field, condition_value in conditions or []:
-        expected = condition_value.strip()
-        if not expected:
-            continue
-        target = next(
-            (field for field in columns if field.name == condition_field), None
+    active_conditions = [
+        condition for condition in (conditions or []) if condition.value.strip()
+    ]
+    if active_conditions:
+        by_fields = {id(record.fields): record for record in decoded_rows}
+        kept = await _filter_decoded_records(
+            db,
+            [record.fields for record in decoded_rows],
+            columns,
+            keyword=None,  # 关键字已在上方应用
+            conditions=active_conditions,
+            aliases=aliases,
         )
-        if target is None:
-            raise AppException(
-                message=f"筛选字段「{condition_field}」不在当前表格中",
-                status_code=400,
-            )
-        decoded_rows = [
-            record
-            for record in decoded_rows
-            if _condition_matches(target, record.fields.get(target.name), expected)
-        ]
+        decoded_rows = [by_fields[id(fields)] for fields in kept]
 
     dimension = (filter_field or "").strip()
     dimension_value = (filter_value or "").strip()
@@ -1114,18 +1456,23 @@ async def update_page_table_record(
     values: dict[str, Any],
     *,
     user_id: uuid.UUID | None = None,
+    table_id: str | None = None,
 ) -> PageTableRecord:
-    """把页面提交的字段值回写到飞书多维表格。"""
-    _, model, app_token, table_id = await _load_config_or_raise(db, page_key)
+    """把页面提交的字段值回写到飞书多维表格（多页签页面按 table_id 定位）。"""
+    definition, model, app_token, _primary = await _load_config_or_raise(
+        db, page_key
+    )
+    bound = _resolve_bound_table(definition, model, table_id)
+    effective_table = bound.table_id
     if not values:
         raise AppException(message="没有需要保存的字段", status_code=400)
-    schema = await _load_field_schema(app_token, table_id)
+    schema = await _load_field_schema(app_token, effective_table)
     try:
         encoded = encode_record_fields(schema, values)
     except FieldCodecError as exc:
         raise AppException(message=str(exc), status_code=400) from exc
 
-    client = SafetyBitableClient(app_token=app_token, table_id=table_id)
+    client = SafetyBitableClient(app_token=app_token, table_id=effective_table)
     ok, error = await client.update_record_with_result(record_id, encoded)
     if not ok:
         raise AppException(
@@ -1143,7 +1490,7 @@ async def update_page_table_record(
             "page_key": page_key,
             "record_id": record_id,
             "app_token": app_token,
-            "table_id": table_id,
+            "table_id": effective_table,
         },
     )
 
@@ -1151,7 +1498,74 @@ async def update_page_table_record(
     raw_fields = await client.get_record(record_id)
     if isinstance(raw_fields, dict):
         # 写透：飞书已更新，本地镜像同步这一条（失败只记日志）
-        await _write_through_mirror(page_key, record_id, raw_fields)
+        await _write_through_mirror(
+            page_key, record_id, raw_fields, effective_table
+        )
+    return PageTableRecord(
+        record_id=record_id,
+        fields=decode_record_fields(schema, raw_fields),
+    )
+
+
+async def create_page_table_record(
+    db: AsyncSession,
+    page_key: str,
+    values: dict[str, Any],
+    *,
+    user_id: uuid.UUID | None = None,
+    table_id: str | None = None,
+) -> PageTableRecord:
+    """在绑定的子表新建一条记录（多页签页面按 ``table_id`` 定位）。
+
+    写入飞书成功后回读真实字段值并写透本地镜像，页面即可立即看到新记录，
+    无需等待 15 分钟周期同步。
+    """
+    definition, model, app_token, _primary = await _load_config_or_raise(
+        db, page_key
+    )
+    bound = _resolve_bound_table(definition, model, table_id)
+    effective_table = bound.table_id
+    if not values:
+        raise AppException(message="没有需要保存的字段", status_code=400)
+    schema = await _load_field_schema(app_token, effective_table)
+    try:
+        encoded = encode_record_fields(schema, values)
+    except FieldCodecError as exc:
+        raise AppException(message=str(exc), status_code=400) from exc
+    # 新建时跳过空值字段，避免把一串 null 写进飞书；全空则拒绝
+    encoded = {name: value for name, value in encoded.items() if value is not None}
+    if not encoded:
+        raise AppException(message="请至少填写一个字段", status_code=400)
+
+    client = SafetyBitableClient(app_token=app_token, table_id=effective_table)
+    record_id, error = await client.create_record_with_result(encoded)
+    if not record_id:
+        raise AppException(
+            message=f"写入飞书多维表格失败：{error or '未知错误'}", status_code=502
+        )
+
+    await record_audit_log(
+        db,
+        action="create",
+        user_id=user_id,
+        resource_type="safety_page_table_record",
+        resource_id=model.id,
+        new_value={"fields": values},
+        extra={
+            "page_key": page_key,
+            "record_id": record_id,
+            "app_token": app_token,
+            "table_id": effective_table,
+        },
+    )
+
+    # 回读一次，让页面拿到飞书侧的真实结果（公式/自动编号等字段由飞书计算）
+    raw_fields = await client.get_record(record_id)
+    if isinstance(raw_fields, dict):
+        # 写透：本地镜像同步这一条（失败只记日志，等待周期同步兜底）
+        await _write_through_mirror(
+            page_key, record_id, raw_fields, effective_table
+        )
     return PageTableRecord(
         record_id=record_id,
         fields=decode_record_fields(schema, raw_fields),
@@ -1166,10 +1580,15 @@ async def upload_page_table_attachment(
     *,
     file: Any,
     user_id: uuid.UUID | None = None,
+    table_id: str | None = None,
 ) -> PageTableAttachmentUploadResponse:
     """上传附件到飞书并在记录附件字段上追加（不覆盖已有附件）。"""
-    _, model, app_token, table_id = await _load_config_or_raise(db, page_key)
-    schema = await _load_field_schema(app_token, table_id)
+    definition, model, app_token, _primary = await _load_config_or_raise(
+        db, page_key
+    )
+    bound = _resolve_bound_table(definition, model, table_id)
+    effective_table = bound.table_id
+    schema = await _load_field_schema(app_token, effective_table)
     try:
         attachment_field_or_error(schema, field_name)
     except FieldCodecError as exc:
@@ -1182,7 +1601,7 @@ async def upload_page_table_attachment(
         what="附件",
     )
 
-    client = SafetyBitableClient(app_token=app_token, table_id=table_id)
+    client = SafetyBitableClient(app_token=app_token, table_id=effective_table)
     file_token = await client.upload_media(content, filename)
     if not file_token:
         raise AppException(message="上传附件到飞书失败", status_code=502)
@@ -1233,14 +1652,18 @@ async def fetch_page_table_attachment(
     record_id: str,
     field_name: str,
     file_token: str,
+    table_id: str | None = None,
 ) -> tuple[bytes, str, str]:
     """代理下载附件。
 
     先校验该 file_token 确实属于这条记录的该附件字段，再回源飞书，避免
     通过构造 token 读取其它记录/表格的附件。
     """
-    _, _, app_token, table_id = await _load_config_or_raise(db, page_key)
-    client = SafetyBitableClient(app_token=app_token, table_id=table_id)
+    definition, model, app_token, _primary = await _load_config_or_raise(
+        db, page_key
+    )
+    bound = _resolve_bound_table(definition, model, table_id)
+    client = SafetyBitableClient(app_token=app_token, table_id=bound.table_id)
     raw_fields = await client.get_record(record_id)
     attachments = raw_fields.get(field_name)
     matched = None
@@ -1501,79 +1924,295 @@ def _schedule_ai_classify(pending: list[str], aliases: dict[str, str]) -> None:
     )
 
 
+def _record_matches_keyword(
+    record: dict[str, Any], columns: list[FieldSchema], needle: str
+) -> bool:
+    """解码记录的关键字匹配（与镜像 search_text 列同口径：任一字段包含）。"""
+    lowered = needle.lower()
+    return any(
+        lowered in _search_text(field, record.get(field.name)).lower()
+        for field in columns
+    )
+
+
+async def _filter_decoded_records(
+    db: AsyncSession,
+    records: list[dict[str, Any]],
+    columns: list[FieldSchema],
+    *,
+    keyword: str | None,
+    conditions: list[PageTableRecordCondition] | None,
+    aliases: dict[str, str],
+) -> list[dict[str, Any]]:
+    """统计取数的记录级筛选（关键字 + 多条件，条件间 AND）。
+
+    文本字段（部门/车间）按图表桶归一口径匹配（别名 + AI 兜底缓存），
+    其余字段与列表查询的 _condition_matches 同语义；字段不在当前子表时
+    跳过该条件（跨子表聚合时各表结构不同）。
+    """
+    needle = (keyword or "").strip()
+    active = [c for c in (conditions or []) if c.value.strip()]
+    text_key_maps: dict[str, dict[str, str]] = {}
+    pending: list[str] = []
+    for condition in active:
+        target = next(
+            (field for field in columns if field.name == condition.field), None
+        )
+        if (
+            target is None
+            or target.kind != KIND_TEXT
+            or condition.field in text_key_maps
+        ):
+            continue
+        row_texts = [
+            _search_text(target, record.get(target.name)).strip()
+            for record in records
+        ]
+        key_map, pending_part = await _resolve_text_bucket_keys(
+            db, target, row_texts, aliases
+        )
+        text_key_maps[condition.field] = key_map
+        pending.extend(pending_part)
+    if pending:
+        _schedule_ai_classify(pending, aliases)
+
+    filtered: list[dict[str, Any]] = []
+    for record in records:
+        if needle and not _record_matches_keyword(record, columns, needle):
+            continue
+        matched_all = True
+        for condition in active:
+            target = next(
+                (field for field in columns if field.name == condition.field), None
+            )
+            if target is None:
+                continue
+            value = record.get(target.name)
+            expected = condition.value.strip()
+            if target.kind == KIND_TEXT:
+                text = _search_text(target, value).strip()
+                bucket = text_key_maps.get(condition.field, {}).get(text, text)
+                if bucket != expected and expected.lower() not in text.lower():
+                    matched_all = False
+                    break
+            elif not _condition_matches(target, value, expected, condition.op):
+                matched_all = False
+                break
+        if matched_all:
+            filtered.append(record)
+    return filtered
+
+
+async def _collect_table_records(
+    db: AsyncSession,
+    model: SafetyPageFeishuConfig,
+    app_token: str,
+    bound: BoundTable,
+    *,
+    keyword: str | None = None,
+    conditions: list[PageTableRecordCondition] | None = None,
+) -> tuple[list[dict[str, Any]], list[FieldSchema]]:
+    """取一张子表的全部解码记录（镜像优先，未同步走实时）+ 该表可见列。
+
+    供 records 实时路径与跨表统计聚合复用；部门继承在两条路径都已应用。
+    ``keyword``/``conditions`` 服务于仪表盘与列表同口径筛选（见
+    _filter_decoded_records），不传时保持原取数行为。每条记录额外带
+    ``_record_id`` 键（到期提醒推送记录定位用；统计/筛选只按字段名
+    访问，不受该键影响）。
+    """
+    columns = await _visible_columns(model, app_token, bound.table_id)
+    has_filters = bool((keyword or "").strip()) or any(
+        condition.value.strip() for condition in (conditions or [])
+    )
+    if model.is_mirrored and model.last_synced_at is not None:
+        mirror_rows = (
+            await db.execute(
+                select(
+                    SafetyPageTableMirrorRecord.record_id,
+                    SafetyPageTableMirrorRecord.fields,
+                ).where(
+                    SafetyPageTableMirrorRecord.page_key == model.page_key,
+                    SafetyPageTableMirrorRecord.table_id == bound.table_id,
+                    SafetyPageTableMirrorRecord.is_deleted.is_(False),
+                )
+            )
+        ).all()
+        records = [
+            dict(fields or {}, _record_id=record_id)
+            for record_id, fields in mirror_rows
+        ]
+        if has_filters:
+            records = await _filter_decoded_records(
+                db,
+                records,
+                columns,
+                keyword=keyword,
+                conditions=conditions,
+                aliases=_workshop_aliases_of(model.workshop_aliases),
+            )
+        return records, columns
+
+    raw_rows = await _fetch_raw_records(
+        app_token,
+        bound.table_id,
+        fetch_sort_field=_default_date_field(columns),
+    )
+    raw_rows = raw_rows[:MAX_RECORDS]
+    full_schema = await _load_field_schema(app_token, bound.table_id)
+    dept_field = _dept_field_of(full_schema)
+    dept_map = _resolve_dept_inheritance(full_schema, raw_rows)
+    decoded: list[dict[str, Any]] = []
+    for row in raw_rows:
+        record_id = str(row.get("record_id") or "")
+        fields = row.get("fields")
+        if not record_id or not isinstance(fields, dict):
+            continue
+        row_decoded = decode_record_fields(columns, fields)
+        _apply_inherited_dept(dept_field, dept_map, record_id, row_decoded)
+        row_decoded["_record_id"] = record_id
+        decoded.append(row_decoded)
+    if has_filters:
+        decoded = await _filter_decoded_records(
+            db,
+            decoded,
+            columns,
+            keyword=keyword,
+            conditions=conditions,
+            aliases=_workshop_aliases_of(model.workshop_aliases),
+        )
+    return decoded, columns
+
+
 async def get_page_table_stats(
     db: AsyncSession,
     page_key: str,
     group_by: list[str] | None = None,
+    table_id: str | None = None,
+    *,
+    keyword: str | None = None,
+    conditions: list[PageTableRecordCondition] | None = None,
+    due_field: str | None = None,
+    close_field: str | None = None,
 ) -> PageTableStatsResponse:
-    """按维度聚合整表记录（月份 / 车间号 / 选项等），供页面顶部仪表盘使用。"""
-    definition, model, app_token, table_id = await _load_config_or_raise(db, page_key)
-    columns = await _visible_columns(model, app_token, table_id)
+    """按维度聚合记录（月份 / 车间号 / 选项等），供页面顶部仪表盘使用。
+
+    单表模式（``table_id`` 给定或页面未配子表）：聚合该表。
+    汇总模式（多页签页面且未指定 ``table_id``）：聚合全部绑定子表——
+    每个分组字段只统计「存在该字段的子表」，日期分组只取该字段为日期
+    类型的子表（同一字段在不同子表可能是文本，如 2024 年的检查内容）。
+    ``keyword``/``conditions`` 与列表查询同口径，仪表盘随筛选联动。
+    """
+    definition, model, app_token, primary_table = await _load_config_or_raise(
+        db, page_key
+    )
+    bound_tables = _bound_tables(definition, model)
+    aggregate_mode = table_id is None and len(bound_tables) > 1
+    if aggregate_mode:
+        tables_for_stats = bound_tables
+        target = bound_tables[0]
+    else:
+        target = _resolve_bound_table(definition, model, table_id)
+        tables_for_stats = [target]
+
+    # 逐表取数（汇总模式下并发取全部子表）
+    per_table: list[tuple[BoundTable, list[dict[str, Any]], list[FieldSchema]]] = []
+    if aggregate_mode:
+        results = await asyncio.gather(
+            *[
+                _collect_table_records(
+                    db, model, app_token, bound, keyword=keyword, conditions=conditions
+                )
+                for bound in tables_for_stats
+            ],
+            return_exceptions=True,
+        )
+        for bound, result in zip(tables_for_stats, results):
+            if isinstance(result, BaseException):
+                logger.warning(
+                    "统计子表取数失败（跳过）: page=%s 表=%s err=%s",
+                    page_key,
+                    bound.tab_name,
+                    result,
+                )
+                continue
+            records, columns = result
+            per_table.append((bound, records, columns))
+    else:
+        if model.is_mirrored and model.last_synced_at is None:
+            _schedule_mirror_sync(page_key)
+        records, columns = await _collect_table_records(
+            db, model, app_token, target, keyword=keyword, conditions=conditions
+        )
+        per_table.append((target, records, columns))
+
+    primary_columns = next(
+        (columns for _, _, columns in per_table if columns), []
+    )
 
     requested = [str(name).strip() for name in (group_by or []) if str(name).strip()]
     if requested:
-        known = {field.name for field in columns}
+        if aggregate_mode:
+            # 汇总模式：字段只需存在于任一绑定子表
+            known = {field.name for _, _, columns in per_table for field in columns}
+        else:
+            known = {field.name for field in primary_columns}
         unknown = [name for name in requested if name not in known]
         if unknown:
             raise AppException(
                 message=f"分组字段不在当前表格中：{'、'.join(unknown)}", status_code=400
             )
-        group_fields = [
-            next(f for f in columns if f.name == name) for name in requested
-        ]
+        group_names = requested
     else:
-        group_fields = [f for f in columns if f.name in _default_stats_fields(columns)]
-
-    if model.is_mirrored and model.last_synced_at is not None:
-        # 镜像数据源：本地全量字段值（结构与解码结果同构）
-        mirror_rows = (
-            (
-                await db.execute(
-                    select(SafetyPageTableMirrorRecord.fields).where(
-                        SafetyPageTableMirrorRecord.page_key == page_key,
-                        SafetyPageTableMirrorRecord.is_deleted.is_(False),
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        decoded = [dict(fields or {}) for fields in mirror_rows]
-    else:
-        if model.is_mirrored:
-            # 未同步过：后台引导同步，本次仍走实时路径
-            _schedule_mirror_sync(page_key)
-        raw_rows = await _fetch_raw_records(
-            app_token, table_id, fetch_sort_field=_default_date_field(columns)
-        )
-        decoded = [
-            decode_record_fields(columns, fields)
-            for row in raw_rows[:MAX_RECORDS]
-            if isinstance(fields := row.get("fields"), dict)
+        group_names = [
+            field.name
+            for field in primary_columns
+            if field.name in _default_stats_fields(primary_columns)
         ]
 
-    groups: list[PageTableStatGroup] = []
+    total = sum(len(records) for _, records, _ in per_table)
     aliases = _workshop_aliases_of(model.workshop_aliases)
-    for field in group_fields:
-        if field.kind == KIND_TEXT:
-            row_texts = [
-                _search_text(field, record.get(field.name)).strip()
-                for record in decoded
-            ]
-            key_map, pending = await _resolve_text_bucket_keys(
-                db, field, row_texts, aliases
+    groups: list[PageTableStatGroup] = []
+    for group_name in group_names:
+        # 每张子表里该字段的定义（类型可能不同：如检查内容 文本 vs 日期）
+        field_defs = [
+            (bound, next((f for f in columns if f.name == group_name), None))
+            for bound, _, columns in per_table
+        ]
+        hits = [(bound, f) for bound, f in field_defs if f is not None]
+        if not hits:
+            continue
+        reference = hits[0][1]
+        counter: Counter[str] = Counter()
+        pending_all: list[str] = []
+        is_date_group = reference.kind == KIND_DATE
+        for bound, field in hits:
+            records = next(
+                records for b, records, _ in per_table if b.table_id == bound.table_id
             )
-            if pending:
-                # 后台触发 AI 兜底归类；本次返回未分类结果，下次刷新生效
-                _schedule_ai_classify(pending, aliases)
-            counter = Counter(key_map[text] for text in row_texts)
-        else:
-            counter = Counter(
-                _stat_bucket_key(field, record.get(field.name), aliases)
-                for record in decoded
-            )
-        top_keys = _stat_top_keys(counter, field, aliases)
-        if field.kind == KIND_DATE:
+            # 日期分组只统计该字段确实是日期类型的子表；文本型检查内容
+            # （2024 年等）不产生月份桶，避免把描述文本当年月
+            if is_date_group and field.kind != KIND_DATE:
+                continue
+            if field.kind == KIND_TEXT:
+                row_texts = [
+                    _search_text(field, record.get(field.name)).strip()
+                    for record in records
+                ]
+                key_map, pending = await _resolve_text_bucket_keys(
+                    db, field, row_texts, aliases
+                )
+                pending_all.extend(pending)
+                counter.update(key_map[text] for text in row_texts)
+            else:
+                counter.update(
+                    _stat_bucket_key(field, record.get(field.name), aliases)
+                    for record in records
+                )
+        if pending_all:
+            # 后台触发 AI 兜底归类；本次返回未分类结果，下次刷新生效
+            _schedule_ai_classify(pending_all, aliases)
+        top_keys = _stat_top_keys(counter, reference, aliases)
+        if reference.kind == KIND_DATE:
             # 月份：按时间升序展示；超过上限时只保留最近几个月
             buckets = [
                 PageTableStatBucket(key=key, count=counter[key]) for key in top_keys
@@ -1595,16 +2234,160 @@ async def get_page_table_stats(
             mode = "value"
         groups.append(
             PageTableStatGroup(
-                field=field.name, kind=field.kind, mode=mode, buckets=buckets
+                field=reference.name, kind=reference.kind, mode=mode, buckets=buckets
             )
+        )
+
+    # 到期分布（仪表盘到期卡片）：未关闭记录按目标完成日期归桶；
+    # 只统计该字段为日期类型的子表（与到期提醒推送同口径）。
+    due_summary: PageTableDueSummary | None = None
+    if due_field and close_field:
+        from app.modules.safety.service.hazard_due_reminder import summarize_due
+
+        due_records = [
+            record
+            for bound, records, columns in per_table
+            if any(
+                field.name == due_field and field.kind == KIND_DATE
+                for field in columns
+            )
+            for record in records
+        ]
+        due_summary = PageTableDueSummary(
+            **summarize_due(due_records, due_field, close_field)
         )
 
     return PageTableStatsResponse(
         page_key=page_key,
         page_name=definition.page_name,
-        total=len(decoded),
+        total=total,
         groups=groups,
+        due_summary=due_summary,
     )
+
+
+async def list_page_table_field_values(
+    db: AsyncSession,
+    page_key: str,
+    field: str,
+    table_id: str | None = None,
+) -> PageTableFieldValuesResponse:
+    """字段去重可选值（含出现次数），供筛选下拉框的选项使用。
+
+    人员字段按个人姓名拆分计数；部门/车间等文本字段与图表桶同口径
+    （别名归一 + AI 兜底缓存）；选项/日期等其他字段按展示文本归组。
+    镜像数据源；未同步过时返回空列表。
+    """
+    definition, model, app_token, _primary = await _load_config_or_raise(
+        db, page_key
+    )
+    bound = _resolve_bound_table(definition, model, table_id)
+    field_name = field.strip()
+    if not field_name:
+        raise AppException(message="请指定要枚举的字段名", status_code=400)
+    columns = await _visible_columns(model, app_token, bound.table_id)
+    target = next((f for f in columns if f.name == field_name), None)
+    if target is None:
+        raise AppException(
+            message=f"字段「{field_name}」不在当前表格中", status_code=400
+        )
+
+    counter: Counter[str] = Counter()
+    values: list[dict[str, Any]] = []
+    if model.is_mirrored and model.last_synced_at is not None:
+        values = [
+            dict(fields or {})
+            for fields in (
+                await db.execute(
+                    select(SafetyPageTableMirrorRecord.fields).where(
+                        SafetyPageTableMirrorRecord.page_key == model.page_key,
+                        SafetyPageTableMirrorRecord.table_id == bound.table_id,
+                        SafetyPageTableMirrorRecord.is_deleted.is_(False),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        ]
+
+    aliases = _workshop_aliases_of(model.workshop_aliases)
+    pending: list[str] = []
+    if target.kind == KIND_PERSON:
+        for record in values:
+            items = record.get(field_name)
+            for item in items if isinstance(items, list) else []:
+                name = (
+                    str(item.get("name") or "").strip()
+                    if isinstance(item, dict)
+                    else ""
+                )
+                if name:
+                    counter[name] += 1
+    elif target.kind == KIND_TEXT:
+        row_texts = [
+            _search_text(target, record.get(field_name)).strip()
+            for record in values
+        ]
+        key_map, pending_part = await _resolve_text_bucket_keys(
+            db, target, row_texts, aliases
+        )
+        pending.extend(pending_part)
+        if pending_part:
+            _schedule_ai_classify(pending_part, aliases)
+        for text in row_texts:
+            key = key_map.get(text, text)
+            if key:
+                counter[key] += 1
+    else:
+        for record in values:
+            key = _stat_bucket_key(target, record.get(field_name), aliases)
+            if key and key != _UNFILLED_KEY:
+                counter[key] += 1
+
+    ranked = sorted(counter.items(), key=lambda kv: (-kv[1], kv[0]))
+    return PageTableFieldValuesResponse(
+        page_key=page_key,
+        field=field_name,
+        table_id=bound.table_id,
+        values=[
+            PageTableFieldValueCount(value=key, count=count)
+            for key, count in ranked[:MAX_FIELD_VALUES]
+        ],
+    )
+
+
+async def list_page_table_tabs(
+    db: AsyncSession, page_key: str
+) -> list[PageTableTab]:
+    """页签清单：主绑定在前 + sub_tables 依次在后，含各子表镜像记录数。"""
+    definition, model, _, _ = await _load_config_or_raise(db, page_key)
+    tables = _bound_tables(definition, model)
+    counts: dict[str, int] = {}
+    if model.is_mirrored and model.last_synced_at is not None:
+        rows = (
+            (
+                await db.execute(
+                    select(
+                        SafetyPageTableMirrorRecord.table_id,
+                        func.count(),
+                    ).where(
+                        SafetyPageTableMirrorRecord.page_key == page_key,
+                        SafetyPageTableMirrorRecord.is_deleted.is_(False),
+                    ).group_by(SafetyPageTableMirrorRecord.table_id)
+                )
+            )
+            .all()
+        )
+        counts = {table_id: count for table_id, count in rows}
+    return [
+        PageTableTab(
+            table_id=bound.table_id,
+            tab_name=bound.tab_name,
+            is_primary=bound.is_primary,
+            record_count=counts.get(bound.table_id, 0),
+        )
+        for bound in tables
+    ]
 
 
 # ── 绑定测试与链接解析 ──

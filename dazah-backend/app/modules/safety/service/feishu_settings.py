@@ -108,6 +108,12 @@ def _build_detail(
         radar_notify_enabled=model.radar_notify_enabled,
         radar_notify_chat_ids=list(model.radar_notify_chat_ids or []),
         radar_notify_user_ids=list(model.radar_notify_user_ids or []),
+        hazard_due_notify_enabled=model.hazard_due_notify_enabled,
+        hazard_due_notify_milestones=list(
+            model.hazard_due_notify_milestones or [30, 15, 7]
+        ),
+        hazard_due_notify_chat_ids=list(model.hazard_due_notify_chat_ids or []),
+        hazard_due_notify_user_ids=list(model.hazard_due_notify_user_ids or []),
         is_enabled=model.is_enabled,
         knowledge_last_sync_status=model.knowledge_last_sync_status,
         knowledge_last_sync_error=model.knowledge_last_sync_error,
@@ -151,6 +157,12 @@ async def update_safety_feishu_app_settings(
                 radar_notify_enabled=data.radar_notify_enabled,
                 radar_notify_chat_ids=list(data.radar_notify_chat_ids or []),
                 radar_notify_user_ids=list(data.radar_notify_user_ids or []),
+                hazard_due_notify_enabled=data.hazard_due_notify_enabled,
+                hazard_due_notify_milestones=list(
+                data.hazard_due_notify_milestones or [30, 15, 7]
+            ),
+                hazard_due_notify_chat_ids=list(data.hazard_due_notify_chat_ids or []),
+                hazard_due_notify_user_ids=list(data.hazard_due_notify_user_ids or []),
                 is_enabled=data.is_enabled,
             )
             db.add(model)
@@ -180,6 +192,20 @@ async def update_safety_feishu_app_settings(
                 model.radar_notify_chat_ids = list(data.radar_notify_chat_ids or [])
             if "radar_notify_user_ids" in data.model_fields_set:
                 model.radar_notify_user_ids = list(data.radar_notify_user_ids or [])
+            if "hazard_due_notify_enabled" in data.model_fields_set:
+                model.hazard_due_notify_enabled = data.hazard_due_notify_enabled
+            if "hazard_due_notify_milestones" in data.model_fields_set:
+                model.hazard_due_notify_milestones = list(
+                    data.hazard_due_notify_milestones or []
+                )
+            if "hazard_due_notify_chat_ids" in data.model_fields_set:
+                model.hazard_due_notify_chat_ids = list(
+                    data.hazard_due_notify_chat_ids or []
+                )
+            if "hazard_due_notify_user_ids" in data.model_fields_set:
+                model.hazard_due_notify_user_ids = list(
+                    data.hazard_due_notify_user_ids or []
+                )
         await db.commit()
         return _build_detail(model)
     except (OperationalError, ProgrammingError) as exc:

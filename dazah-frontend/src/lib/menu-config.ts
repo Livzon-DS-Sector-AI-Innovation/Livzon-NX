@@ -233,8 +233,9 @@ export const moduleMenus: ModuleMenu[] = [
             label: "隐患排查治理",
             path: "",
             children: [
-              { key: "hazard-inspection-ledger", label: "隐患台账", path: "/safety/hazard-ledger" },
+              { key: "hazard-inspection-ledger", label: "隐患随手拍", path: "/safety/hazard-ledger" },
               { key: "hazard-duty", label: "24小时值班隐患", path: "/safety/hazard-duty" },
+              { key: "hazard-quick-report", label: "隐患台账", path: "/safety/hazard-quick-report" },
             ],
           },
           {

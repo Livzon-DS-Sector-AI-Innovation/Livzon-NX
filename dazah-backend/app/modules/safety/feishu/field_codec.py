@@ -289,7 +289,11 @@ def decode_value(field: FieldSchema, raw: Any) -> Any:
     if field.kind == KIND_ATTACHMENT:
         files = _decode_attachments(raw)
         return files or None
-    # 只读类型：尽力给出可展示的文本，避免前端出现空白列
+    # 只读类型：尽力给出可展示的文本，避免前端出现空白列。
+    # link/查找引用类字段返回 {"link_record_ids": [...]} 之类的结构对象，
+    # 没有可读文本，输出 None 而不是 str(dict) 垃圾串。
+    if isinstance(raw, dict):
+        return None
     text = _join_rich_text(raw)
     return text or None
 

@@ -165,13 +165,18 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
                         children=[
                             _n(
                                 "hazard-inspection-ledger",
-                                "隐患台账",
+                                "隐患随手拍",
                                 "/safety/hazard-ledger",
                             ),
                             _n(
                                 "hazard-duty",
                                 "24小时值班隐患",
                                 "/safety/hazard-duty",
+                            ),
+                            _n(
+                                "hazard-quick-report",
+                                "隐患台账",
+                                "/safety/hazard-quick-report",
                             ),
                         ],
                     ),

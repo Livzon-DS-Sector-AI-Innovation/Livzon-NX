@@ -1,6 +1,8 @@
 """页面本地镜像（全量副本）测试：同步 upsert/软删、读取切换、写透。"""
 
-from datetime import UTC, datetime
+import asyncio
+import contextlib
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -12,6 +14,7 @@ from app.modules.safety.models import (
     SafetyPageTableMirrorRecord,
 )
 from app.modules.safety.scheduled import SafetyPageMirrorSyncGenerator
+from app.modules.safety.schemas.page_table import PageTableRecordCondition
 from app.modules.safety.service import page_table
 
 PAGE_KEY = "safety:risk-hazard:hazard-inspection:hazard-duty"
@@ -47,6 +50,9 @@ class _FakeResult:
 
     def scalars(self) -> SimpleNamespace:
         return SimpleNamespace(all=lambda: list(self._list))
+
+    def all(self) -> list:
+        return list(self._list)
 
 
 class _FakeSession:
@@ -85,14 +91,16 @@ class _FakeClient:
         rows: list[dict] | None = None,
         error: str | None = None,
         record_fields: dict | None = None,
+        fields: list[dict] | None = None,
     ) -> None:
         self.rows = rows or []
         self.error = error
         self.record_fields = record_fields or {}
+        self.fields = fields if fields is not None else _FIELDS
         self.search_calls = 0
 
     async def list_fields(self, table_id: str | None = None) -> list[dict]:
-        return _FIELDS
+        return self.fields
 
     async def search_records_with_result(
         self, **kwargs: object
@@ -303,7 +311,8 @@ async def test_mirror_read_path_uses_local_rows(monkeypatch) -> None:
     _install(monkeypatch, client, mirror_session=db)
 
     result = await page_table.list_page_table_records(
-        db, PAGE_KEY, conditions=[("值班日期", "2026-02-09")]
+        db, PAGE_KEY,
+        conditions=[PageTableRecordCondition(field="值班日期", value="2026-02-09")]
     )
 
     # 镜像路径不触发飞书搜索，也不出现截断
@@ -401,3 +410,337 @@ async def test_mirror_sync_generator_finds_due_pages() -> None:
     due = await generator.find_due(session)
 
     assert due == ["safety:ops-safety:daily-risk-report"]
+
+
+# ── 独立同步循环（mirror_sync_loop）──
+
+
+async def test_mirror_sync_loop_runs_due_pages_and_survives_failures() -> None:
+    """独立循环：本轮执行到期的页面；单页失败不中断本轮，整轮异常不退出循环。"""
+    from app.modules.safety import scheduled as scheduled_module
+
+    calls: list[str] = []
+    failures: set[str] = set()
+
+    class _LoopGenerator:
+        async def find_due(self, session: object) -> list[str]:
+            return ["page-ok", "page-bad"]
+
+        async def execute_one(self, session: object, item: object) -> None:
+            page_key = str(item)
+            calls.append(page_key)
+            if page_key in failures:
+                raise RuntimeError("boom")
+
+    original = scheduled_module.SafetyPageMirrorSyncGenerator
+    original_stop = scheduled_module._mirror_sync_stop
+    original_interval = scheduled_module.MIRROR_SYNC_INTERVAL
+    original_factory = page_table.async_session_factory
+    scheduled_module.SafetyPageMirrorSyncGenerator = _LoopGenerator  # type: ignore[misc]
+    # 用极短间隔驱动循环快速跑两轮；第二轮前让 find_due 抛整轮异常验证不退出
+    scheduled_module.MIRROR_SYNC_INTERVAL = timedelta(milliseconds=50)
+    stop = asyncio.Event()
+    scheduled_module._mirror_sync_stop = stop
+
+    @contextlib.asynccontextmanager
+    async def _fake_factory():
+        yield SimpleNamespace(commit=AsyncMock(return_value=None))
+
+    page_table.async_session_factory = _fake_factory
+    failures.add("page-bad")
+    try:
+        task = asyncio.create_task(scheduled_module.mirror_sync_loop())
+        await asyncio.sleep(0.3)
+        assert calls.count("page-ok") >= 2
+        assert "page-bad" in calls  # 单页失败被捕获，本轮继续
+
+        failures.clear()
+        calls.clear()
+        await asyncio.sleep(0.3)
+        assert calls.count("page-bad") >= 1  # 下一轮恢复正常执行失败页
+    finally:
+        stop.set()
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+        scheduled_module.SafetyPageMirrorSyncGenerator = original  # type: ignore[misc]
+        scheduled_module._mirror_sync_stop = original_stop
+        scheduled_module.MIRROR_SYNC_INTERVAL = original_interval
+        page_table.async_session_factory = original_factory
+
+
+# ── 筛选联动（仪表盘/筛选栏与列表同口径） ──
+
+
+def _ledger_fields() -> list[dict]:
+    return _FIELDS + [
+        {"field_id": "fld8", "field_name": "车间/位置", "type": 1},
+        {"field_id": "fld9", "field_name": "负责人", "type": 11},
+    ]
+
+
+async def test_mirror_records_text_condition_matches_normalized_bucket(
+    monkeypatch,
+) -> None:
+    """文本条件（部门/车间）按图表桶归一口径：别名原始写法同样命中。"""
+    config = _config(
+        is_mirrored=True,
+        last_synced_at=datetime.now(UTC),
+        workshop_aliases={"201-1": "201一车间"},
+    )
+    row1 = SimpleNamespace(
+        record_id="rec-1",
+        fields={"车间/位置": [{"text": "201-1车间"}], "整改情况": "未整改"},
+    )
+    row2 = SimpleNamespace(
+        record_id="rec-2",
+        fields={"车间/位置": [{"text": "原料罐区"}], "整改情况": "已整改"},
+    )
+    client = _FakeClient(fields=_ledger_fields())
+    db = _FakeSession(
+        None,
+        results=[
+            _FakeResult(config),
+            # 文本条件走全量取回 + Python 归一过滤，不再 SQL 分页
+            _FakeResult(None, list_value=[row1, row2]),
+        ],
+    )
+    _install(monkeypatch, client, mirror_session=db)
+
+    result = await page_table.list_page_table_records(
+        db,
+        PAGE_KEY,
+        conditions=[PageTableRecordCondition(field="车间/位置", value="201一车间")],
+    )
+
+    assert client.search_calls == 0
+    assert result.total == 1
+    assert result.records[0].record_id == "rec-1"
+
+
+async def test_stats_applies_keyword_and_date_range_filters(monkeypatch) -> None:
+    """仪表盘与筛选联动：关键字 + 日期范围（gte/lte）过滤后再聚合。"""
+    config = _config(is_mirrored=True, last_synced_at=datetime.now(UTC))
+    client = _FakeClient()
+    db = _FakeSession(
+        None,
+        results=[
+            _FakeResult(config),
+            # _collect_table_records 选择的是 fields 列本身（解码后的字典）
+            _FakeResult(
+                None,
+                list_value=[
+                    ("rec-1", {"值班日期": "2026-02-09", "整改情况": "未整改"}),
+                    ("rec-2", {"值班日期": "2026-03-11", "整改情况": "已整改"}),
+                ],
+            ),
+        ],
+    )
+    _install(monkeypatch, client, mirror_session=db)
+
+    result = await page_table.get_page_table_stats(
+        db,
+        PAGE_KEY,
+        group_by=["整改情况"],
+        conditions=[
+            PageTableRecordCondition(field="值班日期", value="2026-03-01", op="gte")
+        ],
+    )
+
+    assert client.search_calls == 0
+    assert result.total == 1
+    assert [bucket.key for bucket in result.groups[0].buckets] == ["已整改"]
+
+
+async def test_field_values_splits_person_names_and_normalizes_text(
+    monkeypatch,
+) -> None:
+    """筛选选项接口：人员按个人姓名计数，文本字段按车间归一口径归组。"""
+    config = _config(
+        is_mirrored=True,
+        last_synced_at=datetime.now(UTC),
+        workshop_aliases={"201-1": "201一车间"},
+    )
+    # values 接口选择的是 fields 列本身（解码后的字典）
+    owner_fields = [
+        {
+            "负责人": [
+                {"id": "ou1", "name": "李玮"},
+                {"id": "ou2", "name": "王思博"},
+            ],
+            "车间/位置": [{"text": "201-1车间"}],
+        },
+        {
+            "负责人": [{"id": "ou1", "name": "李玮"}],
+            "车间/位置": [{"text": "201-1"}],
+        },
+    ]
+    client = _FakeClient(fields=_ledger_fields())
+    db = _FakeSession(
+        None,
+        results=[
+            _FakeResult(config),
+            _FakeResult(None, list_value=owner_fields),
+            _FakeResult(config),
+            _FakeResult(None, list_value=owner_fields),
+        ],
+    )
+    _install(monkeypatch, client, mirror_session=db)
+
+    owners = await page_table.list_page_table_field_values(db, PAGE_KEY, "负责人")
+    assert [(item.value, item.count) for item in owners.values] == [
+        ("李玮", 2),
+        ("王思博", 1),
+    ]
+
+    departments = await page_table.list_page_table_field_values(
+        db, PAGE_KEY, "车间/位置"
+    )
+    assert [(item.value, item.count) for item in departments.values] == [
+        ("201一车间", 2)
+    ]
+
+
+async def test_field_values_rejects_unknown_field(monkeypatch) -> None:
+    config = _config(is_mirrored=True, last_synced_at=datetime.now(UTC))
+    client = _FakeClient()
+    db = _FakeSession(None, results=[_FakeResult(config)])
+    _install(monkeypatch, client, mirror_session=db)
+
+    with pytest.raises(AppException) as excinfo:
+        await page_table.list_page_table_field_values(db, PAGE_KEY, "不存在的字段")
+    assert excinfo.value.status_code == 400
+
+
+# ── 到期统计与 neq 条件 ──
+
+
+async def test_stats_returns_due_summary(monkeypatch) -> None:
+    fields = _FIELDS + [
+        {"field_id": "fld-due", "field_name": "目标完成日期", "type": 5},
+        {
+            "field_id": "fld-close",
+            "field_name": "关闭状态",
+            "type": 3,
+            "property": {"options": [{"name": "已关闭"}, {"name": "未关闭"}]},
+        },
+    ]
+    """due_summary：未关闭记录按目标完成日期归桶（逾期/7/15/30 天）。"""
+    from datetime import date, timedelta
+
+    from app.modules.safety.service.hazard_due_reminder import (
+        CLOSE_FIELD,
+        DUE_FIELD,
+    )
+
+    config = _config(is_mirrored=True, last_synced_at=datetime.now(UTC))
+    today = date.today()
+    client = _FakeClient(fields=fields)
+    db = _FakeSession(
+        None,
+        results=[
+            _FakeResult(config),
+            # 镜像取数现在是 (record_id, fields) 元组行
+            _FakeResult(
+                None,
+                list_value=[
+                    (
+                        "rec-1",
+                        {
+                            "值班日期": "2026-01-01",
+                            "整改情况": "未整改",
+                            "目标完成日期": (today - timedelta(days=2)).isoformat(),
+                            "关闭状态": "未关闭",
+                        },
+                    ),
+                    (
+                        "rec-2",
+                        {
+                            "值班日期": "2026-01-02",
+                            "整改情况": "未整改",
+                            "目标完成日期": (today + timedelta(days=5)).isoformat(),
+                            "关闭状态": "",
+                        },
+                    ),
+                    (
+                        "rec-3",
+                        {
+                            "值班日期": "2026-01-03",
+                            "整改情况": "未整改",
+                            "目标完成日期": (today - timedelta(days=9)).isoformat(),
+                            "关闭状态": "已关闭",
+                        },
+                    ),
+                ],
+            ),
+        ],
+    )
+    _install(monkeypatch, client, mirror_session=db)
+
+    result = await page_table.get_page_table_stats(
+        db,
+        PAGE_KEY,
+        group_by=["整改情况"],
+        due_field=DUE_FIELD,
+        close_field=CLOSE_FIELD,
+    )
+
+    assert result.due_summary is not None
+    assert result.due_summary.overdue == 1  # 已关闭的逾期不计
+    assert result.due_summary.within_7 == 1  # 5 天内到期（逾期单独计）
+    assert result.due_summary.within_30 == 1
+
+
+async def test_stats_without_due_fields_has_no_summary(monkeypatch) -> None:
+    config = _config(is_mirrored=True, last_synced_at=datetime.now(UTC))
+    client = _FakeClient()
+    db = _FakeSession(
+        None,
+        results=[
+            _FakeResult(config),
+            _FakeResult(None, list_value=[]),
+        ],
+    )
+    _install(monkeypatch, client, mirror_session=db)
+
+    result = await page_table.get_page_table_stats(db, PAGE_KEY, group_by=["整改情况"])
+    assert result.due_summary is None
+
+
+async def test_neq_condition_matches_unfilled_and_excludes_value(monkeypatch) -> None:
+    fields = _FIELDS + [
+        {
+            "field_id": "fld-close",
+            "field_name": "关闭状态",
+            "type": 3,
+            "property": {"options": [{"name": "已关闭"}, {"name": "未关闭"}]},
+        },
+    ]
+    """到期下钻条件：关闭状态 ≠ 已关闭（未填写也算未关闭）。"""
+    config = _config(is_mirrored=True, last_synced_at=datetime.now(UTC))
+    # rec-1 已关闭应被排除；rec-3 未填写关闭状态按未关闭命中
+    row2 = SimpleNamespace(
+        record_id="rec-2", fields={"整改情况": "未整改", "关闭状态": "未关闭"}
+    )
+    row3 = SimpleNamespace(record_id="rec-3", fields={"整改情况": "未整改"})
+    client = _FakeClient(fields=fields)
+    db = _FakeSession(
+        None,
+        results=[
+            _FakeResult(config),
+            # neq 走 SQL；非文本条件下推后仍走 SQL 分页（此处给 count + 行）
+            _FakeResult(2),
+            _FakeResult(None, list_value=[row2, row3]),
+        ],
+    )
+    _install(monkeypatch, client, mirror_session=db)
+
+    result = await page_table.list_page_table_records(
+        db,
+        PAGE_KEY,
+        conditions=[
+            PageTableRecordCondition(field="关闭状态", value="已关闭", op="neq")
+        ],
+    )
+
+    assert [record.record_id for record in result.records] == ["rec-2", "rec-3"]

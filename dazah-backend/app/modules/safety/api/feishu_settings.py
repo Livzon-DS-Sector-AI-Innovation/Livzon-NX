@@ -1,5 +1,7 @@
 """Safety API — 飞书应用设置端点。"""
 
+from typing import Any
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -56,4 +58,20 @@ async def test_safety_feishu_app_settings(
 ) -> ApiResponseEnvelope[SafetyFeishuSettingsTestResult]:
     """用已保存凭证换取 tenant_access_token 验证连通性并记录结果。"""
     result = await feishu_settings.test_safety_feishu_app_settings(db)
+    return ApiResponseEnvelope(data=result)
+
+
+@feishu_settings_router.post(
+    "/feishu-settings/hazard-due-notify/test",
+    response_model=ApiResponseEnvelope[dict[str, Any]],
+    summary="测试隐患到期提醒推送发送",
+)
+async def test_hazard_due_notify(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> ApiResponseEnvelope[dict[str, Any]]:
+    """向已配置的群/个人发送一条样例卡片，验证提醒目标配置。"""
+    from app.modules.safety.service import hazard_due_reminder
+
+    result = await hazard_due_reminder.send_test_notification(db)
     return ApiResponseEnvelope(data=result)

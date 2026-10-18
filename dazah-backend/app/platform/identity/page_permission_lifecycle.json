@@ -4741,6 +4741,12 @@
       "route_path": "/safety/hazard-duty",
       "actions": {}
     },
+    "safety:risk-hazard:hazard-inspection:hazard-quick-report": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/hazard-quick-report",
+      "actions": {}
+    },
     "equipment:workshop-101-1:assets-101-1": {
       "status": "active",
       "module_code": "equipment",

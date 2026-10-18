@@ -115,6 +115,8 @@ describe('toPageTableStats', () => {
       page_key: 'k',
       page_name: '24小时值班隐患',
       total: 3,
+      // 缺失时补 null，与后端仪表盘「到期摘要」可选口径一致
+      due_summary: null,
       groups: [{ field: '值班日期', kind: 'date', mode: 'month', buckets: [] }],
     })
   })
