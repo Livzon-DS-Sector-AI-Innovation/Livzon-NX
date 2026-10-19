@@ -1,7 +1,7 @@
 """Safety ORM models."""
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
@@ -15,9 +15,10 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.shared.base_model import BaseModel
@@ -728,6 +729,11 @@ class HazardReport(BaseModel):
     )
     feishu_record_id: Mapped[str | None] = mapped_column(
         String(64), nullable=True, comment="飞书多维表格记录 ID，双向同步关联"
+    )
+    ledger_record_id: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="公司隐患总台账（隐患随手拍页）飞书记录 ID，汇总写入锚点",
     )
 
     # 关系
@@ -2672,6 +2678,49 @@ class SafetyFeishuAppSettings(BaseModel):
     radar_notify_user_ids: Mapped[list[Any] | None] = mapped_column(
         JSON, nullable=True, default=list, comment="通知个人 open_id 列表"
     )
+    hazard_due_notify_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="是否启用隐患到期提醒推送（每天检查，进入提醒节点才推送）",
+    )
+    hazard_due_notify_milestones: Mapped[list[Any] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        default=list,
+        comment="提醒节点天数列表（如 [30,15,7]：到期前一个月/半个月/一周各提醒一次）",
+    )
+    hazard_due_notify_chat_ids: Mapped[list[Any] | None] = mapped_column(
+        JSON, nullable=True, default=list, comment="到期提醒群 chat_id 列表"
+    )
+    hazard_due_notify_user_ids: Mapped[list[Any] | None] = mapped_column(
+        JSON, nullable=True, default=list, comment="到期提醒个人 open_id 列表"
+    )
+
+
+class HazardDueNotificationLog(BaseModel):
+    """到期提醒推送记录：每条隐患每个提醒节点只推一次（0 = 已逾期节点）。"""
+
+    __tablename__ = "hazard_due_notification_log"
+    __table_args__ = (
+        UniqueConstraint(
+            "table_id",
+            "record_id",
+            "milestone_days",
+            name="uq_hazard_due_notify_once_per_milestone",
+        ),
+        {"schema": "safety"},
+    )
+
+    table_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    record_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    milestone_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="触发的提醒节点天数；0 表示已逾期节点"
+    )
+    notified_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
 
 # ==================== EHS 法规雷达 ====================
@@ -2882,6 +2931,15 @@ class SafetyPageFeishuConfig(BaseModel):
         default=dict,
         comment="车间别名归一映射（{别名: 规范车间名}），供仪表盘按车间聚合使用",
     )
+    sub_tables: Mapped[list[Any] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        default=list,
+        comment=(
+            "附加子表页签 [{table_id, tab_name, hidden_field_names}]；"
+            "主绑定（table_id 列）是第一个页签，本列表是其余页签"
+        ),
+    )
     is_enabled: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -2903,6 +2961,79 @@ class SafetyPageFeishuConfig(BaseModel):
     )
     last_test_record_count: Mapped[int | None] = mapped_column(
         Integer, nullable=True, comment="最近绑定测试读到的记录数"
+    )
+    is_mirrored: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+        comment="是否使用本地镜像数据源（关闭则实时拉取飞书）",
+    )
+    last_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="最近镜像同步完成时间"
+    )
+    last_sync_status: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, comment="最近镜像同步状态: success/failed"
+    )
+    last_sync_error: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="最近镜像同步错误信息"
+    )
+    last_sync_record_count: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="最近镜像同步记录数"
+    )
+
+
+class SafetyPageTableMirrorRecord(BaseModel):
+    """页面镜像记录（飞书多维表格 → 本地全量副本）。
+
+    ``fields`` 存按当前飞书字段 schema 解码后的值（与页面 API 返回同构），
+    同一时点重写；列结构仍实时来自飞书（Redis 缓存），镜像只存数据行。
+    编辑写回飞书成功后单条写透更新本表。
+    """
+
+    __tablename__ = "page_table_mirror_records"
+    __table_args__ = (
+        Index(
+            "uq_safety_page_table_mirror_records_page_table_record",
+            "page_key",
+            "table_id",
+            "record_id",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        Index(
+            "ix_safety_page_table_mirror_records_page",
+            "page_key",
+            "is_deleted",
+        ),
+        {"schema": "safety"},
+    )
+
+    page_key: Mapped[str] = mapped_column(
+        String(160), nullable=False, comment="页面标识（对齐 page_feishu_configs）"
+    )
+    table_id: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="所属飞书子表 table_id（多页签页面区分数据来源）",
+    )
+    record_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, comment="飞书记录 record_id"
+    )
+    fields: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, comment="解码后的字段值（中文列名为键）"
+    )
+    search_text: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default="", comment="关键字搜索文本"
+    )
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.now(UTC),
+        server_default=text("now()"),
+        comment="该行最近同步/写透时间",
     )
 
 

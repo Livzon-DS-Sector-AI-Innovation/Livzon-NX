@@ -384,9 +384,8 @@ async def _cmd_start(open_id: str, user_id: str = "") -> None:
         else:
             for i, t in enumerate(active_tasks, 1):
                 eq_count = await _count_task_equipment(db, t)
-                target = (
-                    t.equipment.name if t.equipment else f"{eq_count}台设备"
-                )
+                # 线路（route）模型尚未落地：展示回退到设备名/台数
+                target = t.equipment.name if t.equipment else f"{eq_count}台设备"
                 active_task_infos.append(
                     {
                         "index": i,

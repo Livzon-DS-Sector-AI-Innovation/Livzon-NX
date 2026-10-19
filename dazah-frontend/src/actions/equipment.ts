@@ -4,6 +4,10 @@ import { getServerApiBaseUrl } from '@/lib/server-api'
 import { revalidatePath } from 'next/cache'
 import { getAuthHeaders } from '@/lib/auth'
 import type { InspectionFeishuWorkshopSummary } from '@/types/inspection-feishu'
+import type {
+  EquipmentImportArchive,
+  EquipmentImportArchiveSummary,
+} from '@/types/equipment'
 import {
   CreateCategoryInput, UpdateCategoryInput, CreateLocationInput, UpdateLocationInput, CreateEquipmentInput, UpdateEquipmentInput,
   CreateFailureCodeInput, UpdateFailureCodeInput,
@@ -119,6 +123,50 @@ export async function deleteEquipment(id: string) {
   const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/equipments/${id}`, {
     method: 'DELETE',
   })
+  revalidatePath('/equipment')
+  return result
+}
+
+// ==================== 台账上传存档 ====================
+interface ApiEnvelope<T> {
+  code: number
+  message: string
+  data: T
+  meta?: { page?: number; page_size?: number; total?: number }
+}
+
+export async function getEquipmentImportArchives(
+  page = 1,
+  pageSize = 20,
+  workshop?: string,
+): Promise<ApiEnvelope<EquipmentImportArchiveSummary[]>> {
+  const params = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+  })
+  if (workshop) params.set('workshop', workshop)
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/equipment/equipments/import-archives?${params}`,
+    { headers: await getAuthHeaders() },
+  )
+  return response.json()
+}
+
+export async function getEquipmentImportArchive(
+  id: string,
+): Promise<ApiEnvelope<EquipmentImportArchive>> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/equipment/equipments/import-archives/${id}`,
+    { headers: await getAuthHeaders() },
+  )
+  return response.json()
+}
+
+export async function deleteEquipmentImportArchive(id: string) {
+  const result = await actionFetch(
+    `${API_BASE_URL}/api/v1/equipment/equipments/import-archives/${id}`,
+    { method: 'DELETE' },
+  )
   revalidatePath('/equipment')
   return result
 }

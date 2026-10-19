@@ -395,6 +395,18 @@ def test_fl_board_route_bound_to_overview_page():
     assert binding.scope_adapter == "production.dashboard"
 
 
+def test_board_preferences_routes_bound_to_overview_page():
+    """看板个人偏好读写绑定概览页（query 口径：看板可见即可自定义）。"""
+    for method in ("GET", "POST"):
+        binding = page_policy.api_binding_for_route(
+            method, "/api/v1/production/board-preferences"
+        )
+        assert binding is not None
+        assert binding.page_keys == ("production:overview",)
+        assert binding.permission == "query"
+        assert binding.scope_adapter == "production.dashboard"
+
+
 def test_feishu_sync_config_routes_cover_overview_page():
     """概览页承载 FL 同步设置入口，飞书同步配置写端点授权生产概览页。"""
     binding = page_policy.api_binding_for_route(

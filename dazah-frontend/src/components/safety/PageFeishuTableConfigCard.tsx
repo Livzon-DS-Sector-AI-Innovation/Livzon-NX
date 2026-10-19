@@ -1,8 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { ApiOutlined, LinkOutlined, SaveOutlined } from '@ant-design/icons'
+import { ApiOutlined, LinkOutlined, SaveOutlined, SyncOutlined } from '@ant-design/icons'
 import { App, Button, Card, Input, Select, Space, Switch, Tag, Typography } from 'antd'
 
 /** 把「别名=规范车间名」多行文本解析为映射（容错中文等号/缺失等号）。 */
@@ -30,6 +30,7 @@ import {
   getSafetyPageFeishuConfigs,
   resolveSafetyPageFeishuUrl,
   saveSafetyPageFeishuConfig,
+  syncSafetyPageFeishuConfig,
   testSafetyPageFeishuConfig,
 } from '@/actions/safety'
 import PlatformNotice from '@/components/shared/PlatformNotice'
@@ -51,6 +52,12 @@ function renderTestTag(status: string | null | undefined) {
   return <Tag>未测试</Tag>
 }
 
+function renderSyncTag(status: string | null | undefined) {
+  if (status === 'success') return <Tag color="success">镜像已同步</Tag>
+  if (status === 'failed') return <Tag color="error">镜像同步失败</Tag>
+  return <Tag>镜像未同步</Tag>
+}
+
 function PageTableConfigItem({
   item,
   onSaved,
@@ -63,16 +70,49 @@ function PageTableConfigItem({
   const [tableId, setTableId] = useState(item.table_id ?? '')
   const [viewId, setViewId] = useState(item.view_id ?? '')
   const [hiddenFields, setHiddenFields] = useState<string[]>(item.hidden_field_names ?? [])
+  const [subTableIds, setSubTableIds] = useState<string[]>(
+    (item.sub_tables ?? []).map((table) => table.table_id)
+  )
   const [aliasesText, setAliasesText] = useState(
     formatWorkshopAliasText(item.workshop_aliases ?? {})
   )
   const [enabled, setEnabled] = useState(item.is_enabled)
+  const [mirrored, setMirrored] = useState(item.is_mirrored)
   const [linkInput, setLinkInput] = useState('')
   const [tables, setTables] = useState<ResolvedFeishuTable[]>([])
   const [fieldOptions, setFieldOptions] = useState<string[]>([])
   const [resolving, setResolving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+
+  // 页签子表选项目录：解析链接返回的子表清单；绑定未换 Base 时并入已保存页签，
+  // 让用户不重新解析链接也能取消/保留现有页签。
+  const bindingChanged = (appToken.trim() || '') !== (item.app_token ?? '')
+  const tableCatalog = useMemo(() => {
+    const catalog = new Map<string, string>()
+    for (const table of tables) catalog.set(table.table_id, table.table_name)
+    if (!bindingChanged) {
+      for (const table of item.sub_tables ?? []) {
+        if (!catalog.has(table.table_id)) catalog.set(table.table_id, table.tab_name)
+      }
+    }
+    return catalog
+  }, [tables, item.sub_tables, bindingChanged])
+  const selectedSubTables = useMemo(
+    () =>
+      subTableIds
+        .filter((id) => id !== tableId.trim() && tableCatalog.has(id))
+        .map((id) => {
+          const existing = (item.sub_tables ?? []).find((table) => table.table_id === id)
+          return {
+            table_id: id,
+            tab_name: tableCatalog.get(id) ?? existing?.tab_name ?? id,
+            hidden_field_names: existing?.hidden_field_names ?? [],
+          }
+        }),
+    [subTableIds, tableId, tableCatalog, item.sub_tables]
+  )
 
   const handleResolve = useCallback(async () => {
     if (!linkInput.trim()) {
@@ -83,6 +123,8 @@ function PageTableConfigItem({
     const res = await resolveSafetyPageFeishuUrl(linkInput.trim())
     setResolving(false)
     if (res.code === 200 && res.data) {
+      // 换绑了另一个多维表格时，旧 Base 的页签子表不再有意义，清空重选
+      if ((res.data.app_token ?? '') !== appToken) setSubTableIds([])
       setAppToken(res.data.app_token)
       setTables(res.data.tables ?? [])
       if (res.data.table_id) setTableId(res.data.table_id)
@@ -95,7 +137,7 @@ function PageTableConfigItem({
     } else {
       message.error(res.message || '解析链接失败')
     }
-  }, [linkInput, message])
+  }, [appToken, linkInput, message])
 
   const handleTest = useCallback(async () => {
     setTesting(true)
@@ -116,6 +158,20 @@ function PageTableConfigItem({
     }
   }, [item.page_key, message, onSaved])
 
+  const handleSync = useCallback(async () => {
+    setSyncing(true)
+    const res = await syncSafetyPageFeishuConfig(item.page_key)
+    setSyncing(false)
+    if (res.code === 200 && res.data) {
+      message.success(
+        `镜像同步完成（${res.data.last_sync_record_count ?? 0} 条记录）`
+      )
+      onSaved(res.data)
+    } else {
+      message.error(res.message || '镜像同步失败')
+    }
+  }, [item.page_key, message, onSaved])
+
   const handleSave = useCallback(async () => {
     if (!appToken.trim() || !tableId.trim()) {
       message.warning('请填写 App Token 与 Table ID')
@@ -127,8 +183,10 @@ function PageTableConfigItem({
       table_id: tableId.trim(),
       view_id: viewId.trim() || null,
       hidden_field_names: hiddenFields,
+      sub_tables: selectedSubTables,
       workshop_aliases: parseWorkshopAliasText(aliasesText),
       is_enabled: enabled,
+      is_mirrored: mirrored,
     })
     setSaving(false)
     if (res.code === 200 && res.data) {
@@ -137,13 +195,20 @@ function PageTableConfigItem({
     } else {
       message.error(res.message || '保存失败')
     }
-  }, [aliasesText, appToken, enabled, hiddenFields, item.page_key, message, onSaved, tableId, viewId])
+  }, [aliasesText, appToken, enabled, hiddenFields, item.page_key, message, mirrored, onSaved, selectedSubTables, tableId, viewId])
 
   return (
     <Card
       title={`${item.page_name}（${item.route_path}）`}
       extra={
         <Space>
+          <Button
+            icon={<SyncOutlined />}
+            onClick={() => void handleSync()}
+            loading={syncing}
+          >
+            立即同步
+          </Button>
           <Button
             icon={<ApiOutlined />}
             onClick={() => void handleTest()}
@@ -180,20 +245,44 @@ function PageTableConfigItem({
         {tables.length ? (
           <Space.Compact block>
             <Button disabled style={{ cursor: 'default', width: 140 }}>
-              子表
+              主数据表
             </Button>
             <Select
               style={{ width: '100%' }}
-              placeholder="选择该链接下的子表"
+              placeholder="选择主数据表（页面第一个页签）"
               value={tables.some((table) => table.table_id === tableId) ? tableId : undefined}
               options={tables.map((table) => ({
                 value: table.table_id,
                 label: `${table.table_name}（${table.table_id}）`,
               }))}
-              onChange={(value) => setTableId(value)}
+              onChange={(value) => {
+                setTableId(value)
+                // 主表换到某张子表后，它不能再同时作为页签子表
+                setSubTableIds((prev) => prev.filter((id) => id !== value))
+              }}
             />
           </Space.Compact>
         ) : null}
+        <Space.Compact block>
+          <Button disabled style={{ cursor: 'default', width: 140 }}>
+            页签子表
+          </Button>
+          <Select
+            mode="multiple"
+            allowClear
+            style={{ width: '100%' }}
+            placeholder={
+              tableCatalog.size
+                ? '勾选需要作为页签展示的其余子表（主数据表始终是第一个页签）'
+                : '先粘贴多维表格链接点「解析」获取子表清单，再勾选页签子表'
+            }
+            value={subTableIds.filter((id) => id !== tableId)}
+            options={[...tableCatalog.entries()]
+              .filter(([id]) => id !== tableId)
+              .map(([id, name]) => ({ value: id, label: `${name}（${id}）` }))}
+            onChange={(value) => setSubTableIds(value)}
+          />
+        </Space.Compact>
         <Space.Compact block>
           <Button disabled style={{ cursor: 'default', width: 140 }}>
             App Token
@@ -220,7 +309,7 @@ function PageTableConfigItem({
           </Button>
           <Input
             value={viewId}
-            placeholder="视图 view_id（仅记录，页面展示该表全部记录）"
+            placeholder="视图 view_id（页面列按该视图对齐，粘贴链接时自动带出）"
             onChange={(event) => setViewId(event.target.value)}
           />
         </Space.Compact>
@@ -268,11 +357,31 @@ function PageTableConfigItem({
               : ''}
           </Typography.Text>
         </Space>
+        <Space size={12} wrap>
+          <Typography.Text>本地镜像数据源（全量同步，页面查询更快更完整）</Typography.Text>
+          <Switch
+            aria-label="启用本地镜像数据源"
+            checked={mirrored}
+            onChange={setMirrored}
+          />
+          {renderSyncTag(item.last_sync_status)}
+          <Typography.Text type="secondary">
+            最近同步：{formatDateTime(item.last_synced_at)}
+            {item.last_sync_record_count != null
+              ? `（${item.last_sync_record_count} 条）`
+              : ''}
+            ；每 15 分钟自动同步，页面编辑即时写回飞书并更新镜像。
+          </Typography.Text>
+        </Space>
+        {item.last_sync_error ? (
+          <PlatformNotice type="warning" title={item.last_sync_error} />
+        ) : null}
         {item.last_test_error ? (
           <PlatformNotice type="warning" title={item.last_test_error} />
         ) : null}
         <Typography.Text type="secondary">
           列与数据来自飞书实时表结构，页面不写死字段；在页面上的修改会直接写回该多维表格。
+          页签子表在这里勾选配置，换绑或增删子表无需改代码；每 15 分钟自动同步全部页签。
           需先把安全模块飞书应用添加为该多维表格的协作者。
         </Typography.Text>
       </Space>

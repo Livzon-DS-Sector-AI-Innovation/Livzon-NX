@@ -75,20 +75,23 @@ async def get_page_table_attachment_thumbnail(
     file_token: str,
     max_width: int = DEFAULT_MAX_WIDTH,
     max_height: int = DEFAULT_MAX_HEIGHT,
+    table_id: str | None = None,
 ) -> tuple[bytes, str, str] | None:
     """返回缩略图 (content, content_type, filename)；非图片/生成失败返回 None。
 
     回源复用 ``fetch_page_table_attachment``（含「token 必须属于该记录该字段」
-    的校验与原图缓存），缩略图按尺寸独立缓存。
+    的校验与原图缓存），缩略图按尺寸独立缓存；``table_id`` 用于多页签页面
+    区分附件归属子表，并参与缓存键。
     """
     width = _clamp_dimension(max_width, DEFAULT_MAX_WIDTH)
     height = _clamp_dimension(max_height, DEFAULT_MAX_HEIGHT)
     cache = get_attachment_cache()
-    key_suffix = f"thumb:{width}x{height}"
+    scope = table_id or ""
+    key_suffix = f"thumb:{scope}:{width}x{height}"
 
     async def _fetch() -> tuple[bytes, str, str] | None:
         content, _content_type, filename = await fetch_page_table_attachment(
-            db, page_key, record_id, field_name, file_token
+            db, page_key, record_id, field_name, file_token, table_id=table_id
         )
         thumb = build_thumbnail(content, filename, width, height)
         if thumb is None:

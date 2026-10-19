@@ -72,6 +72,11 @@ def _oral_template(path: Path) -> None:
     end = OxmlElement("w:permEnd")
     end.set(qn("w:id"), "0")
     question_cell.paragraphs[0]._p.append(end)
+    # 模拟真实模板的"限制编辑"只读保护（导出时应被解除，否则无法插入行加题）
+    protection = OxmlElement("w:documentProtection")
+    protection.set(qn("w:edit"), "readOnly")
+    protection.set(qn("w:enforcement"), "1")
+    doc.settings.element.append(protection)
     doc.save(path)
 
 
@@ -162,6 +167,8 @@ async def test_oral_evaluation_and_notification_generators(
     # 锁定区保持锁定：标题行、题头行、序号表头无任何例外标记
     assert not _perm_starts(saved.tables[0].rows[0]._tr)
     assert not _perm_starts(saved.tables[0].rows[3]._tr)
+    # 只读文档保护已解除：下载的文档可在问题区插入新行手工加题
+    assert not saved.settings.element.findall(qn("w:documentProtection"))
 
     notification_path = tmp_path / "notification.docx"
     _notification_template(notification_path)
@@ -253,6 +260,45 @@ async def test_training_evaluation_and_signin_generators(
     assert training_evaluation_document_generator._d(None) == ""
     assert training_evaluation_document_generator._d(date(2026, 8, 20))
     assert training_evaluation_document_generator._int(None) == ""
+
+
+@pytest.mark.asyncio
+async def test_training_evaluation_grade_counts_fill_centered(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """考核标准及结果行的人数写入空白区中间 run（居中），不紧贴标签左侧。"""
+
+    def grade_template(path: Path) -> None:
+        doc = Document()
+        table = doc.add_table(rows=20, cols=7)
+        for row in table.rows:
+            for cell in row.cells:
+                cell.paragraphs[0].add_run("")
+        paragraph = table.rows[8].cells[2].paragraphs[0]
+        paragraph.runs[0].text = "优："
+        for text in [
+            "", "", "", "人　", "良好：", "", "", "", "人　", "合格：", "", "", "",
+            "人　", "不合格：", "", "", "", "人　", "缺考：", "", "", "", "人",
+        ]:
+            paragraph.add_run(text)
+        doc.save(path)
+
+    evaluation_path = tmp_path / "evaluation-grade.docx"
+    grade_template(evaluation_path)
+    monkeypatch.setattr(
+        training_evaluation_document_generator,
+        "_find_template",
+        lambda: evaluation_path,
+    )
+    output = training_evaluation_document_generator.generate_training_evaluation_doc(
+        {"excellent_count": 2, "good_count": 0, "pass_count": 11}
+    )
+    saved = Document(BytesIO(output.getvalue()))
+    runs = [r.text for r in saved.tables[0].cell(8, 2).paragraphs[0].runs]
+    # 每个等级后跟 3 个空白 run：值写入中间一个（index 2/7/12），前后保持空白
+    assert runs[2] == "2" and runs[1] == "" and runs[3] == ""
+    assert runs[7] == "0"
+    assert runs[12] == "11"
 
     def signin_template(path: Path) -> None:
         doc = Document()

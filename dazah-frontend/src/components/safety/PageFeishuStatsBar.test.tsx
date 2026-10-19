@@ -67,6 +67,7 @@ const stats: PageTableStats = {
   page_key: 'safety:risk-hazard:hazard-inspection:hazard-duty',
   page_name: '24小时值班隐患',
   total: 349,
+  due_summary: null,
   groups: [
     {
       field: '值班日期',
@@ -139,9 +140,45 @@ describe('PageFeishuStatsBar', () => {
     expect(donut.find((item) => item.name === '已整改')?.itemStyle.color).toBe('#1aae39')
     expect(donut.find((item) => item.name === '未整改')?.itemStyle.color).toBe('#dd5b00')
 
-    // 卡片标题顺序：月份 / 车间 / 整改
+    // 卡片标题顺序：月份 / 车间 / 整改（文本类标题取字段名）
     const titles = [...html.matchAll(/data-title="([^"]+)"/g)].map((match) => match[1])
-    expect(titles).toEqual(['月度隐患趋势', '车间隐患分布', '整改情况'])
+    expect(titles).toEqual(['月度隐患趋势', '车间/位置分布', '整改情况'])
+  })
+
+  it('renders a person distribution card for person groups', () => {
+    const ledgerStats: PageTableStats = {
+      page_key: 'k',
+      page_name: '隐患台账',
+      total: 12,
+      due_summary: null,
+      groups: [
+        {
+          field: '检查内容',
+          kind: 'date',
+          mode: 'month',
+          buckets: [{ key: '2026-01', count: 12 }],
+        },
+        {
+          field: '负责人',
+          kind: 'person',
+          mode: 'value',
+          buckets: [
+            { key: '李玮', count: 7 },
+            { key: '王思博', count: 5 },
+          ],
+        },
+      ],
+    }
+    const html = renderToStaticMarkup(<PageFeishuStatsBar stats={ledgerStats} />)
+    const charts = chartPayloads(html)
+
+    // 负责人组渲染为横向条形卡（与文本分布同构）
+    const personChart = charts[1] as { yAxis: { data: string[] }; series: { data: number[] }[] }
+    expect(personChart.yAxis.data).toEqual(['王思博', '李玮'])
+    expect(personChart.series[0].data).toEqual([5, 7])
+
+    const titles = [...html.matchAll(/data-title="([^"]+)"/g)].map((match) => match[1])
+    expect(titles).toEqual(['月度隐患趋势', '负责人分布'])
   })
 
   it('renders empty placeholders for missing groups', () => {
@@ -151,6 +188,7 @@ describe('PageFeishuStatsBar', () => {
           page_key: 'k',
           page_name: '24小时值班隐患',
           total: 0,
+          due_summary: null,
           groups: [
             { field: '值班日期', kind: 'date', mode: 'month', buckets: [] },
             {
@@ -180,6 +218,7 @@ describe('PageFeishuStatsBar interactions and colors', () => {
       page_key: 'k',
       page_name: '24小时值班隐患',
       total: 8,
+      due_summary: null,
       groups: [
         {
           field: '整改情况',

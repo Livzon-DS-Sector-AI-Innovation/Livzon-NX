@@ -1,33 +1,25 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Table, Button, Space, Input, Select, DatePicker, Tag, Card,
   Typography, Drawer, Descriptions, Switch, App, Tooltip, Modal,
-  Statistic, Form, Row, Col,
+  Statistic,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
-  SearchOutlined, ExportOutlined, EyeOutlined, PlusOutlined,
+  SearchOutlined, ExportOutlined, EyeOutlined,
   SafetyCertificateOutlined,
   EnvironmentOutlined, ClockCircleOutlined, RobotOutlined,
-  SendOutlined, CheckCircleOutlined, CloseCircleOutlined,
-  EditOutlined, DeleteOutlined, AlertOutlined,
+  AlertOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import {
   getSpecialOperationReports,
   getSpecialOperationLedgerStats,
-  createSpecialOperationReport,
-  updateSpecialOperationReport,
-  deleteSpecialOperationReport,
-  submitSpecialOperationReport,
-  approveSpecialOperationReport,
-  rejectSpecialOperationReport,
-  setSpecialOperationReportCritical,
 } from '@/actions/safety'
-import type { SpecialOperationReport, SpecialOperationReportFormData, SpecialOperationLedgerStats } from '@/types/safety'
+import type { SpecialOperationReport, SpecialOperationLedgerStats } from '@/types/safety'
 
 import {
   T, OP_TYPE_CONFIG, OP_LEVEL_LABELS, OP_LEVEL_OPTIONS,
@@ -35,7 +27,6 @@ import {
 } from './specialOpsConstants'
 
 const { Text } = Typography
-const { TextArea } = Input
 const { RangePicker } = DatePicker
 
 // ═══════════════════════════════════════════════════════════
@@ -44,16 +35,24 @@ const { RangePicker } = DatePicker
 
 interface SpecialOpsManagementProps {
   initialStats?: SpecialOperationLedgerStats[]
+  initialData?: SpecialOperationReport[]
+  initialTotal?: number
+  /** 服务端首屏已应用的当天日期（YYYY-MM-DD），用于初始化日期筛选。 */
+  initialDateFilter?: string
 }
 
-export default function SpecialOpsManagement({ initialStats }: SpecialOpsManagementProps) {
-  const { message, modal } = App.useApp()
-  const [form] = Form.useForm()
+export default function SpecialOpsManagement({
+  initialStats,
+  initialData,
+  initialTotal,
+  initialDateFilter,
+}: SpecialOpsManagementProps) {
+  const { message } = App.useApp()
 
   // ── Data State ──
   const [loading, setLoading] = useState(false)
-  const [data, setData] = useState<SpecialOperationReport[]>([])
-  const [total, setTotal] = useState(0)
+  const [data, setData] = useState<SpecialOperationReport[]>(initialData || [])
+  const [total, setTotal] = useState(initialTotal || 0)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
 
@@ -66,7 +65,12 @@ export default function SpecialOpsManagement({ initialStats }: SpecialOpsManagem
   const [opLevel, setOpLevel] = useState<string | undefined>()
   const [riskLevel, setRiskLevel] = useState<string | undefined>()
   const [dept, setDept] = useState<string | undefined>()
-  const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null)
+  // 默认展示当天（按计划作业日期过滤）；清空日期范围即查看全部
+  const initialDay = initialDateFilter ? dayjs(initialDateFilter) : dayjs()
+  const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>([
+    initialDay,
+    initialDay,
+  ])
   const [keyword, setKeyword] = useState('')
   const [isCritical, setIsCritical] = useState<boolean | undefined>()
 
@@ -80,36 +84,36 @@ export default function SpecialOpsManagement({ initialStats }: SpecialOpsManagem
   const [exportLoading, setExportLoading] = useState(false)
   const [exportExplanation, setExportExplanation] = useState('')
 
-  // ── Report drawer (create/edit) ──
-  const [reportDrawerOpen, setReportDrawerOpen] = useState(false)
-  const [editingReport, setEditingReport] = useState<SpecialOperationReport | null>(null)
-  const [reportSubmitting, setReportSubmitting] = useState(false)
+  // 服务端首屏已带当天数据/统计：跳过挂载时的重复请求（避免与 SSR 结果竞争）
+  const skipDataOnMount = useRef((initialData || []).length > 0)
+  const skipStatsOnMount = useRef((initialStats || []).length > 0)
 
-  // ── Reject modal ──
-  const [rejectVisible, setRejectVisible] = useState(false)
-  const [rejectId, setRejectId] = useState('')
-  const [rejectReason, setRejectReason] = useState('')
 
-  // ── Init form when editing ──
-  useEffect(() => {
-    if (editingReport && reportDrawerOpen) {
-      form.setFieldsValue({
-        ...editingReport,
-        planned_start_time: editingReport.planned_start_time ? dayjs(editingReport.planned_start_time) : undefined,
-        planned_end_time: editingReport.planned_end_time ? dayjs(editingReport.planned_end_time) : undefined,
-      })
-    }
-  }, [editingReport, reportDrawerOpen, form])
 
-  // ── Fetch stats ──
+  // ── Fetch stats（与列表筛选同口径，仪表盘随筛选联动） ──
   const fetchStats = useCallback(async () => {
     try {
-      const res = await getSpecialOperationLedgerStats()
+      const res = await getSpecialOperationLedgerStats({
+        operation_type: opType,
+        operation_level: opLevel,
+        risk_level: riskLevel,
+        department: dept,
+        date_from: dateRange?.[0]?.format('YYYY-MM-DD'),
+        date_to: dateRange?.[1]?.format('YYYY-MM-DD'),
+        keyword: keyword || undefined,
+        is_critical: isCritical,
+      })
       if (res.code === 200 && res.data) setStats(res.data)
     } catch { /* silent */ }
-  }, [])
+  }, [opType, opLevel, riskLevel, dept, dateRange, keyword, isCritical])
 
-  useEffect(() => { if (!initialStats?.length) fetchStats() }, [fetchStats, initialStats])
+  useEffect(() => {
+    if (skipStatsOnMount.current) {
+      skipStatsOnMount.current = false
+      return
+    }
+    void fetchStats()
+  }, [fetchStats])
 
   // ── Fetch data (all statuses) ──
   const fetchData = useCallback(async () => {
@@ -136,7 +140,13 @@ export default function SpecialOpsManagement({ initialStats }: SpecialOpsManagem
     }
   }, [page, pageSize, statusFilter, opType, opLevel, riskLevel, dept, dateRange, keyword, isCritical])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    if (skipDataOnMount.current) {
+      skipDataOnMount.current = false
+      return
+    }
+    void fetchData()
+  }, [fetchData])
 
   // ── AI Export ──
 
@@ -202,100 +212,7 @@ export default function SpecialOpsManagement({ initialStats }: SpecialOpsManagem
     }
   }
 
-  // ── Report CRUD ──
-  const handleCreateReport = () => {
-    setEditingReport(null)
-    form.resetFields()
-    setReportDrawerOpen(true)
-  }
-
-  const handleEditReport = (record: SpecialOperationReport) => {
-    setEditingReport(record)
-    setReportDrawerOpen(true)
-  }
-
-  const handleReportSubmit = async () => {
-    try {
-      const values = await form.validateFields()
-      setReportSubmitting(true)
-      const formatted = {
-        ...values,
-        planned_start_time: values.planned_start_time?.toISOString?.(),
-        planned_end_time: values.planned_end_time?.toISOString?.(),
-      }
-      if (editingReport) {
-        const r = await updateSpecialOperationReport(editingReport.id, formatted)
-        if (r.code === 200) {
-          message.success('已更新')
-          setReportDrawerOpen(false)
-          fetchData()
-        } else {
-          message.error(r.message || '更新失败')
-        }
-      } else {
-        const r = await createSpecialOperationReport(formatted as SpecialOperationReportFormData)
-        if (r.code === 200) {
-          message.success('已创建')
-          setReportDrawerOpen(false)
-          form.resetFields()
-          fetchData()
-        } else {
-          message.error(r.message || '创建失败')
-        }
-      }
-    } catch {
-      // form validation error
-    } finally {
-      setReportSubmitting(false)
-    }
-  }
-
-  const handleDelete = (id: string) => {
-    modal.confirm({
-      title: '确认删除', content: '确定要删除该报备吗？',
-      onOk: async () => {
-        const r = await deleteSpecialOperationReport(id)
-        if (r.code === 200) { message.success('已删除'); fetchData() }
-        else { message.error(r.message || '删除失败') }
-      },
-    })
-  }
-
-  // ── Workflow actions ──
-  const handleFlowSubmit = async (id: string) => {
-    const r = await submitSpecialOperationReport(id)
-    if (r.code === 200) {
-      const item = r.data as SpecialOperationReport
-      if (item.is_critical) {
-        message.success(`已提交 · AI判定为关键作业${item.is_critical_reason ? `（${item.is_critical_reason}）` : ''}`)
-      } else {
-        message.success(`已提交${item.is_critical_reason ? ` · ${item.is_critical_reason}` : ''}`)
-      }
-      fetchData()
-    }
-    else { message.error(r.message || '提交失败') }
-  }
-
-  const handleApprove = async (id: string) => {
-    const r = await approveSpecialOperationReport(id)
-    if (r.code === 200) { message.success('已审批'); fetchData() }
-    else { message.error(r.message || '审批失败') }
-  }
-
-  const handleOpenReject = (id: string) => { setRejectId(id); setRejectReason(''); setRejectVisible(true) }
-
-  const handleReject = async () => {
-    if (!rejectReason.trim()) { message.error('请填写驳回原因'); return }
-    const r = await rejectSpecialOperationReport(rejectId, rejectReason)
-    if (r.code === 200) { message.success('已驳回'); setRejectVisible(false); fetchData() }
-    else { message.error(r.message || '驳回失败') }
-  }
-
-  const handleToggleCritical = async (id: string, checked: boolean) => {
-    const r = await setSpecialOperationReportCritical(id, checked)
-    if (r.code === 200) { message.success(checked ? '已标记为关键作业' : '已取消关键作业标记'); fetchData() }
-    else { message.error(r.message || '操作失败') }
-  }
+  // ── 台账定位：审批与报备编辑都在飞书多维表格完成，本页只读汇总 ──
 
   // ── Build stats map ──
   const statsMap: Record<string, { count: number; critical: number }> = {}
@@ -376,147 +293,25 @@ export default function SpecialOpsManagement({ initialStats }: SpecialOpsManagem
       },
     },
     {
-      title: '审批时间', dataIndex: 'approved_at', key: 'approved_at', width: 110,
-      render: (v: string) => (
-        <Text style={{ color: T.steel, fontSize: 12 }}>{v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-'}</Text>
-      ),
-    },
-    {
-      title: '关键作业', dataIndex: 'is_critical', key: 'critical', width: 85,
-      render: (v: boolean) => v
-        ? <Tag style={{ color: T.error, backgroundColor: T.rose, border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12 }}>关键</Tag>
+      title: '关键作业', dataIndex: 'is_critical', key: 'critical', width: 90,
+      render: (v: boolean, r) => v
+        ? <Tooltip title={r.is_critical_reason || '按规则判定为关键作业'}>
+            <Tag style={{ color: T.error, backgroundColor: T.rose, border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12 }}>关键</Tag>
+          </Tooltip>
         : <Text style={{ color: T.muted, fontSize: 13 }}>-</Text>,
     },
     {
-      title: '操作', key: 'action', width: 280, fixed: 'right',
+      title: '操作', key: 'action', width: 80, fixed: 'right',
       render: (_, record) => (
-        <Space size={2}>
-          {/* Draft: submit, edit, delete */}
-          {record.status === 'draft' && (
-            <>
-              <Button type="link" size="small" icon={<SendOutlined />}
-                style={{ color: T.primary, padding: '0 4px' }}
-                onClick={() => handleFlowSubmit(record.id)}
-              >提交</Button>
-              <Button type="link" size="small" icon={<EditOutlined />}
-                style={{ color: '#0075de', padding: '0 4px' }}
-                onClick={() => handleEditReport(record)}
-              >编辑</Button>
-            </>
-          )}
-          {/* Submitted: approve, reject, edit */}
-          {record.status === 'submitted' && (
-            <>
-              <Button type="link" size="small" icon={<CheckCircleOutlined />}
-                style={{ color: T.success, padding: '0 4px' }}
-                onClick={() => handleApprove(record.id)}
-              >审批</Button>
-              <Button type="link" size="small" icon={<CloseCircleOutlined />}
-                style={{ color: T.error, padding: '0 4px' }}
-                onClick={() => handleOpenReject(record.id)}
-              >驳回</Button>
-            </>
-          )}
-          {/* Approved: view only */}
-          {record.status === 'approved' && (
-            <Button type="link" size="small" icon={<EyeOutlined />}
-              style={{ color: T.steel, padding: '0 4px' }}
-              onClick={() => { setDetailItem(record); setDrawerOpen(true) }}
-            >查看</Button>
-          )}
-          {/* Rejected: edit, delete */}
-          {record.status === 'rejected' && (
-            <>
-              <Button type="link" size="small" icon={<EditOutlined />}
-                style={{ color: '#0075de', padding: '0 4px' }}
-                onClick={() => handleEditReport(record)}
-              >编辑</Button>
-            </>
-          )}
-          {/* Delete for non-approved */}
-          {record.status !== 'approved' && (
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}
-              style={{ padding: '0 4px' }}
-              onClick={() => handleDelete(record.id)}
-            >删除</Button>
-          )}
-          {/* Critical toggle */}
-          <Tooltip title="关键作业">
-            <Switch
-              size="small"
-              checked={record.is_critical}
-              onChange={(v) => handleToggleCritical(record.id, v)}
-              style={{ marginLeft: 4 }}
-            />
-          </Tooltip>
-        </Space>
+        // 台账只读：审批在飞书多维表格完成，关键作业由规则自动判定
+        <Button type="link" size="small" icon={<EyeOutlined />}
+          style={{ color: T.steel, padding: '0 4px' }}
+          onClick={() => { setDetailItem(record); setDrawerOpen(true) }}
+        >查看</Button>
       ),
     },
   ]
 
-  // ── Report form content (per field spec: only ✅ business fields) ──
-  const reportFormContent = (
-    <Form form={form} layout="vertical">
-      <Row gutter={16}>
-        <Col span={12}>
-          <Form.Item name="report_no" label="报备编号" rules={[{ required: true, message: '请输入报备编号' }]}>
-            <Input placeholder="报备编号" style={{ borderRadius: 8 }} />
-          </Form.Item>
-        </Col>
-        <Col span={12}>
-          <Form.Item name="operation_type" label="作业类型" rules={[{ required: true, message: '请选择作业类型' }]}>
-            <Select
-              options={Object.entries(OP_TYPE_CONFIG).map(([k, v]) => ({ value: k, label: v.label }))}
-              placeholder="选择作业类型"
-              style={{ borderRadius: 8 }}
-            />
-          </Form.Item>
-        </Col>
-      </Row>
-      <Row gutter={16}>
-        <Col span={8}>
-          <Form.Item name="operation_level" label="作业级别" initialValue="grade2">
-            <Select options={OP_LEVEL_OPTIONS} style={{ borderRadius: 8 }} />
-          </Form.Item>
-        </Col>
-        <Col span={8}>
-          <Form.Item name="department" label="报备部门">
-            <Input placeholder="部门" style={{ borderRadius: 8 }} />
-          </Form.Item>
-        </Col>
-        <Col span={8}>
-          <Form.Item name="location" label="作业地点">
-            <Input placeholder="地点" style={{ borderRadius: 8 }} />
-          </Form.Item>
-        </Col>
-      </Row>
-      <Row gutter={16}>
-        <Col span={12}>
-          <Form.Item name="applicant_name" label="报备申请人">
-            <Input placeholder="报备申请人" style={{ borderRadius: 8 }} />
-          </Form.Item>
-        </Col>
-      </Row>
-      <Row gutter={16}>
-        <Col span={12}>
-          <Form.Item name="planned_start_time" label="计划开始时间">
-            <DatePicker showTime style={{ width: '100%', borderRadius: 8 }} />
-          </Form.Item>
-        </Col>
-        <Col span={12}>
-          <Form.Item name="planned_end_time" label="计划结束时间">
-            <DatePicker showTime style={{ width: '100%', borderRadius: 8 }} />
-          </Form.Item>
-        </Col>
-      </Row>
-      <Form.Item name="work_description" label="作业内容描述">
-        <TextArea rows={3} placeholder="作业内容描述" style={{ borderRadius: 8 }} />
-      </Form.Item>
-      <Form.Item name="notes" label="备注">
-        <TextArea rows={2} placeholder="备注" style={{ borderRadius: 8 }} />
-      </Form.Item>
-    </Form>
-  )
 
   // ═══════════════════════════════════════════════════════════
   // Render
@@ -528,7 +323,7 @@ export default function SpecialOpsManagement({ initialStats }: SpecialOpsManagem
         <div>
           <Text strong style={{ fontSize: 18, color: T.ink }}>特殊作业管理</Text>
           <div style={{ color: T.slate, fontSize: 13, marginTop: 2 }}>
-            GB 30871-2022 · 8类特殊作业 · 报备审批 · 台账汇总
+            GB 30871-2022 · 8类特殊作业 · 台账汇总（审批在飞书多维表格完成）
           </div>
         </div>
         <Space>
@@ -543,14 +338,7 @@ export default function SpecialOpsManagement({ initialStats }: SpecialOpsManagem
           >
             导出Excel
           </Button>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreateReport}
-            style={{ borderRadius: 8, height: 40, fontWeight: 500 }}
-          >
-            新建报备
-          </Button>
+
         </Space>
       </div>
 
@@ -730,7 +518,6 @@ export default function SpecialOpsManagement({ initialStats }: SpecialOpsManagem
             <Descriptions.Item label="监护人">{detailItem.guardian_name || '-'}</Descriptions.Item>
             <Descriptions.Item label="操作人">{detailItem.operator_names || '-'}</Descriptions.Item>
             <Descriptions.Item label="审批人">{detailItem.approver_name || '-'}</Descriptions.Item>
-            <Descriptions.Item label="审批时间">{detailItem.approved_at ? dayjs(detailItem.approved_at).format('YYYY-MM-DD HH:mm') : '-'}</Descriptions.Item>
             <Descriptions.Item label="计划开始">{detailItem.planned_start_time ? dayjs(detailItem.planned_start_time).format('YYYY-MM-DD HH:mm') : '-'}</Descriptions.Item>
             <Descriptions.Item label="计划结束">{detailItem.planned_end_time ? dayjs(detailItem.planned_end_time).format('YYYY-MM-DD HH:mm') : '-'}</Descriptions.Item>
             <Descriptions.Item label="创建时间">{detailItem.created_at ? dayjs(detailItem.created_at).format('YYYY-MM-DD HH:mm') : '-'}</Descriptions.Item>
@@ -753,71 +540,9 @@ export default function SpecialOpsManagement({ initialStats }: SpecialOpsManagem
         )}
       </Drawer>
 
-      {/* ── Report Drawer (create/edit) ── */}
-      <Drawer
-        title={
-          <Space>
-            <SafetyCertificateOutlined style={{ color: T.primary }} />
-            <span>{editingReport ? (editingReport.status === 'approved' ? '查看报备' : '编辑报备') : '新建报备'}</span>
-          </Space>
-        }
-        placement="right"
-        size="large"
-        open={reportDrawerOpen}
-        onClose={() => { setReportDrawerOpen(false); setEditingReport(null) }}
-        extra={
-          editingReport?.status !== 'approved' ? (
-            <Space>
-              <Button
-                onClick={() => { setReportDrawerOpen(false); setEditingReport(null) }}
-                style={{ borderRadius: 8 }}
-              >
-                取消
-              </Button>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                loading={reportSubmitting}
-                onClick={handleReportSubmit}
-                style={{ borderRadius: 8 }}
-              >
-                {editingReport ? '更新' : '创建'}
-              </Button>
-            </Space>
-          ) : (
-            <Button
-              onClick={() => { setReportDrawerOpen(false); setEditingReport(null) }}
-              style={{ borderRadius: 8 }}
-            >
-              关闭
-            </Button>
-          )
-        }
-      >
-        {reportFormContent}
-      </Drawer>
 
-      {/* ── Reject Modal ── */}
-      <Modal
-        title="驳回原因"
-        open={rejectVisible}
-        onOk={handleReject}
-        onCancel={() => setRejectVisible(false)}
-        okText="确认驳回"
-        cancelText="取消"
-        okButtonProps={{
-          style: { borderRadius: 8, backgroundColor: T.error, borderColor: T.error },
-        }}
-        cancelButtonProps={{ style: { borderRadius: 8 } }}
-      >
-        <TextArea
-          rows={4}
-          placeholder="请输入驳回原因"
-          value={rejectReason}
-          onChange={e => setRejectReason(e.target.value)}
-          style={{ borderRadius: 8 }}
-        />
-      </Modal>
+
+
 
       {/* ── AI Export Modal ── */}
       <Modal

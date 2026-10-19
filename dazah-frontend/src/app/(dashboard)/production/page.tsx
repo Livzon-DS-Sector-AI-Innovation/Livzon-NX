@@ -12,6 +12,7 @@ import Alert from '@/components/shared/PlatformNotice'
 import {
   ScheduleOutlined,
   SyncOutlined,
+  SwapOutlined,
   ToolOutlined,
   AlertOutlined,
   DatabaseOutlined,
@@ -48,6 +49,8 @@ import {
   getPlans,
   getProductionLineStatus,
   setProductionLineStatus,
+  getProductionBoardPreferences,
+  saveProductionBoardPreferences,
 } from '@/actions/production'
 import type {
   FermentationBoard,
@@ -257,6 +260,45 @@ export default function ProductionDashboard() {
   const isFlView = productCode === 'FL'
   // FL 视图刷新信号：页面「立即刷新」按钮驱动（发酵视图走 loadBoard）
   const [flRefreshKey, setFlRefreshKey] = useState(0)
+  // 单批产量图：平均单产口径切换（含中试=总产量÷大罐批数 ↔ 不含中试=
+  // 大罐批均值）与含中试模式下的标签后缀（默认「含中试」，可改可清空）；
+  // 偏好按登录账户服务端持久化（跨设备一致），载入后变更才防抖保存
+  const [avgPilotIncl, setAvgPilotIncl] = useState(true)
+  const [avgNote, setAvgNote] = useState('含中试')
+  const prefsLoadedRef = useRef<{ incl: boolean; note: string } | null>(null)
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await getProductionBoardPreferences()
+        if (res?.code === 200 && res.data) {
+          prefsLoadedRef.current = {
+            incl: res.data.avg_pilot_incl,
+            note: res.data.avg_note,
+          }
+          setAvgPilotIncl(res.data.avg_pilot_incl)
+          setAvgNote(res.data.avg_note)
+        }
+      } catch {
+        // 偏好读取失败不阻断看板，维持默认口径
+      }
+    })()
+  }, [])
+  useEffect(() => {
+    const loaded = prefsLoadedRef.current
+    if (!loaded) return
+    if (avgPilotIncl === loaded.incl && avgNote === loaded.note) return
+    const timer = setTimeout(() => {
+      void saveProductionBoardPreferences({
+        avg_pilot_incl: avgPilotIncl,
+        avg_note: avgNote.trim(),
+      }).then((res) => {
+        if (res?.code === 200) {
+          prefsLoadedRef.current = { incl: avgPilotIncl, note: avgNote }
+        }
+      })
+    }, 600)
+    return () => clearTimeout(timer)
+  }, [avgPilotIncl, avgNote])
   const [maintModalOpen, setMaintModalOpen] = useState(false)
   const [maintTank, setMaintTank] = useState<BoardTank | null>(null)
   const [maintReason, setMaintReason] = useState('')
@@ -1004,14 +1046,41 @@ export default function ProductionDashboard() {
   ]
 
   // 单批产量柱状图 + 平均产量标线
-  // 平均线优先用后端口径（DR：大罐批均值，中试线小罐批不计入），
-  // 无后端值时按柱子自算
+  // 平均线优先用后端口径（DR：总产量÷大罐批数，中试产量只进分子），
+  // 无后端值时按柱子自算；不含中试口径（大罐批均值）由后端 excl 字段提供
   const trendOutputs = board?.trend?.outputs ?? []
-  const trendAvg =
+  const trendAvgIncl =
     board?.trend?.avg_yield_kg ??
     (trendOutputs.length
       ? trendOutputs.reduce((sum, value) => sum + value, 0) / trendOutputs.length
       : null)
+  const trendAvg = avgPilotIncl
+    ? trendAvgIncl
+    : (board?.trend?.avg_yield_kg_excl_pilot ?? trendAvgIncl)
+  // 含中试模式的标签后缀：默认「含中试」，可改可清空；不含中试恒无后缀
+  const avgPilotSuffix =
+    avgPilotIncl && avgNote.trim() ? `（${avgNote.trim()}）` : ''
+  // 平均线可能高于全部柱值（markLine 不撑大轴范围）。按 ECharts 默认分度
+  // （约 5 等分）以 1/2/5×10ⁿ 推算整洁步长并固定 interval，上限抬到能
+  // 容纳平均线的步长整数倍：每格代表的量与自动分度保持一致
+  const niceTickStep = (raw: number): number => {
+    if (!(raw > 0) || !Number.isFinite(raw)) return 1
+    const base = 10 ** Math.floor(Math.log10(raw))
+    for (const factor of [1, 2, 5]) {
+      if (factor * base >= raw) return factor * base
+    }
+    return 10 * base
+  }
+  const trendExtent = trendOutputs.length ? Math.max(...trendOutputs) : null
+  let trendStep: number | undefined
+  let trendAxisMax: number | undefined
+  if (trendExtent != null && trendAvg != null) {
+    trendStep = niceTickStep(trendExtent / 5)
+    trendAxisMax = Math.max(
+      Math.ceil(trendExtent / trendStep) * trendStep,
+      Math.ceil(trendAvg / trendStep) * trendStep,
+    )
+  }
 
   const trendOption = board?.trend
     ? {
@@ -1022,7 +1091,12 @@ export default function ProductionDashboard() {
           data: board.trend.batches,
           axisLabel: { interval: 'auto', hideOverlap: true },
         },
-        yAxis: { type: 'value', name: '产量 (kg)' },
+        yAxis: {
+          type: 'value',
+          name: '产量 (kg)',
+          max: trendAxisMax,
+          interval: trendStep,
+        },
         dataZoom: [
           {
             type: 'slider',
@@ -1048,7 +1122,7 @@ export default function ProductionDashboard() {
                     silent: true,
                     lineStyle: { color: '#fa8c16' },
                     label: {
-                      formatter: `平均产量 ${trendAvg.toFixed(2)} kg`,
+                      formatter: `平均产量 ${trendAvg.toFixed(2)} kg${avgPilotSuffix}`,
                       position: 'insideEndTop',
                     },
                     data: [{ yAxis: trendAvg }],
@@ -1629,10 +1703,38 @@ export default function ProductionDashboard() {
           <Row gutter={[12, 12]}>
             <Col xs={24} lg={16}>
               <Card
-                title="单批产量（最多 31 批）"
+                title="单批产量"
                 variant="borderless"
                 className="shadow-sm h-full"
                 styles={{ body: { padding: 8 } }}
+                extra={
+                  <Space size={4}>
+                    {avgPilotIncl && (
+                      <Input
+                        size="small"
+                        allowClear
+                        value={avgNote}
+                        onChange={(e) => setAvgNote(e.target.value)}
+                        placeholder="标签后缀"
+                        style={{ width: 110 }}
+                      />
+                    )}
+                    <Tooltip
+                      title={
+                        avgPilotIncl
+                          ? '平均产量口径：含中试（总产量÷大罐批数），点击切换'
+                          : '平均产量口径：不含中试（大罐批均值），点击切换'
+                      }
+                    >
+                      <Button
+                        size="small"
+                        type="text"
+                        icon={<SwapOutlined />}
+                        onClick={() => setAvgPilotIncl((v) => !v)}
+                      />
+                    </Tooltip>
+                  </Space>
+                }
               >
                 {trendOption ? (
                   <ReactECharts option={trendOption} style={{ height: 270 }} />

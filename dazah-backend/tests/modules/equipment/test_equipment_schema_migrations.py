@@ -7,6 +7,7 @@
 - e9a4c7d1f5b8：删除巡检线路三张表与索引
 - f1c7e9a3d4b6：巡检飞书镜像三张表（记录/设备/同步状态）
 - a3d8f2c6e1b9：巡检飞书镜像配置表（App Secret 加密存储）
+- c4e6f8a0b2d1：台账上传存档表（表格快照 + 导入摘要 + 查询索引）
 """
 
 import importlib.util
@@ -202,3 +203,34 @@ def test_equipment_per_workshop_columns_migration(monkeypatch):
     module.downgrade()
     assert mocks["drop_index"].call_count == 3
     assert mocks["drop_column"].call_count == 3
+
+
+def test_equipment_ledger_archive_migration(monkeypatch):
+    """c4e6f8a0b2d1：台账上传存档表（快照 + 导入摘要 + 查询索引）。"""
+    module = _load("c4e6f8a0b2d1_add_equipment_ledger_archives.py")
+    mocks = _mock_ops(monkeypatch, module)
+
+    module.upgrade()
+    mocks["create_table"].assert_called_once()
+    call = mocks["create_table"].call_args
+    assert call.args[0] == "equipment_ledger_archives"
+    assert call.kwargs["schema"] == "equipment"
+    columns = _columns(mocks["create_table"])
+    # 表格快照大字段必填；导入摘要允许为空；车间默认与模型一致
+    for name in ("rows", "merges", "col_widths"):
+        assert columns[name].nullable is False
+    assert columns["import_summary"].nullable is True
+    assert columns["workshop_code"].nullable is False
+    assert columns["workshop_code"].server_default.arg == "201-1"
+    # 列表按时间倒序 + 车间过滤两个查询索引
+    index_names = {c.args[0] for c in mocks["create_index"].call_args_list}
+    assert index_names == {
+        "ix_equipment_ledger_archives_created_at",
+        "ix_equipment_ledger_archives_workshop_code",
+    }
+
+    module.downgrade()
+    assert mocks["drop_index"].call_count == 2
+    mocks["drop_table"].assert_called_once_with(
+        "equipment_ledger_archives", schema="equipment"
+    )

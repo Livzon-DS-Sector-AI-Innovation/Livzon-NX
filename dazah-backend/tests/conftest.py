@@ -74,9 +74,14 @@ async def _dispose_app_engine_pools() -> AsyncIterator[None]:
         pass
     # Request admission uses Redis directly and must not reuse sockets owned
     # by a previous pytest event loop. This closes connections, not Redis data.
+    # 关闭挂在已结束事件循环上的 transport（Windows proactor）会抛
+    # RuntimeError；与 engine.dispose 同样按清理失败吞掉，不阻塞测试结果。
     from app.core.redis import redis_client
 
-    await redis_client.aclose()
+    try:
+        await redis_client.aclose()
+    except RuntimeError:  # noqa: BLE001 —— 清理失败不应影响测试结果
+        pass
 
 
 @pytest.fixture

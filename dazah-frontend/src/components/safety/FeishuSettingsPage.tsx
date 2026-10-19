@@ -12,6 +12,7 @@ import { App, Button, Card, Input, Space, Switch, Tabs, Tag, Typography } from '
 
 import {
   getSafetyFeishuSettings,
+  testHazardDueNotify,
   testRadarNotify,
   getSafetyFeishuWsStatus,
   restartSafetyFeishuWs,
@@ -76,6 +77,14 @@ export default function FeishuSettingsPage({
     radar_notify_enabled: initialSettings?.radar_notify_enabled ?? false,
     radar_notify_chat_ids: initialSettings?.radar_notify_chat_ids ?? [],
     radar_notify_user_ids: initialSettings?.radar_notify_user_ids ?? [],
+    hazard_due_notify_enabled:
+      initialSettings?.hazard_due_notify_enabled ?? false,
+    hazard_due_notify_milestones:
+      initialSettings?.hazard_due_notify_milestones ?? [30, 15, 7],
+    hazard_due_notify_chat_ids:
+      initialSettings?.hazard_due_notify_chat_ids ?? [],
+    hazard_due_notify_user_ids:
+      initialSettings?.hazard_due_notify_user_ids ?? [],
     is_enabled: initialSettings?.is_enabled ?? true,
   })
   const [notifyChatIdsText, setNotifyChatIdsText] = useState(
@@ -85,8 +94,41 @@ export default function FeishuSettingsPage({
     (initialSettings?.radar_notify_user_ids ?? []).join('\n')
   )
   const [notifyTesting, setNotifyTesting] = useState(false)
+  // 隐患到期提醒推送的目标输入（保存时解析成数组）
+  const [dueChatIdsText, setDueChatIdsText] = useState(
+    (initialSettings?.hazard_due_notify_chat_ids ?? []).join('\n')
+  )
+  const [dueUserIdsText, setDueUserIdsText] = useState(
+    (initialSettings?.hazard_due_notify_user_ids ?? []).join('\n')
+  )
+  // 提醒节点输入（如 30,15,7 = 到期前一个月/半个月/一周各提醒一次）
+  const [milestonesText, setMilestonesText] = useState(
+    (initialSettings?.hazard_due_notify_milestones ?? [30, 15, 7]).join(',')
+  )
+  const [dueTesting, setDueTesting] = useState(false)
   const [wsStatus, setWsStatus] = useState<WsStatus | null>(
     (initialWsStatus as WsStatus | null) ?? null
+  )
+
+  /** 把多行/逗号分隔的目标输入解析为数组。 */
+  const parseIds = (text: string) =>
+    text.split(/[,，\n]/).map((s) => s.trim()).filter(Boolean)
+
+  const buildDuePayload = useCallback(
+    (): UpdateSafetyFeishuAppSettingsRequest => ({
+      ...form,
+      radar_scan_enabled: form.radar_scan_enabled,
+      radar_notify_chat_ids: parseIds(notifyChatIdsText),
+      radar_notify_user_ids: parseIds(notifyUserIdsText),
+      hazard_due_notify_enabled: form.hazard_due_notify_enabled,
+      hazard_due_notify_milestones: milestonesText
+        .split(/[,，\s]+/)
+        .map((s) => parseInt(s, 10))
+        .filter((n) => Number.isInteger(n) && n > 0 && n <= 365),
+      hazard_due_notify_chat_ids: parseIds(dueChatIdsText),
+      hazard_due_notify_user_ids: parseIds(dueUserIdsText),
+    }),
+    [form, notifyChatIdsText, notifyUserIdsText, dueChatIdsText, dueUserIdsText, milestonesText]
   )
 
   const handleSave = useCallback(async () => {
@@ -99,18 +141,7 @@ export default function FeishuSettingsPage({
       return
     }
     setSaving(true)
-    const payload: UpdateSafetyFeishuAppSettingsRequest = {
-      ...form,
-      radar_scan_enabled: form.radar_scan_enabled,
-      radar_notify_chat_ids: notifyChatIdsText
-        .split(/[,，\n]/)
-        .map((s) => s.trim())
-        .filter(Boolean),
-      radar_notify_user_ids: notifyUserIdsText
-        .split(/[,，\n]/)
-        .map((s) => s.trim())
-        .filter(Boolean),
-    }
+    const payload: UpdateSafetyFeishuAppSettingsRequest = buildDuePayload()
     const res = await saveSafetyFeishuSettings(payload)
     setSaving(false)
     if (res.code === 200 && res.data) {
@@ -120,7 +151,37 @@ export default function FeishuSettingsPage({
     } else {
       message.error(res.message || '保存失败')
     }
-  }, [form, message, settings, notifyChatIdsText, notifyUserIdsText])
+  }, [buildDuePayload, form, message, settings])
+
+  const handleTestDueNotify = useCallback(async () => {
+    if (!form.app_id.trim()) {
+      message.warning('请先填写飞书应用 App ID')
+      return
+    }
+    setDueTesting(true)
+    try {
+      // 先保存当前提醒配置，再发测试卡片
+      const saveRes = await saveSafetyFeishuSettings(buildDuePayload())
+      if (saveRes.code !== 200) {
+        message.error(saveRes.message || '保存配置失败')
+        return
+      }
+      setSettings(saveRes.data ?? null)
+      const res = await testHazardDueNotify()
+      if (res.code === 200 && res.data) {
+        const d = res.data as { sent?: number; errors?: string[] }
+        if ((d.sent ?? 0) > 0) {
+          message.success(`测试提醒已发送（${d.sent} 个目标）`)
+        } else {
+          message.error((d.errors ?? []).join('；') || '发送失败')
+        }
+      } else {
+        message.error(res.message || '测试发送失败')
+      }
+    } finally {
+      setDueTesting(false)
+    }
+  }, [buildDuePayload, form.app_id, message])
 
   const handleTestNotify = useCallback(async () => {
     // 先保存当前通知配置，再发测试卡片
@@ -130,18 +191,7 @@ export default function FeishuSettingsPage({
     }
     setNotifyTesting(true)
     try {
-      const saveRes = await saveSafetyFeishuSettings({
-        ...form,
-        radar_scan_enabled: form.radar_scan_enabled,
-        radar_notify_chat_ids: notifyChatIdsText
-          .split(/[,，\n]/)
-          .map((s) => s.trim())
-          .filter(Boolean),
-        radar_notify_user_ids: notifyUserIdsText
-          .split(/[,，\n]/)
-          .map((s) => s.trim())
-          .filter(Boolean),
-      })
+      const saveRes = await saveSafetyFeishuSettings(buildDuePayload())
       if (saveRes.code !== 200) {
         message.error(saveRes.message || '保存配置失败')
         return
@@ -161,7 +211,7 @@ export default function FeishuSettingsPage({
     } finally {
       setNotifyTesting(false)
     }
-  }, [form, message, notifyChatIdsText, notifyUserIdsText])
+  }, [buildDuePayload, form.app_id, message])
 
   const handleTest = useCallback(async () => {
     setTesting(true)
@@ -322,6 +372,7 @@ export default function FeishuSettingsPage({
             key: 'notify',
             label: '通知设置',
             children: (
+      <Space orientation="vertical" size={16} style={{ display: 'flex' }}>
       <Card title="法规雷达通知（扫描结果推送到飞书）">
         <Space orientation="vertical" size={12} style={{ display: 'flex' }}>
           <Space size={12} wrap>
@@ -391,6 +442,75 @@ export default function FeishuSettingsPage({
           </div>
         </Space>
       </Card>
+      <Card title="隐患到期提醒（按目标完成日期的提醒节点推送）">
+        <Space orientation="vertical" size={12} style={{ display: 'flex' }}>
+          <Space size={12} wrap>
+            <Typography.Text>启用到期提醒</Typography.Text>
+            <Switch
+              aria-label="启用隐患到期提醒"
+              checked={form.hazard_due_notify_enabled}
+              onChange={(checked) =>
+                setForm((current) => ({
+                  ...current,
+                  hazard_due_notify_enabled: checked,
+                }))
+              }
+            />
+            <Typography.Text type="secondary">
+              每天 08:00 检查隐患台账：隐患「目标完成日期」进入下方某个提醒节点
+              或已逾期时，推送到下方群和个人；同一节点只推一次，不重复打扰
+            </Typography.Text>
+          </Space>
+          <Space.Compact block>
+            <Button disabled style={{ cursor: 'default', width: 140 }}>
+              提醒节点（天）
+            </Button>
+            <Input
+              value={milestonesText}
+              placeholder="提醒提前天数，如 7（只填一个数 = 只在该时间点提醒一次；多个如 30,15,7 = 层层递进）"
+              onChange={(event) => setMilestonesText(event.target.value)}
+            />
+          </Space.Compact>
+          <Typography.Text type="secondary">
+            逗号分隔的天数列表，可按需设置任意节点（如 60,30,15,7）；
+            隐患进入某节点当天推送一次，越接近到期节点越靠后提醒。
+          </Typography.Text>
+          <Space.Compact block>
+            <Button disabled style={{ cursor: 'default', width: 140 }}>
+              群 chat_id
+            </Button>
+            <Input
+              value={dueChatIdsText}
+              placeholder="提醒群 chat_id，多个用英文逗号分隔（oc_ 开头）"
+              onChange={(event) => setDueChatIdsText(event.target.value)}
+            />
+          </Space.Compact>
+          <Space.Compact block>
+            <Button disabled style={{ cursor: 'default', width: 140 }}>
+              个人 open_id
+            </Button>
+            <Input
+              value={dueUserIdsText}
+              placeholder="提醒个人 open_id，多个用英文逗号分隔（ou_ 开头）"
+              onChange={(event) => setDueUserIdsText(event.target.value)}
+            />
+          </Space.Compact>
+          <Typography.Text type="secondary">
+            推送对象与法规雷达通知相互独立；同样需先把本应用的机器人拉进目标群。
+            修改后先「保存配置」，再点「发送测试提醒」验证。
+          </Typography.Text>
+          <div>
+            <Button
+              icon={<SendOutlined />}
+              onClick={() => void handleTestDueNotify()}
+              loading={dueTesting}
+            >
+              发送测试提醒
+            </Button>
+          </div>
+        </Space>
+      </Card>
+      </Space>
             ),
           },
           {

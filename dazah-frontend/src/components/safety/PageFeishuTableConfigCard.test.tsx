@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   getSafetyPageFeishuConfigs: vi.fn(),
   resolveSafetyPageFeishuUrl: vi.fn(),
   saveSafetyPageFeishuConfig: vi.fn(),
+  syncSafetyPageFeishuConfig: vi.fn(),
   testSafetyPageFeishuConfig: vi.fn(),
 }))
 
@@ -16,6 +17,7 @@ vi.mock('@/actions/safety', () => ({
   getSafetyPageFeishuConfigs: mocks.getSafetyPageFeishuConfigs,
   resolveSafetyPageFeishuUrl: mocks.resolveSafetyPageFeishuUrl,
   saveSafetyPageFeishuConfig: mocks.saveSafetyPageFeishuConfig,
+  syncSafetyPageFeishuConfig: mocks.syncSafetyPageFeishuConfig,
   testSafetyPageFeishuConfig: mocks.testSafetyPageFeishuConfig,
 }))
 
@@ -34,7 +36,7 @@ vi.mock('@/components/shared/PlatformNotice', async () => {
 
 vi.mock('@ant-design/icons', () => {
   const Icon = () => null
-  return { ApiOutlined: Icon, LinkOutlined: Icon, SaveOutlined: Icon }
+  return { ApiOutlined: Icon, LinkOutlined: Icon, SaveOutlined: Icon, SyncOutlined: Icon }
 })
 
 vi.mock('antd', async () => {
@@ -67,7 +69,37 @@ vi.mock('antd', async () => {
       },
     })
   const Input = Object.assign(textInput, { TextArea: textInput })
-  const Select = Box
+  // 多选 Select 渲染为可交互 checkbox 列表（单选 Select 维持原占位渲染）
+  const Select = (props: AnyProps) => {
+    if (props.mode === 'multiple') {
+      const selected = (props.value as string[] | undefined) ?? []
+      const options =
+        (props.options as { value: string; label: string }[] | undefined) ?? []
+      return createElement(
+        'div',
+        { 'data-multiselect': 'true' },
+        ...options.map((option) =>
+          createElement('input', {
+            key: option.value,
+            type: 'checkbox',
+            'data-option-value': option.value,
+            'data-option-label': option.label,
+            checked: selected.includes(option.value),
+            ref: (node: HTMLInputElement | null) => {
+              if (!node) return
+              node.onchange = () => {
+                const next = node.checked
+                  ? [...new Set([...selected, option.value])]
+                  : selected.filter((item) => item !== option.value)
+                ;(props.onChange as ((value: string[]) => void) | undefined)?.(next)
+              }
+            },
+          })
+        )
+      )
+    }
+    return Box(props)
+  }
   const Switch = ({ checked, onChange }: AnyProps) =>
     createElement('input', {
       type: 'checkbox',
@@ -106,8 +138,16 @@ const configItem = {
   table_id: 'tblOld',
   view_id: 'vewOld',
   hidden_field_names: ['公式列'],
+  sub_tables: [
+    { table_id: 'tblSubOld', tab_name: '2025年公司级检查', hidden_field_names: ['父记录'] },
+  ],
   workshop_aliases: { DR提炼: '201二车间（DR）' },
   is_enabled: true,
+  is_mirrored: true,
+  last_synced_at: '2026-10-13T02:00:00.000Z',
+  last_sync_status: 'success',
+  last_sync_error: null,
+  last_sync_record_count: 20,
   last_test_status: 'success',
   last_tested_at: '2026-10-10T02:00:00.000Z',
   last_test_error: null,
@@ -150,6 +190,24 @@ function setInput(container: HTMLElement, placeholderPrefix: string, value: stri
   input.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
+function findSubTableOption(container: HTMLElement, optionValue: string): HTMLInputElement {
+  const checkbox = Array.from(
+    container.querySelectorAll('input[type="checkbox"][data-option-value]')
+  ).find((node) => (node as HTMLInputElement).dataset.optionValue === optionValue) as
+    | HTMLInputElement
+    | undefined
+  if (!checkbox) throw new Error(`未找到页签子表选项 ${optionValue}`)
+  return checkbox
+}
+
+function toggleSubTable(container: HTMLElement, optionValue: string, checked: boolean) {
+  const checkbox = findSubTableOption(container, optionValue)
+  act(() => {
+    checkbox.checked = checked
+    checkbox.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.getSafetyPageFeishuConfigs.mockResolvedValue({
@@ -163,6 +221,10 @@ beforeEach(() => {
   mocks.testSafetyPageFeishuConfig.mockResolvedValue({
     code: 200,
     data: { success: true, message: '绑定正常', fields: [{ name: '记录编号' }] },
+  })
+  mocks.syncSafetyPageFeishuConfig.mockResolvedValue({
+    code: 200,
+    data: { ...configItem, last_sync_record_count: 21 },
   })
   mocks.resolveSafetyPageFeishuUrl.mockResolvedValue({
     code: 200,
@@ -266,9 +328,23 @@ describe('PageFeishuTableConfigCard', () => {
         table_id: 'tblOld',
         workshop_aliases: { 新别名: '一车间' },
         is_enabled: false,
+        is_mirrored: true,
       })
     )
     expect(mocks.message.success).toHaveBeenCalledWith('页面数据表绑定已保存')
+  })
+
+  it('syncs the mirror on demand and reports the record count', async () => {
+    rendered = renderCard()
+    await settle()
+
+    act(() => findButton(rendered!.container, '立即同步')?.click())
+    await settle()
+
+    expect(mocks.syncSafetyPageFeishuConfig).toHaveBeenCalledWith(
+      'safety:risk-hazard:hazard-inspection:hazard-duty'
+    )
+    expect(mocks.message.success).toHaveBeenCalledWith('镜像同步完成（21 条记录）')
   })
 
   it('resolves a pasted link and reports failures', async () => {
@@ -341,5 +417,102 @@ describe('PageFeishuTableConfigCard', () => {
     act(() => findButton(rendered!.container, '测试绑定')?.click())
     await settle()
     expect(mocks.message.error).toHaveBeenCalledWith('后端不可用')
+  })
+
+  it('preselects saved tab sub-tables and round-trips them on save', async () => {
+    rendered = renderCard()
+    await settle()
+
+    // 已保存页签无需重新解析链接即可编辑：预勾选 + 可见
+    expect(findSubTableOption(rendered.container, 'tblSubOld').checked).toBe(true)
+
+    act(() => findButton(rendered!.container, '保存')?.click())
+    await settle()
+
+    expect(mocks.saveSafetyPageFeishuConfig).toHaveBeenCalledWith(
+      'safety:risk-hazard:hazard-inspection:hazard-duty',
+      expect.objectContaining({
+        sub_tables: [
+          { table_id: 'tblSubOld', tab_name: '2025年公司级检查', hidden_field_names: ['父记录'] },
+        ],
+      })
+    )
+    expect(mocks.message.success).toHaveBeenCalledWith('页面数据表绑定已保存')
+  })
+
+  it('lists sub-tables from a resolved link and saves the checked tabs', async () => {
+    mocks.resolveSafetyPageFeishuUrl.mockResolvedValueOnce({
+      code: 200,
+      data: {
+        app_token: 'bascnNew',
+        table_id: 'tblNew',
+        view_id: 'vewNew',
+        is_wiki: false,
+        tables: [
+          { table_id: 'tblNew', table_name: '2026年公司级检查' },
+          { table_id: 'tblSubA', table_name: '2025年集团检查' },
+          { table_id: 'tblSubB', table_name: '观察项' },
+        ],
+      },
+    })
+    rendered = renderCard()
+    await settle()
+
+    setInput(
+      rendered.container,
+      '粘贴多维表格链接',
+      'https://example.feishu.cn/base/bascnNew?table=tblNew&view=vewNew'
+    )
+    await settle()
+    act(() => findButton(rendered!.container, '解析')?.click())
+    await settle()
+
+    // 换绑新 Base：旧页签不再可选，主表不在页签清单中，只列其余子表
+    const optionValues = Array.from(
+      rendered.container.querySelectorAll('input[type="checkbox"][data-option-value]')
+    ).map((node) => (node as HTMLInputElement).dataset.optionValue)
+    expect(optionValues).toEqual(['tblSubA', 'tblSubB'])
+
+    toggleSubTable(rendered.container, 'tblSubA', true)
+    await settle()
+    act(() => findButton(rendered!.container, '保存')?.click())
+    await settle()
+
+    expect(mocks.saveSafetyPageFeishuConfig).toHaveBeenCalledWith(
+      'safety:risk-hazard:hazard-inspection:hazard-duty',
+      expect.objectContaining({
+        table_id: 'tblNew',
+        sub_tables: [
+          { table_id: 'tblSubA', tab_name: '2025年集团检查', hidden_field_names: [] },
+        ],
+      })
+    )
+  })
+
+  it('drops a tab sub-table when it becomes the primary table', async () => {
+    rendered = renderCard()
+    await settle()
+
+    // 直接把保存过的页签子表升为主表（模拟用户改 Table ID 输入框）
+    const tableIdInput = Array.from(rendered.container.querySelectorAll('input')).find(
+      (node) => node.placeholder?.startsWith('数据表 table_id')
+    ) as HTMLInputElement
+    expect(tableIdInput.value).toBe('tblOld')
+    act(() => {
+      tableIdInput.value = 'tblSubOld'
+      tableIdInput.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await settle()
+
+    act(() => findButton(rendered!.container, '保存')?.click())
+    await settle()
+
+    expect(mocks.saveSafetyPageFeishuConfig).toHaveBeenCalledWith(
+      'safety:risk-hazard:hazard-inspection:hazard-duty',
+      expect.objectContaining({
+        table_id: 'tblSubOld',
+        sub_tables: [],
+      })
+    )
   })
 })

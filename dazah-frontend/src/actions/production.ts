@@ -790,3 +790,31 @@ export async function getLineHaltEvents(product?: string, limit = 20) {
   )
   return response.json()
 }
+
+// ============ Board Preferences Actions（按账户持久化的看板个人偏好） ============
+
+export interface ProductionBoardPreferences {
+  /** 平均单产口径：true=含中试（总产量÷大罐批数）false=不含中试（大罐批均值） */
+  avg_pilot_incl: boolean
+  /** 含中试模式下的平均线标签后缀；空串=无后缀 */
+  avg_note: string
+}
+
+export async function getProductionBoardPreferences() {
+  return fetchApi<ProductionBoardPreferences>(
+    '/api/v1/production/board-preferences',
+  )
+}
+
+export async function saveProductionBoardPreferences(
+  pref: ProductionBoardPreferences,
+) {
+  return fetchApi<ProductionBoardPreferences>(
+    '/api/v1/production/board-preferences',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(pref),
+    },
+  )
+}

@@ -109,6 +109,31 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
                         "关键风险作业报备",
                         "/safety/risk-reporting",
                     ),
+                    _n(
+                        "special-danger-work",
+                        "次日特殊危险作业审批",
+                        "/safety/special-danger-work",
+                    ),
+                    _n(
+                        "risk-work-registration",
+                        "关键风险作业报备表",
+                        "/safety/risk-work-registration",
+                    ),
+                    _n(
+                        "feeding-inspection",
+                        "投料巡查表",
+                        "/safety/feeding-inspection",
+                    ),
+                    _n(
+                        "hazchem-unloading-inspection",
+                        "危险化学品卸车巡查表",
+                        "/safety/hazchem-unloading-inspection",
+                    ),
+                    _n(
+                        "centrifuge-discharge-inspection",
+                        "离心出料风险巡查表",
+                        "/safety/centrifuge-discharge-inspection",
+                    ),
                 ],
             ),
             _n(
@@ -140,13 +165,18 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
                         children=[
                             _n(
                                 "hazard-inspection-ledger",
-                                "隐患台账",
+                                "隐患随手拍",
                                 "/safety/hazard-ledger",
                             ),
                             _n(
                                 "hazard-duty",
                                 "24小时值班隐患",
                                 "/safety/hazard-duty",
+                            ),
+                            _n(
+                                "hazard-quick-report",
+                                "隐患台账",
+                                "/safety/hazard-quick-report",
                             ),
                         ],
                     ),

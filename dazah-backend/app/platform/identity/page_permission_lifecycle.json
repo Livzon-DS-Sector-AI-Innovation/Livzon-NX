@@ -543,6 +543,36 @@
       "route_path": "/safety/risk-reporting",
       "actions": {}
     },
+    "safety:ops-safety:special-danger-work": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/special-danger-work",
+      "actions": {}
+    },
+    "safety:ops-safety:risk-work-registration": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/risk-work-registration",
+      "actions": {}
+    },
+    "safety:ops-safety:feeding-inspection": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/feeding-inspection",
+      "actions": {}
+    },
+    "safety:ops-safety:hazchem-unloading-inspection": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/hazchem-unloading-inspection",
+      "actions": {}
+    },
+    "safety:ops-safety:centrifuge-discharge-inspection": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/centrifuge-discharge-inspection",
+      "actions": {}
+    },
     "safety:risk-hazard:risk-grading:hazard-identification": {
       "status": "active",
       "module_code": "safety",
@@ -4717,6 +4747,12 @@
       "status": "active",
       "module_code": "safety",
       "route_path": "/safety/hazard-duty",
+      "actions": {}
+    },
+    "safety:risk-hazard:hazard-inspection:hazard-quick-report": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/hazard-quick-report",
       "actions": {}
     },
     "equipment:workshop-101-1:assets-101-1": {

@@ -14,9 +14,18 @@ from __future__ import annotations
 
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+)
 from fastapi import status as http_status
 from fastapi.responses import StreamingResponse
+from pydantic import TypeAdapter, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -26,9 +35,12 @@ from app.modules.safety.schemas.page_table import (
     PageFeishuConfigListResponse,
     PageFeishuConfigTestResult,
     PageTableAttachmentUploadResponse,
+    PageTableFieldValuesResponse,
     PageTableRecord,
+    PageTableRecordCondition,
     PageTableRecordsResponse,
     PageTableStatsResponse,
+    PageTableTabListResponse,
     ResolvedPageFeishuUrl,
     ResolvePageFeishuUrlRequest,
     UpdatePageFeishuConfigRequest,
@@ -39,6 +51,24 @@ from app.platform.identity.data_scope import current_page_key
 from app.shared.schemas import ApiResponseEnvelope
 
 page_table_router = APIRouter()
+
+_conditions_adapter: TypeAdapter[list[PageTableRecordCondition]] = TypeAdapter(
+    list[PageTableRecordCondition]
+)
+
+
+def _parse_conditions(raw: str | None) -> list[PageTableRecordCondition]:
+    """把查询表单传入的 conditions JSON 解析为条件对象列表。"""
+    if not raw:
+        return []
+    try:
+        return _conditions_adapter.validate_json(raw)
+    except (ValueError, ValidationError) as exc:
+        raise HTTPException(
+            http_status.HTTP_400_BAD_REQUEST,
+            "conditions 参数格式无效：应为 "
+            '[{"field": "字段名", "value": "值"}] 形式的 JSON 数组',
+        ) from exc
 
 
 def _require_page_context(page_key: str) -> None:
@@ -97,6 +127,26 @@ async def test_page_feishu_config(
 
 
 @page_table_router.post(
+    "/page-feishu-configs/{page_key}/sync",
+    response_model=ApiResponseEnvelope[PageFeishuConfigItem],
+    summary="立即同步页面的本地镜像（全量拉取飞书记录）",
+)
+async def sync_page_feishu_mirror(
+    page_key: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> ApiResponseEnvelope[PageFeishuConfigItem]:
+    await page_table.sync_page_table_mirror(db, page_key)
+    configs = await page_table.list_page_feishu_configs(db)
+    item = next(
+        (entry for entry in configs.items if entry.page_key == page_key), None
+    )
+    if item is None:
+        raise HTTPException(http_status.HTTP_404_NOT_FOUND, "页面绑定不存在")
+    return ApiResponseEnvelope(data=item)
+
+
+@page_table_router.post(
     "/page-feishu-configs/resolve",
     response_model=ApiResponseEnvelope[ResolvedPageFeishuUrl],
     summary="解析多维表格链接并列出子表",
@@ -114,6 +164,30 @@ async def resolve_page_feishu_url(
 
 
 @page_table_router.get(
+    "/page-tables/{page_key}/tabs",
+    response_model=ApiResponseEnvelope[PageTableTabListResponse],
+    summary="多页签页面的子表清单（主绑定在前，含各子表镜像记录数）",
+)
+async def list_page_table_tabs(
+    page_key: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> ApiResponseEnvelope[PageTableTabListResponse]:
+    _require_page_context(page_key)
+    tabs = await page_table.list_page_table_tabs(db, page_key)
+    from app.modules.safety.page_tables import get_page_table
+
+    definition = get_page_table(page_key)
+    return ApiResponseEnvelope(
+        data=PageTableTabListResponse(
+            page_key=page_key,
+            page_name=definition.page_name if definition else page_key,
+            tabs=tabs,
+        )
+    )
+
+
+@page_table_router.get(
     "/page-tables/{page_key}/records",
     response_model=ApiResponseEnvelope[PageTableRecordsResponse],
     summary="读取镜像页的记录（列定义来自飞书实时 schema）",
@@ -127,6 +201,17 @@ async def list_page_table_records(
     sort_direction: str = Query("asc"),
     filter_field: str | None = Query(None),
     filter_value: str | None = Query(None),
+    conditions: str | None = Query(
+        None,
+        description=(
+            "多条件筛选（JSON 数组，如 "
+            '[{"field": "作业日期", "value": "2026-10-13"}]，条件间为 AND；'
+            "日期支持 YYYY / YYYY-MM / YYYY-MM-DD 前缀匹配）"
+        ),
+    ),
+    table_id: str | None = Query(
+        None, description="子表页签 table_id；缺省主绑定表"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> ApiResponseEnvelope[PageTableRecordsResponse]:
@@ -141,6 +226,8 @@ async def list_page_table_records(
         sort_direction=sort_direction,
         filter_field=filter_field,
         filter_value=filter_value,
+        conditions=_parse_conditions(conditions),
+        table_id=table_id,
     )
     return ApiResponseEnvelope(data=result)
 
@@ -148,18 +235,99 @@ async def list_page_table_records(
 @page_table_router.get(
     "/page-tables/{page_key}/stats",
     response_model=ApiResponseEnvelope[PageTableStatsResponse],
-    summary="页面仪表盘聚合（默认：日期按月 / 位置文本按车间号归一 / 单选按选项）",
+    summary=(
+        "页面仪表盘聚合（默认：日期按月 / 位置文本按车间号归一 / 单选按选项）；"
+        "多页签页面不传 table_id 时跨全部子表聚合"
+    ),
 )
 async def get_page_table_stats(
     page_key: str,
     group_by: list[str] | None = Query(
         None, description="分组字段名，可重复；缺省时自动挑选日期/位置/单选字段"
     ),
+    table_id: str | None = Query(
+        None,
+        description=(
+            "子表页签 table_id；缺省时单表页面取主绑定表，"
+            "多页签页面跨全部子表聚合"
+        ),
+    ),
+    keyword: str | None = Query(
+        None, description="与列表查询同口径的关键字筛选（仪表盘联动）"
+    ),
+    conditions: str | None = Query(
+        None,
+        description=(
+            "与列表查询同口径的多条件筛选（JSON 数组，条件间 AND；"
+            "仪表盘随筛选联动，不含图表下钻）"
+        ),
+    ),
+    due_field: str | None = Query(
+        None, description="到期统计字段（日期型，如 目标完成日期）"
+    ),
+    close_field: str | None = Query(
+        None, description="关闭状态字段（如 关闭状态，值为「已关闭」视为已闭环）"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> ApiResponseEnvelope[PageTableStatsResponse]:
     _require_page_context(page_key)
-    result = await page_table.get_page_table_stats(db, page_key, group_by)
+    result = await page_table.get_page_table_stats(
+        db,
+        page_key,
+        group_by,
+        table_id=table_id,
+        keyword=keyword,
+        conditions=_parse_conditions(conditions),
+        due_field=due_field,
+        close_field=close_field,
+    )
+    return ApiResponseEnvelope(data=result)
+
+
+@page_table_router.get(
+    "/page-tables/{page_key}/values",
+    response_model=ApiResponseEnvelope[PageTableFieldValuesResponse],
+    summary="字段去重可选值（含计数），供筛选下拉框选项使用",
+)
+async def list_page_table_field_values(
+    page_key: str,
+    field: str = Query(..., description="字段名（如 部门/车间、负责人）"),
+    table_id: str | None = Query(
+        None, description="子表页签 table_id；缺省主绑定表"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> ApiResponseEnvelope[PageTableFieldValuesResponse]:
+    _require_page_context(page_key)
+    result = await page_table.list_page_table_field_values(
+        db, page_key, field, table_id=table_id
+    )
+    return ApiResponseEnvelope(data=result)
+
+
+@page_table_router.post(
+    "/page-tables/{page_key}/records",
+    response_model=ApiResponseEnvelope[PageTableRecord],
+    summary="在镜像页新建记录（写入当前选中子表并回写飞书）",
+)
+async def create_page_table_record(
+    page_key: str,
+    data: UpdatePageTableRecordRequest,
+    table_id: str | None = Query(
+        None, description="子表 table_id；缺省主绑定表"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> ApiResponseEnvelope[PageTableRecord]:
+    _require_page_context(page_key)
+    result = await page_table.create_page_table_record(
+        db,
+        page_key,
+        data.fields,
+        user_id=current_user.id if current_user else None,
+        table_id=table_id,
+    )
     return ApiResponseEnvelope(data=result)
 
 
@@ -172,6 +340,9 @@ async def update_page_table_record(
     page_key: str,
     record_id: str,
     data: UpdatePageTableRecordRequest,
+    table_id: str | None = Query(
+        None, description="子表页签 table_id；缺省主绑定表"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> ApiResponseEnvelope[PageTableRecord]:
@@ -182,6 +353,7 @@ async def update_page_table_record(
         record_id,
         data.fields,
         user_id=current_user.id if current_user else None,
+        table_id=table_id,
     )
     return ApiResponseEnvelope(data=result)
 
@@ -196,6 +368,9 @@ async def upload_page_table_attachment(
     record_id: str,
     field_name: str,
     file: UploadFile = File(...),
+    table_id: str | None = Query(
+        None, description="子表页签 table_id；缺省主绑定表"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> ApiResponseEnvelope[PageTableAttachmentUploadResponse]:
@@ -207,6 +382,7 @@ async def upload_page_table_attachment(
         field_name,
         file=file,
         user_id=current_user.id if current_user else None,
+        table_id=table_id,
     )
     return ApiResponseEnvelope(data=result)
 
@@ -221,12 +397,15 @@ async def download_page_table_attachment(
     field_name: str,
     file_token: str,
     inline: bool = Query(False),
+    table_id: str | None = Query(
+        None, description="子表页签 table_id；缺省主绑定表"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> Response:
     _require_page_context(page_key)
     content, content_type, filename = await page_table.fetch_page_table_attachment(
-        db, page_key, record_id, field_name, file_token
+        db, page_key, record_id, field_name, file_token, table_id=table_id
     )
     inline_types = {
         "application/pdf",
@@ -266,12 +445,22 @@ async def thumbnail_page_table_attachment(
     max_height: int = Query(
         attachment_thumbnail.DEFAULT_MAX_HEIGHT, ge=16, le=512
     ),
+    table_id: str | None = Query(
+        None, description="子表页签 table_id；缺省主绑定表"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> Response:
     _require_page_context(page_key)
     result = await attachment_thumbnail.get_page_table_attachment_thumbnail(
-        db, page_key, record_id, field_name, file_token, max_width, max_height
+        db,
+        page_key,
+        record_id,
+        field_name,
+        file_token,
+        max_width,
+        max_height,
+        table_id=table_id,
     )
     if result is None:
         raise HTTPException(

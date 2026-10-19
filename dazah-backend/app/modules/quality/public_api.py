@@ -5,9 +5,25 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 __all__ = [
+    "convert_word_attachment_text",
     "get_module_feishu_app_credentials",
     "get_qa_reminder_recipients",
 ]
+
+
+def convert_word_attachment_text(file_name: str, content: bytes) -> str:
+    """word（.doc/.docx/.wps）→ 文本（标准 MD），供跨模块文档解析兜底。
+
+    与文件管理附件同一条转换管线：OOXML 直析 → LibreOffice headless 转
+    .docx → catdoc/antiword 文本兜底；全部失败抛 AppException。
+    阻塞调用（含 soffice 子进程），调用方须放线程执行。图片不返回。
+    """
+    from app.modules.quality.service.document_catalog_md import (
+        convert_word_attachment,
+    )
+
+    text, _images = convert_word_attachment(file_name, content)
+    return text
 
 
 async def get_module_feishu_app_credentials(session: AsyncSession) -> tuple[str, str]:

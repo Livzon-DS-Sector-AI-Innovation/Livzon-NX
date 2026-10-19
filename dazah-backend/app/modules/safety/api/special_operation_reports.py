@@ -12,7 +12,6 @@ from app.core.deps import CurrentUser, get_current_user
 from app.core.response import ApiResponse
 from app.modules.safety.schemas import (
     LedgerExportRequest,
-    SetCriticalRequest,
     SpecialOperationLedgerStats,
     SpecialOperationReportCreate,
     SpecialOperationReportResponse,
@@ -197,31 +196,8 @@ async def reject_special_operation_report(
     return ApiResponse(data=SpecialOperationReportResponse.model_validate(item))
 
 
-@special_operation_reports_router.put(
-    "/special-operation-reports/{report_id}/critical",
-    response_model=ApiResponse,
-    summary="手动设置关键作业标记",
-)
-async def set_special_operation_report_critical(
-    report_id: uuid.UUID,
-    data: SetCriticalRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser | None = Depends(get_current_user),
-) -> Any:
-    """手动修改特殊作业报备的关键作业标记"""
-    service = SpecialOperationReportService(db)
-    updated_by = current_user.name if current_user else None
-    item = await service.set_critical_manual(
-        report_id, data.is_critical, data.reason, updated_by
-    )
-    if not item:
-        return ApiResponse(code=404, message="报备不存在")
-    await db.commit()
-    return ApiResponse(data=SpecialOperationReportResponse.model_validate(item))
-
 
 # ==================== 特殊作业台账 Routes ====================
-
 
 @special_operation_reports_router.get(
     "/special-operation-ledger",
@@ -266,15 +242,32 @@ async def get_special_operation_ledger(
 @special_operation_reports_router.get(
     "/special-operation-ledger/stats",
     response_model=ApiResponse,
-    summary="获取特殊作业台账统计",
+    summary="获取特殊作业台账统计（随筛选条件联动）",
 )
 async def get_special_operation_ledger_stats(
+    operation_type: str | None = None,
+    operation_level: str | None = None,
+    risk_level: str | None = None,
+    department: str | None = None,
+    date_from: str | None = Query(None, description="计划开始日期起 (YYYY-MM-DD)"),
+    date_to: str | None = Query(None, description="计划结束日期止 (YYYY-MM-DD)"),
+    keyword: str | None = None,
+    is_critical: bool | None = Query(None, description="是否关键作业"),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> Any:
-    """按作业类型统计台账数量和关键作业数量"""
+    """按作业类型统计台账数量和关键作业数量（与列表筛选同口径）"""
     service = SpecialOperationReportService(db)
-    stats = await service.get_ledger_stats()
+    stats = await service.get_ledger_stats(
+        operation_type=operation_type,
+        operation_level=operation_level,
+        risk_level=risk_level,
+        department=department,
+        date_from=date_from,
+        date_to=date_to,
+        keyword=keyword,
+        is_critical=is_critical,
+    )
     return ApiResponse(data=[SpecialOperationLedgerStats(**s) for s in stats])
 
 

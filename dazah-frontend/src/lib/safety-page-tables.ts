@@ -10,7 +10,27 @@ import type { components } from '@/types/generated/schema'
 
 export const SAFETY_PAGE_TABLE_KEYS = {
   hazardDuty: 'safety:risk-hazard:hazard-inspection:hazard-duty',
+  hazardQuickReport: 'safety:risk-hazard:hazard-inspection:hazard-quick-report',
+  dailyRiskReport: 'safety:ops-safety:daily-risk-report',
+  specialDangerWork: 'safety:ops-safety:special-danger-work',
+  riskWorkRegistration: 'safety:ops-safety:risk-work-registration',
+  feedingInspection: 'safety:ops-safety:feeding-inspection',
+  hazchemUnloadingInspection: 'safety:ops-safety:hazchem-unloading-inspection',
+  centrifugeDischargeInspection:
+    'safety:ops-safety:centrifuge-discharge-inspection',
 } as const
+
+/**
+ * 默认按「当天」筛选的镜像页（日报/巡查类，数据量大且只关心当天）。
+ * 不在名单内的页面默认显示全部记录（如报备表：数据量小且历史都要看）。
+ */
+export const SAFETY_PAGE_TABLE_DEFAULT_TODAY = new Set<string>([
+  SAFETY_PAGE_TABLE_KEYS.dailyRiskReport,
+  SAFETY_PAGE_TABLE_KEYS.specialDangerWork,
+  SAFETY_PAGE_TABLE_KEYS.feedingInspection,
+  SAFETY_PAGE_TABLE_KEYS.hazchemUnloadingInspection,
+  SAFETY_PAGE_TABLE_KEYS.centrifugeDischargeInspection,
+])
 
 /** 「安全飞书设置」页（页面表格绑定的配置入口）。 */
 export const SAFETY_FEISHU_SETTINGS_PAGE_KEY =
@@ -19,10 +39,56 @@ export const SAFETY_FEISHU_SETTINGS_PAGE_KEY =
 export type PageTableColumn = components['schemas']['PageTableColumn']
 export type PageTableAttachment = components['schemas']['PageTableAttachmentItem']
 export type PageTableStatGroup = components['schemas']['PageTableStatGroup']
+export type PageTableTab = components['schemas']['PageTableTab']
+
+/** 多页签页面的子表清单（normalize 后供组件使用）。 */
+export function toPageTableTabs(
+  tabs: Array<{
+    table_id?: string
+    tab_name?: string
+    is_primary?: boolean
+    record_count?: number
+  }> | null | undefined,
+): PageTableTab[] {
+  return (tabs ?? [])
+    .filter((tab) => Boolean(tab.table_id))
+    .map((tab) => ({
+      table_id: String(tab.table_id),
+      tab_name: String(tab.tab_name ?? tab.table_id),
+      is_primary: Boolean(tab.is_primary),
+      record_count: Number(tab.record_count ?? 0),
+    }))
+}
+
+/** 附件 URL 构造带上 table_id（多页签页面区分附件归属子表）。
+
+ * 以 /content 结尾：共享渲染器会把 /content 重写为 /thumbnail 取小图。 */
+export function pageTableAttachmentUrl(
+  pageKey: string,
+  recordId: string,
+  fieldName: string,
+  fileToken: string,
+  options?: { tableId?: string | null; inline?: boolean },
+): string {
+  const base = `/api/v1/safety/page-tables/${encodeURIComponent(pageKey)}/records/${encodeURIComponent(recordId)}/attachments/${encodeURIComponent(fieldName)}/${encodeURIComponent(fileToken)}/content`
+  const params = new URLSearchParams()
+  if (options?.tableId) params.set('table_id', options.tableId)
+  if (options?.inline) params.set('inline', 'true')
+  const query = params.toString()
+  return query ? `${base}?${query}` : base
+}
 
 type ApiStats = components['schemas']['PageTableStatsResponse']
 type ApiGroup = NonNullable<ApiStats['groups']>[number]
 type ApiBucket = NonNullable<ApiGroup['buckets']>[number]
+
+/** 未关闭记录按目标完成日期的到期分布（到期提醒卡）。 */
+export type PageTableDueSummary = {
+  overdue: number
+  within_7: number
+  within_15: number
+  within_30: number
+}
 
 /** 仪表盘聚合（字段已补默认值，服务端与客户端共用）。 */
 export type PageTableStats = {
@@ -35,6 +101,7 @@ export type PageTableStats = {
     mode: string
     buckets: ApiBucket[]
   }[]
+  due_summary: PageTableDueSummary | null
 }
 
 /** 生成类型的数组字段都是可选的，这里统一补默认值。 */
@@ -43,6 +110,7 @@ export function toPageTableStats(
 ): PageTableStats | null {
   if (!stats) return null
   const groups = stats.groups ?? []
+  const due = stats.due_summary
   return {
     page_key: stats.page_key,
     page_name: stats.page_name,
@@ -56,6 +124,14 @@ export function toPageTableStats(
         count: bucket.count,
       })),
     })),
+    due_summary: due
+      ? {
+          overdue: due.overdue ?? 0,
+          within_7: due.within_7 ?? 0,
+          within_15: due.within_15 ?? 0,
+          within_30: due.within_30 ?? 0,
+        }
+      : null,
   }
 }
 export type PageTablePerson = {
@@ -153,6 +229,29 @@ export function displayFieldText(value: unknown): string {
   const url = asUrlValue(value)
   if (url) return url.text || url.link
   return ''
+}
+
+/** 默认日期列：优先名称含「日期」的日期字段，否则第一个日期字段。 */
+export function pickDefaultDateColumn(
+  columns: PageTableColumn[] | undefined | null
+): PageTableColumn | null {
+  const dateColumns = (columns ?? []).filter((column) => column.kind === 'date')
+  return (
+    dateColumns.find((column) => column.name.includes('日期')) ??
+    dateColumns[0] ??
+    null
+  )
+}
+
+/** 多条件筛选的候选项：带选项的单选/多选列。 */
+export function pickConditionSelectColumns(
+  columns: PageTableColumn[] | undefined | null
+): PageTableColumn[] {
+  return (columns ?? []).filter(
+    (column) =>
+      (column.kind === 'select' || column.kind === 'multi_select') &&
+      columnOptions(column).length > 0
+  )
 }
 
 /** 可内联预览的附件类型（与后端预览白名单一致）。 */

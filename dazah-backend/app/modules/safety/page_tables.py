@@ -25,9 +25,44 @@ class PageTableDefinition:
 
 PAGE_TABLE_DEFINITIONS: tuple[PageTableDefinition, ...] = (
     PageTableDefinition(
+        page_key="safety:ops-safety:daily-risk-report",
+        page_name="关键风险作业报备",
+        route_path="/safety/risk-reporting",
+    ),
+    PageTableDefinition(
+        page_key="safety:ops-safety:special-danger-work",
+        page_name="次日特殊危险作业审批",
+        route_path="/safety/special-danger-work",
+    ),
+    PageTableDefinition(
+        page_key="safety:ops-safety:risk-work-registration",
+        page_name="关键风险作业报备表",
+        route_path="/safety/risk-work-registration",
+    ),
+    PageTableDefinition(
+        page_key="safety:ops-safety:feeding-inspection",
+        page_name="投料巡查表",
+        route_path="/safety/feeding-inspection",
+    ),
+    PageTableDefinition(
+        page_key="safety:ops-safety:hazchem-unloading-inspection",
+        page_name="危险化学品卸车巡查表",
+        route_path="/safety/hazchem-unloading-inspection",
+    ),
+    PageTableDefinition(
+        page_key="safety:ops-safety:centrifuge-discharge-inspection",
+        page_name="离心出料风险巡查表",
+        route_path="/safety/centrifuge-discharge-inspection",
+    ),
+    PageTableDefinition(
         page_key="safety:risk-hazard:hazard-inspection:hazard-duty",
         page_name="24小时值班隐患",
         route_path="/safety/hazard-duty",
+    ),
+    PageTableDefinition(
+        page_key="safety:risk-hazard:hazard-inspection:hazard-quick-report",
+        page_name="隐患台账",
+        route_path="/safety/hazard-quick-report",
     ),
 )
 

@@ -2,11 +2,13 @@
 
 import io
 import uuid
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.deps import CurrentUser
 from app.core.response import paginated_response, success_response
@@ -28,7 +30,7 @@ from app.modules.equipment.schemas import (
     LocationTree,
     LocationUpdate,
 )
-from app.modules.equipment.service import equipment_import
+from app.modules.equipment.service import equipment_import, equipment_ledger_archive
 
 router = APIRouter()
 
@@ -265,6 +267,22 @@ _ALLOWED_IMPORT_MIMES = {
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 }
 _MAX_IMPORT_UPLOAD_BYTES = 2 * 1024 * 1024  # 台账 .xlsx 通常几十 KB
+_ARCHIVE_UPLOAD_SUB_DIR = "equipment-ledger-archive"
+
+
+def _archive_upload_dir() -> Path:
+    directory = Path(get_settings().UPLOAD_DIR) / _ARCHIVE_UPLOAD_SUB_DIR
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def _ensure_archive_file(original_path: str) -> Path:
+    """original_path 相对 uploads 根目录，返回真实文件路径并校验存在。"""
+    base = Path(get_settings().UPLOAD_DIR).resolve()
+    path = (base / original_path).resolve()
+    if base not in path.parents or not path.is_file():
+        raise HTTPException(status_code=404, detail="原始文件不存在")
+    return path
 
 
 @router.get("/equipments/import-template", summary="下载设备台账导入模板")
@@ -299,8 +317,8 @@ async def import_equipments(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> JSONResponse:
-    """按设备编号增量导入：已存在则更新台账字段，不存在则新建"""
-    validate_upload_metadata(
+    """按设备编号增量导入：已存在则更新台账字段，不存在则新建；成功后留上传存档"""
+    filename = validate_upload_metadata(
         file,
         allowed_extensions=_ALLOWED_IMPORT_EXTENSIONS,
         allowed_mimes=_ALLOWED_IMPORT_MIMES,
@@ -315,15 +333,132 @@ async def import_equipments(
         if total > _MAX_IMPORT_UPLOAD_BYTES:
             raise HTTPException(status_code=413, detail="台账文件不能超过 2MB")
         chunks.append(chunk)
+    data = b"".join(chunks)
+    if not data:
+        raise HTTPException(status_code=400, detail="上传文件为空")
 
-    summary = await equipment_import.import_equipment_ledger(
+    # 导入前解析回看快照并保存原件；导入失败时清理原件且不留存档
+    snapshot = equipment_ledger_archive.parse_ledger_snapshot(data)
+    object_name = f"{uuid.uuid4().hex}{Path(filename).suffix.lower()}"
+    relative_path = f"{_ARCHIVE_UPLOAD_SUB_DIR}/{object_name}"
+    (_archive_upload_dir() / object_name).write_bytes(data)
+    try:
+        summary = await equipment_import.import_equipment_ledger(
+            db,
+            data,
+            default_category_id=default_category_id,
+            default_location_id=default_location_id,
+            workshop_code=workshop or "201-1",
+        )
+    except Exception:
+        (_archive_upload_dir() / object_name).unlink(missing_ok=True)
+        raise
+    archive = await equipment_ledger_archive.create_archive(
         db,
-        b"".join(chunks),
-        default_category_id=default_category_id,
-        default_location_id=default_location_id,
         workshop_code=workshop or "201-1",
+        file_name=filename,
+        sheet_name=snapshot["sheet_name"],
+        original_path=relative_path,
+        rows=snapshot["rows"],
+        merges=snapshot["merges"],
+        col_widths=snapshot["col_widths"],
+        row_count=snapshot["row_count"],
+        col_count=snapshot["col_count"],
+        import_summary={
+            key: summary[key] for key in summary if key != "failures"
+        },
+        created_by=current_user.id if current_user else None,
     )
-    return success_response(data=summary)
+    return success_response(
+        data={**summary, "archive_id": str(archive.id)},
+        message="台账导入完成，已留存档",
+    )
+
+
+@router.get(
+    "/equipments/import-archives", summary="设备台账上传存档列表"
+)
+async def list_equipment_import_archives(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    workshop: str | None = WORKSHOP_QUERY,
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    """历次台账上传存档（新在前）；列表项不含大字段，点详情回看完整表格"""
+    items, total = await equipment_ledger_archive.list_archives(
+        db, page=page, page_size=page_size, workshop_code=workshop
+    )
+    return paginated_response(
+        [
+            equipment_ledger_archive.serialize_archive_summary(
+                archive, created_by_name=name
+            )
+            for archive, name in items
+        ],
+        page=page,
+        page_size=page_size,
+        total=total,
+    )
+
+
+@router.get(
+    "/equipments/import-archives/{archive_id}",
+    summary="设备台账上传存档详情（含完整表格）",
+)
+async def get_equipment_import_archive(
+    archive_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    archive = await equipment_ledger_archive.get_archive(db, archive_id)
+    if archive is None:
+        raise HTTPException(status_code=404, detail="存档记录不存在")
+    created_by_name = await equipment_ledger_archive.get_user_name(
+        db, archive.created_by
+    )
+    return success_response(
+        data=equipment_ledger_archive.serialize_archive(
+            archive, created_by_name=created_by_name
+        )
+    )
+
+
+@router.get(
+    "/equipments/import-archives/{archive_id}/file",
+    summary="下载台账上传原件",
+)
+async def download_equipment_import_archive_file(
+    archive_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+) -> FileResponse:
+    archive = await equipment_ledger_archive.get_archive(db, archive_id)
+    if archive is None:
+        raise HTTPException(status_code=404, detail="存档记录不存在")
+    path = _ensure_archive_file(archive.original_path)
+    return FileResponse(
+        path,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        filename=archive.file_name,
+    )
+
+
+@router.delete(
+    "/equipments/import-archives/{archive_id}", summary="删除台账上传存档"
+)
+async def delete_equipment_import_archive(
+    archive_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    """软删存档：只删快照记录，不影响已导入的台账数据"""
+    archive = await equipment_ledger_archive.get_archive(db, archive_id)
+    if archive is None:
+        raise HTTPException(status_code=404, detail="存档记录不存在")
+    await equipment_ledger_archive.delete_archive(
+        db, archive, deleted_by=current_user.id if current_user else None
+    )
+    return success_response(data=None, message="存档已删除")
 
 
 @router.get("/equipments/{equipment_id}", summary="获取设备详情")

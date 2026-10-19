@@ -1296,6 +1296,14 @@ PAGE_API_BINDINGS += _module_api_bindings(
         ),
         (
             "POST",
+            "/feishu-settings/hazard-due-notify/test",
+            ("safety:system-config:safety-feishu-settings",),
+            "operate",
+            "sync_config",
+            "not_applicable",
+        ),
+        (
+            "POST",
             "/knowledge-articles/feishu/sync",
             ("safety:regulation-info:knowledge-base",),
             "operate",
@@ -1354,6 +1362,19 @@ PAGE_API_BINDINGS += _module_api_bindings(
 )
 
 
+# 作业安全镜像页：页面 ↔ 飞书多维表格（与 app/modules/safety/page_tables.py
+# 注册表一致）。数据接口按请求的页面上下文放行，绑定维护归「安全飞书设置」页。
+SAFETY_PAGE_TABLE_PAGES = (
+    "safety:ops-safety:daily-risk-report",
+    "safety:ops-safety:special-danger-work",
+    "safety:ops-safety:risk-work-registration",
+    "safety:ops-safety:feeding-inspection",
+    "safety:ops-safety:hazchem-unloading-inspection",
+    "safety:ops-safety:centrifuge-discharge-inspection",
+    "safety:risk-hazard:hazard-inspection:hazard-duty",
+    "safety:risk-hazard:hazard-inspection:hazard-quick-report",
+)
+
 PAGE_API_BINDINGS += _module_api_bindings(
     "safety",
     [
@@ -1385,17 +1406,33 @@ PAGE_API_BINDINGS += _module_api_bindings(
         ),
         (
             "POST",
+            "/page-feishu-configs/{page_key}/sync",
+            ("safety:system-config:safety-feishu-settings",),
+            "operate",
+            "sync_config",
+            "not_applicable",
+        ),
+        (
+            "POST",
             "/page-feishu-configs/resolve",
             ("safety:system-config:safety-feishu-settings",),
             "operate",
             "sync_config",
             "not_applicable",
         ),
-        # 24小时值班隐患：镜像飞书多维表格，可改记录、可上传附件（回写飞书）。
+        # 镜像页数据：读记录/统计/子表页签，可改记录、可上传附件（回写飞书）。
+        (
+            "GET",
+            "/page-tables/{page_key}/tabs",
+            SAFETY_PAGE_TABLE_PAGES,
+            "query",
+            None,
+            "not_applicable",
+        ),
         (
             "GET",
             "/page-tables/{page_key}/records",
-            ("safety:risk-hazard:hazard-inspection:hazard-duty",),
+            SAFETY_PAGE_TABLE_PAGES,
             "query",
             None,
             "not_applicable",
@@ -1403,15 +1440,31 @@ PAGE_API_BINDINGS += _module_api_bindings(
         (
             "GET",
             "/page-tables/{page_key}/stats",
-            ("safety:risk-hazard:hazard-inspection:hazard-duty",),
+            SAFETY_PAGE_TABLE_PAGES,
             "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/page-tables/{page_key}/values",
+            SAFETY_PAGE_TABLE_PAGES,
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/page-tables/{page_key}/records",
+            SAFETY_PAGE_TABLE_PAGES,
+            "operate",
             None,
             "not_applicable",
         ),
         (
             "PUT",
             "/page-tables/{page_key}/records/{record_id}",
-            ("safety:risk-hazard:hazard-inspection:hazard-duty",),
+            SAFETY_PAGE_TABLE_PAGES,
             "operate",
             None,
             "not_applicable",
@@ -1419,7 +1472,7 @@ PAGE_API_BINDINGS += _module_api_bindings(
         (
             "POST",
             "/page-tables/{page_key}/records/{record_id}/attachments/{field_name}",
-            ("safety:risk-hazard:hazard-inspection:hazard-duty",),
+            SAFETY_PAGE_TABLE_PAGES,
             "operate",
             None,
             "not_applicable",
@@ -1427,7 +1480,7 @@ PAGE_API_BINDINGS += _module_api_bindings(
         (
             "GET",
             "/page-tables/{page_key}/records/{record_id}/attachments/{field_name}/{file_token}/content",
-            ("safety:risk-hazard:hazard-inspection:hazard-duty",),
+            SAFETY_PAGE_TABLE_PAGES,
             "query",
             None,
             "not_applicable",
@@ -1435,7 +1488,7 @@ PAGE_API_BINDINGS += _module_api_bindings(
         (
             "GET",
             "/page-tables/{page_key}/records/{record_id}/attachments/{field_name}/{file_token}/thumbnail",
-            ("safety:risk-hazard:hazard-inspection:hazard-duty",),
+            SAFETY_PAGE_TABLE_PAGES,
             "query",
             None,
             "not_applicable",
@@ -2320,6 +2373,20 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
     add_many(
         "GET",
         ("/fermentation-board", "/fl-board"),
+        overview,
+        scope_adapter="production.dashboard",
+    )
+    # 看板个人偏好（平均单产口径与标签后缀）：仅当前账户自己的数据，
+    # 读写都挂在概览页 query 口径——看板可见即可自定义，不需操作权限
+    add_many(
+        "GET",
+        ("/board-preferences",),
+        overview,
+        scope_adapter="production.dashboard",
+    )
+    add_many(
+        "POST",
+        ("/board-preferences",),
         overview,
         scope_adapter="production.dashboard",
     )
