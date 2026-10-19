@@ -12,17 +12,18 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import xlrd  # type: ignore[import-untyped]
-from openpyxl import Workbook, load_workbook  # type: ignore[import-untyped]
-from openpyxl.styles import (  # type: ignore[import-untyped]
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import (
     Alignment,
     Border,
     Font,
     PatternFill,
     Side,
 )
-from openpyxl.utils import get_column_letter  # type: ignore[import-untyped]
-from openpyxl.worksheet.page import PageMargins  # type: ignore[import-untyped]
-from openpyxl.worksheet.properties import (  # type: ignore[import-untyped]
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet._read_only import ReadOnlyWorksheet
+from openpyxl.worksheet.page import PageMargins
+from openpyxl.worksheet.properties import (
     PageSetupProperties,
 )
 from pydantic import ValidationError
@@ -1519,7 +1520,7 @@ def _build_purchase_order_workbook(
     material_field_mode: bool | None | str,
 ) -> Workbook:
     workbook = Workbook()
-    worksheet = workbook.active
+    worksheet = workbook.worksheets[0]
     worksheet.title = "Sheet1"
     headers = _get_purchase_order_export_headers(material_field_mode)
     column_count = len(headers)
@@ -1916,9 +1917,14 @@ def _parse_supplier_workbook(
     file_bytes: bytes,
 ) -> tuple[list[str], list[tuple[int, dict[str, object]]], str]:
     workbook = load_workbook(BytesIO(file_bytes), read_only=True, data_only=True)
-    worksheet = workbook.active
-    table_rows = list(worksheet.iter_rows(values_only=True))
-    return _build_supplier_rows(table_rows, worksheet.title)
+    try:
+        worksheet = workbook.active
+        if not isinstance(worksheet, ReadOnlyWorksheet):
+            raise ValueError("请选择供应商数据工作表")
+        table_rows = list(worksheet.iter_rows(values_only=True))
+        return _build_supplier_rows(table_rows, worksheet.title)
+    finally:
+        workbook.close()
 
 
 def _parse_supplier_text_table(

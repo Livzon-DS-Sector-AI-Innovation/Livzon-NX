@@ -12,12 +12,14 @@ from copy import copy
 from datetime import date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
+from typing import cast
 from uuid import UUID
 
 from fastapi import UploadFile
-from openpyxl import load_workbook  # type: ignore[import-untyped]
-from openpyxl.cell.cell import MergedCell  # type: ignore[import-untyped]
-from openpyxl.worksheet.worksheet import Worksheet  # type: ignore[import-untyped]
+from openpyxl import load_workbook
+from openpyxl.cell.cell import MergedCell
+from openpyxl.styles import Alignment, Border, Fill, Font, Protection
+from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -628,7 +630,11 @@ def _copy_row_style(
     for column_index in range(1, column_count + 1):
         source_cell = worksheet.cell(row=source_row, column=column_index)
         target_cell = worksheet.cell(row=target_row, column=column_index)
-        target_cell._style = copy(source_cell._style)
+        target_cell.font = cast(Font, copy(source_cell.font))
+        target_cell.fill = cast(Fill, copy(source_cell.fill))
+        target_cell.border = cast(Border, copy(source_cell.border))
+        target_cell.alignment = cast(Alignment, copy(source_cell.alignment))
+        target_cell.protection = cast(Protection, copy(source_cell.protection))
         if source_cell.number_format:
             target_cell.number_format = source_cell.number_format
 

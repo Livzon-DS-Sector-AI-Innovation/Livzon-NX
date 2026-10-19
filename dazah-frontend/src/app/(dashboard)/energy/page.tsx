@@ -1,11 +1,7 @@
-import { EnergyOverview, EnergyQueryProvider } from '@/components/energy'
+import EnergyLedgerPage from '@/components/energy/EnergyLedgerPage'
 
 export const dynamic = 'force-dynamic'
 
 export default function EnergyPage() {
-  return (
-    <EnergyQueryProvider>
-      <EnergyOverview />
-    </EnergyQueryProvider>
-  )
+  return <EnergyLedgerPage mode="overview" />
 }

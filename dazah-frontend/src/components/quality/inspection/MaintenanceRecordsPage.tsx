@@ -6,15 +6,18 @@ import { DownloadOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
 
 import { InspectionFeishuTable } from '@/components/quality/inspection'
+import { usePagePermissions } from '@/hooks/usePagePermissions'
 
 /** 设备维护保养记录页：台账 + 完成即生成下一期任务 + 按月汇总导出。 */
 export function MaintenanceRecordsPage() {
+  const { canExport } = usePagePermissions('quality:inspection:inspection-instruments:inspection-instruments-maintenance')
   const { message } = App.useApp()
   /** 月份为空 = 不按月过滤（看全部）；选中 = 列表按「生成日期」落在当月过滤 */
   const [month, setMonth] = useState<Dayjs | null>(dayjs())
   const [exporting, setExporting] = useState(false)
 
   const handleExport = async () => {
+    if (!canExport) return
     if (!month) {
       message.warning('导出按月汇总，请先选择月份')
       return
@@ -96,6 +99,7 @@ export function MaintenanceRecordsPage() {
           <Button
             icon={<DownloadOutlined />}
             loading={exporting}
+            disabled={!canExport}
             onClick={handleExport}
           >
             导出汇总表

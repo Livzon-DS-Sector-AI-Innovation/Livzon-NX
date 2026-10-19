@@ -6,7 +6,7 @@ import {
   Popconfirm, Result, Modal, Tooltip,
 } from 'antd'
 import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
-import { usePermission } from '@/hooks/usePermission'
+import { usePagePermissions } from '@/hooks/usePagePermissions'
 import {
   fetchFeishuMemberDepartments,
   fetchTrainingDepartments,
@@ -76,7 +76,7 @@ interface FormValues {
  * 底层仍写入 training_dept_mappings 配置表，前后端解析共用。
  */
 export default function DeptMappingSettingsClient() {
-  const { has } = usePermission()
+  const { canQuery, canSync, canDelete } = usePagePermissions('hr:hr-settings:hr-settings-dept-mapping')
   const { message } = App.useApp()
   const { version } = useDeptMappings()
 
@@ -91,9 +91,10 @@ export default function DeptMappingSettingsClient() {
   const [dataTarget, setDataTarget] = useState('')
   const [signinTarget, setSigninTarget] = useState('')
 
-  const forbidden = !has('hr:write')
+  const forbidden = !canQuery
 
   const loadData = useCallback(async () => {
+    if (!canQuery) return
     setLoading(true)
     try {
       const [m, fd, td] = await Promise.all([
@@ -109,7 +110,7 @@ export default function DeptMappingSettingsClient() {
     } finally {
       setLoading(false)
     }
-  }, [message])
+  }, [message, canQuery])
 
   useEffect(() => {
     queueMicrotask(loadData)
@@ -164,7 +165,7 @@ export default function DeptMappingSettingsClient() {
       <Result
         status="403"
         title="无权限访问"
-        subTitle="只有具备 hr:write 权限的管理员可以维护培训部门映射"
+        subTitle="需要部门映射页面的查询权限"
       />
     )
   }
@@ -180,6 +181,7 @@ export default function DeptMappingSettingsClient() {
     matchLevel: 'first' | 'second' | 'both' = 'first',
     priority = 100,
   ) => {
+    if (!canSync) return
     const existing = findRule(source, type)
     const payload: TrainingDeptMappingCreateInput = {
       source_name: source,
@@ -204,6 +206,7 @@ export default function DeptMappingSettingsClient() {
 
   const removeRule = async (source: string, type: string) => {
     const existing = findRule(source, type)
+    if (existing && !canDelete) throw new Error('清除已有映射需要单独授予删除权限')
     if (existing) await deleteTrainingDeptMappingAction(existing.id)
   }
 
@@ -214,6 +217,7 @@ export default function DeptMappingSettingsClient() {
 
   // ── 统一编辑按钮：打开“按页编辑”弹窗（大白话，无技术字段）──
   const openEdit = (row: RowVM) => {
+    if (!canSync) return
     setEditingSource(row.source)
     setNewSource('')
     setDataTarget(row.resolved || '')
@@ -222,6 +226,7 @@ export default function DeptMappingSettingsClient() {
   }
 
   const openNew = () => {
+    if (!canSync) return
     setEditingSource(null)
     setNewSource('')
     setDataTarget('')
@@ -230,6 +235,7 @@ export default function DeptMappingSettingsClient() {
   }
 
   const handleSubmit = async () => {
+    if (!canSync) return
     const source = (editingSource ?? newSource).trim()
     if (!source) {
       message.error('请填写飞书源部门名')
@@ -239,13 +245,22 @@ export default function DeptMappingSettingsClient() {
     try {
       const dt = dataTarget.trim()
       const st = signinTarget.trim()
+      const keepData = Boolean(dt && dt !== source)
+      const keepPrint = Boolean(st && st !== dt)
+      const dataType = findRule(source, 'special') ? 'special' : 'alias'
+      const existingDataRule = findRule(source, dataType)
+      const removals = [
+        ...(['alias', 'special'] as const).filter((type) => !keepData || type !== dataType),
+        ...(!keepPrint ? ['print_unify'] : []),
+      ]
+      if (!canDelete && removals.some((type) => findRule(source, type))) {
+        throw new Error('清除已有映射需要单独授予删除权限')
+      }
       // 7 个数据页（台账/年度计划/培训师/岗位清单/计划跟踪/新员工/员工清单）共用一个部门
-      await removeRule(source, 'alias')
-      await removeRule(source, 'special')
-      if (dt && dt !== source) await upsertRule(source, 'alias', dt, 'first', 100)
+      for (const type of removals) await removeRule(source, type)
+      if (keepData) await upsertRule(source, dataType, dt, existingDataRule?.match_level ?? 'first', existingDataRule?.priority ?? 100)
       // 签到表/通知/考核 打印显示名（可与数据页不同）
-      await removeRule(source, 'print_unify')
-      if (st && st !== dt) await upsertRule(source, 'print_unify', st)
+      if (keepPrint) await upsertRule(source, 'print_unify', st)
       message.success(`已保存「${source}」的部门映射`)
       setModalOpen(false)
       await afterMutate()
@@ -258,13 +273,22 @@ export default function DeptMappingSettingsClient() {
 
   // ── 弹窗列下拉（3.A）──
   const handleModalChange = async (row: RowVM, value: string) => {
+    if (!canSync) return
     try {
-      await removeRule(row.source, 'modal_drop')
-      await removeRule(row.source, 'modal_no_expand')
-      await removeRule(row.source, 'modal_extra')
-      if (value === 'drop') await upsertRule(row.source, 'modal_drop', null)
-      else if (value === 'no_expand') await upsertRule(row.source, 'modal_no_expand', null)
-      else if (value === 'extra') await upsertRule(row.source, 'modal_extra', null)
+      const types = ['modal_drop', 'modal_no_expand', 'modal_extra'] as const
+      const existing = types.map((type) => findRule(row.source, type)).filter((rule) => rule !== undefined)
+      const target = value === 'drop' ? 'modal_drop' : value === 'no_expand' ? 'modal_no_expand' : value === 'extra' ? 'modal_extra' : null
+      if (!canDelete && (target ? existing.length > 1 : existing.length > 0)) {
+        throw new Error('清除已有映射需要单独授予删除权限')
+      }
+      if (target && existing[0]) {
+        await updateTrainingDeptMappingAction(existing[0].id, { mapping_type: target })
+        for (const rule of existing.slice(1)) await deleteTrainingDeptMappingAction(rule.id)
+      } else if (target) {
+        await upsertRule(row.source, target, null)
+      } else {
+        for (const type of types) await removeRule(row.source, type)
+      }
       await afterMutate()
     } catch (e) {
       message.error(e instanceof Error ? e.message : '保存失败')
@@ -272,6 +296,7 @@ export default function DeptMappingSettingsClient() {
   }
 
   const handleDeleteRow = async (row: RowVM) => {
+    if (!canDelete) return
     try {
       for (const t of ['alias', 'special', 'modal_drop', 'modal_no_expand', 'modal_extra', 'print_unify']) {
         await removeRule(row.source, t)
@@ -294,9 +319,9 @@ export default function DeptMappingSettingsClient() {
         <Space>
           <Typography.Text strong>{row.source}</Typography.Text>
           <Space size={4}>
-            <Tooltip title="编辑该飞书部门在各培训页面显示的部门"><Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row)} /></Tooltip>
-            <Popconfirm title={`删除「${row.source}」全部映射？`} onConfirm={() => handleDeleteRow(row)}>
-              <Button size="small" danger icon={<DeleteOutlined />} />
+            <Tooltip title="编辑该飞书部门在各培训页面显示的部门"><Button disabled={!canSync} size="small" icon={<EditOutlined />} onClick={() => openEdit(row)} /></Tooltip>
+            <Popconfirm disabled={!canDelete} title={`删除「${row.source}」全部映射？`} onConfirm={() => handleDeleteRow(row)}>
+              <Button disabled={!canDelete} size="small" danger icon={<DeleteOutlined />} />
             </Popconfirm>
           </Space>
         </Space>
@@ -319,6 +344,7 @@ export default function DeptMappingSettingsClient() {
       width: 130,
       render: (_: unknown, row: RowVM) => (
         <Select
+          disabled={!canSync}
           size="small"
           style={{ width: '100%' }}
           value={row.modalStatus}
@@ -352,7 +378,7 @@ export default function DeptMappingSettingsClient() {
                       </Typography.Paragraph>
                     </div>
                     <Space>
-                      <Button type="primary" icon={<PlusOutlined />} onClick={openNew}>新增映射</Button>
+                      <Button disabled={!canSync} type="primary" icon={<PlusOutlined />} onClick={openNew}>新增映射</Button>
                       <Button icon={<ReloadOutlined />} onClick={loadData}>刷新</Button>
                     </Space>
                   </div>
@@ -374,7 +400,7 @@ export default function DeptMappingSettingsClient() {
 
                 <Modal
                   title={editingSource ? `编辑部门映射：${editingSource}` : '新增部门映射'}
-                  open={modalOpen}
+                  open={modalOpen && canSync}
                   onCancel={() => setModalOpen(false)}
                   onOk={handleSubmit}
                   confirmLoading={saving}
@@ -406,6 +432,7 @@ export default function DeptMappingSettingsClient() {
                         <div key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                           <Typography.Text style={{ width: 150, flexShrink: 0 }}>{col.title}</Typography.Text>
                           <Select
+                            disabled={!canSync}
                             style={{ flex: 1 }}
                             showSearch
                             allowClear

@@ -5,6 +5,9 @@ import { App } from 'antd'
 import dayjs from 'dayjs'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAuthStore } from '@/stores/auth'
+
+vi.mock('next/navigation', () => ({ usePathname: () => '/quality/inspection/instruments/maintenance' }))
 
 const tableState = vi.hoisted(() => ({ latest: {} as Record<string, unknown> }))
 
@@ -22,6 +25,7 @@ let container: HTMLDivElement
 let root: Root
 
 beforeEach(() => {
+  useAuthStore.getState().setUser({ id: 'admin-test', name: '测试管理员', role: 'admin' })
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -31,6 +35,7 @@ beforeEach(() => {
 
 afterEach(() => {
   act(() => root.unmount())
+  useAuthStore.getState().clearUser()
   container.remove()
   document.body.replaceChildren()
   vi.unstubAllGlobals()
@@ -62,6 +67,24 @@ function renderPage() {
 }
 
 describe('MaintenanceRecordsPage 月份过滤与导出', () => {
+  it('导出需要独立页面授权，保留旧模块权限也不能绕过撤销', () => {
+    const authorize = (actions: string[]) => act(() => useAuthStore.getState().setUser({
+      id: 'tester', name: '测试用户', role: 'user', permissions: ['*', 'quality:write'],
+      page_permissions: [{ page_key: 'quality:inspection:inspection-instruments:inspection-instruments-maintenance',
+        module_code: 'quality', permissions: ['access', 'query', 'operate'], sensitive_actions: actions,
+        data_scope: { scope_type: 'all' }, source: 'user' }],
+    }))
+    authorize([])
+    const fetchMock = renderPage()
+    const button = Array.from(container.querySelectorAll('button')).find((node) => node.textContent === '导出汇总表')!
+    expect(button.disabled).toBe(true)
+    authorize(['sensitive_export'])
+    expect(button.disabled).toBe(false)
+    authorize([])
+    expect(button.disabled).toBe(true)
+    act(() => button.click())
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
   it('默认选中当前月并作为 monthFilter 传给列表', () => {
     renderPage()
     expect(tableState.latest.title).toBe('设备维护保养记录')

@@ -4,8 +4,8 @@ import logging
 from io import BytesIO
 from typing import Any
 
-from openpyxl import Workbook  # type: ignore[import-untyped]
-from openpyxl.styles import (  # type: ignore[import-untyped]
+from openpyxl import Workbook
+from openpyxl.styles import (
     Alignment,
     Border,
     Font,
@@ -35,7 +35,7 @@ def _left_align() -> Any:
 def _generate_old(data: OnboardingEvaluationInput) -> BytesIO:
     """根据填写的评估信息生成员工上岗评估表 Excel 文档."""
     wb = Workbook()
-    ws = wb.active
+    ws = wb.worksheets[0]
     ws.title = "员工上岗评估表"
 
     # 列宽设置（A-F，共6列）

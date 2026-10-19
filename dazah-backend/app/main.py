@@ -215,7 +215,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         InspectionFeishuMirrorSyncGenerator,
         SparePartHardwareSyncGenerator,
     )
-    from app.modules.energy.scheduler import EnergyWikiSyncGenerator
+    from app.modules.energy.scheduler import (
+        EnergyNativeEntryGenerator,
+        EnergyNotificationDeliveryGenerator,
+        EnergyWikiSyncGenerator,
+    )
     from app.modules.hr.scheduler import (
         ContractExpiryReminderGenerator,
         ContractSignReminderGenerator,
@@ -265,6 +269,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_registry.register_generator(InspectionFeishuMirrorFullSyncGenerator())
     scheduler_registry.register_generator(SparePartHardwareSyncGenerator())
     scheduler_registry.register_generator(EnergyWikiSyncGenerator())
+    scheduler_registry.register_generator(EnergyNativeEntryGenerator())
+    scheduler_registry.register_generator(EnergyNotificationDeliveryGenerator())
     scheduler_registry.register_generator(WarehouseFeishuDailySyncGenerator())
     scheduler_registry.register_generator(WarehouseFeishuAnalysisGenerator())
     scheduler_registry.register_generator(QualityFeishuReadDailySyncGenerator())

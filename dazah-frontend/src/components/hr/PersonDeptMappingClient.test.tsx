@@ -16,6 +16,9 @@ const actionMocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/api/client/hr', () => ({ fetchFeishuMembers: clientMocks.fetchFeishuMembers }))
 vi.mock('@/actions/hr', () => actionMocks)
+vi.mock('@/hooks/usePagePermissions', () => ({
+  usePagePermissions: () => ({ canSync: true, canDelete: true }),
+}))
 
 import PersonDeptMappingClient from './PersonDeptMappingClient'
 

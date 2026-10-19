@@ -17,6 +17,7 @@ from app.platform.identity.data_scope import (
 from app.platform.identity.models import User
 from app.platform.identity.page_permissions import PagePermissionService
 from app.platform.identity.page_policy import (
+    EnumActionSelector,
     api_binding_for_route,
     api_bindings_for_module,
     api_route_catalog,
@@ -237,12 +238,21 @@ def require_module_view(module_code: str) -> Callable[..., Awaitable[User]]:
                 body = await request.json()
                 if not isinstance(body, dict):
                     raise ValueError("Expected an object")
-                decision = TypeAdapter(bool).validate_python(
-                    body.get(selector.field, selector.default)
-                )
+                if isinstance(selector, EnumActionSelector):
+                    value = body.get(selector.field)
+                    choices = dict(selector.actions)
+                    if not isinstance(value, str) or value not in choices:
+                        raise ValueError("Unknown decision")
+                    sensitive_action = choices[value]
+                else:
+                    decision = TypeAdapter(bool).validate_python(
+                        body.get(selector.field, selector.default)
+                    )
+                    sensitive_action = (
+                        selector.when_true if decision else selector.when_false
+                    )
             except (ValueError, ValidationError) as exc:
                 raise HTTPException(422, "责任动作参数无效") from exc
-            sensitive_action = selector.when_true if decision else selector.when_false
         if sensitive_action is not None:
             declared_actions = {action.key for action in definition.sensitive_actions}
             if sensitive_action not in declared_actions:

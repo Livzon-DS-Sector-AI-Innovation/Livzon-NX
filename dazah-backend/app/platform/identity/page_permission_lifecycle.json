@@ -276,6 +276,10 @@
       "module_code": "production",
       "route_path": "/production/scheduling",
       "actions": {
+        "schedule-archive": {
+          "status": "active",
+          "category": "bulk_change"
+        },
         "delete": {
           "status": "active",
           "category": "destructive"
@@ -409,6 +413,10 @@
           "status": "active",
           "category": "decision"
         },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        },
         "delete": {
           "status": "active",
           "category": "destructive"
@@ -478,25 +486,25 @@
       "actions": {}
     },
     "energy:overview": {
-      "status": "active",
+      "status": "retired",
       "module_code": "energy",
       "route_path": "/energy",
       "actions": {}
     },
     "energy:devices": {
-      "status": "active",
+      "status": "retired",
       "module_code": "energy",
       "route_path": "/energy/devices",
       "actions": {}
     },
     "energy:alerts": {
-      "status": "active",
+      "status": "retired",
       "module_code": "energy",
       "route_path": "/energy/alerts",
       "actions": {}
     },
     "energy:collect-logs": {
-      "status": "active",
+      "status": "retired",
       "module_code": "energy",
       "route_path": "/energy/collect-logs",
       "actions": {}
@@ -4980,6 +4988,89 @@
       "module_code": "equipment",
       "route_path": "/equipment/personnel/203",
       "actions": {}
+    },
+    "energy:ledger-overview": {
+      "status": "active",
+      "module_code": "energy",
+      "route_path": "/energy",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "energy:entry": {
+      "status": "active",
+      "module_code": "energy",
+      "route_path": "/energy/entry",
+      "actions": {}
+    },
+    "energy:reports": {
+      "status": "active",
+      "module_code": "energy",
+      "route_path": "/energy/reports",
+      "actions": {}
+    },
+    "energy:analysis": {
+      "status": "active",
+      "module_code": "energy",
+      "route_path": "/energy/analysis",
+      "actions": {}
+    },
+    "energy:data-quality": {
+      "status": "active",
+      "module_code": "energy",
+      "route_path": "/energy/data-quality",
+      "actions": {}
+    },
+    "energy:settings": {
+      "status": "active",
+      "module_code": "energy",
+      "route_path": "/energy/settings",
+      "actions": {
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "energy:history:sources": {
+      "status": "active",
+      "module_code": "energy",
+      "route_path": "/energy/sources",
+      "actions": {}
+    },
+    "energy:history:data": {
+      "status": "active",
+      "module_code": "energy",
+      "route_path": "/energy/data",
+      "actions": {}
+    },
+    "energy:history:sync-runs": {
+      "status": "active",
+      "module_code": "energy",
+      "route_path": "/energy/sync-runs",
+      "actions": {}
+    },
+    "energy:history:feishu-config": {
+      "status": "active",
+      "module_code": "energy",
+      "route_path": "/energy/feishu-config",
+      "actions": {
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
     }
   }
 }

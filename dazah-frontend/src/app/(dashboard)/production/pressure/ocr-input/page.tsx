@@ -19,12 +19,13 @@ import { UploadOutlined, SendOutlined, CameraOutlined } from '@ant-design/icons'
 import { createOcrTask, submitOcrTaskResult } from '@/actions/pressure'
 import type { OcrResultRecord } from '@/types/pressure'
 import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
+import Alert from '@/components/shared/PlatformNotice'
 
 const { Title, Text } = Typography
 
 export default function OcrInputPage() {
   const { message } = App.useApp()
-  const { canOperate } = useProductionPermissions(PRODUCTION_PAGE_KEYS.pressure)
+  const { canBulkImport } = useProductionPermissions(PRODUCTION_PAGE_KEYS.pressure)
   const [currentStep, setCurrentStep] = useState(0)
   const [uploading, setUploading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -34,7 +35,7 @@ export default function OcrInputPage() {
   const [editableRecords, setEditableRecords] = useState<OcrResultRecord[]>([])
 
   const handleUpload = async (file: File) => {
-    if (!canOperate) return false
+    if (!canBulkImport) return false
     setUploading(true)
     try {
       // 简化处理：将图片转为 base64 URL（实际应上传到文件服务）
@@ -66,7 +67,7 @@ export default function OcrInputPage() {
   }
 
   const handleSubmit = async () => {
-    if (!canOperate) return
+    if (!canBulkImport) return
     if (!taskId) return
     setSubmitting(true)
     try {
@@ -101,6 +102,7 @@ export default function OcrInputPage() {
   }
 
   const updateRecord = (index: number, field: string, value: any) => {
+    if (!canBulkImport) return
     const updated = [...editableRecords]
     updated[index] = { ...updated[index], [field]: value }
     setEditableRecords(updated)
@@ -114,6 +116,7 @@ export default function OcrInputPage() {
       render: (_: any, record: OcrResultRecord, index: number) => (
         <Input
           size="small"
+          disabled={!canBulkImport}
           value={editableRecords[index]?.point_id}
           onChange={(e) => updateRecord(index, 'point_id', e.target.value)}
         />
@@ -126,6 +129,7 @@ export default function OcrInputPage() {
       render: (_: any, record: OcrResultRecord, index: number) => (
         <InputNumber
           size="small"
+          disabled={!canBulkImport}
           value={editableRecords[index]?.pressure_value}
           onChange={(v) => updateRecord(index, 'pressure_value', v)}
           style={{ width: 90 }}
@@ -139,6 +143,7 @@ export default function OcrInputPage() {
       render: (_: any, record: OcrResultRecord, index: number) => (
         <Input
           size="small"
+          disabled={!canBulkImport}
           value={editableRecords[index]?.time_slot || ''}
           onChange={(e) => updateRecord(index, 'time_slot', e.target.value)}
         />
@@ -165,6 +170,7 @@ export default function OcrInputPage() {
   return (
     <div className="space-y-4">
       <Title level={4}>OCR 识别录入</Title>
+      {!canBulkImport && <Alert type="warning" showIcon title="需要压差管理的操作及批量导入权限，才能识别并提交记录。" />}
 
       <Card variant="borderless" className="shadow-sm">
         <Steps
@@ -186,7 +192,7 @@ export default function OcrInputPage() {
                 accept="image/*"
                 showUploadList={false}
                 beforeUpload={handleUpload}
-                disabled={!canOperate}
+                disabled={!canBulkImport}
                 className="max-w-md mx-auto"
               >
                 <p className="text-4xl mb-4 text-[var(--color-primary)]">
@@ -207,7 +213,7 @@ export default function OcrInputPage() {
               <Text>共识别到 {editableRecords.length} 条记录，请核对后提交</Text>
               <Space>
                 <Button onClick={handleReset}>重新上传</Button>
-                {canOperate && <Button
+                {canBulkImport && <Button
                   type="primary"
                   icon={<SendOutlined />}
                   loading={submitting}

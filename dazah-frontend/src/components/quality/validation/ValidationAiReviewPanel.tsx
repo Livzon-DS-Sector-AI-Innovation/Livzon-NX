@@ -12,6 +12,7 @@ import {
   UploadOutlined,
 } from '@ant-design/icons'
 import type { UploadFile } from 'antd/es/upload/interface'
+import { usePagePermissions } from '@/hooks/usePagePermissions'
 
 import {
   createValidationReview,
@@ -50,6 +51,7 @@ function statusTag(status: string) {
 }
 
 export function ValidationAiReviewPanel() {
+  const { canOperate, canDelete, canExport } = usePagePermissions('quality:validation:validation-ai-review')
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
@@ -122,6 +124,7 @@ export function ValidationAiReviewPanel() {
 
   const handleRun = useCallback(
     async (reviewId: string) => {
+      if (!canOperate) return
       try {
         const result = await runValidationReview(reviewId)
         if (result?.job_id) {
@@ -132,11 +135,12 @@ export function ValidationAiReviewPanel() {
         message.error(error instanceof Error ? error.message : '发起审核失败')
       }
     },
-    [message]
+    [message, canOperate]
   )
 
   const handleRerun = useCallback(
     async (reviewId: string) => {
+      if (!canOperate) return
       try {
         const result = await rerunValidationReview(reviewId)
         if (result?.job_id) {
@@ -147,11 +151,12 @@ export function ValidationAiReviewPanel() {
         message.error(error instanceof Error ? error.message : '重新审核失败')
       }
     },
-    [message]
+    [message, canOperate]
   )
 
   const handleDelete = useCallback(
     async (reviewId: string) => {
+      if (!canDelete) return
       try {
         await deleteValidationReview(reviewId)
         message.success('已删除审核记录')
@@ -161,11 +166,12 @@ export function ValidationAiReviewPanel() {
         message.error(error instanceof Error ? error.message : '删除失败')
       }
     },
-    [message, queryClient, detailId]
+    [message, queryClient, detailId, canDelete]
   )
 
   const handleExport = useCallback(
     async (reviewId: string) => {
+      if (!canExport) return
       setExportingId(reviewId)
       try {
         const res = await fetch(
@@ -190,10 +196,11 @@ export function ValidationAiReviewPanel() {
         setExportingId(null)
       }
     },
-    [message]
+    [message, canExport]
   )
 
   const handleCreate = useCallback(async () => {
+    if (!canOperate) return
     if (uploadFiles.length === 0) {
       message.warning('请先选择要上传的验证方案 / 验证报告')
       return
@@ -222,7 +229,7 @@ export function ValidationAiReviewPanel() {
     } finally {
       setSubmitting(false)
     }
-  }, [focusPoints, uploadFiles, queryClient, openDetail, message])
+  }, [focusPoints, uploadFiles, queryClient, openDetail, message, canOperate])
 
   const columns = [
     {
@@ -267,6 +274,7 @@ export function ValidationAiReviewPanel() {
           </Button>
           {item.status === 'failed' || item.status === 'completed' ? (
             <Popconfirm
+              disabled={!canOperate}
               title="重新运行 AI 审核"
               description="将使用当前文件重新执行一次完整审核"
               okText="重跑"
@@ -274,10 +282,11 @@ export function ValidationAiReviewPanel() {
               trigger="click"
               onConfirm={() => handleRerun(item.id)}
             >
-              <Button size="small" icon={<ReloadOutlined />} />
+              <Button aria-label="重新审核" disabled={!canOperate} size="small" icon={<ReloadOutlined />} />
             </Popconfirm>
           ) : null}
           <Popconfirm
+            disabled={!canDelete}
             title="删除审核记录"
             description="删除后不可恢复，不影响文件管理目录"
             okText="删除"
@@ -285,7 +294,7 @@ export function ValidationAiReviewPanel() {
             trigger="click"
             onConfirm={() => handleDelete(item.id)}
           >
-            <Button size="small" danger icon={<DeleteOutlined />} />
+            <Button aria-label="删除审核记录" disabled={!canDelete} size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
       ),
@@ -306,6 +315,7 @@ export function ValidationAiReviewPanel() {
           <Button
             type="primary"
             icon={<PlusOutlined />}
+            disabled={!canOperate}
             onClick={() => setCreateOpen(true)}
           >
             新建审核
@@ -437,7 +447,7 @@ export function ValidationAiReviewPanel() {
 
       <Modal
         title="新建验证 AI 审核"
-        open={createOpen}
+        open={createOpen && canOperate}
         onCancel={() => setCreateOpen(false)}
         onOk={handleCreate}
         okText="创建并上传文件"
@@ -446,6 +456,7 @@ export function ValidationAiReviewPanel() {
         destroyOnHidden
       >
         <Upload.Dragger
+          disabled={!canOperate}
           multiple
           beforeUpload={() => false}
           fileList={uploadFiles}
@@ -492,6 +503,7 @@ export function ValidationAiReviewPanel() {
               <Button
                 type="primary"
                 loading={running}
+                disabled={!canOperate}
                 onClick={() => detailId && handleRun(detailId)}
               >
                 开始审核
@@ -501,6 +513,7 @@ export function ValidationAiReviewPanel() {
               <Button
                 icon={<DownloadOutlined />}
                 loading={exportingId === detailId}
+                disabled={!canExport}
                 onClick={() => detailId && handleExport(detailId)}
               >
                 导出报告
@@ -509,6 +522,7 @@ export function ValidationAiReviewPanel() {
             {record?.status === 'completed' || record?.status === 'failed' ? (
               <Button
                 icon={<ReloadOutlined />}
+                disabled={!canOperate}
                 onClick={() => detailId && handleRerun(detailId)}
               >
                 重新审核

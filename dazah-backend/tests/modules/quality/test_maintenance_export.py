@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import copy
 from datetime import date, timedelta
 from io import BytesIO
 from typing import Any
@@ -93,6 +94,13 @@ async def test_export_renders_template_with_dot_dates(
     assert sheet.cell(3, 3).value == "QC-2-2-086"
     assert sheet.cell(3, 7).value == "贾慧"
     assert sheet.cell(3, 10).value == "-"  # 备注空值占位
+    template = load_workbook(exporter._TEMPLATE_PATH)
+    reference = template.worksheets[0].cell(exporter._DATA_FIRST_ROW, 1)
+    assert copy(sheet.cell(3, 1).font) == copy(reference.font)
+    assert copy(sheet.cell(3, 1).border) == copy(reference.border)
+    assert copy(sheet.cell(3, 1).alignment) == copy(reference.alignment)
+    assert copy(sheet.cell(3, 1).protection) == copy(reference.protection)
+    template.close()
     # 末尾备注行紧随数据区（第 5 行），合并至 J 列且保留说明文字
     footer_text = str(sheet.cell(5, 1).value or "")
     assert "预防性维护" in footer_text

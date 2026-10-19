@@ -1,4 +1,6 @@
 'use client'
+
+import overlayStyles from '@/components/production/production-overlays.module.css'
 // FA 苯丙氨酸 — 专用批次追溯弹窗（血缘 SVG + AI 分析 + 对话）
 
 import { useEffect, useState, useRef } from 'react'
@@ -176,6 +178,7 @@ export default function FATraceModal({ stage, batchNo, onClose, pageKey }: Props
 
   return (
     <Modal
+      className={overlayStyles.traceModal}
       title={<span>FA 批次追溯：<Text strong style={{ color: '#eb2f96', margin: '0 8px' }}>{batchNo}</Text>
         <Button size="small" type="primary" icon={<BulbOutlined />} loading={aiLoading} onClick={doAiAnalysis} style={{ marginLeft: 12 }}>
           AI 分析
@@ -184,6 +187,8 @@ export default function FATraceModal({ stage, batchNo, onClose, pageKey }: Props
           <Button icon={<DownloadOutlined />} size="small" style={{ marginLeft: 8 }} onClick={exportPng}>导出</Button>
         )}
         <Popover
+          classNames={{ root: overlayStyles.popover }}
+          align={{ overflow: { adjustX: true, adjustY: true, shiftX: true, shiftY: true }, htmlRegion: 'visible' }}
           trigger="click" onOpenChange={(open) => { if (open) loadHistory() }} placement="bottomLeft"
           title="分析历史"
           content={
@@ -192,7 +197,7 @@ export default function FATraceModal({ stage, batchNo, onClose, pageKey }: Props
             <div style={{ width: 480, maxHeight: 320, overflow: 'auto', fontSize: 12 }}>
               {historyRecords.map((r) => (
                 <div key={r.id}
-                  style={{ display: 'flex', alignItems: 'center', padding: '4px 0', cursor: 'pointer', borderBottom: '1px solid #fafafa' }}
+                  style={{ display: 'flex', alignItems: 'center', padding: '4px 0', cursor: 'pointer', borderBottom: '1px solid var(--color-border)' }}
                   onClick={() => {
                     const rr = { ...r, analysis_text: null, session_id: r.session_id }
                     setAiResult(rr); aiResultRef.current = rr; setChatMessages([])
@@ -211,7 +216,8 @@ export default function FATraceModal({ stage, batchNo, onClose, pageKey }: Props
         </Popover>
       </span>}
       open onCancel={onClose} destroyOnHidden
-      width={Math.min(window.innerWidth - 100, Math.max(960, maxX + 100))}
+      width={Math.max(960, maxX + 100)}
+      style={{ maxWidth: 'calc(100vw - 32px)' }}
       styles={{ body: { minHeight: '50vh', padding: 0 } }}
       footer={null}
     >

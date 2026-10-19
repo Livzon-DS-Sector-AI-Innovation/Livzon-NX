@@ -2,12 +2,13 @@
 
 按日记录成品产量，与批次台账（方案 B）相互独立：
 同产品同一天仅一条进行中记录，重复录入即覆盖更新。
-读取与写入均要求提炼产量权限（production:extraction-yield）。
+读取与写入遵循生产概览页面授权、提炼工段范围和产品可见范围。
 """
+
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -17,8 +18,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.response import success_response
 from app.modules.production.extraction_report_models import ExtractionDailyReport
-from app.modules.production.fermentation_board_api import EXTRACT_YIELD_PERMISSION
+from app.modules.production.overview_visibility import require_overview_section
+from app.platform.identity.data_scope import current_page_data_scope, current_page_key
 from app.platform.identity.deps import CurrentUser
+from app.platform.identity.public_api import has_current_page_permission
 from app.shared.module_api import create_module_router
 from app.shared.module_registry import MODULES_BY_CODE
 
@@ -31,16 +34,25 @@ class DailyReportBody(BaseModel):
 
 
 async def _require_extract_permission(
-    db: AsyncSession, current_user: CurrentUser
+    db: AsyncSession,
+    current_user: CurrentUser,
+    permission: Literal["query", "operate"],
+    product: str,
 ) -> None:
-    if current_user is None:
-        raise HTTPException(status_code=403, detail="无提炼产量权限")
-    from app.platform.identity.rbac import resolve_user_permissions
-
-    perms = await resolve_user_permissions(db, current_user.id)
-    if "*" in perms or EXTRACT_YIELD_PERMISSION in perms:
-        return
-    raise HTTPException(status_code=403, detail="无提炼产量权限")
+    allowed = current_page_key.get() == "production:overview" and (
+        await has_current_page_permission(
+            db,
+            current_user,
+            module_code="production",
+            permission=permission,
+        )
+    )
+    if not allowed:
+        raise HTTPException(status_code=403, detail="未获授权访问生产概览成品日报")
+    scope = current_page_data_scope.get()
+    if not scope or scope.get("scope_type") not in {"all", "production_extraction"}:
+        raise HTTPException(status_code=403, detail="未获授权访问提炼工段")
+    require_overview_section(product)
 
 
 def _serialize(item: ExtractionDailyReport) -> dict[str, Any]:
@@ -62,7 +74,7 @@ async def list_extraction_daily_reports(
     product: str = Query("FA", description="产品代码（如 FA/MC/DR）"),
     current_user: CurrentUser = None,
 ) -> Any:
-    await _require_extract_permission(db, current_user)
+    await _require_extract_permission(db, current_user, "query", product)
     stmt = select(ExtractionDailyReport).where(
         ExtractionDailyReport.is_deleted.is_(False),
         ExtractionDailyReport.product_code == product,
@@ -76,16 +88,14 @@ async def list_extraction_daily_reports(
     return success_response(data=[_serialize(item) for item in items])
 
 
-@router.post(
-    "/extraction-daily-reports", summary="录入提炼成品日报（同日覆盖更新）"
-)
+@router.post("/extraction-daily-reports", summary="录入提炼成品日报（同日覆盖更新）")
 async def upsert_extraction_daily_report(
     body: DailyReportBody,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
     product: str = Query("FA", description="产品代码（如 FA/MC/DR）"),
 ) -> Any:
-    await _require_extract_permission(db, current_user)
+    await _require_extract_permission(db, current_user, "operate", product)
     result = await db.execute(
         select(ExtractionDailyReport).where(
             ExtractionDailyReport.report_date == body.report_date,

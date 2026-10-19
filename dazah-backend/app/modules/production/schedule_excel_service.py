@@ -12,7 +12,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from io import BytesIO
 from typing import Any
 
-import openpyxl  # type: ignore[import-untyped]
+import openpyxl
 import xlrd  # type: ignore[import-untyped]
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -81,7 +81,7 @@ def _parse_xlsx_bytes(data: bytes) -> dict[str, Any]:
         for rng in worksheet.merged_cells.ranges
     ]
 
-    from openpyxl.utils import get_column_letter  # type: ignore[import-untyped]
+    from openpyxl.utils import get_column_letter
 
     col_widths: list[int] = []
     for index in range(1, worksheet.max_column + 1):

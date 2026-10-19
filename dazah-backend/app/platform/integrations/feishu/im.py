@@ -224,6 +224,7 @@ async def send_feishu_message(
     msg_type: str,
     content: str,
     receive_id_type: str = "open_id",
+    uuid: str | None = None,
 ) -> FeishuMessageSendResult:
     """Send one Feishu IM message with an explicit tenant access token."""
     async with httpx.AsyncClient(timeout=15.0) as client:
@@ -238,6 +239,7 @@ async def send_feishu_message(
                 "receive_id": receive_id,
                 "msg_type": msg_type,
                 "content": content,
+                **({"uuid": uuid} if uuid else {}),
             },
         )
         resp.raise_for_status()

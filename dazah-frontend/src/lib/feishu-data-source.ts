@@ -1,4 +1,5 @@
 import { moduleMenus, type SubMenuItem } from '@/lib/menu-config'
+import { ENERGY_DATA_PAGES } from '@/lib/energy-data-pages'
 import type { components } from '@/types/generated/schema'
 
 export type FeishuModuleCode = 'production' | 'energy' | 'warehouse'
@@ -122,6 +123,9 @@ function mappedMenuTargets(moduleCode: FeishuModuleCode): FeishuMappedMenuTarget
 }
 
 function pageOptions(moduleCode: FeishuModuleCode): FeishuPageOption[] {
+  if (moduleCode === 'energy') {
+    return ENERGY_DATA_PAGES.map(page => ({ label: `历史来源 / ${page.label}`, value: page.pageKey }))
+  }
   return mappedMenuTargets(moduleCode).map(({ label, value }) => ({ label, value }))
 }
 

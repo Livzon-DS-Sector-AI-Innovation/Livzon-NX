@@ -8,6 +8,21 @@ from app.modules.procurement.service import (
 )
 
 
+def test_supplier_import_keeps_the_active_data_sheet() -> None:
+    workbook = Workbook()
+    workbook.worksheets[0].append(["说明页，不是供应商清单"])
+    selected = workbook.create_sheet("导入清单")
+    selected.append(["供应商代码", "供应商名称"])
+    selected.append(["S-001", "测试供应商"])
+    workbook.active = 1
+    output = BytesIO()
+    workbook.save(output)
+    _, rows, name = _parse_supplier_table_file(output.getvalue(), "清单.xlsx")
+    assert name == "导入清单"
+    assert len(rows) == 1
+    assert "测试供应商" in rows[0][1].values()
+
+
 def test_parse_supplier_xlsx_extracts_columns_and_common_fields() -> None:
     workbook = Workbook()
     worksheet = workbook.active

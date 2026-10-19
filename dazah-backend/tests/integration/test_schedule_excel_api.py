@@ -307,14 +307,11 @@ async def test_upload_history_fix_requires_permission(
     isolated_uploads: None,
     monkeypatch: Any,
 ) -> None:
-    """allow_history_fix 需 production:schedule-archive 权限，缺失 403。"""
-    from app.platform.identity import rbac as identity_rbac
-
-    async def _no_archive_perm(_db: Any, _user_id: Any) -> set[str]:
-        return {"production:read"}
+    """allow_history_fix 需排产页面历史修正授权，缺失 403。"""
 
     monkeypatch.setattr(
-        identity_rbac, "resolve_user_permissions", _no_archive_perm
+        schedule_api.PagePermissionService, "effective_grants",
+        AsyncMock(return_value=[]),
     )
     response = await auth_client.post(
         API_PREFIX,
@@ -333,13 +330,12 @@ async def test_upload_history_fix_with_permission_writes_audit(
     monkeypatch: Any,
 ) -> None:
     """有权限且报告 corrected：写审计日志，响应携带合并报告。"""
-    from app.platform.identity import rbac as identity_rbac
-
-    async def _with_archive_perm(_db: Any, _user_id: Any) -> set[str]:
-        return {"production:schedule-archive"}
-
     monkeypatch.setattr(
-        identity_rbac, "resolve_user_permissions", _with_archive_perm
+        schedule_api.PagePermissionService, "effective_grants",
+        AsyncMock(return_value=[SimpleNamespace(
+            page_key="production:plan:scheduling", permissions=["operate"],
+            sensitive_actions=["schedule-archive"],
+        )]),
     )
     audit_mock = AsyncMock()
     monkeypatch.setattr(schedule_api, "record_audit_log", audit_mock)

@@ -35,6 +35,13 @@ function pageGrant(permissions: Array<'access' | 'query' | 'operate'>): NonNulla
 
 describe('application shell permission boundary', () => {
   beforeEach(() => { session.pathname = '/purchasing/supplier' })
+  it('retains a compact mobile entry to the energy sidebar', () => {
+    session.pathname = '/energy/reports'
+    const html = renderToStaticMarkup(<AppShell user={makeUser({ role: 'admin' })}>能源报表</AppShell>)
+    expect(html).toContain('能源菜单')
+    expect(html).toContain('min-[701px]:hidden')
+    expect(html).toContain('能源报表')
+  })
 
   it.each(moduleMenus)('allows administrators into $label without individual grants', (module) => {
     session.pathname = module.path

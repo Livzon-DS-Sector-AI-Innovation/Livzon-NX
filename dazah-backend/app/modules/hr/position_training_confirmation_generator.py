@@ -8,12 +8,16 @@
 """
 
 import logging
+from copy import copy
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-import openpyxl  # type: ignore[import-untyped]
+import openpyxl
+from openpyxl.styles import Alignment, Border, Font
+from openpyxl.worksheet.worksheet import Worksheet
 
+from app.core.exceptions import AppException
 from app.modules.hr.date_format import fmt_date_str
 
 logger = logging.getLogger(__name__)
@@ -63,6 +67,8 @@ def generate_position_training_confirmation(
     template_path = _find_template()
     wb = openpyxl.load_workbook(str(template_path))
     ws = wb.active
+    if not isinstance(ws, Worksheet):
+        raise AppException(500, "导出模板缺少数据工作表")
 
     # ─ 基本信息（R5-R6）──
     # R5: 基本信息 | 姓名 | [值] | 部门 | [值] | 岗位 |
@@ -108,7 +114,7 @@ def generate_position_training_confirmation(
                 dst_cell = ws.cell(row=row, column=col)
                 if src_cell.has_style:
                     dst_cell.font = (
-                        openpyxl.styles.Font(
+                        Font(
                             **{
                                 "name": src_cell.font.name,
                                 "size": src_cell.font.size,
@@ -116,10 +122,10 @@ def generate_position_training_confirmation(
                             }
                         )
                         if src_cell.font.name
-                        else src_cell.font
+                        else cast(Font, copy(src_cell.font))
                     )
-                    dst_cell.alignment = src_cell.alignment
-                    dst_cell.border = src_cell.border
+                    dst_cell.alignment = cast(Alignment, copy(src_cell.alignment))
+                    dst_cell.border = cast(Border, copy(src_cell.border))
 
         # 序号（A列）
         ws.cell(row=row, column=1, value=idx + 1)

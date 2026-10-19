@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urlsplit
 from uuid import UUID
 
 import httpx
@@ -87,9 +87,22 @@ feishu_router = APIRouter(prefix="/feishu", tags=["Livzon 助手飞书"])
 # ── Auth (SSO) ──────────────────────────────────────────────────────
 
 
-def _login_error_redirect(settings: Settings, error: str) -> RedirectResponse:
+def _login_error_redirect(
+    settings: Settings, error: str, next_path: str | None = None
+) -> RedirectResponse:
+    params = {"error": error}
+    if next_path is not None:
+        from app.platform.identity.service import sanitize_oauth_next_path
+
+        retry_target = sanitize_oauth_next_path(next_path)
+        parsed = urlsplit(retry_target)
+        if parsed.path == "/login/complete":
+            retry_target = sanitize_oauth_next_path(
+                parse_qs(parsed.query).get("next", [None])[0]
+            )
+        params["next"] = retry_target
     return RedirectResponse(
-        url=f"{settings.FRONTEND_URL}/login?{urlencode({'error': error})}",
+        url=f"{settings.FRONTEND_URL}/login?{urlencode(params)}",
         status_code=302,
     )
 
@@ -117,9 +130,9 @@ async def login(
 ) -> RedirectResponse:
     """Redirect the browser to Feishu's OAuth authorization page."""
     if not settings.FEISHU_APP_ID or not settings.FEISHU_APP_SECRET:
-        return _login_error_redirect(settings, "feishu_not_configured")
+        return _login_error_redirect(settings, "feishu_not_configured", next)
     if not settings.FEISHU_REDIRECT_URI:
-        return _login_error_redirect(settings, "redirect_uri_missing")
+        return _login_error_redirect(settings, "redirect_uri_missing", next)
 
     from app.platform.identity.service import generate_state_token
     from app.platform.integrations.feishu.oauth import FeishuOAuthClient
@@ -221,20 +234,22 @@ async def auth_callback(
         validate_state_token,
     )
 
+    payload = validate_state_token(state, feishu_oauth_state)
+    target = payload.get("next") if isinstance(payload, dict) else None
+    next_path = target if isinstance(target, str) else None
     response: RedirectResponse
     if error:
-        response = _login_error_redirect(settings, "access_denied")
+        response = _login_error_redirect(settings, "access_denied", next_path)
         response.delete_cookie(OAUTH_STATE_COOKIE, path="/api/v1/identity/auth")
         return response
 
-    payload = validate_state_token(state, feishu_oauth_state)
     if not payload:
         response = _login_error_redirect(settings, "invalid_state")
         response.delete_cookie(OAUTH_STATE_COOKIE, path="/api/v1/identity/auth")
         return response
 
     if not code:
-        response = _login_error_redirect(settings, "missing_code")
+        response = _login_error_redirect(settings, "missing_code", next_path)
         response.delete_cookie(OAUTH_STATE_COOKIE, path="/api/v1/identity/auth")
         return response
 
@@ -242,13 +257,12 @@ async def auth_callback(
         user, token = await handle_oauth_callback(db, code)
     except PermissionError:
         logger.warning("OAuth callback rejected disabled user")
-        response = _login_error_redirect(settings, "account_disabled")
+        response = _login_error_redirect(settings, "account_disabled", next_path)
     except Exception:
         logger.exception("OAuth callback failed")
-        response = _login_error_redirect(settings, "callback_failed")
+        response = _login_error_redirect(settings, "callback_failed", next_path)
     else:
         request.state.audit_user_id = user.id
-        next_path = payload.get("next") if isinstance(payload, dict) else None
         response = RedirectResponse(
             url=f"{settings.FRONTEND_URL}{next_path or '/production'}",
             status_code=302,

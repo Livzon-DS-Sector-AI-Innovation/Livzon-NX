@@ -408,14 +408,15 @@ class SpecialOperationReportService:
         """导出台账为 Excel 文件"""
         import io
 
-        import openpyxl  # type: ignore[import-untyped]
-        from openpyxl.styles import (  # type: ignore[import-untyped]
+        import openpyxl
+        from openpyxl.styles import (
             Alignment,
             Border,
             Font,
             PatternFill,
             Side,
         )
+        from openpyxl.utils import get_column_letter
 
         items, _ = await self.get_ledger(
             skip=0,
@@ -454,7 +455,7 @@ class SpecialOperationReportService:
         }
 
         wb = openpyxl.Workbook()
-        ws = wb.active
+        ws = wb.worksheets[0]
         ws.title = "特殊作业台账"
 
         # 标题样式
@@ -505,7 +506,7 @@ class SpecialOperationReportService:
 
         # 数据行
         for row_idx, item in enumerate(items, 2):
-            values = [
+            values: list[str | int | None] = [
                 row_idx - 1,
                 item.report_no or "",
                 op_type_labels.get(item.operation_type, item.operation_type or ""),
@@ -540,7 +541,7 @@ class SpecialOperationReportService:
         col_widths = [6, 14, 10, 8, 14, 24, 12, 16, 16, 8, 8, 16, 8, 10, 28, 20]
         for col_idx, width in enumerate(col_widths, 1):
             ws.column_dimensions[
-                openpyxl.utils.get_column_letter(col_idx)
+                get_column_letter(col_idx)
             ].width = width
 
         # 冻结首行

@@ -107,10 +107,18 @@ async def list_validation_reviews(
     actor = current_page_actor.get()
     if actor is None:
         raise ForbiddenException("审核记录查询缺少可信用户")
-    permissions = await resolve_user_permissions(db, actor.id)
-    all_visible = bool(
-        {"*", "quality:write", "quality:validation_qa:write"} & set(permissions)
-    )
+    from app.platform.identity.data_scope import current_page_key
+    from app.platform.identity.public_api import has_current_page_permission
+
+    if current_page_key.get() is not None:
+        if not await has_current_page_permission(db, actor, "quality", "query"):
+            raise ForbiddenException("未获得当前质量页面查询权限")
+        all_visible = (current_page_data_scope.get() or {}).get("scope_type") == "all"
+    else:
+        permissions = await resolve_user_permissions(db, actor.id)
+        all_visible = bool(
+            {"*", "quality:write", "quality:validation_qa:write"} & set(permissions)
+        )
     if (current_page_data_scope.get() or {}).get("scope_type") == "self":
         all_visible = False
     rows, total = await validation_review.list_review_records(

@@ -46,7 +46,9 @@ class MaintenanceSession(AsyncSession):
 
     async def __aenter__(self) -> "MaintenanceSession":
         self._maintenance_context: AbstractAsyncContextManager[None] = (
-            admitted_activity(await admit_activity("database-task"))
+            admitted_activity(
+                await admit_activity("database-task"), preserve_on_error=True
+            )
         )
         await self._maintenance_context.__aenter__()
         try:
@@ -70,7 +72,11 @@ class MaintenanceSession(AsyncSession):
             await self._maintenance_context.__aexit__(type(exc), exc, exc.__traceback__)
             raise
         else:
-            await self._maintenance_context.__aexit__(exc_type, exc_value, traceback)
+            # This entry tracks the DB resource, not the business outcome. A
+            # successful close has rolled back outstanding transactions even
+            # when the body was cancelled. The parent's cancelled business
+            # activity remains registered separately until reconciled.
+            await self._maintenance_context.__aexit__(None, None, None)
 
 
 async_session_factory = async_sessionmaker(

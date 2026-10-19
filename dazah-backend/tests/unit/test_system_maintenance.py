@@ -68,6 +68,124 @@ async def test_database_session_is_counted_until_close(isolated_redis, monkeypat
             pytest.fail("new background DB work admitted")
 
 
+async def test_cancelled_database_work_finishes_only_after_session_close(
+    isolated_redis, monkeypatch
+):
+    entered = asyncio.Event()
+    closing = asyncio.Event()
+    allow_close = asyncio.Event()
+    closed = asyncio.Event()
+
+    async def close_session(_session):
+        closing.set()
+        await allow_close.wait()
+        closed.set()
+
+    monkeypatch.setattr(database.AsyncSession, "close", close_session)
+
+    async def work():
+        async with maintenance.business_activity("job"):
+            async with database.async_session_factory():
+                entered.set()
+                await asyncio.Event().wait()
+
+    task = asyncio.create_task(work())
+    await entered.wait()
+    task.cancel()
+    await closing.wait()
+    assert await maintenance.active_work() == {"job": 1, "database-task": 1}
+    assert not closed.is_set()
+    allow_close.set()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert closed.is_set()
+    # The DB resource is closed; the cancelled business result is still unknown.
+    assert await maintenance.active_work() == {"job": 1}
+
+
+async def test_failed_database_close_keeps_drain_evidence(
+    isolated_redis, monkeypatch
+):
+    monkeypatch.setattr(
+        database.AsyncSession,
+        "close",
+        AsyncMock(side_effect=RuntimeError("fixture close failed")),
+    )
+    with pytest.raises(RuntimeError, match="fixture close failed"):
+        async with database.async_session_factory():
+            pass
+    assert await maintenance.active_work() == {"database-task": 1}
+
+
+async def test_second_cancellation_during_database_close_keeps_drain_evidence(
+    isolated_redis, monkeypatch
+):
+    entered = asyncio.Event()
+    closing = asyncio.Event()
+    allow_close = asyncio.Event()
+    closed = asyncio.Event()
+
+    async def close_session(_session):
+        closing.set()
+        await allow_close.wait()
+        closed.set()
+
+    monkeypatch.setattr(database.AsyncSession, "close", close_session)
+
+    async def work():
+        async with database.async_session_factory():
+            entered.set()
+            await asyncio.Event().wait()
+
+    task = asyncio.create_task(work())
+    await entered.wait()
+    task.cancel()
+    await closing.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert not closed.is_set()
+    assert await maintenance.active_work() == {"database-task": 1}
+    # SQLAlchemy shields close; finishing later is not a confirmed caller exit.
+    allow_close.set()
+    await closed.wait()
+    assert await maintenance.active_work() == {"database-task": 1}
+
+
+async def test_attachment_warmup_budget_cancellation_leaves_no_database_entries(
+    isolated_redis, monkeypatch
+):
+    from app.modules.quality.service import feishu_attachment_warmup as warmup
+
+    rows = [("fixture-record", {"file_token": "fixture-file"}, "fixture-page")]
+    monkeypatch.setattr(
+        database.MaintenanceSession,
+        "execute",
+        AsyncMock(return_value=SimpleNamespace(all=lambda: rows)),
+    )
+    monkeypatch.setattr(warmup, "async_session_factory", database.async_session_factory)
+    monkeypatch.setattr(
+        warmup.get_settings(), "QUALITY_ATTACHMENT_WARMUP_ENABLED", True
+    )
+    monkeypatch.setattr(warmup, "_TOTAL_BUDGET_SECONDS", 0.05)
+    monkeypatch.setattr(warmup, "_SINGLE_WARMUP_TIMEOUT_SECONDS", 10)
+    fetching = asyncio.Event()
+
+    async def fetch_thumbnail(*_args):
+        fetching.set()
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(warmup, "get_attachment_thumbnail", fetch_thumbnail)
+    async with maintenance.business_activity("scheduler"):
+        result = await warmup.warmup_attachment_cache()
+    assert fetching.is_set()
+    assert result["budget_hit"] is True
+    assert result["warmed"] == 0
+    assert await maintenance.active_work() == {}
+    await maintenance.set_release_phase("draining")
+    assert await maintenance.drain_report() == '{"active": 0}'
+
+
 async def test_accepted_database_work_can_finish_nested_work_during_drain(
     isolated_redis,
 ):

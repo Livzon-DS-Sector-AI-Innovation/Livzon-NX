@@ -1,8 +1,10 @@
 'use client'
+
+import overlayStyles from '@/components/production/production-overlays.module.css'
 // DR 多拉菌素 — 精制岗位台账通用组件（原生 <table> + 分级合并单元格，与层析台账同风格）
 
 import React from 'react'
-import { Popover } from 'antd'
+import { Button, Popover } from 'antd'
 import { FileTextOutlined } from '@ant-design/icons'
 
 type Fmt = 'text' | 'num' | 'num3' | 'pct'
@@ -133,6 +135,8 @@ export const DRRefinementTable: React.FC<{ data: any[]; columns?: RefineColDef[]
                     <td key={c.key} className="border border-gray-300 px-1 py-0.5 text-center">
                       {has ? (
                         <Popover
+                          classNames={{ root: overlayStyles.popover }}
+                          align={{ overflow: { adjustX: true, adjustY: true, shiftX: true, shiftY: true }, htmlRegion: 'visible' }}
                           trigger="click"
                           content={
                             <div className="max-w-[360px] whitespace-pre-wrap break-all text-[12px] leading-relaxed">
@@ -140,7 +144,7 @@ export const DRRefinementTable: React.FC<{ data: any[]; columns?: RefineColDef[]
                             </div>
                           }
                         >
-                          <FileTextOutlined className="text-blue-500 cursor-pointer text-[13px]" />
+                          <Button type="text" size="small" aria-label="查看备注" icon={<FileTextOutlined />} />
                         </Popover>
                       ) : null}
                     </td>

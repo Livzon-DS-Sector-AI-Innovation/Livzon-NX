@@ -9,7 +9,7 @@ import re
 from datetime import date, datetime
 from typing import Any
 
-import openpyxl  # type: ignore[import-untyped]
+import openpyxl
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 

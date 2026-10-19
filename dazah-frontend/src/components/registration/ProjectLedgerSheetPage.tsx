@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { usePagePermissions } from '@/hooks/usePagePermissions'
 import { useMemo, useState, useTransition } from 'react'
 import {
   App,
@@ -247,6 +248,7 @@ export function toEntryInput(
 
 export default function ProjectLedgerSheetPage({ detail }: ProjectLedgerSheetPageProps) {
   const router = useRouter()
+  const { canOperate, canDelete } = usePagePermissions()
   const { message } = App.useApp()
   const [form] = Form.useForm<ProjectLedgerFormValues>()
   const [keyword, setKeyword] = useState('')
@@ -385,6 +387,7 @@ export default function ProjectLedgerSheetPage({ detail }: ProjectLedgerSheetPag
   )
 
   function openCreateModal() {
+    if (!canOperate) return
     setFormMode('create-main')
     setEditingRecord(null)
     form.resetFields()
@@ -398,6 +401,7 @@ export default function ProjectLedgerSheetPage({ detail }: ProjectLedgerSheetPag
   }
 
   function openEditModal() {
+    if (!canOperate) return
     if (!selectedRecord) {
       message.warning('请先选择一条申报台账记录')
       return
@@ -414,6 +418,7 @@ export default function ProjectLedgerSheetPage({ detail }: ProjectLedgerSheetPag
   }
 
   function openCreateSubRecordModal() {
+    if (!canOperate) return
     if (!selectedRecord) {
       message.warning('请先选择一条申报台账主记录')
       return
@@ -452,6 +457,7 @@ export default function ProjectLedgerSheetPage({ detail }: ProjectLedgerSheetPag
   }
 
   function handleDelete() {
+    if (!canDelete) return
     if (!selectedRecord) {
       message.warning('请先选择一条申报台账记录')
       return
@@ -470,6 +476,7 @@ export default function ProjectLedgerSheetPage({ detail }: ProjectLedgerSheetPag
   }
 
   async function handleSubmit(values: ProjectLedgerFormValues) {
+    if (!canOperate) return
     const payload = toEntryInput(detail.sheet_key, detail.columns, values)
 
     startTransition(async () => {
@@ -512,13 +519,13 @@ export default function ProjectLedgerSheetPage({ detail }: ProjectLedgerSheetPag
         size="small"
         extra={
           <Space>
-            <Button icon={<PlusOutlined />} type="primary" onClick={openCreateModal}>
+            <Button disabled={!canOperate} icon={<PlusOutlined />} type="primary" onClick={openCreateModal}>
               新增主记录
             </Button>
-            <Button icon={<PlusOutlined />} disabled={!selectedRecord} onClick={openCreateSubRecordModal}>
+            <Button icon={<PlusOutlined />} disabled={!canOperate || !selectedRecord} onClick={openCreateSubRecordModal}>
               新增子记录
             </Button>
-            <Button icon={<EditOutlined />} disabled={!selectedRecord} onClick={openEditModal}>
+            <Button icon={<EditOutlined />} disabled={!canOperate || !selectedRecord} onClick={openEditModal}>
               编辑主记录
             </Button>
             <Button
@@ -547,9 +554,9 @@ export default function ProjectLedgerSheetPage({ detail }: ProjectLedgerSheetPag
               okButtonProps={{ danger: true }}
               cancelText="取消"
               onConfirm={handleDelete}
-              disabled={!selectedRecord}
+              disabled={!canDelete || !selectedRecord}
             >
-              <Button danger icon={<DeleteOutlined />} disabled={!selectedRecord}>
+              <Button danger icon={<DeleteOutlined />} disabled={!canDelete || !selectedRecord}>
                 删除选中
               </Button>
             </Popconfirm>
@@ -618,7 +625,7 @@ export default function ProjectLedgerSheetPage({ detail }: ProjectLedgerSheetPag
 
       <Drawer
         destroyOnHidden
-        open={formModalOpen}
+        open={formModalOpen && canOperate}
         title={
           formMode === 'edit-main'
             ? '编辑申报台账主记录'

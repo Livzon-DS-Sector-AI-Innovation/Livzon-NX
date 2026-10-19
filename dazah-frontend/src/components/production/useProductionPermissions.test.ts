@@ -14,6 +14,17 @@ const baseUser = {
 }
 
 describe('production page permissions', () => {
+  it('requires the explicit scheduling history action and operate permission', () => {
+    const grant = { page_key: PRODUCTION_PAGE_KEYS.scheduling,
+      permissions: ['access', 'query', 'operate'] as const, sensitive_actions: ['bulk_import'] }
+    const allowed = (value: typeof grant | Omit<typeof grant, 'permissions'> & { permissions: readonly ['access', 'query'] }) =>
+      hasProductionPagePermission({ ...baseUser, page_permissions: [value] }, PRODUCTION_PAGE_KEYS.scheduling, 'operate', 'schedule-archive')
+    expect(allowed(grant)).toBe(false)
+    expect(allowed({ ...grant, sensitive_actions: ['schedule-archive'] })).toBe(true)
+    expect(allowed({ ...grant, permissions: ['access', 'query'], sensitive_actions: ['schedule-archive'] })).toBe(false)
+    expect(allowed({ ...grant, sensitive_actions: [] })).toBe(false)
+    expect(hasProductionPagePermission({ ...baseUser, role: 'admin' }, PRODUCTION_PAGE_KEYS.scheduling, 'operate', 'schedule-archive')).toBe(true)
+  })
   it('uses scheduling visibility independently of overview permissions', () => {
     const grant = { page_key: PRODUCTION_PAGE_KEYS.scheduling,
       permissions: ['access', 'query'] as const, visible_sections: ['LN'] }

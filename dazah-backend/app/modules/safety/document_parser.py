@@ -31,7 +31,7 @@ def extract_to_markdown(file_path: str, max_chars: int = 50000) -> str:
 
 def _extract_xlsx_to_markdown(path: str) -> str:
     """Extract Excel content as Markdown tables (one table per sheet)."""
-    import openpyxl  # type: ignore[import-untyped]
+    import openpyxl
 
     wb = openpyxl.load_workbook(path, data_only=True)
     parts: list[str] = []
@@ -62,9 +62,9 @@ def _extract_xlsx_to_markdown(path: str) -> str:
             "| " + " | ".join(header) + " |",
             "| " + " | ".join(["---"] * max_cols) + " |",
         ]
-        for row in rows[1:]:
-            row += [""] * (max_cols - len(row))
-            md_rows.append("| " + " | ".join(row) + " |")
+        for data_row in rows[1:]:
+            padded = data_row + [""] * (max_cols - len(data_row))
+            md_rows.append("| " + " | ".join(padded) + " |")
         parts.append("\n".join(md_rows) + "\n")
     wb.close()
     return "\n\n".join(parts)

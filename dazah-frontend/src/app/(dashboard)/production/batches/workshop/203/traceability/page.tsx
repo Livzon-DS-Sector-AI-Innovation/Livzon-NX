@@ -1,4 +1,6 @@
 'use client'
+
+import overlayStyles from '@/components/production/production-overlays.module.css'
 // FA 苯丙氨酸 — 全链路追溯页面（血缘流程图 + AI 分析 + 对话）
 
 import { useState, useCallback, Suspense } from 'react'
@@ -203,6 +205,8 @@ function FATraceabilityContent() {
                   AI 分析
                 </Button>
                 <Popover
+                  classNames={{ root: overlayStyles.popover }}
+                  align={{ overflow: { adjustX: true, adjustY: true, shiftX: true, shiftY: true }, htmlRegion: 'visible' }}
                   trigger="click"
                   onOpenChange={(open) => { if (open) loadHistory() }}
                   placement="bottomLeft"
@@ -213,7 +217,7 @@ function FATraceabilityContent() {
                     <div style={{ width: 420, maxHeight: 320, overflow: 'auto', fontSize: 12 }}>
                       {historyRecords.map((r) => (
                         <div key={r.id}
-                          style={{ display: 'flex', alignItems: 'center', padding: '4px 0', cursor: 'pointer', borderBottom: '1px solid #fafafa' }}
+                          style={{ display: 'flex', alignItems: 'center', padding: '4px 0', cursor: 'pointer', borderBottom: '1px solid var(--color-border)' }}
                           onClick={() => {
                             const rr = { ...r, analysis_text: null, session_id: r.session_id }
                             setAiResult(rr); aiResultRef.current = rr; setChatMessages([])

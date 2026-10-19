@@ -160,6 +160,41 @@ class _PageRepo:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "role_actions,user_actions,expected",
+    [
+        (["bulk_import", "schedule-archive"], None, True),
+        (["bulk_import", "schedule-archive"], ["bulk_import"], False),
+        (["bulk_import"], ["bulk_import", "schedule-archive"], True),
+        (["bulk_import", "schedule-archive"], [], False),
+    ],
+)
+async def test_schedule_history_fix_follows_role_and_exact_user_override(
+    monkeypatch, role_actions, user_actions, expected
+):
+    role = SimpleNamespace(id=uuid4(), code="scheduler", name="排产员")
+    user = SimpleNamespace(id=uuid4(), role="user")
+    common = dict(
+        page_key="production:plan:scheduling", permissions=["operate"],
+        scope_type="all", department_ids=[], visible_sections=["LN"],
+    )
+    repo = _PageRepo(
+        role_grants=[SimpleNamespace(
+            role_id=role.id, sensitive_actions=role_actions, **common,
+        )],
+        user_grants=[] if user_actions is None else [SimpleNamespace(
+            user_id=user.id, sensitive_actions=user_actions, **common,
+        )],
+    )
+    monkeypatch.setattr(rbac, "resolve_user_roles", AsyncMock(return_value=[role]))
+    grants = await PagePermissionService(repo=repo).effective_grants(None, user=user)
+    scheduling = next(g for g in grants if g.page_key == common["page_key"])
+    assert ("schedule-archive" in scheduling.sensitive_actions) is expected
+    assert scheduling.visible_sections == ["LN"]
+    assert scheduling.source == ("role" if user_actions is None else "user")
+
+
+@pytest.mark.asyncio
 async def test_user_permission_output_uses_live_integration_checks() -> None:
     service = PagePermissionService(repo=_PageRepo())
     service.effective_grants = AsyncMock(return_value=[])  # type: ignore[method-assign]

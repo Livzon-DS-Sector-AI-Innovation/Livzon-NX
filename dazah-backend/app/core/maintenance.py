@@ -67,7 +67,10 @@ async def finish_activity(identifier: str) -> None:
 
 
 @asynccontextmanager
-async def admitted_activity(identifier: str) -> AsyncIterator[None]:
+async def admitted_activity(
+    identifier: str, *, preserve_on_error: bool = False
+) -> AsyncIterator[None]:
+    """Keep uncertain resource cleanup registered until explicitly confirmed."""
     context = _activity.set(identifier)
     try:
         yield
@@ -75,7 +78,8 @@ async def admitted_activity(identifier: str) -> AsyncIterator[None]:
         # Keep evidence of work whose outcome could not be confirmed.
         raise
     except Exception:
-        await finish_activity(identifier)
+        if not preserve_on_error:
+            await finish_activity(identifier)
         raise
     else:
         await finish_activity(identifier)

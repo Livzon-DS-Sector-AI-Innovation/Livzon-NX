@@ -47,6 +47,8 @@ from app.modules.quality.service.validation_review import (
     run_review,
 )
 from app.modules.quality.service.validation_review_export import build_review_docx
+from app.platform.identity.data_scope import current_page_data_scope, current_page_key
+from app.platform.identity.public_api import has_current_page_permission
 from app.platform.identity.rbac import resolve_user_permissions
 from app.shared.schemas import ApiResponseEnvelope
 
@@ -69,6 +71,14 @@ async def _assert_review_view(
 ) -> None:
     """读操作（详情/导出）准入：记录归属本人，或具有质量 QA 权限。"""
     assert current_user is not None
+    if current_page_key.get() is not None:
+        if not await has_current_page_permission(db, current_user, "quality", "query"):
+            raise AppException(status_code=403, message="未获得当前质量页面查询权限")
+        if (current_page_data_scope.get() or {}).get("scope_type") == "all":
+            return
+        if record.created_by and str(record.created_by) == str(current_user.id):
+            return
+        raise AppException(status_code=403, message="审核记录不在当前页面授权范围内")
     if record.created_by and str(record.created_by) == str(current_user.id):
         return
     permissions = await resolve_user_permissions(db, current_user.id)
@@ -97,6 +107,11 @@ async def _check_run_rate_limit(user_id: uuid.UUID) -> None:
 
 async def _can_view_all(db: AsyncSession, current_user: CurrentUser) -> bool:
     assert current_user is not None
+    if current_page_key.get() is not None:
+        return (
+            await has_current_page_permission(db, current_user, "quality", "query")
+            and (current_page_data_scope.get() or {}).get("scope_type") == "all"
+        )
     permissions = await resolve_user_permissions(db, current_user.id)
     return bool(
         "*" in permissions

@@ -11,7 +11,6 @@ import { App,
   Tag,
   DatePicker,
   Input,
-  Popconfirm,
   Modal,
   Row,
   Col,
@@ -33,14 +32,19 @@ import {
 import { AREA_OPTIONS, AUDIT_STATUS_OPTIONS } from '@/types/pressure'
 import type { PressureRecord, AuditStats } from '@/types/pressure'
 import dayjs from 'dayjs'
+import ProductionConfirmButton from '@/components/production/ProductionConfirmButton'
 import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
 const { RangePicker } = DatePicker
 
 export default function AuditManagementPage() {
+  const { authorizationKey, canApprove, canReject } = useProductionPermissions(PRODUCTION_PAGE_KEYS.pressure)
+  return <AuditManagementContent key={authorizationKey} canApprove={canApprove} canReject={canReject} />
+}
+
+function AuditManagementContent({ canApprove, canReject }: { canApprove: boolean; canReject: boolean }) {
   const { message } = App.useApp()
-  const { canApprove } = useProductionPermissions(PRODUCTION_PAGE_KEYS.pressure)
   const [loading, setLoading] = useState(false)
   const [records, setRecords] = useState<PressureRecord[]>([])
   const [total, setTotal] = useState(0)
@@ -87,16 +91,19 @@ export default function AuditManagementPage() {
   }, [loadData])
 
   const handleApprove = async (id: string) => {
-    if (!canApprove) return
+    if (!canApprove) return false
     const res = await auditPressureRecord(id, { status: 'approved' })
     if (res.code === 200) {
       message.success('审核通过')
       loadData()
+    } else {
+      message.error(res.message || '审核失败')
+      return false
     }
   }
 
   const handleReject = async () => {
-    if (!canApprove) return
+    if (!canReject) return
     if (!rejectTarget || !rejectReason.trim()) {
       message.warning('请填写驳回原因')
       return
@@ -115,7 +122,7 @@ export default function AuditManagementPage() {
   }
 
   const handleBatchApprove = async () => {
-    if (!canApprove) return
+    if (!canApprove) return false
     const res = await batchAuditPressureRecords({
       ids: selectedRowKeys as string[],
       status: 'approved'
@@ -124,6 +131,9 @@ export default function AuditManagementPage() {
       message.success(`批量通过 ${res.data?.success_count || 0} 条`)
       setSelectedRowKeys([])
       loadData()
+    } else {
+      message.error(res.message || '批量审核失败')
+      return false
     }
   }
 
@@ -146,10 +156,13 @@ export default function AuditManagementPage() {
       key: 'action',
       width: 120,
       render: (_: any, record: PressureRecord) =>
-        record.status === 'pending' && canApprove ? (
+        record.status === 'pending' && (canApprove || canReject) ? (
           <Space>
-            <Button type="link" size="small" icon={<CheckOutlined />} style={{ color: '#52c41a' }} onClick={() => handleApprove(record.id)} />
-            <Button type="link" size="small" danger icon={<CloseOutlined />} onClick={() => { setRejectTarget(record.id); setRejectModalOpen(true) }} />
+            {canApprove && <ProductionConfirmButton title="确认通过该压差记录？"
+              description={`位点：${record.point_id}，记录时间：${record.record_time}。确认后该记录将标记为已通过。`}
+              confirmText="通过" onConfirm={() => handleApprove(record.id)}
+              type="link" size="small" icon={<CheckOutlined />} aria-label="通过记录" />}
+            {canReject && <Button type="link" size="small" danger icon={<CloseOutlined />} aria-label="驳回记录" onClick={() => { setRejectTarget(record.id); setRejectModalOpen(true) }} />}
           </Space>
         ) : null
     },
@@ -200,9 +213,11 @@ export default function AuditManagementPage() {
           />
           <Button icon={<ReloadOutlined />} onClick={loadData}>刷新</Button>
           {canApprove && selectedRowKeys.length > 0 && (
-            <Popconfirm title={`确认通过 ${selectedRowKeys.length} 条记录？`} onConfirm={handleBatchApprove}>
-              <Button type="primary" icon={<CheckOutlined />}>批量通过 ({selectedRowKeys.length})</Button>
-            </Popconfirm>
+            <ProductionConfirmButton title={`确认通过 ${selectedRowKeys.length} 条记录？`}
+              description="确认后，所选待审核压差记录将标记为已通过。"
+              confirmText="通过" onConfirm={handleBatchApprove} type="primary" icon={<CheckOutlined />}>
+              批量通过 ({selectedRowKeys.length})
+            </ProductionConfirmButton>
           )}
         </Space>
 
@@ -225,13 +240,14 @@ export default function AuditManagementPage() {
             getCheckboxProps: (record) => ({ disabled: record.status !== 'pending' })
           }}
           size="middle"
+          scroll={{ x: 1080 }}
         />
       </Card>
 
       <Modal
         title="驳回记录"
-        open={rejectModalOpen && canApprove}
-        onOk={canApprove ? handleReject : undefined}
+        open={rejectModalOpen && canReject}
+        onOk={canReject ? handleReject : undefined}
         onCancel={() => { setRejectModalOpen(false); setRejectTarget(null); setRejectReason('') }}
       >
         <Input.TextArea

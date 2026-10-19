@@ -384,7 +384,6 @@ export default function ReturnApplicationPage({
         onCancel={closeModal}
         confirmLoading={saving}
         destroyOnHidden
-        forceRender
         width={editingRecord ? 880 : 1240}
       >
         {editingRecord ? (

@@ -3,5 +3,6 @@ export default function HrLayout({
 }: {
   children: React.ReactNode
 }) {
-  return <>{children}</>
+  return <ViewportOverlays>{children}</ViewportOverlays>
 }
+import ViewportOverlays from '@/components/shared/ViewportOverlays'

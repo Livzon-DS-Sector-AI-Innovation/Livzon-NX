@@ -197,7 +197,7 @@ def _extract_attachment_text(extension: str, data: bytes) -> str:
         ]
         return "\n".join([*paragraphs, *table_rows])
     if extension == ".xlsx":
-        from openpyxl import load_workbook  # type: ignore[import-untyped]
+        from openpyxl import load_workbook
 
         workbook = load_workbook(BytesIO(data), read_only=True, data_only=True)
         rows: list[str] = []

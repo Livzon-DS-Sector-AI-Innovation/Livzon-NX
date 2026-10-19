@@ -14,7 +14,7 @@ from typing import Any
 
 from docx import Document
 from docx.oxml.ns import qn as docx_qn
-from openpyxl import load_workbook  # type: ignore[import-untyped]
+from openpyxl import load_workbook
 
 # 附件编号匹配（阿拉伯/全角/中文数字）
 ANNEX_RE = re.compile(r"附件\s*([0-9０-９一二三四五六七八九十]+)")

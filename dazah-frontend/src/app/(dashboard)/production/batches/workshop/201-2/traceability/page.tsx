@@ -1,4 +1,6 @@
 'use client'
+
+import overlayStyles from '@/components/production/production-overlays.module.css'
 // 全链路追溯页面 — 批次血链表横向流程图 + 收率递推 + 分析面板
 
 import { useEffect, useState, useCallback, useRef, Suspense } from 'react'
@@ -618,6 +620,8 @@ function TraceabilityPage() {
                   AI 分析
                 </Button>
                 <Popover
+                  classNames={{ root: overlayStyles.popover }}
+                  align={{ overflow: { adjustX: true, adjustY: true, shiftX: true, shiftY: true }, htmlRegion: 'visible' }}
                   trigger="click"
                   onOpenChange={(open) => { if (open) loadHistory() }}
                   placement="bottomLeft"
@@ -626,7 +630,7 @@ function TraceabilityPage() {
                     historyLoading ? <Spin size="small" /> :
                     historyRecords.length === 0 ? <Text type="secondary">暂无历史分析</Text> :
                     <div style={{ width: 520, maxHeight: 320, overflow: 'auto', fontSize: 12 }}>
-                      <div style={{ display: 'flex', fontWeight: 600, borderBottom: '1px solid #f0f0f0', paddingBottom: 6, marginBottom: 4, color: '#999' }}>
+                      <div style={{ display: 'flex', fontWeight: 600, borderBottom: '1px solid var(--color-border)', paddingBottom: 6, marginBottom: 4, color: 'var(--color-text-secondary)' }}>
                         <span style={{ width: 56 }}>状态</span>
                         <span style={{ width: 110 }}>日期</span>
                         <span style={{ width: 80 }}>批号名称</span>
@@ -634,7 +638,7 @@ function TraceabilityPage() {
                         <span style={{ flex: 1 }}>分析</span>
                       </div>
                       {historyRecords.map((r) => (
-                        <div key={r.id} style={{ display: 'flex', alignItems: 'center', padding: '4px 0', cursor: 'pointer', borderBottom: '1px solid #fafafa' }}
+                        <div key={r.id} style={{ display: 'flex', alignItems: 'center', padding: '4px 0', cursor: 'pointer', borderBottom: '1px solid var(--color-border)' }}
                           onClick={() => { setAiResult({...r, analysis_text: null, session_id: r.session_id}); setChatMessages([]) }}>
                           <Tag color={r.severity === 'high' ? 'red' : r.severity === 'medium' ? 'orange' : 'green'} style={{ fontSize: 10, margin: 0, width: 48 }}>
                             {r.severity === 'high' ? '严重' : r.severity === 'medium' ? '中等' : '正常'}
@@ -642,7 +646,7 @@ function TraceabilityPage() {
                           <Text style={{ width: 110 }} ellipsis>{(r.created_at || '').slice(0, 16)}</Text>
                           <Text style={{ width: 80 }} ellipsis>{r.stage_label || r.stage}</Text>
                           <Text style={{ width: 110 }} ellipsis>{r.batch_no}</Text>
-                          <Text style={{ flex: 1, color: '#666' }} ellipsis={{ tooltip: r.summary }}>{r.summary}</Text>
+                          <Text style={{ flex: 1, color: 'var(--color-text-secondary)' }} ellipsis={{ tooltip: r.summary }}>{r.summary}</Text>
                         </div>
                       ))}
                     </div>

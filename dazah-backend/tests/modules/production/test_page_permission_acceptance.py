@@ -19,6 +19,77 @@ from app.platform.identity.schemas import EffectivePageGrantOut, PageDataScopeIn
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "actions,fix_history,status_code",
+    [
+        (["bulk_import"], False, 200),
+        (["bulk_import"], True, 403),
+        (["schedule-archive"], True, 403),
+        (["bulk_import", "schedule-archive"], True, 200),
+        ([], True, 403),
+    ],
+)
+async def test_schedule_history_fix_requires_separate_page_grant(
+    monkeypatch, tmp_path, actions, fix_history, status_code
+):
+    from app.modules.production import schedule_excel_api as schedule
+    from app.platform.identity import rbac
+
+    app, _ = acceptance_app(
+        schedule.router, monkeypatch, "production:plan:scheduling", actions=actions,
+    )
+    # A legacy role permission must not override the effective page grant.
+    legacy = AsyncMock(return_value=["production:schedule-archive"])
+    monkeypatch.setattr(rbac, "resolve_user_permissions", legacy)
+    archive = SimpleNamespace(id=uuid4())
+    create = AsyncMock(return_value=(archive, {
+        "corrected": fix_history, "discarded_changes": [],
+    }))
+    parsing = Mock(return_value={
+        "sheet_name": "排产", "rows": [["计划"]], "merges": [],
+        "col_widths": [], "row_count": 1, "col_count": 1,
+    })
+    monkeypatch.setattr(schedule.schedule_excel_service, "create_archive", create)
+    monkeypatch.setattr(
+        schedule.schedule_excel_service, "parse_workbook_bytes", parsing
+    )
+    monkeypatch.setattr(schedule.schedule_excel_service, "serialize_archive", Mock(
+        return_value={"id": str(archive.id)},
+    ))
+    monkeypatch.setattr(schedule, "_original_upload_dir", lambda: tmp_path)
+    audit = AsyncMock()
+    monkeypatch.setattr(schedule, "record_audit_log", audit)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/production/schedule-excel?product=LN",
+            headers={"X-Dazah-Page-Key": "production:plan:scheduling"},
+            files={"file": (
+                "plan.xlsx", b"test",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )},
+            data={
+                "allow_history_fix": str(fix_history).lower(),
+                "history_fix_reason": "纠正笔误",
+            },
+        )
+    assert response.status_code == status_code, response.text
+    legacy.assert_not_awaited()
+    if status_code == 200:
+        assert response.json()["code"] == 200
+        assert response.json()["data"]["merge"]["corrected"] is fix_history
+        assert create.await_args.kwargs["history_fix"] is fix_history
+        if fix_history:
+            assert audit.await_args.kwargs["extra"]["reason"] == "纠正笔误"
+    else:
+        parsing.assert_not_called()
+        create.assert_not_awaited()
+        audit.assert_not_awaited()
+        assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("product", ["MC", "LN", "DR", "FA", "LV", "MV", "TY"])
 @pytest.mark.parametrize("restricted", [False, True])
 async def test_scheduling_visible_product_list(monkeypatch, product, restricted):

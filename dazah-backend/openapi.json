@@ -1036,6 +1036,57 @@
         "title": "AcidStepCreate",
         "type": "object"
       },
+      "AdjustmentWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "metric_key": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Metric Key",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "override",
+              "delta"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "usage_date": {
+            "format": "date",
+            "title": "Usage Date",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,20}|(?=[\\d.]{1,29}0*$)\\d{0,20}\\.\\d{0,8}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "metric_key",
+          "usage_date",
+          "mode",
+          "value",
+          "reason"
+        ],
+        "title": "AdjustmentWrite",
+        "type": "object"
+      },
       "AgencySummary": {
         "description": "按付款方汇总。",
         "properties": {
@@ -12678,6 +12729,20 @@
         "title": "Body_import_practical_exam_questions_api_v1_hr_training_practical_exam_import_post",
         "type": "object"
       },
+      "Body_import_preview_api_v1_energy_imports_preview_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_preview_api_v1_energy_imports_preview_post",
+        "type": "object"
+      },
       "Body_import_project_ledger_workbook_api_v1_registration_project_ledger_workbook_import_post": {
         "properties": {
           "file": {
@@ -13331,6 +13396,84 @@
           "file"
         ],
         "title": "Body_upload_workflow_attachment_api_v1_safety_ai_workflow_configs_attachments_upload_post",
+        "type": "object"
+      },
+      "BotDefinition": {
+        "additionalProperties": false,
+        "properties": {
+          "app_id": {
+            "default": "",
+            "maxLength": 128,
+            "title": "App Id",
+            "type": "string"
+          },
+          "base_url": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Base Url",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "title": "BotDefinition",
+        "type": "object"
+      },
+      "BotResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/BotDefinition"
+          },
+          "secret_configured": {
+            "title": "Secret Configured",
+            "type": "boolean"
+          },
+          "version": {
+            "default": 0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "definition",
+          "secret_configured"
+        ],
+        "title": "BotResponse",
+        "type": "object"
+      },
+      "BotWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "app_secret": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Secret"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/BotDefinition"
+          },
+          "version": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "definition"
+        ],
+        "title": "BotWrite",
         "type": "object"
       },
       "BrothReceiveCreate": {
@@ -35058,6 +35201,40 @@
         "title": "EmployeeUpdate",
         "type": "object"
       },
+      "EnergyApiResponse_BotResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/BotResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[BotResponse]",
+        "type": "object"
+      },
       "EnergyApiResponse_EnergyFeishuConfigResponse_": {
         "properties": {
           "code": {
@@ -35364,6 +35541,414 @@
         "title": "EnergyApiResponse[EnergySyncRunResponse]",
         "type": "object"
       },
+      "EnergyApiResponse_ImportResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ImportResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[ImportResponse]",
+        "type": "object"
+      },
+      "EnergyApiResponse_LedgerOptions_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/LedgerOptions"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[LedgerOptions]",
+        "type": "object"
+      },
+      "EnergyApiResponse_LockResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/LockResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[LockResponse]",
+        "type": "object"
+      },
+      "EnergyApiResponse_MeterResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/MeterResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[MeterResponse]",
+        "type": "object"
+      },
+      "EnergyApiResponse_NotificationResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/NotificationResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[NotificationResponse]",
+        "type": "object"
+      },
+      "EnergyApiResponse_PlanResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PlanResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[PlanResponse]",
+        "type": "object"
+      },
+      "EnergyApiResponse_ReportResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ReportResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[ReportResponse]",
+        "type": "object"
+      },
+      "EnergyApiResponse_RuleResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/RuleResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[RuleResponse]",
+        "type": "object"
+      },
+      "EnergyApiResponse_TaskListResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/TaskListResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[TaskListResponse]",
+        "type": "object"
+      },
+      "EnergyApiResponse_TaskResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/TaskResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[TaskResponse]",
+        "type": "object"
+      },
+      "EnergyApiResponse_TemplateDraftResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/TemplateDraftResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[TemplateDraftResponse]",
+        "type": "object"
+      },
+      "EnergyApiResponse_TrialResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/TrialResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[TrialResponse]",
+        "type": "object"
+      },
       "EnergyApiResponse_Union_EnergySheetMappingResponse__NoneType__": {
         "properties": {
           "code": {
@@ -35405,6 +35990,74 @@
         "title": "EnergyApiResponse[Union[EnergySheetMappingResponse, NoneType]]",
         "type": "object"
       },
+      "EnergyApiResponse_UsageRow_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/UsageRow"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[UsageRow]",
+        "type": "object"
+      },
+      "EnergyApiResponse_WorkbookReport_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WorkbookReport"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[WorkbookReport]",
+        "type": "object"
+      },
       "EnergyApiResponse_list_EnergyFeishuSourceRootResponse__": {
         "properties": {
           "code": {
@@ -35441,6 +36094,44 @@
           "data"
         ],
         "title": "EnergyApiResponse[list[EnergyFeishuSourceRootResponse]]",
+        "type": "object"
+      },
+      "EnergyApiResponse_list_EnergyMetricOption__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/EnergyMetricOption"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[list[EnergyMetricOption]]",
         "type": "object"
       },
       "EnergyApiResponse_list_EnergySnapshotResponse__": {
@@ -35593,6 +36284,310 @@
           "data"
         ],
         "title": "EnergyApiResponse[list[EnergySyncRunResponse]]",
+        "type": "object"
+      },
+      "EnergyApiResponse_list_LockResponse__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/LockResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[list[LockResponse]]",
+        "type": "object"
+      },
+      "EnergyApiResponse_list_MeterResponse__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/MeterResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[list[MeterResponse]]",
+        "type": "object"
+      },
+      "EnergyApiResponse_list_NotificationResponse__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[list[NotificationResponse]]",
+        "type": "object"
+      },
+      "EnergyApiResponse_list_PlanResponse__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/PlanResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[list[PlanResponse]]",
+        "type": "object"
+      },
+      "EnergyApiResponse_list_RevisionResponse__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/RevisionResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[list[RevisionResponse]]",
+        "type": "object"
+      },
+      "EnergyApiResponse_list_RuleResponse__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/RuleResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[list[RuleResponse]]",
+        "type": "object"
+      },
+      "EnergyApiResponse_list_SnapshotImportOption__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SnapshotImportOption"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[list[SnapshotImportOption]]",
+        "type": "object"
+      },
+      "EnergyApiResponse_list_WorkbookDataset__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/WorkbookDataset"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[list[WorkbookDataset]]",
         "type": "object"
       },
       "EnergyFeishuConfigResponse": {
@@ -36140,6 +37135,43 @@
           "values"
         ],
         "title": "EnergyMappingPreviewRow",
+        "type": "object"
+      },
+      "EnergyMetricOption": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "enum": [
+              "drinking_water",
+              "chilled_water",
+              "steam",
+              "circulating_water",
+              "air",
+              "electricity"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "metric_key": {
+            "title": "Metric Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "metric_key",
+          "name",
+          "category",
+          "unit"
+        ],
+        "title": "EnergyMetricOption",
         "type": "object"
       },
       "EnergyOverviewDistributionPoint": {
@@ -37123,6 +38155,320 @@
           }
         },
         "title": "EnergySyncTriggerRequest",
+        "type": "object"
+      },
+      "EntryItemResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "enum": [
+              "drinking_water",
+              "chilled_water",
+              "steam",
+              "circulating_water",
+              "air",
+              "electricity"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "draft_value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Value"
+          },
+          "estimated_usage": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Usage"
+          },
+          "exception": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadingException-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "frequency": {
+            "default": "daily",
+            "title": "Frequency",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "multiplier": {
+            "default": "1",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Multiplier",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "point_id": {
+            "format": "uuid",
+            "title": "Point Id",
+            "type": "string"
+          },
+          "precision": {
+            "title": "Precision",
+            "type": "integer"
+          },
+          "previous_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Date"
+          },
+          "previous_value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Value"
+          },
+          "reading_date": {
+            "format": "date",
+            "title": "Reading Date",
+            "type": "string"
+          },
+          "reading_type": {
+            "title": "Reading Type",
+            "type": "string"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "point_id",
+          "name",
+          "category",
+          "unit",
+          "precision",
+          "reading_type",
+          "reading_date",
+          "value",
+          "draft_value",
+          "previous_value",
+          "previous_date",
+          "version",
+          "submitted_at"
+        ],
+        "title": "EntryItemResponse",
+        "type": "object"
+      },
+      "EntryPlanDefinition": {
+        "additionalProperties": false,
+        "properties": {
+          "deadline_time": {
+            "default": "10:00",
+            "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Deadline Time",
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "group_chat_id": {
+            "default": "",
+            "maxLength": 160,
+            "title": "Group Chat Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "owner_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 30,
+            "minItems": 1,
+            "title": "Owner Ids",
+            "type": "array"
+          },
+          "point_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Point Ids",
+            "type": "array"
+          },
+          "publish_time": {
+            "default": "08:00",
+            "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Publish Time",
+            "type": "string"
+          },
+          "reminder_time": {
+            "default": "10:30",
+            "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Reminder Time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "point_ids",
+          "owner_ids"
+        ],
+        "title": "EntryPlanDefinition",
+        "type": "object"
+      },
+      "EntrySubmission": {
+        "additionalProperties": false,
+        "properties": {
+          "draft": {
+            "default": false,
+            "title": "Draft",
+            "type": "boolean"
+          },
+          "reason": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Reason",
+            "type": "string"
+          },
+          "source": {
+            "default": "platform",
+            "enum": [
+              "platform",
+              "feishu"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/EntryValue"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "title": "EntrySubmission",
+        "type": "object"
+      },
+      "EntryValue": {
+        "additionalProperties": false,
+        "properties": {
+          "exception": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadingException-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reading_id": {
+            "format": "uuid",
+            "title": "Reading Id",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,20}|(?=[\\d.]{1,29}0*$)\\d{0,20}\\.\\d{0,8}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Value"
+          },
+          "version": {
+            "minimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "reading_id",
+          "version",
+          "value"
+        ],
+        "title": "EntryValue",
         "type": "object"
       },
       "EquipmentCategoryCreate": {
@@ -42873,6 +44219,21 @@
         "title": "GeneralAuditLogPage",
         "type": "object"
       },
+      "GenerateTasks": {
+        "additionalProperties": false,
+        "properties": {
+          "task_date": {
+            "format": "date",
+            "title": "Task Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_date"
+        ],
+        "title": "GenerateTasks",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -44780,6 +46141,40 @@
         "title": "HrFeishuFieldMappingItem",
         "type": "object"
       },
+      "ImportConfirm": {
+        "additionalProperties": false,
+        "properties": {
+          "adjustments": {
+            "items": {
+              "$ref": "#/components/schemas/AdjustmentWrite"
+            },
+            "maxItems": 500,
+            "title": "Adjustments",
+            "type": "array"
+          },
+          "mappings": {
+            "items": {
+              "$ref": "#/components/schemas/ImportMapping"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Mappings",
+            "type": "array"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mappings",
+          "reason"
+        ],
+        "title": "ImportConfirm",
+        "type": "object"
+      },
       "ImportConfirmResponse": {
         "properties": {
           "code": {
@@ -44867,6 +46262,35 @@
         "title": "ImportFeishuMembersResult",
         "type": "object"
       },
+      "ImportMapping": {
+        "additionalProperties": false,
+        "properties": {
+          "column": {
+            "maximum": 16384.0,
+            "minimum": 2.0,
+            "title": "Column",
+            "type": "integer"
+          },
+          "point_id": {
+            "format": "uuid",
+            "title": "Point Id",
+            "type": "string"
+          },
+          "sheet": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Sheet",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sheet",
+          "column",
+          "point_id"
+        ],
+        "title": "ImportMapping",
+        "type": "object"
+      },
       "ImportPreviewData": {
         "properties": {
           "field_catalog": {
@@ -44912,6 +46336,34 @@
           "data"
         ],
         "title": "ImportPreviewResponse",
+        "type": "object"
+      },
+      "ImportResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Payload",
+            "type": "object"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "payload"
+        ],
+        "title": "ImportResponse",
         "type": "object"
       },
       "ImportSheetConfirm": {
@@ -47380,6 +48832,7 @@
         "title": "JobPostingUpdate",
         "type": "object"
       },
+      "JsonValue": {},
       "KnowledgeArticleCreate": {
         "description": "新增知识文章。",
         "properties": {
@@ -49495,6 +50948,31 @@
         "title": "LedgerExportRequest",
         "type": "object"
       },
+      "LedgerOptions": {
+        "additionalProperties": false,
+        "properties": {
+          "is_manager": {
+            "title": "Is Manager",
+            "type": "boolean"
+          },
+          "people": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "People",
+            "type": "array"
+          }
+        },
+        "required": [
+          "is_manager",
+          "people"
+        ],
+        "title": "LedgerOptions",
+        "type": "object"
+      },
       "LinkDeviationRequest": {
         "properties": {
           "deviation_id": {
@@ -49853,6 +51331,57 @@
           }
         },
         "title": "LocationUpdate",
+        "type": "object"
+      },
+      "LockResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "locked": {
+            "title": "Locked",
+            "type": "boolean"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "month",
+          "locked",
+          "version"
+        ],
+        "title": "LockResponse",
+        "type": "object"
+      },
+      "LockWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "locked": {
+            "title": "Locked",
+            "type": "boolean"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "version": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "locked",
+          "reason"
+        ],
+        "title": "LockWrite",
         "type": "object"
       },
       "MaintenanceBody": {
@@ -52134,6 +53663,433 @@
         "title": "MenuUpdateRequest",
         "type": "object"
       },
+      "MeterDefinition-Input": {
+        "additionalProperties": false,
+        "properties": {
+          "active_from": {
+            "format": "date",
+            "title": "Active From",
+            "type": "string"
+          },
+          "active_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active To"
+          },
+          "area": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Area",
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "drinking_water",
+              "chilled_water",
+              "steam",
+              "circulating_water",
+              "air",
+              "electricity"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "code": {
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "title": "Code",
+            "type": "string"
+          },
+          "department": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Department",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "frequency": {
+            "default": "daily",
+            "enum": [
+              "daily",
+              "monthly"
+            ],
+            "title": "Frequency",
+            "type": "string"
+          },
+          "multiplier": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,20}|(?=[\\d.]{1,29}0*$)\\d{0,20}\\.\\d{0,8}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "1",
+            "title": "Multiplier"
+          },
+          "name": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "notes": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Notes",
+            "type": "string"
+          },
+          "precision": {
+            "default": 3,
+            "maximum": 8.0,
+            "minimum": 0.0,
+            "title": "Precision",
+            "type": "integer"
+          },
+          "quantity_kind": {
+            "default": "volume",
+            "enum": [
+              "volume",
+              "heat",
+              "mass",
+              "electricity"
+            ],
+            "title": "Quantity Kind",
+            "type": "string"
+          },
+          "reading_type": {
+            "default": "counter",
+            "enum": [
+              "counter",
+              "direct"
+            ],
+            "title": "Reading Type",
+            "type": "string"
+          },
+          "report_scope": {
+            "default": "source",
+            "enum": [
+              "source",
+              "detail",
+              "plant",
+              "check"
+            ],
+            "title": "Report Scope",
+            "type": "string"
+          },
+          "source_column": {
+            "anyOf": [
+              {
+                "maximum": 16384.0,
+                "minimum": 2.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Column"
+          },
+          "source_sheet": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Source Sheet",
+            "type": "string"
+          },
+          "temperature": {
+            "default": "",
+            "maxLength": 40,
+            "title": "Temperature",
+            "type": "string"
+          },
+          "unit": {
+            "maxLength": 24,
+            "minLength": 1,
+            "title": "Unit",
+            "type": "string"
+          },
+          "warning_limit": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,20}|(?=[\\d.]{1,29}0*$)\\d{0,20}\\.\\d{0,8}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning Limit"
+          },
+          "workshop": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Workshop",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "category",
+          "area",
+          "department",
+          "unit",
+          "active_from"
+        ],
+        "title": "MeterDefinition",
+        "type": "object"
+      },
+      "MeterDefinition-Output": {
+        "additionalProperties": false,
+        "properties": {
+          "active_from": {
+            "format": "date",
+            "title": "Active From",
+            "type": "string"
+          },
+          "active_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active To"
+          },
+          "area": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Area",
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "drinking_water",
+              "chilled_water",
+              "steam",
+              "circulating_water",
+              "air",
+              "electricity"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "code": {
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "title": "Code",
+            "type": "string"
+          },
+          "department": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Department",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "frequency": {
+            "default": "daily",
+            "enum": [
+              "daily",
+              "monthly"
+            ],
+            "title": "Frequency",
+            "type": "string"
+          },
+          "multiplier": {
+            "default": "1",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,20}|(?=[\\d.]{1,29}0*$)\\d{0,20}\\.\\d{0,8}0*$)",
+            "title": "Multiplier",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "notes": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Notes",
+            "type": "string"
+          },
+          "precision": {
+            "default": 3,
+            "maximum": 8.0,
+            "minimum": 0.0,
+            "title": "Precision",
+            "type": "integer"
+          },
+          "quantity_kind": {
+            "default": "volume",
+            "enum": [
+              "volume",
+              "heat",
+              "mass",
+              "electricity"
+            ],
+            "title": "Quantity Kind",
+            "type": "string"
+          },
+          "reading_type": {
+            "default": "counter",
+            "enum": [
+              "counter",
+              "direct"
+            ],
+            "title": "Reading Type",
+            "type": "string"
+          },
+          "report_scope": {
+            "default": "source",
+            "enum": [
+              "source",
+              "detail",
+              "plant",
+              "check"
+            ],
+            "title": "Report Scope",
+            "type": "string"
+          },
+          "source_column": {
+            "anyOf": [
+              {
+                "maximum": 16384.0,
+                "minimum": 2.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Column"
+          },
+          "source_sheet": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Source Sheet",
+            "type": "string"
+          },
+          "temperature": {
+            "default": "",
+            "maxLength": 40,
+            "title": "Temperature",
+            "type": "string"
+          },
+          "unit": {
+            "maxLength": 24,
+            "minLength": 1,
+            "title": "Unit",
+            "type": "string"
+          },
+          "warning_limit": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,20}|(?=[\\d.]{1,29}0*$)\\d{0,20}\\.\\d{0,8}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning Limit"
+          },
+          "workshop": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Workshop",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "category",
+          "area",
+          "department",
+          "unit",
+          "active_from"
+        ],
+        "title": "MeterDefinition",
+        "type": "object"
+      },
+      "MeterResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/MeterDefinition-Output"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "definition"
+        ],
+        "title": "MeterResponse",
+        "type": "object"
+      },
+      "MeterWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/MeterDefinition-Input"
+          },
+          "reason": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Reason",
+            "type": "string"
+          },
+          "version": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "definition"
+        ],
+        "title": "MeterWrite",
+        "type": "object"
+      },
       "ModulePermissionDefinitionOut": {
         "properties": {
           "description": {
@@ -52832,6 +54788,74 @@
           "item_ids"
         ],
         "title": "NewEmployeeTrainingStartRequest",
+        "type": "object"
+      },
+      "NotificationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "message_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Id"
+          },
+          "next_attempt_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Attempt At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "task_id",
+          "status",
+          "attempts",
+          "message_id",
+          "error",
+          "next_attempt_at"
+        ],
+        "title": "NotificationResponse",
         "type": "object"
       },
       "OffboardingRecordCreate": {
@@ -58250,6 +60274,53 @@
         "title": "PaymentStatusSummary",
         "type": "object"
       },
+      "PeriodMetric": {
+        "additionalProperties": false,
+        "properties": {
+          "metric_key": {
+            "title": "Metric Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "quantity_kind": {
+            "default": "volume",
+            "title": "Quantity Kind",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "metric_key",
+          "name",
+          "unit",
+          "value",
+          "status"
+        ],
+        "title": "PeriodMetric",
+        "type": "object"
+      },
       "PermissionAuditItem": {
         "properties": {
           "action": {
@@ -58841,6 +60912,30 @@
         "title": "PlanAttachmentSectionResponse",
         "type": "object"
       },
+      "PlanResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/EntryPlanDefinition"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "definition"
+        ],
+        "title": "PlanResponse",
+        "type": "object"
+      },
       "PlanTrackingRecordCreate": {
         "properties": {
           "actual_time": {
@@ -59284,6 +61379,31 @@
           }
         },
         "title": "PlanTrackingRecordUpdate",
+        "type": "object"
+      },
+      "PlanWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/EntryPlanDefinition"
+          },
+          "reason": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Reason",
+            "type": "string"
+          },
+          "version": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "definition"
+        ],
+        "title": "PlanWrite",
         "type": "object"
       },
       "PointMappingCreate": {
@@ -66396,6 +68516,118 @@
         "title": "RawMaterialResponse",
         "type": "object"
       },
+      "ReadingException-Input": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "replacement",
+              "reset",
+              "rollover"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "new_initial": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,20}|(?=[\\d.]{1,29}0*$)\\d{0,20}\\.\\d{0,8}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "New Initial"
+          },
+          "previous_final": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,20}|(?=[\\d.]{1,29}0*$)\\d{0,20}\\.\\d{0,8}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Previous Final"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "previous_final",
+          "new_initial",
+          "reason"
+        ],
+        "title": "ReadingException",
+        "type": "object"
+      },
+      "ReadingException-Output": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "replacement",
+              "reset",
+              "rollover"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "new_initial": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,20}|(?=[\\d.]{1,29}0*$)\\d{0,20}\\.\\d{0,8}0*$)",
+            "title": "New Initial",
+            "type": "string"
+          },
+          "previous_final": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,20}|(?=[\\d.]{1,29}0*$)\\d{0,20}\\.\\d{0,8}0*$)",
+            "title": "Previous Final",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "previous_final",
+          "new_initial",
+          "reason"
+        ],
+        "title": "ReadingException",
+        "type": "object"
+      },
+      "RebuildRequest": {
+        "properties": {
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start_date",
+          "end_date"
+        ],
+        "title": "RebuildRequest",
+        "type": "object"
+      },
       "RectificationReplyRequest": {
         "description": "整改回复请求（合并了原 complete_rectification 步骤）",
         "properties": {
@@ -67234,6 +69466,173 @@
         "title": "ReminderConfigUpdate",
         "type": "object"
       },
+      "ReportDistribution": {
+        "additionalProperties": false,
+        "properties": {
+          "available_count": {
+            "title": "Available Count",
+            "type": "integer"
+          },
+          "category": {
+            "enum": [
+              "drinking_water",
+              "chilled_water",
+              "steam",
+              "circulating_water",
+              "air",
+              "electricity"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "expected_count": {
+            "title": "Expected Count",
+            "type": "integer"
+          },
+          "quantity_kind": {
+            "title": "Quantity Kind",
+            "type": "string"
+          },
+          "temperature": {
+            "title": "Temperature",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "workshop": {
+            "title": "Workshop",
+            "type": "string"
+          }
+        },
+        "required": [
+          "category",
+          "unit",
+          "quantity_kind",
+          "temperature",
+          "value",
+          "expected_count",
+          "available_count",
+          "workshop"
+        ],
+        "title": "ReportDistribution",
+        "type": "object"
+      },
+      "ReportResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "distribution": {
+            "items": {
+              "$ref": "#/components/schemas/ReportDistribution"
+            },
+            "title": "Distribution",
+            "type": "array"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "entry_completed": {
+            "default": 0,
+            "title": "Entry Completed",
+            "type": "integer"
+          },
+          "entry_total": {
+            "default": 0,
+            "title": "Entry Total",
+            "type": "integer"
+          },
+          "latest_complete_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Complete Date"
+          },
+          "period_metrics": {
+            "items": {
+              "$ref": "#/components/schemas/PeriodMetric"
+            },
+            "title": "Period Metrics",
+            "type": "array"
+          },
+          "quality_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Quality Counts",
+            "type": "object"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/UsageRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "complete",
+              "partial",
+              "pending"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "total_count": {
+            "title": "Total Count",
+            "type": "integer"
+          },
+          "totals": {
+            "items": {
+              "$ref": "#/components/schemas/ReportTotal"
+            },
+            "title": "Totals",
+            "type": "array"
+          },
+          "trend": {
+            "items": {
+              "$ref": "#/components/schemas/ReportTrend"
+            },
+            "title": "Trend",
+            "type": "array"
+          }
+        },
+        "required": [
+          "start_date",
+          "end_date",
+          "status",
+          "rows",
+          "totals",
+          "total_count"
+        ],
+        "title": "ReportResponse",
+        "type": "object"
+      },
       "ReportStatus": {
         "description": "报备状态枚举",
         "enum": [
@@ -67244,6 +69643,132 @@
         ],
         "title": "ReportStatus",
         "type": "string"
+      },
+      "ReportTotal": {
+        "additionalProperties": false,
+        "properties": {
+          "available_count": {
+            "title": "Available Count",
+            "type": "integer"
+          },
+          "category": {
+            "enum": [
+              "drinking_water",
+              "chilled_water",
+              "steam",
+              "circulating_water",
+              "air",
+              "electricity"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "expected_count": {
+            "title": "Expected Count",
+            "type": "integer"
+          },
+          "quantity_kind": {
+            "title": "Quantity Kind",
+            "type": "string"
+          },
+          "temperature": {
+            "title": "Temperature",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "category",
+          "unit",
+          "quantity_kind",
+          "temperature",
+          "value",
+          "expected_count",
+          "available_count"
+        ],
+        "title": "ReportTotal",
+        "type": "object"
+      },
+      "ReportTrend": {
+        "additionalProperties": false,
+        "properties": {
+          "available_count": {
+            "title": "Available Count",
+            "type": "integer"
+          },
+          "category": {
+            "enum": [
+              "drinking_water",
+              "chilled_water",
+              "steam",
+              "circulating_water",
+              "air",
+              "electricity"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "expected_count": {
+            "title": "Expected Count",
+            "type": "integer"
+          },
+          "quantity_kind": {
+            "title": "Quantity Kind",
+            "type": "string"
+          },
+          "temperature": {
+            "title": "Temperature",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "usage_date": {
+            "format": "date",
+            "title": "Usage Date",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "category",
+          "unit",
+          "quantity_kind",
+          "temperature",
+          "value",
+          "expected_count",
+          "available_count",
+          "usage_date"
+        ],
+        "title": "ReportTrend",
+        "type": "object"
       },
       "ResearchProjectCreate": {
         "description": "创建研发项目请求",
@@ -67892,6 +70417,69 @@
         "title": "ReturnRecallResponse",
         "type": "object"
       },
+      "RevisionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "entity_id": {
+            "format": "uuid",
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "entity_kind": {
+            "title": "Entity Kind",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Payload",
+            "type": "object"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "entity_kind",
+          "entity_id",
+          "version",
+          "payload",
+          "reason",
+          "created_by",
+          "created_at"
+        ],
+        "title": "RevisionResponse",
+        "type": "object"
+      },
       "RevisionType": {
         "description": "修订类型枚举",
         "enum": [
@@ -68269,6 +70857,432 @@
           }
         },
         "title": "RoleUpdateRequest",
+        "type": "object"
+      },
+      "RuleDefinition-Input": {
+        "additionalProperties": false,
+        "properties": {
+          "active_from": {
+            "format": "date",
+            "title": "Active From",
+            "type": "string"
+          },
+          "active_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active To"
+          },
+          "category": {
+            "enum": [
+              "drinking_water",
+              "chilled_water",
+              "steam",
+              "circulating_water",
+              "air",
+              "electricity"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "code": {
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "title": "Code",
+            "type": "string"
+          },
+          "department": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Department",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "frequency": {
+            "default": "daily",
+            "enum": [
+              "daily",
+              "monthly"
+            ],
+            "title": "Frequency",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "notes": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Notes",
+            "type": "string"
+          },
+          "operation": {
+            "default": "sum",
+            "enum": [
+              "sum",
+              "ratio"
+            ],
+            "title": "Operation",
+            "type": "string"
+          },
+          "quantity_kind": {
+            "default": "volume",
+            "enum": [
+              "volume",
+              "heat",
+              "mass",
+              "electricity",
+              "ratio"
+            ],
+            "title": "Quantity Kind",
+            "type": "string"
+          },
+          "report_scope": {
+            "default": "detail",
+            "enum": [
+              "source",
+              "detail",
+              "plant",
+              "check"
+            ],
+            "title": "Report Scope",
+            "type": "string"
+          },
+          "source_column": {
+            "anyOf": [
+              {
+                "maximum": 16384.0,
+                "minimum": 2.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Column"
+          },
+          "source_sheet": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Source Sheet",
+            "type": "string"
+          },
+          "temperature": {
+            "default": "",
+            "maxLength": 40,
+            "title": "Temperature",
+            "type": "string"
+          },
+          "terms": {
+            "items": {
+              "$ref": "#/components/schemas/RuleTerm-Input"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Terms",
+            "type": "array"
+          },
+          "unit": {
+            "maxLength": 24,
+            "minLength": 1,
+            "title": "Unit",
+            "type": "string"
+          },
+          "workshop": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Workshop",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "category",
+          "unit",
+          "department",
+          "terms",
+          "active_from"
+        ],
+        "title": "RuleDefinition",
+        "type": "object"
+      },
+      "RuleDefinition-Output": {
+        "additionalProperties": false,
+        "properties": {
+          "active_from": {
+            "format": "date",
+            "title": "Active From",
+            "type": "string"
+          },
+          "active_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active To"
+          },
+          "category": {
+            "enum": [
+              "drinking_water",
+              "chilled_water",
+              "steam",
+              "circulating_water",
+              "air",
+              "electricity"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "code": {
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "title": "Code",
+            "type": "string"
+          },
+          "department": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Department",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "frequency": {
+            "default": "daily",
+            "enum": [
+              "daily",
+              "monthly"
+            ],
+            "title": "Frequency",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "notes": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Notes",
+            "type": "string"
+          },
+          "operation": {
+            "default": "sum",
+            "enum": [
+              "sum",
+              "ratio"
+            ],
+            "title": "Operation",
+            "type": "string"
+          },
+          "quantity_kind": {
+            "default": "volume",
+            "enum": [
+              "volume",
+              "heat",
+              "mass",
+              "electricity",
+              "ratio"
+            ],
+            "title": "Quantity Kind",
+            "type": "string"
+          },
+          "report_scope": {
+            "default": "detail",
+            "enum": [
+              "source",
+              "detail",
+              "plant",
+              "check"
+            ],
+            "title": "Report Scope",
+            "type": "string"
+          },
+          "source_column": {
+            "anyOf": [
+              {
+                "maximum": 16384.0,
+                "minimum": 2.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Column"
+          },
+          "source_sheet": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Source Sheet",
+            "type": "string"
+          },
+          "temperature": {
+            "default": "",
+            "maxLength": 40,
+            "title": "Temperature",
+            "type": "string"
+          },
+          "terms": {
+            "items": {
+              "$ref": "#/components/schemas/RuleTerm-Output"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Terms",
+            "type": "array"
+          },
+          "unit": {
+            "maxLength": 24,
+            "minLength": 1,
+            "title": "Unit",
+            "type": "string"
+          },
+          "workshop": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Workshop",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "category",
+          "unit",
+          "department",
+          "terms",
+          "active_from"
+        ],
+        "title": "RuleDefinition",
+        "type": "object"
+      },
+      "RuleResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/RuleDefinition-Output"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "definition"
+        ],
+        "title": "RuleResponse",
+        "type": "object"
+      },
+      "RuleTerm-Input": {
+        "additionalProperties": false,
+        "properties": {
+          "coefficient": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,20}|(?=[\\d.]{1,29}0*$)\\d{0,20}\\.\\d{0,8}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "1",
+            "title": "Coefficient"
+          },
+          "metric_key": {
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^(point|rule):[a-zA-Z0-9_-]+$",
+            "title": "Metric Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "metric_key"
+        ],
+        "title": "RuleTerm",
+        "type": "object"
+      },
+      "RuleTerm-Output": {
+        "additionalProperties": false,
+        "properties": {
+          "coefficient": {
+            "default": "1",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,20}|(?=[\\d.]{1,29}0*$)\\d{0,20}\\.\\d{0,8}0*$)",
+            "title": "Coefficient",
+            "type": "string"
+          },
+          "metric_key": {
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^(point|rule):[a-zA-Z0-9_-]+$",
+            "title": "Metric Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "metric_key"
+        ],
+        "title": "RuleTerm",
+        "type": "object"
+      },
+      "RuleWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/RuleDefinition-Input"
+          },
+          "reason": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Reason",
+            "type": "string"
+          },
+          "version": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "definition"
+        ],
+        "title": "RuleWrite",
         "type": "object"
       },
       "SafetyCheckCreate": {
@@ -71694,6 +74708,88 @@
         "title": "ShiftLogUpdate",
         "type": "object"
       },
+      "SnapshotImportOption": {
+        "additionalProperties": false,
+        "properties": {
+          "captured_at": {
+            "format": "date-time",
+            "title": "Captured At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "sheet_title": {
+            "title": "Sheet Title",
+            "type": "string"
+          },
+          "snapshot_number": {
+            "title": "Snapshot Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "sheet_title",
+          "captured_at",
+          "snapshot_number"
+        ],
+        "title": "SnapshotImportOption",
+        "type": "object"
+      },
+      "SnapshotImportRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "end_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "snapshot_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "title": "Snapshot Ids",
+            "type": "array"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "year": {
+            "maximum": 2100.0,
+            "minimum": 2000.0,
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "snapshot_ids",
+          "year"
+        ],
+        "title": "SnapshotImportRequest",
+        "type": "object"
+      },
       "SodiumStepCreate": {
         "properties": {
           "alkali_usage": {
@@ -74583,6 +77679,85 @@
         "title": "TankBlockBody",
         "type": "object"
       },
+      "TaskListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TaskResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "TaskListResponse",
+        "type": "object"
+      },
+      "TaskResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "completed_count": {
+            "title": "Completed Count",
+            "type": "integer"
+          },
+          "deadline_time": {
+            "title": "Deadline Time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EntryItemResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owner_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Owner Ids",
+            "type": "array"
+          },
+          "task_date": {
+            "format": "date",
+            "title": "Task Date",
+            "type": "string"
+          },
+          "total_count": {
+            "title": "Total Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "task_date",
+          "name",
+          "owner_ids",
+          "deadline_time",
+          "total_count",
+          "completed_count",
+          "items"
+        ],
+        "title": "TaskResponse",
+        "type": "object"
+      },
       "TeamCreate": {
         "properties": {
           "code": {
@@ -74683,6 +77858,38 @@
           }
         },
         "title": "TeamUpdate",
+        "type": "object"
+      },
+      "TemplateDraftResponse": {
+        "properties": {
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "meters": {
+            "items": {
+              "$ref": "#/components/schemas/MeterDefinition-Output"
+            },
+            "title": "Meters",
+            "type": "array"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/RuleDefinition-Output"
+            },
+            "title": "Rules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "meters",
+          "rules",
+          "issues"
+        ],
+        "title": "TemplateDraftResponse",
         "type": "object"
       },
       "TokenResponse": {
@@ -79109,6 +82316,78 @@
           "metric_key"
         ],
         "title": "TrendAIReanalyzeRequest",
+        "type": "object"
+      },
+      "TrialRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "usage_date": {
+            "format": "date",
+            "title": "Usage Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "usage_date"
+        ],
+        "title": "TrialRequest",
+        "type": "object"
+      },
+      "TrialResponse": {
+        "properties": {
+          "usage_date": {
+            "format": "date",
+            "title": "Usage Date",
+            "type": "string"
+          },
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/TrialValue"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "usage_date",
+          "values"
+        ],
+        "title": "TrialResponse",
+        "type": "object"
+      },
+      "TrialValue": {
+        "properties": {
+          "metric_key": {
+            "title": "Metric Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "metric_key",
+          "name",
+          "value",
+          "status"
+        ],
+        "title": "TrialValue",
         "type": "object"
       },
       "TrueFalseQuestion": {
@@ -83567,6 +86846,125 @@
           }
         },
         "title": "UpdateValidationRequest",
+        "type": "object"
+      },
+      "UsageRow": {
+        "additionalProperties": false,
+        "properties": {
+          "calculated_value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculated Value"
+          },
+          "category": {
+            "enum": [
+              "drinking_water",
+              "chilled_water",
+              "steam",
+              "circulating_water",
+              "air",
+              "electricity"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "department": {
+            "title": "Department",
+            "type": "string"
+          },
+          "effective_value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Value"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "metric_key": {
+            "title": "Metric Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "provenance": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Provenance",
+            "type": "object"
+          },
+          "quantity_kind": {
+            "title": "Quantity Kind",
+            "type": "string"
+          },
+          "report_scope": {
+            "enum": [
+              "source",
+              "detail",
+              "plant",
+              "check"
+            ],
+            "title": "Report Scope",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "temperature": {
+            "title": "Temperature",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "usage_date": {
+            "format": "date",
+            "title": "Usage Date",
+            "type": "string"
+          },
+          "workshop": {
+            "title": "Workshop",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "metric_key",
+          "usage_date",
+          "name",
+          "category",
+          "unit",
+          "workshop",
+          "department",
+          "report_scope",
+          "quantity_kind",
+          "temperature",
+          "calculated_value",
+          "effective_value",
+          "status",
+          "provenance"
+        ],
+        "title": "UsageRow",
         "type": "object"
       },
       "UserManagementItem": {
@@ -89278,6 +92676,210 @@
         ],
         "title": "WorkRecordStatusEnum",
         "type": "string"
+      },
+      "WorkbookCell": {
+        "additionalProperties": false,
+        "properties": {
+          "calculated_value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculated Value"
+          },
+          "provenance": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Provenance",
+            "type": "object"
+          },
+          "reading_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reading Id"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "WorkbookCell",
+        "type": "object"
+      },
+      "WorkbookColumn": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "quantity_kind": {
+            "title": "Quantity Kind",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value_kind": {
+            "enum": [
+              "reading",
+              "usage"
+            ],
+            "title": "Value Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "unit",
+          "value_kind",
+          "quantity_kind"
+        ],
+        "title": "WorkbookColumn",
+        "type": "object"
+      },
+      "WorkbookDataset": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "reading",
+              "usage",
+              "mixed"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "kind"
+        ],
+        "title": "WorkbookDataset",
+        "type": "object"
+      },
+      "WorkbookDay": {
+        "additionalProperties": false,
+        "properties": {
+          "cells": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/WorkbookCell"
+            },
+            "title": "Cells",
+            "type": "object"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "cells"
+        ],
+        "title": "WorkbookDay",
+        "type": "object"
+      },
+      "WorkbookReport": {
+        "additionalProperties": false,
+        "properties": {
+          "available_count": {
+            "title": "Available Count",
+            "type": "integer"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/WorkbookColumn"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "dataset": {
+            "title": "Dataset",
+            "type": "string"
+          },
+          "expected_count": {
+            "title": "Expected Count",
+            "type": "integer"
+          },
+          "month": {
+            "title": "Month",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/WorkbookDay"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "year": {
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "year",
+          "month",
+          "dataset",
+          "columns",
+          "rows",
+          "available_count",
+          "expected_count"
+        ],
+        "title": "WorkbookReport",
+        "type": "object"
       },
       "WrittenExamExportRequest": {
         "description": "笔试试卷导出请求",
@@ -98334,6 +101936,1012 @@
         ]
       }
     },
+    "/api/v1/energy/adjustments": {
+      "post": {
+        "operationId": "adjust_api_v1_energy_adjustments_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdjustmentWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_UsageRow_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Adjust",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/bot-config": {
+      "get": {
+        "operationId": "get_bot_api_v1_energy_bot_config_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_BotResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Bot",
+        "tags": [
+          "能源管理"
+        ]
+      },
+      "put": {
+        "operationId": "put_bot_api_v1_energy_bot_config_put",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BotWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_BotResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Bot",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/calculation-rules": {
+      "get": {
+        "operationId": "rules_api_v1_energy_calculation_rules_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_list_RuleResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rules",
+        "tags": [
+          "能源管理"
+        ]
+      },
+      "post": {
+        "operationId": "create_rule_api_v1_energy_calculation_rules_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_RuleResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Rule",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/calculation-rules/trial": {
+      "post": {
+        "operationId": "trial_api_v1_energy_calculation_rules_trial_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrialRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_TrialResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Trial",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/calculation-rules/{record_id}": {
+      "put": {
+        "operationId": "update_rule_api_v1_energy_calculation_rules__record_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_RuleResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Rule",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/data-quality": {
+      "get": {
+        "operationId": "quality_api_v1_energy_data_quality_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "start_date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Start Date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end_date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "End Date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workshop"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "in": "query",
+            "name": "quality_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Quality Status"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_ReportResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Quality",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/entry-plans": {
+      "get": {
+        "operationId": "plans_api_v1_energy_entry_plans_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_list_PlanResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Plans",
+        "tags": [
+          "能源管理"
+        ]
+      },
+      "post": {
+        "operationId": "create_plan_api_v1_energy_entry_plans_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_PlanResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Plan",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/entry-plans/{record_id}": {
+      "put": {
+        "operationId": "update_plan_api_v1_energy_entry_plans__record_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_PlanResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Plan",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/entry-tasks": {
+      "get": {
+        "operationId": "tasks_api_v1_energy_entry_tasks_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "start_date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Start Date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end_date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "End Date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mine",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Mine",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_TaskListResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tasks",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/entry-tasks/generate": {
+      "post": {
+        "operationId": "generate_tasks_api_v1_energy_entry_tasks_generate_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateTasks"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_TaskListResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Generate Tasks",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/entry-tasks/{task_id}": {
+      "get": {
+        "operationId": "task_api_v1_energy_entry_tasks__task_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_TaskResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Task",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/entry-tasks/{task_id}/submit": {
+      "post": {
+        "operationId": "submit_api_v1_energy_entry_tasks__task_id__submit_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntrySubmission"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_TaskResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
     "/api/v1/energy/feishu-config": {
       "get": {
         "operationId": "get_feishu_config_api_v1_energy_feishu_config_get",
@@ -98719,6 +103327,769 @@
         ]
       }
     },
+    "/api/v1/energy/imports/from-snapshot": {
+      "post": {
+        "operationId": "from_snapshot_api_v1_energy_imports_from_snapshot_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SnapshotImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_ImportResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "From Snapshot",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/imports/preview": {
+      "post": {
+        "operationId": "import_preview_api_v1_energy_imports_preview_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "year",
+            "required": true,
+            "schema": {
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End Date"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_preview_api_v1_energy_imports_preview_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_ImportResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Preview",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/imports/snapshot-options": {
+      "get": {
+        "operationId": "snapshot_options_api_v1_energy_imports_snapshot_options_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_list_SnapshotImportOption__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Snapshot Options",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/imports/{batch_id}/confirm": {
+      "post": {
+        "operationId": "import_confirm_api_v1_energy_imports__batch_id__confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Batch Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportConfirm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_ImportResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Confirm",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/imports/{batch_id}/draft-config": {
+      "post": {
+        "operationId": "draft_config_api_v1_energy_imports__batch_id__draft_config_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Batch Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_TemplateDraftResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Draft Config",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/ledger-history/{kind}/{entity_id}": {
+      "get": {
+        "operationId": "history_api_v1_energy_ledger_history__kind___entity_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "entity_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Entity Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_list_RevisionResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "History",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/ledger-options": {
+      "get": {
+        "operationId": "options_api_v1_energy_ledger_options_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_LedgerOptions_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Options",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/meter-points": {
+      "get": {
+        "operationId": "meters_api_v1_energy_meter_points_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_list_MeterResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Meters",
+        "tags": [
+          "能源管理"
+        ]
+      },
+      "post": {
+        "operationId": "create_meter_api_v1_energy_meter_points_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeterWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_MeterResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Meter",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/meter-points/{record_id}": {
+      "put": {
+        "operationId": "update_meter_api_v1_energy_meter_points__record_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeterWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_MeterResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Meter",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/notification-runs": {
+      "get": {
+        "operationId": "notifications_api_v1_energy_notification_runs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_list_NotificationResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Notifications",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/notification-runs/{record_id}/retry": {
+      "post": {
+        "operationId": "retry_notification_api_v1_energy_notification_runs__record_id__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_NotificationResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry Notification",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
     "/api/v1/energy/overview": {
       "get": {
         "operationId": "get_overview_api_v1_energy_overview_get",
@@ -99089,6 +104460,797 @@
           }
         },
         "summary": "分页读取能源工作表本地快照",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/period-locks": {
+      "get": {
+        "operationId": "locks_api_v1_energy_period_locks_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_list_LockResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Locks",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/period-locks/{month}": {
+      "put": {
+        "operationId": "set_lock_api_v1_energy_period_locks__month__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LockWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_LockResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Lock",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/reporting": {
+      "get": {
+        "operationId": "report_api_v1_energy_reporting_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "start_date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Start Date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end_date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "End Date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "report_scope",
+            "required": false,
+            "schema": {
+              "default": "detail",
+              "enum": [
+                "source",
+                "detail",
+                "plant",
+                "check"
+              ],
+              "title": "Report Scope",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workshop"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "in": "query",
+            "name": "metric_key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Metric Key"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_ReportResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Report",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/reporting/datasets": {
+      "get": {
+        "operationId": "workbook_datasets_api_v1_energy_reporting_datasets_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_list_WorkbookDataset__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Workbook Datasets",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/reporting/export": {
+      "get": {
+        "operationId": "export_report_api_v1_energy_reporting_export_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "start_date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Start Date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end_date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "End Date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "report_scope",
+            "required": false,
+            "schema": {
+              "default": "detail",
+              "enum": [
+                "source",
+                "detail",
+                "plant",
+                "check"
+              ],
+              "title": "Report Scope",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workshop"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "in": "query",
+            "name": "metric_key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Metric Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Report",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/reporting/metrics": {
+      "get": {
+        "operationId": "reporting_metrics_api_v1_energy_reporting_metrics_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_list_EnergyMetricOption__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reporting Metrics",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/reporting/rebuild": {
+      "post": {
+        "operationId": "rebuild_api_v1_energy_reporting_rebuild_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RebuildRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_ReportResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rebuild",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/reporting/trace/{fact_id}": {
+      "get": {
+        "operationId": "trace_api_v1_energy_reporting_trace__fact_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fact_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Fact Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_UsageRow_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Trace",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/reporting/workbook": {
+      "get": {
+        "operationId": "workbook_report_api_v1_energy_reporting_workbook_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "year",
+            "required": true,
+            "schema": {
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dataset",
+            "required": true,
+            "schema": {
+              "maxLength": 100,
+              "title": "Dataset",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_WorkbookReport_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Workbook Report",
+        "tags": [
+          "能源管理"
+        ]
+      }
+    },
+    "/api/v1/energy/reporting/workbook/export": {
+      "get": {
+        "operationId": "export_workbook_api_v1_energy_reporting_workbook_export_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "year",
+            "required": true,
+            "schema": {
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dataset",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dataset"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Workbook",
         "tags": [
           "能源管理"
         ]
