@@ -11,6 +11,9 @@ const nextNav = vi.hoisted(() => ({
 }))
 
 vi.mock('next/navigation', () => nextNav)
+vi.mock('@/hooks/usePagePermissions', () => ({
+  usePagePermissions: () => ({ canOperate: true, canDelete: true, canSync: true }),
+}))
 
 const apiClient = vi.hoisted(() => ({
   fetchInspectionMaterials: vi.fn(),

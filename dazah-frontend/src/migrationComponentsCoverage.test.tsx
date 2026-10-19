@@ -2194,10 +2194,15 @@ describe('migrated component coverage', () => {
       }
     }
     await settle()
-    Array.from(rendered.container.querySelectorAll('button')).filter((button) => !button.textContent?.trim()).at(-1)?.click()
+    const mappingRow = Array.from(rendered.container.querySelectorAll('tbody tr'))
+      .find(row => row.querySelector('td')?.textContent?.includes('仓储部'))
+    const deleteMapping = mappingRow?.querySelector('.anticon-delete')?.closest('button')
+    expect(deleteMapping).toBeDefined()
+    deleteMapping?.click()
     await settle()
     expect(getMock('actions/hr', 'createTrainingDeptMappingAction')).toHaveBeenCalled()
-    expect(getMock('actions/hr', 'deleteTrainingDeptMappingAction')).toHaveBeenCalled()
+    expect(getMock('actions/hr', 'deleteTrainingDeptMappingAction')).toHaveBeenCalledWith('mapping-1')
+    expect(getMock('actions/hr', 'deleteTrainingDeptMappingAction')).toHaveBeenCalledWith('mapping-2')
     closeRendered(rendered)
   })
 

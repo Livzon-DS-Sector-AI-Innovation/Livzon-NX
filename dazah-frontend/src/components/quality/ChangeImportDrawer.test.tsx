@@ -18,14 +18,14 @@ beforeEach(() => {
   document.body.appendChild(container)
   root = createRoot(container)
   act(() => root.render(<ChangeImportDrawer isOpen onClose={onClose} onSuccess={onSuccess} changeType="file" />))
-  const input = container.querySelector('input[type=file]') as HTMLInputElement
+  const input = document.body.querySelector('input[type=file]') as HTMLInputElement
   Object.defineProperty(input, 'files', { configurable: true, value: [new File(['docx'], 'import.docx')] })
   act(() => input.dispatchEvent(new Event('change', { bubbles: true })))
 })
 afterEach(() => { act(() => root.unmount()); container.remove(); vi.useRealTimers() })
 
 async function click(label: string) {
-  const button = Array.from(container.querySelectorAll('button')).find(item => item.textContent === label)
+  const button = Array.from(document.body.querySelectorAll('button')).find(item => item.textContent === label)
   expect(button).toBeDefined()
   await act(async () => button?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
 }
@@ -39,9 +39,9 @@ it('shows public authorization errors and preserves the selected document', asyn
   await preview()
   actions.confirmChangeImport.mockResolvedValue({ ok: false, message: '未获得当前高风险业务动作授权' })
   await click('确认导入')
-  expect(container.textContent).toContain('未获得当前高风险业务动作授权')
-  expect(container.textContent).toContain('import.docx')
-  expect(container.textContent).not.toContain('React error')
+  expect(document.body.textContent).toContain('未获得当前高风险业务动作授权')
+  expect(document.body.textContent).toContain('import.docx')
+  expect(document.body.textContent).not.toContain('React error')
   expect(onSuccess).not.toHaveBeenCalled()
   expect(onClose).not.toHaveBeenCalled()
 })
@@ -51,11 +51,11 @@ it('keeps partial failures open, displays row details and refreshes saved rows',
   actions.confirmChangeImport.mockResolvedValue({ ok: true, data: { success_count: 1, update_count: 0, skip_count: 0, error_count: 1,
     error_details: [{ row: 3, error: '变更对象不能超过255个字符' }] } })
   await click('确认导入')
-  expect(container.textContent).toContain('第3行：变更对象不能超过255个字符')
-  expect(container.textContent).toContain('已成功的数据已保存')
+  expect(document.body.textContent).toContain('第3行：变更对象不能超过255个字符')
+  expect(document.body.textContent).toContain('已成功的数据已保存')
   expect(onSuccess).toHaveBeenCalledOnce()
   expect(onClose).not.toHaveBeenCalled()
-  expect(Array.from(container.querySelectorAll('button')).some(button => button.textContent === '确认导入')).toBe(false)
+  expect(Array.from(document.body.querySelectorAll('button')).some(button => button.textContent === '确认导入')).toBe(false)
 })
 
 it('closes and refreshes after a fully successful import', async () => {
@@ -64,7 +64,7 @@ it('closes and refreshes after a fully successful import', async () => {
   actions.confirmChangeImport.mockResolvedValue({ ok: true, data: { success_count: 2, update_count: 0, skip_count: 0, error_count: 0 } })
   await click('确认导入')
   expect(actions.confirmChangeImport).toHaveBeenCalledWith(expect.any(FormData), true, false, 'file')
-  expect(container.textContent).toContain('2 条成功')
+  expect(document.body.textContent).toContain('2 条成功')
   act(() => vi.advanceTimersByTime(1500))
   expect(onClose).toHaveBeenCalledOnce()
   expect(onSuccess).toHaveBeenCalledOnce()

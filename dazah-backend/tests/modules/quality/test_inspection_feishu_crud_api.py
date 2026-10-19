@@ -7,6 +7,7 @@ mock BitableClient 成功路径（断言审计调用）、附件代理下载多�
 from __future__ import annotations
 
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
@@ -193,13 +194,42 @@ async def test_unconfigured_feishu_returns_400_with_message(
 async def test_readonly_permission_forbidden_on_write(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from app.main import app
     from app.modules.quality.api import deps as quality_deps
+    from app.platform.identity.deps import get_current_user
+    from app.platform.identity.models import User
+    from app.platform.identity.page_permissions import PagePermissionService
+    from app.platform.identity.page_policy import api_binding_for_route
+    from app.platform.identity.schemas import EffectivePageGrantOut, PageDataScopeInput
 
     async def _readonly(db, user_id):
         return ["quality:read"]
 
     _patch_feishu_success(monkeypatch)
     monkeypatch.setattr(quality_deps, "resolve_user_permissions", _readonly)
+    user = User(id=uuid4(), name="只读质量用户", role="user", status="active")
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: user)
+    binding = api_binding_for_route(
+        "PUT", "/api/v1/quality/inspection/feishu/{entity_code}/records/{record_id}"
+    )
+    assert binding is not None
+    grants = [
+        EffectivePageGrantOut(
+            page_key=page_key,
+            module_code="quality",
+            permissions=["access", "query"],
+            data_scope=PageDataScopeInput(scope_type="all"),
+            source="user",
+        )
+        for page_key in binding.page_keys
+    ]
+    monkeypatch.setattr(
+        PagePermissionService, "effective_grants", AsyncMock(return_value=grants)
+    )
+    update = AsyncMock()
+    delete = AsyncMock()
+    monkeypatch.setattr(_FakeBitable, "update_record", update)
+    monkeypatch.setattr(_FakeBitable, "delete_record", delete)
 
     for method, url in [
         ("PUT", "/api/v1/quality/inspection/feishu/qc_items_inventory/records/rec_1"),
@@ -210,6 +240,8 @@ async def test_readonly_permission_forbidden_on_write(
     ]:
         resp = await client.request(method, url, json={"fields": {"批号": "B-2"}})
         assert resp.status_code == 403, f"{method} -> {resp.status_code}"
+    update.assert_not_awaited()
+    delete.assert_not_awaited()
 
 
 # ─── 成功路径（mock Bitable + 审计断言） ──────────────────────────
