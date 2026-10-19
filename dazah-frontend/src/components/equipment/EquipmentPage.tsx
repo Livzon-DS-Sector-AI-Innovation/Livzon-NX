@@ -4,7 +4,7 @@ import { useEffect, useCallback, useRef, useState } from 'react'
 import { App, ConfigProvider, Tabs, Button } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import { MenuFoldOutlined, MenuUnfoldOutlined, ReloadOutlined } from '@ant-design/icons'
-import { EquipmentCategory, Location, Equipment, EquipmentStatistics } from '@/types/equipment'
+import { EquipmentCategory, Location, Equipment, EquipmentStatistics, DepartmentOption } from '@/types/equipment'
 import { useEquipmentStore } from '@/stores/equipment'
 import { fetchEquipmentsClient, fetchEquipmentStatisticsClient, fetchCategoriesClient, fetchLocationsClient, fetchDepartmentsClient } from '@/lib/api/equipment-client'
 import { StatsCards } from './StatsCards'
@@ -24,7 +24,7 @@ interface EquipmentPageProps {
   initialEquipments: Equipment[]
   initialTotal: number
   initialStatistics: EquipmentStatistics
-  initialDepartments: import('@/lib/api/equipment').DepartmentOption[]
+  initialDepartments: DepartmentOption[]
 }
 
 const SIDEBAR_WIDTH = 280

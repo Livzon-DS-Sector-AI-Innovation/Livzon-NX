@@ -10,6 +10,7 @@ import { fetchSparePartsClient, fetchStockWarningsClient } from '@/lib/api/equip
 import { SparePartTable } from './SparePartTable'
 import { SparePartDrawer } from './SparePartDrawer'
 import { StockInboundDrawer } from './StockInboundDrawer'
+import { StockWarningTable } from './StockWarningTable'
 
 interface SparePartsPageProps {
   workshopCode: string
@@ -29,6 +30,7 @@ export function SparePartsPage({
   const {
     sparePartPage, sparePartPageSize, sparePartKeyword,
     setSpareParts, setSparePartTotal, setSparePartLoading, setStockWarnings,
+    stockWarnings,
     openSparePartDrawer,
   } = useEquipmentStore()
 
@@ -77,6 +79,23 @@ export function SparePartsPage({
             {workshopLabel} · 备件库存 · 入库管理 · 库存预警 · 物料追踪
           </p>
         </div>
+        {/* 库存预警：仅存在低于最低库存的备件时展示 */}
+        {stockWarnings.length > 0 && (
+          <div
+            style={{
+              background: '#ffffff',
+              padding: 20,
+              borderRadius: 12,
+              border: '1px solid #e5e3df',
+              marginBottom: 16,
+            }}
+          >
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a', marginBottom: 12 }}>
+              库存预警
+            </div>
+            <StockWarningTable />
+          </div>
+        )}
         <div
           style={{
             background: '#ffffff',

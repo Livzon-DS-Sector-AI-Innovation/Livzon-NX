@@ -35,10 +35,6 @@ export { MaintenancePlanTable } from './MaintenancePlanTable'
 export { MaintenancePlanDrawer } from './MaintenancePlanDrawer'
 
 // inspection template components
-export { PersonnelSelect } from './PersonnelSelect'
-export { InspectionTemplateTable } from './InspectionTemplateTable'
-export { InspectionTemplateDrawer } from './InspectionTemplateDrawer'
-export { InspectionItemDrawer } from './InspectionItemDrawer'
 export { InspectionCompleteDrawer } from './InspectionCompleteDrawer'
 
 // repair drawer
