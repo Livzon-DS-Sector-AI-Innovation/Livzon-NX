@@ -15,6 +15,7 @@ from app.platform.identity.data_scope import (
     current_page_key,
     resolve_user_department_scope,
 )
+from app.platform.identity.public_api import has_current_page_permission
 from app.platform.identity.rbac import resolve_user_permissions
 
 logger = logging.getLogger(__name__)
@@ -159,13 +160,24 @@ async def assert_quality_edit_scope(
 ) -> None:
     """质量记录编辑/删除准入（端点内精校验）。
 
-    通过条件（任一）：
+    页面请求必须具有当前页面 operate，并遵守记录的部门数据范围。
+    无页面上下文的兼容调用通过条件（任一）：
       - "*" 通配（超管/DEV 本地开发用户）或模块级 quality:write
       - 命中 scope_permission（当前角色所属子域的全编辑权限）
       - 记录归属当前用户（created_by == 本人，或记录人员列命中本人）
     否则抛 403。列表/详情读取不受此限制（可见性由 resolve_quality_list_scope 控制）。
     """
     assert current_user is not None
+    if current_page_key.get() is not None:
+        if not await has_current_page_permission(db, current_user, "quality"):
+            raise AppException(status_code=403, message="未获得当前质量页面操作权限")
+        if record is not None:
+            from app.modules.quality.page_access import assert_quality_record_department
+
+            await assert_quality_record_department(
+                db, getattr(record, "department", None)
+            )
+        return
     permissions = await resolve_user_permissions(db, current_user.id)
     if "*" in permissions or "quality:write" in permissions:
         return

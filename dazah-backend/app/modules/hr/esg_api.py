@@ -9,17 +9,18 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import StreamingResponse
-from openpyxl import Workbook  # type: ignore[import-untyped]
-from openpyxl.styles import (  # type: ignore[import-untyped]
+from openpyxl import Workbook
+from openpyxl.styles import (
     Alignment,
     Border,
     Font,
     PatternFill,
     Side,
 )
-from openpyxl.worksheet.datavalidation import (  # type: ignore[import-untyped]
+from openpyxl.worksheet.datavalidation import (
     DataValidation,
 )
+from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -304,7 +305,7 @@ async def export_esg_records(
     # 布局按模板《ESG培训报表模板（更新时间2026.05.29）.xls》（不含选项行）：
     # 行1 标题 / 行2 创建日期 / 行3 制表信息 / 行4 表头 / 行5+ 数据
     wb = Workbook()
-    ws = wb.active
+    ws = wb.worksheets[0]
     ws.title = "集团培训明细表"
     thin = Border(
         left=Side(style="thin"),
@@ -399,6 +400,8 @@ async def import_esg_records(
     )
     wb = load_workbook(BytesIO(content), data_only=True)
     ws = wb.active
+    if not isinstance(ws, Worksheet):
+        raise AppException(422, "Excel 活动页必须是可读取的数据工作表")
 
     header_row, col_map = 0, {}
     for ri, row in enumerate(
@@ -421,16 +424,10 @@ async def import_esg_records(
     created = 0
     for row in ws.iter_rows(min_row=header_row + 1, values_only=True):
         vals = {col_map[ci]: (row[ci] if ci < len(row) else None) for ci in col_map}
-        name = (
-            (vals.get("employee_name") or "").strip()
-            if isinstance(vals.get("employee_name"), str)
-            else ""
-        )
-        tname = (
-            (vals.get("training_name") or "").strip()
-            if isinstance(vals.get("training_name"), str)
-            else ""
-        )
+        name_value = vals.get("employee_name")
+        training_value = vals.get("training_name")
+        name = name_value.strip() if isinstance(name_value, str) else ""
+        tname = training_value.strip() if isinstance(training_value, str) else ""
         if not name and not tname:
             continue
         age = vals.get("age")
@@ -439,14 +436,14 @@ async def import_esg_records(
             training_date=_parse_esg_date(vals.get("training_date")) or date.today(),
             training_name=tname or "培训",
             # 导入兜底：Excel 缺省时按集团填报口径补默认值（线下/部门组织/中国大陆）
-            training_method=(vals.get("training_method") or "").strip()
+            training_method=str(vals.get("training_method") or "").strip()
             or _ESG_IMPORT_DEFAULTS["training_method"],
-            caliber=(vals.get("caliber") or "").strip()
+            caliber=str(vals.get("caliber") or "").strip()
             or _ESG_IMPORT_DEFAULTS["caliber"],
-            training_type=(vals.get("training_type") or "").strip() or None,
+            training_type=str(vals.get("training_type") or "").strip() or None,
             employee_name=name or "未知",
             employee_account=vals.get("employee_account") or None,
-            location_address=(vals.get("location_address") or "").strip()
+            location_address=str(vals.get("location_address") or "").strip()
             or _ESG_IMPORT_DEFAULTS["location_address"],
             department=department,
             employee_level=vals.get("employee_level") or None,

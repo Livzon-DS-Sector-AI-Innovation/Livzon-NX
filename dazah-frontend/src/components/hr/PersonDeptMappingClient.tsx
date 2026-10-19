@@ -7,6 +7,7 @@ import {
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { fetchFeishuMembers, type DeptMappingItem } from '@/lib/api/client/hr'
+import { usePagePermissions } from '@/hooks/usePagePermissions'
 import {
   createTrainingDeptMappingAction,
   updateTrainingDeptMappingAction,
@@ -47,6 +48,7 @@ export default function PersonDeptMappingClient({
   onChanged,
 }: Props) {
   const { message } = App.useApp()
+  const { canSync, canDelete } = usePagePermissions('hr:hr-settings:hr-settings-dept-mapping')
 
   const personRows: PersonRow[] = mappings
     .filter((m) => m.mapping_type === 'person')
@@ -104,6 +106,7 @@ export default function PersonDeptMappingClient({
   }
 
   const handleBatchSave = async () => {
+    if (!canSync) return
     if (selectedNames.length === 0) {
       message.error('请先选择人员')
       return
@@ -145,6 +148,7 @@ export default function PersonDeptMappingClient({
   }
 
   const handleToggle = async (row: PersonRow, enabled: boolean) => {
+    if (!canSync) return
     try {
       await updateTrainingDeptMappingAction(row.id, { enabled })
       message.success(enabled ? '已启用' : '已停用')
@@ -155,6 +159,7 @@ export default function PersonDeptMappingClient({
   }
 
   const handleEditSave = async () => {
+    if (!canSync) return
     if (!editing) return
     if (!editTarget) {
       message.error('请选择归属部门')
@@ -177,6 +182,7 @@ export default function PersonDeptMappingClient({
   }
 
   const handleDelete = async (row: PersonRow) => {
+    if (!canDelete) return
     try {
       await deleteTrainingDeptMappingAction(row.id)
       message.success(`已删除「${row.name}」的人员归属配置`)
@@ -200,7 +206,7 @@ export default function PersonDeptMappingClient({
       dataIndex: 'enabled',
       width: 90,
       render: (v: boolean, row: PersonRow) => (
-        <Switch size="small" checked={v} onChange={(checked) => handleToggle(row, checked)} />
+        <Switch disabled={!canSync} size="small" checked={v} onChange={(checked) => handleToggle(row, checked)} />
       ),
     },
     {
@@ -210,8 +216,10 @@ export default function PersonDeptMappingClient({
       render: (_: unknown, row: PersonRow) => (
         <Space>
           <Button
+            disabled={!canSync}
             size="small"
             onClick={() => {
+              if (!canSync) return
               setEditing(row)
               setEditTarget(row.target)
               setEditRemark(row.remark)
@@ -219,8 +227,8 @@ export default function PersonDeptMappingClient({
           >
             编辑
           </Button>
-          <Popconfirm title={`删除「${row.name}」的人员归属配置？`} onConfirm={() => handleDelete(row)}>
-            <Button size="small" danger>删除</Button>
+          <Popconfirm disabled={!canDelete} title={`删除「${row.name}」的人员归属配置？`} onConfirm={() => handleDelete(row)}>
+            <Button disabled={!canDelete} size="small" danger>删除</Button>
           </Popconfirm>
         </Space>
       ),
@@ -239,6 +247,7 @@ export default function PersonDeptMappingClient({
         <div>
           <Typography.Text strong>人员（可多选）</Typography.Text>
           <Select
+            disabled={!canSync}
             mode="multiple"
             showSearch
             allowClear
@@ -259,6 +268,7 @@ export default function PersonDeptMappingClient({
         <div>
           <Typography.Text strong>归属部门</Typography.Text>
           <Select
+            disabled={!canSync}
             showSearch
             style={{ width: 220 }}
             placeholder="选择台账部门"
@@ -278,7 +288,7 @@ export default function PersonDeptMappingClient({
             onChange={(e) => setRemark(e.target.value)}
           />
         </div>
-        <Button type="primary" icon={<PlusOutlined />} loading={saving} onClick={handleBatchSave}>
+        <Button disabled={!canSync} type="primary" icon={<PlusOutlined />} loading={saving} onClick={handleBatchSave}>
           批量配置
         </Button>
         <Button
@@ -304,7 +314,7 @@ export default function PersonDeptMappingClient({
 
       <Modal
         title={editing ? `编辑人员归属：${editing.name}` : '编辑人员归属'}
-        open={!!editing}
+        open={!!editing && canSync}
         onCancel={() => setEditing(null)}
         onOk={handleEditSave}
         confirmLoading={saving}
@@ -316,6 +326,7 @@ export default function PersonDeptMappingClient({
           <div>
             <Typography.Text strong>归属部门</Typography.Text>
             <Select
+              disabled={!canSync}
               showSearch
               style={{ width: '100%', marginTop: 4 }}
               value={editTarget || undefined}

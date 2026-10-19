@@ -81,7 +81,11 @@ export async function proxy(request: NextRequest) {
       const response = await fetch(`${getServerApiBaseUrl()}/api/v1/identity/me`, {
         headers: authHeaders, cache: 'no-store', signal: AbortSignal.timeout(10000),
       })
-      if (response.status === 401) return NextResponse.redirect(new URL('/login', request.url))
+      if (response.status === 401) {
+        const login = new URL('/login', request.url)
+        login.searchParams.set('next', request.nextUrl.pathname + request.nextUrl.search)
+        return NextResponse.redirect(login)
+      }
       if (!response.ok) return denied('暂时无法验证页面权限，请稍后重试。', 503)
       const payload = await response.json() as { data?: User }
       user = payload.data

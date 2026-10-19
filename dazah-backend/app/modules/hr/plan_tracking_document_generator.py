@@ -4,10 +4,13 @@ import logging
 from copy import copy
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-import openpyxl  # type: ignore[import-untyped]
+import openpyxl
+from openpyxl.styles import Alignment, Border, Font
+from openpyxl.worksheet.worksheet import Worksheet
 
+from app.core.exceptions import AppException
 from app.modules.hr.date_format import fmt_date_obj
 
 logger = logging.getLogger(__name__)
@@ -47,6 +50,8 @@ def generate_plan_tracking_excel(
     template_path = _find_template()
     wb = openpyxl.load_workbook(str(template_path))
     ws = wb.active
+    if not isinstance(ws, Worksheet):
+        raise AppException(500, "导出模板缺少数据工作表")
 
     # 模板结构: 行2 程序标题, 行4 年度月份标题, 行5
     # 培训内容/培训跟踪工作, 行6 表头, 行7-13 数据行, 行14 底部合并行
@@ -71,9 +76,9 @@ def generate_plan_tracking_excel(
             for col in range(1, 11):
                 src = ws.cell(row=style_src_row, column=col)
                 dst = ws.cell(row=new_row, column=col)
-                dst.font = copy(src.font)
-                dst.alignment = copy(src.alignment)
-                dst.border = copy(src.border)
+                dst.font = cast(Font, copy(src.font))
+                dst.alignment = cast(Alignment, copy(src.alignment))
+                dst.border = cast(Border, copy(src.border))
 
     for idx, record in enumerate(records):
         row = data_start_row + idx

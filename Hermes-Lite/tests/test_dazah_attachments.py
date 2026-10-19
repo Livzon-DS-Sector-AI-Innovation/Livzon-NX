@@ -157,6 +157,23 @@ def test_persistent_attachment_catalog_routes_follow_up_operations() -> None:
     assert "agent.delete_attachment" in instruction
 
 
+def test_tabular_catalog_keeps_backend_selection_and_validation_authority() -> None:
+    attachment_id = str(uuid.uuid4())
+    payload = _payload(
+        message="修改图表工作簿.xlsx 中的活动工作表",
+        attachment_catalog=[{
+            "attachment_id": attachment_id, "filename": "图表工作簿.xlsx",
+            "kind": "document", "version": 1,
+        }],
+    )
+    instruction = _attachment_catalog_instruction(payload)
+    assert attachment_id in instruction
+    assert "agent.mutate_tabular_attachment" in instruction
+    # Sheet selection remains an input to the dynamic backend capability.
+    # Gateway instructions must not invent a fallback to Sheet1 on rejection.
+    assert "Sheet1" not in instruction
+
+
 def test_gateway_cached_pdf_text_is_extracted_without_exposing_path(
     tmp_path: Path,
     monkeypatch,

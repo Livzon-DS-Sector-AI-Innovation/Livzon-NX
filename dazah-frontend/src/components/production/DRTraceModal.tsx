@@ -1,5 +1,7 @@
 'use client'
 
+import overlayStyles from './production-overlays.module.css'
+
 // DR 多拉菌素批次追溯弹窗（血链流程图，数据源 /dr/lineage）
 // 适配自 MC TraceModal：工段配置改为 DR 七工段，无 AI 分析（第一版不做），支持断链标注
 
@@ -253,11 +255,13 @@ export default function DRTraceModal({ stage, batchNo, onClose, stageConfig, sta
 
   return (
     <Modal
+      className={overlayStyles.traceModal}
       title={<span>批次追溯：<Text strong style={{ color: '#f5222d', margin: '0 8px' }}>{batchNo}</Text>
         {canExport && <Button icon={<DownloadOutlined />} size="small" onClick={exportPng}>导出</Button>}
       </span>}
       open onCancel={onClose} destroyOnHidden
-      width={Math.min(window.innerWidth - 100, Math.max(1100, maxX + 100))}
+      width={Math.max(1100, maxX + 100)}
+      style={{ maxWidth: 'calc(100vw - 32px)' }}
       styles={{ body: { minHeight: '60vh', padding: 0 } }}
       footer={null}
     >

@@ -3,6 +3,7 @@
 import PlatformNotice from '@/components/shared/PlatformNotice'
 
 import { useRef, useState } from "react"
+import { Button, Drawer } from "antd"
 import { confirmOotLimitImport, previewOotLimitImport, type OotLimitImportPreviewFile } from "@/actions/quality"
 
 interface OotLimitImportDrawerProps {
@@ -110,119 +111,105 @@ export function OotLimitImportDrawer({ isOpen, onClose, onSuccess }: OotLimitImp
   }
 
   return (
-    <>
-      {isOpen && <div className="fixed inset-0 bg-black/30 z-40" onClick={handleClose} />}
-      <div className={`fixed top-0 right-0 h-full w-[520px] bg-white shadow-2xl z-50 transform transition-transform duration-300 ${isOpen ? "translate-x-0" : "translate-x-full"}`}>
-        <div className="flex flex-col h-full">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">导入OOT限度告知单</h2>
-            <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-            <PlatformNotice type="warning" title="导入将更新匹配产品的全部限度明细，未匹配产品将新建" description={<>选择一个或多个「XX年 XX 产品OOT限度通知单」Word 文件（.docx）。系统按
-              <span className="font-medium"> 产品名 + 年份 </span>匹配已有产品：命中则更新该产品全部限度明细，未命中则自动新建产品。
-            </>} />
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">选择文件（可多选）</label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".docx"
-                  multiple
-                  onChange={handleFilesChange}
-                  className="hidden"
-                  id="oot-limit-import-file"
-                />
-                <label htmlFor="oot-limit-import-file" className="cursor-pointer">
-                  <div className="text-3xl mb-2">📄</div>
-                  <div className="text-sm text-gray-600">
-                    {files.length > 0 ? `已选择 ${files.length} 个文件` : "点击选择 Word 告知单 (.docx)"}
-                  </div>
-                </label>
-              </div>
-              {files.length > 0 && (
-                <div className="mt-2 space-y-1">
-                  {files.map((file) => (
-                    <div key={file.name} className="text-xs text-gray-500 truncate">· {file.name}</div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {errorMsg && <PlatformNotice type="error" title={<>{errorMsg}</>} />}
-            {successMsg && <PlatformNotice type="success" title={<>{successMsg}</>} />}
-
-            {previewed && (
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-gray-900">导入预览</h3>
-                {previewFiles.map((entry) => (
-                  <div
-                    key={entry.filename}
-                    className="rounded-lg p-3 text-sm border bg-gray-50 border-gray-200"
-                  >
-                    <div className="flex justify-between gap-2">
-                      <span className="font-medium text-gray-800 truncate">{entry.filename}</span>
-                      {entry.status === "error" ? (
-                        <span className="text-red-600 shrink-0">解析失败</span>
-                      ) : (
-                        <span className={entry.mode === "update" ? "text-amber-600 shrink-0" : "text-green-700 shrink-0"}>
-                          {modeLabel(entry)}
-                        </span>
-                      )}
-                    </div>
-                    {entry.status === "ok" && (
-                      <>
-                        <div className="text-xs text-gray-500 mt-1">
-                          {entry.product_name}
-                          {entry.document_year ? ` · ${entry.document_year}年` : ""} · 限度 {entry.item_count} 项
-                        </div>
-                        {entry.warnings && entry.warnings.length > 0 && (
-                          <PlatformNotice type="warning" className="mt-1" title={`解析结果包含 ${entry.warnings.length} 项提醒`}
-                            description={entry.warnings.join("；")} />
-                        )}
-                        {entry.row_errors && entry.row_errors.length > 0 && (
-                          <div className="mt-1 max-h-32 overflow-y-auto">
-                            {entry.row_errors.map((error, index) => (
-                              <PlatformNotice type="error" key={index} title={<>{error}</>} />
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    )}
-                    {entry.status === "error" && <PlatformNotice type="error" className="mt-1" title="文件解析失败"
-                      description={entry.error} />}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="px-6 py-4 border-t border-gray-200 flex gap-3">
-            <button onClick={handleClose} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium" disabled={importing}>
-              取消
-            </button>
-            <button
-              onClick={handlePreview}
-              disabled={files.length === 0 || previewing || importing}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
-            >
-              {previewing ? "解析中..." : "预览解析结果"}
-            </button>
-            {previewed && (
-              <button
-                onClick={handleConfirm}
-                disabled={importing || previewFiles.every((entry) => entry.status === "error")}
-                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium disabled:opacity-50"
-              >
-                {importing ? "导入中..." : "确认导入"}
-              </button>
-            )}
-          </div>
+    <Drawer
+      open={isOpen}
+      onClose={handleClose}
+      size={520}
+      title={"导入OOT限度告知单"}
+      footer={
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={handleClose} disabled={importing}>取消</Button>
+          <Button type={previewed ? "default" : "primary"} onClick={handlePreview} disabled={files.length === 0 || previewing || importing}>
+            {previewing ? "解析中..." : "预览解析结果"}
+          </Button>
+          {previewed && (
+            <Button type="primary" onClick={handleConfirm} disabled={importing || previewFiles.every((entry) => entry.status === "error")}>
+              {importing ? "导入中..." : "确认导入"}
+            </Button>
+          )}
         </div>
+      }
+    >
+      <div className="space-y-5">
+        <PlatformNotice type="warning" title="导入将更新匹配产品的全部限度明细，未匹配产品将新建" description={<>选择一个或多个「XX年 XX 产品OOT限度通知单」Word 文件（.docx）。系统按
+          <span className="font-medium"> 产品名 + 年份 </span>匹配已有产品：命中则更新该产品全部限度明细，未命中则自动新建产品。
+        </>} />
+
+        <div>
+          <label className="block text-sm font-medium text-[var(--color-slate)] mb-2">选择文件（可多选）</label>
+          <div className="border-2 border-dashed border-[var(--color-hairline-strong)] rounded-lg p-6 text-center hover:border-[var(--color-primary-border)] transition-colors">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".docx"
+              multiple
+              onChange={handleFilesChange}
+              className="hidden"
+              id="oot-limit-import-file"
+            />
+            <label htmlFor="oot-limit-import-file" className="cursor-pointer">
+              <div className="text-3xl mb-2">📄</div>
+              <div className="text-sm text-[var(--color-slate)]">
+                {files.length > 0 ? `已选择 ${files.length} 个文件` : "点击选择 Word 告知单 (.docx)"}
+              </div>
+            </label>
+          </div>
+          {files.length > 0 && (
+            <div className="mt-2 space-y-1">
+              {files.map((file) => (
+                <div key={file.name} className="text-xs text-[var(--color-steel)] truncate">· {file.name}</div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {errorMsg && <PlatformNotice type="error" title={<>{errorMsg}</>} />}
+        {successMsg && <PlatformNotice type="success" title={<>{successMsg}</>} />}
+
+        {previewed && (
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-[var(--color-ink)]">导入预览</h3>
+            {previewFiles.map((entry) => (
+              <div
+                key={entry.filename}
+                className="rounded-lg p-3 text-sm border bg-[var(--color-surface-soft)] border-[var(--color-hairline)]"
+              >
+                <div className="flex justify-between gap-2">
+                  <span className="font-medium text-[var(--color-charcoal)] truncate">{entry.filename}</span>
+                  {entry.status === "error" ? (
+                    <span className="text-[var(--color-error)] shrink-0">解析失败</span>
+                  ) : (
+                    <span className={entry.mode === "update" ? "text-[var(--color-warning)] shrink-0" : "text-[var(--color-success)] shrink-0"}>
+                      {modeLabel(entry)}
+                    </span>
+                  )}
+                </div>
+                {entry.status === "ok" && (
+                  <>
+                    <div className="text-xs text-[var(--color-steel)] mt-1">
+                      {entry.product_name}
+                      {entry.document_year ? ` · ${entry.document_year}年` : ""} · 限度 {entry.item_count} 项
+                    </div>
+                    {entry.warnings && entry.warnings.length > 0 && (
+                      <PlatformNotice type="warning" className="mt-1" title={`解析结果包含 ${entry.warnings.length} 项提醒`}
+                        description={entry.warnings.join("；")} />
+                    )}
+                    {entry.row_errors && entry.row_errors.length > 0 && (
+                      <div className="mt-1 max-h-32 overflow-y-auto">
+                        {entry.row_errors.map((error, index) => (
+                          <PlatformNotice type="error" key={index} title={<>{error}</>} />
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+                {entry.status === "error" && <PlatformNotice type="error" className="mt-1" title="文件解析失败"
+                  description={entry.error} />}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-    </>
+    </Drawer>
   )
 }

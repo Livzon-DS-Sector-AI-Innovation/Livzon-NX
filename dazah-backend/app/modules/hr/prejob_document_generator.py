@@ -4,8 +4,10 @@ import logging
 from io import BytesIO
 from pathlib import Path
 
-import openpyxl  # type: ignore[import-untyped]
+import openpyxl
+from openpyxl.worksheet.worksheet import Worksheet
 
+from app.core.exceptions import AppException
 from app.modules.hr.date_format import fmt_date_obj
 from app.modules.hr.models import Employee
 
@@ -46,6 +48,8 @@ def _generate_old(employee: Employee) -> BytesIO:
     template_path = _find_old_template()
     wb = openpyxl.load_workbook(str(template_path))
     ws = wb.active
+    if not isinstance(ws, Worksheet):
+        raise AppException(500, "导出模板缺少数据工作表")
 
     # Part 1: Employee overview
     ws["C5"] = employee.name or ""

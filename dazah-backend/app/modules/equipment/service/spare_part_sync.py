@@ -16,6 +16,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import AppException
 from app.modules.equipment.models.spare_part import SparePart, SparePartStock
 from app.modules.warehouse import public_api as warehouse_public_api
 
@@ -110,6 +111,10 @@ async def sync_workshop(db: AsyncSession, workshop_code: str) -> dict[str, Any]:
         db, page_key=page_key
     )
     aggregated = _aggregate_rows(rows)
+    if any(not round(item.current_qty, 2).is_integer() for item in aggregated.values()):
+        raise AppException(
+            422, "备件库存当前仅支持整数，来源存在小数结存量，请先核对计量单位"
+        )
 
     existing = {
         part.code: part
@@ -158,8 +163,7 @@ async def sync_workshop(db: AsyncSession, workshop_code: str) -> dict[str, Any]:
             if stock is None:
                 stock = SparePartStock(spare_part_id=part.id, current_qty=0)
                 db.add(stock)
-            # 库存列为 Integer：聚合结果四舍五入取整
-            stock.current_qty = int(round(aggregated[code].current_qty))
+            stock.current_qty = int(round(aggregated[code].current_qty, 2))
         elif stock is not None and (stock.current_qty or 0) != 0:
             stock.current_qty = 0
             zeroed += 1

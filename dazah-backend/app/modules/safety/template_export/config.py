@@ -244,7 +244,7 @@ class TemplateInspector:
 
         *column_mapping* 可选 — 提供则优先使用，否则生成空映射。
         """
-        import openpyxl  # type: ignore[import-untyped]
+        import openpyxl
 
         wb = openpyxl.load_workbook(str(template_path))
         ws = wb.active
@@ -317,7 +317,7 @@ class TemplateInspector:
 
         从下往上扫描，第一行满足「至少 3 列有边框且有空列有内容」即为样本行。
         """
-        from openpyxl.styles import Border  # type: ignore[import-untyped]
+        from openpyxl.styles import Border
 
         no_border = Border()
         max_row = min(ws.max_row or 100, 100)
@@ -407,7 +407,7 @@ class TemplateInspector:
     @staticmethod
     def _build_empty_mapping(total_cols: int) -> dict[str, str]:
         """根据列数生成空的列映射。"""
-        from openpyxl.utils import get_column_letter  # type: ignore[import-untyped]
+        from openpyxl.utils import get_column_letter
 
         return {get_column_letter(c).lower(): "" for c in range(1, total_cols + 1)}
 

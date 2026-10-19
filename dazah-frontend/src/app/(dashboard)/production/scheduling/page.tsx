@@ -1,8 +1,10 @@
 'use client'
 
+import ProductionConfirmButton from '@/components/production/ProductionConfirmButton'
+
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, TdHTMLAttributes } from 'react'
-import { Card, Typography, Upload, Table, App, Row, Col, Button, Popconfirm, Space, Modal, Input, InputNumber, Tag } from 'antd'
+import { Card, Typography, Upload, Table, App, Row, Col, Button, Space, Modal, Input, InputNumber, Tag } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
 import type { ColumnsType } from 'antd/es/table'
 import { ScheduleOutlined, InboxOutlined, ReloadOutlined, DownloadOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined, FileSearchOutlined, EditOutlined } from '@ant-design/icons'
@@ -28,7 +30,6 @@ import BoardNavBlocks from '@/components/production/board-nav-blocks'
 import { useProductContextStore } from '@/stores/product-context'
 import { useAuthStore } from '@/stores/auth'
 import { PRODUCTION_SCHEDULING_SECTIONS } from '@/lib/production-overview-sections'
-import { usePermission } from '@/hooks/usePermission'
 import {
   hasProductionSchedulingProduct,
   PRODUCTION_PAGE_KEYS,
@@ -83,15 +84,14 @@ const MergeChangeTable = memo(function MergeChangeTable({
 }: {
   changes: ScheduleMergeChange[]
 }) {
-  const rows = useMemo(() => changes.slice(0, 200), [changes])
+  // Reports are immutable snapshots; assign row keys before Table paginates them.
+  const rows = useMemo(() => changes.slice(0, 200).map((change, key) => ({ ...change, key })), [changes])
   return (
     <Table
       size="small"
       pagination={{ pageSize: 10, showSizeChanger: false, hideOnSinglePage: true }}
       dataSource={rows}
-      rowKey={(c: ScheduleMergeChange) =>
-        `${c.block}|${c.row}|${c.date}|${c.column}`
-      }
+      rowKey="key"
       columns={changeColumns}
     />
   )
@@ -139,14 +139,13 @@ const ValidationIssueTable = memo(function ValidationIssueTable({
 }: {
   issues: ScheduleValidationIssue[]
 }) {
+  const rows = useMemo(() => issues.map((issue, key) => ({ ...issue, key })), [issues])
   return (
     <Table
       size="small"
       pagination={{ pageSize: 10, showSizeChanger: false, hideOnSinglePage: true }}
-      dataSource={issues}
-      rowKey={(issue: ScheduleValidationIssue) =>
-        `${issue.rule}|${issue.block ?? ''}|${issue.date ?? ''}|${issue.tank_no ?? ''}|${issue.batch_no ?? ''}`
-      }
+      dataSource={rows}
+      rowKey="key"
       columns={issueColumns}
     />
   )
@@ -215,9 +214,7 @@ function SchedulingContent({ productCode, hideCodes }: {
   const [constraintDraft, setConstraintDraft] = useState<ScheduleConstraintSettings | null>(null)
   const [savingConstraints, setSavingConstraints] = useState(false)
   const isFa = productCode === 'FA'
-  const { has } = usePermission()
-  const canFixHistory = has('production:schedule-archive')
-  const { canDelete, canBulkImport, canExport, canSync } = useProductionPermissions(
+  const { canDelete, canBulkImport, canExport, canSync, canFixHistory } = useProductionPermissions(
     PRODUCTION_PAGE_KEYS.scheduling,
   )
 
@@ -422,7 +419,7 @@ function SchedulingContent({ productCode, hideCodes }: {
   }
 
   const removeArchive = async (archiveId: string) => {
-    if (!canDelete) return
+    if (!canDelete) return false
     try {
       const res = await deleteScheduleExcelArchive(archiveId)
       if (res.code === 200) {
@@ -431,9 +428,11 @@ function SchedulingContent({ productCode, hideCodes }: {
         await reloadList()
       } else {
         message.error(res.message || '删除失败')
+        return false
       }
     } catch {
       message.error('删除失败')
+      return false
     }
   }
 
@@ -625,7 +624,7 @@ function SchedulingContent({ productCode, hideCodes }: {
       // 列宽不足会把删除按钮顶出单元格，留足余量
       title: '操作', key: 'actions', width: 310,
       render: (_: unknown, record: ScheduleExcelArchive) => (
-        <Space size={4} onClick={(e) => e.stopPropagation()}>
+        <Space size={4} wrap onClick={(e) => e.stopPropagation()}>
           <Button size="small" icon={<EyeOutlined />} onClick={() => openArchive(record.id)}>
             查看
           </Button>
@@ -645,16 +644,13 @@ function SchedulingContent({ productCode, hideCodes }: {
             </Button>
           )}
           {canDelete && (
-            <Popconfirm
+            <ProductionConfirmButton
               title="删除该排产存档？"
-              description="删除后不可恢复，原件文件一并移除。"
-              okText="删除"
-              cancelText="取消"
-              okButtonProps={{ danger: true }}
+              description={`存档：${record.file_name}。删除后不可恢复，原件文件一并移除。`}
+              confirmText="删除"
               onConfirm={() => removeArchive(record.id)}
-            >
-              <Button size="small" danger icon={<DeleteOutlined />} />
-            </Popconfirm>
+              size="small" danger icon={<DeleteOutlined />} aria-label="删除排产存档"
+            />
           )}
         </Space>
       ),

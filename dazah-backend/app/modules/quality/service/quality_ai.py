@@ -15,7 +15,7 @@ from typing import Any, cast
 import pytesseract  # type: ignore[import-untyped]
 from docx import Document
 from fastapi import HTTPException, UploadFile
-from openpyxl import load_workbook  # type: ignore[import-untyped]
+from openpyxl import load_workbook
 from PIL import Image
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession

@@ -5,6 +5,14 @@ import { proxy } from './proxy'
 vi.mock('@/lib/server-api', () => ({ getServerApiBaseUrl: () => 'http://backend.test' }))
 afterEach(() => vi.unstubAllGlobals())
 
+it('retains the exact Feishu energy task destination through login', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 401 })))
+  const result = await proxy(new NextRequest('http://frontend.test/energy/entry?task=task-id&source=feishu'))
+  const location = new URL(result.headers.get('location') || '')
+  expect(location.pathname).toBe('/login')
+  expect(location.searchParams.get('next')).toBe('/energy/entry?task=task-id&source=feishu')
+})
+
 function qualityMe(pageKey: string, permissions = ['access', 'query', 'operate']) {
   vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(JSON.stringify({ data: {
     role: 'user', page_permissions: [{ page_key: pageKey, module_code: 'quality', permissions }],

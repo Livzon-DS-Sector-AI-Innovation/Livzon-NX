@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getAuthorizedDirectoryEntryPath,
   getFirstAuthorizedModulePath,
+  getPostLoginPath,
   getAuthorizedPageMenus,
   getPageKeyByPath,
   getPermissionModuleName,
@@ -125,6 +126,18 @@ describe('page permission menu boundary', () => {
 
   it('keeps the first platform module as the administrator landing page', () => {
     expect(getFirstAuthorizedModulePath({ role: 'admin' })).toBe('/production')
+  })
+
+  it('preserves permitted task links and rejects unauthorized post-login targets', () => {
+    const user = { role: 'user', page_permissions: [{ page_key: 'energy:entry', module_code: 'energy', permissions: ['access' as const, 'query' as const] }] }
+    const target = '/energy/entry?task=task-1&source=feishu'
+    expect(getPostLoginPath(user, target)).toBe(target)
+    expect(getPostLoginPath(user, '/energy/settings')).toBe('/energy/entry')
+    expect(getPostLoginPath({ role: 'admin' }, target)).toBe(target)
+  })
+
+  it.each(['https://other.test', '//other.test', '/\\other.test', '/energy/../auth/logout', '/login?next=/energy/entry', '/api/v1/identity/auth/logout', '/energy/entry\n'])('rejects unsafe or authentication post-login target %j', target => {
+    expect(getPostLoginPath({ role: 'admin' }, target)).toBe('/production')
   })
 
   it('keeps retired CPV routes out of the quality permission menu', () => {

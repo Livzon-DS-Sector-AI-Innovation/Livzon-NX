@@ -10,6 +10,13 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_manual_release_defaults_to_current_production_site() -> None:
+    local = (ROOT / "scripts/deploy-production.ps1").read_text(encoding="utf-8")
+    assert re.search(r"\[string\]\$Server\s*=\s*'192\.168\.40\.251'", local)
+    assert re.search(r"\[string\]\$PublicHost\s*=\s*'192\.168\.40\.251'", local)
+    assert re.search(r"\[string\]\$SshUser\s*=\s*'livzon'", local)
+
+
 def test_manual_release_defaults_to_three_minute_notice() -> None:
     local = (ROOT / "scripts/deploy-production.ps1").read_text(encoding="utf-8")
     remote = (ROOT / "scripts/deploy-production-remote.sh").read_text(encoding="utf-8")

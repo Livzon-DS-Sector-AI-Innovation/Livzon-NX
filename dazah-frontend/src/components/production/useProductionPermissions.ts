@@ -40,6 +40,7 @@ export type ProductionSensitiveAction =
   | 'reject'
   | 'delete'
   | 'bulk_import'
+  | 'schedule-archive'
   | 'sensitive_export'
   | 'sync_config'
 
@@ -120,6 +121,7 @@ export function useProductionPermissions(pageKey: ProductionPageKey) {
     canReject: hasProductionPagePermission(user, pageKey, 'operate', 'reject'),
     canDelete: hasProductionPagePermission(user, pageKey, 'operate', 'delete'),
     canBulkImport: hasProductionPagePermission(user, pageKey, 'operate', 'bulk_import'),
+    canFixHistory: hasProductionPagePermission(user, pageKey, 'operate', 'schedule-archive'),
     canExport: hasProductionPagePermission(user, pageKey, 'operate', 'sensitive_export'),
     canSync: hasProductionPagePermission(user, pageKey, 'operate', 'sync_config'),
   }

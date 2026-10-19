@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { usePagePermissions } from '@/hooks/usePagePermissions'
 import { TableEmptyState } from '../TableEmptyState'
 import { qualityTokens } from '../themeTokens'
 
@@ -132,6 +133,7 @@ export function InspectionFeishuTable({
   monthFilter = '',
 }: Props) {
   const { message } = App.useApp()
+  const { canOperate, canDelete, canSync } = usePagePermissions()
   const queryClient = useQueryClient()
   const router = useRouter()
   const [syncing, setSyncing] = useState(false)
@@ -253,7 +255,7 @@ export function InspectionFeishuTable({
   }
 
   const handlePull = async () => {
-    if (!entityCode) return
+    if (!entityCode || !canSync) return
     setSyncing(true)
     try {
       let synced = 0
@@ -290,6 +292,7 @@ export function InspectionFeishuTable({
   }
 
   const openCreate = () => {
+    if (!canOperate) return
     setCreatePresetValues(undefined)
     // 仅表单模式：新增只打开飞书共享表单，本地弹窗录入入口彻底关闭
     if (createFormOnly) {
@@ -318,13 +321,14 @@ export function InspectionFeishuTable({
   }
 
   const openEdit = (record: Record<string, unknown>) => {
+    if (!canOperate) return
     setModalMode('edit')
     setEditingRecord(record)
     setModalOpen(true)
   }
 
   const handleDelete = async (record: Record<string, unknown>) => {
-    if (!entityCode) return
+    if (!entityCode || !canDelete) return
     try {
       await deleteInspectionFeishuRecord(entityCode, String(record.record_id ?? ''))
       message.success('删除成功，已同步飞书')
@@ -535,14 +539,15 @@ export function InspectionFeishuTable({
         )}
         {editable && (
           <>
-            <Button type="link" size="small" onClick={() => openEdit(record)}>编辑</Button>
+            <Button disabled={!canOperate} type="link" size="small" onClick={() => openEdit(record)}>编辑</Button>
             <Popconfirm
               title="删除后无法恢复，确定删除并同步飞书？"
               onConfirm={() => handleDelete(record)}
               okText="删除"
               cancelText="取消"
+              disabled={!canDelete}
             >
-              <Button type="link" size="small" danger>删除</Button>
+              <Button disabled={!canDelete} type="link" size="small" danger>删除</Button>
             </Popconfirm>
           </>
         )}
@@ -589,12 +594,12 @@ export function InspectionFeishuTable({
             </Button>
           )}
           {editable && !disableCreate && (canPush || formUrl) && (!createFormOnly || formUrl) && (
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+            <Button disabled={!canOperate} type="primary" icon={<PlusOutlined />} onClick={openCreate}>
               {createLabel}
             </Button>
           )}
           {editable && !disableCreate && enableCertificateCreate && entityCode && canPush && (
-            <Button icon={<RobotOutlined />} onClick={() => setCertModalOpen(true)}>
+            <Button disabled={!canOperate} icon={<RobotOutlined />} onClick={() => setCertModalOpen(true)}>
               证书识别新增
             </Button>
           )}
@@ -604,7 +609,7 @@ export function InspectionFeishuTable({
             </Button>
           </Tooltip>
           {pullApi && entityCode && (
-            <Button type="primary" icon={<SyncOutlined />} onClick={handlePull} loading={syncing}>
+            <Button disabled={!canSync} type="primary" icon={<SyncOutlined />} onClick={handlePull} loading={syncing}>
               同步飞书数据
             </Button>
           )}
@@ -702,7 +707,7 @@ export function InspectionFeishuTable({
       </Card>
       {editable && entityCode && (
               <InspectionFeishuRecordModal
-          open={modalOpen}
+          open={modalOpen && canOperate}
           entityCode={entityCode}
           mode={modalMode}
           initialValues={modalMode === 'create' ? createPresetValues : editingRecord}
@@ -715,9 +720,10 @@ export function InspectionFeishuTable({
       )}
       {editable && enableCertificateCreate && entityCode && (
         <InstrumentCertificateCreateModal
-          open={certModalOpen}
+          open={certModalOpen && canOperate}
           onClose={() => setCertModalOpen(false)}
           onApply={(mappedFields) => {
+            if (!canOperate) return
             setCertModalOpen(false)
             setModalMode('create')
             setEditingRecord(undefined)
@@ -728,7 +734,7 @@ export function InspectionFeishuTable({
       )}
       {editable && createWithMaterialPicker && (
         <InspectionCreateByMaterialModal
-          open={createModalOpen}
+          open={createModalOpen && canOperate}
           onClose={() => setCreateModalOpen(false)}
           onCreated={handleMaterialCreated}
           module={materialPickerModule}

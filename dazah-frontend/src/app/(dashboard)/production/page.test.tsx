@@ -1389,7 +1389,7 @@ describe('ProductionHomePage (fermentation board)', () => {
       await new Promise((r) => setTimeout(r, 120))
     })
     const confirmBtn = Array.from(
-      document.body.querySelectorAll('.ant-popover button, .ant-popconfirm button'),
+      document.body.querySelectorAll('.ant-modal[role="dialog"] button'),
     ).find((b) => (b.textContent || '').replace(/\s/g, '') === '删除') as HTMLElement
     expect(confirmBtn).toBeTruthy()
     await act(async () => {
@@ -1478,7 +1478,7 @@ describe('ProductionHomePage (fermentation board)', () => {
       await new Promise((r) => setTimeout(r, 120))
     })
     const confirmBtn = Array.from(
-      document.body.querySelectorAll('.ant-popover button, .ant-popconfirm button'),
+      document.body.querySelectorAll('.ant-modal[role="dialog"] button'),
     ).find((b) => (b.textContent || '').replace(/\s/g, '') === '删除') as HTMLElement
     expect(confirmBtn).toBeTruthy()
     await act(async () => {

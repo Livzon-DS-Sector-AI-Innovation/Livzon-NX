@@ -11,7 +11,8 @@ from uuid import UUID
 from docx import Document as DocxDocument
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import StreamingResponse
-from openpyxl import load_workbook  # type: ignore[import-untyped]
+from openpyxl import load_workbook
+from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -114,6 +115,8 @@ def _parse_excel_trainers(content: bytes) -> list[dict[str, Any]]:
     """解析 Excel 培训师清单，按首行表头映射列。"""
     wb = load_workbook(BytesIO(content), data_only=True)
     ws = wb.active
+    if not isinstance(ws, Worksheet):
+        raise AppException(422, "Excel 活动页必须是可读取的数据工作表")
 
     header_row = next(ws.iter_rows(min_row=1, max_row=1, values_only=True), None)
     header = [str(v).strip() if v is not None else "" for v in (header_row or [])]

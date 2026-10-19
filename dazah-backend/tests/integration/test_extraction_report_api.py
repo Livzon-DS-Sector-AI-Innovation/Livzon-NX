@@ -1,72 +1,67 @@
 """提炼工段成品日报端点集成测试。
 
 - 真库冒烟：日报 upsert（同日覆盖）与列表过滤（自建会话）。
-- 权限：无提炼产量权限时 403，且不触达数据层（HTTP 层，权限解析 mock）。
+- 权限：页面范围不包含提炼工段时 403，旧权限不得扩大范围。
 """
 
 from __future__ import annotations
 
 import json
-import uuid
 from collections.abc import AsyncIterator
 from datetime import date
 from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
 import app.modules.production.extraction_report_api as extraction_api
 import app.platform.identity.rbac as identity_rbac
-from app.main import app
-from app.platform.identity.deps import get_current_user
-from app.platform.identity.models import User
+from app.platform.identity.page_permissions import PagePermissionService
+from app.platform.identity.schemas import PageDataScopeInput
+from tests.modules.production.test_page_permission_acceptance import acceptance_app
 
 API = "/api/v1/production/extraction-daily-reports"
 
 
 @pytest.fixture
 async def auth_client(
-    client: AsyncClient, monkeypatch: Any
+    monkeypatch: Any,
 ) -> AsyncIterator[AsyncClient]:
+    app, _ = acceptance_app(
+        extraction_api.router, monkeypatch, "production:overview",
+        scope_type="production_extraction",
+    )
     monkeypatch.setattr(
         identity_rbac,
         "resolve_user_permissions",
         AsyncMock(return_value=["*"]),
     )
 
-    async def _override_current_user() -> User:
-        return User(
-            id=uuid.uuid4(),
-            name="提炼测试用户",
-            username=f"extract-test-{uuid.uuid4().hex[:10]}",
-            role="admin",
-            status="active",
-            auth_source="local",
-            grant_version=0,
-        )
-
-    app.dependency_overrides[get_current_user] = _override_current_user
-    try:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test",
+        headers={"X-Dazah-Page-Key": "production:overview"},
+    ) as client:
         yield client
-    finally:
-        app.dependency_overrides.pop(get_current_user, None)
 
 
 @pytest.mark.anyio
-async def test_daily_report_requires_extract_permission(
+async def test_daily_report_requires_extraction_page_scope(
     auth_client: AsyncClient,
     monkeypatch: Any,
 ) -> None:
-    """无提炼产量权限：列表与写入均 403，且不触达数据层。"""
+    """仅发酵范围：旧通配权限不能放开成品日报。"""
+    PagePermissionService.effective_grants.return_value[0].data_scope = (
+        PageDataScopeInput(scope_type="production_fermentation")
+    )
     monkeypatch.setattr(
         identity_rbac,
         "resolve_user_permissions",
-        AsyncMock(return_value=["production:fermentation-yield"]),
+        AsyncMock(return_value=["*"]),
     )
     denied_list = await auth_client.get(API)
     assert denied_list.status_code == 403
-    assert "提炼产量权限" in denied_list.json()["message"]
+    assert "提炼工段" in denied_list.json()["detail"]
 
     denied_post = await auth_client.post(
         API, json={"report_date": "2026-09-10", "quantity_kg": 1200}

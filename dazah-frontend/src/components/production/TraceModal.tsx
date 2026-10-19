@@ -1,5 +1,7 @@
 'use client'
 
+import overlayStyles from '@/components/production/production-overlays.module.css'
+
 import { useEffect, useState, useRef, useCallback } from 'react'
 import {Modal, Typography, Tag, Spin, Empty, App, Button, Input, Space, Popover,} from 'antd'
 import { SendOutlined, HistoryOutlined, DownloadOutlined } from '@ant-design/icons'
@@ -337,6 +339,7 @@ export default function TraceModal({ stage, batchNo, onClose, stageConfig, stage
 
   return (
     <Modal
+      className={overlayStyles.traceModal}
       title={<span>批次追溯：<Text strong style={{ color: '#f5222d', margin: '0 8px' }}>{batchNo}</Text>
         <Button size="small" type="primary" loading={aiLoading} onClick={doAiAnalysis} style={{ marginLeft: 12 }}>
           AI 分析
@@ -345,6 +348,8 @@ export default function TraceModal({ stage, batchNo, onClose, stageConfig, stage
           <Button icon={<DownloadOutlined />} size="small" style={{ marginLeft: 8 }} onClick={exportPng}>导出</Button>
         )}
         <Popover
+          classNames={{ root: overlayStyles.popover }}
+          align={{ overflow: { adjustX: true, adjustY: true, shiftX: true, shiftY: true }, htmlRegion: 'visible' }}
           trigger="click"
           onOpenChange={(open) => { if (open) loadHistory() }}
           placement="bottomLeft"
@@ -353,7 +358,7 @@ export default function TraceModal({ stage, batchNo, onClose, stageConfig, stage
             historyLoading ? <Spin size="small" /> :
             historyRecords.length === 0 ? <Text type="secondary">暂无历史分析</Text> :
             <div style={{ width: 520, maxHeight: 320, overflow: 'auto', fontSize: 12 }}>
-              <div style={{ display: 'flex', fontWeight: 600, borderBottom: '1px solid #f0f0f0', paddingBottom: 6, marginBottom: 4, color: '#999' }}>
+              <div style={{ display: 'flex', fontWeight: 600, borderBottom: '1px solid var(--color-border)', paddingBottom: 6, marginBottom: 4, color: 'var(--color-text-secondary)' }}>
                 <span style={{ width: 56 }}>状态</span>
                 <span style={{ width: 110 }}>日期</span>
                 <span style={{ width: 80 }}>批号名称</span>
@@ -361,7 +366,7 @@ export default function TraceModal({ stage, batchNo, onClose, stageConfig, stage
                 <span style={{ flex: 1 }}>分析</span>
               </div>
               {historyRecords.map((r) => (
-                <div key={r.id} style={{ display: 'flex', alignItems: 'center', padding: '4px 0', cursor: 'pointer', borderBottom: '1px solid #fafafa' }}
+                <div key={r.id} style={{ display: 'flex', alignItems: 'center', padding: '4px 0', cursor: 'pointer', borderBottom: '1px solid var(--color-border)' }}
                   onClick={() => { setAiResult({...r, analysis_text: null, session_id: r.session_id}); setChatMessages([]) }}>
                   <Tag color={r.severity === 'high' ? 'red' : r.severity === 'medium' ? 'orange' : 'green'} style={{ fontSize: 10, margin: 0, width: 48 }}>
                     {r.severity === 'high' ? '严重' : r.severity === 'medium' ? '中等' : '正常'}
@@ -369,7 +374,7 @@ export default function TraceModal({ stage, batchNo, onClose, stageConfig, stage
                   <Text style={{ width: 110 }} ellipsis>{(r.created_at || '').slice(0, 16)}</Text>
                   <Text style={{ width: 80 }} ellipsis>{r.stage_label || r.stage}</Text>
                   <Text style={{ width: 110 }} ellipsis>{r.batch_no}</Text>
-                  <Text style={{ flex: 1, color: '#666' }} ellipsis={{ tooltip: r.summary }}>{r.summary}</Text>
+                  <Text style={{ flex: 1, color: 'var(--color-text-secondary)' }} ellipsis={{ tooltip: r.summary }}>{r.summary}</Text>
                 </div>
               ))}
             </div>
@@ -379,7 +384,8 @@ export default function TraceModal({ stage, batchNo, onClose, stageConfig, stage
         </Popover>
       </span>}
       open onCancel={onClose} destroyOnHidden
-      width={Math.min(window.innerWidth - 100, Math.max(1100, maxX + 100))}
+      width={Math.max(1100, maxX + 100)}
+      style={{ maxWidth: 'calc(100vw - 32px)' }}
       styles={{ body: { minHeight: '60vh', padding: 0 } }}
       footer={null}
     >

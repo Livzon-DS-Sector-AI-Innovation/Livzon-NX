@@ -58,6 +58,7 @@ from app.platform.identity.data_scope import (
     resolve_user_department_scope,
 )
 from app.platform.identity.deps import RequireUser
+from app.platform.identity.public_api import has_current_page_permission
 from app.platform.identity.rbac import resolve_user_permissions
 from app.shared.module_api import create_module_router
 from app.shared.module_registry import MODULES_BY_CODE
@@ -115,7 +116,12 @@ def _assert_warehouse_edit_scope(page_key: str, permissions: list[str]) -> None:
     )
 
 
-def _assert_warehouse_write(permissions: list[str]) -> None:
+async def _assert_warehouse_write(db: AsyncSession, user: RequireUser) -> None:
+    if current_page_key.get() is not None:
+        if await has_current_page_permission(db, user, "warehouse"):
+            return
+        raise HTTPException(status_code=403, detail="未获得当前仓储页面操作权限")
+    permissions = await resolve_user_permissions(db, user.id)
     if "*" in permissions or "warehouse:write" in permissions:
         return
     raise HTTPException(status_code=403, detail="无权修改仓储飞书配置")
@@ -159,8 +165,7 @@ async def save_feishu_config(
     db: AsyncSession = Depends(get_db),
     service: WarehouseService = Depends(get_warehouse_service),
 ) -> Any:
-    permissions = await resolve_user_permissions(db, current_user.id)
-    _assert_warehouse_write(permissions)
+    await _assert_warehouse_write(db, current_user)
     data = await service.save_feishu_config(payload)
     return success_response(data=data)
 
@@ -176,8 +181,7 @@ async def test_feishu_config(
     db: AsyncSession = Depends(get_db),
     service: WarehouseService = Depends(get_warehouse_service),
 ) -> Any:
-    permissions = await resolve_user_permissions(db, current_user.id)
-    _assert_warehouse_write(permissions)
+    await _assert_warehouse_write(db, current_user)
     return success_response(data=await service.test_feishu_connectivity(payload))
 
 
@@ -203,8 +207,7 @@ async def create_feishu_root(
     db: AsyncSession = Depends(get_db),
     service: WarehouseService = Depends(get_warehouse_service),
 ) -> Any:
-    permissions = await resolve_user_permissions(db, current_user.id)
-    _assert_warehouse_write(permissions)
+    await _assert_warehouse_write(db, current_user)
     return success_response(data=await service.create_feishu_source_root(payload))
 
 
@@ -215,8 +218,7 @@ async def delete_feishu_root(
     db: AsyncSession = Depends(get_db),
     service: WarehouseService = Depends(get_warehouse_service),
 ) -> Any:
-    permissions = await resolve_user_permissions(db, current_user.id)
-    _assert_warehouse_write(permissions)
+    await _assert_warehouse_write(db, current_user)
     return success_response(data=await service.delete_feishu_source_root(root_id))
 
 
@@ -227,8 +229,7 @@ async def discover_feishu_root(
     db: AsyncSession = Depends(get_db),
     service: WarehouseService = Depends(get_warehouse_service),
 ) -> Any:
-    permissions = await resolve_user_permissions(db, current_user.id)
-    _assert_warehouse_write(permissions)
+    await _assert_warehouse_write(db, current_user)
     return success_response(data=await service.discover_feishu_source_root(root_id))
 
 
@@ -256,8 +257,7 @@ async def replace_warehouse_page_data(
     db: AsyncSession = Depends(get_db),
     service: WarehouseService = Depends(get_warehouse_service),
 ) -> Any:
-    permissions = await resolve_user_permissions(db, current_user.id)
-    _assert_warehouse_write(permissions)
+    await _assert_warehouse_write(db, current_user)
     return success_response(data=await service.replace_page_bindings(page_key, payload))
 
 
@@ -378,8 +378,7 @@ async def restart_warehouse_ws(
     current_user: RequireUser,
     db: AsyncSession = Depends(get_db),
 ) -> Any:
-    permissions = await resolve_user_permissions(db, current_user.id)
-    _assert_warehouse_write(permissions)
+    await _assert_warehouse_write(db, current_user)
     from app.modules.warehouse.ws_client import restart_ws_from_db
 
     return success_response(data=await restart_ws_from_db())
@@ -396,8 +395,7 @@ async def create_warehouse_analysis_profile(
     db: AsyncSession = Depends(get_db),
     service: WarehouseService = Depends(get_warehouse_service),
 ) -> Any:
-    permissions = await resolve_user_permissions(db, current_user.id)
-    _assert_warehouse_write(permissions)
+    await _assert_warehouse_write(db, current_user)
     return success_response(data=await service.create_analysis_profile(payload))
 
 
@@ -437,8 +435,7 @@ async def create_warehouse_analysis_prompt(
     db: AsyncSession = Depends(get_db),
     service: WarehouseService = Depends(get_warehouse_service),
 ) -> Any:
-    permissions = await resolve_user_permissions(db, current_user.id)
-    _assert_warehouse_write(permissions)
+    await _assert_warehouse_write(db, current_user)
     return success_response(data=await service.create_prompt_draft(profile_id, payload))
 
 
@@ -454,8 +451,7 @@ async def publish_warehouse_analysis_prompt(
     db: AsyncSession = Depends(get_db),
     service: WarehouseService = Depends(get_warehouse_service),
 ) -> Any:
-    permissions = await resolve_user_permissions(db, current_user.id)
-    _assert_warehouse_write(permissions)
+    await _assert_warehouse_write(db, current_user)
     return success_response(
         data=await service.publish_prompt_version(profile_id, prompt_id)
     )
@@ -472,8 +468,7 @@ async def run_warehouse_analysis(
     db: AsyncSession = Depends(get_db),
     service: WarehouseService = Depends(get_warehouse_service),
 ) -> Any:
-    permissions = await resolve_user_permissions(db, current_user.id)
-    _assert_warehouse_write(permissions)
+    await _assert_warehouse_write(db, current_user)
     return success_response(data=await service.run_analysis(profile_id))
 
 
@@ -540,9 +535,7 @@ async def sync_legacy_feishu_table(
     db: AsyncSession = Depends(get_db),
     service: WarehouseService = Depends(get_warehouse_service),
 ) -> Any:
-    permissions = await resolve_user_permissions(db, current_user.id)
-    if "*" not in permissions and "warehouse:write" not in permissions:
-        raise HTTPException(status_code=403, detail="无权同步仓储飞书数据表")
+    await _assert_warehouse_write(db, current_user)
     return await service.sync_feishu_table(table_id)
 
 

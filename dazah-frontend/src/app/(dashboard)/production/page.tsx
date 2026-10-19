@@ -1,11 +1,13 @@
 'use client'
 
+import ProductionConfirmButton from '@/components/production/ProductionConfirmButton'
+
 // 发酵车间生产实时看板（生产管理概览页，一期：计划驱动）
 // 数据源：最新排产 Excel 存档（当前扎帐周期块）+ 人工检修标注。
 // 实际完成/收率/合格率等指标待实际数据接入后启用（当前显示 --）。
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Card, Row, Col, Typography, Button, Tag, Table, App, Modal, Input, InputNumber, DatePicker, Drawer, Popconfirm, Select, Statistic, Empty, Space, Tooltip } from 'antd'
+import { Card, Row, Col, Typography, Button, Tag, Table, App, Modal, Input, InputNumber, DatePicker, Drawer, Select, Statistic, Empty, Space, Tooltip } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
 import {
   ScheduleOutlined,
@@ -622,7 +624,7 @@ export default function ProductionDashboard() {
   }
 
   const removeActual = async (item: FermentationBatchActual) => {
-    if (!canDelete) return
+    if (!canDelete) return false
     const res = await deleteFermentationBatchActual(item.id)
     if (res.code === 200) {
       message.success('已删除批次产量记录')
@@ -630,6 +632,7 @@ export default function ProductionDashboard() {
       await loadBoard()
     } else {
       message.error(res.message || '删除失败')
+      return false
     }
   }
 
@@ -1034,16 +1037,13 @@ export default function ProductionDashboard() {
           {canOperate && <Button size="small" type="link" onClick={() => openActualModal(record)}>
             编辑
           </Button>}
-          {canDelete && <Popconfirm
-            title="删除后看板图表不再统计该批次，确认删除？"
-            okText="删除"
-            cancelText="取消"
-            onConfirm={() => void removeActual(record)}
-          >
-            <Button size="small" type="link" danger>
-              删除
-            </Button>
-          </Popconfirm>}
+          {canDelete && <ProductionConfirmButton
+            title="删除批次产量记录？"
+            description={`批次：${record.batch_no}。删除后看板图表不再统计该批次。`}
+            confirmText="删除"
+            onConfirm={() => removeActual(record)}
+            size="small" type="link" danger
+          >删除</ProductionConfirmButton>}
         </Space>
       ),
     },
@@ -1948,6 +1948,7 @@ export default function ProductionDashboard() {
           dataSource={actuals}
           loading={actualsLoading}
           pagination={false}
+          scroll={{ x: 600 }}
           locale={{ emptyText: '暂无录入数据' }}
         />
         <Text type="secondary" style={{ fontSize: 12 }}>

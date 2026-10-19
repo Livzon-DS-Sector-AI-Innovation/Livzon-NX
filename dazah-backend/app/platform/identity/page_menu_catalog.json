@@ -762,6 +762,116 @@
     ]
   },
   {
+    "key": "energy",
+    "name": "能源管理",
+    "path": "/energy",
+    "icon": "bolt",
+    "permission_code": null,
+    "disabled": false,
+    "children": [
+      {
+        "key": "ledger-overview",
+        "name": "能源总览",
+        "path": "/energy",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "entry",
+        "name": "数据填报",
+        "path": "/energy/entry",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "reports",
+        "name": "能源报表",
+        "path": "/energy/reports",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "analysis",
+        "name": "用量分析",
+        "path": "/energy/analysis",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "data-quality",
+        "name": "数据质量",
+        "path": "/energy/data-quality",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "settings",
+        "name": "配置管理",
+        "path": "/energy/settings",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "history",
+        "name": "历史来源",
+        "path": "",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "sources",
+            "name": "历史来源与映射",
+            "path": "/energy/sources",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "data",
+            "name": "历史快照",
+            "path": "/energy/data",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "sync-runs",
+            "name": "历史同步记录",
+            "path": "/energy/sync-runs",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "feishu-config",
+            "name": "历史飞书配置",
+            "path": "/energy/feishu-config",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          }
+        ]
+      }
+    ]
+  },
+  {
     "key": "quality",
     "name": "质量管理",
     "path": "/quality",

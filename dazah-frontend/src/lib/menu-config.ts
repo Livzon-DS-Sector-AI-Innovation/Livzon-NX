@@ -1,4 +1,3 @@
-import { ENERGY_DATA_PAGES } from "./energy-data-pages"
 import { registrationCertificateSheets } from "./registration-certificate"
 import { registrationDeclarationProgressSheets } from "./registration-declaration-progress"
 import { registrationProjectLedgerSheets } from "./registration-project-ledger"
@@ -166,14 +165,18 @@ export const moduleMenus: ModuleMenu[] = [
     icon: "bolt",
     path: "/energy",
     children: [
-      { key: "overview", label: "能源总览", path: "/energy" },
-      ...ENERGY_DATA_PAGES.map((page) => ({
-        key: page.key,
-        label: page.label,
-        path: `/energy/${page.slug}`,
-        feishuPageKey: page.pageKey,
-      })),
-      { key: "feishu-config", label: "飞书配置", path: "/energy/feishu-config", placement: "bottom" },
+      { key: "ledger-overview", label: "能源总览", path: "/energy", feishuPageKey: "" },
+      { key: "entry", label: "数据填报", path: "/energy/entry", feishuPageKey: "" },
+      { key: "reports", label: "能源报表", path: "/energy/reports", feishuPageKey: "" },
+      { key: "analysis", label: "用量分析", path: "/energy/analysis", feishuPageKey: "" },
+      { key: "data-quality", label: "数据质量", path: "/energy/data-quality", feishuPageKey: "" },
+      { key: "settings", label: "配置管理", path: "/energy/settings", placement: "bottom", feishuPageKey: "" },
+      { key: "history", label: "历史来源", path: "", children: [
+        { key: "sources", label: "历史来源与映射", path: "/energy/sources", feishuPageKey: "" },
+        { key: "data", label: "历史快照", path: "/energy/data", feishuPageKey: "" },
+        { key: "sync-runs", label: "历史同步记录", path: "/energy/sync-runs", feishuPageKey: "" },
+        { key: "feishu-config", label: "历史飞书配置", path: "/energy/feishu-config", feishuPageKey: "" },
+      ] },
     ],
   },
 
@@ -998,6 +1001,21 @@ export function getFirstAuthorizedModulePath(user: ModuleLandingAccess): string 
     if (path) return path
   }
   return NO_AUTHORIZED_PAGE_PATH
+}
+
+/** Keep a permitted business deep link through SSO, including its task query. */
+export function getPostLoginPath(user: ModuleLandingAccess, nextPath?: string): string {
+  const fallback = getFirstAuthorizedModulePath(user)
+  if (!nextPath?.startsWith('/') || nextPath.startsWith('//') || /[\\\u0000-\u001f\u007f]/.test(nextPath)) return fallback
+  const origin = 'https://dazah.invalid'
+  const target = new URL(nextPath, origin)
+  if (target.origin !== origin || /^\/(?:api|auth|login)(?:\/|$)/.test(target.pathname)) return fallback
+  if (user.role !== 'admin') {
+    const pageKey = getPageKeyByPath(target.pathname)
+    const grant = expandEquipmentPagePermissions(user.page_permissions).find(item => item.page_key === pageKey)
+    if (!pageKey || !grant?.permissions?.includes('access') || !grant.permissions.includes('query')) return fallback
+  }
+  return target.pathname + target.search + target.hash
 }
 
 function collectPageRoutes(

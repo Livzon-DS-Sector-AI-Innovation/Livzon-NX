@@ -19,7 +19,8 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
-import openpyxl  # type: ignore[import-untyped]
+import openpyxl
+from openpyxl.styles import Alignment
 
 from app.core.exceptions import AppException
 from app.modules.hr.date_format import fmt_date_str
@@ -66,7 +67,7 @@ def _apply_data_style(ws: Any, row: int, col: int) -> None:
         f.size = 10.5  # 5号
         dst.font = f
         # 用户要求：可编辑区域填写内容一律居中
-        dst.alignment = openpyxl.styles.Alignment(
+        dst.alignment = Alignment(
             horizontal="center", vertical="center", wrap_text=True
         )
         dst.border = copy(src.border)

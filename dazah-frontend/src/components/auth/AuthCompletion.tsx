@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import type { User } from '@/types/user'
-import { getFirstAuthorizedModulePath } from '@/lib/menu-config'
+import { getPostLoginPath } from '@/lib/menu-config'
 
 import { AuthLayout } from './AuthLayout'
 import styles from './AuthLayout.module.css'
@@ -117,21 +117,14 @@ export function AuthCompletion({ nextPath }: AuthCompletionProps) {
       }
 
       setUser(payload.data)
-      const landingPath = getFirstAuthorizedModulePath(payload.data)
+      const landingPath = getPostLoginPath(payload.data, nextPath)
       setState('ready')
       readyTimer.current = setTimeout(() => {
         setState('entering')
         enterTimer.current = setTimeout(() => {
-          const documentWithTransition = document as Document & {
-            startViewTransition?: (callback: () => void) => void
-          }
-          if (documentWithTransition.startViewTransition) {
-            documentWithTransition.startViewTransition(() => {
-              router.replace(landingPath)
-            })
-          } else {
-            router.replace(landingPath)
-          }
+          // Keep navigation independent of snapshot animations, which can be
+          // aborted when the authentication tab is hidden.
+          router.replace(landingPath)
         }, ENTER_DURATION_MS)
       }, READY_DURATION_MS)
     } catch (error) {
@@ -145,7 +138,7 @@ export function AuthCompletion({ nextPath }: AuthCompletionProps) {
     } finally {
       clearTimeout(verificationTimeout)
     }
-  }, [clearPendingWork, router])
+  }, [clearPendingWork, nextPath, router])
 
   useEffect(() => {
     const startTimer = window.setTimeout(() => {

@@ -8,9 +8,9 @@ param(
   [string]$Version,
 
   [string]$PreviousVersion,
-  [string]$Server = '150.158.111.91',
-  [string]$PublicHost = '150.158.111.91',
-  [string]$SshUser = 'ubuntu',
+  [string]$Server = '192.168.40.251',
+  [string]$PublicHost = '192.168.40.251',
+  [string]$SshUser = 'livzon',
   [string]$SshKey = "$env:USERPROFILE\.ssh\id_ed25519",
   [string]$Builder = 'dazah-builder',
   [string]$BuildContext,

@@ -16,9 +16,11 @@ import logging
 from copy import copy
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-from openpyxl import load_workbook  # type: ignore[import-untyped]
+from openpyxl import load_workbook
+from openpyxl.styles import Alignment, Border, Fill, Font, Protection
+from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
@@ -122,9 +124,17 @@ async def export_maintenance_summary(
 
     workbook = load_workbook(_TEMPLATE_PATH)
     sheet = workbook.active
+    if not isinstance(sheet, Worksheet):
+        raise AppException(500, "维保导出模板缺少数据工作表")
     # 摘示例行样式与行高（逐列），删除示例数据后按数据量重插并回填
     style_refs = [
-        copy(sheet.cell(_DATA_FIRST_ROW, col)._style)
+        (
+            cast(Font, copy(sheet.cell(_DATA_FIRST_ROW, col).font)),
+            cast(Fill, copy(sheet.cell(_DATA_FIRST_ROW, col).fill)),
+            cast(Border, copy(sheet.cell(_DATA_FIRST_ROW, col).border)),
+            cast(Alignment, copy(sheet.cell(_DATA_FIRST_ROW, col).alignment)),
+            cast(Protection, copy(sheet.cell(_DATA_FIRST_ROW, col).protection)),
+        )
         for col in range(1, _DATA_COLUMNS + 1)
     ]
     number_formats = [
@@ -149,7 +159,9 @@ async def export_maintenance_summary(
         for col, value in enumerate(_row_values(offset + 1, item), start=1):
             cell = sheet.cell(excel_row, col)
             cell.value = value
-            cell._style = copy(style_refs[col - 1])  # noqa: SLF001
+            cell.font, cell.fill, cell.border, cell.alignment, cell.protection = (
+                copy(style) for style in style_refs[col - 1]
+            )
             cell.number_format = number_formats[col - 1]
         if data_row_height is not None:
             sheet.row_dimensions[excel_row].height = data_row_height

@@ -11,8 +11,6 @@ import { App,
   Tag,
   DatePicker,
   Input,
-  Popconfirm,
-  Modal
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
@@ -30,6 +28,7 @@ import {
 import { AREA_OPTIONS } from '@/types/pressure'
 import type { MergedPressureRow } from '@/types/pressure'
 import dayjs from 'dayjs'
+import ProductionConfirmButton from '@/components/production/ProductionConfirmButton'
 import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
@@ -75,18 +74,19 @@ export default function PressureRecordsPage() {
   }, [loadData])
 
   const handleDelete = async (record: MergedPressureRow) => {
-    if (!canDelete) return
+    if (!canDelete) return false
     const res = await deleteMergedRow({ point_id: record.point_id, date: record.date })
     if (res.code === 200) {
       message.success('删除成功')
       loadData()
     } else {
       message.error('删除失败')
+      return false
     }
   }
 
   const handleBatchDelete = async () => {
-    if (!canDelete) return
+    if (!canDelete) return false
     const rows = selectedRowKeys.map((key) => {
       const record = records.find((r) => `${r.point_id}-${r.date}` === key)!
       return { point_id: record.point_id, date: record.date }
@@ -96,6 +96,9 @@ export default function PressureRecordsPage() {
       message.success(`成功删除 ${res.data?.success_count || 0} 条`)
       setSelectedRowKeys([])
       loadData()
+    } else {
+      message.error('批量删除失败')
+      return false
     }
   }
 
@@ -182,9 +185,10 @@ export default function PressureRecordsPage() {
       key: 'action',
       width: 80,
       render: (_: any, record: MergedPressureRow) => canDelete ? (
-        <Popconfirm title="确认删除该记录？" onConfirm={() => handleDelete(record)}>
-          <Button type="link" danger size="small" icon={<DeleteOutlined />} />
-        </Popconfirm>
+        <ProductionConfirmButton title="确认删除该记录？"
+          description={`位点：${record.point_id}，日期：${record.date}。删除该日各时段压差记录，删除后不可恢复。`}
+          confirmText="删除" onConfirm={() => handleDelete(record)}
+          type="link" danger size="small" icon={<DeleteOutlined />} aria-label="删除压差记录" />
       ) : null
     },
   ]
@@ -218,9 +222,11 @@ export default function PressureRecordsPage() {
           <Button icon={<ReloadOutlined />} onClick={loadData}>刷新</Button>
           {canExport && <Button icon={<ExportOutlined />} onClick={handleExport}>导出</Button>}
           {canDelete && selectedRowKeys.length > 0 && (
-            <Popconfirm title={`确认删除 ${selectedRowKeys.length} 条记录？`} onConfirm={handleBatchDelete}>
-              <Button danger icon={<DeleteOutlined />}>批量删除 ({selectedRowKeys.length})</Button>
-            </Popconfirm>
+            <ProductionConfirmButton title={`确认删除 ${selectedRowKeys.length} 条记录？`}
+              description="删除所选日期与位点的各时段压差记录，删除后不可恢复。"
+              confirmText="删除" onConfirm={handleBatchDelete} danger icon={<DeleteOutlined />}>
+              批量删除 ({selectedRowKeys.length})
+            </ProductionConfirmButton>
           )}
         </Space>
 
@@ -242,6 +248,7 @@ export default function PressureRecordsPage() {
             onChange: setSelectedRowKeys
           }}
           size="middle"
+          scroll={{ x: 1000 }}
         />
       </Card>
     </div>

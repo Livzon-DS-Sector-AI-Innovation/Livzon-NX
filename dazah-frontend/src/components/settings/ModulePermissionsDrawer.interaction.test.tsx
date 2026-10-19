@@ -108,6 +108,33 @@ it('edits and saves the seven scheduling products independently', async () => {
   }))
 })
 
+it.each([false, true])('independently toggles scheduling history correction for a user (existing=%s)', async (existing) => {
+  const pageKey = 'production:plan:scheduling'
+  const data: UserPagePermissionsOut = { ...result('A'),
+    definitions: [{ page_key: pageKey, module_code: 'production', page_name: '排产计划',
+      route_path: '/production/scheduling', supported_scope_types: ['all'], sensitive_actions: [
+        { key: 'bulk_import', name: '批量导入或覆盖', category: 'bulk_change', description: '上传排产表' },
+        { key: 'schedule-archive', name: '排产历史修正', category: 'bulk_change', description: '修正历史列并记录原因' },
+      ] }], custom_page_keys: [pageKey],
+    grants: [{ page_key: pageKey, module_code: 'production', source: 'user',
+      permissions: ['access', 'query', 'operate'], sensitive_actions: existing ? ['bulk_import', 'schedule-archive'] : ['bulk_import'],
+      data_scope: { scope_type: 'all' } }],
+  }
+  mocks.get.mockResolvedValue(data)
+  mocks.replace.mockResolvedValue({ ok: true, data })
+  await show('A')
+  const checkbox = document.querySelector<HTMLInputElement>('input[value="schedule-archive"]')!
+  expect(checkbox.checked).toBe(existing)
+  await act(async () => checkbox.click())
+  expect(checkbox.checked).toBe(!existing)
+  expect(document.querySelector<HTMLInputElement>('input[value="bulk_import"]')!.checked).toBe(true)
+  const confirmation = await preview(false)
+  await act(async () => { await confirmation.onOk() })
+  expect(mocks.replace).toHaveBeenCalledWith('A', expect.objectContaining({ grants: [expect.objectContaining({
+    page_key: pageKey, sensitive_actions: existing ? ['bulk_import'] : ['bulk_import', 'schedule-archive'],
+  })] }))
+})
+
 it('saves a high risk user override without an expiry', async () => {
   const data = result('A')
   data.definitions![0].sensitive_actions = [{ key: 'delete', name: '删除员工档案', category: 'destructive', description: '删除员工记录' }]
@@ -212,10 +239,12 @@ function button(label: string) {
   expect(found, label).toBeTruthy()
   return found!
 }
-async function preview() {
-  await act(async () => button('可查看').click())
-  const batchConfirmation = mocks.confirm.mock.lastCall![0] as { onOk: () => Promise<void> | void }
-  await act(async () => { await batchConfirmation.onOk() })
+async function preview(changeTier = true) {
+  if (changeTier) {
+    await act(async () => button('可查看').click())
+    const batchConfirmation = mocks.confirm.mock.lastCall![0] as { onOk: () => Promise<void> | void }
+    await act(async () => { await batchConfirmation.onOk() })
+  }
   const input = document.querySelector<HTMLInputElement>('input[placeholder="填写授权调整原因"]')!
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '职责调整')

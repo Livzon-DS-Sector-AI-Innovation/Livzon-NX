@@ -1,0 +1,40 @@
+.popover {
+  max-width: calc(100vw - 32px);
+}
+
+.popover :global(.ant-popover-content) {
+  /* Keep the original columns readable and scroll inside the floating layer. */
+  max-width: calc(100vw - 64px);
+  max-height: min(320px, calc(100dvh - 120px));
+  overflow: auto;
+}
+
+.traceModal :global(.ant-modal-title) {
+  padding-inline-end: 24px;
+  overflow-wrap: anywhere;
+}
+
+.datePickerPopup {
+  max-width: calc(100vw - 32px);
+}
+
+.datePickerPopup :global(.ant-picker-panel-container) {
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 64px);
+  overflow: auto;
+}
+
+@media (max-width: 900px) {
+  .datePickerPopup {
+    /* The range picker aligns to its right input even when the panel is wider. */
+    left: 16px !important;
+    right: auto !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .popover {
+    left: 16px !important;
+    right: auto !important;
+  }
+}

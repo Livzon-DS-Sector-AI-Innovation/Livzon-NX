@@ -11,8 +11,8 @@ from uuid import UUID, uuid4
 from fastapi import Depends, File, Form, Query, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
-from openpyxl import Workbook  # type: ignore[import-untyped]
-from openpyxl.styles import (  # type: ignore[import-untyped]
+from openpyxl import Workbook
+from openpyxl.styles import (
     Alignment,
     Border,
     Font,
@@ -271,18 +271,11 @@ async def _assert_hr_write(db: AsyncSession, current_user: CurrentUser) -> None:
     _require_user(current_user)
     assert current_user is not None
     from app.platform.identity.data_scope import current_page_key
-    from app.platform.identity.page_permissions import PagePermissionService
+    from app.platform.identity.public_api import has_current_page_permission
     from app.platform.identity.rbac import resolve_user_permissions
 
-    page_key = current_page_key.get()
-    if page_key and page_key.startswith("hr:"):
-        if current_user.role == "admin":
-            return
-        grants = await PagePermissionService().effective_grants(db, user=current_user)
-        if any(
-            grant.page_key == page_key and "operate" in grant.permissions
-            for grant in grants
-        ):
+    if current_page_key.get() is not None:
+        if await has_current_page_permission(db, current_user, "hr"):
             return
         raise AppException(status_code=403, message="无权操作当前人事页面")
     permissions = await resolve_user_permissions(db, current_user.id)
@@ -1101,7 +1094,7 @@ async def export_contract_expiring(
         title_text = template.get("title_text", "")
 
         wb = Workbook()
-        ws = wb.active
+        ws = wb.worksheets[0]
         ws.title = template.get("sheet_name", "Sheet1")
 
         # 样式定义
@@ -2734,11 +2727,7 @@ async def create_training_dept_mapping(
     """新增一条映射（source+match_level+mapping_type+target 查重）。"""
     _require_user(current_user)
     assert current_user is not None
-    from app.platform.identity.rbac import resolve_user_permissions
-
-    perms = await resolve_user_permissions(db, current_user.id)
-    if "*" not in perms and "hr:write" not in perms:
-        raise AppException(status_code=403, message="需要 hr:write 权限")
+    await _assert_hr_write(db, current_user)
     data = await service.create_dept_mapping(body, user_id=current_user.id)
     return success_response(data=data)
 
@@ -2754,11 +2743,7 @@ async def update_training_dept_mapping(
     """更新一条映射（仅非 None 字段生效）。"""
     _require_user(current_user)
     assert current_user is not None
-    from app.platform.identity.rbac import resolve_user_permissions
-
-    perms = await resolve_user_permissions(db, current_user.id)
-    if "*" not in perms and "hr:write" not in perms:
-        raise AppException(status_code=403, message="需要 hr:write 权限")
+    await _assert_hr_write(db, current_user)
     data = await service.update_dept_mapping(mapping_id, body, user_id=current_user.id)
     return success_response(data=data)
 
@@ -2773,11 +2758,7 @@ async def delete_training_dept_mapping(
     """软删除一条映射。"""
     _require_user(current_user)
     assert current_user is not None
-    from app.platform.identity.rbac import resolve_user_permissions
-
-    perms = await resolve_user_permissions(db, current_user.id)
-    if "*" not in perms and "hr:write" not in perms:
-        raise AppException(status_code=403, message="需要 hr:write 权限")
+    await _assert_hr_write(db, current_user)
     deleted = await service.delete_dept_mapping(mapping_id)
     if not deleted:
         raise AppException(status_code=404, message="映射不存在")
@@ -3000,7 +2981,7 @@ def _generate_training_ledger_excel(
     """Generate training ledger Excel based on employee training ledger format."""
     records = list(records)
     wb = Workbook()
-    ws = wb.active
+    ws = wb.worksheets[0]
     ws.title = "员工培训台账"
 
     thin_border = Border(
@@ -3389,7 +3370,7 @@ def _generate_dept_ledger_excel(
 ) -> BytesIO:
     """生成部门年度培训统计表 Excel（与页面统计表列一致）."""
     wb = Workbook()
-    ws = wb.active
+    ws = wb.worksheets[0]
     ws.title = "年度培训统计表"
 
     thin = Border(
@@ -4420,7 +4401,7 @@ def _generate_annual_plan_excel(
     """Generate annual training plan Excel based on 7.7 template format."""
     items = list(items)
     wb = Workbook()
-    ws = wb.active
+    ws = wb.worksheets[0]
     ws.title = "年度培训计划"
 
     # Styles

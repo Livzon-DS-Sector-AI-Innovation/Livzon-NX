@@ -17,20 +17,6 @@ const actions = vi.hoisted(() => ({
 
 vi.mock('@/actions/production', () => actions)
 
-// 权限可控：历史修正入口按 production:schedule-archive 显隐
-const permissionState = vi.hoisted(() => ({ codes: [] as string[] }))
-
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({
-    has: (code: string) =>
-      permissionState.codes.includes('*') || permissionState.codes.includes(code),
-    hasAny: (codes: string[]) =>
-      permissionState.codes.includes('*') ||
-      codes.some((code) => permissionState.codes.includes(code)),
-    permissions: permissionState.codes,
-  }),
-}))
-
 // Mock antd Upload so tests can drive beforeUpload deterministically.
 const fakeUpload = vi.hoisted(() => ({
   trigger: null as null | ((file: unknown) => unknown),
@@ -64,6 +50,27 @@ import { setProductionAdminForTest } from '@/test/production-auth'
 import { useAuthStore } from '@/stores/auth'
 import { useProductContextStore } from '@/stores/product-context'
 import SchedulingPage from './page'
+
+afterEach(() => vi.restoreAllMocks())
+
+async function expectDistinctReportRowsAcrossPages(dialog: Element) {
+  const keys = () => Array.from(dialog.querySelectorAll('tbody tr[data-row-key]'), (row) => row.getAttribute('data-row-key'))
+  const firstPage = keys()
+  expect(firstPage).toHaveLength(10)
+  expect(new Set(firstPage).size).toBe(10)
+  await act(async () => {
+    dialog.querySelector<HTMLElement>('.ant-pagination-next')?.click()
+    await new Promise((resolve) => setTimeout(resolve, 30))
+  })
+  const secondPage = keys()
+  expect(secondPage).toHaveLength(2)
+  expect(new Set([...firstPage, ...secondPage]).size).toBe(12)
+  await act(async () => {
+    dialog.querySelector<HTMLElement>('.ant-pagination-prev')?.click()
+    await new Promise((resolve) => setTimeout(resolve, 30))
+  })
+  expect(keys()).toEqual(firstPage)
+}
 
 const ARCHIVE_SUMMARY = [
   {
@@ -100,7 +107,6 @@ describe('SchedulingPage archive flow', () => {
   beforeEach(() => {
     setProductionAdminForTest()
     useProductContextStore.getState().setProductCode('MC')
-    permissionState.codes = []
     actions.getScheduleExcelArchives.mockResolvedValue({
       code: 200,
       message: 'success',
@@ -322,8 +328,33 @@ describe('SchedulingPage archive flow', () => {
     },
   }
 
+  it('renders duplicate history changes with distinct keys across pages and no rowKey deprecation', async () => {
+    const errors = vi.spyOn(console, 'error')
+    const change = UPLOAD_WITH_HISTORY_CHANGES.data.merge.discarded_changes[0]
+    actions.uploadScheduleExcel.mockResolvedValue({
+      ...UPLOAD_WITH_HISTORY_CHANGES,
+      data: { ...UPLOAD_WITH_HISTORY_CHANGES.data, merge: {
+        ...UPLOAD_WITH_HISTORY_CHANGES.data.merge,
+        discarded_changes: Array.from({ length: 12 }, () => ({ ...change })),
+      } },
+    })
+    await render()
+    await act(async () => {
+      fakeUpload.trigger?.(new File(['fake'], '9月排产.xlsx'))
+      await new Promise((resolve) => setTimeout(resolve, 60))
+    })
+    const dialog = document.querySelector('[role="dialog"]')
+    expect(dialog).not.toBeNull()
+    await expectDistinctReportRowsAcrossPages(dialog!)
+    expect(errors.mock.calls.flat().filter((value) => typeof value === 'string' && value.includes('`index` parameter of `rowKey`'))).toEqual([])
+  })
+
   it('freezes history changes without fix entry when lacking permission', async () => {
-    permissionState.codes = []
+    useAuthStore.getState().setUser({ id: 'uploader', name: '排产员', role: 'user',
+      permissions: ['production:schedule-archive'],
+      page_permissions: [{ page_key: 'production:plan:scheduling', module_code: 'production',
+        source: 'user', permissions: ['access', 'query', 'operate'], sensitive_actions: ['bulk_import'],
+        data_scope: { scope_type: 'all' } }] })
     actions.uploadScheduleExcel.mockResolvedValue(UPLOAD_WITH_HISTORY_CHANGES)
     await render()
 
@@ -342,7 +373,10 @@ describe('SchedulingPage archive flow', () => {
   })
 
   it('offers history fix with reason when permitted and re-uploads on confirm', async () => {
-    permissionState.codes = ['production:schedule-archive']
+    useAuthStore.getState().setUser({ id: 'uploader', name: '排产员', role: 'user', permissions: [],
+      page_permissions: [{ page_key: 'production:plan:scheduling', module_code: 'production',
+        source: 'user', permissions: ['access', 'query', 'operate'], sensitive_actions: ['bulk_import', 'schedule-archive'],
+        data_scope: { scope_type: 'all' } }] })
     actions.uploadScheduleExcel
       .mockResolvedValueOnce(UPLOAD_WITH_HISTORY_CHANGES)
       .mockResolvedValueOnce({
@@ -511,7 +545,6 @@ describe('SchedulingPage schedule validation (FA only)', () => {
   beforeEach(() => {
     setProductionAdminForTest()
     useProductContextStore.getState().setProductCode('FA')
-    permissionState.codes = []
     actions.getScheduleExcelArchives.mockResolvedValue({
       code: 200,
       message: 'success',
@@ -578,6 +611,23 @@ describe('SchedulingPage schedule validation (FA only)', () => {
     expect(text).toContain('FA26301')
     expect(text).toContain('两批重叠')
     expect(text).toContain('FA26315')
+  })
+
+  it('renders duplicate validation issues with distinct keys across pages and no rowKey deprecation', async () => {
+    const errors = vi.spyOn(console, 'error')
+    actions.getScheduleValidation.mockResolvedValue({
+      code: 200,
+      data: { ...VALIDATION_DATA, issues: Array.from({ length: 12 }, () => ({ ...VALIDATION_DATA.issues[0] })) },
+    })
+    await render()
+    await act(async () => {
+      Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('校验'))?.click()
+      await new Promise((resolve) => setTimeout(resolve, 60))
+    })
+    const dialog = document.querySelector('[role="dialog"]')
+    expect(dialog).not.toBeNull()
+    await expectDistinctReportRowsAcrossPages(dialog!)
+    expect(errors.mock.calls.flat().filter((value) => typeof value === 'string' && value.includes('`index` parameter of `rowKey`'))).toEqual([])
   })
 
   it('auto opens the validation report after upload when issues exist', async () => {

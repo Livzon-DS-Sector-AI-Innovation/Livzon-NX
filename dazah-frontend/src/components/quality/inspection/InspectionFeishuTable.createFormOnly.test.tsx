@@ -5,6 +5,8 @@ import { App } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('@/hooks/usePagePermissions', () => ({ usePagePermissions: () => ({ canOperate: true, canDelete: true, canSync: true }) }))
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }))

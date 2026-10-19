@@ -20,12 +20,15 @@ test.describe('身份认证与模块权限', () => {
     expect(response?.status()).toBeLessThan(400)
   })
 
-  test('失效会话访问受保护页面时返回登录入口', async ({ context, page }) => {
+  test('失效会话返回登录入口并保留受保护页面地址', async ({ context, page }) => {
     await useAuthToken(context, 'invalid-session')
 
     await page.goto('/purchasing')
 
-    await expect(page).toHaveURL(/\/login$/)
+    await expect(page).toHaveURL(url =>
+      url.origin === applicationUrl && url.pathname === '/login'
+      && url.searchParams.get('next') === '/purchasing',
+    )
     await expect(page.getByRole('heading', { name: '欢迎登录' })).toBeVisible()
     await expect(page.getByRole('button', { name: '使用飞书企业账号登录' })).toBeVisible()
   })

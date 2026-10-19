@@ -14,7 +14,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-import openpyxl  # type: ignore[import-untyped]
+import openpyxl
 from fastapi import Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import text

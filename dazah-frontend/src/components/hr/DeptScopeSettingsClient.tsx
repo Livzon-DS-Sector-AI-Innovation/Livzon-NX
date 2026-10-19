@@ -6,7 +6,7 @@ import {
 } from 'antd'
 import { SearchOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { pinyin } from 'pinyin-pro'
-import { usePermission } from '@/hooks/usePermission'
+import { usePagePermissions } from '@/hooks/usePagePermissions'
 import {
   fetchDeptScopes,
   fetchTrainingDepartments,
@@ -27,10 +27,10 @@ interface EnrichedMember extends FeishuContactVM {
  * 用户可见部门配置（部门级数据隔离管理）。
  *
  * 为指定用户配置可查看的培训部门（规范名）；白名单制，未配置的用户看不到任何部门。
- * 仅 hr:write 管理员可访问本页（路由组件内二次校验）。
+ * 按当前页面的查询、同步配置和删除授权控制操作。
  */
 export default function DeptScopeSettingsClient() {
-  const { has } = usePermission()
+  const { canQuery, canSync, canDelete } = usePagePermissions('hr:hr-settings:hr-settings-dept-scopes')
   const { message, modal } = App.useApp()
   const [rows, setRows] = useState<DeptScopeItem[]>([])
   const [allDeptOptions, setAllDeptOptions] = useState<string[]>([])
@@ -45,6 +45,7 @@ export default function DeptScopeSettingsClient() {
   const membersLoadedRef = useRef(false)
 
   const loadData = useCallback(async () => {
+    if (!canQuery) return
     setLoading(true)
     try {
       const [scopes, depts, customDepts] = await Promise.all([
@@ -63,7 +64,7 @@ export default function DeptScopeSettingsClient() {
     } finally {
       setLoading(false)
     }
-  }, [message])
+  }, [message, canQuery])
 
   useEffect(() => {
     queueMicrotask(loadData)
@@ -128,6 +129,7 @@ export default function DeptScopeSettingsClient() {
 
   // 选择用户加入配置列表（尚未配置的用户默认空配置）
   const handleAddUser = useCallback((member: FeishuContactVM) => {
+    if (!canSync) return
     if (!member.open_id) {
       message.warning('该联系人缺少 open_id，无法配置')
       return
@@ -147,13 +149,15 @@ export default function DeptScopeSettingsClient() {
     setLocalScopes((prev) => ({ ...prev, [member.open_id]: [] }))
     setSearchKeyword('')
     setSearchResults([])
-  }, [rows, message])
+  }, [rows, message, canSync])
 
   const handleScopeChange = useCallback((userId: string, value: string[]) => {
+    if (!canSync) return
     setLocalScopes((prev) => ({ ...prev, [userId]: value }))
-  }, [])
+  }, [canSync])
 
   const handleSave = useCallback(async (row: DeptScopeItem) => {
+    if (!canSync) return
     setSavingIds((prev) => new Set(prev).add(row.user_id))
     try {
       const saved = await saveDeptScopeAction(row.user_id, localScopes[row.user_id] || [], {
@@ -177,10 +181,11 @@ export default function DeptScopeSettingsClient() {
         return next
       })
     }
-  }, [localScopes, message])
+  }, [localScopes, message, canSync])
 
   // 清除配置：清空可见部门（保留用户行，方便重新配置；该用户回退白名单）
   const handleClear = useCallback(async (row: DeptScopeItem) => {
+    if (!canSync) return
     setSavingIds((prev) => new Set(prev).add(row.user_id))
     try {
       const saved = await saveDeptScopeAction(row.user_id, [])
@@ -200,10 +205,11 @@ export default function DeptScopeSettingsClient() {
         return next
       })
     }
-  }, [message])
+  }, [message, canSync])
 
   // 移除：彻底删除该用户的配置记录（后端软删），从列表消失且刷新后不再出现
   const handleRemove = useCallback(async (row: DeptScopeItem) => {
+    if (!canDelete) return
     setSavingIds((prev) => new Set(prev).add(row.user_id))
     try {
       await clearDeptScopeAction(row.user_id)
@@ -223,7 +229,7 @@ export default function DeptScopeSettingsClient() {
         return next
       })
     }
-  }, [message])
+  }, [message, canDelete])
 
   const changedMap = useMemo(() => {
     const map: Record<string, boolean> = {}
@@ -236,14 +242,14 @@ export default function DeptScopeSettingsClient() {
   }, [rows, localScopes])
 
   // 注意：权限判断必须放在所有 hooks 之后（用户异步加载时避免 hooks 顺序变化）
-  const forbidden = !has('hr:write')
+  const forbidden = !canQuery
 
   if (forbidden) {
     return (
       <Result
         status="403"
         title="无权限访问"
-        subTitle="只有具备 hr:write 权限的管理员可以配置用户可见部门"
+        subTitle="需要部门权限配置页面的查询权限"
       />
     )
   }
@@ -272,6 +278,7 @@ export default function DeptScopeSettingsClient() {
       render: (_: unknown, row: DeptScopeItem) => (
         <Select
           mode="multiple"
+          disabled={!canSync}
           allowClear
           showSearch
           placeholder="选择该用户可查看的培训部门（留空 = 看不到任何部门）"
@@ -302,23 +309,26 @@ export default function DeptScopeSettingsClient() {
             type="primary"
             size="small"
             loading={savingIds.has(row.user_id)}
+            disabled={!canSync}
             onClick={() => handleSave(row)}
           >
             保存
           </Button>
           <Popconfirm
             title="清除该用户的可见部门配置？"
+            disabled={!canSync || savingIds.has(row.user_id)}
             description="清空可见部门（用户行保留），该用户回退为白名单：看不到任何部门"
             onConfirm={() => handleClear(row)}
           >
-            <Button size="small" disabled={savingIds.has(row.user_id)}>清除</Button>
+            <Button size="small" disabled={!canSync || savingIds.has(row.user_id)}>清除</Button>
           </Popconfirm>
           <Popconfirm
             title={`彻底移除「${row.user_name}」的配置？`}
+            disabled={!canDelete || savingIds.has(row.user_id)}
             description="删除该用户的可见部门配置记录，从列表消失且刷新后不再出现"
             onConfirm={() => handleRemove(row)}
           >
-            <Button size="small" danger disabled={savingIds.has(row.user_id)}>移除</Button>
+            <Button size="small" danger disabled={!canDelete || savingIds.has(row.user_id)}>移除</Button>
           </Popconfirm>
         </Space>
       ),
@@ -335,7 +345,7 @@ export default function DeptScopeSettingsClient() {
             </Typography.Title>
             <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
               部门级数据隔离（白名单制）：用户<strong>未配置时看不到任何部门</strong>的数据，
-              在此为指定用户配置可见部门（培训部门名）后生效；有 hr:write 权限的管理员始终可见全部部门。
+              当前业务页面的数据范围以页面授权为准，管理员可查看全部已授权数据。
               支持提前配置：用户尚未登录过系统也可以直接配置，其首次飞书登录后自动生效。
               留空保存 = 清除配置，该用户回退为看不到任何部门。
             </Typography.Paragraph>
@@ -360,6 +370,7 @@ export default function DeptScopeSettingsClient() {
               <Space orientation="vertical" style={{ width: '100%' }}>
                 {searchResults.map((m) => (
                   <Button
+                    disabled={!canSync}
                     key={m.open_id}
                     block
                     style={{ textAlign: 'left' }}

@@ -165,6 +165,7 @@ export function ValidationEditModal({
           fontSize: 13,
           color: 'var(--color-steel, #555)',
           display: 'flex',
+          flexWrap: 'wrap',
           alignItems: 'center',
           gap: 8,
         }}
@@ -229,7 +230,6 @@ export function ValidationEditModal({
           rules={hideCategory ? [] : [{ required: true, message: '请选择验证类别' }]}
         >
           <Select
-            getPopupContainer={(triggerNode) => triggerNode.parentElement || triggerNode.parentNode as HTMLElement}
             options={[
               { label: '设备确认', value: 'equipment_qualification' },
               { label: '工艺验证', value: 'process_validation' },
@@ -240,14 +240,12 @@ export function ValidationEditModal({
         </Form.Item>
         <Form.Item label="任务状态" name="status">
           <Select
-            getPopupContainer={(triggerNode) => triggerNode.parentElement || triggerNode.parentNode as HTMLElement}
             allowClear
             options={statusOptions}
           />
         </Form.Item>
         <Form.Item label="部门名称" name="department">
           <Select
-            getPopupContainer={(triggerNode) => triggerNode.parentElement || triggerNode.parentNode as HTMLElement}
             showSearch
             allowClear
             placeholder="请选择部门"
@@ -262,7 +260,6 @@ export function ValidationEditModal({
         </Form.Item>
         <Form.Item label="产品代码" name="product_codes">
           <Select
-            getPopupContainer={(triggerNode) => triggerNode.parentElement || triggerNode.parentNode as HTMLElement}
             mode="tags"
             allowClear
             placeholder="请输入或选择产品代码"

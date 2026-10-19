@@ -1,0 +1,116 @@
+.modal :global(.ant-modal) {
+  max-width: calc(100vw - 32px);
+}
+
+.title {
+  padding-inline-end: 24px;
+  overflow-wrap: anywhere;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 64px);
+}
+
+.container > :global(.ant-modal-header),
+.footer {
+  flex-shrink: 0;
+}
+
+.body {
+  /* Keep the title and actions visible while long forms scroll independently. */
+  min-height: 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+
+@media (max-height: 700px) {
+  .datePicker {
+    /* When neither side of a field fits a calendar, keep it inside the screen. */
+    position: fixed !important;
+    top: 50% !important;
+    bottom: auto !important;
+    translate: 0 -50%;
+  }
+}
+
+.drawerBody {
+  min-width: 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.footer > :global(.ant-space) {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 100%;
+}
+
+.footer :global(.ant-space-item) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.footer :global(.ant-btn) {
+  max-width: 100%;
+  height: auto;
+  min-height: 32px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  margin-inline-start: 0;
+}
+
+.floating {
+  max-width: calc(100vw - 32px);
+  overflow-wrap: anywhere;
+}
+
+.floating :global(.ant-popover-container) {
+  max-width: calc(100vw - 32px);
+}
+
+.floating :global(.ant-popover-content) {
+  max-width: calc(100vw - 64px);
+  max-height: calc(100dvh - 64px);
+  overflow: auto;
+}
+
+.datePicker,
+.select,
+.dropdown {
+  max-width: calc(100vw - 32px);
+}
+
+.datePicker :global(.ant-picker-panel-container) {
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 64px);
+  overflow: auto;
+}
+
+@media (max-width: 900px) {
+  .datePicker {
+    /* A two-panel range picker can be wider than its right-hand input. */
+    left: 16px !important;
+    right: auto !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .floating {
+    left: 16px !important;
+    right: auto !important;
+  }
+
+  .floating :global(.ant-popover-arrow) {
+    display: none;
+  }
+}

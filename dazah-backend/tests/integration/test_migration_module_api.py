@@ -14,6 +14,7 @@ from app.core import storage
 from app.core.database import get_db
 from app.platform.identity.deps import get_current_user
 from app.platform.identity.models import User
+from app.platform.identity.rbac import seed_menus
 
 app: FastAPI = cast(FastAPI, getattr(import_module("app.main"), "app"))
 
@@ -53,7 +54,7 @@ async def test_migrated_read_routes_work_through_real_async_client(
         "/api/v1/quality/oos-oot/records?page=1&page_size=20&keyword=missing",
         "/api/v1/registration/knowledge/articles?page=1&page_size=20",
         "/api/v1/warehouse/feishu-config",
-        "/api/v1/identity/users?page=1&page_size=20",
+        f"/api/v1/identity/users?page=1&page_size=20&keyword={admin.username}",
     )
 
     try:
@@ -94,6 +95,7 @@ async def test_system_boundary_forbids_regular_user_and_validates_notice_input(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
+    await seed_menus(db_session)
     regular_user = _user(role="user")
     db_session.add(regular_user)
     await db_session.flush()

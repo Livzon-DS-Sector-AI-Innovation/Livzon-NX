@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ConfigProvider } from 'antd'
 import type { RolePagePermissionsOut } from '@/actions/admin'
 import type { RoleItem } from '@/lib/api/client/admin'
-import { antdTheme } from '@/lib/antd-theme'
+import { antdTheme, getAntdTheme } from '@/lib/antd-theme'
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(), preview: vi.fn(), replace: vi.fn(), confirm: vi.fn(), info: vi.fn(),
@@ -140,6 +140,64 @@ it('configures and saves exactly seven scheduling product visibility items', asy
   expect(mocks.replace).toHaveBeenCalledWith('A', expect.objectContaining({
     grants: [expect.objectContaining({ page_key: pageKey, visible_sections: codes.filter((code) => code !== 'MC') })],
   }))
+})
+
+it.each([false, true])('independently toggles scheduling history correction for a role (existing=%s)', async (existing) => {
+  const pageKey = 'production:plan:scheduling'
+  const data = result('A')
+  data.definitions = [{ page_key: pageKey, module_code: 'production', page_name: '排产计划',
+    route_path: '/production/scheduling', supported_scope_types: ['all'], sensitive_actions: [
+      { key: 'bulk_import', name: '批量导入或覆盖', category: 'bulk_change', description: '上传排产表' },
+      { key: 'schedule-archive', name: '排产历史修正', category: 'bulk_change', description: '修正历史列并记录原因' },
+    ] }]
+  data.grants = [{ page_key: pageKey, module_code: 'production', source: 'role',
+    permissions: ['access', 'query', 'operate'], sensitive_actions: existing ? ['bulk_import', 'schedule-archive'] : ['bulk_import'],
+    data_scope: { scope_type: 'all' } }]
+  mocks.get.mockResolvedValue(data)
+  mocks.replace.mockResolvedValue({ ok: true, data })
+  await show('A')
+  await act(async () => button('展开全部菜单').click())
+  const checkbox = document.querySelector<HTMLInputElement>('input[value="schedule-archive"]')!
+  expect(checkbox.checked).toBe(existing)
+  await act(async () => checkbox.click())
+  expect(checkbox.checked).toBe(!existing)
+  expect(document.querySelector<HTMLInputElement>('input[value="bulk_import"]')!.checked).toBe(true)
+  const confirmation = await preview(false)
+  await act(async () => { await confirmation.onOk() })
+  expect(mocks.replace).toHaveBeenCalledWith('A', expect.objectContaining({ grants: [expect.objectContaining({
+    page_key: pageKey, sensitive_actions: existing ? ['bulk_import'] : ['bulk_import', 'schedule-archive'],
+  })] }))
+})
+
+it.each([
+  { existing: false, mode: 'light' }, { existing: true, mode: 'light' },
+  { existing: false, mode: 'dark' }, { existing: true, mode: 'dark' },
+] as const)('saves and revokes pressure rejection independently ($mode, existing=$existing)', async ({ existing, mode }) => {
+  const pageKey = 'production:pressure'
+  const data = result('A')
+  data.definitions = [{ page_key: pageKey, module_code: 'production', page_name: '压差管理',
+    route_path: '/production/pressure', supported_scope_types: ['all'], sensitive_actions: [
+      { key: 'approve', name: '批准业务申请', category: 'decision', description: '批准压差记录' },
+      { key: 'reject', name: '驳回业务申请', category: 'decision', description: '驳回压差记录' },
+    ] }]
+  data.grants = [{ page_key: pageKey, module_code: 'production', source: 'role',
+    permissions: ['access', 'query', 'operate'], sensitive_actions: existing ? ['approve', 'reject'] : ['approve'],
+    data_scope: { scope_type: 'all' } }]
+  mocks.get.mockResolvedValue(data)
+  mocks.replace.mockResolvedValue({ ok: true, data })
+  await act(async () => root.render(createElement(ConfigProvider, { theme: getAntdTheme(mode) },
+    createElement(RolePagePermissionsDrawer, { role: role('A'), departments: [], open: true, onClose: vi.fn() }))))
+  await act(async () => button('展开全部菜单').click())
+  const reject = document.querySelector<HTMLInputElement>('input[value="reject"]')!
+  expect(reject.checked).toBe(existing)
+  await act(async () => reject.click())
+  expect(reject.checked).toBe(!existing)
+  expect(document.querySelector<HTMLInputElement>('input[value="approve"]')!.checked).toBe(true)
+  const confirmation = await preview(false)
+  await act(async () => { await confirmation.onOk() })
+  expect(mocks.replace).toHaveBeenCalledWith('A', expect.objectContaining({ grants: [expect.objectContaining({
+    page_key: pageKey, sensitive_actions: existing ? ['approve'] : ['approve', 'reject'],
+  })] }))
 })
 
 it('disables batch controls for an empty search and restores them after clearing it', async () => {
@@ -317,11 +375,13 @@ function button(label: string) {
   expect(found, label).toBeTruthy()
   return found!
 }
-async function preview() {
-  await act(async () => button('可查看').click())
-  const batchConfirmation = mocks.confirm.mock.lastCall![0] as { onOk: () => Promise<void> | void }
-  expect(batchConfirmation).toEqual(expect.objectContaining({ centered: true, cancelText: '取消' }))
-  await act(async () => { await batchConfirmation.onOk() })
+async function preview(changeTier = true) {
+  if (changeTier) {
+    await act(async () => button('可查看').click())
+    const batchConfirmation = mocks.confirm.mock.lastCall![0] as { onOk: () => Promise<void> | void }
+    expect(batchConfirmation).toEqual(expect.objectContaining({ centered: true, cancelText: '取消' }))
+    await act(async () => { await batchConfirmation.onOk() })
+  }
   const input = document.querySelector<HTMLInputElement>('input[placeholder="填写角色授权调整原因"]')!
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '岗位调整')

@@ -2,7 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { App } from 'antd'
+import { App, ConfigProvider } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const actions = vi.hoisted(() => ({
@@ -98,7 +98,7 @@ const DRAFT_RESULT = {
   },
 }
 
-function setViewUser(permissions: string[]) {
+function setViewUser(permissions: string[], sensitiveActions: string[] = []) {
   useAuthStore.getState().setUser({
     id: 'auto-user',
     name: '排产用户',
@@ -109,6 +109,7 @@ function setViewUser(permissions: string[]) {
         module_code: 'production',
         source: 'user',
         permissions,
+        sensitive_actions: sensitiveActions,
         visible_sections: null,
         data_scope: { scope_type: 'all' },
       },
@@ -141,9 +142,11 @@ describe('AutoSchedulingPage', () => {
   async function render() {
     act(() => {
       root.render(
-        <App>
-          <AutoSchedulingPage />
-        </App>,
+        <ConfigProvider theme={{ token: { motion: false } }}>
+          <App>
+            <AutoSchedulingPage />
+          </App>
+        </ConfigProvider>,
       )
     })
     await act(async () => {
@@ -526,6 +529,91 @@ describe('AutoSchedulingPage', () => {
     expect(document.body.textContent).toContain('加载草稿详情失败')
   })
 
+  function deleteDialog() {
+    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')
+    expect(dialog, 'delete confirmation must be a dialog').toBeTruthy()
+    return dialog!
+  }
+
+  function dialogButton(label: string) {
+    const button = [...deleteDialog().querySelectorAll('button')].find(
+      b => b.textContent?.replace(/\s/g, '') === label,
+    )
+    expect(button).toBeTruthy()
+    return button!
+  }
+
+  async function openDeleteDialog() {
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="删除草稿记录"]')!.click()
+      await new Promise(r => setTimeout(r, 40))
+    })
+    return deleteDialog()
+  }
+
+  it('identifies the draft in a dialog and cancellation never deletes it', async () => {
+    setViewUser(['access', 'query', 'operate'], ['delete'])
+    mockHistory()
+    await render()
+    const dialog = await openDeleteDialog()
+    expect(dialog.textContent).toContain('2026-10-27～2026-11-26')
+    expect(dialog.textContent).toContain('不影响已上传的排产存档')
+    expect(actions.deleteScheduleDraftRecord).not.toHaveBeenCalled()
+    await act(async () => {
+      dialogButton('取消').click()
+      await new Promise(r => setTimeout(r, 40))
+    })
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+    expect(actions.deleteScheduleDraftRecord).not.toHaveBeenCalled()
+  })
+
+  it('prevents duplicate deletion while pending and keeps the dialog for a failed retry', async () => {
+    mockHistory()
+    let finish: ((value: { code: number; message: string }) => void) | undefined
+    actions.deleteScheduleDraftRecord.mockReturnValue(new Promise(resolve => { finish = resolve }))
+    await render()
+    await openDeleteDialog()
+    const confirm = dialogButton('删除')
+    await act(async () => { confirm.click(); confirm.click() })
+    expect(actions.deleteScheduleDraftRecord).toHaveBeenCalledTimes(1)
+    expect(dialogButton('取消').disabled).toBe(true)
+    await act(async () => { finish!({ code: 409, message: '记录已被其他操作更新' }) })
+    expect(deleteDialog().textContent).toContain('2026-10-27～2026-11-26')
+    expect(dialogButton('取消').disabled).toBe(false)
+    actions.deleteScheduleDraftRecord.mockResolvedValue({ code: 200, message: 'success' })
+    await act(async () => {
+      dialogButton('删除').click()
+      await new Promise(r => setTimeout(r, 40))
+    })
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+    expect(actions.deleteScheduleDraftRecord).toHaveBeenCalledTimes(2)
+  })
+
+  it('closes an open delete dialog when delete authorization is revoked', async () => {
+    setViewUser(['access', 'query', 'operate'], ['delete'])
+    mockHistory()
+    await render()
+    await openDeleteDialog()
+    await act(async () => {
+      setViewUser(['access', 'query', 'operate'])
+      await new Promise(r => setTimeout(r, 40))
+    })
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+    expect(container.querySelector('[aria-label="删除草稿记录"]')).toBeNull()
+    expect(actions.deleteScheduleDraftRecord).not.toHaveBeenCalled()
+  })
+
+  it('keeps the selected draft available after a network failure', async () => {
+    mockHistory()
+    actions.deleteScheduleDraftRecord.mockRejectedValue(new Error('offline'))
+    await render()
+    await openDeleteDialog()
+    await act(async () => { dialogButton('删除').click() })
+    expect(deleteDialog().textContent).toContain('2026-10-27～2026-11-26')
+    expect(document.body.textContent).toContain('删除请求失败')
+    expect(dialogButton('取消').disabled).toBe(false)
+  })
+
   it('deletes a record after confirmation and reports failure states', async () => {
     mockHistory()
     actions.deleteScheduleDraftRecord.mockResolvedValue({
@@ -569,6 +657,34 @@ describe('AutoSchedulingPage', () => {
       await new Promise((r) => setTimeout(r, 80))
     })
     expect(document.body.textContent).toContain('删除失败：归档占用')
+  })
+
+  it.each([
+    { actions: [], download: false, remove: false },
+    { actions: ['sensitive_export'], download: true, remove: false },
+    { actions: ['delete'], download: false, remove: true },
+  ])('gates historical actions independently: $actions', async ({ actions: grants, download, remove }) => {
+    setViewUser(['access', 'query', 'operate'], grants)
+    mockHistory()
+    await render()
+    const buttons = [...container.querySelectorAll('table button')]
+    expect(buttons.some(b => b.textContent?.trim() === '下载')).toBe(download)
+    expect(Boolean(container.querySelector('table .ant-btn-dangerous'))).toBe(remove)
+  })
+
+  it('removes historical actions when sensitive grants are revoked', async () => {
+    setViewUser(['access', 'query', 'operate'], ['delete', 'sensitive_export'])
+    mockHistory()
+    await render()
+    expect(container.querySelector('table .ant-btn-dangerous')).toBeTruthy()
+    await act(async () => {
+      setViewUser(['access', 'query', 'operate'])
+      await new Promise(r => setTimeout(r, 80))
+    })
+    expect(container.querySelector('table .ant-btn-dangerous')).toBeNull()
+    expect([...container.querySelectorAll('table button')].some(b => b.textContent?.trim() === '下载')).toBe(false)
+    expect(actions.deleteScheduleDraftRecord).not.toHaveBeenCalled()
+    expect(actions.downloadScheduleDraftRecordFile).not.toHaveBeenCalled()
   })
 })
 
