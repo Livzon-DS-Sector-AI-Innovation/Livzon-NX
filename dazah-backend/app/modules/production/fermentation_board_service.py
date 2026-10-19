@@ -278,11 +278,27 @@ def collect_dump_tanks(
             if product_code in _STATIN_KEYWORD
             else _mp_batch_timeline(rows)
         )
-        return {
+        dump_tank_map = {
             batch_no: str(entry["dump_tank"] or entry["ferm_tank"] or "")
             for batch_no, entry in timeline.items()
             if entry["dump_tank"] or entry["ferm_tank"]
         }
+        if product_code in _STATIN_KEYWORD:
+            # 倒罐对补复合批号键：录入下拉选「MV-26069/070」时罐号
+            # 回填大罐（301A），而非子批各自的发酵罐
+            turn_pairs: dict[tuple[Any, Any], list[str]] = {}
+            for batch_no, entry in timeline.items():
+                turn_to = entry.get("turn_to")
+                if turn_to:
+                    turn_pairs.setdefault(
+                        (turn_to, entry.get("turn_at")), []
+                    ).append(batch_no)
+            for (turn_to, _turn_at), members in turn_pairs.items():
+                if len(members) > 1:
+                    dump_tank_map[_compact_statin_batch_nos(sorted(members))] = (
+                        str(turn_to)
+                    )
+        return dump_tank_map
     mapping: dict[str, str] = {}
     for index, row in enumerate(rows):
         if not row:
@@ -1376,6 +1392,48 @@ def _statin_split_tanks(value: Any) -> list[str]:
     return [tank.strip() for tank in text.split("/") if tank.strip()]
 
 
+def _expand_composite_actuals(
+    actuals: list[dict[str, Any]] | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """他汀复合批产量记录展开：'MV-26083/084'（一条总量）→ 两个子批均摊。
+
+    倒罐复合批现场只从大罐（301A）称一次总量、按复合批号录一条；
+    统计口径需按子批计（分母 +N、柱状图画 N 根均摊柱）。分摊值前 N-1
+    个四舍五入 2 位、末个取差值，保证合计与录入总量严格一致。
+    返回 (展开后的 actuals, 复合组信息)；非复合记录原样透传。
+    """
+    expanded: list[dict[str, Any]] = []
+    groups: list[dict[str, Any]] = []
+    for a in actuals or []:
+        batch_no = str(a.get("batch_no") or "").strip()
+        subs = (
+            _statin_split_batch(batch_no)
+            if "/" in batch_no and a.get("yield_kg") is not None
+            else []
+        )
+        if len(subs) < 2:
+            expanded.append(a)
+            continue
+        total = float(a["yield_kg"])
+        share = round(total / len(subs), 2)
+        shares = [share] * (len(subs) - 1) + [
+            round(total - share * (len(subs) - 1), 2)
+        ]
+        for sub, amount in zip(subs, shares):
+            item = dict(a)
+            item["batch_no"] = sub
+            item["yield_kg"] = amount
+            expanded.append(item)
+        groups.append(
+            {
+                "batch_no": batch_no,
+                "batch_nos": subs,
+                "total_kg": round(total, 2),
+            }
+        )
+    return expanded, groups
+
+
 def _statin_row_time(value: Any, default: str) -> time:
     """时刻解析：Excel 小数分数（0.666…=16:00）或 'HH:MM(:SS)' 文本；异常回退默认。"""
     if isinstance(value, (int, float)) and not isinstance(value, bool):
@@ -2056,8 +2114,12 @@ def build_mp_board(
         block = find_mp_period_block(rows, now, product=product)
     if block is None:
         return None
+    composite_groups: list[dict[str, Any]] = []
     if product in _STATIN_KEYWORD:
         timeline = _statin_batch_timeline(rows)
+        # 倒罐复合批产量录入是一条总量（复合批号）：先展开为子批均摊，
+        # 计数/均值/柱状图即按子批口径（分母 +N、柱高 = 总量 ÷ N）
+        actuals, composite_groups = _expand_composite_actuals(actuals)
     else:
         timeline = _mp_batch_timeline(rows)
     actual_by_batch = {
@@ -2292,16 +2354,48 @@ def build_mp_board(
         }
         for b in done[:12]
     ]
-    dumped_batches = [
-        {
-            "batch_no": b["batch_no"],
-            "dump_date": b["dump"].date().isoformat(),
-            # 排产放罐时刻（MP/他汀有精确时刻；产量录入弹窗的默认值）
-            "dump_plan_at": b["dump"].isoformat(),
-        }
-        for b in done
-        if b["dump"]
-    ]
+    if product in _STATIN_KEYWORD:
+        # 倒罐对（同倒罐目的罐 + 同放罐时刻）在录入下拉合并为一条复合批
+        # 选项：现场只从大罐称一次总量，按复合批号（如 MV-26069/070）录
+        # 一条；直放批保持逐批一条
+        turn_pairs: dict[tuple[Any, Any], list[dict[str, Any]]] = {}
+        dumped_batches = []
+        for b in done:
+            if not b["dump"]:
+                continue
+            turn_to = b.get("turn_to")
+            if not turn_to:
+                dumped_batches.append(
+                    {
+                        "batch_no": b["batch_no"],
+                        "dump_date": b["dump"].date().isoformat(),
+                        "dump_plan_at": b["dump"].isoformat(),
+                    }
+                )
+            else:
+                turn_pairs.setdefault((turn_to, b["dump"]), []).append(b)
+        for members in turn_pairs.values():
+            dumped_batches.append(
+                {
+                    "batch_no": _compact_statin_batch_nos(
+                        sorted(m["batch_no"] for m in members)
+                    ),
+                    "dump_date": members[0]["dump"].date().isoformat(),
+                    "dump_plan_at": members[0]["dump"].isoformat(),
+                }
+            )
+        dumped_batches.sort(key=lambda e: e["dump_plan_at"], reverse=True)
+    else:
+        dumped_batches = [
+            {
+                "batch_no": b["batch_no"],
+                "dump_date": b["dump"].date().isoformat(),
+                # 排产放罐时刻（MP/他汀有精确时刻；产量录入弹窗的默认值）
+                "dump_plan_at": b["dump"].isoformat(),
+            }
+            for b in done
+            if b["dump"]
+        ]
     ledger_rows = [
         {
             "batch_no": b["batch_no"],
@@ -2377,6 +2471,28 @@ def build_mp_board(
         if recent_measured
         else None
     )
+    # 复合批组信息（他汀倒罐对）：两根均摊柱的罐号与合计总量，供前端
+    # 画托架标注；仅当组内子批全部进入柱状图窗口时输出
+    if trend and composite_groups:
+        shown = {a["batch_no"] for a in recent_measured}
+        shown_groups = [
+            {
+                "batch_nos": g["batch_nos"],
+                "tank_no": next(
+                    (
+                        timeline[b].get("turn_to") or timeline[b].get("dump_tank")
+                        for b in g["batch_nos"]
+                        if b in timeline
+                    ),
+                    None,
+                ),
+                "total_kg": g["total_kg"],
+            }
+            for g in composite_groups
+            if all(b in shown for b in g["batch_nos"])
+        ]
+        if shown_groups:
+            trend["composite_groups"] = shown_groups
     return {
         "now": now.isoformat(),
         "period": {
