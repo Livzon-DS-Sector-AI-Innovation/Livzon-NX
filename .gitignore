@@ -108,6 +108,8 @@ desktop.ini
 **/next-env.d.ts
 
 # Temporary and generated leftovers
+/outputs/
+/dazah-frontend/outputs/
 **/tmp/
 **/temp/
 **/*.bak
