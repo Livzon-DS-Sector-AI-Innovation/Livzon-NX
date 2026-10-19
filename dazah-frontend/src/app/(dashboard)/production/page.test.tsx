@@ -35,10 +35,37 @@ vi.mock('next/navigation', () => ({
   useRouter: () => routerMock,
 }))
 
-vi.mock('echarts-for-react', () => ({
-  default: ({ option }: { option?: unknown }) =>
-    createElement('pre', null, JSON.stringify(option ?? {})),
-}))
+// 捕获传给图表组件的 option：变更行覆盖率要求 tooltip formatter 等
+// 交互回调在测试中真实执行，仅靠 JSON 快照覆盖不到
+const chartCaptured = vi.hoisted(() => ({ options: [] as Array<Record<string, unknown>> }))
+
+vi.mock('echarts-for-react', async () => {
+  // 纯 JSON 快照式的 mock 校验不了 option 合法性（曾放过 markLine 非法
+  // 数据项式：单对象 coord/coord2，浏览器端 ECharts 直接抛错白屏），
+  // 故 mock 内用真实 echarts SSR 渲染一遍，非法 option 让测试直接失败
+  const echarts = await import('echarts')
+  const validateOption = (option: unknown) => {
+    if (option == null) return
+    const chart = echarts.init(null, null, {
+      renderer: 'svg',
+      ssr: true,
+      width: 800,
+      height: 400,
+    })
+    try {
+      chart.setOption(option as never)
+    } finally {
+      chart.dispose()
+    }
+  }
+  return {
+    default: ({ option }: { option?: unknown }) => {
+      validateOption(option)
+      chartCaptured.options.push(option as Record<string, unknown>)
+      return createElement('pre', null, JSON.stringify(option ?? {}))
+    },
+  }
+})
 
 
 // 认证 store：默认管理员；工段矩阵使用页面实际数据范围。
@@ -1019,10 +1046,78 @@ describe('ProductionHomePage (fermentation board)', () => {
     const text = (container.textContent || '') + (document.body.textContent || '')
     expect(text).toContain('FA26229')
     expect(text).toContain('平均产量 30750.00 kg')
+    // 含中试口径切换仅多拉（DR）需要：FA 视图不渲染切换按钮与后缀输入
+    expect(container.querySelectorAll('.anticon-swap').length).toBe(0)
+    expect(container.querySelectorAll('input[placeholder="标签后缀"]').length).toBe(0)
+  })
+
+  it('renders composite pair bracket for turned statin dumps', async () => {
+    // 倒罐复合批：一条总量录入 → 后端展开为两根均摊柱 + 复合组信息，
+    // 图上以横跨托架标注放罐大罐与合计总量
+    actions.getFermentationBoard.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: {
+        ...BOARD,
+        trend: {
+          batches: ['MV-26063', 'MV-26069', 'MV-26070'],
+          outputs: [800, 1200, 1200],
+          composite_groups: [
+            {
+              batch_nos: ['MV-26069', 'MV-26070'],
+              tank_no: '301A',
+              total_kg: 2400,
+            },
+          ],
+        },
+      },
+    })
+    await render()
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('MV-26069')
+    expect(text).toContain('MV-26070')
+    // 托架标注：大罐 + 合计总量
+    expect(text).toContain('301A · 合计 2,400 kg')
+    // 托架抬到柱顶上方半格（1200 → 1450，分度 500），两端短竖线落回柱顶
+    expect(text).toContain('"coord":[1,1450]')
+    expect(text).toContain('"coord":[1,1200]')
+    // 平均线按均摊柱均值（(800+1200+1200)/3 ≈ 1066.67）
+    expect(text).toContain('平均产量 1066.67 kg')
+    // MV 无中试概念：不渲染含中试口径切换入口
+    expect(container.querySelectorAll('.anticon-swap').length).toBe(0)
+    // 悬浮提示：复合组子批追加两批合计与放罐大罐；普通批与空参数不追加
+    const trendOption = [...chartCaptured.options]
+      .reverse()
+      .find(
+        (o) =>
+          typeof (o as { tooltip?: { formatter?: unknown } }).tooltip?.formatter ===
+          'function',
+      ) as
+      | {
+          tooltip: {
+            formatter: (
+              params: Array<{ name?: string; value?: number | string; marker?: string }>,
+            ) => string
+          }
+        }
+      | undefined
+    expect(trendOption).toBeTruthy()
+    const formatter = trendOption!.tooltip.formatter
+    const grouped = formatter([{ name: 'MV-26069', value: 1200, marker: '●' }])
+    expect(grouped).toContain('MV-26069：1200 kg')
+    expect(grouped).toContain(
+      '两批 MV-26069/MV-26070 合计 2,400 kg（301A 放罐，柱高为均摊值）',
+    )
+    const plain = formatter([{ name: 'MV-26063', value: 800 }])
+    expect(plain).toContain('MV-26063：800 kg')
+    expect(plain).not.toContain('两批')
+    expect(formatter([])).toBe('')
   })
 
   it('loads per-user preferences and persists caliber changes', async () => {
-    // 服务端记忆了该账户的偏好：不含中试口径 + 自定义后缀
+    // 服务端记忆了该账户的偏好：不含中试口径 + 自定义后缀；
+    // 口径切换入口仅 DR 视图渲染，测试切到多拉产线
+    useProductContextStore.setState({ productCode: 'DR' })
     actions.getProductionBoardPreferences.mockResolvedValue({
       code: 200,
       message: 'success',
@@ -1074,6 +1169,8 @@ describe('ProductionHomePage (fermentation board)', () => {
   })
 
   it('toggles the average caliber and edits the incl-pilot suffix note', async () => {
+    // 口径切换入口仅 DR 视图渲染，测试切到多拉产线
+    useProductContextStore.setState({ productCode: 'DR' })
     actions.getFermentationBoard.mockResolvedValue({
       code: 200,
       message: 'success',
