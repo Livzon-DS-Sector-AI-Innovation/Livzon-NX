@@ -11,6 +11,10 @@ export function registerModuleOverlayTests(module: 'quality' | 'hr' | 'warehouse
         const height = width === 320 ? 568 : width === 390 ? 700 : 900
         const token = `module-overlays-${randomUUID()}`
         await context.addCookies([{ name: 'auth_token', value: token, url: baseURL! }])
+        // Seed the persisted preference before hydration restores the sidebar.
+        await context.addInitScript(({ userId, collapsed }) => {
+          window.localStorage.setItem(`dazah-sidebar-collapsed:${userId}`, String(collapsed))
+        }, { userId: token, collapsed: width < 768 })
         await page.setViewportSize({ width, height })
         await page.emulateMedia({ colorScheme: mode })
         await page.route('**/__dazah_maintenance_status', route => route.fulfill({ json: { phase: 'normal' } }))
@@ -22,8 +26,9 @@ export function registerModuleOverlayTests(module: 'quality' | 'hr' | 'warehouse
           await expect(ready).toBeVisible()
           await page.getByTitle(mode === 'light' ? '浅色' : '深色', { exact: true }).click()
           await expect(page.locator('html')).toHaveAttribute('data-theme', mode)
-          const collapse = page.getByRole('button', { name: '收起侧边栏', exact: true })
-          if (width < 768 && await collapse.isVisible()) await collapse.click()
+          await expect(page.getByRole('button', {
+            name: width < 768 ? '展开侧边栏' : '收起侧边栏', exact: true,
+          })).toBeVisible()
           await page.waitForTimeout(500)
         }
         async function fits(layer: Locator, name: string) {
