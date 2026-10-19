@@ -35,6 +35,10 @@ vi.mock('next/navigation', () => ({
   useRouter: () => routerMock,
 }))
 
+// 捕获传给图表组件的 option：变更行覆盖率要求 tooltip formatter 等
+// 交互回调在测试中真实执行，仅靠 JSON 快照覆盖不到
+const chartCaptured = vi.hoisted(() => ({ options: [] as Array<Record<string, unknown>> }))
+
 vi.mock('echarts-for-react', async () => {
   // 纯 JSON 快照式的 mock 校验不了 option 合法性（曾放过 markLine 非法
   // 数据项式：单对象 coord/coord2，浏览器端 ECharts 直接抛错白屏），
@@ -57,6 +61,7 @@ vi.mock('echarts-for-react', async () => {
   return {
     default: ({ option }: { option?: unknown }) => {
       validateOption(option)
+      chartCaptured.options.push(option as Record<string, unknown>)
       return createElement('pre', null, JSON.stringify(option ?? {}))
     },
   }
@@ -1080,6 +1085,33 @@ describe('ProductionHomePage (fermentation board)', () => {
     expect(text).toContain('平均产量 1066.67 kg')
     // MV 无中试概念：不渲染含中试口径切换入口
     expect(container.querySelectorAll('.anticon-swap').length).toBe(0)
+    // 悬浮提示：复合组子批追加两批合计与放罐大罐；普通批与空参数不追加
+    const trendOption = [...chartCaptured.options]
+      .reverse()
+      .find(
+        (o) =>
+          typeof (o as { tooltip?: { formatter?: unknown } }).tooltip?.formatter ===
+          'function',
+      ) as
+      | {
+          tooltip: {
+            formatter: (
+              params: Array<{ name?: string; value?: number | string; marker?: string }>,
+            ) => string
+          }
+        }
+      | undefined
+    expect(trendOption).toBeTruthy()
+    const formatter = trendOption!.tooltip.formatter
+    const grouped = formatter([{ name: 'MV-26069', value: 1200, marker: '●' }])
+    expect(grouped).toContain('MV-26069：1200 kg')
+    expect(grouped).toContain(
+      '两批 MV-26069/MV-26070 合计 2,400 kg（301A 放罐，柱高为均摊值）',
+    )
+    const plain = formatter([{ name: 'MV-26063', value: 800 }])
+    expect(plain).toContain('MV-26063：800 kg')
+    expect(plain).not.toContain('两批')
+    expect(formatter([])).toBe('')
   })
 
   it('loads per-user preferences and persists caliber changes', async () => {
