@@ -8,12 +8,17 @@ const navigation = vi.hoisted(() => ({
   push: vi.fn(),
   replace: vi.fn(),
 }))
-const currentRoute = vi.hoisted(() => ({ workshop: '' }))
+const currentRoute = vi.hoisted(() => ({ workshop: '', module: '' }))
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: navigation.push, replace: navigation.replace }),
-  usePathname: () => '/equipment/assets',
-  useSearchParams: () => new URLSearchParams(currentRoute.workshop ? `workshop=${currentRoute.workshop}` : ''),
+  usePathname: () => '/equipment',
+  useSearchParams: () => new URLSearchParams(
+    [
+      ...(currentRoute.workshop ? [`workshop=${currentRoute.workshop}`] : []),
+      ...(currentRoute.module ? [`module=${currentRoute.module}`] : []),
+    ].join('&'),
+  ),
 }))
 
 const authStore = vi.hoisted(() => ({
@@ -32,16 +37,17 @@ vi.mock('@/stores/auth', () => ({
 }))
 
 import { WorkshopNavBlocks } from './WorkshopNavBlocks'
+import type { EquipmentPageKey } from '@/lib/equipment-page-permissions'
 import { useEquipmentWorkshopStore } from '@/stores/equipment-workshop'
 
 let root: Root | null = null
 
-function renderBlocks() {
+function renderBlocks(pageKey: EquipmentPageKey = 'equipment:assets') {
   const container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   act(() => {
-    root!.render(<WorkshopNavBlocks pageKey="equipment:assets" />)
+    root!.render(<WorkshopNavBlocks pageKey={pageKey} />)
   })
 }
 
@@ -52,6 +58,8 @@ function blocks() {
 beforeEach(() => {
   navigation.push.mockClear()
   navigation.replace.mockClear()
+  currentRoute.workshop = ''
+  currentRoute.module = ''
   useEquipmentWorkshopStore.setState({ workshopCode: '201-1' })
   try {
     window.localStorage.removeItem('dazah.equipment.workshop-context')
@@ -64,55 +72,63 @@ afterEach(() => {
 })
 
 describe('WorkshopNavBlocks（产线块样式）', () => {
-  it('渲染汇总首块 + 9 个车间块并高亮 URL 指定的车间', async () => {
+  it('渲染 9 个车间块并高亮 URL 指定的车间；无模块参数时点击不带 module', async () => {
     currentRoute.workshop = '201-1'
     renderBlocks()
     await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
 
     const all = blocks()
-    expect(all).toHaveLength(10)
-    expect(all[0].getAttribute('data-testid')).toBe('workshop-block:summary')
+    expect(all).toHaveLength(9)
+    expect(all[0].getAttribute('data-testid')).toBe('workshop-block:101-1')
     const active = document.querySelector('[data-testid="workshop-block:201-1"]') as HTMLElement
     expect(active).toBeTruthy()
     expect(active.style.borderColor).toContain('var(--color-primary)')
     // 车间名与图标渲染
     expect(active.textContent).toContain('201一车间')
+
+    const plain = document.querySelector('[data-testid="workshop-block:203"]') as HTMLElement
+    await act(async () => { plain.click() })
+    expect(navigation.push).toHaveBeenCalledWith('/equipment?workshop=203', { scroll: false })
   })
 
-  it('点击汇总块跳全局汇总页；点击车间块更新 URL 查询参数', async () => {
+  it('点击车间块更新 URL 查询参数并记忆车间；保留当前功能模块', async () => {
     currentRoute.workshop = '201-1'
+    currentRoute.module = 'maintenance'
     renderBlocks()
     await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
 
-    const summary = document.querySelector('[data-testid="workshop-block:summary"]') as HTMLElement
-    await act(async () => { summary.click() })
-    expect(navigation.push).toHaveBeenCalledWith('/equipment/stats')
-
     const target = document.querySelector('[data-testid="workshop-block:103"]') as HTMLElement
     await act(async () => { target.click() })
-    expect(navigation.push).toHaveBeenCalledWith('/equipment/assets?workshop=103', { scroll: false })
+    expect(navigation.push).toHaveBeenCalledWith(
+      '/equipment?workshop=103&module=maintenance',
+      { scroll: false },
+    )
     expect(useEquipmentWorkshopStore.getState().workshopCode).toBe('103')
   })
 
-  it('无 URL 参数时回落记忆车间；无汇总授权隐藏汇总块并按授权过滤车间', async () => {
+  it('无 URL 参数时回落记忆车间（含模块参数）并按授权过滤车间', async () => {
     currentRoute.workshop = ''
+    currentRoute.module = 'personnel'
     useEquipmentWorkshopStore.setState({ workshopCode: '101-1' })
-    // 非管理员：台账页仅授权 101-1 / 203 两个车间，且无汇总页授权
+    // 非管理员：人员配置页仅授权 101-1 / 203 两个车间
     authStore.state.user = {
       ...authStore.state.user,
       role: 'user',
       page_permissions: [
-        { page_key: 'equipment:assets', permissions: ['access', 'query', 'operate'], visible_sections: ['101-1', '203'] },
+        { page_key: 'equipment:personnel', permissions: ['access', 'query', 'operate'], visible_sections: ['101-1', '203'] },
       ],
     }
-    renderBlocks()
+    renderBlocks('equipment:personnel')
     await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
 
-    // 汇总块隐藏（无 stats 授权），只渲染授权车间；记忆车间自动补到 URL
+    // 只渲染授权车间；记忆车间连同模块参数一起补到 URL
     expect(blocks().map((b) => b.getAttribute('data-testid'))).toEqual([
       'workshop-block:101-1',
       'workshop-block:203',
     ])
-    expect(navigation.replace).toHaveBeenCalledWith('/equipment/assets?workshop=101-1', { scroll: false })
+    expect(navigation.replace).toHaveBeenCalledWith(
+      '/equipment?workshop=101-1&module=personnel',
+      { scroll: false },
+    )
   })
 })

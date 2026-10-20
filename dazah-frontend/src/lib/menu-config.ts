@@ -14,6 +14,8 @@ export interface SubMenuItem {
   adminOnly?: boolean         // 仅系统管理员可见
   permission?: string         // 细粒度权限（仍由后端负责最终鉴权）
   feishuPageKey?: string      // 可绑定飞书只读数据表的稳定页面标识
+  /** 聚合入口：所列页面 key 任一有 access 授权即显示（如设备统一工作台） */
+  anyOfPageKeys?: readonly string[]
   /** localStorage key 读取激活产品集合，用于动态菜单标签 */
   labelStorageKey?: string
   /** 产品 key → 显示名 映射，配合 labelStorageKey 使用 */
@@ -50,6 +52,15 @@ export const EQUIPMENT_WORKSHOPS: ReadonlyArray<{ code: string; label: string }>
   { code: "201-3", label: "201三车间" },
   { code: "203", label: "203车间" },
 ]
+
+/** 设备统一工作台聚合的功能模块授权 key（菜单 anyOfPageKeys 与深链校验共用） */
+const EQUIPMENT_CONSOLE_MODULE_KEYS = [
+  "equipment:assets",
+  "equipment:maintenance",
+  "equipment:inspection",
+  "equipment:spare-parts",
+  "equipment:personnel",
+] as const
 
 export const moduleMenus: ModuleMenu[] = [
   {
@@ -131,15 +142,18 @@ export const moduleMenus: ModuleMenu[] = [
     label: "设备管理",
     icon: "cog",
     path: "/equipment",
-    // 功能页单页 + 页内车间切换（车间可见性走 visible_sections）；
-    // 旧 /equipment/<功能>/<车间> 路径重定向到 ?workshop= 查询参数
+    // 统一工作台：车间块 + 功能模块 Tab（/equipment?workshop=&module=）；
+    // 模块授权 key（equipment:assets 等）仍是权限实体，入口按任一模块授权显示；
+    // 旧 /equipment/<功能>[/<车间>] 路径重定向到统一工作台
     children: [
       { key: "stats", label: "设备汇总", path: "/equipment/stats" },
-      { key: "assets", label: "设备台账", path: "/equipment/assets" },
-      { key: "maintenance", label: "维护保养", path: "/equipment/maintenance" },
-      { key: "inspection", label: "设备巡检", path: "/equipment/inspection" },
-      { key: "spare-parts", label: "备件管理", path: "/equipment/spare-parts" },
-      { key: "personnel", label: "人员配置", path: "/equipment/personnel" },
+      {
+        key: "console",
+        label: "设备管理",
+        path: "/equipment",
+        anyOfPageKeys: EQUIPMENT_CONSOLE_MODULE_KEYS,
+      },
+      { key: "feishu-config", label: "飞书配置", path: "/equipment/feishu-config" },
     ],
   },
   {
@@ -960,7 +974,8 @@ function filterPageChildren(
       ? filterPageChildren(item.children, pageKey, allowedPageKeys)
       : undefined
     const accessKey = item.children?.length ? pageKey : getPageKeyByPath(item.path) || pageKey
-    if (!allowedPageKeys.has(accessKey) && !children?.length) return []
+    const anyAllowed = item.anyOfPageKeys?.some((key) => allowedPageKeys.has(key))
+    if (!anyAllowed && !allowedPageKeys.has(accessKey) && !children?.length) return []
     return [{ ...item, children }]
   })
 }
@@ -1004,7 +1019,8 @@ export function getFirstAuthorizedModulePath(user: ModuleLandingAccess): string 
     for (const item of items) {
       if (item.disabled || item.adminOnly) continue
       const key = item.path && getPageKeyByPath(item.path.split('?')[0])
-      if (key && allowedKeys.has(key)) return item.path
+      const anyAllowed = item.anyOfPageKeys?.some((k) => allowedKeys.has(k))
+      if ((key && allowedKeys.has(key)) || anyAllowed) return item.path
       const nested = item.children && firstAuthorizedPage(item.children)
       if (nested) return nested
     }
@@ -1024,8 +1040,16 @@ export function getPostLoginPath(user: ModuleLandingAccess, nextPath?: string): 
   const target = new URL(nextPath, origin)
   if (target.origin !== origin || /^\/(?:api|auth|login)(?:\/|$)/.test(target.pathname)) return fallback
   if (user.role !== 'admin') {
+    const grants = expandEquipmentPagePermissions(user.page_permissions)
     const pageKey = getPageKeyByPath(target.pathname)
-    const grant = expandEquipmentPagePermissions(user.page_permissions).find(item => item.page_key === pageKey)
+    // 设备统一工作台按 ?module= 解析具体功能页授权；无参数时按任一模块授权放行
+    const grant = pageKey === 'equipment:console'
+      ? (target.searchParams.get('module')
+        ? grants.find((item) => item.page_key === `equipment:${target.searchParams.get('module')}`)
+        : EQUIPMENT_CONSOLE_MODULE_KEYS
+          .map((key) => grants.find((item) => item.page_key === key))
+          .find(Boolean))
+      : grants.find((item) => item.page_key === pageKey)
     if (!pageKey || !grant?.permissions?.includes('access') || !grant.permissions.includes('query')) return fallback
   }
   return target.pathname + target.search + target.hash
@@ -1048,8 +1072,8 @@ function collectPageRoutes(
 // aliases. Directory nodes are not permission pages, so their entry route
 // must explicitly inherit a stable leaf page identity.
 const pageRouteAliases: Record<string, string> = {
-  // 设备模块功能页已是真实菜单路径（/equipment/assets 等），旧车间子路径
-  // 由菜单前缀匹配自然解析到功能页 key，无需单独别名。
+  // 设备模块统一工作台（/equipment）按任一功能模块授权放行（见
+  // anyOfPageKeys 与 getPostLoginPath），旧功能页路径由前缀别名解析。
   "/quality/deviations": "quality:deviations:deviation-ledger",
   "/quality/capas": "quality:capas:capa-ledger",
   "/quality/complaints": "quality:complaints:complaint-ledger",
@@ -1084,6 +1108,13 @@ const pageRouteAliases: Record<string, string> = {
 }
 
 const pageRoutePrefixAliases: Record<string, string> = {
+  // 设备模块旧功能页路径（含更深的旧车间子路径）重定向到统一工作台，
+  // 权限仍按原功能页 key 校验
+  "/equipment/assets": "equipment:assets",
+  "/equipment/maintenance": "equipment:maintenance",
+  "/equipment/inspection": "equipment:inspection",
+  "/equipment/spare-parts": "equipment:spare-parts",
+  "/equipment/personnel": "equipment:personnel",
   "/registration/reference-standard": "registration:project:declaration-progress:international-planned-in-progress",
   "/registration/supplementary-reply": "registration:project:declaration-progress:international-planned-in-progress",
   "/registration/validation-audit": "registration:project:declaration-progress:international-planned-in-progress",

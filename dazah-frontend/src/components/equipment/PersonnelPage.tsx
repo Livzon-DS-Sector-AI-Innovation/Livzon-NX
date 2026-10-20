@@ -13,8 +13,8 @@ import { PersonnelCategoryDrawer } from './PersonnelCategoryDrawer'
 import type { EquipmentRole, Personnel } from '@/types/equipment-personnel'
 
 export function PersonnelPage({
-  workshopCode, workshopLabel,
-}: { workshopCode: string; workshopLabel: string }) {
+  workshopCode,
+}: { workshopCode: string }) {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<'personnel' | 'roles'>('personnel')
@@ -130,19 +130,6 @@ export function PersonnelPage({
 
   return (
     <div style={{ paddingBottom: 40 }}>
-      {/* 页面头部 */}
-      <div style={{ marginBottom: 24 }}>
-        <h2 style={{
-          fontSize: 22, fontWeight: 600, color: '#1a1a1a',
-          margin: 0, marginBottom: 4, lineHeight: 1.3,
-        }}>
-          人员配置 · {workshopLabel}
-        </h2>
-        <p style={{ fontSize: 14, color: '#787671', margin: 0, lineHeight: 1.5 }}>
-          {workshopLabel} · 角色权限管理 · 人员分配 · 分类约束 · 飞书同步
-        </p>
-      </div>
-
       {/* Tab 内容包进白色卡片 */}
       <div style={{
         background: '#ffffff',

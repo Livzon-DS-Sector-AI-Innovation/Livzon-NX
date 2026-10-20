@@ -136,7 +136,6 @@ describe('EquipmentPage data lifecycle', () => {
       root.render(
         <EquipmentPage
           workshopCode="201-1"
-          workshopLabel="201一车间"
           initialCategories={[initialCategory]}
           initialLocations={[initialLocation]}
           initialEquipments={[]}
@@ -175,7 +174,6 @@ describe('EquipmentPage data lifecycle', () => {
     const renderPage = (id: string) => (
       <EquipmentPage
         workshopCode="201-1"
-        workshopLabel="201一车间"
         initialCategories={[category(id)]}
         initialLocations={[location(id)]}
         initialEquipments={[]}

@@ -1,23 +1,14 @@
-import { PersonnelPage, PersonnelQueryProvider, WorkshopNavBlocks } from '@/components/equipment'
-import { EQUIPMENT_WORKSHOPS } from '@/lib/menu-config'
-import { EQUIPMENT_PAGE_KEYS } from '@/lib/equipment-page-permissions'
+import { redirect } from 'next/navigation'
 
-// 人员配置单页 + 页内车间切换（?workshop=，缺省回落 201一车间）；数据在客户端自取
-export default async function PersonnelPageWrapper({
+// 旧功能页路径收敛到统一工作台：/equipment/personnel[?workshop=] → /equipment[?workshop=&module=personnel]
+export default async function PersonnelRedirect({
   searchParams,
 }: {
   searchParams: Promise<{ workshop?: string }>
 }) {
   const { workshop } = await searchParams
-  const meta = EQUIPMENT_WORKSHOPS.find((item) => item.code === workshop)
-    ?? EQUIPMENT_WORKSHOPS.find((item) => item.code === '201-1')!
-
-  return (
-    <>
-      <WorkshopNavBlocks pageKey={EQUIPMENT_PAGE_KEYS.personnel} />
-      <PersonnelQueryProvider>
-        <PersonnelPage workshopCode={meta.code} workshopLabel={meta.label} />
-      </PersonnelQueryProvider>
-    </>
-  )
+  const query = workshop
+    ? `workshop=${encodeURIComponent(workshop)}&module=personnel`
+    : 'module=personnel'
+  redirect(`/equipment?${query}`)
 }

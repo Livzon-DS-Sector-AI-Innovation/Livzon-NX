@@ -1,8 +1,9 @@
 'use client'
 
-// 设备模块五个功能页顶部共用的 9 个车间切换块（复刻生产模块产线块样式）：
+// 设备统一工作台顶部的 9 个车间切换块（复刻生产模块产线块样式）：
 // 数据以 URL query ?workshop= 为准（服务端取数、可分享），store 跨页记忆
-// 上次选择——无参数进入时自动补上；非管理员按授权车间过滤。
+// 上次选择——无参数进入时自动补上；切换车间保留当前 ?module= 功能模块；
+// 非管理员按当前模块授权的 visible_sections 过滤车间。
 
 import { useEffect } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
@@ -15,8 +16,6 @@ import {
   useEquipmentWorkshopStore,
 } from '@/stores/equipment-workshop'
 import {
-  EQUIPMENT_PAGE_KEYS,
-  hasEquipmentPageAccess,
   hasEquipmentWorkshopAccess,
   type EquipmentPageKey,
 } from '@/lib/equipment-page-permissions'
@@ -54,45 +53,26 @@ export function WorkshopNavBlocks({ pageKey }: WorkshopNavBlocksProps) {
   }, [])
 
   const urlWorkshop = searchParams.get('workshop')
+  // 切换车间时保留当前功能模块（统一工作台 ?module= 参数）
+  const moduleQuery = searchParams.get('module')
+  const moduleSuffix = moduleQuery ? `&module=${encodeURIComponent(moduleQuery)}` : ''
 
   // 无参数进入：跳到上次选择的车间（有记忆且非缺省时）
   useEffect(() => {
     if (urlWorkshop) return
     const saved = useEquipmentWorkshopStore.getState().workshopCode
     if (saved !== '201-1') {
-      router.replace(`${pathname}?workshop=${encodeURIComponent(saved)}`, { scroll: false })
+      router.replace(`${pathname}?workshop=${encodeURIComponent(saved)}${moduleSuffix}`, { scroll: false })
     }
-  }, [urlWorkshop, pathname, router])
+  }, [urlWorkshop, pathname, router, moduleSuffix])
 
   const visible = EQUIPMENT_WORKSHOPS.filter((ws) =>
     hasEquipmentWorkshopAccess(user, pageKey, ws.code),
   )
   const active = urlWorkshop ?? workshopCode
-  // 汇总块（仿生产模块 SUMMARY 首块）：点击跳全局汇总页，仅在持有汇总页授权时展示
-  const showSummary = hasEquipmentPageAccess(user, EQUIPMENT_PAGE_KEYS.stats)
 
   return (
     <Row gutter={[12, 12]} style={{ marginBottom: 8 }}>
-      {showSummary && (
-        <Col flex="1 1 144px">
-          <div
-            title="切换到 设备汇总（全车间聚合）"
-            onClick={() => router.push('/equipment/stats')}
-            data-testid="workshop-block:summary"
-            className="flex items-center justify-center gap-2 rounded-lg border cursor-pointer transition-colors"
-            style={{
-              height: 56,
-              borderColor: '#5645d4',
-              backgroundColor: 'rgba(86, 69, 212, 0.08)',
-            }}
-          >
-            <ApartmentOutlined style={{ color: '#5645d4', fontSize: 18 }} />
-            <Text strong style={{ fontSize: 13, color: '#5645d4' }}>
-              汇总
-            </Text>
-          </div>
-        </Col>
-      )}
       {visible.map((ws) => {
         const isActive = active === ws.code
         return (
@@ -102,7 +82,7 @@ export function WorkshopNavBlocks({ pageKey }: WorkshopNavBlocksProps) {
               title={`切换到 ${ws.label}`}
               onClick={() => {
                 setWorkshopCode(ws.code)
-                router.push(`${pathname}?workshop=${encodeURIComponent(ws.code)}`, { scroll: false })
+                router.push(`${pathname}?workshop=${encodeURIComponent(ws.code)}${moduleSuffix}`, { scroll: false })
               }}
               data-testid={`workshop-block:${ws.code}`}
               className="flex items-center justify-center gap-2 rounded-lg border bg-white cursor-pointer transition-colors"

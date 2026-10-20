@@ -46,7 +46,6 @@ function renderPage(warnings: StockWarning[]) {
         <AntApp>
           <SparePartsPage
             workshopCode="201-1"
-            workshopLabel="201-1 车间"
             initialSpareParts={[sparePart]}
             initialSparePartTotal={1}
             initialStockWarnings={warnings}

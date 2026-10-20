@@ -41,38 +41,52 @@ vi.mock('@/components/equipment', () => {
     PersonnelQueryProvider: passthrough,
     StatsDashboard: () => null,
     WorkshopNavBlocks: () => null,
+    ModuleTabs: () => null,
   }
 })
 
-import AssetsPage from '@/app/(dashboard)/equipment/assets/page'
+import EquipmentConsolePage from '@/app/(dashboard)/equipment/page'
+import AssetsRedirect from '@/app/(dashboard)/equipment/assets/page'
 import AssetsWorkshopRedirect from '@/app/(dashboard)/equipment/assets/[workshop]/page'
-import InspectionPage from '@/app/(dashboard)/equipment/inspection/page'
+import InspectionRedirect from '@/app/(dashboard)/equipment/inspection/page'
 import InspectionWorkshopRedirect from '@/app/(dashboard)/equipment/inspection/[workshop]/page'
-import MaintenancePage from '@/app/(dashboard)/equipment/maintenance/page'
+import MaintenanceRedirect from '@/app/(dashboard)/equipment/maintenance/page'
 import MaintenanceWorkshopRedirect from '@/app/(dashboard)/equipment/maintenance/[workshop]/page'
-import PersonnelPage from '@/app/(dashboard)/equipment/personnel/page'
+import PersonnelRedirect from '@/app/(dashboard)/equipment/personnel/page'
 import PersonnelWorkshopRedirect from '@/app/(dashboard)/equipment/personnel/[workshop]/page'
-import SparePartsPage from '@/app/(dashboard)/equipment/spare-parts/page'
+import SparePartsRedirect from '@/app/(dashboard)/equipment/spare-parts/page'
 import SparePartsWorkshopRedirect from '@/app/(dashboard)/equipment/spare-parts/[workshop]/page'
 import StatsPage from '@/app/(dashboard)/equipment/stats/page'
 
-type PageElement = { props: Record<string, unknown> }
+type PageElement = {
+  type: (props: Record<string, unknown>) => Promise<PageElement> | PageElement
+  props: Record<string, unknown>
+}
 
-/** 单页路由渲染片段 [车间切换块, 内容组件]，取内容组件的 props */
-async function renderContent(
-  Page: (args: { searchParams: Promise<{ workshop?: string }> }) => Promise<unknown>,
-  workshop?: string,
-): Promise<PageElement> {
-  const element = (await Page({
-    searchParams: Promise.resolve(workshop ? { workshop } : {}),
+/** 渲染统一工作台，返回 [车间块, 模块Tab, 选中模块视图] 与模块视图元素 */
+async function renderConsole(module?: string, workshop?: string) {
+  const element = (await EquipmentConsolePage({
+    searchParams: Promise.resolve({
+      ...(workshop ? { workshop } : {}),
+      ...(module ? { module } : {}),
+    }),
   })) as unknown as { props: { children: unknown[] } }
-  const children = element.props.children
-  const content = Array.isArray(children) ? children[children.length - 1] : children
-  return content as PageElement
+  const children = element.props.children.filter(Boolean)
+  return children as unknown as PageElement[]
+}
+
+/** 执行模块视图（异步服务端组件）取其渲染出的内容元素 props */
+async function renderView(view: PageElement): Promise<PageElement> {
+  const result = await view.type(view.props)
+  return result as PageElement
 }
 
 function legacyParams(workshop: string) {
   return { params: Promise.resolve({ workshop }) }
+}
+
+function queryParams(workshop?: string) {
+  return { searchParams: Promise.resolve(workshop ? { workshop } : {}) }
 }
 
 function defaults() {
@@ -103,41 +117,50 @@ function defaults() {
   actions.fetchInspectionTodaySummaries.mockResolvedValue([])
 }
 
-describe('equipment single pages with workshop query', () => {
+describe('equipment unified console with workshop + module queries', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     defaults()
   })
 
-  it('renders the assets page scoped to ?workshop= and passes it to fetches', async () => {
-    const element = await renderContent(AssetsPage, '101-2')
-    expect(element.props.workshopCode).toBe('101-2')
-    expect(element.props.workshopLabel).toBe('101二车间')
+  it('renders the assets module scoped to ?workshop= and passes it to fetches', async () => {
+    const children = await renderConsole('assets', '101-2')
+    // 车间块 + 模块Tab + 模块视图三段结构
+    expect(children).toHaveLength(3)
+    const view = await renderView(children[2])
+    expect(view.props.workshopCode).toBe('101-2')
     expect(actions.fetchEquipments).toHaveBeenCalledWith({
       workshop: '101-2',
       page: 1,
       page_size: 20,
     })
     expect(actions.fetchEquipmentStatistics).toHaveBeenCalledWith('101-2')
+    // 只取当前模块的数据
+    expect(actions.fetchWorkOrders).not.toHaveBeenCalled()
+    expect(actions.fetchSpareParts).not.toHaveBeenCalled()
   })
 
   it('falls back to the default workshop when the query is missing or invalid', async () => {
-    const element = await renderContent(AssetsPage)
-    expect(element.props.workshopCode).toBe('201-1')
-    const invalid = await renderContent(AssetsPage, '999')
-    expect(invalid.props.workshopCode).toBe('201-1')
+    const children = await renderConsole('assets')
+    const view = await renderView(children[2])
+    expect(view.props.workshopCode).toBe('201-1')
+    const invalid = await renderConsole('assets', '999')
+    const invalidView = await renderView(invalid[2])
+    expect(invalidView.props.workshopCode).toBe('201-1')
   })
 
-  it('falls back to empty assets data when a fetch fails', async () => {
-    actions.fetchEquipments.mockRejectedValue(new Error('boom'))
-    const element = await renderContent(AssetsPage, '201-1')
-    expect(element.props.workshopCode).toBe('201-1')
-    expect(element.props.initialEquipments).toEqual([])
+  it('renders no module content when ?module= is absent or unknown', async () => {
+    const absent = await renderConsole()
+    expect(absent).toHaveLength(2)
+    const unknown = await renderConsole('nonsense', '103')
+    expect(unknown).toHaveLength(2)
+    expect(actions.fetchEquipments).not.toHaveBeenCalled()
   })
 
-  it('renders the maintenance page scoped to ?workshop=', async () => {
-    const element = await renderContent(MaintenancePage, '201-1')
-    expect(element.props.workshopCode).toBe('201-1')
+  it('renders the maintenance module scoped to ?workshop=', async () => {
+    const children = await renderConsole('maintenance', '201-1')
+    const view = await renderView(children[2])
+    expect(view.props.workshopCode).toBe('201-1')
     expect(actions.fetchWorkOrders).toHaveBeenCalledWith({
       workshop: '201-1',
       page: 1,
@@ -154,21 +177,26 @@ describe('equipment single pages with workshop query', () => {
       page: 1,
       page_size: 20,
     })
+    expect(actions.fetchEquipments).not.toHaveBeenCalledWith(
+      expect.objectContaining({ page_size: 20 }),
+    )
   })
 
   it('maintenance degrades per-domain when individual fetches fail', async () => {
     actions.fetchWorkOrders.mockRejectedValue(new Error('boom'))
-    const element = await renderContent(MaintenancePage, '103')
-    expect(element.props.workshopCode).toBe('103')
-    expect(element.props.initialWorkOrders).toEqual([])
+    const children = await renderConsole('maintenance', '103')
+    const view = await renderView(children[2])
+    expect(view.props.workshopCode).toBe('103')
+    expect(view.props.initialWorkOrders).toEqual([])
     // 其余域不受影响
-    expect(element.props.initialCalibrationPlans).toEqual([])
+    expect(view.props.initialCalibrationPlans).toEqual([])
     expect(actions.fetchCalibrationPlans).toHaveBeenCalled()
   })
 
-  it('renders the spare parts page scoped to ?workshop=', async () => {
-    const element = await renderContent(SparePartsPage, '201-1')
-    expect(element.props.workshopCode).toBe('201-1')
+  it('renders the spare parts module scoped to ?workshop=', async () => {
+    const children = await renderConsole('spare-parts', '201-1')
+    const view = await renderView(children[2])
+    expect(view.props.workshopCode).toBe('201-1')
     expect(actions.fetchSpareParts).toHaveBeenCalledWith({
       workshop: '201-1',
       page: 1,
@@ -177,18 +205,18 @@ describe('equipment single pages with workshop query', () => {
     expect(actions.fetchStockWarnings).toHaveBeenCalledWith('201-1')
   })
 
-  it('renders the inspection page with the workshop label', async () => {
-    const element = await renderContent(InspectionPage, '201-1')
-    expect(element.props.workshopCode).toBe('201-1')
-    expect(element.props.workshopLabel).toBe('201一车间')
+  it('renders the inspection module with the workshop context', async () => {
+    const children = await renderConsole('inspection', '201-1')
+    const view = children[2]
+    expect(view.props.workshopCode).toBe('201-1')
+    expect(view.props.workshopLabel).toBe('201一车间')
   })
 
-  it('renders the personnel page scoped to ?workshop=', async () => {
-    const provider = await renderContent(PersonnelPage, '101-1')
-    // PersonnelQueryProvider（透传 mock）内层才是页面组件
+  it('renders the personnel module scoped to ?workshop=', async () => {
+    const children = await renderConsole('personnel', '101-1')
+    const provider = await renderView(children[2])
     const page = (provider.props as unknown as { children: PageElement }).children
     expect(page.props.workshopCode).toBe('101-1')
-    expect(page.props.workshopLabel).toBe('101一车间')
   })
 
   it('renders the stats dashboard with inspection summaries', async () => {
@@ -224,22 +252,43 @@ describe('equipment single pages with workshop query', () => {
   })
 })
 
-describe('equipment legacy workshop redirects', () => {
+describe('equipment legacy module path redirects', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    defaults()
   })
 
   it.each([
-    ['台账', AssetsWorkshopRedirect, '/equipment/assets?workshop=101-2'],
-    ['维护保养', MaintenanceWorkshopRedirect, '/equipment/maintenance?workshop=201-3'],
-    ['备件管理', SparePartsWorkshopRedirect, '/equipment/spare-parts?workshop=103'],
-    ['人员配置', PersonnelWorkshopRedirect, '/equipment/personnel?workshop=101-1'],
-    ['巡检', InspectionWorkshopRedirect, '/equipment/inspection?workshop=203'],
-  ])('%s 旧车间路径重定向到 ?workshop= 查询参数', async (_name, Page, target) => {
-    const workshop = target.split('=')[1]
-    await expect(Page(legacyParams(workshop))).rejects.toThrow('REDIRECT')
-    expect(navigation.redirect).toHaveBeenCalledWith(target)
+    ['台账', AssetsRedirect, 'assets'],
+    ['维护保养', MaintenanceRedirect, 'maintenance'],
+    ['巡检', InspectionRedirect, 'inspection'],
+    ['备件管理', SparePartsRedirect, 'spare-parts'],
+    ['人员配置', PersonnelRedirect, 'personnel'],
+  ])('%s 旧功能页路径重定向到统一工作台（保留车间参数）', async (_name, Page, module) => {
+    await expect(Page(queryParams('101-2'))).rejects.toThrow('REDIRECT')
+    expect(navigation.redirect).toHaveBeenCalledWith(
+      `/equipment?workshop=101-2&module=${module}`,
+    )
+    await expect(Page(queryParams())).rejects.toThrow('REDIRECT')
+    expect(navigation.redirect).toHaveBeenCalledWith(`/equipment?module=${module}`)
+  })
+})
+
+describe('equipment legacy workshop redirects', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it.each([
+    ['台账', AssetsWorkshopRedirect, 'assets'],
+    ['维护保养', MaintenanceWorkshopRedirect, 'maintenance'],
+    ['备件管理', SparePartsWorkshopRedirect, 'spare-parts'],
+    ['人员配置', PersonnelWorkshopRedirect, 'personnel'],
+    ['巡检', InspectionWorkshopRedirect, 'inspection'],
+  ])('%s 旧车间子路径直接重定向到统一工作台', async (_name, Page, module) => {
+    await expect(Page(legacyParams('101-2'))).rejects.toThrow('REDIRECT')
+    expect(navigation.redirect).toHaveBeenCalledWith(
+      `/equipment?workshop=101-2&module=${module}`,
+    )
   })
 
   it.each([

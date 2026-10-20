@@ -8,11 +8,13 @@ import { usePathname } from "next/navigation"
 import { AgentFloatingEntry } from "@/components/agent/AgentFloatingEntry"
 import { MappedMenuPageGate } from "@/components/feishu-data"
 import {
+  expandEquipmentPagePermissions,
   getAuthorizedPageMenus,
   getModuleByKey,
   getPageKeyByPath,
   moduleMenus,
 } from "@/lib/menu-config"
+import { hasAnyEquipmentModuleAccess } from "@/lib/equipment-page-permissions"
 import { TopNav } from "./TopNav"
 import { Sidebar } from "./Sidebar"
 import { PageNavigation } from "./PageNavigation"
@@ -63,11 +65,15 @@ export function AppShell({ children, user }: AppShellProps) {
     'energy:ledger-overview', 'energy:entry', 'energy:reports',
     'energy:analysis', 'energy:data-quality', 'energy:settings',
   ]).has(currentPageKey ?? '')
-  const pageGrant = user.page_permissions?.find(
+  // 展开旧「车间×功能」叶授权后查找；设备统一工作台按任一功能模块授权放行
+  const pageGrant = expandEquipmentPagePermissions(user.page_permissions).find(
     (grant) => grant.page_key === currentPageKey,
   )
+  const consoleAccess = currentPageKey === 'equipment:console'
+    && hasAnyEquipmentModuleAccess(user)
   const isPageDenied = Boolean(
     user.role !== 'admin' &&
+      !consoleAccess &&
       (!currentPageKey || !pageGrant?.permissions?.includes("access")),
   )
   const isQueryDenied = Boolean(
