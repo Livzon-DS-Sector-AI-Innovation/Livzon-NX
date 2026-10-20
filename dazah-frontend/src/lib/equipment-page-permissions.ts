@@ -50,3 +50,15 @@ export function hasEquipmentWorkshopAccess(
   if (visible == null) return true
   return visible.includes(workshopCode)
 }
+
+/** 用户是否可进入指定功能页（admin 或持有 access 授权）。 */
+export function hasEquipmentPageAccess(
+  user: EquipmentPermissionUser | null | undefined,
+  pageKey: EquipmentPageKey,
+): boolean {
+  if (!user) return false
+  if (user.role === 'admin') return true
+  return (user.page_permissions ?? []).some(
+    (grant) => grant.page_key === pageKey && grant.permissions?.includes('access'),
+  )
+}

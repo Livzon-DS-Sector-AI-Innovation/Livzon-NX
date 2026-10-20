@@ -18,7 +18,7 @@ const NAME_COL_WIDTH = 96
 const COUNT_COL_WIDTH = 92
 const ABNORMAL_COL_WIDTH = 64
 
-/** 设备仪表盘的“今日巡检进度”汇总卡：全部车间一行一条，未接入灰态。 */
+/** 设备汇总页的“今日巡检进度”汇总卡：全部车间一行一条，未接入灰态。 */
 export function InspectionProgressCard({
   summaries,
 }: {

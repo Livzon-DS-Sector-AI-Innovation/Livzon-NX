@@ -56,7 +56,7 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
         "/equipment",
         icon="cog",
         children=[
-            _n("stats", "设备仪表盘", "/equipment/stats"),
+            _n("stats", "设备汇总", "/equipment/stats"),
             _n("assets", "设备台账", "/equipment/assets"),
             _n("maintenance", "维护保养", "/equipment/maintenance"),
             _n("inspection", "设备巡检", "/equipment/inspection"),

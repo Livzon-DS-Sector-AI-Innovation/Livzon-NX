@@ -15,6 +15,8 @@ import {
   useEquipmentWorkshopStore,
 } from '@/stores/equipment-workshop'
 import {
+  EQUIPMENT_PAGE_KEYS,
+  hasEquipmentPageAccess,
   hasEquipmentWorkshopAccess,
   type EquipmentPageKey,
 } from '@/lib/equipment-page-permissions'
@@ -66,9 +68,31 @@ export function WorkshopNavBlocks({ pageKey }: WorkshopNavBlocksProps) {
     hasEquipmentWorkshopAccess(user, pageKey, ws.code),
   )
   const active = urlWorkshop ?? workshopCode
+  // 汇总块（仿生产模块 SUMMARY 首块）：点击跳全局汇总页，仅在持有汇总页授权时展示
+  const showSummary = hasEquipmentPageAccess(user, EQUIPMENT_PAGE_KEYS.stats)
 
   return (
     <Row gutter={[12, 12]} style={{ marginBottom: 8 }}>
+      {showSummary && (
+        <Col flex="1 1 144px">
+          <div
+            title="切换到 设备汇总（全车间聚合）"
+            onClick={() => router.push('/equipment/stats')}
+            data-testid="workshop-block:summary"
+            className="flex items-center justify-center gap-2 rounded-lg border cursor-pointer transition-colors"
+            style={{
+              height: 56,
+              borderColor: '#5645d4',
+              backgroundColor: 'rgba(86, 69, 212, 0.08)',
+            }}
+          >
+            <ApartmentOutlined style={{ color: '#5645d4', fontSize: 18 }} />
+            <Text strong style={{ fontSize: 13, color: '#5645d4' }}>
+              汇总
+            </Text>
+          </div>
+        </Col>
+      )}
       {visible.map((ws) => {
         const isActive = active === ws.code
         return (

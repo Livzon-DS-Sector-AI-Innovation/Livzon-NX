@@ -64,12 +64,14 @@ afterEach(() => {
 })
 
 describe('WorkshopNavBlocks（产线块样式）', () => {
-  it('渲染 9 个等宽车间块并高亮 URL 指定的车间', async () => {
+  it('渲染汇总首块 + 9 个车间块并高亮 URL 指定的车间', async () => {
     currentRoute.workshop = '201-1'
     renderBlocks()
     await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
 
-    expect(blocks()).toHaveLength(9)
+    const all = blocks()
+    expect(all).toHaveLength(10)
+    expect(all[0].getAttribute('data-testid')).toBe('workshop-block:summary')
     const active = document.querySelector('[data-testid="workshop-block:201-1"]') as HTMLElement
     expect(active).toBeTruthy()
     expect(active.style.borderColor).toContain('var(--color-primary)')
@@ -77,10 +79,14 @@ describe('WorkshopNavBlocks（产线块样式）', () => {
     expect(active.textContent).toContain('201一车间')
   })
 
-  it('点击车间块更新 URL 查询参数（不跳路由）', async () => {
+  it('点击汇总块跳全局汇总页；点击车间块更新 URL 查询参数', async () => {
     currentRoute.workshop = '201-1'
     renderBlocks()
     await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
+
+    const summary = document.querySelector('[data-testid="workshop-block:summary"]') as HTMLElement
+    await act(async () => { summary.click() })
+    expect(navigation.push).toHaveBeenCalledWith('/equipment/stats')
 
     const target = document.querySelector('[data-testid="workshop-block:103"]') as HTMLElement
     await act(async () => { target.click() })
@@ -88,10 +94,10 @@ describe('WorkshopNavBlocks（产线块样式）', () => {
     expect(useEquipmentWorkshopStore.getState().workshopCode).toBe('103')
   })
 
-  it('无 URL 参数时回落记忆车间；按授权过滤不可见车间', async () => {
+  it('无 URL 参数时回落记忆车间；无汇总授权隐藏汇总块并按授权过滤车间', async () => {
     currentRoute.workshop = ''
     useEquipmentWorkshopStore.setState({ workshopCode: '101-1' })
-    // 非管理员：台账页仅授权 101-1 / 203 两个车间
+    // 非管理员：台账页仅授权 101-1 / 203 两个车间，且无汇总页授权
     authStore.state.user = {
       ...authStore.state.user,
       role: 'user',
@@ -102,7 +108,7 @@ describe('WorkshopNavBlocks（产线块样式）', () => {
     renderBlocks()
     await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
 
-    // 只渲染授权车间；记忆车间（101-1）自动补到 URL
+    // 汇总块隐藏（无 stats 授权），只渲染授权车间；记忆车间自动补到 URL
     expect(blocks().map((b) => b.getAttribute('data-testid'))).toEqual([
       'workshop-block:101-1',
       'workshop-block:203',

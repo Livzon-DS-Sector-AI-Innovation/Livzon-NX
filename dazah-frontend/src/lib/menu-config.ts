@@ -134,7 +134,7 @@ export const moduleMenus: ModuleMenu[] = [
     // 功能页单页 + 页内车间切换（车间可见性走 visible_sections）；
     // 旧 /equipment/<功能>/<车间> 路径重定向到 ?workshop= 查询参数
     children: [
-      { key: "stats", label: "设备仪表盘", path: "/equipment/stats" },
+      { key: "stats", label: "设备汇总", path: "/equipment/stats" },
       { key: "assets", label: "设备台账", path: "/equipment/assets" },
       { key: "maintenance", label: "维护保养", path: "/equipment/maintenance" },
       { key: "inspection", label: "设备巡检", path: "/equipment/inspection" },

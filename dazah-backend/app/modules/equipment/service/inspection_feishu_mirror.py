@@ -943,7 +943,7 @@ async def today_summary(db: AsyncSession, workshop_code: str) -> dict[str, Any]:
 
 
 async def today_summaries_all(db: AsyncSession) -> list[dict[str, Any]]:
-    """各已启用镜像车间的今日巡检进度汇总（设备仪表盘）。"""
+    """各已启用镜像车间的今日巡检进度汇总（设备汇总页）。"""
     summaries: list[dict[str, Any]] = []
     for workshop_code in await list_enabled_workshops(db):
         summary = await today_summary(db, workshop_code)

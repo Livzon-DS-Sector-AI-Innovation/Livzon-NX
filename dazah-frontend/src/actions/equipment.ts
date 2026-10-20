@@ -472,7 +472,7 @@ export async function fetchEquipmentStatistics(workshop?: string): Promise<any> 
   return json.data
 }
 
-/** 各已启用镜像车间的今日巡检进度（设备仪表盘汇总）；失败降级为空列表 */
+/** 各已启用镜像车间的今日巡检进度（设备汇总页）；失败降级为空列表 */
 export async function fetchInspectionTodaySummaries(): Promise<InspectionFeishuWorkshopSummary[]> {
   try {
     const res = await fetch(

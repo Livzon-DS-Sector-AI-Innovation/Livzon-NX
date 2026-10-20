@@ -257,7 +257,7 @@
     "children": [
       {
         "key": "stats",
-        "name": "设备仪表盘",
+        "name": "设备汇总",
         "path": "/equipment/stats",
         "permission_code": null,
         "disabled": false,
