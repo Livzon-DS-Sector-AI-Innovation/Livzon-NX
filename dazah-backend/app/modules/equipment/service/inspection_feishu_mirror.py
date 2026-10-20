@@ -677,6 +677,14 @@ async def list_records(
         conditions.append(
             EquipmentInspectionFeishuRecord.process_status == process_status
         )
+    else:
+        # 多设备合并填写的原始行（处理状态=已拆分，已被逐设备行取代）不参与
+        # 巡检记录/跨车间聚合展示；未启用该字段的表（NULL）不受影响
+        conditions.append(
+            EquipmentInspectionFeishuRecord.process_status.is_distinct_from(
+                _STATUS_SPLIT
+            )
+        )
 
     total = (
         await db.execute(
