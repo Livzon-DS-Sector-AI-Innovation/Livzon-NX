@@ -44,25 +44,28 @@ async def test_module_coverage_http_inventory_disabled_and_admin_boundary(
             item["module_name"] for item in data["modules"]
         )
         assert sum(item["registered_count"] > 0 for item in data["modules"]) == 6
-        # Nine workshops each add five distinct equipment permission pages.
-        equipment_workshop_pages = {
+        # 设备模块已收敛为统一工作台：45 个 workshop-叶页面退役，目录保留功能页 key；
+        # 飞书配置页（equipment:feishu-config）按 agent 工具排除策略（config 路径段）
+        # 不计入可接入页面
+        equipment_page_keys = {
             page["page_key"] for page in modules["equipment"]["pages"]
-            if page["page_key"].startswith("equipment:workshop-")
         }
-        assert equipment_workshop_pages == {
-            f"equipment:workshop-{code}:{kind}-{code}"
-            for code in (
-                "101-1", "101-2", "102-1", "102-2", "103",
-                "201-1", "201-2", "201-3", "203",
-            )
-            for kind in (
-                "assets", "maintenance", "inspection", "spare-parts", "personnel",
-            )
+        assert equipment_page_keys == {
+            "equipment:stats",
+            "equipment:assets",
+            "equipment:maintenance",
+            "equipment:inspection",
+            "equipment:spare-parts",
+            "equipment:personnel",
         }
+        assert not any(
+            key.startswith("equipment:workshop-") for key in equipment_page_keys
+        )
         assert modules["equipment"]["registered_count"] == 0
         assert modules["equipment"]["covered_pages"] == 0
-        # Native energy replaces the legacy workspace and adds four net pages.
-        assert data["total_pages"] == 314
+        # Native energy replaces the legacy workspace and adds four net pages;
+        # 设备模块 45 个 workshop-叶页面退役后总量相应减少
+        assert data["total_pages"] == 269
         assert {"/energy/entry", "/energy/reports", "/energy/analysis"} <= {
             page["route_path"] for page in modules["energy"]["pages"]
         }
