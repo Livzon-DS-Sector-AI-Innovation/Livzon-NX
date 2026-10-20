@@ -234,3 +234,24 @@ def test_equipment_ledger_archive_migration(monkeypatch):
     mocks["drop_table"].assert_called_once_with(
         "equipment_ledger_archives", schema="equipment"
     )
+
+
+def test_inspection_feishu_config_base_url_migration(monkeypatch):
+    """飞书配置页：inspection_feishu_config 增加 base_url（完整链接）列。"""
+    module = _load("c9d400000062_add_feishu_config_base_url.py")
+    mocks = _mock_ops(monkeypatch, module)
+
+    module.upgrade()
+    mocks["add_column"].assert_called_once()
+    column = mocks["add_column"].call_args.args[1]
+    assert column.name == "base_url"
+    # 已存行走空串缺省，非空约束不回填
+    assert column.nullable is False
+    assert column.server_default.arg == ""
+
+    module.downgrade()
+    mocks["drop_column"].assert_called_once()
+    assert mocks["drop_column"].call_args.args == (
+        "inspection_feishu_config",
+        "base_url",
+    )
