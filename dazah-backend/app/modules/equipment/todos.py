@@ -1,30 +1,23 @@
 """Assigned repair/inspection work, with device department isolation."""
 
-import re
 from datetime import date
 from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import (
-    Date,
     Select,
     String,
     and_,
-    case,
     cast,
-    exists,
     func,
-    literal,
     or_,
     select,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.modules.equipment.models.equipment import Equipment
-from app.modules.equipment.models.inspection import InspectionTask
 from app.modules.equipment.models.work_order import WorkOrder
 from app.platform.identity.data_scope import current_page_key
 from app.platform.identity.deps import RequiredUser
@@ -52,80 +45,32 @@ def equipment_todo_query(
     ]
     if department_ids is not None:
         valid_equipment.append(Equipment.department_id.in_(department_ids))
-    if kind == "maintenance":
-        personal = or_(
-            and_(
-                WorkOrder.status.in_(["待处理", "执行中"]),
-                or_(
-                    WorkOrder.assignee_id == actor.user_id,
-                    and_(
-                        WorkOrder.assignee_id.is_(None),
-                        WorkOrder.responsible_person_id == actor.user_id,
-                    ),
+    personal = or_(
+        and_(
+            WorkOrder.status.in_(["待处理", "执行中"]),
+            or_(
+                WorkOrder.assignee_id == actor.user_id,
+                and_(
+                    WorkOrder.assignee_id.is_(None),
+                    WorkOrder.responsible_person_id == actor.user_id,
                 ),
             ),
-            and_(WorkOrder.status == "待验收", WorkOrder.reporter_id == actor.user_id),
+        ),
+        and_(WorkOrder.status == "待验收", WorkOrder.reporter_id == actor.user_id),
+    )
+    return (
+        select(
+            cast(WorkOrder.id, String).label("id"),
+            func.concat(WorkOrder.work_order_no, " · ", Equipment.name).label(
+                "title"
+            ),
+            func.concat(
+                WorkOrder.status, " · ", WorkOrder.priority, "优先级"
+            ).label("detail"),
+            WorkOrder.planned_start_date.label("due_date"),
         )
-        return (
-            select(
-                cast(WorkOrder.id, String).label("id"),
-                func.concat(WorkOrder.work_order_no, " · ", Equipment.name).label(
-                    "title"
-                ),
-                func.concat(
-                    WorkOrder.status, " · ", WorkOrder.priority, "优先级"
-                ).label("detail"),
-                WorkOrder.planned_start_date.label("due_date"),
-            )
-            .join(Equipment, WorkOrder.equipment_id == Equipment.id)
-            .where(WorkOrder.is_deleted.is_(False), *valid_equipment, personal)
-        )
-    equipment_json = cast(InspectionTask.equipment_ids, JSONB)
-    safe_ids = case(
-        (func.jsonb_typeof(equipment_json) == "array", equipment_json),
-        else_=literal([], type_=JSONB),
-    )
-    devices = (
-        func.jsonb_array_elements_text(safe_ids)
-        .table_valued("value")
-        .alias("task_devices")
-    )
-    allowed = exists(
-        select(Equipment.id)
-        .where(cast(Equipment.id, String) == devices.c.value, *valid_equipment)
-        .correlate(devices)
-    )
-    multi_scope = and_(
-        func.jsonb_array_length(safe_ids) > 0,
-        ~exists(
-            select(1).select_from(devices).where(~allowed).correlate(InspectionTask)
-        ),
-    )
-    single_scope = and_(
-        func.jsonb_array_length(safe_ids) == 0,
-        exists(
-            select(Equipment.id).where(
-                Equipment.id == InspectionTask.equipment_id, *valid_equipment
-            )
-        ),
-    )
-    # Restricted scopes require every linked device to be authorized. Empty
-    # or unknown device ownership cannot establish a department grant.
-    scope_filter = or_(multi_scope, single_scope)
-    return select(
-        cast(InspectionTask.id, String).label("id"),
-        func.concat(InspectionTask.task_no, " · ", InspectionTask.plan_type).label(
-            "title"
-        ),
-        InspectionTask.status.label("detail"),
-        cast(func.timezone("Asia/Shanghai", InspectionTask.planned_time), Date).label(
-            "due_date"
-        ),
-    ).where(
-        InspectionTask.is_deleted.is_(False),
-        InspectionTask.assigned_to == actor.user_id,
-        InspectionTask.status.in_(["待执行", "执行中"]),
-        scope_filter,
+        .join(Equipment, WorkOrder.equipment_id == Equipment.id)
+        .where(WorkOrder.is_deleted.is_(False), *valid_equipment, personal)
     )
 
 
@@ -165,13 +110,9 @@ async def equipment_my_todos(
     db: AsyncSession = Depends(get_db),
 ) -> BusinessTodoPage:
     key = current_page_key.get() or ""
-    matched = re.fullmatch(r"equipment:workshop-([0-9]{3}(?:-[0-9])?):([a-z]+)-\1", key)
-    if key == PAGES[kind]:
-        # 功能页单页：车间由页内切换块的查询参数指定，缺省回落 201-1
-        workshop_code = workshop or "201-1"
-    elif matched and matched.group(2) == kind:
-        workshop_code = matched.group(1)
-    else:
+    if key != PAGES[kind]:
         raise HTTPException(403, "当前页面不能读取其他设备业务的待办")
+    # 功能页单页：车间由页内切换块的查询参数指定，缺省回落 201-1
+    workshop_code = workshop or "201-1"
     actor = await resolve_todo_actor(request, db, user)
     return await list_equipment_todos(db, kind, actor, page, page_size, workshop_code)

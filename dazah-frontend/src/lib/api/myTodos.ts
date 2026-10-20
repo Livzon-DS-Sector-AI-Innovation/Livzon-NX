@@ -24,7 +24,6 @@ const businessTodoPages: Record<string, { moduleCode: string; kind: string }> = 
   '/quality/capas/plans': { moduleCode: 'quality', kind: 'capa-plans' },
   '/quality/change/action-plans': { moduleCode: 'quality', kind: 'change-plans' },
   '/equipment/maintenance': { moduleCode: 'equipment', kind: 'maintenance' },
-  '/equipment/inspection': { moduleCode: 'equipment', kind: 'inspection' },
   '/safety/hazard-ledger': { moduleCode: 'safety', kind: 'hazards' },
   '/safety/accident': { moduleCode: 'safety', kind: 'accidents' },
   '/safety/check': { moduleCode: 'safety', kind: 'checks' },

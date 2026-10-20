@@ -2,12 +2,11 @@
 
 import os
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import UploadFile
-from sqlalchemy import String, and_, cast, func, or_, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -35,15 +34,6 @@ _VALID_TRANSITIONS: dict[str, list[str]] = {
 
 
 # ═══════════ 任务 ═══════════
-async def _generate_task_no(db: AsyncSession) -> str:
-    today = datetime.now().strftime("%Y%m%d")
-    max_no = await repo.get_max_task_no(db)
-    if max_no:
-        seq = int(max_no.split("-")[-1]) + 1
-    else:
-        seq = 1
-    return f"IT-{today}-{seq:04d}"
-
 
 async def _get_task(db: AsyncSession, task_id: uuid.UUID) -> InspectionTask:
     task = await repo.get_task_by_id(db, task_id)
@@ -56,56 +46,6 @@ def _validate_transition(current: str, target: str) -> None:
     allowed = _VALID_TRANSITIONS.get(current, [])
     if target not in allowed:
         raise AppException(message=f"状态不允许从 '{current}' 转换到 '{target}'")
-
-
-async def create_task(db: AsyncSession, data: dict[str, Any]) -> InspectionTask:
-    has_equipment = data.get("equipment_id") or data.get("equipment_ids")
-    if not has_equipment:
-        raise AppException(message="设备巡检至少需要选择一台设备")
-
-    equipment_templates = data.get("equipment_templates")
-    template_ids = data.get("template_ids")
-
-    if equipment_templates:
-        # 新方式：逐设备绑定模板
-        equipment_ids = data.get("equipment_ids", [])
-        eq_id_set = {str(eid) for eid in equipment_ids}
-        # 校验 equipment_templates 的 key 都在 equipment_ids 中
-        for eq_id in equipment_templates:
-            if eq_id not in eq_id_set:
-                raise AppException(message=f"设备 {eq_id} 不在已选择的设备列表中")
-        # 校验每个已选设备都绑定了至少一个模板
-        for eq_id in eq_id_set:
-            if eq_id not in equipment_templates or not equipment_templates[eq_id]:
-                raise AppException(message="每台已选设备必须绑定至少一个检查模板")
-        # 将 UUID 转为字符串存储
-        data["equipment_templates"] = {
-            str(k): [str(tid) for tid in v] for k, v in equipment_templates.items()
-        }
-    elif template_ids:
-        # 兼容旧方式：扁平模板列表（所有模板应用于所有设备）
-        pass
-    else:
-        raise AppException(message="设备巡检必须选择检查模板")
-
-    # JSON 列无法直接序列化 UUID 对象，需提前转为字符串
-    if data.get("equipment_ids"):
-        data["equipment_ids"] = [str(uid) for uid in data["equipment_ids"]]
-    if data.get("template_ids"):
-        data["template_ids"] = [str(uid) for uid in data["template_ids"]]
-
-    for attempt in range(_MAX_RETRIES):
-        task_no = await _generate_task_no(db)
-        data["task_no"] = task_no
-        data["status"] = "待执行"
-        try:
-            return await repo.create_task(db, data)
-        except IntegrityError:
-            if attempt < _MAX_RETRIES - 1:
-                await db.rollback()
-                continue
-            raise AppException(message="任务号生成失败，请重试")
-    raise AppException(message="任务号生成失败")
 
 
 async def get_tasks(
@@ -488,57 +428,3 @@ async def delete_photo(db: AsyncSession, photo_id: uuid.UUID) -> bool:
 
 
 # ═══════════ 历史 ═══════════
-async def get_history(
-    db: AsyncSession,
-    date_from: date | None = None,
-    date_to: date | None = None,
-    equipment_id: uuid.UUID | None = None,
-    result: str | None = None,
-    page: int = 1,
-    page_size: int = 20,
-) -> tuple[list[InspectionTask], int]:
-    from app.modules.equipment.models.inspection import (
-        InspectionTask as ITask,
-    )
-
-    conditions = [
-        ITask.is_deleted == False,  # noqa: E712
-        ITask.status.in_(["已完成", "已关闭"]),
-    ]
-    if date_from:
-        conditions.append(ITask.planned_time >= date_from)
-    if date_to:
-        conditions.append(ITask.planned_time <= date_to)
-    if equipment_id:
-        conditions.append(
-            or_(
-                ITask.equipment_id == equipment_id,
-                cast(ITask.equipment_ids, String).like(f'%"{equipment_id}"%'),
-            )
-        )
-    if result:
-        conditions.append(ITask.overall_result == result)
-
-    count_stmt = select(func.count(ITask.id)).where(and_(*conditions))
-    total = (await db.execute(count_stmt)).scalar_one()
-
-    stmt = (
-        select(ITask)
-        .options(
-            selectinload(ITask.equipment),
-            selectinload(ITask.assignee),
-        )
-        .where(and_(*conditions))
-        .order_by(ITask.planned_time.desc(), ITask.created_at.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    )
-    result_set = await db.execute(stmt)
-    return list(result_set.scalars().all()), total
-
-
-async def get_task_detail(db: AsyncSession, task_id: uuid.UUID) -> dict[str, Any]:
-    task = await _get_task(db, task_id)
-    records = await repo.get_records_by_task(db, task_id)
-    photos = await repo.get_photos_by_task(db, task_id)
-    return {"task": task, "records": records, "photos": photos}

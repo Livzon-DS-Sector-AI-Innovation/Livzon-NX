@@ -1,11 +1,9 @@
-from datetime import UTC, datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.equipment.models.equipment import Equipment, Location
-from app.modules.equipment.models.inspection import InspectionTask
 from app.modules.equipment.models.work_order import WorkOrder
 from app.modules.equipment.todos import PAGES, router
 from app.platform.identity.data_scope import DepartmentScope
@@ -41,69 +39,6 @@ async def devices(db: AsyncSession) -> tuple[Department, Equipment, Equipment]:
     db.add_all([first, second])
     await db.flush()
     return own, first, second
-
-
-@pytest.mark.asyncio
-async def test_inspection_requires_all_devices_in_scope_and_trusted_assignee(
-    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    actor = await make_todo_user(db_session)
-    other_actor = await make_todo_user(db_session)
-    department, own, other = await devices(db_session)
-    expected = []
-    for variant in (
-        "single",
-        "multi-own",
-        "multi-mixed",
-        "missing-device",
-        "outside",
-        "finished",
-        "deleted",
-        "other-person",
-    ):
-        task = InspectionTask(
-            task_no=f"I-{uuid4().hex[:15]}",
-            equipment_id=other.id if variant == "outside" else own.id,
-            assigned_to=other_actor.id if variant == "other-person" else actor.id,
-            planned_time=datetime(
-                2026, 10, 12, 0, 30, tzinfo=timezone(timedelta(hours=8))
-            ),
-            status="已完成" if variant == "finished" else "待执行",
-            is_deleted=variant == "deleted",
-        )
-        if variant.startswith("multi") or variant == "missing-device":
-            task.equipment_ids = (
-                [str(own.id), str(other.id)]
-                if variant == "multi-mixed"
-                else [str(uuid4())]
-                if variant == "missing-device"
-                else [str(own.id)]
-            )
-        db_session.add(task)
-        await db_session.flush()
-        if variant in {"single", "multi-own"}:
-            expected.append(str(task.id))
-    async with scoped_todo_client(
-        db_session,
-        actor,
-        router,
-        "equipment",
-        PAGES["inspection"],
-        DepartmentScope(department_names={department.name}),
-        monkeypatch,
-    ) as client:
-        result = await client.get(
-            f"/api/v1/equipment/my-todos?kind=inspection&assigned_to={uuid4()}"
-        )
-        assert result.status_code == 200, result.text
-        assert result.json()["total"] == 2
-        assert {item["id"] for item in result.json()["items"]} == set(expected)
-        assert all(item["due_date"] == "2026-10-12" for item in result.json()["items"])
-        paged = await client.get(
-            "/api/v1/equipment/my-todos?kind=inspection&page=2&page_size=1"
-        )
-        assert paged.status_code == 200
-        assert paged.json()["total"] == 2 and len(paged.json()["items"]) == 1
 
 
 @pytest.mark.asyncio
@@ -156,62 +91,56 @@ async def test_repairs_follow_assignment_and_acceptance_responsibility(
         response = await client.get("/api/v1/equipment/my-todos?kind=maintenance")
         assert response.status_code == 200, response.text
         assert {item["id"] for item in response.json()["items"]} == set(expected)
+        # 巡检待办 kind 已下线：请求被参数校验或页面权限层拒绝
         assert (
             await client.get("/api/v1/equipment/my-todos?kind=inspection")
-        ).status_code == 403
+        ).status_code in {403, 422}
 
 
 @pytest.mark.asyncio
 async def test_functional_todos_scope_by_workshop_query(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """设备模块收敛为功能单页：待办按车间查询参数过滤；
-    已退役的 workshop 页面标识不再作为请求上下文被接受。"""
+    """设备模块收敛为功能单页：维保待办按车间查询参数过滤。"""
     actor = await make_todo_user(db_session)
     department, first, second = await devices(db_session)
     first.workshop_code = "201-1"
     second.workshop_code = "101-1"
     second.department_id = department.id
-    tasks = {}
+    orders = {}
     for code, device in (("201-1", first), ("101-1", second)):
-        task = InspectionTask(
-            task_no=f"scope-{uuid4().hex[:12]}",
+        order = WorkOrder(
+            work_order_no=f"scope-{uuid4().hex[:12]}",
             equipment_id=device.id,
-            assigned_to=actor.id,
-            planned_time=datetime.now(UTC),
-            status="待执行",
+            order_type="故障维修",
+            status="待处理",
+            assignee_id=actor.id,
         )
-        db_session.add(task)
+        db_session.add(order)
         await db_session.flush()
-        tasks[code] = str(task.id)
+        orders[code] = str(order.id)
     async with scoped_todo_client(
         db_session,
         actor,
         router,
         "equipment",
-        PAGES["inspection"],
+        PAGES["maintenance"],
         DepartmentScope(is_all=True),
         monkeypatch,
     ) as client:
         # 指定车间时仅返回该车间的待办
         for code in ("201-1", "101-1"):
             response = await client.get(
-                f"/api/v1/equipment/my-todos?kind=inspection&workshop={code}"
+                f"/api/v1/equipment/my-todos?kind=maintenance&workshop={code}"
             )
             assert response.status_code == 200, response.text
-            assert {item["id"] for item in response.json()["items"]} == {tasks[code]}
+            assert {item["id"] for item in response.json()["items"]} == {orders[code]}
             assert response.json()["total"] == 1
         # 不指定车间时缺省回落 201一车间
         default_response = await client.get(
-            "/api/v1/equipment/my-todos?kind=inspection"
+            "/api/v1/equipment/my-todos?kind=maintenance"
         )
         assert default_response.status_code == 200, default_response.text
         assert {item["id"] for item in default_response.json()["items"]} == {
-            tasks["201-1"]
+            orders["201-1"]
         }
-        # 已退役的 workshop 页面标识作为上下文请求 → 拒绝
-        refused = await client.get(
-            "/api/v1/equipment/my-todos?kind=inspection",
-            headers={"X-Dazah-Page-Key": "equipment:workshop-203:inspection-203"},
-        )
-        assert refused.status_code == 403
