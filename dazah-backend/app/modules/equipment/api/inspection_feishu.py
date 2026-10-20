@@ -168,6 +168,20 @@ async def get_feishu_config(
     )
 
 
+@router.get(
+    "/feishu/config-list",
+    summary="飞书配置清单（各车间凭据状态与多维表格链接）",
+)
+async def list_feishu_configs(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    _require_user(current_user)
+    return success_response(
+        data=await config_service.list_config_details(db)
+    )
+
+
 @router.put("/feishu/config", summary="保存设备巡检飞书镜像配置")
 async def save_feishu_config(
     data: EquipmentInspectionFeishuConfigUpdateRequest,

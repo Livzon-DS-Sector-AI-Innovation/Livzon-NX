@@ -104,6 +104,7 @@ export interface InspectionFeishuConfigDetail {
   app_secret_masked: string
   app_secret_configured: boolean
   app_token: string
+  base_url: string
   today_table_id: string
   history_table_id: string
   device_table_id: string
@@ -119,6 +120,7 @@ export interface InspectionFeishuConfigUpdateRequest {
   app_id: string
   app_secret?: string | null
   app_token: string
+  base_url?: string
   today_table_id: string
   history_table_id: string
   device_table_id: string

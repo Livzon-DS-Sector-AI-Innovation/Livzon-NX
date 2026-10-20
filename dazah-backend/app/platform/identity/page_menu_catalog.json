@@ -302,6 +302,14 @@
         "permission_code": null,
         "disabled": false,
         "children": null
+      },
+      {
+        "key": "feishu-config",
+        "name": "飞书配置",
+        "path": "/equipment/feishu-config",
+        "permission_code": null,
+        "disabled": false,
+        "children": null
       }
     ]
   },

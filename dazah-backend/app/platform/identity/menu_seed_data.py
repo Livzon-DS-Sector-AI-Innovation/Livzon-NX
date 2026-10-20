@@ -62,6 +62,7 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
             _n("inspection", "设备巡检", "/equipment/inspection"),
             _n("spare-parts", "备件管理", "/equipment/spare-parts"),
             _n("personnel", "人员配置", "/equipment/personnel"),
+            _n("feishu-config", "飞书配置", "/equipment/feishu-config"),
         ],
     ),
     # ── 能源管理 ────────────────────────────────────────────────
@@ -1307,6 +1308,8 @@ SEED_MENUS: list[dict[str, Any]] = [
     _PAGE_MENU_BY_KEY.get(node["key"], node) for node in _LEGACY_SEED_MENUS
 ]
 
-# 设备模块已收敛回功能单页（车间切换在页内，车间可见性走 visible_sections）：
-# 目录与种子不再包含 workshop-叶节点；存量车间叶授权由前端
-# expandEquipmentPagePermissions 投影为功能页授权，无需兼容入口。
+# 设备模块前端已收敛为统一工作台（/equipment?workshop=&module=，车间切换与
+# 功能模块 Tab 都在页内）：目录与种子保留 6 个功能页 key 作为授权实体
+# （页面 key 即模块 Tab 的权限门槛），route_path 是生命周期台账的稳定授权
+# 锚点，保持旧功能页路径不随前端 URL 合并而变（旧路径已 307 到工作台）；
+# 存量车间叶授权由前端 expandEquipmentPagePermissions 投影为功能页授权。

@@ -178,6 +178,11 @@ class EquipmentInspectionFeishuConfigUpdateRequest(BaseModel):
         max_length=500,
         description="多维表格 App Token，支持粘贴 /base/ 链接或 /wiki/ 知识库链接",
     )
+    base_url: str = Field(
+        default="",
+        max_length=500,
+        description="多维表格完整链接（含租户域名，用于飞书配置页直达，可选）",
+    )
     today_table_id: str = Field(default="", max_length=100, description="今日巡检表 ID")
     history_table_id: str = Field(
         default="", max_length=100, description="设备历史巡检记录表 ID"
@@ -196,6 +201,7 @@ class EquipmentInspectionFeishuConfigDetail(BaseModel):
     app_secret_masked: str = Field(description="App Secret 掩码")
     app_secret_configured: bool = Field(description="是否已配置 App Secret")
     app_token: str = Field(description="多维表格 App Token")
+    base_url: str = Field(description="多维表格完整链接（未填写为空串）")
     today_table_id: str = Field(description="今日巡检表 ID")
     history_table_id: str = Field(description="设备历史巡检记录表 ID")
     device_table_id: str = Field(description="设备档案表 ID")

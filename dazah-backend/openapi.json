@@ -38949,6 +38949,13 @@
             "title": "App Token",
             "type": "string"
           },
+          "base_url": {
+            "default": "",
+            "description": "多维表格完整链接（含租户域名，用于飞书配置页直达，可选）",
+            "maxLength": 500,
+            "title": "Base Url",
+            "type": "string"
+          },
           "device_table_id": {
             "default": "",
             "description": "设备档案表 ID",
@@ -107371,6 +107378,53 @@
           }
         },
         "summary": "保存设备巡检飞书镜像配置",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/inspection/feishu/config-list": {
+      "get": {
+        "operationId": "list_feishu_configs_api_v1_equipment_inspection_feishu_config_list_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "飞书配置清单（各车间凭据状态与多维表格链接）",
         "tags": [
           "设备管理"
         ]

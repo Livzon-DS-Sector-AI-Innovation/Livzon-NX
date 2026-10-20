@@ -2732,6 +2732,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment/inspection/feishu/config-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 飞书配置清单（各车间凭据状态与多维表格链接） */
+        get: operations["list_feishu_configs_api_v1_equipment_inspection_feishu_config_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment/inspection/feishu/config/test": {
         parameters: {
             query?: never;
@@ -42734,6 +42751,12 @@ export interface components {
              */
             app_token: string;
             /**
+             * Base Url
+             * @description 多维表格完整链接（含租户域名，用于飞书配置页直达，可选）
+             * @default
+             */
+            base_url: string;
+            /**
              * Device Table Id
              * @description 设备档案表 ID
              * @default
@@ -71387,6 +71410,37 @@ export interface operations {
                 "application/json": components["schemas"]["EquipmentInspectionFeishuConfigUpdateRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_feishu_configs_api_v1_equipment_inspection_feishu_config_list_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

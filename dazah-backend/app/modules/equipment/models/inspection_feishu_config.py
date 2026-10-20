@@ -45,6 +45,12 @@ class EquipmentInspectionFeishuConfig(BaseModel):
     app_token: Mapped[str] = mapped_column(
         String(200), default="", comment="多维表格 App Token（wiki 链接保存时已解析）"
     )
+    base_url: Mapped[str] = mapped_column(
+        String(500),
+        default="",
+        server_default="",
+        comment="多维表格完整链接（含租户域名，用于飞书配置页直达）",
+    )
     today_table_id: Mapped[str] = mapped_column(
         String(100), default="", comment="今日巡检表 ID"
     )

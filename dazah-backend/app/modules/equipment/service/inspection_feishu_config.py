@@ -61,6 +61,7 @@ class InspectionFeishuEffectiveConfig:
     app_id: str
     app_secret: str
     app_token: str
+    base_url: str
     today_table_id: str
     history_table_id: str
     device_table_id: str
@@ -123,6 +124,7 @@ def _empty_config() -> InspectionFeishuEffectiveConfig:
         app_id="",
         app_secret="",
         app_token="",
+        base_url="",
         today_table_id="",
         history_table_id="",
         device_table_id="",
@@ -136,6 +138,7 @@ def _env_config() -> InspectionFeishuEffectiveConfig:
         app_id=settings.EQUIPMENT_FEISHU_APP_ID.strip(),
         app_secret=settings.EQUIPMENT_FEISHU_APP_SECRET.strip(),
         app_token=settings.EQUIPMENT_FEISHU_BITABLE_APP_TOKEN.strip(),
+        base_url="",
         today_table_id=settings.EQUIPMENT_FEISHU_BITABLE_TODAY_TABLE_ID.strip(),
         history_table_id=settings.EQUIPMENT_FEISHU_BITABLE_HISTORY_TABLE_ID.strip(),
         device_table_id=settings.EQUIPMENT_FEISHU_BITABLE_DEVICE_TABLE_ID.strip(),
@@ -151,6 +154,7 @@ def _row_config(
         app_id=(row.app_id or "").strip(),
         app_secret=_decrypt_stored_secret(row.app_secret),
         app_token=(row.app_token or "").strip(),
+        base_url=(row.base_url or "").strip(),
         today_table_id=(row.today_table_id or "").strip(),
         history_table_id=(row.history_table_id or "").strip(),
         device_table_id=(row.device_table_id or "").strip(),
@@ -205,6 +209,7 @@ async def get_config_detail(
         app_secret_masked=mask_api_key(config.app_secret) if config.app_secret else "",
         app_secret_configured=bool(config.app_secret),
         app_token=config.app_token,
+        base_url=config.base_url,
         today_table_id=config.today_table_id,
         history_table_id=config.history_table_id,
         device_table_id=config.device_table_id,
@@ -217,6 +222,39 @@ async def get_config_detail(
         ),
         last_tested_at=row.last_tested_at if row else None,
     )
+
+
+def _normalized_base_url(value: str) -> str:
+    """完整链接仅接受 https 直链；粘贴 base/wiki 链接以外的内容时报错。"""
+    stripped = value.strip()
+    if not stripped:
+        return ""
+    if not stripped.startswith("https://"):
+        raise AppException(message="多维表格完整链接需以 https:// 开头")
+    return stripped[:500]
+
+
+async def list_config_details(
+    db: AsyncSession,
+) -> list[EquipmentInspectionFeishuConfigDetail]:
+    """飞书配置页清单：全部已配置车间 + 默认车间（环境变量回退）。
+
+    前端结合车间常量表补齐未配置车间的空态行。
+    """
+    rows = (
+        await db.execute(
+            select(EquipmentInspectionFeishuConfig).where(
+                EquipmentInspectionFeishuConfig.is_deleted.is_(False)
+            )
+        )
+    ).scalars().all()
+    workshops = [row.workshop_code for row in rows]
+    if DEFAULT_WORKSHOP_CODE not in workshops:
+        workshops.append(DEFAULT_WORKSHOP_CODE)
+    return [
+        await get_config_detail(db, workshop_code)
+        for workshop_code in sorted(set(workshops))
+    ]
 
 
 def _normalized_table_id(value: str) -> str:
@@ -378,6 +416,7 @@ async def update_config(
     row.app_id = app_id
     row.is_enabled = data.is_enabled
     row.app_token = app_token
+    row.base_url = _normalized_base_url(data.base_url)
     table_ids = await _resolve_view_ids_or_raise(
         {
             "today_table_id": _normalized_table_id(data.today_table_id),

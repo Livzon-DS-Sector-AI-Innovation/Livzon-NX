@@ -32,6 +32,7 @@ type ConfigFormValues = {
   app_id: string
   app_secret?: string
   app_token: string
+  base_url?: string
   today_table_id: string
   history_table_id: string
   device_table_id: string
@@ -101,6 +102,7 @@ function InspectionFeishuConfigDrawerInner({
       app_id: configQuery.data.app_id,
       app_secret: '',
       app_token: configQuery.data.app_token,
+      base_url: configQuery.data.base_url ?? '',
       today_table_id: configQuery.data.today_table_id,
       history_table_id: configQuery.data.history_table_id,
       device_table_id: configQuery.data.device_table_id,
@@ -137,6 +139,7 @@ function InspectionFeishuConfigDrawerInner({
         app_id: values.app_id.trim(),
         app_secret: values.app_secret?.trim() || null,
         app_token: values.app_token.trim(),
+        base_url: values.base_url?.trim() || '',
         today_table_id: values.today_table_id.trim(),
         history_table_id: values.history_table_id.trim(),
         device_table_id: values.device_table_id.trim(),
@@ -275,6 +278,13 @@ function InspectionFeishuConfigDrawerInner({
               placeholder="bascnxxxxxxxx 或多维表格链接"
               onBlur={handleTokenBlur}
             />
+          </Form.Item>
+          <Form.Item
+            name="base_url" label="多维表格完整链接（可选）"
+            extra="粘贴带公司域名的完整链接（如 https://xxx.feishu.cn/base/…），飞书配置页可直接打开"
+            rules={[{ pattern: /^https:\/\//, message: '链接需以 https:// 开头' }]}
+          >
+            <Input placeholder="https://xxx.feishu.cn/base/bascn…" autoComplete="off" />
           </Form.Item>
           <Form.Item
             name="today_table_id" label="今日巡检表 Table ID"
