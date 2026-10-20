@@ -1307,14 +1307,6 @@ SEED_MENUS: list[dict[str, Any]] = [
     _PAGE_MENU_BY_KEY.get(node["key"], node) for node in _LEGACY_SEED_MENUS
 ]
 
-# Keep immutable legacy page identities while the workshop catalog is adopted.
-# Legacy grants are projected only onto the original 201-1 workshop.
-for _seed_module in SEED_MENUS:
-    if _seed_module["key"] == "equipment":
-        _legacy_equipment = next(
-            node for node in _LEGACY_SEED_MENUS if node["key"] == "equipment"
-        )
-        _seed_module["children"] = list(_seed_module["children"]) + [
-            {**node, "name": f"{node['name']}（201一车间兼容入口）"}
-            for node in _legacy_equipment["children"] if node["key"] != "stats"
-        ]
+# 设备模块已收敛回功能单页（车间切换在页内，车间可见性走 visible_sections）：
+# 目录与种子不再包含 workshop-叶节点；存量车间叶授权由前端
+# expandEquipmentPagePermissions 投影为功能页授权，无需兼容入口。

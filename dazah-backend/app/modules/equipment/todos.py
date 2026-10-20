@@ -159,12 +159,16 @@ async def equipment_my_todos(
     kind: EquipmentTodoKind,
     page: int = Query(1, ge=1),
     page_size: int = Query(5, ge=1, le=50),
+    workshop: str | None = Query(
+        None, pattern=r"^[0-9]{3}(-[0-9])?$", description="车间代码（功能页授权下生效）"
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> BusinessTodoPage:
     key = current_page_key.get() or ""
     matched = re.fullmatch(r"equipment:workshop-([0-9]{3}(?:-[0-9])?):([a-z]+)-\1", key)
     if key == PAGES[kind]:
-        workshop_code = "201-1"
+        # 功能页单页：车间由页内切换块的查询参数指定，缺省回落 201-1
+        workshop_code = workshop or "201-1"
     elif matched and matched.group(2) == kind:
         workshop_code = matched.group(1)
     else:

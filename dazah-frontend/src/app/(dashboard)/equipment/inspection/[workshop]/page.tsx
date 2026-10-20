@@ -1,20 +1,15 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 
-import { FeishuInspectionPage } from '@/components/equipment/inspection/FeishuInspectionPage'
 import { EQUIPMENT_WORKSHOPS } from '@/lib/menu-config'
 
-export const dynamic = 'force-dynamic'
-
-// 巡检数据按车间隔离：/equipment/inspection/<车间代码>
-export default async function InspectionWorkshopPage({
+// 旧车间子路径（/equipment/inspection/<车间代码>）收敛为查询参数：
+// 重定向到 /equipment/inspection?workshop=<车间代码>，保持历史链接可用。
+export default async function InspectionWorkshopRedirect({
   params,
 }: {
   params: Promise<{ workshop: string }>
 }) {
   const { workshop } = await params
-  const meta = EQUIPMENT_WORKSHOPS.find((item) => item.code === workshop)
-  if (!meta) notFound()
-  return (
-    <FeishuInspectionPage workshopCode={meta.code} workshopLabel={meta.label} />
-  )
+  if (!EQUIPMENT_WORKSHOPS.some((item) => item.code === workshop)) notFound()
+  redirect(`/equipment/inspection?workshop=${encodeURIComponent(workshop)}`)
 }

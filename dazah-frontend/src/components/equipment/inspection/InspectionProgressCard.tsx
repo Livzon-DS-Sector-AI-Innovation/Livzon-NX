@@ -116,7 +116,7 @@ export function InspectionProgressCard({
           return (
             <a
               key={workshop.code}
-              href={`/equipment/inspection/${workshop.code}`}
+              href={`/equipment/inspection?workshop=${workshop.code}`}
               style={{
                 display: 'flex',
                 alignItems: 'center',

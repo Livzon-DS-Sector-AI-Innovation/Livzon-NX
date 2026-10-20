@@ -38,7 +38,7 @@ export function getPermissionModuleName(moduleCode: string): string {
     || "未命名模块"
 }
 
-/** 设备管理车间分组：台账/巡检/维护/备件/人员均按车间独立路由与数据。 */
+/** 设备管理车间常量：页面数据隔离与车间切换块使用（菜单已收敛为功能单页）。 */
 export const EQUIPMENT_WORKSHOPS: ReadonlyArray<{ code: string; label: string }> = [
   { code: "101-1", label: "101一车间" },
   { code: "101-2", label: "101二车间" },
@@ -50,26 +50,6 @@ export const EQUIPMENT_WORKSHOPS: ReadonlyArray<{ code: string; label: string }>
   { code: "201-3", label: "201三车间" },
   { code: "203", label: "203车间" },
 ]
-
-function equipmentWorkshopMenu(workshopCode: string, label: string): SubMenuItem {
-  const leaf = (pageKey: string, text: string, path: string): SubMenuItem => ({
-    key: `${pageKey}-${workshopCode}`,
-    label: text,
-    path,
-  })
-  return {
-    key: `workshop-${workshopCode}`,
-    label,
-    path: "",
-    children: [
-      leaf("assets", "设备台账", `/equipment/assets/${workshopCode}`),
-      leaf("maintenance", "维护保养", `/equipment/maintenance/${workshopCode}`),
-      leaf("inspection", "设备巡检", `/equipment/inspection/${workshopCode}`),
-      leaf("spare-parts", "备件管理", `/equipment/spare-parts/${workshopCode}`),
-      leaf("personnel", "人员配置", `/equipment/personnel/${workshopCode}`),
-    ],
-  }
-}
 
 export const moduleMenus: ModuleMenu[] = [
   {
@@ -151,11 +131,15 @@ export const moduleMenus: ModuleMenu[] = [
     label: "设备管理",
     icon: "cog",
     path: "/equipment",
+    // 功能页单页 + 页内车间切换（车间可见性走 visible_sections）；
+    // 旧 /equipment/<功能>/<车间> 路径重定向到 ?workshop= 查询参数
     children: [
       { key: "stats", label: "设备仪表盘", path: "/equipment/stats" },
-      ...EQUIPMENT_WORKSHOPS.map(({ code, label }) =>
-        equipmentWorkshopMenu(code, label),
-      ),
+      { key: "assets", label: "设备台账", path: "/equipment/assets" },
+      { key: "maintenance", label: "维护保养", path: "/equipment/maintenance" },
+      { key: "inspection", label: "设备巡检", path: "/equipment/inspection" },
+      { key: "spare-parts", label: "备件管理", path: "/equipment/spare-parts" },
+      { key: "personnel", label: "人员配置", path: "/equipment/personnel" },
     ],
   },
   {
@@ -921,17 +905,46 @@ export type PageAccessSummary = {
   page_key: string
   module_code: string
   permissions?: Array<"access" | "query" | "operate">
+  /** 设备模块收敛后承载车间可见性；null/缺省 = 全部可见 */
+  visible_sections?: ReadonlyArray<string> | null
 }
 
-/** Existing equipment grants retain only the original workshop, never all workshops. */
+/**
+ * 设备模块权限收敛映射：旧「车间 × 功能」叶授权
+ * （equipment:workshop-<车间>:<功能>-<车间>）投影为功能页授权
+ * （equipment:<功能>），授权车间并入 visible_sections；
+ * 旧式无车间维度的全量功能授权保持原样（visible_sections 空 = 全部车间）。
+ */
 export function expandEquipmentPagePermissions<T extends PageAccessSummary>(grants: T[] | undefined): T[] {
-  const output = [...(grants || [])]
+  const source = grants || []
+  const output = [...source]
   const explicit = new Set(output.map((grant) => grant.page_key))
-  for (const grant of grants || []) {
-    if (!/^equipment:(assets|maintenance|inspection|spare-parts|personnel)$/.test(grant.page_key)) continue
-    const leaf = grant.page_key.split(':')[1]
-    const target = `equipment:workshop-201-1:${leaf}-201-1`
-    if (!explicit.has(target)) output.push({ ...grant, page_key: target })
+  const leafPattern = /^equipment:workshop-([^:]+):(assets|maintenance|inspection|spare-parts|personnel)-([^:]+)$/
+  const derived = new Map<string, {
+    template: T
+    permissions: Set<'access' | 'query' | 'operate'>
+    workshops: Set<string>
+  }>()
+  for (const grant of source) {
+    const match = leafPattern.exec(grant.page_key)
+    if (!match) continue
+    const [, workshop, leaf] = match
+    const functionalKey = `equipment:${leaf}`
+    // 已存在全量功能授权时无需投影（全量优先于车间约束）
+    if (explicit.has(functionalKey)) continue
+    const entry = derived.get(functionalKey)
+      ?? { template: grant, permissions: new Set<'access' | 'query' | 'operate'>(), workshops: new Set<string>() }
+    for (const permission of grant.permissions ?? []) entry.permissions.add(permission)
+    entry.workshops.add(workshop)
+    derived.set(functionalKey, entry)
+  }
+  for (const [pageKey, { template, permissions, workshops }] of derived) {
+    output.push({
+      ...template,
+      page_key: pageKey,
+      permissions: [...permissions],
+      visible_sections: [...workshops],
+    } as T)
   }
   return output
 }
@@ -1035,13 +1048,8 @@ function collectPageRoutes(
 // aliases. Directory nodes are not permission pages, so their entry route
 // must explicitly inherit a stable leaf page identity.
 const pageRouteAliases: Record<string, string> = {
-  // Legacy redirects retain immutable grant identities. The compatibility
-  // projection above limits their access to the original 201-1 workshop.
-  "/equipment/assets": "equipment:assets",
-  "/equipment/maintenance": "equipment:maintenance",
-  "/equipment/inspection": "equipment:inspection",
-  "/equipment/spare-parts": "equipment:spare-parts",
-  "/equipment/personnel": "equipment:personnel",
+  // 设备模块功能页已是真实菜单路径（/equipment/assets 等），旧车间子路径
+  // 由菜单前缀匹配自然解析到功能页 key，无需单独别名。
   "/quality/deviations": "quality:deviations:deviation-ledger",
   "/quality/capas": "quality:capas:capa-ledger",
   "/quality/complaints": "quality:complaints:complaint-ledger",

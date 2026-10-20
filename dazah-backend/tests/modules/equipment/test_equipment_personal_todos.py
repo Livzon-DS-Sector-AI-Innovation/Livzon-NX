@@ -162,9 +162,11 @@ async def test_repairs_follow_assignment_and_acceptance_responsibility(
 
 
 @pytest.mark.asyncio
-async def test_workshop_todos_and_legacy_grants_never_include_other_workshops(
+async def test_functional_todos_scope_by_workshop_query(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """设备模块收敛为功能单页：待办按车间查询参数过滤；
+    已退役的 workshop 页面标识不再作为请求上下文被接受。"""
     actor = await make_todo_user(db_session)
     department, first, second = await devices(db_session)
     first.workshop_code = "201-1"
@@ -182,28 +184,34 @@ async def test_workshop_todos_and_legacy_grants_never_include_other_workshops(
         db_session.add(task)
         await db_session.flush()
         tasks[code] = str(task.id)
-    for key, code in (
-        (PAGES["inspection"], "201-1"),
-        ("equipment:workshop-201-1:inspection-201-1", "201-1"),
-        ("equipment:workshop-101-1:inspection-101-1", "101-1"),
-    ):
-        async with scoped_todo_client(
-            db_session,
-            actor,
-            router,
-            "equipment",
-            key,
-            DepartmentScope(is_all=True),
-            monkeypatch,
-        ) as client:
+    async with scoped_todo_client(
+        db_session,
+        actor,
+        router,
+        "equipment",
+        PAGES["inspection"],
+        DepartmentScope(is_all=True),
+        monkeypatch,
+    ) as client:
+        # 指定车间时仅返回该车间的待办
+        for code in ("201-1", "101-1"):
             response = await client.get(
-                "/api/v1/equipment/my-todos?kind=inspection&workshop=203"
+                f"/api/v1/equipment/my-todos?kind=inspection&workshop={code}"
             )
             assert response.status_code == 200, response.text
             assert {item["id"] for item in response.json()["items"]} == {tasks[code]}
             assert response.json()["total"] == 1
-            refused = await client.get(
-                "/api/v1/equipment/my-todos?kind=inspection",
-                headers={"X-Dazah-Page-Key": "equipment:workshop-203:inspection-203"},
-            )
-            assert refused.status_code == 403
+        # 不指定车间时缺省回落 201一车间
+        default_response = await client.get(
+            "/api/v1/equipment/my-todos?kind=inspection"
+        )
+        assert default_response.status_code == 200, default_response.text
+        assert {item["id"] for item in default_response.json()["items"]} == {
+            tasks["201-1"]
+        }
+        # 已退役的 workshop 页面标识作为上下文请求 → 拒绝
+        refused = await client.get(
+            "/api/v1/equipment/my-todos?kind=inspection",
+            headers={"X-Dazah-Page-Key": "equipment:workshop-203:inspection-203"},
+        )
+        assert refused.status_code == 403

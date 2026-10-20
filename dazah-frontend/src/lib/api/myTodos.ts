@@ -48,9 +48,7 @@ export function getTodoSources(user: User, modules: ModuleMenu[]): TodoSource[] 
       const canOperate = user.role === 'admin' ||
         ['access', 'query', 'operate'].every((permission) => grant?.permissions?.some((value) => value === permission))
       const canApprove = user.role === 'admin' || Boolean(grant?.sensitive_actions?.includes('approve'))
-      const equipmentKind = /^\/equipment\/(maintenance|inspection)\/[0-9]{3}(?:-[0-9])?$/.exec(item.path)?.[1]
-      const business = businessTodoPages[item.path] || (equipmentKind
-        ? { moduleCode: 'equipment', kind: equipmentKind } : undefined)
+      const business = businessTodoPages[item.path]
       const approval = item.path === '/hr/position-transfer'
       if (key && business && canOperate && (!approval || canApprove)) {
         const params = new URLSearchParams({ page: '1', page_size: '5' })

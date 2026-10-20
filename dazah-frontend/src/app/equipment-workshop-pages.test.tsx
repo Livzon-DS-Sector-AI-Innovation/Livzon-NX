@@ -40,22 +40,38 @@ vi.mock('@/components/equipment', () => {
     PersonnelPage: () => null,
     PersonnelQueryProvider: passthrough,
     StatsDashboard: () => null,
+    WorkshopNavBlocks: () => null,
   }
 })
 
-import AssetsRedirect from '@/app/(dashboard)/equipment/assets/page'
-import AssetsWorkshopPage from '@/app/(dashboard)/equipment/assets/[workshop]/page'
-import InspectionRedirect from '@/app/(dashboard)/equipment/inspection/page'
-import InspectionWorkshopPage from '@/app/(dashboard)/equipment/inspection/[workshop]/page'
-import MaintenanceRedirect from '@/app/(dashboard)/equipment/maintenance/page'
-import MaintenanceWorkshopPage from '@/app/(dashboard)/equipment/maintenance/[workshop]/page'
-import PersonnelRedirect from '@/app/(dashboard)/equipment/personnel/page'
-import PersonnelWorkshopPage from '@/app/(dashboard)/equipment/personnel/[workshop]/page'
-import SparePartsRedirect from '@/app/(dashboard)/equipment/spare-parts/page'
-import SparePartsWorkshopPage from '@/app/(dashboard)/equipment/spare-parts/[workshop]/page'
+import AssetsPage from '@/app/(dashboard)/equipment/assets/page'
+import AssetsWorkshopRedirect from '@/app/(dashboard)/equipment/assets/[workshop]/page'
+import InspectionPage from '@/app/(dashboard)/equipment/inspection/page'
+import InspectionWorkshopRedirect from '@/app/(dashboard)/equipment/inspection/[workshop]/page'
+import MaintenancePage from '@/app/(dashboard)/equipment/maintenance/page'
+import MaintenanceWorkshopRedirect from '@/app/(dashboard)/equipment/maintenance/[workshop]/page'
+import PersonnelPage from '@/app/(dashboard)/equipment/personnel/page'
+import PersonnelWorkshopRedirect from '@/app/(dashboard)/equipment/personnel/[workshop]/page'
+import SparePartsPage from '@/app/(dashboard)/equipment/spare-parts/page'
+import SparePartsWorkshopRedirect from '@/app/(dashboard)/equipment/spare-parts/[workshop]/page'
 import StatsPage from '@/app/(dashboard)/equipment/stats/page'
 
-function params(workshop: string) {
+type PageElement = { props: Record<string, unknown> }
+
+/** 单页路由渲染片段 [车间切换块, 内容组件]，取内容组件的 props */
+async function renderContent(
+  Page: (args: { searchParams: Promise<{ workshop?: string }> }) => Promise<unknown>,
+  workshop?: string,
+): Promise<PageElement> {
+  const element = (await Page({
+    searchParams: Promise.resolve(workshop ? { workshop } : {}),
+  })) as unknown as { props: { children: unknown[] } }
+  const children = element.props.children
+  const content = Array.isArray(children) ? children[children.length - 1] : children
+  return content as PageElement
+}
+
+function legacyParams(workshop: string) {
   return { params: Promise.resolve({ workshop }) }
 }
 
@@ -87,16 +103,14 @@ function defaults() {
   actions.fetchInspectionTodaySummaries.mockResolvedValue([])
 }
 
-describe('equipment workshop server pages', () => {
+describe('equipment single pages with workshop query', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     defaults()
   })
 
-  it('renders the assets page scoped to the workshop and passes workshop to fetches', async () => {
-    const element = (await AssetsWorkshopPage(params('101-2'))) as {
-      props: Record<string, unknown>
-    }
+  it('renders the assets page scoped to ?workshop= and passes it to fetches', async () => {
+    const element = await renderContent(AssetsPage, '101-2')
     expect(element.props.workshopCode).toBe('101-2')
     expect(element.props.workshopLabel).toBe('101二车间')
     expect(actions.fetchEquipments).toHaveBeenCalledWith({
@@ -107,24 +121,22 @@ describe('equipment workshop server pages', () => {
     expect(actions.fetchEquipmentStatistics).toHaveBeenCalledWith('101-2')
   })
 
-  it('rejects unknown workshops with notFound', async () => {
-    await expect(AssetsWorkshopPage(params('999'))).rejects.toThrow('NOT_FOUND')
-    expect(navigation.notFound).toHaveBeenCalled()
+  it('falls back to the default workshop when the query is missing or invalid', async () => {
+    const element = await renderContent(AssetsPage)
+    expect(element.props.workshopCode).toBe('201-1')
+    const invalid = await renderContent(AssetsPage, '999')
+    expect(invalid.props.workshopCode).toBe('201-1')
   })
 
   it('falls back to empty assets data when a fetch fails', async () => {
     actions.fetchEquipments.mockRejectedValue(new Error('boom'))
-    const element = (await AssetsWorkshopPage(params('201-1'))) as {
-      props: Record<string, unknown>
-    }
+    const element = await renderContent(AssetsPage, '201-1')
     expect(element.props.workshopCode).toBe('201-1')
     expect(element.props.initialEquipments).toEqual([])
   })
 
-  it('renders the maintenance page scoped to the workshop', async () => {
-    const element = (await MaintenanceWorkshopPage(params('201-1'))) as {
-      props: Record<string, unknown>
-    }
+  it('renders the maintenance page scoped to ?workshop=', async () => {
+    const element = await renderContent(MaintenancePage, '201-1')
     expect(element.props.workshopCode).toBe('201-1')
     expect(actions.fetchWorkOrders).toHaveBeenCalledWith({
       workshop: '201-1',
@@ -144,23 +156,18 @@ describe('equipment workshop server pages', () => {
     })
   })
 
-  it('rejects unknown workshops on the maintenance page', async () => {
-    await expect(MaintenanceWorkshopPage(params('bad'))).rejects.toThrow('NOT_FOUND')
-  })
-
-  it('falls back to empty maintenance data when a fetch fails', async () => {
+  it('maintenance degrades per-domain when individual fetches fail', async () => {
     actions.fetchWorkOrders.mockRejectedValue(new Error('boom'))
-    const element = (await MaintenanceWorkshopPage(params('103'))) as {
-      props: Record<string, unknown>
-    }
+    const element = await renderContent(MaintenancePage, '103')
     expect(element.props.workshopCode).toBe('103')
     expect(element.props.initialWorkOrders).toEqual([])
+    // 其余域不受影响
+    expect(element.props.initialCalibrationPlans).toEqual([])
+    expect(actions.fetchCalibrationPlans).toHaveBeenCalled()
   })
 
-  it('renders the spare parts page scoped to the workshop', async () => {
-    const element = (await SparePartsWorkshopPage(params('201-1'))) as {
-      props: Record<string, unknown>
-    }
+  it('renders the spare parts page scoped to ?workshop=', async () => {
+    const element = await renderContent(SparePartsPage, '201-1')
     expect(element.props.workshopCode).toBe('201-1')
     expect(actions.fetchSpareParts).toHaveBeenCalledWith({
       workshop: '201-1',
@@ -170,20 +177,18 @@ describe('equipment workshop server pages', () => {
     expect(actions.fetchStockWarnings).toHaveBeenCalledWith('201-1')
   })
 
-  it('rejects unknown workshops on the spare parts page', async () => {
-    await expect(SparePartsWorkshopPage(params('bad'))).rejects.toThrow('NOT_FOUND')
-  })
-
   it('renders the inspection page with the workshop label', async () => {
-    const element = (await InspectionWorkshopPage(params('201-1'))) as {
-      props: Record<string, unknown>
-    }
+    const element = await renderContent(InspectionPage, '201-1')
     expect(element.props.workshopCode).toBe('201-1')
     expect(element.props.workshopLabel).toBe('201一车间')
   })
 
-  it('rejects unknown workshops on the inspection page', async () => {
-    await expect(InspectionWorkshopPage(params('bad'))).rejects.toThrow('NOT_FOUND')
+  it('renders the personnel page scoped to ?workshop=', async () => {
+    const provider = await renderContent(PersonnelPage, '101-1')
+    // PersonnelQueryProvider（透传 mock）内层才是页面组件
+    const page = (provider.props as unknown as { children: PageElement }).children
+    expect(page.props.workshopCode).toBe('101-1')
+    expect(page.props.workshopLabel).toBe('101一车间')
   })
 
   it('renders the stats dashboard with inspection summaries', async () => {
@@ -200,7 +205,7 @@ describe('equipment workshop server pages', () => {
     ]
     actions.fetchInspectionTodaySummaries.mockResolvedValue(summaries)
 
-    const element = (await StatsPage()) as {
+    const element = (await StatsPage()) as unknown as {
       props: { initialData: { inspectionSummaries: unknown } }
     }
 
@@ -211,34 +216,40 @@ describe('equipment workshop server pages', () => {
   it('degrades to empty inspection summaries when the fetch rejects', async () => {
     actions.fetchInspectionTodaySummaries.mockRejectedValue(new Error('boom'))
 
-    const element = (await StatsPage()) as {
+    const element = (await StatsPage()) as unknown as {
       props: { initialData: { inspectionSummaries: unknown } }
     }
 
     expect(element.props.initialData.inspectionSummaries).toEqual([])
   })
+})
 
-  it('renders the personnel page scoped to the workshop', async () => {
-    const element = (await PersonnelWorkshopPage(params('201-1'))) as {
-      props: { children: { props: Record<string, unknown> } }
-    }
-    const page = element.props.children
-    expect(page.props.workshopCode).toBe('201-1')
-    expect(page.props.workshopLabel).toBe('201一车间')
-  })
-
-  it('rejects unknown workshops on the personnel page', async () => {
-    await expect(PersonnelWorkshopPage(params('bad'))).rejects.toThrow('NOT_FOUND')
+describe('equipment legacy workshop redirects', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    defaults()
   })
 
   it.each([
-    ['台账', AssetsRedirect, '/equipment/assets/201-1'],
-    ['维护保养', MaintenanceRedirect, '/equipment/maintenance/201-1'],
-    ['备件管理', SparePartsRedirect, '/equipment/spare-parts/201-1'],
-    ['人员配置', PersonnelRedirect, '/equipment/personnel/201-1'],
-    ['巡检', InspectionRedirect, '/equipment/inspection/201-1'],
-  ])('%s 旧入口重定向到 201一车间', (_name, Page, target) => {
-    expect(() => (Page as () => void)()).toThrow('REDIRECT')
+    ['台账', AssetsWorkshopRedirect, '/equipment/assets?workshop=101-2'],
+    ['维护保养', MaintenanceWorkshopRedirect, '/equipment/maintenance?workshop=201-3'],
+    ['备件管理', SparePartsWorkshopRedirect, '/equipment/spare-parts?workshop=103'],
+    ['人员配置', PersonnelWorkshopRedirect, '/equipment/personnel?workshop=101-1'],
+    ['巡检', InspectionWorkshopRedirect, '/equipment/inspection?workshop=203'],
+  ])('%s 旧车间路径重定向到 ?workshop= 查询参数', async (_name, Page, target) => {
+    const workshop = target.split('=')[1]
+    await expect(Page(legacyParams(workshop))).rejects.toThrow('REDIRECT')
     expect(navigation.redirect).toHaveBeenCalledWith(target)
+  })
+
+  it.each([
+    AssetsWorkshopRedirect,
+    MaintenanceWorkshopRedirect,
+    SparePartsWorkshopRedirect,
+    PersonnelWorkshopRedirect,
+    InspectionWorkshopRedirect,
+  ])('未知车间代码走 notFound', async (Page) => {
+    await expect(Page(legacyParams('bad'))).rejects.toThrow('NOT_FOUND')
+    expect(navigation.notFound).toHaveBeenCalled()
   })
 })

@@ -103,13 +103,14 @@ describe('permission-scoped todos', () => {
 })
 
 
-it('equipment todo sources preserve only the original workshop for a legacy grant', () => {
+it('equipment todo sources resolve to the functional pages for legacy grants', () => {
   const grant = { ...user.page_permissions![0], page_key: 'equipment:inspection', module_code: 'equipment' }
   const sources = getTodoSources({ ...user, page_permissions: [grant] }, moduleMenus)
   expect(sources).toHaveLength(1)
-  expect(sources[0].key).toBe('equipment:workshop-201-1:inspection-201-1')
-  expect(sources[0].path).toBe('/equipment/inspection/201-1')
+  expect(sources[0].key).toBe('equipment:inspection')
+  expect(sources[0].path).toBe('/equipment/inspection')
   expect(sources[0].apiPath).toContain('kind=inspection')
+  // 旧车间叶授权投影到功能页，待办来源同样指向功能页路由
   const scoped = { ...grant, page_key: 'equipment:workshop-101-1:inspection-101-1' }
-  expect(getTodoSources({ ...user, page_permissions: [scoped] }, moduleMenus)[0].path).toBe('/equipment/inspection/101-1')
+  expect(getTodoSources({ ...user, page_permissions: [scoped] }, moduleMenus)[0].path).toBe('/equipment/inspection')
 })
