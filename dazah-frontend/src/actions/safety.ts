@@ -877,6 +877,50 @@ export async function exportHazardLedgerPdf(
   return { code: 0, message: 'ok', data: base64 }
 }
 
+// ── 危险源辨识台账 Excel 导入 ──
+
+export async function getHazardFilterOptions(): Promise<
+  ApiResponse<import('@/types/safety').HazardFilterOptions>
+> {
+  return fetchApi<import('@/types/safety').HazardFilterOptions>(
+    '/safety/hazard-identifications/filter-options'
+  )
+}
+
+export async function parseHazardLedgerImport(
+  file: File
+): Promise<ApiResponse<import('@/types/safety').HazardImportPreview>> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const authHeaders = await getAuthHeaders()
+  const { 'Content-Type': _, ...uploadHeaders } = authHeaders
+  const response = await fetch(
+    `${API_BASE}/safety/hazard-identifications/import/parse`,
+    { method: 'POST', headers: uploadHeaders, body: formData }
+  )
+  return response.json()
+}
+
+export async function importHazardLedger(
+  file: File,
+  department: string,
+  sheets: string[]
+): Promise<ApiResponse<import('@/types/safety').HazardImportResult>> {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('department', department)
+  formData.append('sheets', JSON.stringify(sheets))
+  const authHeaders = await getAuthHeaders()
+  const { 'Content-Type': _, ...uploadHeaders } = authHeaders
+  const response = await fetch(`${API_BASE}/safety/hazard-identifications/import`, {
+    method: 'POST',
+    headers: uploadHeaders,
+    body: formData,
+  })
+  revalidatePath('/safety/hazard-identification/ledger')
+  return response.json()
+}
+
 export async function getSafetyEnums() {
   return fetchApi<Record<string, Array<{ value: string; label: string }>>>('/safety/enums')
 }
@@ -2402,4 +2446,140 @@ export async function completeRectification(): Promise<any> {
 export async function verifyRectification(): Promise<any> {
   console.warn('verifyRectification is deprecated')
   return null
+}
+
+// ============ 灭火器 / 消防栓点检 ============
+
+type FireEquipmentListResponse =
+  components['schemas']['FireEquipmentListResponse']
+type FireEquipmentStats = components['schemas']['FireEquipmentStats']
+type FireEquipmentDetailResponse =
+  components['schemas']['FireEquipmentDetailResponse']
+type FireInspectionListResponse =
+  components['schemas']['FireInspectionListResponse']
+type FireInspectionRecordItem =
+  components['schemas']['FireInspectionRecordItem']
+type CreateFireInspectionRequest =
+  components['schemas']['CreateFireInspectionRequest']
+
+/**
+ * 消防点检页的页面上下文头：台账、详情与提交接口都绑定该页权限，
+ * 与镜像页数据接口的 X-Dazah-Page-Key 口径一致。
+ */
+function fireEquipmentPageHeaders(pageKey: string): Record<string, string> {
+  return { 'X-Dazah-Page-Key': pageKey }
+}
+
+export async function getFireEquipmentList(params: {
+  pageKey: string
+  page?: number
+  pageSize?: number
+  equipmentType?: string | null
+  keyword?: string | null
+  tableId?: string | null
+  monthStatus?: string | null
+  expiryStatus?: string | null
+}) {
+  const search = new URLSearchParams()
+  search.set('page', String(params.page ?? 1))
+  search.set('page_size', String(params.pageSize ?? 20))
+  if (params.equipmentType) search.set('equipment_type', params.equipmentType)
+  if (params.keyword) search.set('keyword', params.keyword)
+  if (params.tableId) search.set('table_id', params.tableId)
+  if (params.monthStatus) search.set('month_status', params.monthStatus)
+  if (params.expiryStatus) search.set('expiry_status', params.expiryStatus)
+  return fetchApi<FireEquipmentListResponse>(
+    `/safety/fire-equipment?${search.toString()}`,
+    { headers: fireEquipmentPageHeaders(params.pageKey) }
+  )
+}
+
+export async function getFireEquipmentStats(params: { pageKey: string }) {
+  return fetchApi<FireEquipmentStats>('/safety/fire-equipment/stats', {
+    headers: fireEquipmentPageHeaders(params.pageKey),
+  })
+}
+
+export async function getFireEquipmentDetail(params: {
+  pageKey: string
+  equipmentId: string
+}) {
+  return fetchApi<FireEquipmentDetailResponse>(
+    `/safety/fire-equipment/${encodeURIComponent(params.equipmentId)}`,
+    { headers: fireEquipmentPageHeaders(params.pageKey) }
+  )
+}
+
+export async function getFireInspectionRecords(params: {
+  pageKey: string
+  page?: number
+  pageSize?: number
+  equipmentType?: string | null
+  result?: string | null
+  keyword?: string | null
+  inspectedFrom?: string | null
+  inspectedTo?: string | null
+}) {
+  const search = new URLSearchParams()
+  search.set('page', String(params.page ?? 1))
+  search.set('page_size', String(params.pageSize ?? 20))
+  if (params.equipmentType) search.set('equipment_type', params.equipmentType)
+  if (params.result) search.set('result', params.result)
+  if (params.keyword) search.set('keyword', params.keyword)
+  if (params.inspectedFrom) search.set('inspected_from', params.inspectedFrom)
+  if (params.inspectedTo) search.set('inspected_to', params.inspectedTo)
+  return fetchApi<FireInspectionListResponse>(
+    `/safety/fire-inspection-records?${search.toString()}`,
+    { headers: fireEquipmentPageHeaders(params.pageKey) }
+  )
+}
+
+export async function submitFireEquipmentInspection(params: {
+  pageKey: string
+  equipmentId: string
+  data: CreateFireInspectionRequest
+}): Promise<ApiResponse<FireInspectionRecordItem>> {
+  return fetchApi<FireInspectionRecordItem>(
+    `/safety/fire-equipment/${encodeURIComponent(params.equipmentId)}/inspections`,
+    {
+      method: 'POST',
+      headers: {
+        ...fireEquipmentPageHeaders(params.pageKey),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params.data),
+    }
+  )
+}
+
+export async function syncFireEquipment(params: { pageKey: string }) {
+  return fetchApi<FireEquipmentStats>('/safety/fire-equipment/sync', {
+    method: 'POST',
+    headers: fireEquipmentPageHeaders(params.pageKey),
+  })
+}
+
+type FireInspectionWritebackInitResponse =
+  components['schemas']['FireInspectionWritebackInitResponse']
+
+/** 一键在绑定的 Base 下创建（或复用）「点检记录」回写子表。 */
+export async function initFireEquipmentWritebackTable(params: { pageKey: string }) {
+  return fetchApi<FireInspectionWritebackInitResponse>(
+    '/safety/fire-equipment/writeback-table/init',
+    {
+      method: 'POST',
+      headers: fireEquipmentPageHeaders(params.pageKey),
+    }
+  )
+}
+
+export async function testFireExpiryNotify() {
+  const res = await fetchApi<{ sent: number; errors?: string[] }>(
+    '/safety/feishu-settings/fire-expiry-notify/test',
+    {
+      method: 'POST',
+      headers: { 'X-Dazah-Page-Key': 'safety:system-config:safety-feishu-settings' },
+    },
+  )
+  return res
 }

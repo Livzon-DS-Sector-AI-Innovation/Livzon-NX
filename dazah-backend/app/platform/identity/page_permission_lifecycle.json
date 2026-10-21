@@ -4118,6 +4118,12 @@
       "route_path": "/registration/regulation",
       "actions": {}
     },
+    "safety:emergency-accident:fire-equipment-inspection": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/fire-inspection",
+      "actions": {}
+    },
     "safety:emergency-accident:accident-ledger": {
       "status": "active",
       "module_code": "safety",

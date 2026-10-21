@@ -23575,6 +23575,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/safety/feishu-settings/fire-expiry-notify/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 测试消防器材有效期提醒推送发送
+         * @description 向已配置的群/个人发送一条样例卡片，验证提醒目标配置。
+         */
+        post: operations["test_fire_expiry_notify_api_v1_safety_feishu_settings_fire_expiry_notify_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/safety/feishu-settings/hazard-due-notify/test": {
         parameters: {
             query?: never;
@@ -23640,6 +23660,142 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/safety/fire-equipment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 消防器材台账分页列表（编号/部门/位置/最近点检状态） */
+        get: operations["list_fire_equipment_api_v1_safety_fire_equipment_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/fire-equipment/checklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 点检检查卡检查项（灭火器 4 项 / 消防栓 8 项） */
+        get: operations["get_fire_equipment_checklist_api_v1_safety_fire_equipment_checklist_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/fire-equipment/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 消防器材台账概览（类型分布 + 本月点检覆盖 + 同步状态） */
+        get: operations["get_fire_equipment_stats_api_v1_safety_fire_equipment_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/fire-equipment/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 立即同步飞书台账并重新投影消防器材（含待回写点检补写） */
+        post: operations["sync_fire_equipment_api_v1_safety_fire_equipment_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/fire-equipment/writeback-table/init": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 一键初始化「点检记录」回写子表（已存在则复用） */
+        post: operations["init_fire_inspection_writeback_table_api_v1_safety_fire_equipment_writeback_table_init_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/fire-equipment/{equipment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 消防器材详情（含检查卡与最近点检记录，扫码页使用） */
+        get: operations["get_fire_equipment_detail_api_v1_safety_fire_equipment__equipment_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/fire-equipment/{equipment_id}/inspections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 提交一次点检（检查项须覆盖整卡，结论自动汇总） */
+        post: operations["create_fire_inspection_api_v1_safety_fire_equipment__equipment_id__inspections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/fire-inspection-records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 点检记录台账分页列表（按点检时间倒序） */
+        get: operations["list_fire_inspections_api_v1_safety_fire_inspection_records_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/safety/hazard-identifications": {
         parameters: {
             query?: never;
@@ -23685,6 +23841,71 @@ export interface paths {
          *     不提供 natural_query 时导出全部已完成记录。
          */
         post: operations["export_hazard_ledger_pdf_api_v1_safety_hazard_identifications_export_pdf_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/hazard-identifications/filter-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 获取台账筛选下拉选项（部门/岗位）
+         * @description 返回已入账记录的去重部门与（部门，岗位）组合，供台账筛选下拉使用。
+         */
+        get: operations["get_hazard_filter_options_api_v1_safety_hazard_identifications_filter_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/hazard-identifications/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 导入车间危险源辨识 Excel 到台账
+         * @description 把车间 Excel 解析结果写入危险源辨识台账（已完成的记录）。
+         *
+         *     按内容指纹生成编号，重复导入同一文件会自动跳过已存在记录。
+         */
+        post: operations["import_hazard_ledger_api_v1_safety_hazard_identifications_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/hazard-identifications/import/parse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 解析车间危险源辨识 Excel（预览子表与行数）
+         * @description 上传车间 Excel 并解析：识别每个子表（sheet）的格式、有效行数与样例行。
+         *
+         *     支持：作业活动/设备设施分级管控清单、重点风险管控措施清单、
+         *     危险源识别评价表（.xls）。仅解析不落库。
+         */
+        post: operations["parse_hazard_ledger_import_api_v1_safety_hazard_identifications_import_parse_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -29047,6 +29268,24 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[ChecklistResponse] */
+        ApiResponseEnvelope_ChecklistResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["ChecklistResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[ComplaintOut] */
         ApiResponseEnvelope_ComplaintOut_: {
             /**
@@ -29469,6 +29708,114 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["FeeOverview"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[FireEquipmentDetailResponse] */
+        ApiResponseEnvelope_FireEquipmentDetailResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["FireEquipmentDetailResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[FireEquipmentListResponse] */
+        ApiResponseEnvelope_FireEquipmentListResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["FireEquipmentListResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[FireEquipmentStats] */
+        ApiResponseEnvelope_FireEquipmentStats_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["FireEquipmentStats"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[FireInspectionListResponse] */
+        ApiResponseEnvelope_FireInspectionListResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["FireInspectionListResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[FireInspectionRecordItem] */
+        ApiResponseEnvelope_FireInspectionRecordItem_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["FireInspectionRecordItem"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[FireInspectionWritebackInitResponse] */
+        ApiResponseEnvelope_FireInspectionWritebackInitResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["FireInspectionWritebackInitResponse"];
             /**
              * Message
              * @default success
@@ -33011,6 +33358,23 @@ export interface components {
              */
             record_id: string;
         };
+        /** Body_import_hazard_ledger_api_v1_safety_hazard_identifications_import_post */
+        Body_import_hazard_ledger_api_v1_safety_hazard_identifications_import_post: {
+            /**
+             * Department
+             * @description 部门/车间（默认取文件名推断值）
+             * @default
+             */
+            department: string;
+            /** File */
+            file: string;
+            /**
+             * Sheets
+             * @description 要导入的子表名 JSON 数组，空则导入全部可解析子表
+             * @default
+             */
+            sheets: string;
+        };
         /** Body_import_position_training_list_api_v1_hr_position_training_lists_import_post */
         Body_import_position_training_list_api_v1_hr_position_training_lists_import_post: {
             /** File */
@@ -33072,6 +33436,11 @@ export interface components {
         Body_parse_coa_file_api_v1_registration_reference_standards_parse_coa_post: {
             /** Coa */
             coa: string;
+        };
+        /** Body_parse_hazard_ledger_import_api_v1_safety_hazard_identifications_import_parse_post */
+        Body_parse_hazard_ledger_import_api_v1_safety_hazard_identifications_import_parse_post: {
+            /** File */
+            file: string;
         };
         /** Body_preview_capa_import_api_v1_quality_capas_import_preview_post */
         Body_preview_capa_import_api_v1_quality_capas_import_preview_post: {
@@ -35457,6 +35826,26 @@ export interface components {
          */
         CheckType: "daily" | "special" | "comprehensive" | "holiday" | "monthly" | "seasonal" | "pre_holiday" | "leadership_duty" | "dept_cross" | "weekly" | "resumption" | "change_acceptance" | "lightning" | "safety_valve" | "post_holiday" | "heatstroke_prevention";
         /**
+         * ChecklistItem
+         * @description 检查卡检查项（key 是契约，label 展示用）。
+         */
+        ChecklistItem: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+        };
+        /** ChecklistResponse */
+        ChecklistResponse: {
+            /**
+             * Equipment Type
+             * @enum {string}
+             */
+            equipment_type: "extinguisher" | "hydrant";
+            /** Items */
+            items?: components["schemas"]["ChecklistItem"][];
+        };
+        /**
          * ChoiceOption
          * @description 选择题选项
          */
@@ -37095,6 +37484,23 @@ export interface components {
              * @description 检验结果
              */
             test_result?: string | null;
+        };
+        /** CreateFireInspectionRequest */
+        CreateFireInspectionRequest: {
+            /** Abnormal Action */
+            abnormal_action?: string | null;
+            /** Inspected At */
+            inspected_at?: string | null;
+            /** Inspector Name */
+            inspector_name?: string | null;
+            /** Items */
+            items: components["schemas"]["FireInspectionItemInput"][];
+            /**
+             * Source
+             * @default web
+             * @enum {string}
+             */
+            source: "scan" | "web";
         };
         /** CreateHistoricalDeviationRequest */
         CreateHistoricalDeviationRequest: {
@@ -44803,6 +45209,218 @@ export interface components {
              */
             question: string;
         };
+        /**
+         * FireEquipmentColumn
+         * @description 台账页的动态列（与飞书多维表格字段对齐）。
+         */
+        FireEquipmentColumn: {
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * FireEquipmentDetailResponse
+         * @description 扫码页 / 详情抽屉的一次性数据：器材 + 检查卡 + 最近记录。
+         */
+        FireEquipmentDetailResponse: {
+            /** Checklist */
+            checklist?: components["schemas"]["ChecklistItem"][];
+            equipment: components["schemas"]["FireEquipmentItem"];
+            /** Recent Inspections */
+            recent_inspections?: components["schemas"]["FireInspectionRecordItem"][];
+        };
+        /**
+         * FireEquipmentItem
+         * @description 一台消防器材（镜像投影行）。
+         */
+        FireEquipmentItem: {
+            /** Department */
+            department: string;
+            /** Equipment No */
+            equipment_no: string;
+            /** Equipment Type */
+            equipment_type: string;
+            /** Equipment Type Label */
+            equipment_type_label: string;
+            /** Expiry Date */
+            expiry_date?: string | null;
+            /** Expiry Days Left */
+            expiry_days_left?: number | null;
+            /** Expiry Status */
+            expiry_status?: string | null;
+            /** Fields */
+            fields?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Inspected At */
+            last_inspected_at?: string | null;
+            /** Last Inspection Result */
+            last_inspection_result?: string | null;
+            /** Last Synced At */
+            last_synced_at?: string | null;
+            /** Location */
+            location: string;
+            /** Month Status */
+            month_status: string;
+            /** Record Id */
+            record_id: string;
+            /** Tab Name */
+            tab_name: string;
+            /** Table Id */
+            table_id: string;
+        };
+        /** FireEquipmentListResponse */
+        FireEquipmentListResponse: {
+            /** Columns */
+            columns?: components["schemas"]["FireEquipmentColumn"][];
+            /** Items */
+            items: components["schemas"]["FireEquipmentItem"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * FireEquipmentStats
+         * @description 台账概览 + 镜像绑定/同步状态（页面顶栏一次取全）。
+         */
+        FireEquipmentStats: {
+            /**
+             * Expired Count
+             * @default 0
+             */
+            expired_count: number;
+            /**
+             * Expiring In 30 Count
+             * @default 0
+             */
+            expiring_in_30_count: number;
+            /** Extinguisher Count */
+            extinguisher_count: number;
+            /** Failed This Month */
+            failed_this_month: number;
+            /** Hydrant Count */
+            hydrant_count: number;
+            /** Inspected This Month */
+            inspected_this_month: number;
+            /**
+             * Is Configured
+             * @default false
+             */
+            is_configured: boolean;
+            /** Last Sync Error */
+            last_sync_error?: string | null;
+            /** Last Sync Status */
+            last_sync_status?: string | null;
+            /** Last Synced At */
+            last_synced_at?: string | null;
+            /** Total */
+            total: number;
+            /** Uninspected This Month */
+            uninspected_this_month: number;
+            /**
+             * Writeback Enabled
+             * @default false
+             */
+            writeback_enabled: boolean;
+        };
+        /**
+         * FireInspectionItemInput
+         * @description 单条检查项的提交值（label 由服务端按检查卡回填）。
+         */
+        FireInspectionItemInput: {
+            /** Key */
+            key: string;
+            /** Remark */
+            remark?: string | null;
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "ok" | "fail";
+        };
+        /** FireInspectionListResponse */
+        FireInspectionListResponse: {
+            /** Items */
+            items: components["schemas"]["FireInspectionRecordItem"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * FireInspectionRecordItem
+         * @description 一条点检记录（检查项为当次快照）。
+         */
+        FireInspectionRecordItem: {
+            /** Abnormal Action */
+            abnormal_action?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Department */
+            department: string;
+            /**
+             * Equipment Id
+             * Format: uuid
+             */
+            equipment_id: string;
+            /** Equipment No */
+            equipment_no: string;
+            /** Equipment Type */
+            equipment_type: string;
+            /** Equipment Type Label */
+            equipment_type_label: string;
+            /** Failed Items */
+            failed_items?: {
+                [key: string]: unknown;
+            }[];
+            /** Feishu Record Id */
+            feishu_record_id?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Inspected At
+             * Format: date-time
+             */
+            inspected_at: string;
+            /** Inspector Name */
+            inspector_name: string;
+            /** Items */
+            items?: {
+                [key: string]: unknown;
+            }[];
+            /** Location */
+            location: string;
+            /** Result */
+            result: string;
+            /** Source */
+            source: string;
+        };
+        /**
+         * FireInspectionWritebackInitResponse
+         * @description 一键初始化点检记录回写子表的结果。
+         */
+        FireInspectionWritebackInitResponse: {
+            /** Created */
+            created: boolean;
+            /** Table Id */
+            table_id: string;
+            /** Table Name */
+            table_name: string;
+        };
         /** GeneralAuditLogDetail */
         GeneralAuditLogDetail: {
             /** Action */
@@ -45013,6 +45631,12 @@ export interface components {
             c_post?: number | null;
             /** C Residual */
             c_residual?: number | null;
+            /** Check Frequency */
+            check_frequency?: string | null;
+            /** Check Standard */
+            check_standard?: string | null;
+            /** Control Level */
+            control_level?: string | null;
             /** D Inherent */
             d_inherent?: number | null;
             /** D Post */
@@ -45045,6 +45669,8 @@ export interface components {
             inherent_risk_label?: string | null;
             /** Inherent Risk Level */
             inherent_risk_level?: string | null;
+            /** Is Major Hazard */
+            is_major_hazard?: string | null;
             /** L Inherent */
             l_inherent?: number | null;
             /** L Post */
@@ -45081,8 +45707,16 @@ export interface components {
             residual_risk_label?: string | null;
             /** Residual Risk Level */
             residual_risk_level?: string | null;
+            /** Responsible Person */
+            responsible_person?: string | null;
+            /** Responsible Unit */
+            responsible_unit?: string | null;
             /** Specific Activity */
             specific_activity?: string | null;
+            /** State */
+            state?: string | null;
+            /** Tense */
+            tense?: string | null;
             /** Unsafe Behavior */
             unsafe_behavior?: string | null;
         };
@@ -56718,6 +57352,17 @@ export interface components {
             bitable_app_token?: string | null;
             /** Bitable Hazard Table Id */
             bitable_hazard_table_id?: string | null;
+            /** Fire Expiry Notify Chat Ids */
+            fire_expiry_notify_chat_ids?: string[];
+            /**
+             * Fire Expiry Notify Enabled
+             * @default false
+             */
+            fire_expiry_notify_enabled: boolean;
+            /** Fire Expiry Notify Milestones */
+            fire_expiry_notify_milestones?: number[];
+            /** Fire Expiry Notify User Ids */
+            fire_expiry_notify_user_ids?: string[];
             /** Hazard Due Notify Chat Ids */
             hazard_due_notify_chat_ids?: string[];
             /**
@@ -61980,6 +62625,17 @@ export interface components {
             bitable_app_token?: string | null;
             /** Bitable Hazard Table Id */
             bitable_hazard_table_id?: string | null;
+            /** Fire Expiry Notify Chat Ids */
+            fire_expiry_notify_chat_ids?: string[];
+            /**
+             * Fire Expiry Notify Enabled
+             * @default false
+             */
+            fire_expiry_notify_enabled: boolean;
+            /** Fire Expiry Notify Milestones */
+            fire_expiry_notify_milestones?: number[];
+            /** Fire Expiry Notify User Ids */
+            fire_expiry_notify_user_ids?: string[];
             /** Hazard Due Notify Chat Ids */
             hazard_due_notify_chat_ids?: string[];
             /**
@@ -126054,6 +126710,37 @@ export interface operations {
             };
         };
     };
+    test_fire_expiry_notify_api_v1_safety_feishu_settings_fire_expiry_notify_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     test_hazard_due_notify_api_v1_safety_feishu_settings_hazard_due_notify_test_post: {
         parameters: {
             query?: never;
@@ -126134,6 +126821,288 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_fire_equipment_api_v1_safety_fire_equipment_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description 器材类型: extinguisher=灭火器 / hydrant=消防栓 */
+                equipment_type?: string | null;
+                /** @description 编号/部门/位置/车间关键字 */
+                keyword?: string | null;
+                /** @description 来源子表 table_id */
+                table_id?: string | null;
+                /** @description 本月点检状态: inspected=已检 / uninspected=未检 */
+                month_status?: string | null;
+                /** @description 有效期状态: expiring=30天内到期 / expired=已过期 */
+                expiry_status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_FireEquipmentListResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_fire_equipment_checklist_api_v1_safety_fire_equipment_checklist_get: {
+        parameters: {
+            query: {
+                /** @description extinguisher / hydrant */
+                equipment_type: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ChecklistResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_fire_equipment_stats_api_v1_safety_fire_equipment_stats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_FireEquipmentStats_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_fire_equipment_api_v1_safety_fire_equipment_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_FireEquipmentStats_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    init_fire_inspection_writeback_table_api_v1_safety_fire_equipment_writeback_table_init_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_FireInspectionWritebackInitResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_fire_equipment_detail_api_v1_safety_fire_equipment__equipment_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                equipment_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_FireEquipmentDetailResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_fire_inspection_api_v1_safety_fire_equipment__equipment_id__inspections_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                equipment_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateFireInspectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_FireInspectionRecordItem_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_fire_inspections_api_v1_safety_fire_inspection_records_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                equipment_type?: string | null;
+                /** @description pass=合格 / fail=不合格 */
+                result?: string | null;
+                /** @description 编号/部门/位置/点检人关键字 */
+                keyword?: string | null;
+                inspected_from?: string | null;
+                inspected_to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_FireInspectionListResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -126246,6 +127215,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_hazard_filter_options_api_v1_safety_hazard_identifications_filter_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_hazard_ledger_api_v1_safety_hazard_identifications_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_hazard_ledger_api_v1_safety_hazard_identifications_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    parse_hazard_ledger_import_api_v1_safety_hazard_identifications_import_parse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_parse_hazard_ledger_import_api_v1_safety_hazard_identifications_import_parse_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
                 };
             };
             /** @description Validation Error */
