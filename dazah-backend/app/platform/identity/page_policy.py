@@ -1273,6 +1273,14 @@ PAGE_API_BINDINGS += _module_api_bindings(
         ),
         (
             "POST",
+            "/feishu-settings/fire-expiry-notify/test",
+            ("safety:system-config:safety-feishu-settings",),
+            "operate",
+            "sync_config",
+            "not_applicable",
+        ),
+        (
+            "POST",
             "/knowledge-articles/feishu/sync",
             ("safety:regulation-info:knowledge-base",),
             "operate",
@@ -1342,6 +1350,7 @@ SAFETY_PAGE_TABLE_PAGES = (
     "safety:ops-safety:centrifuge-discharge-inspection",
     "safety:risk-hazard:hazard-inspection:hazard-duty",
     "safety:risk-hazard:hazard-inspection:hazard-quick-report",
+    "safety:emergency-accident:fire-equipment-inspection",
 )
 
 PAGE_API_BINDINGS += _module_api_bindings(
@@ -1459,6 +1468,78 @@ PAGE_API_BINDINGS += _module_api_bindings(
             "/page-tables/{page_key}/records/{record_id}/attachments/{field_name}/{file_token}/thumbnail",
             SAFETY_PAGE_TABLE_PAGES,
             "query",
+            None,
+            "not_applicable",
+        ),
+    ],
+)
+
+# 灭火器/消防栓点检页：台账/统计/检查卡/详情/记录读，提交点检与立即同步
+# 归操作权限（页面键不含敏感动作关键词，绑定动作必须为空集）。
+PAGE_API_BINDINGS += _module_api_bindings(
+    "safety",
+    [
+        (
+            "GET",
+            "/fire-equipment",
+            ("safety:emergency-accident:fire-equipment-inspection",),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/fire-equipment/stats",
+            ("safety:emergency-accident:fire-equipment-inspection",),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/fire-equipment/checklist",
+            ("safety:emergency-accident:fire-equipment-inspection",),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/fire-equipment/{equipment_id}",
+            ("safety:emergency-accident:fire-equipment-inspection",),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/fire-inspection-records",
+            ("safety:emergency-accident:fire-equipment-inspection",),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/fire-equipment/{equipment_id}/inspections",
+            ("safety:emergency-accident:fire-equipment-inspection",),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/fire-equipment/writeback-table/init",
+            ("safety:emergency-accident:fire-equipment-inspection",),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/fire-equipment/sync",
+            ("safety:emergency-accident:fire-equipment-inspection",),
+            "operate",
             None,
             "not_applicable",
         ),

@@ -4747,6 +4747,12 @@
       "route_path": "/safety/hazard-quick-report",
       "actions": {}
     },
+    "safety:emergency-accident:fire-equipment-inspection": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/fire-inspection",
+      "actions": {}
+    },
     "equipment:workshop-101-1:assets-101-1": {
       "status": "active",
       "module_code": "equipment",

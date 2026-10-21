@@ -265,6 +265,8 @@ describe("safety feishu settings actions", () => {
       is_enabled: true,
       hazard_due_notify_enabled: false,
       hazard_due_notify_milestones: [30, 15, 7],
+      fire_expiry_notify_enabled: false,
+      fire_expiry_notify_milestones: [30, 15, 7],
     };
     await saveSafetyFeishuSettings(payload);
     expect(fetchMock).toHaveBeenCalledWith(

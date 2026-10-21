@@ -18,6 +18,8 @@ export const SAFETY_PAGE_TABLE_KEYS = {
   hazchemUnloadingInspection: 'safety:ops-safety:hazchem-unloading-inspection',
   centrifugeDischargeInspection:
     'safety:ops-safety:centrifuge-discharge-inspection',
+  fireEquipmentInspection:
+    'safety:emergency-accident:fire-equipment-inspection',
 } as const
 
 /**

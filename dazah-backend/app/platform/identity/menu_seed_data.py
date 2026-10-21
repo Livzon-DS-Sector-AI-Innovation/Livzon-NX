@@ -210,6 +210,11 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
                 children=[
                     _n("accident-ledger", "事故台账", "/safety/accident"),
                     _n("emergency-plan", "应急预案", "", disabled=True),
+                    _n(
+                        "fire-equipment-inspection",
+                        "灭火器及消防栓点检",
+                        "/safety/fire-inspection",
+                    ),
                 ],
             ),
             _n(

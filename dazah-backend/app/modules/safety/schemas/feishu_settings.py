@@ -24,6 +24,12 @@ class SafetyFeishuAppSettingsDetail(BaseModel):
     )
     hazard_due_notify_chat_ids: list[str] = Field(default_factory=list)
     hazard_due_notify_user_ids: list[str] = Field(default_factory=list)
+    fire_expiry_notify_enabled: bool = False
+    fire_expiry_notify_milestones: list[int] = Field(
+        default_factory=lambda: [30, 15, 7]
+    )
+    fire_expiry_notify_chat_ids: list[str] = Field(default_factory=list)
+    fire_expiry_notify_user_ids: list[str] = Field(default_factory=list)
     is_enabled: bool = True
     knowledge_last_sync_status: str | None = None
     knowledge_last_sync_error: str | None = None
@@ -56,6 +62,12 @@ class UpdateSafetyFeishuAppSettingsRequest(BaseModel):
     )
     hazard_due_notify_chat_ids: list[str] = Field(default_factory=list)
     hazard_due_notify_user_ids: list[str] = Field(default_factory=list)
+    fire_expiry_notify_enabled: bool = False
+    fire_expiry_notify_milestones: list[int] = Field(
+        default_factory=lambda: [30, 15, 7]
+    )
+    fire_expiry_notify_chat_ids: list[str] = Field(default_factory=list)
+    fire_expiry_notify_user_ids: list[str] = Field(default_factory=list)
     is_enabled: bool = True
 
 

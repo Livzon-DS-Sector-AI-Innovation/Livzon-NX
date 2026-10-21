@@ -14,6 +14,7 @@ import pytest
 
 from app.modules.safety.scheduled import (
     MIRROR_SYNC_INTERVAL,
+    SafetyFireExpiryReminderGenerator,
     SafetyHazardDueReminderGenerator,
     mirror_sync_loop,
 )
@@ -29,6 +30,18 @@ def test_hazard_due_reminder_generator_registers_with_unique_name() -> None:
     registry.register_generator(gen)
     with pytest.raises(ValueError):
         registry.register_generator(SafetyHazardDueReminderGenerator())
+
+
+def test_fire_expiry_reminder_generator_registers_with_unique_name() -> None:
+    """消防器材有效期提醒与隐患提醒错峰（08:20）且任务名唯一。"""
+    gen = SafetyFireExpiryReminderGenerator()
+
+    assert gen.name == "safety.fire_expiry_daily"
+
+    registry = SchedulerRegistry()
+    registry.register_generator(gen)
+    with pytest.raises(ValueError):
+        registry.register_generator(SafetyFireExpiryReminderGenerator())
 
 
 def test_mirror_sync_loop_runs_until_stop_then_finishes(monkeypatch) -> None:

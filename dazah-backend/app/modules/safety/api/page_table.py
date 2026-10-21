@@ -137,6 +137,10 @@ async def sync_page_feishu_mirror(
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> ApiResponseEnvelope[PageFeishuConfigItem]:
     await page_table.sync_page_table_mirror(db, page_key)
+    # 消防点检页同步完成后立即重投影台账，其余页面无派生数据
+    from app.modules.safety.service.fire_equipment import maybe_project_after_sync
+
+    await maybe_project_after_sync(db, page_key)
     configs = await page_table.list_page_feishu_configs(db)
     item = next(
         (entry for entry in configs.items if entry.page_key == page_key), None

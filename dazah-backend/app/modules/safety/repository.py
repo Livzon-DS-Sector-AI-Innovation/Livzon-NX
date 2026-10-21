@@ -866,6 +866,35 @@ class SafetyRepository:
         results["total_pending_review"] = await self.session.scalar(pending_q) or 0
         return results
 
+    async def get_hazard_filter_options(self) -> dict[str, Any]:
+        """台账筛选选项：已入账记录的去重部门与（部门，岗位）组合。"""
+        active = (
+            HazardIdentification.is_deleted.is_(False),
+            HazardIdentification.overall_status == "completed",
+        )
+        dept_result = await self.session.execute(
+            select(HazardIdentification.department)
+            .where(*active)
+            .distinct()
+            .order_by(HazardIdentification.department)
+        )
+        pos_result = await self.session.execute(
+            select(
+                HazardIdentification.department,
+                HazardIdentification.position,
+            )
+            .where(*active)
+            .distinct()
+            .order_by(HazardIdentification.department, HazardIdentification.position)
+        )
+        return {
+            "departments": [row[0] for row in dept_result.all()],
+            "positions": [
+                {"department": department, "position": position}
+                for department, position in pos_result.all()
+            ],
+        }
+
     async def get_hazard_identification_ledger_stats(
         self,
         department: str | None = None,
@@ -952,6 +981,17 @@ class SafetyRepository:
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
+
+    async def get_existing_hazard_id_nos(self, nos: list[str]) -> set[str]:
+        """按编号集合查询已存在的危险源辨识记录编号（导入去重）。"""
+        if not nos:
+            return set()
+        stmt = select(HazardIdentification.hazard_id_no).where(
+            HazardIdentification.hazard_id_no.in_(nos),
+            HazardIdentification.is_deleted.is_(False),
+        )
+        result = await self.session.execute(stmt)
+        return {row[0] for row in result.all()}
 
     async def create_hazard_identification(
         self, data: dict[str, Any]

@@ -563,6 +563,57 @@ class SafetyBitableClient:
                     break
         return tables
 
+    async def create_table(
+        self,
+        name: str,
+        fields: list[dict[str, Any]],
+        *,
+        app_token: str | None = None,
+        default_view_name: str = "表格",
+    ) -> tuple[str | None, str | None]:
+        """在 Base 下新建数据表，返回 ``(table_id, 飞书错误信息)``。
+
+        ``fields`` 为飞书建表字段规格（field_name/type/property），用于
+        消防点检「点检记录」等回写子表的一键初始化。
+        """
+        target = (app_token or self.app_token or "").strip()
+        if not target:
+            return None, "缺少 app_token"
+        token = await self._token()
+        async with httpx.AsyncClient(timeout=15) as http:
+            resp = await http.post(
+                f"{BITABLE_BASE}/apps/{target}/tables",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json; charset=utf-8",
+                },
+                json={
+                    "table": {
+                        "name": name,
+                        "default_view_name": default_view_name,
+                        "fields": fields,
+                    }
+                },
+            )
+            data = resp.json()
+            if data.get("code") != 0:
+                message = str(data.get("msg") or "飞书返回未知错误")
+                logger.error(
+                    "Bitable create_table 失败: name=%s code=%s msg=%s",
+                    name,
+                    data.get("code"),
+                    message,
+                )
+                return None, message
+            table_id = (data.get("data") or {}).get("table_id")
+            if not table_id:
+                logger.error("Bitable create_table 未返回 table_id: name=%s", name)
+                return None, "飞书未返回 table_id"
+            logger.info(
+                "Bitable create_table 成功: name=%s table_id=%s", name, table_id
+            )
+            return str(table_id), None
+
     async def create_field(
         self,
         field_name: str,

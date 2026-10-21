@@ -1,26 +1,31 @@
 """Safety API — hazard_identifications endpoints."""
 
+import json
 import os
 import uuid
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, UploadFile
+from fastapi import APIRouter, Depends, Form, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import CurrentUser, get_current_user
 from app.core.response import ApiResponse
 from app.modules.safety.schemas import (
+    HazardFilterOptions,
     HazardIdentificationCreate,
     HazardIdentificationResponse,
     HazardIdentificationReview,
     HazardIdentificationRunScript,
     HazardIdentificationUpdate,
+    HazardImportPreview,
+    HazardImportResult,
     HazardLedgerExportRequest,
     HazardRiskOption,
 )
 from app.modules.safety.service import (
+    HazardLedgerImportService,
     SafetyService,
 )
 
@@ -106,6 +111,21 @@ async def get_hazard_identification_ledger_stats(
         date_to,
     )
     return ApiResponse(data=stats)
+
+
+@hazard_identifications_router.get(
+    "/hazard-identifications/filter-options",
+    response_model=ApiResponse,
+    summary="获取台账筛选下拉选项（部门/岗位）",
+)
+async def get_hazard_filter_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> Any:
+    """返回已入账记录的去重部门与（部门，岗位）组合，供台账筛选下拉使用。"""
+    service = SafetyService(db)
+    options = await service.get_hazard_filter_options()
+    return ApiResponse(data=HazardFilterOptions.model_validate(options))
 
 
 @hazard_identifications_router.get(
@@ -368,3 +388,76 @@ async def export_hazard_ledger_pdf(
             "Content-Length": str(len(pdf_bytes)),
         },
     )
+
+
+# ── 危险源辨识台账 Excel 导入 ──
+
+
+@hazard_identifications_router.post(
+    "/hazard-identifications/import/parse",
+    response_model=ApiResponse,
+    summary="解析车间危险源辨识 Excel（预览子表与行数）",
+)
+async def parse_hazard_ledger_import(
+    file: UploadFile,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> Any:
+    """上传车间 Excel 并解析：识别每个子表（sheet）的格式、有效行数与样例行。
+
+    支持：作业活动/设备设施分级管控清单、重点风险管控措施清单、
+    危险源识别评价表（.xls）。仅解析不落库。
+    """
+    content = await file.read()
+    service = HazardLedgerImportService(db)
+    try:
+        preview = await service.preview(file.filename or "", content)
+    except ValueError as exc:
+        return ApiResponse(code=400, message=str(exc))
+    return ApiResponse(data=HazardImportPreview.model_validate(preview))
+
+
+@hazard_identifications_router.post(
+    "/hazard-identifications/import",
+    response_model=ApiResponse,
+    summary="导入车间危险源辨识 Excel 到台账",
+)
+async def import_hazard_ledger(
+    file: UploadFile,
+    department: str = Form("", description="部门/车间（默认取文件名推断值）"),
+    sheets: str = Form(
+        "", description="要导入的子表名 JSON 数组，空则导入全部可解析子表"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> Any:
+    """把车间 Excel 解析结果写入危险源辨识台账（已完成的记录）。
+
+    按内容指纹生成编号，重复导入同一文件会自动跳过已存在记录。
+    """
+    selected_sheets: list[str] | None = None
+    if sheets:
+        try:
+            parsed_sheets = json.loads(sheets)
+        except json.JSONDecodeError:
+            return ApiResponse(code=400, message="子表参数格式错误")
+        if not isinstance(parsed_sheets, list) or not all(
+            isinstance(item, str) for item in parsed_sheets
+        ):
+            return ApiResponse(code=400, message="子表参数格式错误")
+        selected_sheets = parsed_sheets
+
+    content = await file.read()
+    service = HazardLedgerImportService(db)
+    try:
+        result = await service.commit(
+            file.filename or "",
+            content,
+            department,
+            selected_sheets,
+            current_user.id if current_user else None,
+        )
+    except ValueError as exc:
+        return ApiResponse(code=400, message=str(exc))
+    await db.commit()
+    return ApiResponse(data=HazardImportResult.model_validate(result))

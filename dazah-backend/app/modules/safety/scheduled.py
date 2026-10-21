@@ -154,6 +154,52 @@ class SafetyPageMirrorSyncGenerator(TaskGenerator):
         logger.info("页面镜像定时同步完成: page=%s 记录=%s", page_key, count)
 
 
+class SafetyFireExpiryReminderGenerator(TaskGenerator):
+    """每天 08:20 检查消防器材台账：有效日期进入提醒节点（如还剩一个月/
+    半个月/一周）或已过期时推送飞书提醒，同一台器材同一节点只推一次。
+
+    尊重设置页的开关与节点天数（safety.feishu_app_settings.fire_expiry_*）；
+    无新触发节点时静默跳过。手动测试走设置页「测试发送」。
+    """
+
+    name = "safety.fire_expiry_daily"
+    schedule = ScheduleConfig(
+        strategy=ScheduleStrategy.CRON,
+        # 分 时 日 月 周 —— 每天 08:20（错开隐患提醒的 08:00）
+        expression="20 8 * * *",
+        timezone="Asia/Shanghai",
+    )
+    timeout_seconds = 300
+
+    async def find_due(self, session: Any) -> list[Any]:
+        from app.modules.safety.models import SafetyFeishuAppSettings
+
+        row = (
+            await session.execute(
+                select(SafetyFeishuAppSettings)
+                .where(SafetyFeishuAppSettings.is_deleted.is_(False))
+                .order_by(SafetyFeishuAppSettings.updated_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if row is None or not row.fire_expiry_notify_enabled:
+            logger.info(
+                "消防器材有效期提醒未启用（fire_expiry_notify_enabled=false），本轮跳过"
+            )
+            return []
+        return [True]
+
+    async def execute_one(self, session: Any, item: Any) -> None:
+        from app.modules.safety.service import fire_expiry_reminder
+
+        sent, errors = (
+            await fire_expiry_reminder.send_fire_expiry_notifications(session)
+        )
+        logger.info(
+            "消防器材有效期提醒推送完成: 成功=%s 错误=%s", sent, errors or "无"
+        )
+
+
 # ── 独立同步循环（自建，不依赖平台调度引擎） ──
 # 平台 SchedulerEngine 的循环协程缺少外层异常保护，曾被其它模块的异常
 # 静默杀死（循环停止推进所有 generator）。镜像同步是安全模块的核心数据
@@ -169,6 +215,13 @@ async def mirror_sync_loop() -> None:
     特殊危险作业页同步成功后自动转录进特殊作业台账并重算关键作业，
     台账与镜像保持同节奏更新，无需人工触发。
     """
+    from app.modules.safety.service.fire_equipment import (
+        FIRE_EQUIPMENT_PAGE_KEY as fire_equipment_page_key,  # noqa: N811
+    )
+    from app.modules.safety.service.fire_equipment import (
+        retry_pending_inspection_writebacks,
+        sync_fire_equipment_ledger,
+    )
     from app.modules.safety.service.special_operation_transcription import (
         SOURCE_PAGE_KEY as special_danger_page_key,  # noqa: N811 —— 原名语义即常量
     )
@@ -202,6 +255,15 @@ async def mirror_sync_loop() -> None:
                         await sync_special_operation_ledger(session)
                     except Exception:
                         logger.exception("特殊作业台账自动转录失败，等待下一轮")
+                if fire_equipment_page_key in synced:
+                    try:
+                        await sync_fire_equipment_ledger(session)
+                    except Exception:
+                        logger.exception("消防器材台账投影失败，等待下一轮")
+                    try:
+                        await retry_pending_inspection_writebacks(session)
+                    except Exception:
+                        logger.exception("点检记录回写补写失败，等待下一轮")
         except Exception:
             logger.exception("页面镜像独立同步本轮失败，等待下一轮")
         try:
