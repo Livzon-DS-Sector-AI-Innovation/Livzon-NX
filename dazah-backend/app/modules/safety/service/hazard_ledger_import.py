@@ -22,8 +22,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-import openpyxl  # type: ignore[import-untyped]
-import xlrd
+import openpyxl
+import xlrd  # type: ignore[import-untyped]
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.safety.repository import SafetyRepository
