@@ -24,6 +24,7 @@ const DETAIL = {
     expiry_date: '2027-06-30',
     days_left: 252,
     expiry_status: 'ok',
+    fields: { 型号: 'MFZ/ABC4', 压力状态: '正常' },
     month_status: 'inspected',
   },
   checklist: [],

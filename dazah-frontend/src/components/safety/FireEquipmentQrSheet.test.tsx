@@ -43,7 +43,9 @@ describe('FireEquipmentQrSheet', () => {
   let container: HTMLElement
 
   beforeEach(() => {
-    vi.stubGlobal('print', vi.fn())
+    const flush = () => new Promise((resolve) => setTimeout(resolve, 30))
+    const printSpy = vi.fn()
+    vi.stubGlobal('print', printSpy)
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
