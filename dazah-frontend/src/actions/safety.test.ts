@@ -27,6 +27,17 @@ import {
   getSafetyPageTableStats,
   getSafetyPageTableTabs,
   getSpecialOperationLedgerStats,
+  getFireEquipmentDetail,
+  getFireEquipmentList,
+  getFireEquipmentStats,
+  getFireInspectionRecords,
+  getHazardFilterOptions,
+  importHazardLedger,
+  initFireEquipmentWritebackTable,
+  parseHazardLedgerImport,
+  submitFireEquipmentInspection,
+  syncFireEquipment,
+  testFireExpiryNotify,
   syncSafetyPageFeishuConfig,
   getSafetyFeishuWsStatus,
   resolveSafetyPageFeishuUrl,
@@ -698,3 +709,161 @@ describe("safety special-operation ledger and config sync actions", () => {
     );
   });
 });
+
+describe('safety hazard ledger import actions', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('fetches hazard filter options', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: [] }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await getHazardFilterOptions()
+    const [url] = fetchMock.mock.calls[0] as unknown as [string]
+    expect(url).toContain('/api/v1/safety/hazard-identifications/filter-options')
+  })
+
+  it('parses a hazard ledger workbook before import', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const file = new File(["x"], "ledger.xlsx")
+    await parseHazardLedgerImport(file)
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toContain('/api/v1/safety/hazard-identifications/import/parse')
+    expect(init.method).toBe('POST')
+    expect(init.body).toBeInstanceOf(FormData)
+  })
+
+  it('imports a hazard ledger with department and sheets', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const file = new File(["x"], "ledger.xlsx")
+    await importHazardLedger(file, "103三车间", ["Sheet1"])
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toContain('/api/v1/safety/hazard-identifications/import')
+    expect(init.method).toBe('POST')
+    const body = init.body as FormData
+    expect(body.get('department')).toBe('103三车间')
+    expect(body.get('sheets')).toBe(JSON.stringify(['Sheet1']))
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(
+      '/safety/hazard-identification/ledger',
+    )
+  })
+})
+
+describe('safety fire equipment actions', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('lists fire equipment with filters and page key header', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await getFireEquipmentList({
+      pageKey: 'k',
+      page: 2,
+      pageSize: 10,
+      equipmentType: 'extinguisher',
+      keyword: 'MQC',
+      monthStatus: 'inspected',
+      expiryStatus: 'expiring',
+    })
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toContain('/api/v1/safety/fire-equipment?')
+    expect(url).toContain('page=2')
+    expect(url).toContain('page_size=10')
+    expect(url).toContain('equipment_type=extinguisher')
+    expect(url).toContain('month_status=inspected')
+    expect(url).toContain('expiry_status=expiring')
+    expect(init.headers).toMatchObject({ 'X-Dazah-Page-Key': 'k' })
+  })
+
+  it('fetches fire equipment stats', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await getFireEquipmentStats({ pageKey: "k" })
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toContain('/api/v1/safety/fire-equipment/stats')
+    expect(init.headers).toMatchObject({ 'X-Dazah-Page-Key': 'k' })
+  })
+
+  it('fetches fire equipment detail by id', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await getFireEquipmentDetail({ pageKey: "k", equipmentId: "e1" })
+    const [url] = fetchMock.mock.calls[0] as unknown as [string]
+    expect(url).toContain('/api/v1/safety/fire-equipment/e1')
+  })
+
+  it('lists fire inspection records with date range', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await getFireInspectionRecords({
+      pageKey: "k",
+      result: "pass",
+      inspectedFrom: "2026-10-01T00:00:00",
+      inspectedTo: "2026-10-31T00:00:00",
+    })
+    const [url] = fetchMock.mock.calls[0] as unknown as [string]
+    expect(url).toContain('/api/v1/safety/fire-inspection-records?')
+    expect(url).toContain('result=pass')
+    expect(url).toContain('inspected_from=')
+    expect(url).toContain('inspected_to=')
+  })
+
+  it('submits a fire inspection for an equipment', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await submitFireEquipmentInspection({
+      pageKey: "k",
+      equipmentId: "e1",
+      data: { items: [], source: "scan" },
+    })
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toContain('/api/v1/safety/fire-equipment/e1/inspections')
+    expect(init.method).toBe('POST')
+    expect(init.body).toBe(JSON.stringify({ items: [], source: "scan" }))
+  })
+
+  it('syncs fire equipment and inits writeback table', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await syncFireEquipment({ pageKey: "k" })
+    await initFireEquipmentWritebackTable({ pageKey: "k" })
+    const [syncUrl, syncInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    const [initUrl, initInit] = fetchMock.mock.calls[1] as unknown as [string, RequestInit]
+    expect(syncUrl).toContain('/api/v1/safety/fire-equipment/sync')
+    expect(syncInit.method).toBe('POST')
+    expect(initUrl).toContain('/api/v1/safety/fire-equipment/writeback-table/init')
+    expect(initInit.method).toBe('POST')
+  })
+})
+
+describe('safety fire expiry notify actions', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('posts the fire expiry notify test push', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { sent: 2 } }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const res = await testFireExpiryNotify()
+    expect(res).toEqual({ code: 200, data: { sent: 2 } })
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toContain('/api/v1/safety/feishu-settings/fire-expiry-notify/test')
+    expect(init.method).toBe('POST')
+  })
+})
