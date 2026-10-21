@@ -3,7 +3,7 @@
 import PlatformNotice from '@/components/shared/PlatformNotice'
 
 import { useState, useRef } from "react"
-import { Checkbox } from "antd"
+import { Button, Checkbox, Drawer } from "antd"
 import { getUserErrorMessage } from '@/lib/user-error'
 
 export interface ImportPreviewResult {
@@ -171,78 +171,74 @@ export function ImportPreviewDrawer({
   }
 
   return (
-    <>
-      {isOpen && <div className="fixed inset-0 bg-black/30 z-40" onClick={handleClose} />}
-      <div className={`fixed top-0 right-0 h-full w-[480px] bg-white shadow-2xl z-50 transform transition-transform duration-300 ${isOpen ? "translate-x-0" : "translate-x-full"}`}>
-        <div className="flex flex-col h-full">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-            <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
-          </div>
+    <Drawer
+      open={isOpen}
+      onClose={handleClose}
+      size={480}
+      title={title}
+      footer={
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={handleClose} disabled={importing}>取消</Button>
+          <Button type={preview ? "default" : "primary"} onClick={handlePreview} disabled={!file || previewing || importing}>
+            {previewing ? "预览中..." : "预览数据"}
+          </Button>
+          {preview && preview.total_rows > 0 && (
+            <Button type="primary" onClick={handleConfirm} disabled={importing}>
+              {importing ? "导入中..." : "确认导入"}
+            </Button>
+          )}
+        </div>
+      }
+    >
+      <div className="space-y-5">
+        <PlatformNotice type="info" title="导入前请核对文档表头与模板" description={<><div className="text-sm font-medium text-[var(--color-info)] mb-2">Word 文档表头字段</div><div className="text-xs text-[var(--color-info)] mb-3">{headers.join("、")}</div></>} action={<><button onClick={handleDownloadTemplate} className="text-xs text-[var(--color-primary)] underline hover:text-[var(--color-primary-hover)]">
+            下载导入模板（从系统导出）
+          </button></>} />
 
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-            <PlatformNotice type="info" title="导入前请核对文档表头与模板" description={<><div className="text-sm font-medium text-blue-800 mb-2">Word 文档表头字段</div><div className="text-xs text-blue-600 mb-3">{headers.join("、")}</div></>} action={<><button onClick={handleDownloadTemplate} className="text-xs text-blue-700 underline hover:text-blue-900">
-                下载导入模板（从系统导出）
-              </button></>} />
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">选择文件</label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
-                <input ref={fileInputRef} type="file" accept=".docx" onChange={handleFileChange} className="hidden" id={fileInputId} />
-                <label htmlFor={fileInputId} className="cursor-pointer">
-                  <div className="text-3xl mb-2">📄</div>
-                  <div className="text-sm text-gray-600">{file ? file.name : "点击选择 Word 文件 (.docx)"}</div>
-                </label>
-              </div>
-            </div>
-
-            <Checkbox checked={skipDuplicates} onChange={(e) => setSkipDuplicates(e.target.checked)}>
-              跳过重复记录（按编号去重）
-            </Checkbox>
-            <Checkbox checked={updateExisting} onChange={(e) => setUpdateExisting(e.target.checked)}>
-              重复时更新已有记录
-            </Checkbox>
-
-            {errorMsg && <PlatformNotice type="error" title={<>{errorMsg}</>} />}
-            {successMsg && <PlatformNotice type="success" title={<>{successMsg}</>} />}
-
-            {rowErrors.map((rowError, index) => (
-              <PlatformNotice key={index} type="error" title={`第${rowError.row}行：${rowError.error}`} />
-            ))}
-            {preview && (
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-gray-900">导入预览</h3>
-                <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="text-gray-500">总行数</span><span className="font-medium">{preview.total_rows}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500">可导入</span><span className="font-bold text-green-700">{preview.valid_rows}</span></div>
-                  {preview.error_rows && preview.error_rows.length > 0 && (
-                    <div className="flex justify-between"><span className="text-gray-500">错误/重复行</span><span className="font-bold text-red-600">{preview.error_rows.length}</span></div>
-                  )}
-                </div>
-                {preview.error_rows && preview.error_rows.length > 0 && (
-                  <div className="max-h-40 overflow-y-auto">
-                    {preview.error_rows.map((e, i) => (
-                      <PlatformNotice type="error" key={i} title={<>第{e.row_number}行: {e.error_message}</>} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="px-6 py-4 border-t border-gray-200 flex gap-3">
-            <button onClick={handleClose} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium" disabled={importing}>取消</button>
-            <button onClick={handlePreview} disabled={!file || previewing || importing} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50">
-              {previewing ? "预览中..." : "预览数据"}
-            </button>
-            {preview && preview.total_rows > 0 && (
-              <button onClick={handleConfirm} disabled={importing} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium disabled:opacity-50">
-                {importing ? "导入中..." : "确认导入"}
-              </button>
-            )}
+        <div>
+          <label className="block text-sm font-medium text-[var(--color-slate)] mb-2">选择文件</label>
+          <div className="border-2 border-dashed border-[var(--color-hairline-strong)] rounded-lg p-6 text-center hover:border-[var(--color-primary-border)] transition-colors">
+            <input ref={fileInputRef} type="file" accept=".docx" onChange={handleFileChange} className="hidden" id={fileInputId} />
+            <label htmlFor={fileInputId} className="cursor-pointer">
+              <div className="text-3xl mb-2">📄</div>
+              <div className="text-sm text-[var(--color-slate)]">{file ? file.name : "点击选择 Word 文件 (.docx)"}</div>
+            </label>
           </div>
         </div>
+
+        <Checkbox checked={skipDuplicates} onChange={(e) => setSkipDuplicates(e.target.checked)}>
+          跳过重复记录（按编号去重）
+        </Checkbox>
+        <Checkbox checked={updateExisting} onChange={(e) => setUpdateExisting(e.target.checked)}>
+          重复时更新已有记录
+        </Checkbox>
+
+        {errorMsg && <PlatformNotice type="error" title={<>{errorMsg}</>} />}
+        {successMsg && <PlatformNotice type="success" title={<>{successMsg}</>} />}
+
+        {rowErrors.map((rowError, index) => (
+          <PlatformNotice key={index} type="error" title={`第${rowError.row}行：${rowError.error}`} />
+        ))}
+        {preview && (
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-[var(--color-ink)]">导入预览</h3>
+            <div className="bg-[var(--color-surface-soft)] rounded-lg p-4 space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-[var(--color-steel)]">总行数</span><span className="font-medium">{preview.total_rows}</span></div>
+              <div className="flex justify-between"><span className="text-[var(--color-steel)]">可导入</span><span className="font-bold text-[var(--color-success)]">{preview.valid_rows}</span></div>
+              {preview.error_rows && preview.error_rows.length > 0 && (
+                <div className="flex justify-between"><span className="text-[var(--color-steel)]">错误/重复行</span><span className="font-bold text-[var(--color-error)]">{preview.error_rows.length}</span></div>
+              )}
+            </div>
+            {preview.error_rows && preview.error_rows.length > 0 && (
+              <div className="max-h-40 overflow-y-auto">
+                {preview.error_rows.map((e, i) => (
+                  <PlatformNotice type="error" key={i} title={<>第{e.row_number}行: {e.error_message}</>} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
-    </>
+    </Drawer>
   )
 }

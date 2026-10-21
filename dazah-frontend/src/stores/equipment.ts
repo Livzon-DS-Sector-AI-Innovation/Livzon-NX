@@ -19,7 +19,6 @@ import {
   StockWarning,
   MaintenancePlan,
   MaintenancePlanStatus,
-  InspectionTemplate,
   InspectionTemplateItem,
   Maintainer,
   DepartmentOption,
@@ -198,29 +197,6 @@ interface EquipmentStore {
   editingMaintenancePlan: MaintenancePlan | null
   openMaintenancePlanDrawer: (plan?: MaintenancePlan) => void
   closeMaintenancePlanDrawer: () => void
-
-  // ========== 巡检模板 ==========
-  inspectionTemplates: InspectionTemplate[]
-  inspectionTemplateTotal: number
-  inspectionTemplatePage: number
-  inspectionTemplatePageSize: number
-  inspectionTemplateLoading: boolean
-  inspectionTemplateKeyword: string
-  setInspectionTemplates: (templates: InspectionTemplate[]) => void
-  setInspectionTemplateTotal: (total: number) => void
-  setInspectionTemplatePage: (page: number) => void
-  setInspectionTemplatePageSize: (size: number) => void
-  setInspectionTemplateLoading: (loading: boolean) => void
-  setInspectionTemplateKeyword: (keyword: string) => void
-  inspectionTemplateDrawerOpen: boolean
-  editingInspectionTemplate: InspectionTemplate | null
-  openInspectionTemplateDrawer: (template?: InspectionTemplate) => void
-  closeInspectionTemplateDrawer: () => void
-  inspectionItemDrawerOpen: boolean
-  inspectionItemTemplateId: string | null
-  editingInspectionItem: InspectionTemplateItem | null
-  openInspectionItemDrawer: (templateId: string, item?: InspectionTemplateItem) => void
-  closeInspectionItemDrawer: () => void
 
   // ========== 巡检完成 ==========
   inspectionCompleteDrawerOpen: boolean
@@ -489,43 +465,6 @@ export const useEquipmentStore = create<EquipmentStore>()(
         maintenancePlanDrawerOpen: false,
         editingMaintenancePlan: null,
       }, false, 'equipment/closeMaintenancePlanDrawer'),
-
-      // ========== 巡检模板 ==========
-      inspectionTemplates: [],
-      inspectionTemplateTotal: 0,
-      inspectionTemplatePage: 1,
-      inspectionTemplatePageSize: 20,
-      inspectionTemplateLoading: false,
-      inspectionTemplateKeyword: '',
-      setInspectionTemplates: (templates) => set({ inspectionTemplates: templates }, false, 'equipment/setInspectionTemplates'),
-      setInspectionTemplateTotal: (total) => set({ inspectionTemplateTotal: total }, false, 'equipment/setInspectionTemplateTotal'),
-      setInspectionTemplatePage: (page) => set({ inspectionTemplatePage: page }, false, 'equipment/setInspectionTemplatePage'),
-      setInspectionTemplatePageSize: (size) => set({ inspectionTemplatePageSize: size, inspectionTemplatePage: 1 }, false, 'equipment/setInspectionTemplatePageSize'),
-      setInspectionTemplateLoading: (loading) => set({ inspectionTemplateLoading: loading }, false, 'equipment/setInspectionTemplateLoading'),
-      setInspectionTemplateKeyword: (keyword) => set({ inspectionTemplateKeyword: keyword, inspectionTemplatePage: 1 }, false, 'equipment/setInspectionTemplateKeyword'),
-      inspectionTemplateDrawerOpen: false,
-      editingInspectionTemplate: null,
-      openInspectionTemplateDrawer: (template) => set({
-        inspectionTemplateDrawerOpen: true,
-        editingInspectionTemplate: template || null,
-      }, false, 'equipment/openInspectionTemplateDrawer'),
-      closeInspectionTemplateDrawer: () => set({
-        inspectionTemplateDrawerOpen: false,
-        editingInspectionTemplate: null,
-      }, false, 'equipment/closeInspectionTemplateDrawer'),
-      inspectionItemDrawerOpen: false,
-      inspectionItemTemplateId: null,
-      editingInspectionItem: null,
-      openInspectionItemDrawer: (templateId, item) => set({
-        inspectionItemDrawerOpen: true,
-        inspectionItemTemplateId: templateId,
-        editingInspectionItem: item || null,
-      }, false, 'equipment/openInspectionItemDrawer'),
-      closeInspectionItemDrawer: () => set({
-        inspectionItemDrawerOpen: false,
-        inspectionItemTemplateId: null,
-        editingInspectionItem: null,
-      }, false, 'equipment/closeInspectionItemDrawer'),
 
       // ========== 巡检完成 ==========
       inspectionCompleteDrawerOpen: false,

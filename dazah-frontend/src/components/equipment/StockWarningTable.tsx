@@ -7,11 +7,7 @@ import type { ColumnsType } from 'antd/es/table'
 import { StockWarning } from '@/types/equipment'
 import { useEquipmentStore } from '@/stores/equipment'
 
-interface StockWarningTableProps {
-  onRefresh?: () => void
-}
-
-export function StockWarningTable({ onRefresh }: StockWarningTableProps) {
+export function StockWarningTable() {
   const { stockWarnings, stockWarningsLoading } = useEquipmentStore()
 
   const columns: ColumnsType<StockWarning> = [

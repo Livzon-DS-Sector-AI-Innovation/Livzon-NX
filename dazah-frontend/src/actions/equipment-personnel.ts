@@ -41,7 +41,7 @@ export async function createRole(data: CreateRoleInput) {
     `${API_BASE_URL}/api/v1/equipment/personnel/roles`,
     { method: 'POST', body: JSON.stringify(data) },
   )
-  revalidatePath('/equipment/personnel')
+  revalidatePath('/equipment/personnel', 'page')
   return result
 }
 
@@ -50,7 +50,7 @@ export async function updateRole(id: string, data: UpdateRoleInput) {
     `${API_BASE_URL}/api/v1/equipment/personnel/roles/${id}`,
     { method: 'PUT', body: JSON.stringify(data) },
   )
-  revalidatePath('/equipment/personnel')
+  revalidatePath('/equipment/personnel', 'page')
   return result
 }
 
@@ -59,7 +59,7 @@ export async function deleteRole(id: string) {
     `${API_BASE_URL}/api/v1/equipment/personnel/roles/${id}`,
     { method: 'DELETE' },
   )
-  revalidatePath('/equipment/personnel')
+  revalidatePath('/equipment/personnel', 'page')
   return result
 }
 
@@ -70,7 +70,7 @@ export async function addPersonnel(data: AddPersonnelInput) {
     `${API_BASE_URL}/api/v1/equipment/personnel`,
     { method: 'POST', body: JSON.stringify(data) },
   )
-  revalidatePath('/equipment/personnel')
+  revalidatePath('/equipment/personnel', 'page')
   return result
 }
 
@@ -79,7 +79,7 @@ export async function deletePersonnel(id: string) {
     `${API_BASE_URL}/api/v1/equipment/personnel/${id}`,
     { method: 'DELETE' },
   )
-  revalidatePath('/equipment/personnel')
+  revalidatePath('/equipment/personnel', 'page')
   return result
 }
 
@@ -90,7 +90,7 @@ export async function assignRoles(
     `${API_BASE_URL}/api/v1/equipment/personnel/${personnelId}/roles`,
     { method: 'POST', body: JSON.stringify(data) },
   )
-  revalidatePath('/equipment/personnel')
+  revalidatePath('/equipment/personnel', 'page')
   return result
 }
 
@@ -101,7 +101,7 @@ export async function assignCategories(
     `${API_BASE_URL}/api/v1/equipment/personnel/${personnelId}/categories`,
     { method: 'POST', body: JSON.stringify(data) },
   )
-  revalidatePath('/equipment/personnel')
+  revalidatePath('/equipment/personnel', 'page')
   return result
 }
 
@@ -110,6 +110,6 @@ export async function refreshFeishu() {
     `${API_BASE_URL}/api/v1/equipment/personnel/refresh-feishu`,
     { method: 'POST' },
   )
-  revalidatePath('/equipment/personnel')
+  revalidatePath('/equipment/personnel', 'page')
   return result
 }

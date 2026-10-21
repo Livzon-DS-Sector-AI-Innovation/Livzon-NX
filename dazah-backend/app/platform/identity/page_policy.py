@@ -37,7 +37,7 @@ PENDING_SCOPE_MODULES = frozenset({"equipment", "energy", "safety", "research"})
 # option for existing grants; other endpoints in these modules remain subject
 # to their existing registration checks.
 PERSONAL_TODO_SCOPE_PAGES = frozenset({
-    "equipment:maintenance", "equipment:inspection",
+    "equipment:maintenance",
     "safety:risk-hazard:hazard-inspection:hazard-inspection-ledger",
     "safety:risk-hazard:ehs-change:ehs-change-apply",
     "safety:emergency-accident:accident-ledger", "safety:training-check:safety-check",
@@ -218,6 +218,14 @@ class BooleanActionSelector:
 
 
 @dataclass(frozen=True)
+class EnumActionSelector:
+    """An exact request value selecting a separately granted decision action."""
+
+    field: str
+    actions: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True)
 class PageApiBinding:
     """Reviewed exact route contract; never inferred from resource name or verb."""
 
@@ -227,7 +235,7 @@ class PageApiBinding:
     permission: str
     sensitive_action: str | None = None
     scope_adapter: str | None = None
-    action_selector: BooleanActionSelector | None = None
+    action_selector: BooleanActionSelector | EnumActionSelector | None = None
 
 
 # Add entries only after the endpoint's list/detail/write scope adapter has
@@ -334,7 +342,13 @@ def _api_binding_errors(binding: PageApiBinding) -> list[str]:
     actions = {binding.sensitive_action} if binding.sensitive_action else set()
     if binding.action_selector is not None:
         selector = binding.action_selector
-        actions.update((selector.when_true, selector.when_false))
+        if isinstance(selector, EnumActionSelector):
+            actions.update(action for _, action in selector.actions)
+            values = [value for value, _ in selector.actions]
+            if not values or len(values) != len(set(values)) or not all(values):
+                errors.append("动态责任动作枚举配置无效")
+        else:
+            actions.update((selector.when_true, selector.when_false))
         if not selector.field or binding.sensitive_action is not None:
             errors.append("动态责任动作配置无效")
     if actions and binding.permission != "operate":
@@ -419,6 +433,10 @@ _ACTION_DEFINITIONS = {
     ),
     "bulk_import": SensitiveActionDefinition(
         "bulk_import", "批量导入或覆盖", "bulk_change", "批量导入、覆盖或清空数据"
+    ),
+    "schedule-archive": SensitiveActionDefinition(
+        "schedule-archive", "排产历史修正", "bulk_change",
+        "以新排产文件修正今天之前的历史列，必须填写修正原因并记录审计",
     ),
     "sensitive_export": SensitiveActionDefinition(
         "sensitive_export", "导出敏感数据", "sensitive_export", "下载或批量导出业务数据"
@@ -553,6 +571,7 @@ def _sensitive_actions(
         "production:plan:scheduling": (
             "delete",
             "bulk_import",
+            "schedule-archive",
             "sensitive_export",
             "sync_config",
         ),
@@ -563,6 +582,7 @@ def _sensitive_actions(
         "production:label-verification": ("delete",),
         "production:pressure": (
             "approve",
+            "reject",
             "delete",
             "bulk_import",
             "sensitive_export",
@@ -628,6 +648,8 @@ def _sensitive_actions(
     }
 
     def _action_name(action_key: str) -> str:
+        if action_key == "schedule-archive":
+            return _ACTION_DEFINITIONS[action_key].name
         if page_key == "hr:employee-management:profile":
             return employee_action_names[action_key]
         if page_key == "quality:deviations:deviation-ledger":
@@ -671,6 +693,15 @@ def _walk_pages(
             elif module_code in PENDING_SCOPE_MODULES:
                 scopes = ("not_applicable",)
             else:
+                scopes = ("all",)
+            if page_key in {
+                "energy:ledger-overview",
+                "energy:reports",
+                "energy:analysis",
+                "energy:data-quality",
+            }:
+                scopes = ("department_tree", "departments", "all")
+            if page_key in {"energy:entry", "energy:settings"}:
                 scopes = ("all",)
             if page_key in PERSONAL_TODO_SCOPE_PAGES or (
                 page_key.startswith("equipment:workshop-")
@@ -899,17 +930,8 @@ PAGE_API_BINDINGS += tuple(
             "quality:deviations:deviation-ledger", "quality:capas:capa-ledger",
             "quality:capas:capa-plans", "quality:change:change-action-plans",
         )),
-        ("equipment", tuple(
-            page.page_key for page in PAGE_DEFINITIONS
-            if page.module_code == "equipment"
-            and (
-                page.page_key in {"equipment:maintenance", "equipment:inspection"}
-                or page.page_key.startswith("equipment:workshop-")
-                and page.route_path.startswith((
-                    "/equipment/maintenance/", "/equipment/inspection/",
-                ))
-            )
-        )),
+        # 巡检待办 kind 已下线，my-todos 仅维保页可读
+        ("equipment", ("equipment:maintenance",)),
         ("safety", (
             "safety:risk-hazard:hazard-inspection:hazard-inspection-ledger",
             "safety:risk-hazard:ehs-change:ehs-change-apply",
@@ -2440,8 +2462,7 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
         overview,
         scope_adapter="production.dashboard",
     )
-    # The extraction daily report is edited from the production dashboard and
-    # keeps its finer-grained extraction-yield check inside the module API.
+    # Daily reports use the overview page grant and extraction stage scope.
     add(
         "GET",
         "/extraction-daily-reports",
@@ -2977,7 +2998,8 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
         "/pressure/ocr-tasks/{task_id}/submit",
         pressure_page,
         "operate",
-        scope_adapter="production.pressure",
+        "bulk_import",
+        "production.pressure",
     )
     add(
         "PATCH",
@@ -3116,6 +3138,17 @@ PAGE_API_BINDINGS += tuple(
     )
     if binding.method == "POST"
     and binding.route_path == "/api/v1/production/dr/schedule/tasks/{batch_no}/approve"
+    else replace(
+        binding,
+        sensitive_action=None,
+        action_selector=EnumActionSelector(
+            "status", (("approved", "approve"), ("rejected", "reject")),
+        ),
+    )
+    if binding.method == "PATCH" and binding.route_path in {
+        "/api/v1/production/pressure/records/{record_id}/audit",
+        "/api/v1/production/pressure/records/batch-audit",
+    }
     else binding
     for binding in _production_api_bindings()
 )
@@ -5827,3 +5860,155 @@ def sensitive_action_for_request(method: str, api_path: str) -> str | None:
     if any(token in path for token in ("/export", "/download-report")):
         return "sensitive_export"
     return None
+
+
+def _energy_ledger_bindings() -> tuple[PageApiBinding, ...]:
+    """Native ledger scope is enforced by task ownership and department queries."""
+    viewing = (
+        "energy:ledger-overview",
+        "energy:reports",
+        "energy:analysis",
+        "energy:data-quality",
+    )
+    entry = ("energy:entry",)
+    settings = ("energy:settings",)
+    reads = viewing + entry + settings
+    rules = [
+        ("GET", "/ledger-options", reads, "query", None, "energy.ledger"),
+        (
+            "GET",
+            "/meter-points",
+            viewing + settings,
+            "query",
+            None,
+            "energy.department",
+        ),
+        (
+            "GET",
+            "/calculation-rules",
+            viewing + settings,
+            "query",
+            None,
+            "energy.department",
+        ),
+        (
+            "POST",
+            "/entry-tasks/generate",
+            entry + settings,
+            "operate",
+            None,
+            "energy.manager",
+        ),
+        ("GET", "/entry-plans", entry + settings, "query", None, "energy.owner"),
+        ("GET", "/entry-tasks", entry + settings, "query", None, "energy.owner"),
+        (
+            "GET",
+            "/entry-tasks/{task_id}",
+            entry + settings,
+            "query",
+            None,
+            "energy.owner",
+        ),
+        (
+            "POST",
+            "/entry-tasks/{task_id}/submit",
+            entry + settings,
+            "operate",
+            None,
+            "energy.owner",
+        ),
+        ("GET", "/reporting", viewing + settings, "query", None, "energy.department"),
+        (
+            "GET",
+            "/reporting/metrics",
+            viewing + settings,
+            "query",
+            None,
+            "energy.department",
+        ),
+        (
+            "GET",
+            "/reporting/datasets",
+            viewing + settings,
+            "query",
+            None,
+            "energy.department",
+        ),
+        (
+            "GET",
+            "/reporting/workbook",
+            viewing + settings,
+            "query",
+            None,
+            "energy.department",
+        ),
+        (
+            "GET",
+            "/reporting/workbook/export",
+            ("energy:reports",),
+            "query",
+            None,
+            "energy.department",
+        ),
+        (
+            "GET",
+            "/reporting/export",
+            ("energy:reports", "energy:analysis"),
+            "query",
+            None,
+            "energy.department",
+        ),
+        (
+            "GET",
+            "/reporting/trace/{fact_id}",
+            viewing + settings,
+            "query",
+            None,
+            "energy.department",
+        ),
+        (
+            "GET",
+            "/data-quality",
+            ("energy:data-quality",),
+            "query",
+            None,
+            "energy.department",
+        ),
+        (
+            "GET",
+            "/ledger-history/{kind}/{entity_id}",
+            entry + settings,
+            "query",
+            None,
+            "energy.owner",
+        ),
+    ]
+    rules.extend(
+        (method, path, settings, permission, None, "energy.manager")
+        for method, path, permission in (
+            ("POST", "/meter-points", "operate"),
+            ("PUT", "/meter-points/{record_id}", "operate"),
+            ("POST", "/calculation-rules", "operate"),
+            ("PUT", "/calculation-rules/{record_id}", "operate"),
+            ("POST", "/calculation-rules/trial", "operate"),
+            ("POST", "/entry-plans", "operate"),
+            ("PUT", "/entry-plans/{record_id}", "operate"),
+            ("POST", "/adjustments", "operate"),
+            ("GET", "/period-locks", "query"),
+            ("PUT", "/period-locks/{month}", "operate"),
+            ("GET", "/bot-config", "query"),
+            ("PUT", "/bot-config", "operate"),
+            ("GET", "/notification-runs", "query"),
+            ("POST", "/notification-runs/{record_id}/retry", "operate"),
+            ("POST", "/imports/preview", "operate"),
+            ("GET", "/imports/snapshot-options", "query"),
+            ("POST", "/imports/from-snapshot", "operate"),
+            ("POST", "/imports/{batch_id}/confirm", "operate"),
+            ("POST", "/imports/{batch_id}/draft-config", "operate"),
+            ("POST", "/reporting/rebuild", "operate"),
+        )
+    )
+    return _module_api_bindings("energy", rules)
+
+
+PAGE_API_BINDINGS += _energy_ledger_bindings()

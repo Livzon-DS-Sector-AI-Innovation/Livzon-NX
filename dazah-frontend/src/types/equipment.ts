@@ -514,11 +514,6 @@ export interface StockInboundInput {
   remark?: string
 }
 
-export interface StockAdjustInput {
-  new_qty: number
-  remark?: string
-}
-
 export interface StockWarning {
   spare_part_id: string
   code: string
@@ -594,22 +589,7 @@ export interface MaintenancePlanListResponse {
   page_size: number
 }
 
-// ==================== 巡检模板 ====================
-export interface InspectionTemplate {
-  id: string
-  name: string
-  description: string | null
-  equipment_category_id: string | null
-  is_active: boolean
-  items_count: number
-  created_at: string
-  updated_at: string
-  created_by: string | null
-  updated_by: string | null
-  equipment_category_name?: string
-  items?: InspectionTemplateItem[]
-}
-
+// ==================== 巡检（工单巡检结果提交） ====================
 export interface InspectionTemplateItem {
   id: string
   template_id: string
@@ -620,52 +600,6 @@ export interface InspectionTemplateItem {
   sort_order: number
   created_at: string
   updated_at: string
-}
-
-export interface CreateInspectionTemplateInput {
-  name: string
-  description?: string
-  equipment_category_id?: string
-  is_active?: boolean
-  items?: CreateInspectionTemplateItemInput[]
-}
-
-export interface UpdateInspectionTemplateInput {
-  name?: string
-  description?: string
-  equipment_category_id?: string
-  is_active?: boolean
-}
-
-export interface CreateInspectionTemplateItemInput {
-  item_name: string
-  item_description?: string
-  expected_result?: string
-  check_method?: string
-  sort_order?: number
-}
-
-export interface UpdateInspectionTemplateItemInput {
-  item_name?: string
-  item_description?: string
-  expected_result?: string
-  check_method?: string
-  sort_order?: number
-}
-
-export interface InspectionTemplateFilters {
-  equipment_category_id?: string
-  is_active?: boolean
-  keyword?: string
-  page?: number
-  page_size?: number
-}
-
-export interface InspectionTemplateListResponse {
-  items: InspectionTemplate[]
-  total: number
-  page: number
-  page_size: number
 }
 
 export interface InspectionRecordItem {

@@ -13,9 +13,10 @@ import copy
 from pathlib import Path
 from typing import Any
 
-import openpyxl  # type: ignore[import-untyped]
-from openpyxl.styles import Font  # type: ignore[import-untyped]
-from openpyxl.utils import get_column_letter  # type: ignore[import-untyped]
+import openpyxl
+from openpyxl.styles import Font
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.properties import PageSetupProperties
 
 from .config import TemplateConfig
 
@@ -156,7 +157,7 @@ class ExcelTemplateFiller:
         ws.page_setup.fitToWidth = ps.fit_to_width
         ws.page_setup.fitToHeight = ps.fit_to_height
         ws.sheet_properties.pageSetUpPr = (
-            openpyxl.worksheet.properties.PageSetupProperties(fitToPage=True)
+            PageSetupProperties(fitToPage=True)
         )
 
     @staticmethod

@@ -16,8 +16,8 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import UploadFile
-from openpyxl import load_workbook  # type: ignore[import-untyped]
-from openpyxl.cell.cell import MergedCell  # type: ignore[import-untyped]
+from openpyxl import load_workbook
+from openpyxl.cell.cell import MergedCell
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 

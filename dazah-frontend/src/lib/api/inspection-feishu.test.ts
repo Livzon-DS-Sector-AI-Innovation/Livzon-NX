@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   fetchInspectionFeishuConfig,
+  fetchInspectionFeishuConfigList,
   fetchInspectionFeishuDevices,
   fetchInspectionFeishuRecords,
   fetchInspectionFeishuSyncStatus,
@@ -188,5 +189,50 @@ describe('triggerInspectionFeishuSync', () => {
     await expect(triggerInspectionFeishuSync('201-1')).rejects.toThrow(
       '巡检飞书镜像同步未配置',
     )
+  })
+})
+
+describe('fetchInspectionFeishuConfigList', () => {
+  it('requests the config-list endpoint and returns masked details', async () => {
+    const fetchMock = vi.fn((_url: unknown) =>
+      jsonResponse({
+        code: 200,
+        data: [
+          {
+            workshop_code: '101-2',
+            app_id: 'cli_ws',
+            app_secret_masked: 'cli_ws****',
+            app_secret_configured: true,
+            app_token: 'bascn_1012',
+            base_url: 'https://example.feishu.cn/base/bascn_1012',
+            today_table_id: 'tbl_today',
+            history_table_id: 'tbl_history',
+            device_table_id: 'tbl_devices',
+            is_enabled: true,
+            source: 'database',
+            enabled: true,
+            last_test_status: 'success',
+            last_test_error: null,
+            last_tested_at: null,
+          },
+        ],
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const details = await fetchInspectionFeishuConfigList()
+    expect(fetchMock).toHaveBeenCalledWith(`${BASE}/config-list`)
+    expect(details).toHaveLength(1)
+    expect(details[0].workshop_code).toBe('101-2')
+    expect(details[0].base_url).toBe('https://example.feishu.cn/base/bascn_1012')
+    // Secret 只回掩码状态
+    expect(details[0].app_secret_configured).toBe(true)
+    expect(details[0].app_secret_masked).toBe('cli_ws****')
+  })
+
+  it('falls back to an empty list when the endpoint returns no data', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ code: 200, data: null })))
+    const details = await fetchInspectionFeishuConfigList()
+    expect(details).toEqual([])
   })
 })

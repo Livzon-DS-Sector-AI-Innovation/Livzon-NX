@@ -28,6 +28,7 @@ from app.platform.identity.data_scope import (
     current_page_visible_sections,
 )
 from app.platform.identity.deps import CurrentUser
+from app.platform.identity.page_permissions import PagePermissionService
 from app.shared.module_api import create_module_router
 from app.shared.module_registry import MODULES_BY_CODE
 
@@ -45,7 +46,7 @@ _ALLOWED_MIMES = {
 _MAX_UPLOAD_BYTES = 1024 * 1024  # 1MB（排产表通常几十 KB，与前端上传提示同步）
 _UPLOAD_SUB_DIR = "schedule_excel"
 # 以新文件修正历史列（覆盖冻结规则）所需的细粒度权限
-SCHEDULE_ARCHIVE_PERMISSION = "production:schedule-archive"
+SCHEDULE_ARCHIVE_ACTION = "schedule-archive"
 
 
 class ScheduleConstraintBody(BaseModel):
@@ -114,17 +115,17 @@ async def upload_schedule_excel(
     if allow_history_fix:
         if current_user is None:
             raise HTTPException(
-                status_code=403, detail="无排产存档管理权限，不能应用历史修正"
+                status_code=403, detail="未获得排产历史修正授权"
             )
-        from app.platform.identity.rbac import resolve_user_permissions
-
-        perms = await resolve_user_permissions(db, current_user.id)
-        if (
-            "*" not in perms
-            and SCHEDULE_ARCHIVE_PERMISSION not in perms
+        grants = await PagePermissionService().effective_grants(db, user=current_user)
+        if not any(
+            grant.page_key == "production:plan:scheduling"
+            and "operate" in grant.permissions
+            and SCHEDULE_ARCHIVE_ACTION in grant.sensitive_actions
+            for grant in grants
         ):
             raise HTTPException(
-                status_code=403, detail="无排产存档管理权限，不能应用历史修正"
+                status_code=403, detail="未获得排产历史修正授权"
             )
     filename = validate_upload_metadata(
         file,

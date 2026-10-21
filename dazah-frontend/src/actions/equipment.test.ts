@@ -9,6 +9,7 @@ vi.mock('@/lib/auth', () => ({ getAuthHeaders: mocks.getAuthHeaders }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 
 import {
+  consumeMaterials,
   createCategory,
   createEquipment,
   deleteCategory,
@@ -18,6 +19,7 @@ import {
   fetchEquipmentStatistics,
   fetchInspectionTodaySummaries,
   fetchMaintenancePlans,
+  fetchOverdueMaintenancePlans,
   fetchSpareParts,
   fetchStockWarnings,
   fetchWorkOrders,
@@ -187,5 +189,36 @@ describe('equipment workshop scoping actions', () => {
 
     vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ code: 200, data: null })))
     await expect(fetchInspectionTodaySummaries()).resolves.toEqual([])
+  })
+})
+
+describe('equipment actions 补充覆盖', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('consumes materials against the work order materials endpoint', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const items = [{ spare_part_id: 'sp-1', quantity: 2 }]
+    await consumeMaterials('wo-1', { items })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/equipment/maintenance/work-orders/wo-1/materials`,
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ items }) }),
+    )
+  })
+
+  it('fetches overdue maintenance plans from the maintenance plans path', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await fetchOverdueMaintenancePlans()
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/equipment/maintenance/plans/overdue`,
+      expect.anything(),
+    )
+    expect(result).toEqual([])
   })
 })

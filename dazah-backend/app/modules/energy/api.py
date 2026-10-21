@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.exceptions import AppException
 from app.core.response import paginated_response, success_response
+from app.modules.energy.ledger_api import router as ledger_router
 from app.modules.energy.models import EnergyFeishuPageBinding
 from app.modules.energy.schemas import (
     EnergyApiResponse,
@@ -45,6 +46,8 @@ from app.shared.module_api import create_module_router
 from app.shared.module_registry import MODULES_BY_CODE
 
 router = create_module_router(MODULES_BY_CODE["energy"])
+
+router.include_router(ledger_router)
 
 
 def _validate_page_key(page_key: str) -> None:

@@ -2,6 +2,8 @@
 export { EquipmentPage } from './EquipmentPage'
 export { StatsCards } from './StatsCards'
 export { StatsDashboard } from './StatsDashboard'
+export { WorkshopNavBlocks } from './WorkshopNavBlocks'
+export { ModuleTabs } from './ModuleTabs'
 export { EquipmentTable } from './EquipmentTable'
 export { EquipmentDrawer } from './EquipmentDrawer'
 export { EquipmentDetailDrawer } from './EquipmentDetailDrawer'
@@ -35,10 +37,6 @@ export { MaintenancePlanTable } from './MaintenancePlanTable'
 export { MaintenancePlanDrawer } from './MaintenancePlanDrawer'
 
 // inspection template components
-export { PersonnelSelect } from './PersonnelSelect'
-export { InspectionTemplateTable } from './InspectionTemplateTable'
-export { InspectionTemplateDrawer } from './InspectionTemplateDrawer'
-export { InspectionItemDrawer } from './InspectionItemDrawer'
 export { InspectionCompleteDrawer } from './InspectionCompleteDrawer'
 
 // repair drawer

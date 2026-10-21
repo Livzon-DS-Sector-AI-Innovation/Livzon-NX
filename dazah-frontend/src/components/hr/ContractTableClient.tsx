@@ -260,7 +260,7 @@ export default function ContractTableClient({ initialData, initialTotal }: Contr
 
       <Drawer title="合同详情" open={detailOpen} onClose={() => setDetailOpen(false)} size="large">
         {selected && (
-          <Descriptions column={2} size="small" bordered>
+          <Descriptions column={{ xs: 1, sm: 2 }} size="small" bordered>
             <Descriptions.Item label="工号">{selected.employee_number}</Descriptions.Item>
             <Descriptions.Item label="姓名">{selected.name}</Descriptions.Item>
             <Descriptions.Item label="性别">{selected.gender || '-'}</Descriptions.Item>
@@ -407,10 +407,12 @@ export default function ContractTableClient({ initialData, initialTotal }: Contr
         </>} />
         <Form form={renewForm} layout="vertical">
           <Form.Item name="start_date" label="续签开始日期" rules={[{ required: true, message: '请选择开始日期' }]}>
-            <DatePicker style={{ width: '100%' }} placement="bottomLeft" getPopupContainer={(node) => node.parentNode as HTMLElement} />
+            <DatePicker style={{ width: '100%' }} placement="bottomLeft"
+              popupAlign={{ offset: [0, 0], overflow: { adjustX: true, adjustY: true, shiftX: true, shiftY: true }, htmlRegion: 'visible' }} />
           </Form.Item>
           <Form.Item name="end_date" label="续签截止日期" rules={[{ required: true, message: '请选择截止日期' }]}>
-            <DatePicker style={{ width: '100%' }} placement="bottomLeft" getPopupContainer={(node) => node.parentNode as HTMLElement} />
+            <DatePicker style={{ width: '100%' }} placement="bottomLeft"
+              popupAlign={{ offset: [0, 0], overflow: { adjustX: true, adjustY: true, shiftX: true, shiftY: true }, htmlRegion: 'visible' }} />
           </Form.Item>
         </Form>
       </Modal>

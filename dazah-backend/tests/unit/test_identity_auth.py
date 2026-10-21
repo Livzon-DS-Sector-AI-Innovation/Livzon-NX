@@ -1,3 +1,5 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace as _SimpleNamespace
 from typing import Any, cast
@@ -32,6 +34,13 @@ def isolate_login_rate_limit(monkeypatch: Any) -> None:
         "app.platform.identity.permission_middleware.check_local_account_rate_limit",
         AsyncMock(return_value=True),
     )
+
+    @asynccontextmanager
+    async def admitted(*args: Any, **kwargs: Any) -> AsyncIterator[None]:
+        yield
+
+    # Test real auth routes without the development Redis maintenance state.
+    monkeypatch.setattr("app.core.maintenance_middleware.business_activity", admitted)
 
 
 def make_request(authorization: str | None = None) -> Request:
@@ -473,6 +482,59 @@ async def test_feishu_callback_success_redirects_token(monkeypatch: Any) -> None
     assert response.headers["location"] == "http://localhost:3000/warehouse"
     assert "auth_token=jwt-token" in response.headers["set-cookie"]
     assert "token=" not in response.headers["location"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "failure", ["access_denied", "callback_failed", "missing_code"]
+)
+async def test_feishu_callback_retry_preserves_validated_energy_task(
+    monkeypatch: Any,
+    failure: str,
+) -> None:
+    from unittest.mock import AsyncMock
+    from urllib.parse import parse_qs, urlsplit
+
+    from fastapi import FastAPI
+
+    from app.platform.identity import api, service
+
+    target = "/login/complete?next=%2Fenergy%2Fentry%3Ftask%3Dtask-1%26source%3Dfeishu"
+    state = generate_state_token(target)
+    monkeypatch.setattr(
+        service,
+        "handle_oauth_callback",
+        AsyncMock(side_effect=RuntimeError("synthetic OAuth failure")),
+    )
+    auth_app = FastAPI()
+    auth_app.include_router(api.auth_router, prefix="/api/v1/identity")
+    auth_app.dependency_overrides[get_settings] = make_settings
+    auth_app.dependency_overrides[get_db] = fake_get_db
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=auth_app), base_url="http://test"
+        ) as client:
+            response = await client.get(
+                "/api/v1/identity/auth/callback",
+                params={
+                    "state": state,
+                    **(
+                        {"error": "access_denied"}
+                        if failure == "access_denied"
+                        else {"code": "test-code"}
+                        if failure == "callback_failed"
+                        else {}
+                    ),
+                },
+                cookies={"feishu_oauth_state": state},
+                follow_redirects=False,
+            )
+    finally:
+        auth_app.dependency_overrides.clear()
+    assert response.status_code == 302
+    query = parse_qs(urlsplit(response.headers["location"]).query)
+    assert query["error"] == [failure]
+    assert query["next"] == ["/energy/entry?task=task-1&source=feishu"]
 
 
 @pytest.mark.anyio

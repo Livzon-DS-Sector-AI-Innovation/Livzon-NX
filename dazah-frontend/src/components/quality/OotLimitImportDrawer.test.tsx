@@ -92,6 +92,19 @@ afterEach(() => {
 })
 
 describe('OotLimitImportDrawer', () => {
+  it('uses a portal drawer and closes without importing or retaining the selected file', () => {
+    const props = renderDrawer()
+    selectFiles(['待预览.docx'])
+    expect(container.querySelector('.ant-drawer')).toBeNull()
+    expect(document.querySelector('.ant-drawer')).not.toBeNull()
+    act(() => document.querySelector<HTMLButtonElement>('.ant-drawer-close')!.click())
+    expect(props.onClose).toHaveBeenCalledOnce()
+    expect(props.onSuccess).not.toHaveBeenCalled()
+    expect(mocks.previewOotLimitImport).not.toHaveBeenCalled()
+    expect(mocks.confirmOotLimitImport).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('点击选择 Word 告知单')
+  })
+
   it('rejects non-docx files with a clear message', async () => {
     renderDrawer()
     selectFiles(['说明.pdf', '告知单.docx'])

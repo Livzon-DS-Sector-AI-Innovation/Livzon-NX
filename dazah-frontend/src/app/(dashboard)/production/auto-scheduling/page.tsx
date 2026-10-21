@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   App,
   Button,
@@ -9,7 +9,6 @@ import {
   DatePicker,
   InputNumber,
   Modal,
-  Popconfirm,
   Row,
   Select,
   Space,
@@ -71,7 +70,7 @@ function weekday(value: string) {
 }
 
 export default function AutoSchedulingPage() {
-  const { authorizationKey, canAccess, canOperate, canExport } =
+  const { authorizationKey, canAccess, canOperate, canExport, canDelete } =
     useProductionPermissions(PRODUCTION_PAGE_KEYS.autoScheduling)
   if (!canAccess) {
     return (
@@ -85,16 +84,18 @@ export default function AutoSchedulingPage() {
     )
   }
   return (
-    <AutoSchedulingContent key={authorizationKey} canOperate={canOperate} canExport={canExport} />
+    <AutoSchedulingContent key={authorizationKey} canOperate={canOperate} canExport={canExport} canDelete={canDelete} />
   )
 }
 
 function AutoSchedulingContent({
   canOperate,
   canExport,
+  canDelete,
 }: {
   canOperate: boolean
   canExport: boolean
+  canDelete: boolean
 }) {
   const { message } = App.useApp()
   // 周期缺省 = 下一扎帐周期（后端解析）；生成后回显实际周期
@@ -112,6 +113,9 @@ function AutoSchedulingContent({
   const [records, setRecords] = useState<ScheduleDraftRecord[]>([])
   const [recordsLoading, setRecordsLoading] = useState(false)
   const [viewingRecord, setViewingRecord] = useState<ScheduleDraftRecord | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<ScheduleDraftRecord | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const deletePending = useRef(false)
 
   const params: ScheduleDraftParams = useMemo(
     () => ({
@@ -243,24 +247,32 @@ function AutoSchedulingContent({
   )
 
   const removeRecord = useCallback(
-    async (id: string) => {
+    async () => {
+      if (!canDelete || !deleteTarget || deletePending.current) return
+      deletePending.current = true
+      setDeleting(true)
       try {
-        const res = await deleteScheduleDraftRecord(id)
+        const res = await deleteScheduleDraftRecord(deleteTarget.id)
         if (res.code === 200) {
           message.success('草稿记录已删除')
+          setDeleteTarget(null)
           await reloadRecords()
         } else {
           message.error(res.message || '删除失败', 5)
         }
       } catch {
         message.error('删除请求失败', 5)
+      } finally {
+        deletePending.current = false
+        setDeleting(false)
       }
     },
-    [message, reloadRecords],
+    [canDelete, deleteTarget, message, reloadRecords],
   )
 
   const downloadRecordFile = useCallback(
     async (record: ScheduleDraftRecord) => {
+      if (!canExport) return
       try {
         const file = await downloadScheduleDraftRecordFile(record.id)
         if (!file) {
@@ -272,7 +284,7 @@ function AutoSchedulingContent({
         message.error(error instanceof Error ? error.message : '下载失败', 5)
       }
     },
-    [message],
+    [canExport, message],
   )
 
   const recordColumns: ColumnsType<ScheduleDraftRecord> = [
@@ -330,7 +342,7 @@ function AutoSchedulingContent({
       key: 'actions',
       width: 260,
       render: (_: unknown, record: ScheduleDraftRecord) => (
-        <Space size={4}>
+        <Space size={4} wrap>
           <Button
             size="small"
             icon={<EyeOutlined />}
@@ -338,13 +350,13 @@ function AutoSchedulingContent({
           >
             查看
           </Button>
-          <Button
+          {canExport && <Button
             size="small"
             icon={<DownloadOutlined />}
             onClick={() => void downloadRecordFile(record)}
           >
             下载
-          </Button>
+          </Button>}
           <Button
             size="small"
             icon={<ImportOutlined />}
@@ -352,17 +364,14 @@ function AutoSchedulingContent({
           >
             载入参数
           </Button>
-          {canOperate && (
-            <Popconfirm
-              title="删除该草稿记录？"
-              description="仅删除工作台历史，不影响已上传的排产存档。"
-              okText="删除"
-              cancelText="取消"
-              okButtonProps={{ danger: true }}
-              onConfirm={() => void removeRecord(record.id)}
-            >
-              <Button size="small" danger icon={<DeleteOutlined />} />
-            </Popconfirm>
+          {canDelete && (
+            <Button
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              aria-label="删除草稿记录"
+              onClick={() => setDeleteTarget(record)}
+            />
           )}
         </Space>
       ),
@@ -718,9 +727,34 @@ function AutoSchedulingContent({
           dataSource={records}
           pagination={{ pageSize: 8, showSizeChanger: false }}
           columns={recordColumns}
+          scroll={{ x: 960 }}
           locale={{ emptyText: '暂无生成记录' }}
         />
       </Card>
+
+      <Modal
+        open={deleteTarget !== null && canDelete}
+        title="删除该草稿记录？"
+        centered
+        width={480}
+        style={{ maxWidth: 'calc(100vw - 32px)' }}
+        destroyOnHidden
+        okText="删除"
+        cancelText="取消"
+        okButtonProps={{ danger: true }}
+        confirmLoading={deleting}
+        cancelButtonProps={{ disabled: deleting }}
+        closable={!deleting}
+        mask={{ closable: !deleting }}
+        keyboard={!deleting}
+        onOk={() => void removeRecord()}
+        onCancel={() => { if (!deletePending.current) setDeleteTarget(null) }}
+      >
+        <p className="mb-2 break-words">
+          草稿周期：{deleteTarget?.summary?.period?.start ?? '—'}～{deleteTarget?.summary?.period?.end ?? '—'}
+        </p>
+        <p>仅删除工作台历史，不影响已上传的排产存档。</p>
+      </Modal>
 
       {/* 历史详情：当时的参数、摘要、校验与逐日方案快照 */}
       <Modal

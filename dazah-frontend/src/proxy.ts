@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 import { getServerApiBaseUrl } from '@/lib/server-api'
-import { getModuleByKey, getPageKeyByPath, getAuthorizedPageMenus, getAuthorizedDirectoryEntryPath } from '@/lib/menu-config'
+import { getModuleByKey, getPageKeyByPath, getAuthorizedPageMenus, getAuthorizedDirectoryEntryPath, expandEquipmentPagePermissions } from '@/lib/menu-config'
 import type { SubMenuItem } from '@/lib/menu-config'
+import { isEquipmentModule } from '@/lib/equipment-page-permissions'
 import type { User } from '@/types/user'
 import { isSystemAdministrator, isSystemSettingsPath } from '@/lib/administrator-role'
 
@@ -81,7 +82,11 @@ export async function proxy(request: NextRequest) {
       const response = await fetch(`${getServerApiBaseUrl()}/api/v1/identity/me`, {
         headers: authHeaders, cache: 'no-store', signal: AbortSignal.timeout(10000),
       })
-      if (response.status === 401) return NextResponse.redirect(new URL('/login', request.url))
+      if (response.status === 401) {
+        const login = new URL('/login', request.url)
+        login.searchParams.set('next', request.nextUrl.pathname + request.nextUrl.search)
+        return NextResponse.redirect(login)
+      }
       if (!response.ok) return denied('暂时无法验证页面权限，请稍后重试。', 503)
       const payload = await response.json() as { data?: User }
       user = payload.data
@@ -96,7 +101,14 @@ export async function proxy(request: NextRequest) {
     }
     if (!currentModule) return NextResponse.next({ request: { headers: requestHeaders } })
     if (user.role !== 'admin') {
-      if (request.nextUrl.pathname.replace(/\/$/, '') === currentModule.path) {
+      // 设备统一工作台（/equipment）由 ?module= 决定具体功能页 key：
+      // 带有效模块参数时逐模块校验授权，不带参数时按模块根入口逻辑放行
+      const consoleModuleParam = currentModule.moduleCode === 'equipment'
+        && request.nextUrl.pathname === '/equipment'
+        ? request.nextUrl.searchParams.get('module')
+        : null
+      const hasConsoleModuleParam = isEquipmentModule(consoleModuleParam)
+      if (!hasConsoleModuleParam && request.nextUrl.pathname.replace(/\/$/, '') === currentModule.path) {
         const visible = getAuthorizedPageMenus(user.module_codes, user.page_permissions)
           .find((item) => item.moduleCode === currentModule.moduleCode)
         if (visible && hasModuleLandingEntry(visible.children, currentModule.path)) {
@@ -112,8 +124,12 @@ export async function proxy(request: NextRequest) {
           return NextResponse.redirect(new URL(entry, request.url))
         }
       }
-      const key = getPageKeyByPath(request.nextUrl.pathname)
-      const grant = user.page_permissions?.find((item) => item.page_key === key)
+      const key = getPageKeyByPath(
+        hasConsoleModuleParam ? `/equipment/${consoleModuleParam}` : request.nextUrl.pathname,
+      )
+      // 展开旧「车间×功能」叶授权后再查找，避免投影授权被误拒
+      const grant = expandEquipmentPagePermissions(user.page_permissions)
+        .find((item) => item.page_key === key)
       if (!key || !grant?.permissions?.includes('access')) return denied('未获得当前菜单页面的访问权限。')
       if (!grant.permissions.includes('query')) return denied('可以访问此页面，但尚未获得查询数据权限。请联系管理员授权。')
     }

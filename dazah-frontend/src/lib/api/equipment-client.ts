@@ -9,7 +9,6 @@ import {
   CalibrationRecordFilters, CalibrationRecordListResponse,
   SparePartFilters, SparePartListResponse, SparePart, StockWarning,
   MaintenancePlanFilters, MaintenancePlanListResponse, MaintenancePlan,
-  InspectionTemplateFilters, InspectionTemplateListResponse, InspectionTemplate,
   MaterialRecord,
   ClaimTimeoutConfig, Maintainer, WorkOrderImage,
 } from '@/types/equipment'
@@ -275,41 +274,9 @@ export async function fetchOverdueMaintenancePlansClient(days?: number): Promise
   return result.data || []
 }
 
-// ==================== 巡检模板 ====================
-export async function fetchInspectionTemplatesClient(params: InspectionTemplateFilters = {}): Promise<InspectionTemplateListResponse> {
-  const searchParams = new URLSearchParams()
-  if (params.equipment_category_id) searchParams.append('equipment_category_id', params.equipment_category_id)
-  if (params.is_active !== undefined) searchParams.append('is_active', params.is_active.toString())
-  if (params.keyword) searchParams.append('keyword', params.keyword)
-  if (params.page && params.page > 0) searchParams.append('page', params.page.toString())
-  if (params.page_size && params.page_size > 0) searchParams.append('page_size', params.page_size.toString())
-
-  const queryString = searchParams.toString()
-  const url = queryString
-    ? `/api/v1/equipment/maintenance/inspection-templates/?${queryString}`
-    : `/api/v1/equipment/maintenance/inspection-templates/`
-
-  const response = await fetch(url)
-  if (!response.ok) throw new Error(`请求失败: ${response.status} ${response.statusText}`)
-  const result = await response.json()
-  return {
-    items: result.data || [],
-    total: result.meta?.total || 0,
-    page: result.meta?.page || 1,
-    page_size: result.meta?.page_size || 20,
-  }
-}
-
-export async function fetchInspectionTemplateByIdClient(id: string): Promise<InspectionTemplate> {
-  const response = await fetch(`/api/v1/equipment/maintenance/inspection-templates/${id}`)
-  if (!response.ok) throw new Error(`请求失败: ${response.status} ${response.statusText}`)
-  const result = await response.json()
-  return result.data
-}
-
 // ==================== 工单物料 ====================
 export async function fetchWorkOrderMaterialsClient(workOrderId: string): Promise<MaterialRecord[]> {
-  const response = await fetch(`/api/v1/equipment/maintenance/work-orders${workOrderId}/materials`)
+  const response = await fetch(`/api/v1/equipment/maintenance/work-orders/${workOrderId}/materials`)
   if (!response.ok) throw new Error(`请求失败: ${response.status} ${response.statusText}`)
   const result = await response.json()
   return result.data || []

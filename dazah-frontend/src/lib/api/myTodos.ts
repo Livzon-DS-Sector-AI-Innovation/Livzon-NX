@@ -18,13 +18,24 @@ export interface TodoGroup {
   error?: string
 }
 
-const businessTodoPages: Record<string, { moduleCode: string; kind: string }> = {
+const businessTodoPages: Record<string, {
+  moduleCode: string
+  kind: string
+  /** 聚合入口（如设备统一工作台）按具体功能页 key 校验授权 */
+  pageKey?: string
+  /** 待办点击跳转地址与菜单入口不同时显式指定 */
+  todoPath?: string
+}> = {
   '/quality/deviations/ledger': { moduleCode: 'quality', kind: 'deviations' },
   '/quality/capas/ledger': { moduleCode: 'quality', kind: 'capas' },
   '/quality/capas/plans': { moduleCode: 'quality', kind: 'capa-plans' },
   '/quality/change/action-plans': { moduleCode: 'quality', kind: 'change-plans' },
-  '/equipment/maintenance': { moduleCode: 'equipment', kind: 'maintenance' },
-  '/equipment/inspection': { moduleCode: 'equipment', kind: 'inspection' },
+  '/equipment': {
+    moduleCode: 'equipment',
+    kind: 'maintenance',
+    pageKey: 'equipment:maintenance',
+    todoPath: '/equipment?module=maintenance',
+  },
   '/safety/hazard-ledger': { moduleCode: 'safety', kind: 'hazards' },
   '/safety/accident': { moduleCode: 'safety', kind: 'accidents' },
   '/safety/check': { moduleCode: 'safety', kind: 'checks' },
@@ -44,20 +55,20 @@ export function getTodoSources(user: User, modules: ModuleMenu[]): TodoSource[] 
     for (const item of items) {
       if (item.disabled || (item.adminOnly && user.role !== 'admin')) continue
       const key = getPageKeyByPath(item.path)
-      const grant = grants.find((entry) => entry.page_key === key)
+      const business = businessTodoPages[item.path]
+      const grantKey = business?.pageKey ?? key
+      const grant = grants.find((entry) => entry.page_key === grantKey)
       const canOperate = user.role === 'admin' ||
         ['access', 'query', 'operate'].every((permission) => grant?.permissions?.some((value) => value === permission))
       const canApprove = user.role === 'admin' || Boolean(grant?.sensitive_actions?.includes('approve'))
-      const equipmentKind = /^\/equipment\/(maintenance|inspection)\/[0-9]{3}(?:-[0-9])?$/.exec(item.path)?.[1]
-      const business = businessTodoPages[item.path] || (equipmentKind
-        ? { moduleCode: 'equipment', kind: equipmentKind } : undefined)
       const approval = item.path === '/hr/position-transfer'
-      if (key && business && canOperate && (!approval || canApprove)) {
+      if (grantKey && business && canOperate && (!approval || canApprove)) {
         const params = new URLSearchParams({ page: '1', page_size: '5' })
         params.set('kind', business.kind)
-        sources.set(key, {
-          key, label: business?.kind === 'validation-audits' ? '注册管理 / 验证文件审核' : [...labels, item.label].join(' / '),
-          path: business?.kind === 'validation-audits' ? '/registration/validation-audit' : item.path,
+        sources.set(grantKey, {
+          key: grantKey, label: business?.kind === 'validation-audits' ? '注册管理 / 验证文件审核' : [...labels, item.label].join(' / '),
+          path: business?.todoPath
+            ?? (business?.kind === 'validation-audits' ? '/registration/validation-audit' : item.path),
           kind: 'business',
           apiPath: `/api/v1/${business.moduleCode}/my-todos?${params}`,
         })

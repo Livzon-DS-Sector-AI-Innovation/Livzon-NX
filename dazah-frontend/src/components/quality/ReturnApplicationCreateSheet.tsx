@@ -47,18 +47,20 @@ interface ReturnApplicationCreateSheetProps {
 }
 
 const outerStyle: CSSProperties = {
-  border: '1px solid #1f1f1f',
-  background: '#fff',
+  border: '1px solid var(--color-hairline)',
+  background: 'var(--color-canvas)',
+  overflowX: 'auto',
 }
 
 const tableStyle: CSSProperties = {
   width: '100%',
+  minWidth: 860,
   borderCollapse: 'collapse',
   tableLayout: 'fixed',
 }
 
 const cellStyle: CSSProperties = {
-  border: '1px solid #1f1f1f',
+  border: '1px solid var(--color-hairline)',
   padding: 6,
   fontSize: 12,
   verticalAlign: 'middle',
@@ -94,7 +96,6 @@ function buildSelect(searchPlaceholder: string, options: ContactOption[]) {
       options={options}
       optionFilterProp="label"
       style={{ width: '100%' }}
-      getPopupContainer={(triggerNode) => triggerNode.parentElement || document.body}
     />
   )
 }
@@ -258,7 +259,7 @@ export default function ReturnApplicationCreateSheet({
                     autoSize={{ minRows: 7, maxRows: 7 }}
                   />
                 </Form.Item>
-                <div style={{ borderTop: '1px solid #1f1f1f', padding: '8px 12px' }}>
+                <div style={{ borderTop: '1px solid var(--color-hairline)', padding: '8px 12px' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '96px 1fr 88px 170px', gap: 8, alignItems: 'center' }}>
                     <span style={{ fontSize: 12, fontWeight: 600 }}>签名/日期</span>
                     <Form.Item name="applicant" style={noMarginItemStyle}>
@@ -283,7 +284,7 @@ export default function ReturnApplicationCreateSheet({
                     autoSize={{ minRows: 5, maxRows: 5 }}
                   />
                 </Form.Item>
-                <div style={{ borderTop: '1px solid #1f1f1f', padding: '8px 12px' }}>
+                <div style={{ borderTop: '1px solid var(--color-hairline)', padding: '8px 12px' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '96px 1fr 88px 170px', gap: 8, alignItems: 'center' }}>
                     <span style={{ fontSize: 12, fontWeight: 600 }}>签名/日期</span>
                     <Form.Item name="qa_head" style={noMarginItemStyle}>
@@ -314,7 +315,7 @@ export default function ReturnApplicationCreateSheet({
                     autoSize={{ minRows: 4, maxRows: 4 }}
                   />
                 </Form.Item>
-                <div style={{ borderTop: '1px solid #1f1f1f', padding: '8px 12px' }}>
+                <div style={{ borderTop: '1px solid var(--color-hairline)', padding: '8px 12px' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '96px 1fr 88px 170px', gap: 8, alignItems: 'center' }}>
                     <span style={{ fontSize: 12, fontWeight: 600 }}>签名/日期</span>
                     <Form.Item name="quality_manager" style={noMarginItemStyle}>
@@ -332,7 +333,7 @@ export default function ReturnApplicationCreateSheet({
             <tr>
               <td style={labelCellStyle}>备注</td>
               <td style={textAreaCellStyle} colSpan={6}>
-                <div style={{ padding: '8px 12px', fontSize: 12, color: '#595959' }}>
+                <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--color-slate)' }}>
                   如需补充说明，可填写在上方右侧备注栏；此处保留为单据尾部说明区。
                 </div>
               </td>

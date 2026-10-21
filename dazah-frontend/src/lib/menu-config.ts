@@ -1,4 +1,3 @@
-import { ENERGY_DATA_PAGES } from "./energy-data-pages"
 import { registrationCertificateSheets } from "./registration-certificate"
 import { registrationDeclarationProgressSheets } from "./registration-declaration-progress"
 import { registrationProjectLedgerSheets } from "./registration-project-ledger"
@@ -15,6 +14,8 @@ export interface SubMenuItem {
   adminOnly?: boolean         // 仅系统管理员可见
   permission?: string         // 细粒度权限（仍由后端负责最终鉴权）
   feishuPageKey?: string      // 可绑定飞书只读数据表的稳定页面标识
+  /** 聚合入口：所列页面 key 任一有 access 授权即显示（如设备统一工作台） */
+  anyOfPageKeys?: readonly string[]
   /** localStorage key 读取激活产品集合，用于动态菜单标签 */
   labelStorageKey?: string
   /** 产品 key → 显示名 映射，配合 labelStorageKey 使用 */
@@ -39,7 +40,7 @@ export function getPermissionModuleName(moduleCode: string): string {
     || "未命名模块"
 }
 
-/** 设备管理车间分组：台账/巡检/维护/备件/人员均按车间独立路由与数据。 */
+/** 设备管理车间常量：页面数据隔离与车间切换块使用（菜单已收敛为功能单页）。 */
 export const EQUIPMENT_WORKSHOPS: ReadonlyArray<{ code: string; label: string }> = [
   { code: "101-1", label: "101一车间" },
   { code: "101-2", label: "101二车间" },
@@ -52,25 +53,14 @@ export const EQUIPMENT_WORKSHOPS: ReadonlyArray<{ code: string; label: string }>
   { code: "203", label: "203车间" },
 ]
 
-function equipmentWorkshopMenu(workshopCode: string, label: string): SubMenuItem {
-  const leaf = (pageKey: string, text: string, path: string): SubMenuItem => ({
-    key: `${pageKey}-${workshopCode}`,
-    label: text,
-    path,
-  })
-  return {
-    key: `workshop-${workshopCode}`,
-    label,
-    path: "",
-    children: [
-      leaf("assets", "设备台账", `/equipment/assets/${workshopCode}`),
-      leaf("maintenance", "维护保养", `/equipment/maintenance/${workshopCode}`),
-      leaf("inspection", "设备巡检", `/equipment/inspection/${workshopCode}`),
-      leaf("spare-parts", "备件管理", `/equipment/spare-parts/${workshopCode}`),
-      leaf("personnel", "人员配置", `/equipment/personnel/${workshopCode}`),
-    ],
-  }
-}
+/** 设备统一工作台聚合的功能模块授权 key（菜单 anyOfPageKeys 与深链校验共用） */
+const EQUIPMENT_CONSOLE_MODULE_KEYS = [
+  "equipment:assets",
+  "equipment:maintenance",
+  "equipment:inspection",
+  "equipment:spare-parts",
+  "equipment:personnel",
+] as const
 
 export const moduleMenus: ModuleMenu[] = [
   {
@@ -152,11 +142,18 @@ export const moduleMenus: ModuleMenu[] = [
     label: "设备管理",
     icon: "cog",
     path: "/equipment",
+    // 统一工作台：车间块 + 功能模块 Tab（/equipment?workshop=&module=）；
+    // 模块授权 key（equipment:assets 等）仍是权限实体，入口按任一模块授权显示；
+    // 旧 /equipment/<功能>[/<车间>] 路径重定向到统一工作台
     children: [
-      { key: "stats", label: "设备仪表盘", path: "/equipment/stats" },
-      ...EQUIPMENT_WORKSHOPS.map(({ code, label }) =>
-        equipmentWorkshopMenu(code, label),
-      ),
+      { key: "stats", label: "设备汇总", path: "/equipment/stats" },
+      {
+        key: "console",
+        label: "设备管理",
+        path: "/equipment",
+        anyOfPageKeys: EQUIPMENT_CONSOLE_MODULE_KEYS,
+      },
+      { key: "feishu-config", label: "飞书配置", path: "/equipment/feishu-config" },
     ],
   },
   {
@@ -166,14 +163,18 @@ export const moduleMenus: ModuleMenu[] = [
     icon: "bolt",
     path: "/energy",
     children: [
-      { key: "overview", label: "能源总览", path: "/energy" },
-      ...ENERGY_DATA_PAGES.map((page) => ({
-        key: page.key,
-        label: page.label,
-        path: `/energy/${page.slug}`,
-        feishuPageKey: page.pageKey,
-      })),
-      { key: "feishu-config", label: "飞书配置", path: "/energy/feishu-config", placement: "bottom" },
+      { key: "ledger-overview", label: "能源总览", path: "/energy", feishuPageKey: "" },
+      { key: "entry", label: "数据填报", path: "/energy/entry", feishuPageKey: "" },
+      { key: "reports", label: "能源报表", path: "/energy/reports", feishuPageKey: "" },
+      { key: "analysis", label: "用量分析", path: "/energy/analysis", feishuPageKey: "" },
+      { key: "data-quality", label: "数据质量", path: "/energy/data-quality", feishuPageKey: "" },
+      { key: "settings", label: "配置管理", path: "/energy/settings", placement: "bottom", feishuPageKey: "" },
+      { key: "history", label: "历史来源", path: "", children: [
+        { key: "sources", label: "历史来源与映射", path: "/energy/sources", feishuPageKey: "" },
+        { key: "data", label: "历史快照", path: "/energy/data", feishuPageKey: "" },
+        { key: "sync-runs", label: "历史同步记录", path: "/energy/sync-runs", feishuPageKey: "" },
+        { key: "feishu-config", label: "历史飞书配置", path: "/energy/feishu-config", feishuPageKey: "" },
+      ] },
     ],
   },
 
@@ -919,17 +920,46 @@ export type PageAccessSummary = {
   page_key: string
   module_code: string
   permissions?: Array<"access" | "query" | "operate">
+  /** 设备模块收敛后承载车间可见性；null/缺省 = 全部可见 */
+  visible_sections?: ReadonlyArray<string> | null
 }
 
-/** Existing equipment grants retain only the original workshop, never all workshops. */
+/**
+ * 设备模块权限收敛映射：旧「车间 × 功能」叶授权
+ * （equipment:workshop-<车间>:<功能>-<车间>）投影为功能页授权
+ * （equipment:<功能>），授权车间并入 visible_sections；
+ * 旧式无车间维度的全量功能授权保持原样（visible_sections 空 = 全部车间）。
+ */
 export function expandEquipmentPagePermissions<T extends PageAccessSummary>(grants: T[] | undefined): T[] {
-  const output = [...(grants || [])]
+  const source = grants || []
+  const output = [...source]
   const explicit = new Set(output.map((grant) => grant.page_key))
-  for (const grant of grants || []) {
-    if (!/^equipment:(assets|maintenance|inspection|spare-parts|personnel)$/.test(grant.page_key)) continue
-    const leaf = grant.page_key.split(':')[1]
-    const target = `equipment:workshop-201-1:${leaf}-201-1`
-    if (!explicit.has(target)) output.push({ ...grant, page_key: target })
+  const leafPattern = /^equipment:workshop-([^:]+):(assets|maintenance|inspection|spare-parts|personnel)-([^:]+)$/
+  const derived = new Map<string, {
+    template: T
+    permissions: Set<'access' | 'query' | 'operate'>
+    workshops: Set<string>
+  }>()
+  for (const grant of source) {
+    const match = leafPattern.exec(grant.page_key)
+    if (!match) continue
+    const [, workshop, leaf] = match
+    const functionalKey = `equipment:${leaf}`
+    // 已存在全量功能授权时无需投影（全量优先于车间约束）
+    if (explicit.has(functionalKey)) continue
+    const entry = derived.get(functionalKey)
+      ?? { template: grant, permissions: new Set<'access' | 'query' | 'operate'>(), workshops: new Set<string>() }
+    for (const permission of grant.permissions ?? []) entry.permissions.add(permission)
+    entry.workshops.add(workshop)
+    derived.set(functionalKey, entry)
+  }
+  for (const [pageKey, { template, permissions, workshops }] of derived) {
+    output.push({
+      ...template,
+      page_key: pageKey,
+      permissions: [...permissions],
+      visible_sections: [...workshops],
+    } as T)
   }
   return output
 }
@@ -945,7 +975,8 @@ function filterPageChildren(
       ? filterPageChildren(item.children, pageKey, allowedPageKeys)
       : undefined
     const accessKey = item.children?.length ? pageKey : getPageKeyByPath(item.path) || pageKey
-    if (!allowedPageKeys.has(accessKey) && !children?.length) return []
+    const anyAllowed = item.anyOfPageKeys?.some((key) => allowedPageKeys.has(key))
+    if (!anyAllowed && !allowedPageKeys.has(accessKey) && !children?.length) return []
     return [{ ...item, children }]
   })
 }
@@ -989,7 +1020,8 @@ export function getFirstAuthorizedModulePath(user: ModuleLandingAccess): string 
     for (const item of items) {
       if (item.disabled || item.adminOnly) continue
       const key = item.path && getPageKeyByPath(item.path.split('?')[0])
-      if (key && allowedKeys.has(key)) return item.path
+      const anyAllowed = item.anyOfPageKeys?.some((k) => allowedKeys.has(k))
+      if ((key && allowedKeys.has(key)) || anyAllowed) return item.path
       const nested = item.children && firstAuthorizedPage(item.children)
       if (nested) return nested
     }
@@ -999,6 +1031,29 @@ export function getFirstAuthorizedModulePath(user: ModuleLandingAccess): string 
     if (path) return path
   }
   return NO_AUTHORIZED_PAGE_PATH
+}
+
+/** Keep a permitted business deep link through SSO, including its task query. */
+export function getPostLoginPath(user: ModuleLandingAccess, nextPath?: string): string {
+  const fallback = getFirstAuthorizedModulePath(user)
+  if (!nextPath?.startsWith('/') || nextPath.startsWith('//') || /[\\\u0000-\u001f\u007f]/.test(nextPath)) return fallback
+  const origin = 'https://dazah.invalid'
+  const target = new URL(nextPath, origin)
+  if (target.origin !== origin || /^\/(?:api|auth|login)(?:\/|$)/.test(target.pathname)) return fallback
+  if (user.role !== 'admin') {
+    const grants = expandEquipmentPagePermissions(user.page_permissions)
+    const pageKey = getPageKeyByPath(target.pathname)
+    // 设备统一工作台按 ?module= 解析具体功能页授权；无参数时按任一模块授权放行
+    const grant = pageKey === 'equipment:console'
+      ? (target.searchParams.get('module')
+        ? grants.find((item) => item.page_key === `equipment:${target.searchParams.get('module')}`)
+        : EQUIPMENT_CONSOLE_MODULE_KEYS
+          .map((key) => grants.find((item) => item.page_key === key))
+          .find(Boolean))
+      : grants.find((item) => item.page_key === pageKey)
+    if (!pageKey || !grant?.permissions?.includes('access') || !grant.permissions.includes('query')) return fallback
+  }
+  return target.pathname + target.search + target.hash
 }
 
 function collectPageRoutes(
@@ -1018,13 +1073,8 @@ function collectPageRoutes(
 // aliases. Directory nodes are not permission pages, so their entry route
 // must explicitly inherit a stable leaf page identity.
 const pageRouteAliases: Record<string, string> = {
-  // Legacy redirects retain immutable grant identities. The compatibility
-  // projection above limits their access to the original 201-1 workshop.
-  "/equipment/assets": "equipment:assets",
-  "/equipment/maintenance": "equipment:maintenance",
-  "/equipment/inspection": "equipment:inspection",
-  "/equipment/spare-parts": "equipment:spare-parts",
-  "/equipment/personnel": "equipment:personnel",
+  // 设备模块统一工作台（/equipment）按任一功能模块授权放行（见
+  // anyOfPageKeys 与 getPostLoginPath），旧功能页路径由前缀别名解析。
   "/quality/deviations": "quality:deviations:deviation-ledger",
   "/quality/capas": "quality:capas:capa-ledger",
   "/quality/complaints": "quality:complaints:complaint-ledger",
@@ -1059,6 +1109,13 @@ const pageRouteAliases: Record<string, string> = {
 }
 
 const pageRoutePrefixAliases: Record<string, string> = {
+  // 设备模块旧功能页路径（含更深的旧车间子路径）重定向到统一工作台，
+  // 权限仍按原功能页 key 校验
+  "/equipment/assets": "equipment:assets",
+  "/equipment/maintenance": "equipment:maintenance",
+  "/equipment/inspection": "equipment:inspection",
+  "/equipment/spare-parts": "equipment:spare-parts",
+  "/equipment/personnel": "equipment:personnel",
   "/registration/reference-standard": "registration:project:declaration-progress:international-planned-in-progress",
   "/registration/supplementary-reply": "registration:project:declaration-progress:international-planned-in-progress",
   "/registration/validation-audit": "registration:project:declaration-progress:international-planned-in-progress",

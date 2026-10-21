@@ -22,6 +22,9 @@ const reviewActions = vi.hoisted(() => ({
 
 vi.mock('@/lib/api/client/quality', () => apiClient)
 vi.mock('@/actions/validation-review', () => reviewActions)
+vi.mock('@/hooks/usePagePermissions', () => ({
+  usePagePermissions: () => ({ canOperate: true, canDelete: true, canExport: true }),
+}))
 
 import { ValidationAiReviewPanel } from './ValidationAiReviewPanel'
 

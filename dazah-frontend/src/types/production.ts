@@ -818,6 +818,13 @@ export interface FermentationBoard {
     outputs: number[]
     avg_yield_kg?: number | null
     avg_yield_kg_excl_pilot?: number | null
+    /** 倒罐复合批组（他汀）：组内子批各画一根均摊柱，此处为放罐大罐
+     * 与合计总量，供柱顶托架标注；仅组内子批全部进入柱窗口时返回 */
+    composite_groups?: {
+      batch_nos: string[]
+      tank_no: string | null
+      total_kg: number
+    }[]
   } | null
   /** 当前周期内已放罐（放罐窗口已结束或放罐日已到）的批次，供产量录入下拉 */
   dumped_batches: {

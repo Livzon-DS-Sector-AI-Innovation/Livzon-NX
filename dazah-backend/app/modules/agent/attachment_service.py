@@ -11,7 +11,8 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import HTTPException, status
-from openpyxl import load_workbook  # type: ignore[import-untyped]
+from openpyxl import load_workbook
+from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.storage import delete_object, get_object, is_enabled, upload_object
@@ -435,15 +436,19 @@ class AgentAttachmentService:
     ) -> bytes:
         workbook = load_workbook(BytesIO(raw))
         try:
+            selected: object
             if sheet_name:
                 if sheet_name not in workbook.sheetnames:
                     raise HTTPException(
                         status.HTTP_400_BAD_REQUEST,
                         f"工作表不存在：{sheet_name}",
                     )
-                worksheet = workbook[sheet_name]
+                selected = workbook[sheet_name]
             else:
-                worksheet = workbook.active
+                selected = workbook.active
+            if not isinstance(selected, Worksheet):
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "请选择数据工作表")
+            worksheet = selected
             if action == "append_row":
                 if not values:
                     raise HTTPException(

@@ -1,16 +1,20 @@
 "use client"
 
-import { Suspense, useEffect } from "react"
+import { Suspense, useEffect, useState } from "react"
+import { Button, Drawer } from 'antd'
+import { MenuOutlined } from '@ant-design/icons'
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { AgentFloatingEntry } from "@/components/agent/AgentFloatingEntry"
 import { MappedMenuPageGate } from "@/components/feishu-data"
 import {
+  expandEquipmentPagePermissions,
   getAuthorizedPageMenus,
   getModuleByKey,
   getPageKeyByPath,
   moduleMenus,
 } from "@/lib/menu-config"
+import { hasAnyEquipmentModuleAccess } from "@/lib/equipment-page-permissions"
 import { TopNav } from "./TopNav"
 import { Sidebar } from "./Sidebar"
 import { PageNavigation } from "./PageNavigation"
@@ -39,6 +43,7 @@ export function AppShell({ children, user }: AppShellProps) {
   }, [setUser, user])
 
   const pathname = usePathname()
+  const [mobileSidebarPath, setMobileSidebarPath] = useState<string | null>(null)
   const moduleKey = pathname.split("/")[1]
   const currentModule = getModuleByKey(moduleKey)
   // 系统管理员不依赖逐项授权；普通用户缺失授权仍保持默认拒绝。
@@ -56,11 +61,19 @@ export function AppShell({ children, user }: AppShellProps) {
       ),
   )
   const currentPageKey = getPageKeyByPath(pathname)
-  const pageGrant = user.page_permissions?.find(
+  const nativeEnergyPage = currentModule?.moduleCode === 'energy' && new Set([
+    'energy:ledger-overview', 'energy:entry', 'energy:reports',
+    'energy:analysis', 'energy:data-quality', 'energy:settings',
+  ]).has(currentPageKey ?? '')
+  // 展开旧「车间×功能」叶授权后查找；设备统一工作台按任一功能模块授权放行
+  const pageGrant = expandEquipmentPagePermissions(user.page_permissions).find(
     (grant) => grant.page_key === currentPageKey,
   )
+  const consoleAccess = currentPageKey === 'equipment:console'
+    && hasAnyEquipmentModuleAccess(user)
   const isPageDenied = Boolean(
     user.role !== 'admin' &&
+      !consoleAccess &&
       (!currentPageKey || !pageGrant?.permissions?.includes("access")),
   )
   const isQueryDenied = Boolean(
@@ -73,6 +86,7 @@ export function AppShell({ children, user }: AppShellProps) {
     <div className="h-screen flex flex-col overflow-hidden">
       <TopNav user={user} modules={authorizedModules} />
       <div className="flex flex-1 overflow-hidden">
+        <div className={`${nativeEnergyPage ? 'hidden min-[701px]:flex' : 'flex'} shrink-0`}>
         <Suspense
           fallback={
             <aside className="w-56 shrink-0 border-r border-[var(--color-hairline)] bg-[var(--color-canvas)]" />
@@ -80,7 +94,9 @@ export function AppShell({ children, user }: AppShellProps) {
         >
           <Sidebar user={user} modules={authorizedModules} />
         </Suspense>
-        <main className="flex-1 overflow-y-auto bg-[var(--color-surface)] p-6">
+        </div>
+        <main className={`flex-1 min-w-0 overflow-y-auto bg-[var(--color-surface)] ${nativeEnergyPage ? 'p-3 min-[701px]:p-6' : 'p-6'}`}>
+          {nativeEnergyPage && <div className="mb-3 min-[701px]:hidden"><Button aria-label="能源菜单" icon={<MenuOutlined />} onClick={() => setMobileSidebarPath(pathname)}>能源菜单</Button><Drawer title="能源菜单" placement="left" size={280} open={mobileSidebarPath === pathname} onClose={() => setMobileSidebarPath(null)} destroyOnHidden><Suspense fallback={null}><Sidebar user={user} modules={authorizedModules} /></Suspense></Drawer></div>}
           {isModuleDenied ? (
             <section className="mx-auto flex min-h-full max-w-xl items-center justify-center">
               <div className="w-full rounded-[var(--rounded-lg)] border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-8 text-center">

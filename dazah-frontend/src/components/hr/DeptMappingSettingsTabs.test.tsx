@@ -9,17 +9,22 @@ const api = vi.hoisted(() => ({
   fetchTrainingDepartments: vi.fn(),
   fetchTrainingDeptMappings: vi.fn(),
   fetchFeishuMembers: vi.fn(),
+  fetchDeptScopes: vi.fn(),
+  fetchCustomTrainingDepartments: vi.fn(),
 }))
 
 const actions = vi.hoisted(() => ({
   createTrainingDeptMappingAction: vi.fn(),
   updateTrainingDeptMappingAction: vi.fn(),
   deleteTrainingDeptMappingAction: vi.fn(),
+  saveDeptScopeAction: vi.fn(),
+  clearDeptScopeAction: vi.fn(),
 }))
 
 const ui = vi.hoisted(() => ({
   message: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }))
+const permissions = vi.hoisted(() => ({ canQuery: true, canSync: true, canDelete: true }))
 
 const MAPPINGS = vi.hoisted(() => [
   {
@@ -50,8 +55,8 @@ const MAPPINGS = vi.hoisted(() => [
 
 vi.mock('@/lib/api/client/hr', () => api)
 vi.mock('@/actions/hr', () => actions)
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ has: () => true }),
+vi.mock('@/hooks/usePagePermissions', () => ({
+  usePagePermissions: () => permissions,
 }))
 vi.mock('./trainingDept', () => ({
   refreshDeptMappings: vi.fn(async () => undefined),
@@ -111,6 +116,7 @@ vi.mock('antd', async () => {
       ),
     )
   const Select = (props: {
+    disabled?: boolean
     mode?: string
     value?: unknown
     onChange?: (v: unknown) => void
@@ -125,6 +131,7 @@ vi.mock('antd', async () => {
             'button',
             {
               key: o.value,
+              disabled: props.disabled,
               onClick: () =>
                 props.onChange?.([...(Array.isArray(props.value) ? (props.value as string[]) : []), o.value]),
             },
@@ -137,6 +144,7 @@ vi.mock('antd', async () => {
       'select',
       {
         value: String(props.value ?? ''),
+        disabled: props.disabled,
         onChange: (e: { target: { value: string } }) => props.onChange?.(e.target.value),
       },
       (props.options || []).map((o) =>
@@ -168,7 +176,9 @@ vi.mock('antd', async () => {
     App: { useApp: () => ({ message: ui.message }) },
     Button,
     Card: Wrapper,
-    Input: (props: Record<string, unknown>) => createElement('input', props),
+    Input: Object.assign((props: Record<string, unknown>) => createElement('input', props), {
+      Search: () => createElement('input'),
+    }),
     Popconfirm,
     Result: ({ title }: { title?: ReactNode }) => createElement('div', null, title),
     Select,
@@ -189,12 +199,14 @@ vi.mock('antd', async () => {
     Tag: Wrapper,
     Tooltip: Wrapper,
     Typography,
-    Modal: ({ open, children }: { open?: boolean; children?: ReactNode }) =>
-      open ? createElement('div', null, children) : null,
+    Modal: ({ open, children, onOk }: { open?: boolean; children?: ReactNode; onOk?: () => void }) =>
+      open ? createElement('div', { 'data-testid': 'modal' }, children,
+        createElement('button', { onClick: onOk }, 'modal-save')) : null,
   }
 })
 
 import DeptMappingSettingsClient from './DeptMappingSettingsClient'
+import DeptScopeSettingsClient from './DeptScopeSettingsClient'
 
 describe('DeptMappingSettingsClient 双 Tab 与人员归属', () => {
   const pickPerson = async (label: string) => {
@@ -251,10 +263,14 @@ describe('DeptMappingSettingsClient 双 Tab 与人员归属', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    Object.assign(permissions, { canQuery: true, canSync: true, canDelete: true })
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
     api.fetchFeishuMemberDepartments.mockResolvedValue([])
+    api.fetchDeptScopes.mockResolvedValue([{ user_id: 'test-user', user_name: '测试用户',
+      user_department: '质量部', visible_depts: ['质量部'] }])
+    api.fetchCustomTrainingDepartments.mockResolvedValue([])
     api.fetchTrainingDepartments.mockResolvedValue([
       '201二车间（MC）',
       '201二车间（DR）',
@@ -293,6 +309,82 @@ describe('DeptMappingSettingsClient 双 Tab 与人员归属', () => {
     expect(container.textContent).toContain('人员归属')
     expect(container.textContent).toContain('安志刚')
     expect(container.textContent).toContain('201二车间（DR）')
+  })
+
+  it('页面查询授权可打开配置，写入和删除分别授权，撤销后不再放行', async () => {
+    Object.assign(permissions, { canQuery: true, canSync: false, canDelete: false })
+    await renderPage()
+    const buttons = () => Array.from(container.querySelectorAll('button'))
+    const batch = () => buttons().find((button) => button.textContent === '批量配置')!
+    expect(container.textContent).toContain('安志刚')
+    expect(batch().disabled).toBe(true)
+    expect(buttons().find((button) => button.textContent === '新增映射')?.disabled).toBe(true)
+    expect(buttons().find((button) => button.textContent === '删除')?.disabled).toBe(true)
+    permissions.canSync = true
+    await renderPage()
+    expect(batch().disabled).toBe(false)
+    expect(buttons().find((button) => button.textContent === '删除')?.disabled).toBe(true)
+    permissions.canSync = false
+    await renderPage()
+    expect(batch().disabled).toBe(true)
+    act(() => batch().click())
+    expect(actions.createTrainingDeptMappingAction).not.toHaveBeenCalled()
+  })
+
+  it('部门权限配置的保存、清除和移除按页面敏感操作授权', async () => {
+    Object.assign(permissions, { canQuery: true, canSync: false, canDelete: false })
+    const renderScopes = async () => {
+      await act(async () => root.render(createElement(DeptScopeSettingsClient)))
+      await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    }
+    const button = (text: string) => Array.from(container.querySelectorAll('button'))
+      .find((item) => item.textContent === text)!
+    await renderScopes()
+    expect(container.textContent).toContain('测试用户')
+    expect(button('清除').disabled).toBe(true)
+    expect(button('移除').disabled).toBe(true)
+    permissions.canSync = true
+    await renderScopes()
+    expect(button('清除').disabled).toBe(false)
+    expect(button('移除').disabled).toBe(true)
+    permissions.canDelete = true
+    await renderScopes()
+    expect(button('移除').disabled).toBe(false)
+    Object.assign(permissions, { canSync: false, canDelete: false })
+    await renderScopes()
+    expect(button('清除').disabled).toBe(true)
+    expect(button('移除').disabled).toBe(true)
+    act(() => {
+      button('清除').click()
+      button('移除').click()
+    })
+    expect(actions.saveDeptScopeAction).not.toHaveBeenCalled()
+    expect(actions.clearDeptScopeAction).not.toHaveBeenCalled()
+  })
+
+  it('仅有配置授权时原地更新映射，保留匹配规则且无需删除权限', async () => {
+    permissions.canDelete = false
+    actions.updateTrainingDeptMappingAction.mockResolvedValue({ code: 200 })
+    await renderPage()
+    const row = Array.from(container.querySelectorAll('tr')).find((item) => item.textContent?.includes('201二车间（多拉）'))!
+    act(() => row.querySelector('button')?.click())
+    const modal = container.querySelector('[data-testid="modal"]')!
+    const selects = modal.querySelectorAll('select')
+    for (const select of selects) {
+      act(() => {
+        select.value = '201二车间（DR）'
+        select.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+    }
+    await act(async () => {
+      Array.from(modal.querySelectorAll('button')).find((button) => button.textContent === 'modal-save')?.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(actions.updateTrainingDeptMappingAction).toHaveBeenCalledWith('m-dept-1', expect.objectContaining({
+      target_name: '201二车间（DR）', match_level: 'both', priority: 10,
+    }))
+    expect(actions.deleteTrainingDeptMappingAction).not.toHaveBeenCalled()
   })
 
   it('人员归属批量配置：多选人员后按 person 类型逐条创建', async () => {

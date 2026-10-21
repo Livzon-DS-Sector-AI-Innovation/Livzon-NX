@@ -53,4 +53,20 @@ describe('DRRefinementTable', () => {
     // 数字字符串 '8kg' 解析失败返回原文
     expect(DRRefinementTable).toBeTypeOf('function')
   })
+
+  it('opens a complete remark from a named button and omits empty remarks', async () => {
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => root.render(<DRRefinementTable data={DATA} columns={[
+      { key: 'remark_text', title: '备注', group: null, fmt: 'text', remark: true },
+    ]} />))
+    const buttons = container.querySelectorAll<HTMLButtonElement>('[aria-label="查看备注"]')
+    expect(buttons).toHaveLength(1)
+    await act(async () => {
+      buttons[0].click()
+      await new Promise(resolve => setTimeout(resolve, 50))
+    })
+    expect(document.querySelector('.ant-popover')?.textContent).toContain('有备注')
+  })
 })

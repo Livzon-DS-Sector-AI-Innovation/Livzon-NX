@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/actions/auth'
 import { LoginPanel } from '@/components/auth/LoginPanel'
 import { getLocalLoginMode } from '@/lib/local-auth'
-import { getFirstAuthorizedModulePath } from '@/lib/menu-config'
+import { getPostLoginPath } from '@/lib/menu-config'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,7 +31,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const user = await getCurrentUser()
 
   if (user) {
-    redirect(getFirstAuthorizedModulePath(user))
+    redirect(getPostLoginPath(user, nextPath))
   }
 
   return (

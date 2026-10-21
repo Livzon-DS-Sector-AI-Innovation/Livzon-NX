@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { usePagePermissions } from '@/hooks/usePagePermissions'
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import {
   App,
@@ -121,6 +122,7 @@ export default function CertificateSheetPage({
   detail,
 }: CertificateSheetPageProps) {
   const router = useRouter()
+  const { canOperate, canDelete } = usePagePermissions()
   const { message } = App.useApp()
   const [form] = Form.useForm<CertificateFormValues>()
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null)
@@ -281,6 +283,7 @@ export default function CertificateSheetPage({
   )
 
   function openCreateModal() {
+    if (!canOperate) return
     setEditingRowId(null)
     form.resetFields()
     form.setFieldsValue({ sheet_key: detail.sheet_key })
@@ -288,6 +291,7 @@ export default function CertificateSheetPage({
   }
 
   function openEditModal() {
+    if (!canOperate) return
     if (!selectedRow) {
       message.warning('请先在台账中选择一条记录')
       return
@@ -310,6 +314,7 @@ export default function CertificateSheetPage({
   }
 
   async function handleSubmit(values: CertificateFormValues) {
+    if (!canOperate) return
     const payload: CertificateEntryInput = {
       sheet_key: detail.sheet_key,
       certificate_name: toRequiredString(values.certificate_name),
@@ -347,6 +352,7 @@ export default function CertificateSheetPage({
   }
 
   function handleDelete() {
+    if (!canDelete) return
     if (!selectedRow) {
       message.warning('请先在台账中选择一条记录')
       return
@@ -380,10 +386,10 @@ export default function CertificateSheetPage({
               <Tag color="purple">{detail.summary.total_records} 条记录</Tag>
             </Space>
             <Space wrap>
-              <Button icon={<PlusOutlined />} type="primary" onClick={openCreateModal}>
+              <Button disabled={!canOperate} icon={<PlusOutlined />} type="primary" onClick={openCreateModal}>
                 新增
               </Button>
-              <Button icon={<EditOutlined />} disabled={!selectedRow} onClick={openEditModal}>
+              <Button icon={<EditOutlined />} disabled={!canOperate || !selectedRow} onClick={openEditModal}>
                 编辑选中
               </Button>
               <Popconfirm
@@ -391,9 +397,9 @@ export default function CertificateSheetPage({
                 okText="删除"
                 cancelText="取消"
                 onConfirm={handleDelete}
-                disabled={!selectedRow}
+                disabled={!canDelete || !selectedRow}
               >
-                <Button danger icon={<DeleteOutlined />} disabled={!selectedRow}>
+                <Button danger icon={<DeleteOutlined />} disabled={!canDelete || !selectedRow}>
                   删除选中
                 </Button>
               </Popconfirm>
@@ -425,7 +431,7 @@ export default function CertificateSheetPage({
 
       <Modal
         destroyOnHidden
-        open={modalOpen}
+        open={modalOpen && canOperate}
         title={editingRowId ? '编辑证书记录' : '新增证书记录'}
         okText={editingRowId ? '保存' : '新增'}
         cancelText="取消"

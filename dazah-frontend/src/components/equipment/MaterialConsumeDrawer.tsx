@@ -50,7 +50,7 @@ export function MaterialConsumeDrawer({ workOrderId, spareParts, onRefresh }: Ma
 
   return (
     <>
-      <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
+      <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
         领料
       </Button>
       <Drawer

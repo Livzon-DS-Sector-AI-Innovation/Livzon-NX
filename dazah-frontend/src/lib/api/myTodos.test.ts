@@ -103,13 +103,18 @@ describe('permission-scoped todos', () => {
 })
 
 
-it('equipment todo sources preserve only the original workshop for a legacy grant', () => {
-  const grant = { ...user.page_permissions![0], page_key: 'equipment:inspection', module_code: 'equipment' }
+it('equipment todo sources resolve maintenance only; inspection kind retired', () => {
+  // 巡检待办 kind 已随本地巡检旧轨下线：巡检授权不产生待办来源
+  const inspectionGrant = { ...user.page_permissions![0], page_key: 'equipment:inspection', module_code: 'equipment' }
+  expect(getTodoSources({ ...user, page_permissions: [inspectionGrant] }, moduleMenus)).toEqual([])
+
+  // 维保功能授权产生功能页待办来源；待办跳转到统一工作台的维保模块
+  const grant = { ...user.page_permissions![0], page_key: 'equipment:maintenance', module_code: 'equipment' }
   const sources = getTodoSources({ ...user, page_permissions: [grant] }, moduleMenus)
   expect(sources).toHaveLength(1)
-  expect(sources[0].key).toBe('equipment:workshop-201-1:inspection-201-1')
-  expect(sources[0].path).toBe('/equipment/inspection/201-1')
-  expect(sources[0].apiPath).toContain('kind=inspection')
-  const scoped = { ...grant, page_key: 'equipment:workshop-101-1:inspection-101-1' }
-  expect(getTodoSources({ ...user, page_permissions: [scoped] }, moduleMenus)[0].path).toBe('/equipment/inspection/101-1')
+  expect(sources[0].key).toBe('equipment:maintenance')
+  expect(sources[0].path).toBe('/equipment?module=maintenance')
+  expect(sources[0].apiPath).toContain('kind=maintenance')
+  const scoped = { ...grant, page_key: 'equipment:workshop-101-1:maintenance-101-1' }
+  expect(getTodoSources({ ...user, page_permissions: [scoped] }, moduleMenus)[0].path).toBe('/equipment?module=maintenance')
 })

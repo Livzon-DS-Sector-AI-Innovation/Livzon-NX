@@ -727,9 +727,11 @@ describe('WarehouseFeishuTablePage', () => {
     expect(firstRowIndex).toBeLessThan(bodyRows.indexOf(laterRow!))
 
     // 入库登记按钮按 inboundLabel 显示为「新增」（等待表单链接配置查询就绪）
-    await act(async () => { await Promise.resolve(); await Promise.resolve() })
-    const buttons = Array.from(container.querySelectorAll('button'))
-    expect(buttons.some((button) => button.textContent === '新增')).toBe(true)
-    expect(buttons.some((button) => button.textContent === '入库登记')).toBe(false)
+    await vi.waitFor(async () => {
+      await act(async () => { await Promise.resolve() })
+      const buttons = Array.from(container.querySelectorAll('button'))
+      expect(buttons.some((button) => button.textContent === '新增')).toBe(true)
+      expect(buttons.some((button) => button.textContent === '入库登记')).toBe(false)
+    })
   })
 })

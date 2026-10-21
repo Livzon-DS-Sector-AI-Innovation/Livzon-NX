@@ -5,6 +5,8 @@ import { App } from 'antd'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ProjectLedgerSheetDetail } from '@/types/registration'
 
+vi.mock('@/hooks/usePagePermissions', () => ({ usePagePermissions: () => ({ canOperate: true, canDelete: true }) }))
+
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 
 import ProjectLedgerSheetPage from './ProjectLedgerSheetPage'

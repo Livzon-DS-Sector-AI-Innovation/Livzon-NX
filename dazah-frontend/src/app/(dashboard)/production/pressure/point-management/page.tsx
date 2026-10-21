@@ -11,8 +11,7 @@ import { App,
   Modal,
   Form,
   Input,
-  InputNumber,
-  Popconfirm
+  InputNumber
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
@@ -25,6 +24,7 @@ import {
 } from '@/actions/pressure'
 import { AREA_OPTIONS } from '@/types/pressure'
 import type { PointMapping } from '@/types/pressure'
+import ProductionConfirmButton from '@/components/production/ProductionConfirmButton'
 import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title } = Typography
@@ -110,11 +110,14 @@ export default function PointManagementPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!canDelete) return
+    if (!canDelete) return false
     const res = await deletePointMapping(id)
     if (res.code === 200) {
       message.success('删除成功')
       loadData()
+    } else {
+      message.error(res.message || '删除失败')
+      return false
     }
   }
 
@@ -129,9 +132,10 @@ export default function PointManagementPage() {
       render: (_: any, record: PointMapping) => (
         <Space>
           {canOperate && <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />}
-          {canDelete && <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)}>
-            <Button type="link" danger size="small" icon={<DeleteOutlined />} />
-          </Popconfirm>}
+          {canDelete && <ProductionConfirmButton title="确认删除位点？"
+            description={`位点：${record.point_id}。删除该压差位点配置，删除后不可恢复。`}
+            confirmText="删除" onConfirm={() => handleDelete(record.id)}
+            type="link" danger size="small" icon={<DeleteOutlined />} aria-label="删除压差位点" />}
         </Space>
       )
     },
@@ -182,6 +186,7 @@ export default function PointManagementPage() {
             onChange: (p, ps) => { setPage(p); setPageSize(ps) }
           }}
           size="middle"
+          scroll={{ x: 520 }}
         />
       </Card>
 

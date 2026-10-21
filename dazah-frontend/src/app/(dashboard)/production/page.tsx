@@ -1,11 +1,13 @@
 'use client'
 
+import ProductionConfirmButton from '@/components/production/ProductionConfirmButton'
+
 // 发酵车间生产实时看板（生产管理概览页，一期：计划驱动）
 // 数据源：最新排产 Excel 存档（当前扎帐周期块）+ 人工检修标注。
 // 实际完成/收率/合格率等指标待实际数据接入后启用（当前显示 --）。
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Card, Row, Col, Typography, Button, Tag, Table, App, Modal, Input, InputNumber, DatePicker, Drawer, Popconfirm, Select, Statistic, Empty, Space, Tooltip } from 'antd'
+import { Card, Row, Col, Typography, Button, Tag, Table, App, Modal, Input, InputNumber, DatePicker, Drawer, Select, Statistic, Empty, Space, Tooltip } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
 import {
   ScheduleOutlined,
@@ -256,10 +258,14 @@ export default function ProductionDashboard() {
   const isSummaryView = productCode === 'SUMMARY' || hiddenOverviewCodes.includes(productCode)
   // FL 氟苯尼考为合成预混工艺：无发酵工段，概览渲染独立批次工序看板
   const isFlView = productCode === 'FL'
+  // 含中试口径切换只对 DR（多拉菌素，中试线 B30x 产量进平均分子）有意义；
+  // 其余产线无中试概念，不渲染切换入口，恒用默认平均口径
+  const isDrView = productCode === 'DR'
   // FL 视图刷新信号：页面「立即刷新」按钮驱动（发酵视图走 loadBoard）
   const [flRefreshKey, setFlRefreshKey] = useState(0)
   // 单批产量图：平均单产口径切换（含中试=总产量÷大罐批数 ↔ 不含中试=
   // 大罐批均值）与含中试模式下的标签后缀（默认「含中试」，可改可清空）；
+  // 仅 DR（多拉菌素）有中试口径，切换入口只在 DR 视图渲染；
   // 偏好按登录账户服务端持久化（跨设备一致），载入后变更才防抖保存
   const [avgPilotIncl, setAvgPilotIncl] = useState(true)
   const [avgNote, setAvgNote] = useState('含中试')
@@ -618,7 +624,7 @@ export default function ProductionDashboard() {
   }
 
   const removeActual = async (item: FermentationBatchActual) => {
-    if (!canDelete) return
+    if (!canDelete) return false
     const res = await deleteFermentationBatchActual(item.id)
     if (res.code === 200) {
       message.success('已删除批次产量记录')
@@ -626,6 +632,7 @@ export default function ProductionDashboard() {
       await loadBoard()
     } else {
       message.error(res.message || '删除失败')
+      return false
     }
   }
 
@@ -1030,16 +1037,13 @@ export default function ProductionDashboard() {
           {canOperate && <Button size="small" type="link" onClick={() => openActualModal(record)}>
             编辑
           </Button>}
-          {canDelete && <Popconfirm
-            title="删除后看板图表不再统计该批次，确认删除？"
-            okText="删除"
-            cancelText="取消"
-            onConfirm={() => void removeActual(record)}
-          >
-            <Button size="small" type="link" danger>
-              删除
-            </Button>
-          </Popconfirm>}
+          {canDelete && <ProductionConfirmButton
+            title="删除批次产量记录？"
+            description={`批次：${record.batch_no}。删除后看板图表不再统计该批次。`}
+            confirmText="删除"
+            onConfirm={() => removeActual(record)}
+            size="small" type="link" danger
+          >删除</ProductionConfirmButton>}
         </Space>
       ),
     },
@@ -1054,12 +1058,13 @@ export default function ProductionDashboard() {
     (trendOutputs.length
       ? trendOutputs.reduce((sum, value) => sum + value, 0) / trendOutputs.length
       : null)
-  const trendAvg = avgPilotIncl
+  const trendAvg = !isDrView || avgPilotIncl
     ? trendAvgIncl
     : (board?.trend?.avg_yield_kg_excl_pilot ?? trendAvgIncl)
-  // 含中试模式的标签后缀：默认「含中试」，可改可清空；不含中试恒无后缀
+  // 含中试模式的标签后缀：默认「含中试」，可改可清空；不含中试恒无后缀；
+  // 非 DR 产线无中试概念，恒用默认口径且不带后缀
   const avgPilotSuffix =
-    avgPilotIncl && avgNote.trim() ? `（${avgNote.trim()}）` : ''
+    isDrView && avgPilotIncl && avgNote.trim() ? `（${avgNote.trim()}）` : ''
   // 平均线可能高于全部柱值（markLine 不撑大轴范围）。按 ECharts 默认分度
   // （约 5 等分）以 1/2/5×10ⁿ 推算整洁步长并固定 interval，上限抬到能
   // 容纳平均线的步长整数倍：每格代表的量与自动分度保持一致
@@ -1072,15 +1077,73 @@ export default function ProductionDashboard() {
     return 10 * base
   }
   const trendExtent = trendOutputs.length ? Math.max(...trendOutputs) : null
+  // 倒罐复合批组（他汀）：组内子批定位到柱下标；两根均摊柱恒同高，
+  // 柱顶即托架落脚点
+  const compositePlacements = (board?.trend?.composite_groups ?? [])
+    .map((group) => {
+      const indexes = group.batch_nos
+        .map((name) => board?.trend?.batches.indexOf(name) ?? -1)
+        .filter((i) => i >= 0)
+      if (indexes.length !== group.batch_nos.length) return null
+      return {
+        group,
+        minIndex: Math.min(...indexes),
+        maxIndex: Math.max(...indexes),
+        top: Math.max(...indexes.map((i) => trendOutputs[i] ?? 0)),
+      }
+    })
+    .filter((p): p is NonNullable<typeof p> => p !== null)
+  // 托架横线高度：抬到柱顶上方约半格；与均线相距不足 0.35 格时整体
+  // 再抬一格，避免横线贴着柱顶或与均线重合
+  const bracketLineY = (top: number, step: number) => {
+    let y = top + step / 2
+    if (trendAvg != null && Math.abs(y - trendAvg) < step * 0.35) y += step
+    return y
+  }
   let trendStep: number | undefined
   let trendAxisMax: number | undefined
   if (trendExtent != null && trendAvg != null) {
     trendStep = niceTickStep(trendExtent / 5)
+    const step = trendStep
+    // 托架高度一并纳入轴上限（每格代表的量不变，只按需多出顶部格子）
     trendAxisMax = Math.max(
-      Math.ceil(trendExtent / trendStep) * trendStep,
-      Math.ceil(trendAvg / trendStep) * trendStep,
+      Math.ceil(trendExtent / step) * step,
+      Math.ceil(trendAvg / step) * step,
+      ...compositePlacements.map(
+        (p) => Math.ceil(bracketLineY(p.top, step) / step) * step,
+      ),
     )
   }
+  // markLine 两点线段必须是「起终点对象组成的数组」这一项式；
+  // 单对象 coord/coord2 形式 ECharts 不识别，会抛 Invalid markLine data。
+  // 托架 = 抬高的横线（标签居中放线上方）+ 两端落到柱顶中心的短竖线
+  const compositeMarks = compositePlacements.flatMap(
+    ({ group, minIndex, maxIndex, top }) => {
+      const step = trendStep ?? niceTickStep((top || 1) / 5)
+      const y = bracketLineY(top, step)
+      const bracketLineStyle = { color: '#8b93e8', type: 'dashed' as const }
+      const tick = (x: number) => [
+        { coord: [x, y], lineStyle: bracketLineStyle, label: { show: false } },
+        { coord: [x, top], lineStyle: bracketLineStyle, label: { show: false } },
+      ]
+      return [
+        [
+          { coord: [minIndex, y] },
+          {
+            coord: [maxIndex, y],
+            label: {
+              formatter: `${group.tank_no ?? '—'} · 合计 ${group.total_kg.toLocaleString('zh-CN')} kg`,
+              position: 'insideMiddleTop' as const,
+              distance: 4,
+            },
+            lineStyle: bracketLineStyle,
+          },
+        ],
+        tick(minIndex),
+        tick(maxIndex),
+      ]
+    },
+  )
 
   const trendOption = board?.trend
     ? {
@@ -1107,7 +1170,28 @@ export default function ProductionDashboard() {
             bottom: 8,
           },
         ],
-        tooltip: { trigger: 'axis' },
+        tooltip: {
+          trigger: 'axis' as const,
+          formatter: (
+            params: Array<{ name?: string; value?: number | string; marker?: string }>,
+          ) => {
+            const first = params[0]
+            if (!first) return ''
+            const group = (board?.trend?.composite_groups ?? []).find((g) =>
+              g.batch_nos.includes(first.name ?? ''),
+            )
+            const lines = params.map(
+              (p) => `${p.marker ?? ''}${p.name}：${p.value} kg`,
+            )
+            if (group) {
+              lines.push(
+                `两批 ${group.batch_nos.join('/')} 合计 ${group.total_kg.toLocaleString('zh-CN')} kg` +
+                  `（${group.tank_no ?? '—'} 放罐，柱高为均摊值）`,
+              )
+            }
+            return lines.join('<br/>')
+          },
+        },
         series: [
           {
             type: 'bar',
@@ -1115,17 +1199,28 @@ export default function ProductionDashboard() {
             data: trendOutputs,
             barMaxWidth: 36,
             markLine:
-              trendAvg == null
+              trendAvg == null && compositeMarks.length === 0
                 ? undefined
                 : {
                     symbol: 'none',
                     silent: true,
                     lineStyle: { color: '#fa8c16' },
-                    label: {
-                      formatter: `平均产量 ${trendAvg.toFixed(2)} kg${avgPilotSuffix}`,
-                      position: 'insideEndTop',
-                    },
-                    data: [{ yAxis: trendAvg }],
+                    label: { position: 'insideEndTop' },
+                    data: [
+                      ...(trendAvg == null
+                        ? []
+                        : [
+                            {
+                              yAxis: trendAvg,
+                              lineStyle: { color: '#fa8c16' },
+                              label: {
+                                formatter: `平均产量 ${trendAvg.toFixed(2)} kg${avgPilotSuffix}`,
+                                position: 'insideEndTop' as const,
+                              },
+                            },
+                          ]),
+                      ...compositeMarks,
+                    ],
                   },
           },
         ],
@@ -1708,32 +1803,34 @@ export default function ProductionDashboard() {
                 className="shadow-sm h-full"
                 styles={{ body: { padding: 8 } }}
                 extra={
-                  <Space size={4}>
-                    {avgPilotIncl && (
-                      <Input
-                        size="small"
-                        allowClear
-                        value={avgNote}
-                        onChange={(e) => setAvgNote(e.target.value)}
-                        placeholder="标签后缀"
-                        style={{ width: 110 }}
-                      />
-                    )}
-                    <Tooltip
-                      title={
-                        avgPilotIncl
-                          ? '平均产量口径：含中试（总产量÷大罐批数），点击切换'
-                          : '平均产量口径：不含中试（大罐批均值），点击切换'
-                      }
-                    >
-                      <Button
-                        size="small"
-                        type="text"
-                        icon={<SwapOutlined />}
-                        onClick={() => setAvgPilotIncl((v) => !v)}
-                      />
-                    </Tooltip>
-                  </Space>
+                  isDrView ? (
+                    <Space size={4}>
+                      {avgPilotIncl && (
+                        <Input
+                          size="small"
+                          allowClear
+                          value={avgNote}
+                          onChange={(e) => setAvgNote(e.target.value)}
+                          placeholder="标签后缀"
+                          style={{ width: 110 }}
+                        />
+                      )}
+                      <Tooltip
+                        title={
+                          avgPilotIncl
+                            ? '平均产量口径：含中试（总产量÷大罐批数），点击切换'
+                            : '平均产量口径：不含中试（大罐批均值），点击切换'
+                        }
+                      >
+                        <Button
+                          size="small"
+                          type="text"
+                          icon={<SwapOutlined />}
+                          onClick={() => setAvgPilotIncl((v) => !v)}
+                        />
+                      </Tooltip>
+                    </Space>
+                  ) : undefined
                 }
               >
                 {trendOption ? (
@@ -1851,6 +1948,7 @@ export default function ProductionDashboard() {
           dataSource={actuals}
           loading={actualsLoading}
           pagination={false}
+          scroll={{ x: 600 }}
           locale={{ emptyText: '暂无录入数据' }}
         />
         <Text type="secondary" style={{ fontSize: 12 }}>

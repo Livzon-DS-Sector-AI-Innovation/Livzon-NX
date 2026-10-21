@@ -8,6 +8,7 @@ from typing import Any, cast
 import pytest
 from fastapi import HTTPException
 from openpyxl import Workbook, load_workbook  # type: ignore[import-untyped]
+from openpyxl.chart import BarChart, Reference
 from pydantic import BaseModel
 
 from app.modules.agent import agent_tools
@@ -30,6 +31,29 @@ class FailingDb:
 
 class EmptyInput(BaseModel):
     pass
+
+
+def test_xlsx_mutation_rejects_chart_sheet_without_modifying_other_data() -> None:
+    workbook = Workbook()
+    source = workbook.worksheets[0]
+    source.append([10, 20])
+    chart = BarChart()
+    chart.add_data(Reference(source, min_row=1, min_col=1, max_col=2))
+    workbook.create_chartsheet("图表").add_chart(chart)
+    workbook.active = 1
+    output = BytesIO()
+    workbook.save(output)
+    with pytest.raises(HTTPException) as error:
+        AgentAttachmentService._mutate_xlsx(
+            output.getvalue(), action="append_row", sheet_name=None,
+            row_number=None, values=[30, 40],
+        )
+    assert error.value.status_code == 400
+    assert "数据工作表" in error.value.detail
+    original = load_workbook(BytesIO(output.getvalue()))
+    assert original.worksheets[0].max_row == 1
+    assert original.worksheets[0].cell(1, 1).value == 10
+    original.close()
 
 
 class FakeRepo:

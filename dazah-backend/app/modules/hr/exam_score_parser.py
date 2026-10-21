@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-import openpyxl  # type: ignore[import-untyped]
+import openpyxl
 from docx import Document
 from fastapi import UploadFile
 

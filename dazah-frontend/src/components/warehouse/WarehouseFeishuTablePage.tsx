@@ -2210,7 +2210,7 @@ export function WarehouseFeishuTablePage({
         <Spin spinning={detailLoading}>
           {detailData ? (
             <>
-            <Descriptions bordered size="small" column={2} className="wh-detail-desc">
+            <Descriptions bordered size="small" column={{ xs: 1, sm: 2 }} className="wh-detail-desc">
               {detailData.fields
                 .filter((field) => !HIDDEN_FIELD_NAMES.has(field.field_name))
                 .map((field) => (

@@ -119,7 +119,7 @@ def test_batch2_migrations_chain_linearly(name: str, revision: str, down: str) -
     assert module.down_revision == down
 
 
-def test_batch2_head_is_c8e4a2f6d9b3() -> None:
+def test_single_head_retains_the_safety_reminder_history() -> None:
     from alembic.config import Config
     from alembic.script import ScriptDirectory
 
@@ -128,6 +128,9 @@ def test_batch2_head_is_c8e4a2f6d9b3() -> None:
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
     assert heads == ["c8e4a2f6d9b3"]
+    assert "d4e7f1a9c3b5" in {
+        revision.revision for revision in script.walk_revisions(head=heads[0])
+    }
 
 
 def test_multi_table_tabs_upgrade_adds_columns_and_upgrades_index(monkeypatch) -> None:

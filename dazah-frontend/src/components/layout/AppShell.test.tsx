@@ -35,6 +35,13 @@ function pageGrant(permissions: Array<'access' | 'query' | 'operate'>): NonNulla
 
 describe('application shell permission boundary', () => {
   beforeEach(() => { session.pathname = '/purchasing/supplier' })
+  it('retains a compact mobile entry to the energy sidebar', () => {
+    session.pathname = '/energy/reports'
+    const html = renderToStaticMarkup(<AppShell user={makeUser({ role: 'admin' })}>能源报表</AppShell>)
+    expect(html).toContain('能源菜单')
+    expect(html).toContain('min-[701px]:hidden')
+    expect(html).toContain('能源报表')
+  })
 
   it.each(moduleMenus)('allows administrators into $label without individual grants', (module) => {
     session.pathname = module.path
@@ -92,6 +99,23 @@ describe('application shell permission boundary', () => {
     const denied = renderToStaticMarkup(await DashboardLayout({ children: '业务内容' }))
     expect(denied).toContain('暂无页面访问权限')
     expect(denied).not.toContain('业务内容')
+  })
+
+  it('admits the equipment console with only a legacy workshop-leaf grant', () => {
+    // 统一工作台：旧「车间×功能」叶授权经展开后，/equipment 聚合入口按任一模块授权放行
+    session.pathname = '/equipment'
+    const html = renderToStaticMarkup(<AppShell user={makeUser({
+      module_codes: ['equipment'],
+      page_permissions: [{
+        page_key: 'equipment:workshop-101-2:inspection-101-2',
+        module_code: 'equipment',
+        permissions: ['access', 'query'],
+        source: 'user', sensitive_actions: [], data_scope: { scope_type: 'not_applicable' },
+      }],
+      page_permission_rollouts: { equipment: 'enforced' },
+    })}>业务内容</AppShell>)
+    expect(html).toContain('业务内容')
+    expect(html).not.toContain('暂无页面访问权限')
   })
 
   it('builds navigation from the current user page grant', () => {

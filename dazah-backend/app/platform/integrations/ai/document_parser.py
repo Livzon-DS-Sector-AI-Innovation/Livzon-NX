@@ -103,7 +103,7 @@ class DocumentParser:
 
     @staticmethod
     def _extract_xlsx(path: str) -> str:
-        import openpyxl  # type: ignore[import-untyped]
+        import openpyxl
 
         wb = openpyxl.load_workbook(path, data_only=True)
         parts: list[str] = []

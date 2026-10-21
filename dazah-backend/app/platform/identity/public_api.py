@@ -1,11 +1,78 @@
 """Small, non-HTTP identity capabilities shared by business modules."""
 
 from dataclasses import dataclass
+from typing import Literal
+from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.secrets import decrypt_secret
+from app.platform.identity.models import User
 from app.platform.identity.repository import FeishuConfigRepository, UserRepository
+
+
+async def has_current_page_permission(
+    db: AsyncSession,
+    user: User | None,
+    module_code: str,
+    permission: Literal["query", "operate"] = "operate",
+    sensitive_action: str | None = None,
+) -> bool:
+    """Check the exact trusted request page; legacy module codes never widen it."""
+    from app.platform.identity.data_scope import current_page_key
+    from app.platform.identity.page_permissions import PagePermissionService
+    from app.platform.identity.page_policy import get_page_definition
+
+    page_key = current_page_key.get()
+    definition = get_page_definition(page_key) if page_key else None
+    if user is None or definition is None or definition.module_code != module_code:
+        return False
+    grants = await PagePermissionService().effective_grants(db, user=user)
+    return any(
+        grant.page_key == page_key
+        and permission in grant.permissions
+        and (
+            sensitive_action is None
+            or "operate" in grant.permissions
+            and sensitive_action in grant.sensitive_actions
+        )
+        for grant in grants
+    )
+
+
+@dataclass(frozen=True)
+class ActiveUserOption:
+    id: UUID
+    name: str
+    department: str
+
+
+async def list_active_user_options(db: AsyncSession) -> list[ActiveUserOption]:
+    """Minimal assignable identities; no authentication or contact secrets."""
+    rows = await db.scalars(
+        select(User)
+        .where(User.status == "active", User.is_deleted.is_(False))
+        .order_by(User.name)
+        .limit(5000)
+    )
+    return [
+        ActiveUserOption(user.id, user.name, user.department or "") for user in rows
+    ]
+
+
+async def notification_recipient_for_user(
+    db: AsyncSession, user_id: UUID
+) -> tuple[str, str] | None:
+    """Resolve enterprise identifiers without reusing another app's open_id."""
+    user = await UserRepository().get_by_id(db, user_id)
+    if user is None or user.is_deleted or user.status != "active":
+        return None
+    if user.feishu_user_id:
+        return user.feishu_user_id, "user_id"
+    if user.enterprise_email:
+        return user.enterprise_email, "email"
+    return None
 
 
 @dataclass(frozen=True)

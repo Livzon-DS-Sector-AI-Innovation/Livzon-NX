@@ -1458,8 +1458,8 @@ async def export_contract_approval_results(
     from app.modules.hr.api import _assert_dept_in_scope
 
     alias_set = await _assert_dept_in_scope(db, current_user, department)
-    from openpyxl import Workbook  # type: ignore[import-untyped]
-    from openpyxl.styles import (  # type: ignore[import-untyped]
+    from openpyxl import Workbook
+    from openpyxl.styles import (
         Alignment,
         Border,
         Font,
@@ -1505,7 +1505,7 @@ async def export_contract_approval_results(
     records = (await db.execute(stmt)).scalars().all()
 
     wb = Workbook()
-    ws = wb.active
+    ws = wb.worksheets[0]
     ws.title = "合同审批结果"
 
     title_font = Font(name="宋体", size=14, bold=True)
@@ -1558,7 +1558,7 @@ async def export_contract_approval_results(
         supervisor_result = _fmt_result(
             r.supervisor_name, r.supervisor_approved_at, not bool(r.dept_approved_at)
         )
-        values = [
+        values: list[str | int | None] = [
             idx + 1,
             r.employee_number,
             r.name,
