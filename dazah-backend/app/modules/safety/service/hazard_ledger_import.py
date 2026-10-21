@@ -23,7 +23,7 @@ from datetime import datetime
 from typing import Any
 
 import openpyxl  # type: ignore[import-untyped]
-import xlrd  # type: ignore[import-untyped]
+import xlrd
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.safety.repository import SafetyRepository
