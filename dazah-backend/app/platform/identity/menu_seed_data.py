@@ -56,12 +56,13 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
         "/equipment",
         icon="cog",
         children=[
-            _n("stats", "设备仪表盘", "/equipment/stats"),
+            _n("stats", "设备汇总", "/equipment/stats"),
             _n("assets", "设备台账", "/equipment/assets"),
             _n("maintenance", "维护保养", "/equipment/maintenance"),
             _n("inspection", "设备巡检", "/equipment/inspection"),
             _n("spare-parts", "备件管理", "/equipment/spare-parts"),
             _n("personnel", "人员配置", "/equipment/personnel"),
+            _n("feishu-config", "飞书配置", "/equipment/feishu-config"),
         ],
     ),
     # ── 能源管理 ────────────────────────────────────────────────
@@ -1307,14 +1308,8 @@ SEED_MENUS: list[dict[str, Any]] = [
     _PAGE_MENU_BY_KEY.get(node["key"], node) for node in _LEGACY_SEED_MENUS
 ]
 
-# Keep immutable legacy page identities while the workshop catalog is adopted.
-# Legacy grants are projected only onto the original 201-1 workshop.
-for _seed_module in SEED_MENUS:
-    if _seed_module["key"] == "equipment":
-        _legacy_equipment = next(
-            node for node in _LEGACY_SEED_MENUS if node["key"] == "equipment"
-        )
-        _seed_module["children"] = list(_seed_module["children"]) + [
-            {**node, "name": f"{node['name']}（201一车间兼容入口）"}
-            for node in _legacy_equipment["children"] if node["key"] != "stats"
-        ]
+# 设备模块前端已收敛为统一工作台（/equipment?workshop=&module=，车间切换与
+# 功能模块 Tab 都在页内）：目录与种子保留 6 个功能页 key 作为授权实体
+# （页面 key 即模块 Tab 的权限门槛），route_path 是生命周期台账的稳定授权
+# 锚点，保持旧功能页路径不随前端 URL 合并而变（旧路径已 307 到工作台）；
+# 存量车间叶授权由前端 expandEquipmentPagePermissions 投影为功能页授权。

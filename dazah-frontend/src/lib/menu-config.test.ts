@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  expandEquipmentPagePermissions,
   getAuthorizedDirectoryEntryPath,
   getFirstAuthorizedModulePath,
   getPostLoginPath,
@@ -7,6 +8,7 @@ import {
   getPageKeyByPath,
   getPermissionModuleName,
   moduleMenus,
+  type PageAccessSummary,
 } from './menu-config'
 
 describe('page permission menu boundary', () => {
@@ -336,76 +338,93 @@ describe('production menu structure', () => {
 })
 
 describe('equipment menu structure', () => {
-  const equipmentWorkshops = [
-    ['101-1', '101一车间'],
-    ['101-2', '101二车间'],
-    ['102-1', '102一车间'],
-    ['102-2', '102二车间'],
-    ['103', '103车间'],
-    ['201-1', '201一车间'],
-    ['201-2', '201二车间'],
-    ['201-3', '201三车间'],
-    ['203', '203车间'],
-  ] as const
-
-  it('groups the workshop pages under one path-less submenu per workshop', () => {
+  it('collapses the equipment module to the stats page plus the unified console', () => {
     const equipment = moduleMenus.find((menu) => menu.key === 'equipment')
 
+    // 统一工作台：车间块 + 功能模块 Tab 都在页内；功能页 key 仍是授权实体
     expect(equipment?.children.map((item) => item.key)).toEqual([
       'stats',
-      ...equipmentWorkshops.map(([code]) => `workshop-${code}`),
+      'console',
+      'feishu-config',
     ])
-    for (const [code, label] of equipmentWorkshops) {
-      const workshop = equipment?.children.find(
-        (item) => item.key === `workshop-${code}`,
-      )
-      expect(workshop, label).toMatchObject({ label, path: '' })
-      expect(workshop?.children?.map((item) => item.key)).toEqual([
-        `assets-${code}`,
-        `maintenance-${code}`,
-        `inspection-${code}`,
-        `spare-parts-${code}`,
-        `personnel-${code}`,
-      ])
-      expect(workshop?.children?.map((item) => item.path)).toEqual([
-        // 台账/维护/巡检/备件/人员均按车间独立路由
-        `/equipment/assets/${code}`,
-        `/equipment/maintenance/${code}`,
-        `/equipment/inspection/${code}`,
-        `/equipment/spare-parts/${code}`,
-        `/equipment/personnel/${code}`,
-      ])
-    }
+    expect(equipment?.children.map((item) => item.path)).toEqual([
+      '/equipment/stats',
+      '/equipment',
+      '/equipment/feishu-config',
+    ])
+    const console = equipment?.children.find((item) => item.key === 'console')
+    expect(console?.anyOfPageKeys).toEqual([
+      'equipment:assets',
+      'equipment:maintenance',
+      'equipment:inspection',
+      'equipment:spare-parts',
+      'equipment:personnel',
+    ])
   })
 
   it.each([
-    // 全部叶子路由按车间独立，各自解析到本车间的权限身份
-    ['/equipment/assets/101-1', 'equipment:workshop-101-1:assets-101-1'],
-    ['/equipment/assets/201-1', 'equipment:workshop-201-1:assets-201-1'],
-    ['/equipment/maintenance/101-1', 'equipment:workshop-101-1:maintenance-101-1'],
-    ['/equipment/inspection/101-1', 'equipment:workshop-101-1:inspection-101-1'],
-    ['/equipment/inspection/201-1', 'equipment:workshop-201-1:inspection-201-1'],
-    ['/equipment/inspection/201-3', 'equipment:workshop-201-3:inspection-201-3'],
-    ['/equipment/spare-parts/101-1', 'equipment:workshop-101-1:spare-parts-101-1'],
-    ['/equipment/personnel/101-1', 'equipment:workshop-101-1:personnel-101-1'],
+    // 工作台根按聚合入口解析；旧功能页与旧车间子路径仍解析到功能页 key（由路由层重定向到工作台）
+    ['/equipment', 'equipment:console'],
+    ['/equipment/assets', 'equipment:assets'],
+    ['/equipment/assets/101-1', 'equipment:assets'],
+    ['/equipment/assets/201-1', 'equipment:assets'],
+    ['/equipment/maintenance/101-1', 'equipment:maintenance'],
+    ['/equipment/inspection/101-1', 'equipment:inspection'],
+    ['/equipment/inspection/201-3', 'equipment:inspection'],
+    ['/equipment/spare-parts/101-1', 'equipment:spare-parts'],
+    ['/equipment/personnel/101-1', 'equipment:personnel'],
     ['/equipment/stats', 'equipment:stats'],
-  ])('maps the nested equipment pages to scoped permission keys: %s', (path, pageKey) => {
+  ])('maps the equipment pages to functional permission keys: %s', (path, pageKey) => {
     expect(getPageKeyByPath(path)).toBe(pageKey)
   })
-  it('keeps an existing inspection grant limited to the original workshop', () => {
-    const menus = getAuthorizedPageMenus([], [{ page_key: 'equipment:inspection', module_code: 'equipment', permissions: ['access', 'query', 'operate'] }])
-    expect(menus[0]?.children[0]?.children?.map((item) => item.path)).toEqual(['/equipment/inspection/201-1'])
-    expect(getFirstAuthorizedModulePath({ role: 'user', page_permissions: [{ page_key: 'equipment:inspection', module_code: 'equipment', permissions: ['access', 'query'] }] })).toBe('/equipment/inspection/201-1')
+
+  it('projects legacy workshop-leaf grants onto functional pages with visible sections', () => {
+    const grants = expandEquipmentPagePermissions([
+      { page_key: 'equipment:workshop-101-1:inspection-101-1', module_code: 'equipment', permissions: ['access', 'query'] },
+      { page_key: 'equipment:workshop-203:inspection-203', module_code: 'equipment', permissions: ['access', 'operate'] },
+    ])
+    const projected = grants.find((grant) => grant.page_key === 'equipment:inspection')
+    expect(projected).toMatchObject({
+      page_key: 'equipment:inspection',
+      permissions: expect.arrayContaining(['access', 'query', 'operate']),
+      visible_sections: ['101-1', '203'],
+    })
+  })
+
+  it('keeps legacy full functional grants unlimited (no visible sections)', () => {
+    const grants = expandEquipmentPagePermissions<PageAccessSummary>([
+      { page_key: 'equipment:inspection', module_code: 'equipment', permissions: ['access', 'query'] },
+      { page_key: 'equipment:workshop-101-1:inspection-101-1', module_code: 'equipment', permissions: ['access'] },
+    ])
+    const projected = grants.find((grant) => grant.page_key === 'equipment:inspection')
+    // 全量授权已存在：车间叶授权不再额外投影，保持全部车间可见
+    expect(projected?.visible_sections).toBeUndefined()
+    expect(grants.filter((grant) => grant.page_key === 'equipment:inspection')).toHaveLength(1)
+  })
+
+  it('authorizes the console menu item from a legacy workshop grant', () => {
+    const menus = getAuthorizedPageMenus([], [
+      { page_key: 'equipment:workshop-201-1:inspection-201-1', module_code: 'equipment', permissions: ['access', 'query', 'operate'] },
+    ])
+    const equipment = menus.find((menu) => menu.key === 'equipment')
+    // 巡检叶授权投影到 equipment:inspection，聚合入口 console 因任一模块授权而可见
+    expect(equipment?.children?.map((item) => item.key)).toEqual(['console'])
+    expect(getFirstAuthorizedModulePath({
+      role: 'user',
+      page_permissions: [
+        { page_key: 'equipment:workshop-201-1:inspection-201-1', module_code: 'equipment', permissions: ['access', 'query'] },
+      ],
+    })).toBe('/equipment')
   })
 })
 
 
 describe('legacy equipment grant boundaries', () => {
-  it('preserves an explicit denial of the original workshop and never grants a new workshop', () => {
+  it('preserves an explicit denial and never grants unauthorized workshops', () => {
+    // 车间叶授权 permissions 为空（显式拒绝）：不投影出功能页授权
     const grants = [
-      { page_key: 'equipment:inspection', module_code: 'equipment', permissions: ['access', 'query'] as const },
       { page_key: 'equipment:workshop-201-1:inspection-201-1', module_code: 'equipment', permissions: [] },
-    ].map((grant) => ({ ...grant, permissions: [...grant.permissions] }))
+    ]
     expect(getAuthorizedPageMenus([], grants)).toEqual([])
     expect(getFirstAuthorizedModulePath({ role: 'user', page_permissions: grants })).toBe('/no-access')
   })

@@ -1,7 +1,14 @@
 import { redirect } from 'next/navigation'
 
-// 台账已按车间拆分路由（/equipment/assets/<车间代码>）；
-// 旧入口保留重定向，当前唯一已配置车间为 201一车间。
-export default function AssetsPageRedirect() {
-  redirect('/equipment/assets/201-1')
+// 旧功能页路径收敛到统一工作台：/equipment/assets[?workshop=] → /equipment[?workshop=&module=assets]
+export default async function AssetsRedirect({
+  searchParams,
+}: {
+  searchParams: Promise<{ workshop?: string }>
+}) {
+  const { workshop } = await searchParams
+  const query = workshop
+    ? `workshop=${encodeURIComponent(workshop)}&module=assets`
+    : 'module=assets'
+  redirect(`/equipment?${query}`)
 }

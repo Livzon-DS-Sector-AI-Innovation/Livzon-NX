@@ -57,7 +57,7 @@ describe('InspectionProgressCard', () => {
   it('renders the enabled workshop as a linked row with progress numbers', () => {
     renderCard()
     const link = document.body.querySelector<HTMLAnchorElement>(
-      'a[href="/equipment/inspection/101-2"]',
+      'a[href="/equipment/inspection?workshop=101-2"]',
     )
     expect(link).toBeTruthy()
     expect(link!.textContent).toContain('101二车间')
@@ -72,7 +72,7 @@ describe('InspectionProgressCard', () => {
     expect(unconnected).toHaveLength(EQUIPMENT_WORKSHOPS.length - 1)
     // 未接入车间不可点击
     expect(
-      document.body.querySelector('a[href="/equipment/inspection/201-1"]'),
+      document.body.querySelector('a[href="/equipment/inspection?workshop=201-1"]'),
     ).toBeNull()
   })
 
@@ -82,6 +82,6 @@ describe('InspectionProgressCard', () => {
     expect(text).toContain('已接入0/9车间')
     expect(text).toContain('总进度0/0台')
     expect(text).toContain('上午0/0·下午0/0')
-    expect(document.body.querySelector('a[href^="/equipment/inspection/"]')).toBeNull()
+    expect(document.body.querySelector('a[href^="/equipment/inspection?"]')).toBeNull()
   })
 })

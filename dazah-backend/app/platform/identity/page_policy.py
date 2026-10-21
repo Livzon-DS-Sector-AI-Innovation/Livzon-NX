@@ -37,7 +37,7 @@ PENDING_SCOPE_MODULES = frozenset({"equipment", "energy", "safety", "research"})
 # option for existing grants; other endpoints in these modules remain subject
 # to their existing registration checks.
 PERSONAL_TODO_SCOPE_PAGES = frozenset({
-    "equipment:maintenance", "equipment:inspection",
+    "equipment:maintenance",
     "safety:risk-hazard:hazard-inspection:hazard-inspection-ledger",
     "safety:risk-hazard:ehs-change:ehs-change-apply",
     "safety:emergency-accident:accident-ledger", "safety:training-check:safety-check",
@@ -930,17 +930,8 @@ PAGE_API_BINDINGS += tuple(
             "quality:deviations:deviation-ledger", "quality:capas:capa-ledger",
             "quality:capas:capa-plans", "quality:change:change-action-plans",
         )),
-        ("equipment", tuple(
-            page.page_key for page in PAGE_DEFINITIONS
-            if page.module_code == "equipment"
-            and (
-                page.page_key in {"equipment:maintenance", "equipment:inspection"}
-                or page.page_key.startswith("equipment:workshop-")
-                and page.route_path.startswith((
-                    "/equipment/maintenance/", "/equipment/inspection/",
-                ))
-            )
-        )),
+        # 巡检待办 kind 已下线，my-todos 仅维保页可读
+        ("equipment", ("equipment:maintenance",)),
         ("safety", (
             "safety:risk-hazard:hazard-inspection:hazard-inspection-ledger",
             "safety:risk-hazard:ehs-change:ehs-change-apply",

@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fetchCandidates, fetchPersonnelList } from './equipment-personnel'
 
+const revalidatePathSpy = vi.hoisted(() => vi.fn())
+vi.mock('next/cache', () => ({ revalidatePath: revalidatePathSpy }))
+vi.mock('@/lib/auth', () => ({
+  getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: 'Bearer t' }),
+}))
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -71,5 +77,20 @@ describe('equipment-personnel workshop scoping', () => {
     await expect(fetchPersonnelList({ workshop: '101-2' })).rejects.toThrow(
       '请求失败: 500',
     )
+  })
+})
+
+describe('equipment-personnel actions', () => {
+  it('createRole revalidates the real /equipment/personnel page route', async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: { id: 'r-1' } }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { createRole } = await import('@/actions/equipment-personnel')
+    await createRole({ name: '维修工' } as never)
+
+    // 人员配置页收敛为真实路由后，写操作必须按页面路由失效缓存
+    expect(revalidatePathSpy).toHaveBeenCalledWith('/equipment/personnel', 'page')
   })
 })

@@ -677,6 +677,14 @@ async def list_records(
         conditions.append(
             EquipmentInspectionFeishuRecord.process_status == process_status
         )
+    else:
+        # 多设备合并填写的原始行（处理状态=已拆分，已被逐设备行取代）不参与
+        # 巡检记录/跨车间聚合展示；未启用该字段的表（NULL）不受影响
+        conditions.append(
+            EquipmentInspectionFeishuRecord.process_status.is_distinct_from(
+                _STATUS_SPLIT
+            )
+        )
 
     total = (
         await db.execute(
@@ -943,7 +951,7 @@ async def today_summary(db: AsyncSession, workshop_code: str) -> dict[str, Any]:
 
 
 async def today_summaries_all(db: AsyncSession) -> list[dict[str, Any]]:
-    """各已启用镜像车间的今日巡检进度汇总（设备仪表盘）。"""
+    """各已启用镜像车间的今日巡检进度汇总（设备汇总页）。"""
     summaries: list[dict[str, Any]] = []
     for workshop_code in await list_enabled_workshops(db):
         summary = await today_summary(db, workshop_code)

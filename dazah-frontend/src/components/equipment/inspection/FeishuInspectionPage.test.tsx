@@ -27,10 +27,61 @@ const todayRecord = {
   equipment_name: '酸化罐 1',
   equipment_no: 'XT1-1-1-028',
   am_clean: '√',
+  am_lubrication: '√',
+  am_fastening: '√',
+  am_sealing: '√',
+  am_vibration: '√',
+  am_sound: '√',
+  am_surface: '√',
   pm_clean: '×',
+  pm_lubrication: '√',
+  pm_fastening: '√',
+  pm_sealing: '√',
+  pm_vibration: '√',
+  pm_sound: '√',
+  pm_surface: '√',
   anomaly_note: '下午清洁异常',
   process_status: null,
   has_abnormal: true,
+  raw_fields: {
+    填报人: [{ id: 'ou_test_reporter', name: '王巡检' }],
+  },
+}
+
+// 多项异常行：徽章只直书前两项，其余收敛为「等 N 项」
+const multiFailRecord = {
+  ...todayRecord,
+  id: 'rec-multi',
+  equipment_name: '酸化罐 2',
+  equipment_no: 'XT1-1-1-030',
+  pm_clean: '×',
+  pm_lubrication: '×',
+  pm_sealing: '×',
+  anomaly_note: null,
+}
+
+// 上午未填报行
+const emptyAmRecord = {
+  ...todayRecord,
+  id: 'rec-empty-am',
+  equipment_name: '酸化罐 3',
+  equipment_no: 'XT1-1-1-032',
+  am_clean: null,
+  am_lubrication: null,
+  am_fastening: null,
+  am_sealing: null,
+  am_vibration: null,
+  am_sound: null,
+  am_surface: null,
+  pm_clean: null,
+  pm_lubrication: null,
+  pm_fastening: null,
+  pm_sealing: null,
+  pm_vibration: null,
+  pm_sound: null,
+  pm_surface: null,
+  anomaly_note: null,
+  has_abnormal: false,
 }
 
 const device = {
@@ -59,7 +110,9 @@ describe('FeishuInspectionPage', () => {
   let root: Root
 
   beforeEach(() => {
-    api.fetchInspectionFeishuRecords.mockResolvedValue(paged([todayRecord]))
+    api.fetchInspectionFeishuRecords.mockResolvedValue(
+      paged([todayRecord, multiFailRecord, emptyAmRecord]),
+    )
     api.fetchInspectionFeishuDevices.mockResolvedValue({
       date: '2026-10-10',
       items: [device],
@@ -124,16 +177,27 @@ describe('FeishuInspectionPage', () => {
     return button!
   }
 
-  it('renders the header, sync bar, summary card and today table', async () => {
+  it('renders the sync bar, summary card and today table', async () => {
     await renderPage()
     const text = document.body.textContent || ''
-    expect(text).toContain('设备巡检 · 201一车间')
-    expect(text).toContain('201一车间岗位巡检记录（飞书多维表格镜像，只读展示）')
+    // 页面标题/副标题已由统一工作台的模块 Tab 取代，这里从同步条开始断言
     expect(text).toContain('巡检数据在飞书多维表格录入，平台每 5 分钟自动同步')
     expect(text).toContain('最近同步')
     expect(text).toContain('镜像 98 行')
     expect(text).toContain('查看原因')
     expect(text).toContain('今日进度（2026-10-10）')
+    // 同步条在「今日进度」卡片右侧，不再独占标题下的一行
+    const syncButton = findButton('飞书同步')
+    const summaryCard = syncButton.closest('.ant-card')
+    expect(summaryCard?.textContent).toContain('今日进度')
+    // 填报人列从镜像原始字段（飞书人员字段）提取姓名展示
+    expect(text).toContain('填报人')
+    expect(text).toContain('王巡检')
+    // 上午/下午 14 列收敛为状态徽章：全正常、单项异常直书、多项异常收敛「等 N 项」
+    expect(text).toContain('✓ 7 项正常')
+    expect(text).toContain('✗ 清洁')
+    expect(text).toContain('✗ 清洁、润滑 等3项')
+    expect(text).toContain('未填报')
     expect(text).toContain('46 / 49')
     expect(text).toContain('上午 46/49 · 下午 45/49')
     expect(text).toContain('含异常')

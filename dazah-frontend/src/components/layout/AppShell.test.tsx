@@ -101,6 +101,23 @@ describe('application shell permission boundary', () => {
     expect(denied).not.toContain('业务内容')
   })
 
+  it('admits the equipment console with only a legacy workshop-leaf grant', () => {
+    // 统一工作台：旧「车间×功能」叶授权经展开后，/equipment 聚合入口按任一模块授权放行
+    session.pathname = '/equipment'
+    const html = renderToStaticMarkup(<AppShell user={makeUser({
+      module_codes: ['equipment'],
+      page_permissions: [{
+        page_key: 'equipment:workshop-101-2:inspection-101-2',
+        module_code: 'equipment',
+        permissions: ['access', 'query'],
+        source: 'user', sensitive_actions: [], data_scope: { scope_type: 'not_applicable' },
+      }],
+      page_permission_rollouts: { equipment: 'enforced' },
+    })}>业务内容</AppShell>)
+    expect(html).toContain('业务内容')
+    expect(html).not.toContain('暂无页面访问权限')
+  })
+
   it('builds navigation from the current user page grant', () => {
     const html = renderToStaticMarkup(<AppShell user={makeUser({
       page_permissions: pageGrant(['access', 'query']),

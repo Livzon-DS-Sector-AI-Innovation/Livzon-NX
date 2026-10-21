@@ -1,8 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import {
-  App, Button, Card, Checkbox, DatePicker, Input, Progress, Table, Tabs, Tag, Tooltip,
+  App, Button, Card, Checkbox, DatePicker, Input, Popover, Progress, Table, Tabs, Tag, Tooltip,
 } from 'antd'
 import {
   CheckSquareOutlined, CloudSyncOutlined, HistoryOutlined, SettingOutlined, SyncOutlined, TabletOutlined,
@@ -38,6 +38,85 @@ function CheckCell({ value }: { value: string | null }) {
   if (value === '√') return <span style={{ color: C.green, fontWeight: 600 }}>√</span>
   if (value === '×') return <span style={{ color: C.red, fontWeight: 700 }}>×</span>
   return <span style={{ color: '#c9c5bd' }}>—</span>
+}
+
+// ── 上午/下午会话徽章（14 个检查列收敛为两枚状态徽章，悬停看逐项明细） ──
+
+type SessionTone = 'ok' | 'bad' | 'empty'
+
+interface SessionSummary {
+  tone: SessionTone
+  label: string
+  values: Array<{ label: string; value: string | null }>
+}
+
+function sessionSummary(
+  record: InspectionFeishuRecord,
+  keys: readonly (keyof InspectionFeishuRecord)[],
+): SessionSummary {
+  const values = keys.map((key, i) => ({
+    label: ITEM_LABELS[i],
+    value: (record[key] ?? null) as string | null,
+  }))
+  const filled = values.filter((v) => v.value !== null)
+  const failed = values.filter((v) => v.value === '×')
+  if (failed.length > 0) {
+    // 多项异常只展示前两项，其余收敛为「等 N 项」，明细在悬停层
+    const head = failed.slice(0, 2).map((v) => v.label).join('、')
+    return {
+      tone: 'bad',
+      label: failed.length > 2 ? `✗ ${head} 等${failed.length}项` : `✗ ${head}`,
+      values,
+    }
+  }
+  if (filled.length === 0) return { tone: 'empty', label: '未填报', values }
+  return {
+    tone: 'ok',
+    label: filled.length === values.length
+      ? `✓ ${values.length} 项正常`
+      : `✓ ${filled.length}/${values.length} 项正常`,
+    values,
+  }
+}
+
+const SESSION_TONES: Record<SessionTone, { bg: string; color: string }> = {
+  ok: { bg: 'rgba(56,158,13,0.10)', color: C.green },
+  bad: { bg: 'rgba(207,19,34,0.08)', color: C.red },
+  empty: { bg: '#f4f2ef', color: '#a8a49e' },
+}
+
+function SessionBadge({ summary }: { summary: SessionSummary }) {
+  const tone = SESSION_TONES[summary.tone]
+  const chip = (
+    <span
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        borderRadius: 999, padding: '2px 10px',
+        fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
+        background: tone.bg, color: tone.color, cursor: 'default',
+      }}
+    >
+      {summary.label}
+    </span>
+  )
+  const detail = (
+    <div style={{ minWidth: 150 }}>
+      {summary.values.map(({ label, value }) => (
+        <div
+          key={label}
+          style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 12, padding: '3px 0', color: '#595753' }}
+        >
+          <span>{label}</span>
+          <CheckCell value={value} />
+        </div>
+      ))}
+    </div>
+  )
+  return (
+    <Popover content={detail} trigger="hover" placement="bottomLeft">
+      {chip}
+    </Popover>
+  )
 }
 
 function fmtTime(iso: string | null | undefined): string {
@@ -111,25 +190,36 @@ function SyncBar({
 
 // ── 巡检记录表（今日/历史共用） ───────────────────────────────────
 
+/** 从镜像原始字段取填报人姓名（飞书人员字段值：[{id, name, ...}]） */
+function reporterNames(record: InspectionFeishuRecord): string | null {
+  const value = record.raw_fields?.['填报人']
+  if (!Array.isArray(value)) return null
+  const names = value
+    .map((entry) => (
+      entry && typeof entry === 'object' && 'name' in entry
+        ? String((entry as { name?: unknown }).name ?? '')
+        : ''))
+    .filter(Boolean)
+  return names.length > 0 ? names.join('、') : null
+}
+
 function recordColumns(opts: { showStatus: boolean }): ColumnsType<InspectionFeishuRecord> {
   const base: ColumnsType<InspectionFeishuRecord> = [
     { title: '日期', dataIndex: 'record_date', width: 95, render: (d: string | null) => d || '-' },
     { title: '设备名称', dataIndex: 'equipment_name', width: 140, ellipsis: true, render: (v: string | null) => v || '-' },
     { title: '设备编号', dataIndex: 'equipment_no', width: 125, render: (v: string | null) => <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{v || '-'}</span> },
   ]
-  const am = AM_KEYS.map((key, i) => ({
-    title: ITEM_LABELS[i],
-    dataIndex: key,
-    width: 52,
-    align: 'center' as const,
-    render: (v: string | null) => <CheckCell value={v} />,
-  }))
-  const pm = PM_KEYS.map((key, i) => ({
-    title: ITEM_LABELS[i],
-    dataIndex: key,
-    width: 52,
-    align: 'center' as const,
-    render: (v: string | null) => <CheckCell value={v} />,
+  // 上午/下午 14 个检查列收敛为两枚状态徽章：正常绿 / 异常红（≤2 项直书名称，
+  // 更多收敛「等 N 项」）/ 未填报灰；悬停徽章展示逐项明细
+  const sessions: ColumnsType<InspectionFeishuRecord> = ([
+    ['上午', AM_KEYS],
+    ['下午', PM_KEYS],
+  ] as const).map(([title, keys]) => ({
+    title,
+    width: 185,
+    render: (_: unknown, record: InspectionFeishuRecord) => (
+      <SessionBadge summary={sessionSummary(record, keys)} />
+    ),
   }))
   const tail: ColumnsType<InspectionFeishuRecord> = [
     {
@@ -139,6 +229,10 @@ function recordColumns(opts: { showStatus: boolean }): ColumnsType<InspectionFei
           ? <span style={{ color: C.red }}>{v || '（含异常项，未填写描述）'}</span>
           : (v || '-'),
     },
+    {
+      title: '填报人', width: 110, ellipsis: true,
+      render: (_, record) => reporterNames(record) || '-',
+    },
   ]
   if (opts.showStatus) {
     tail.unshift({
@@ -146,11 +240,9 @@ function recordColumns(opts: { showStatus: boolean }): ColumnsType<InspectionFei
       render: (v: string | null) => v || '-',
     })
   }
-  // 分组表头：上午 / 下午
   const columns: ColumnsType<InspectionFeishuRecord> = [
     ...base,
-    { title: '上午', children: am as ColumnsType<InspectionFeishuRecord> },
-    { title: '下午', children: pm as ColumnsType<InspectionFeishuRecord> },
+    ...sessions,
     ...tail,
   ]
   return columns
@@ -244,8 +336,13 @@ function RecordsTable({
 // ── 今日进度 ─────────────────────────────────────────────────────
 
 function TodaySummaryCard({
-  refreshKey, workshop,
-}: { refreshKey: number; workshop: string }) {
+  refreshKey, workshop, extra,
+}: {
+  refreshKey: number
+  workshop: string
+  /** 卡片右侧内容（飞书同步条），随卡片常驻展示 */
+  extra?: ReactNode
+}) {
   const [summary, setSummary] = useState<InspectionFeishuTodaySummary | null>(null)
 
   useEffect(() => {
@@ -254,28 +351,34 @@ function TodaySummaryCard({
       .catch(() => setSummary(null))
   }, [refreshKey, workshop])
 
-  if (!summary) return null
-  const pct = summary.total_devices > 0
+  // 无进度数据时仍保留卡片右侧的同步入口（如未配置时进度为空）
+  if (!summary && !extra) return null
+  const pct = summary && summary.total_devices > 0
     ? Math.round((summary.inspected / summary.total_devices) * 100) : 0
   return (
     <Card size="small" style={{ marginBottom: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-        <div style={{ minWidth: 260 }}>
-          <div style={{ fontSize: 13, color: C.slate, marginBottom: 4 }}>
-            今日进度（{summary.date}）
-          </div>
-          <Progress
-            percent={pct} size="small"
-            strokeColor={summary.abnormal > 0 ? '#e67e22' : C.green}
-            format={() => `${summary.inspected} / ${summary.total_devices} 台`}
-          />
-          <div style={{ fontSize: 12, color: C.stone, marginTop: 2 }}>
-            上午 {summary.am_inspected}/{summary.total_devices} · 下午 {summary.pm_inspected}/{summary.total_devices}
-          </div>
-        </div>
-        <div style={{ fontSize: 13, color: C.slate }}>
-          含异常 <span style={{ color: summary.abnormal > 0 ? C.red : C.green, fontWeight: 600, fontSize: 16 }}>{summary.abnormal}</span> 台
-        </div>
+        {summary && (
+          <>
+            <div style={{ minWidth: 260 }}>
+              <div style={{ fontSize: 13, color: C.slate, marginBottom: 4 }}>
+                今日进度（{summary.date}）
+              </div>
+              <Progress
+                percent={pct} size="small"
+                strokeColor={summary.abnormal > 0 ? '#e67e22' : C.green}
+                format={() => `${summary.inspected} / ${summary.total_devices} 台`}
+              />
+              <div style={{ fontSize: 12, color: C.stone, marginTop: 2 }}>
+                上午 {summary.am_inspected}/{summary.total_devices} · 下午 {summary.pm_inspected}/{summary.total_devices}
+              </div>
+            </div>
+            <div style={{ fontSize: 13, color: C.slate }}>
+              含异常 <span style={{ color: summary.abnormal > 0 ? C.red : C.green, fontWeight: 600, fontSize: 16 }}>{summary.abnormal}</span> 台
+            </div>
+          </>
+        )}
+        {extra && <div style={{ marginLeft: summary ? 'auto' : 0 }}>{extra}</div>}
       </div>
     </Card>
   )
@@ -392,13 +495,22 @@ export function FeishuInspectionPage({
     }
   }
 
-  const tabItems = useMemo(() => [
+  // 同步状态/按钮随 status、syncing 实时变化，直接内联构建避免 useMemo 过期
+  const tabItems = [
     {
       key: 'today',
       label: <span><CheckSquareOutlined /> 今日巡检</span>,
       children: (
         <div>
-          <TodaySummaryCard refreshKey={refreshKey} workshop={workshopCode} />
+          <TodaySummaryCard
+            refreshKey={refreshKey} workshop={workshopCode}
+            extra={(
+              <SyncBar
+                status={status} syncing={syncing}
+                onSync={handleSync} onOpenConfig={() => setConfigOpen(true)}
+              />
+            )}
+          />
           <RecordsTable source="today" defaultDays={null} showStatus={false} workshop={workshopCode} />
         </div>
       ),
@@ -413,25 +525,10 @@ export function FeishuInspectionPage({
       label: <span><TabletOutlined /> 巡检设备</span>,
       children: <DevicesTab refreshKey={refreshKey} workshop={workshopCode} />,
     },
-  ], [refreshKey, workshopCode])
+  ]
 
   return (
-    <div style={{ padding: '20px 24px 32px', maxWidth: 1440, margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <h2 style={{ fontSize: 20, fontWeight: 600, color: C.ink, margin: 0 }}>
-            设备巡检 · {workshopLabel}
-          </h2>
-          <p style={{ fontSize: 13, color: C.stone, margin: '4px 0 0' }}>
-            {workshopLabel}岗位巡检记录（飞书多维表格镜像，只读展示）
-          </p>
-        </div>
-        <SyncBar
-          status={status} syncing={syncing}
-          onSync={handleSync} onOpenConfig={() => setConfigOpen(true)}
-        />
-      </div>
-
+    <div style={{ padding: '20px 24px 32px' }}>
       <InspectionFeishuConfigDrawer
         workshopCode={workshopCode}
         workshopLabel={workshopLabel}
