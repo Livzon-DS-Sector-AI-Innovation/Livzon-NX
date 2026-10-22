@@ -11,8 +11,10 @@ from app.modules.equipment import repository as repo
 from app.modules.equipment.models import CalibrationPlan, CalibrationRecord
 from app.modules.equipment.schemas import (
     CalibrationPlanCreate,
+    CalibrationPlanResponse,
     CalibrationPlanUpdate,
     CalibrationRecordCreate,
+    CalibrationRecordResponse,
 )
 
 
@@ -183,3 +185,40 @@ async def get_calibration_records(
         page=page,
         page_size=page_size,
     )
+
+
+async def attach_calibration_plan_display(
+    db: AsyncSession, plans: list[CalibrationPlanResponse]
+) -> list[CalibrationPlanResponse]:
+    """批量填充设备名称/编号与负责人姓名（列表展示用）"""
+    if not plans:
+        return plans
+    equipment_map = await repo.get_equipment_name_map(
+        db, [p.equipment_id for p in plans]
+    )
+    user_map = await repo.get_user_name_map(
+        db, [p.responsible_person_id for p in plans if p.responsible_person_id]
+    )
+    for p in plans:
+        name_no = equipment_map.get(p.equipment_id)
+        if name_no:
+            p.equipment_name, p.equipment_no = name_no
+        if p.responsible_person_id:
+            p.responsible_person_name = user_map.get(p.responsible_person_id)
+    return plans
+
+
+async def attach_record_display(
+    db: AsyncSession, records: list[CalibrationRecordResponse]
+) -> list[CalibrationRecordResponse]:
+    """批量填充校准记录的设备名称/编号"""
+    if not records:
+        return records
+    equipment_map = await repo.get_equipment_name_map(
+        db, [r.equipment_id for r in records]
+    )
+    for r in records:
+        name_no = equipment_map.get(r.equipment_id)
+        if name_no:
+            r.equipment_name, r.equipment_no = name_no
+    return records

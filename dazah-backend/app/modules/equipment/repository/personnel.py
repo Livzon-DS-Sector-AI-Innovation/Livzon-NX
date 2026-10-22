@@ -159,9 +159,7 @@ async def list_personnel(
 
     if workshop_code:
         stmt = stmt.where(EquipmentPersonnel.workshop_code == workshop_code)
-        count_stmt = count_stmt.where(
-            EquipmentPersonnel.workshop_code == workshop_code
-        )
+        count_stmt = count_stmt.where(EquipmentPersonnel.workshop_code == workshop_code)
     if is_active is not None:
         stmt = stmt.where(EquipmentPersonnel.is_active == is_active)
         count_stmt = count_stmt.where(EquipmentPersonnel.is_active == is_active)
@@ -428,3 +426,36 @@ async def get_candidates(
         return list(filtered.values())
 
     return list(candidates.values())
+
+
+async def get_active_maintainer_personnel(
+    db: AsyncSession, workshop_code: str | None = None
+) -> list[EquipmentPersonnel]:
+    """在岗且有账号关联的人员（工单指派维修人下拉用）"""
+    conditions = [
+        EquipmentPersonnel.is_deleted == False,  # noqa: E712
+        EquipmentPersonnel.is_active == True,  # noqa: E712
+        EquipmentPersonnel.user_id.isnot(None),
+    ]
+    if workshop_code:
+        conditions.append(EquipmentPersonnel.workshop_code == workshop_code)
+    result = await db.execute(
+        select(EquipmentPersonnel)
+        .where(*conditions)
+        .order_by(EquipmentPersonnel.name)
+    )
+    return list(result.scalars().all())
+
+
+async def get_user_option_rows(
+    db: AsyncSession,
+) -> list[Any]:
+    """全部本地用户的 (id, name, employee_no) 行（责任人下拉用）"""
+    from app.platform.identity.models import User
+
+    result = await db.execute(
+        select(User.id, User.name, User.employee_no)
+        .where(User.is_deleted == False)  # noqa: E712
+        .order_by(User.name)
+    )
+    return list(result.all())

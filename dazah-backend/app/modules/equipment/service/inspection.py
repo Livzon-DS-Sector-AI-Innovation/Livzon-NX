@@ -35,6 +35,7 @@ _VALID_TRANSITIONS: dict[str, list[str]] = {
 
 # ═══════════ 任务 ═══════════
 
+
 async def _get_task(db: AsyncSession, task_id: uuid.UUID) -> InspectionTask:
     task = await repo.get_task_by_id(db, task_id)
     if not task:

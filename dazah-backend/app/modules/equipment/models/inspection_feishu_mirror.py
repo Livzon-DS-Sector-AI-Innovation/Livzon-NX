@@ -55,12 +55,8 @@ class EquipmentInspectionFeishuRecord(BaseModel):
     )
     record_id: Mapped[str] = mapped_column(String(64), comment="飞书记录ID")
     record_date: Mapped[date | None] = mapped_column(Date, comment="巡检日期")
-    equipment_name: Mapped[str | None] = mapped_column(
-        String(200), comment="设备名称"
-    )
-    equipment_no: Mapped[str | None] = mapped_column(
-        String(100), comment="设备编号"
-    )
+    equipment_name: Mapped[str | None] = mapped_column(String(200), comment="设备名称")
+    equipment_no: Mapped[str | None] = mapped_column(String(100), comment="设备编号")
     # 上午 7 项（√ / × / NULL=未填）
     am_clean: Mapped[str | None] = mapped_column(String(8))
     am_lubrication: Mapped[str | None] = mapped_column(String(8))
@@ -77,15 +73,11 @@ class EquipmentInspectionFeishuRecord(BaseModel):
     pm_vibration: Mapped[str | None] = mapped_column(String(8))
     pm_sound: Mapped[str | None] = mapped_column(String(8))
     pm_surface: Mapped[str | None] = mapped_column(String(8))
-    anomaly_note: Mapped[str | None] = mapped_column(
-        Text, comment="其他异常情况描述"
-    )
+    anomaly_note: Mapped[str | None] = mapped_column(Text, comment="其他异常情况描述")
     process_status: Mapped[str | None] = mapped_column(
         String(20), comment="处理状态（历史表）：已拆分/有效记录"
     )
-    has_abnormal: Mapped[bool] = mapped_column(
-        default=False, comment="任一检查项为 ×"
-    )
+    has_abnormal: Mapped[bool] = mapped_column(default=False, comment="任一检查项为 ×")
     raw_fields: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, comment="飞书原始字段（未识别列也保留）"
     )
@@ -117,12 +109,8 @@ class EquipmentInspectionFeishuDevice(BaseModel):
         comment="车间代码（如 101-1 / 201-1）",
     )
     record_id: Mapped[str] = mapped_column(String(64), comment="飞书记录ID")
-    equipment_name: Mapped[str | None] = mapped_column(
-        String(200), comment="设备名称"
-    )
-    equipment_no: Mapped[str | None] = mapped_column(
-        String(100), comment="设备编号"
-    )
+    equipment_name: Mapped[str | None] = mapped_column(String(200), comment="设备名称")
+    equipment_no: Mapped[str | None] = mapped_column(String(100), comment="设备编号")
     last_modified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), comment="飞书最后修改时间"
     )

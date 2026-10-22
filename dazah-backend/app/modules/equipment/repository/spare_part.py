@@ -140,6 +140,23 @@ async def get_stock_by_spare_part_id(
     return result.scalar_one_or_none()
 
 
+async def get_stocks_by_spare_part_ids(
+    db: AsyncSession,
+    spare_part_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, SparePartStock]:
+    """批量获取库存记录（列表展示用，单次查询避免 N+1）"""
+    unique_ids = list(set(spare_part_ids))
+    if not unique_ids:
+        return {}
+    result = await db.execute(
+        select(SparePartStock).where(
+            SparePartStock.spare_part_id.in_(unique_ids),
+            SparePartStock.is_deleted == False,  # noqa: E712
+        )
+    )
+    return {stock.spare_part_id: stock for stock in result.scalars().all()}
+
+
 async def create_stock(
     db: AsyncSession,
     data: dict[str, Any],

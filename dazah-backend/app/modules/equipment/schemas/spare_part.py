@@ -78,6 +78,13 @@ class SparePartResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SparePartListItem(SparePartResponse):
+    """备件列表项（附当前库存与安全库存，列表端点批量填充）"""
+
+    current_qty: int = 0
+    safety_qty: int = 0
+
+
 # ==================== 库存 ====================
 class StockResponse(BaseModel):
     """库存响应"""

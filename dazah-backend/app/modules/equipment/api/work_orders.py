@@ -26,6 +26,7 @@ from app.modules.equipment.schemas import (
     WorkOrderUpdate,
     WorkOrderVerify,
 )
+from app.shared.schemas import ApiResponseEnvelope
 
 
 def _require_user(current_user: CurrentUser) -> uuid.UUID:
@@ -71,7 +72,11 @@ def _to_response(wo: WorkOrder) -> WorkOrderResponse:
 router = APIRouter()
 
 
-@router.post("/", summary="创建工单（报修）")
+@router.post(
+    "/",
+    summary="创建工单（报修）",
+    response_model=ApiResponseEnvelope[WorkOrderResponse],
+)
 async def create_work_order(
     data: WorkOrderCreate,
     db: AsyncSession = Depends(get_db),
@@ -82,7 +87,11 @@ async def create_work_order(
     return success_response(data=_to_response(wo))
 
 
-@router.put("/{work_order_id}", summary="更新工单")
+@router.put(
+    "/{work_order_id}",
+    summary="更新工单",
+    response_model=ApiResponseEnvelope[WorkOrderResponse],
+)
 async def update_work_order(
     work_order_id: uuid.UUID,
     data: WorkOrderUpdate,
@@ -92,7 +101,9 @@ async def update_work_order(
     return success_response(data=_to_response(wo))
 
 
-@router.get("/", summary="工单列表")
+@router.get(
+    "/", summary="工单列表", response_model=ApiResponseEnvelope[list[WorkOrderResponse]]
+)
 async def list_work_orders(
     status: str | None = Query(None, description="工单状态"),
     equipment_id: uuid.UUID | None = Query(None, description="设备ID"),
@@ -123,7 +134,11 @@ async def list_work_orders(
     )
 
 
-@router.get("/statistics", summary="工单统计")
+@router.get(
+    "/statistics",
+    summary="工单统计",
+    response_model=ApiResponseEnvelope[WorkOrderStatistics],
+)
 async def get_work_order_statistics(
     workshop: str | None = Query(
         None, pattern=r"^\d{3}(-\d)?$", description="车间代码（如 101-1 / 201-1）"
@@ -134,7 +149,11 @@ async def get_work_order_statistics(
     return success_response(data=WorkOrderStatistics.model_validate(stats))
 
 
-@router.get("/{work_order_id}", summary="工单详情")
+@router.get(
+    "/{work_order_id}",
+    summary="工单详情",
+    response_model=ApiResponseEnvelope[WorkOrderResponse],
+)
 async def get_work_order(
     work_order_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -143,7 +162,11 @@ async def get_work_order(
     return success_response(data=_to_response(wo))
 
 
-@router.put("/{work_order_id}/assign", summary="指派维修人")
+@router.put(
+    "/{work_order_id}/assign",
+    summary="指派维修人",
+    response_model=ApiResponseEnvelope[WorkOrderResponse],
+)
 async def assign_work_order(
     work_order_id: uuid.UUID,
     data: WorkOrderAssign,
@@ -154,7 +177,11 @@ async def assign_work_order(
     return success_response(data=_to_response(wo))
 
 
-@router.put("/{work_order_id}/start", summary="开始维修")
+@router.put(
+    "/{work_order_id}/start",
+    summary="开始维修",
+    response_model=ApiResponseEnvelope[WorkOrderResponse],
+)
 async def start_work_order(
     work_order_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -164,7 +191,11 @@ async def start_work_order(
     return success_response(data=_to_response(wo))
 
 
-@router.put("/{work_order_id}/complete", summary="提交完成")
+@router.put(
+    "/{work_order_id}/complete",
+    summary="提交完成",
+    response_model=ApiResponseEnvelope[WorkOrderResponse],
+)
 async def complete_work_order(
     work_order_id: uuid.UUID,
     data: WorkOrderComplete,
@@ -175,7 +206,11 @@ async def complete_work_order(
     return success_response(data=_to_response(wo))
 
 
-@router.put("/{work_order_id}/verify", summary="验收")
+@router.put(
+    "/{work_order_id}/verify",
+    summary="验收",
+    response_model=ApiResponseEnvelope[WorkOrderResponse],
+)
 async def verify_work_order(
     work_order_id: uuid.UUID,
     data: WorkOrderVerify,
@@ -187,7 +222,11 @@ async def verify_work_order(
     return success_response(data=_to_response(wo))
 
 
-@router.put("/{work_order_id}/close", summary="关闭工单")
+@router.put(
+    "/{work_order_id}/close",
+    summary="关闭工单",
+    response_model=ApiResponseEnvelope[WorkOrderResponse],
+)
 async def close_work_order(
     work_order_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -197,7 +236,11 @@ async def close_work_order(
     return success_response(data=_to_response(wo))
 
 
-@router.post("/{work_order_id}/materials", summary="领料")
+@router.post(
+    "/{work_order_id}/materials",
+    summary="领料",
+    response_model=ApiResponseEnvelope[list[MaterialConsumeResponse]],
+)
 async def consume_materials(
     work_order_id: uuid.UUID,
     data: MaterialConsumeRequest,
@@ -211,14 +254,16 @@ async def consume_materials(
     )
 
 
-@router.get("/{work_order_id}/materials", summary="工单领料记录")
+@router.get(
+    "/{work_order_id}/materials",
+    summary="工单领料记录",
+    response_model=ApiResponseEnvelope[list[MaterialConsumeResponse]],
+)
 async def get_material_consumptions(
     work_order_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
-    from app.modules.equipment import repository as repo
-
-    transactions = await repo.get_material_consumptions(db, work_order_id)
+    transactions = await service.get_material_consumptions(db, work_order_id)
     return success_response(
         data=[MaterialConsumeResponse.model_validate(t) for t in transactions]
     )

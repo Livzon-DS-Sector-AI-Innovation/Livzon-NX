@@ -249,22 +249,37 @@ async def delete_location(
     return True
 
 
+async def _get_subtree_child_ids(
+    db: AsyncSession,
+    model: type[EquipmentCategory] | type[Location],
+    parent_id: uuid.UUID,
+) -> list[uuid.UUID]:
+    """收集指定节点及其所有子孙的 ID（整树一次查询后内存展开，避免逐层递归查询）"""
+    result = await db.execute(
+        select(model.id, model.parent_id).where(
+            model.is_deleted == False,  # noqa: E712
+        )
+    )
+    children_of: dict[uuid.UUID | None, list[uuid.UUID]] = {}
+    for node_id, node_parent in result.all():
+        children_of.setdefault(node_parent, []).append(node_id)
+    collected: list[uuid.UUID] = [parent_id]
+    frontier = [parent_id]
+    while frontier:
+        next_frontier: list[uuid.UUID] = []
+        for node in frontier:
+            next_frontier.extend(children_of.get(node, []))
+        collected.extend(next_frontier)
+        frontier = next_frontier
+    return collected
+
+
 async def _get_category_child_ids(
     db: AsyncSession,
     parent_id: uuid.UUID,
 ) -> list[uuid.UUID]:
     """递归收集指定分类及其所有子孙分类的ID"""
-    result = await db.execute(
-        select(EquipmentCategory.id).where(
-            EquipmentCategory.parent_id == parent_id,
-            EquipmentCategory.is_deleted == False,  # noqa: E712
-        )
-    )
-    child_ids = list(result.scalars().all())
-    all_ids: list[uuid.UUID] = [parent_id]
-    for child_id in child_ids:
-        all_ids.extend(await _get_category_child_ids(db, child_id))
-    return all_ids
+    return await _get_subtree_child_ids(db, EquipmentCategory, parent_id)
 
 
 async def _get_location_child_ids(
@@ -272,17 +287,7 @@ async def _get_location_child_ids(
     parent_id: uuid.UUID,
 ) -> list[uuid.UUID]:
     """递归收集指定位置及其所有子孙位置的ID"""
-    result = await db.execute(
-        select(Location.id).where(
-            Location.parent_id == parent_id,
-            Location.is_deleted == False,  # noqa: E712
-        )
-    )
-    child_ids = list(result.scalars().all())
-    all_ids: list[uuid.UUID] = [parent_id]
-    for child_id in child_ids:
-        all_ids.extend(await _get_location_child_ids(db, child_id))
-    return all_ids
+    return await _get_subtree_child_ids(db, Location, parent_id)
 
 
 # ==================== 设备管理 ====================
@@ -685,6 +690,31 @@ async def get_department_info(
     return dict(row._mapping)
 
 
+async def get_department_info_map(
+    db: AsyncSession, department_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, dict[str, Any]]:
+    """批量获取部门信息（含负责人，列表展示用，单次查询避免 N+1）"""
+    unique_ids = list(set(department_ids))
+    if not unique_ids:
+        return {}
+    query = (
+        select(
+            Department.id.label("id"),
+            Department.name.label("name"),
+            Department.leader_user_id.label("leader_user_id"),
+            User.id.label("leader_id"),
+            User.name.label("leader_name"),
+        )
+        .outerjoin(User, Department.leader_user_id == User.feishu_open_id)
+        .where(
+            Department.id.in_(unique_ids),
+            Department.is_deleted == False,  # noqa: E712
+        )
+    )
+    result = await db.execute(query)
+    return {row.id: dict(row._mapping) for row in result.all()}
+
+
 async def get_department_leader_user_id(
     db: AsyncSession, department_id: uuid.UUID
 ) -> uuid.UUID | None:
@@ -706,3 +736,29 @@ async def get_user_name_by_id(db: AsyncSession, user_id: uuid.UUID) -> str | Non
     """根据 User.id 获取用户姓名"""
     result = await db.execute(select(User.name).where(User.id == user_id))
     return result.scalar_one_or_none()
+
+
+async def get_user_name_map(
+    db: AsyncSession, user_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, str]:
+    """批量获取用户姓名（列表展示用，单次查询避免 N+1）"""
+    unique_ids = list(set(user_ids))
+    if not unique_ids:
+        return {}
+    result = await db.execute(select(User.id, User.name).where(User.id.in_(unique_ids)))
+    return {row.id: row.name for row in result.all()}
+
+
+async def get_equipment_name_map(
+    db: AsyncSession, equipment_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, tuple[str, str]]:
+    """批量获取设备名称与编号（列表展示用，单次查询避免 N+1）"""
+    unique_ids = list(set(equipment_ids))
+    if not unique_ids:
+        return {}
+    result = await db.execute(
+        select(Equipment.id, Equipment.name, Equipment.equipment_no).where(
+            Equipment.id.in_(unique_ids)
+        )
+    )
+    return {row.id: (row.name, row.equipment_no) for row in result.all()}

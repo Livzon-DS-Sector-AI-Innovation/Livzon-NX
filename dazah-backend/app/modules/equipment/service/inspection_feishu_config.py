@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import re
+import uuid
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
@@ -128,20 +129,24 @@ class _AppLibraryCredentials:
 
 
 async def _resolve_app_credentials(
-    db: AsyncSession, app_row_id
+    db: AsyncSession, app_row_id: uuid.UUID
 ) -> _AppLibraryCredentials | None:
     """从自建应用库解析凭据；应用不存在或已删除时返回 None（视为未配置）。"""
     from app.modules.equipment.models.feishu_app import EquipmentFeishuApp
     from app.modules.equipment.service.feishu_app import decrypt_app_secret
 
     row = (
-        await db.execute(
-            select(EquipmentFeishuApp).where(
-                EquipmentFeishuApp.id == app_row_id,
-                EquipmentFeishuApp.is_deleted == False,  # noqa: E712
+        (
+            await db.execute(
+                select(EquipmentFeishuApp).where(
+                    EquipmentFeishuApp.id == app_row_id,
+                    EquipmentFeishuApp.is_deleted == False,  # noqa: E712
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if row is None:
         return None
     return _AppLibraryCredentials(
@@ -235,17 +240,20 @@ async def is_mirror_enabled(db: AsyncSession, workshop_code: str) -> bool:
 async def list_enabled_workshops(db: AsyncSession) -> list[str]:
     """已启用镜像同步的车间代码（调度器按此生成同步任务）。"""
     rows = (
-        await db.execute(
-            select(EquipmentInspectionFeishuConfig.workshop_code).where(
-                EquipmentInspectionFeishuConfig.is_deleted == False  # noqa: E712
+        (
+            await db.execute(
+                select(EquipmentInspectionFeishuConfig.workshop_code).where(
+                    EquipmentInspectionFeishuConfig.is_deleted == False  # noqa: E712
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     workshops = set(rows)
     # 默认车间无行时仍检查环境变量回退
     workshops.add(DEFAULT_WORKSHOP_CODE)
-    enabled = [code for code in sorted(workshops)
-               if await is_mirror_enabled(db, code)]
+    enabled = [code for code in sorted(workshops) if await is_mirror_enabled(db, code)]
     return enabled
 
 
@@ -312,12 +320,16 @@ async def list_config_details(
     前端结合车间常量表补齐未配置车间的空态行。
     """
     rows = (
-        await db.execute(
-            select(EquipmentInspectionFeishuConfig).where(
-                EquipmentInspectionFeishuConfig.is_deleted.is_(False)
+        (
+            await db.execute(
+                select(EquipmentInspectionFeishuConfig).where(
+                    EquipmentInspectionFeishuConfig.is_deleted.is_(False)
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     workshops = [row.workshop_code for row in rows]
     if DEFAULT_WORKSHOP_CODE not in workshops:
         workshops.append(DEFAULT_WORKSHOP_CODE)
@@ -448,9 +460,7 @@ async def update_config(
     if data.feishu_app_id is not None:
         app_creds = await _resolve_app_credentials(db, data.feishu_app_id)
         if app_creds is None:
-            raise AppException(
-                message="所选自建应用不存在或已删除，请刷新应用库后重选"
-            )
+            raise AppException(message="所选自建应用不存在或已删除，请刷新应用库后重选")
 
     if app_creds is not None:
         app_id = app_creds.app_id

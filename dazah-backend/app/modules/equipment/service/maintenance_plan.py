@@ -13,6 +13,7 @@ from app.modules.equipment import repository as repo
 from app.modules.equipment.models import MaintenancePlan
 from app.modules.equipment.schemas import (
     MaintenancePlanCreate,
+    MaintenancePlanResponse,
     MaintenancePlanUpdate,
 )
 
@@ -275,3 +276,24 @@ async def _generate_work_order_no(db: AsyncSession) -> str:
     else:
         seq = 1
     return f"WO-{today}-{seq:04d}"
+
+
+async def attach_maintenance_display(
+    db: AsyncSession, plans: list[MaintenancePlanResponse]
+) -> list[MaintenancePlanResponse]:
+    """批量填充设备名称/编号与负责人姓名（列表展示用）"""
+    if not plans:
+        return plans
+    equipment_map = await repo.get_equipment_name_map(
+        db, [p.equipment_id for p in plans]
+    )
+    user_map = await repo.get_user_name_map(
+        db, [p.responsible_person_id for p in plans if p.responsible_person_id]
+    )
+    for p in plans:
+        name_no = equipment_map.get(p.equipment_id)
+        if name_no:
+            p.equipment_name, p.equipment_no = name_no
+        if p.responsible_person_id:
+            p.responsible_person_name = user_map.get(p.responsible_person_id)
+    return plans

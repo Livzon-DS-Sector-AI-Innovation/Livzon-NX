@@ -15,21 +15,32 @@ from app.modules.equipment.schemas import (
     MaintenancePlanResponse,
     MaintenancePlanUpdate,
 )
+from app.shared.schemas import ApiResponseEnvelope
 
 router = APIRouter()
 
 
-@router.post("/", summary="新增维护计划")
+@router.post(
+    "/",
+    summary="新增维护计划",
+    response_model=ApiResponseEnvelope[MaintenancePlanResponse],
+)
 async def create_maintenance_plan(
     data: MaintenancePlanCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     plan = await service.create_maintenance_plan(db, data)
-    return success_response(data=MaintenancePlanResponse.model_validate(plan))
+    resp = MaintenancePlanResponse.model_validate(plan)
+    resp = (await service.attach_maintenance_display(db, [resp]))[0]
+    return success_response(data=resp)
 
 
-@router.get("/", summary="维护计划列表")
+@router.get(
+    "/",
+    summary="维护计划列表",
+    response_model=ApiResponseEnvelope[list[MaintenancePlanResponse]],
+)
 async def list_maintenance_plans(
     equipment_id: uuid.UUID | None = Query(None, description="设备ID"),
     status: str | None = Query(None, description="状态"),
@@ -50,35 +61,53 @@ async def list_maintenance_plans(
         page=page,
         page_size=page_size,
     )
+    responses = await service.attach_maintenance_display(
+        db, [MaintenancePlanResponse.model_validate(p) for p in plans]
+    )
     return paginated_response(
-        data=[MaintenancePlanResponse.model_validate(p) for p in plans],
+        data=responses,
         page=page,
         page_size=page_size,
         total=total,
     )
 
 
-@router.get("/overdue", summary="查询到期/逾期的维护计划")
+@router.get(
+    "/overdue",
+    summary="查询到期/逾期的维护计划",
+    response_model=ApiResponseEnvelope[list[MaintenancePlanResponse]],
+)
 async def get_overdue_plans(
     days: int = Query(0, ge=0, description="提前天数，0=仅逾期"),
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     plans = await service.get_overdue_maintenance_plans(db, days)
-    return success_response(
-        data=[MaintenancePlanResponse.model_validate(p) for p in plans]
+    responses = await service.attach_maintenance_display(
+        db, [MaintenancePlanResponse.model_validate(p) for p in plans]
     )
+    return success_response(data=responses)
 
 
-@router.get("/{plan_id}", summary="维护计划详情")
+@router.get(
+    "/{plan_id}",
+    summary="维护计划详情",
+    response_model=ApiResponseEnvelope[MaintenancePlanResponse],
+)
 async def get_maintenance_plan(
     plan_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     plan = await service.get_maintenance_plan_by_id(db, plan_id)
-    return success_response(data=MaintenancePlanResponse.model_validate(plan))
+    resp = MaintenancePlanResponse.model_validate(plan)
+    resp = (await service.attach_maintenance_display(db, [resp]))[0]
+    return success_response(data=resp)
 
 
-@router.put("/{plan_id}", summary="修改维护计划")
+@router.put(
+    "/{plan_id}",
+    summary="修改维护计划",
+    response_model=ApiResponseEnvelope[MaintenancePlanResponse],
+)
 async def update_maintenance_plan(
     plan_id: uuid.UUID,
     data: MaintenancePlanUpdate,
@@ -86,10 +115,14 @@ async def update_maintenance_plan(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     plan = await service.update_maintenance_plan(db, plan_id, data)
-    return success_response(data=MaintenancePlanResponse.model_validate(plan))
+    resp = MaintenancePlanResponse.model_validate(plan)
+    resp = (await service.attach_maintenance_display(db, [resp]))[0]
+    return success_response(data=resp)
 
 
-@router.delete("/{plan_id}", summary="删除维护计划")
+@router.delete(
+    "/{plan_id}", summary="删除维护计划", response_model=ApiResponseEnvelope[None]
+)
 async def delete_maintenance_plan(
     plan_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),

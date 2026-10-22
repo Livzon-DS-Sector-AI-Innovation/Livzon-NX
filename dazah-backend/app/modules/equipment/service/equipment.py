@@ -13,6 +13,7 @@ from app.modules.equipment.schemas import (
     EquipmentCategoryCreate,
     EquipmentCategoryUpdate,
     EquipmentCreate,
+    EquipmentResponse,
     EquipmentUpdate,
     LocationCreate,
     LocationUpdate,
@@ -284,3 +285,69 @@ async def get_equipment_statistics(
 async def get_departments_for_select(db: AsyncSession) -> list[dict[str, Any]]:
     """获取可选部门列表（含负责人），供下拉使用"""
     return await repo.get_departments_for_select(db)
+
+
+async def to_equipment_response(
+    db: AsyncSession, equipment: Equipment
+) -> EquipmentResponse:
+    """ORM Equipment → 响应对象（单条，含分类/位置/部门/负责人填充）。
+
+    设备模块对外的唯一转换实现，api 层与 public_api 均复用。
+    """
+    if not equipment.responsible_person_id and not equipment.department_id:
+        return _build_equipment_response(equipment, None, None)
+    dept_info = None
+    if equipment.department_id:
+        dept_info = await repo.get_department_info(db, equipment.department_id)
+    person_name = None
+    if equipment.responsible_person_id:
+        person_map = await repo.get_user_name_map(db, [equipment.responsible_person_id])
+        person_name = person_map.get(equipment.responsible_person_id)
+    return _build_equipment_response(equipment, dept_info, person_name)
+
+
+async def to_equipment_responses(
+    db: AsyncSession, equipments: list[Equipment]
+) -> list[EquipmentResponse]:
+    """ORM Equipment 列表 → 响应对象（批量，部门/负责人各一次查询，避免 N+1）。"""
+    dept_ids = [e.department_id for e in equipments if e.department_id]
+    person_ids = [
+        e.responsible_person_id for e in equipments if e.responsible_person_id
+    ]
+    dept_map = await repo.get_department_info_map(db, dept_ids)
+    person_map = await repo.get_user_name_map(db, person_ids)
+    return [
+        _build_equipment_response(
+            e,
+            dept_map.get(e.department_id) if e.department_id else None,
+            person_map.get(e.responsible_person_id)
+            if e.responsible_person_id
+            else None,
+        )
+        for e in equipments
+    ]
+
+
+def _build_equipment_response(
+    equipment: Equipment,
+    dept_info: dict[str, Any] | None,
+    person_name: str | None,
+) -> EquipmentResponse:
+    """组装 EquipmentResponse：多分类、位置名、部门与负责人推导。"""
+    resp = EquipmentResponse.model_validate(equipment)
+    links = getattr(equipment, "category_links", []) or []
+    resp.category_ids = [link.category_id for link in links if not link.is_deleted]
+    names = [
+        link.category.name for link in links if not link.is_deleted and link.category
+    ]
+    resp.category_names = "、".join(names) if names else None
+    resp.location_name = equipment.location.name if equipment.location else None
+    if dept_info:
+        resp.department_name = dept_info["name"]
+        # 负责人：优先用设备独立设置的 responsible_person_id；否则由部门负责人推导
+        if not equipment.responsible_person_id:
+            resp.responsible_person_name = dept_info["leader_name"]
+            resp.responsible_person_id = dept_info.get("leader_id")
+    if equipment.responsible_person_id:
+        resp.responsible_person_name = person_name
+    return resp

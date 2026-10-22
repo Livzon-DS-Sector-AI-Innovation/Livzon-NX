@@ -13,15 +13,17 @@ from app.core.database import get_db
 from app.core.deps import CurrentUser
 from app.core.response import paginated_response, success_response
 from app.core.upload_security import validate_upload_metadata
-from app.modules.equipment import repository as repo
 from app.modules.equipment import service
-from app.modules.equipment.models.equipment import Equipment
 from app.modules.equipment.schemas import (
+    DepartmentOption,
     EquipmentCategoryCreate,
     EquipmentCategoryResponse,
     EquipmentCategoryTree,
     EquipmentCategoryUpdate,
     EquipmentCreate,
+    EquipmentImportResult,
+    EquipmentLedgerArchiveDetail,
+    EquipmentLedgerArchiveSummary,
     EquipmentResponse,
     EquipmentStatistics,
     EquipmentUpdate,
@@ -31,6 +33,7 @@ from app.modules.equipment.schemas import (
     LocationUpdate,
 )
 from app.modules.equipment.service import equipment_import, equipment_ledger_archive
+from app.shared.schemas import ApiResponseEnvelope
 
 router = APIRouter()
 
@@ -40,37 +43,12 @@ WORKSHOP_QUERY = Query(
 )
 
 
-async def _equipment_to_response(
-    equipment: Equipment, db: AsyncSession | None = None
-) -> EquipmentResponse:
-    """将 ORM Equipment 转为响应对象，填充多分类信息及部门信息"""
-    resp = EquipmentResponse.model_validate(equipment)
-    links = getattr(equipment, "category_links", []) or []
-    resp.category_ids = [link.category_id for link in links if not link.is_deleted]
-    names = [
-        link.category.name for link in links if not link.is_deleted and link.category
-    ]
-    resp.category_names = "、".join(names) if names else None
-    resp.location_name = equipment.location.name if equipment.location else None
-    # 填充部门信息
-    if equipment.department_id and db:
-        dept_info = await repo.get_department_info(db, equipment.department_id)
-        if dept_info:
-            resp.department_name = dept_info["name"]
-            # 负责人：优先用设备独立设置的 responsible_person_id；否则由部门负责人推导
-            if not equipment.responsible_person_id:
-                resp.responsible_person_name = dept_info["leader_name"]
-                resp.responsible_person_id = dept_info.get("leader_id")
-    # 负责人名称：如果独立设置了 responsible_person_id，从用户表查找
-    if equipment.responsible_person_id and db:
-        resp.responsible_person_name = await repo.get_user_name_by_id(
-            db, equipment.responsible_person_id
-        )
-    return resp
-
-
 # ==================== 设备分类 ====================
-@router.post("/categories", summary="创建设备分类")
+@router.post(
+    "/categories",
+    summary="创建设备分类",
+    response_model=ApiResponseEnvelope[EquipmentCategoryResponse],
+)
 async def create_equipment_category(
     data: EquipmentCategoryCreate,
     db: AsyncSession = Depends(get_db),
@@ -81,7 +59,13 @@ async def create_equipment_category(
     return success_response(data=EquipmentCategoryResponse.model_validate(category))
 
 
-@router.get("/categories", summary="获取设备分类列表")
+@router.get(
+    "/categories",
+    summary="获取设备分类列表",
+    response_model=ApiResponseEnvelope[
+        list[EquipmentCategoryResponse | EquipmentCategoryTree]
+    ],
+)
 async def get_equipment_categories(
     parent_id: uuid.UUID | None = Query(None, description="父分类ID"),
     tree: bool = Query(False, description="是否返回树形结构"),
@@ -99,7 +83,11 @@ async def get_equipment_categories(
     )
 
 
-@router.get("/categories/{category_id}", summary="获取设备分类详情")
+@router.get(
+    "/categories/{category_id}",
+    summary="获取设备分类详情",
+    response_model=ApiResponseEnvelope[EquipmentCategoryResponse],
+)
 async def get_equipment_category(
     category_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -109,7 +97,11 @@ async def get_equipment_category(
     return success_response(data=EquipmentCategoryResponse.model_validate(category))
 
 
-@router.put("/categories/{category_id}", summary="更新设备分类")
+@router.put(
+    "/categories/{category_id}",
+    summary="更新设备分类",
+    response_model=ApiResponseEnvelope[EquipmentCategoryResponse],
+)
 async def update_equipment_category(
     category_id: uuid.UUID,
     data: EquipmentCategoryUpdate,
@@ -121,7 +113,11 @@ async def update_equipment_category(
     return success_response(data=EquipmentCategoryResponse.model_validate(category))
 
 
-@router.delete("/categories/{category_id}", summary="删除设备分类")
+@router.delete(
+    "/categories/{category_id}",
+    summary="删除设备分类",
+    response_model=ApiResponseEnvelope[None],
+)
 async def delete_equipment_category(
     category_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -133,7 +129,11 @@ async def delete_equipment_category(
 
 
 # ==================== 位置管理 ====================
-@router.post("/locations", summary="创建位置")
+@router.post(
+    "/locations",
+    summary="创建位置",
+    response_model=ApiResponseEnvelope[LocationResponse],
+)
 async def create_location(
     data: LocationCreate,
     db: AsyncSession = Depends(get_db),
@@ -144,7 +144,11 @@ async def create_location(
     return success_response(data=LocationResponse.model_validate(location))
 
 
-@router.get("/locations", summary="获取位置列表")
+@router.get(
+    "/locations",
+    summary="获取位置列表",
+    response_model=ApiResponseEnvelope[list[LocationResponse | LocationTree]],
+)
 async def get_locations(
     parent_id: uuid.UUID | None = Query(None, description="父位置ID"),
     tree: bool = Query(False, description="是否返回树形结构"),
@@ -162,7 +166,11 @@ async def get_locations(
     )
 
 
-@router.get("/locations/{location_id}", summary="获取位置详情")
+@router.get(
+    "/locations/{location_id}",
+    summary="获取位置详情",
+    response_model=ApiResponseEnvelope[LocationResponse],
+)
 async def get_location(
     location_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -172,7 +180,11 @@ async def get_location(
     return success_response(data=LocationResponse.model_validate(location))
 
 
-@router.put("/locations/{location_id}", summary="更新位置")
+@router.put(
+    "/locations/{location_id}",
+    summary="更新位置",
+    response_model=ApiResponseEnvelope[LocationResponse],
+)
 async def update_location(
     location_id: uuid.UUID,
     data: LocationUpdate,
@@ -184,7 +196,11 @@ async def update_location(
     return success_response(data=LocationResponse.model_validate(location))
 
 
-@router.delete("/locations/{location_id}", summary="删除位置")
+@router.delete(
+    "/locations/{location_id}",
+    summary="删除位置",
+    response_model=ApiResponseEnvelope[None],
+)
 async def delete_location(
     location_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -196,7 +212,11 @@ async def delete_location(
 
 
 # ==================== 部门列表（供设备表单下拉使用） ====================
-@router.get("/departments", summary="获取部门列表（供设备表单下拉使用）")
+@router.get(
+    "/departments",
+    summary="获取部门列表（供设备表单下拉使用）",
+    response_model=ApiResponseEnvelope[list[DepartmentOption]],
+)
 async def get_departments_list(
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
@@ -206,7 +226,11 @@ async def get_departments_list(
 
 
 # ==================== 设备管理 ====================
-@router.post("/equipments", summary="创建设备")
+@router.post(
+    "/equipments",
+    summary="创建设备",
+    response_model=ApiResponseEnvelope[EquipmentResponse],
+)
 async def create_equipment(
     data: EquipmentCreate,
     db: AsyncSession = Depends(get_db),
@@ -214,10 +238,14 @@ async def create_equipment(
 ) -> JSONResponse:
     """创建设备"""
     equipment = await service.create_equipment(db, data)
-    return success_response(data=await _equipment_to_response(equipment, db))
+    return success_response(data=await service.to_equipment_response(db, equipment))
 
 
-@router.get("/equipments", summary="获取设备列表")
+@router.get(
+    "/equipments",
+    summary="获取设备列表",
+    response_model=ApiResponseEnvelope[list[EquipmentResponse]],
+)
 async def get_equipments(
     category_id: uuid.UUID | None = Query(None, description="设备分类ID"),
     location_id: uuid.UUID | None = Query(None, description="设备位置ID"),
@@ -241,9 +269,7 @@ async def get_equipments(
         page,
         page_size,
     )
-    equipment_responses = []
-    for e in equipments:
-        equipment_responses.append(await _equipment_to_response(e, db))
+    equipment_responses = await service.to_equipment_responses(db, equipments)
     return paginated_response(
         data=equipment_responses,
         page=page,
@@ -252,7 +278,11 @@ async def get_equipments(
     )
 
 
-@router.get("/equipments/statistics", summary="获取设备统计")
+@router.get(
+    "/equipments/statistics",
+    summary="获取设备统计",
+    response_model=ApiResponseEnvelope[EquipmentStatistics],
+)
 async def get_equipment_statistics(
     workshop: str | None = WORKSHOP_QUERY,
     db: AsyncSession = Depends(get_db),
@@ -302,7 +332,11 @@ async def download_equipment_import_template() -> StreamingResponse:
     )
 
 
-@router.post("/equipments/import", summary="Excel 批量导入设备台账")
+@router.post(
+    "/equipments/import",
+    summary="Excel 批量导入设备台账",
+    response_model=ApiResponseEnvelope[EquipmentImportResult],
+)
 async def import_equipments(
     file: UploadFile = File(..., description="按模板填写的台账 .xlsx 文件"),
     default_category_id: uuid.UUID | None = Form(
@@ -364,9 +398,7 @@ async def import_equipments(
         col_widths=snapshot["col_widths"],
         row_count=snapshot["row_count"],
         col_count=snapshot["col_count"],
-        import_summary={
-            key: summary[key] for key in summary if key != "failures"
-        },
+        import_summary={key: summary[key] for key in summary if key != "failures"},
         created_by=current_user.id if current_user else None,
     )
     return success_response(
@@ -376,7 +408,9 @@ async def import_equipments(
 
 
 @router.get(
-    "/equipments/import-archives", summary="设备台账上传存档列表"
+    "/equipments/import-archives",
+    summary="设备台账上传存档列表",
+    response_model=ApiResponseEnvelope[list[EquipmentLedgerArchiveSummary]],
 )
 async def list_equipment_import_archives(
     page: int = Query(1, ge=1),
@@ -404,6 +438,7 @@ async def list_equipment_import_archives(
 @router.get(
     "/equipments/import-archives/{archive_id}",
     summary="设备台账上传存档详情（含完整表格）",
+    response_model=ApiResponseEnvelope[EquipmentLedgerArchiveDetail],
 )
 async def get_equipment_import_archive(
     archive_id: uuid.UUID,
@@ -444,7 +479,9 @@ async def download_equipment_import_archive_file(
 
 
 @router.delete(
-    "/equipments/import-archives/{archive_id}", summary="删除台账上传存档"
+    "/equipments/import-archives/{archive_id}",
+    summary="删除台账上传存档",
+    response_model=ApiResponseEnvelope[None],
 )
 async def delete_equipment_import_archive(
     archive_id: uuid.UUID,
@@ -461,17 +498,25 @@ async def delete_equipment_import_archive(
     return success_response(data=None, message="存档已删除")
 
 
-@router.get("/equipments/{equipment_id}", summary="获取设备详情")
+@router.get(
+    "/equipments/{equipment_id}",
+    summary="获取设备详情",
+    response_model=ApiResponseEnvelope[EquipmentResponse],
+)
 async def get_equipment(
     equipment_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     """获取设备详情"""
     equipment = await service.get_equipment_by_id(db, equipment_id)
-    return success_response(data=await _equipment_to_response(equipment, db))
+    return success_response(data=await service.to_equipment_response(db, equipment))
 
 
-@router.put("/equipments/{equipment_id}", summary="更新设备")
+@router.put(
+    "/equipments/{equipment_id}",
+    summary="更新设备",
+    response_model=ApiResponseEnvelope[EquipmentResponse],
+)
 async def update_equipment(
     equipment_id: uuid.UUID,
     data: EquipmentUpdate,
@@ -480,10 +525,14 @@ async def update_equipment(
 ) -> JSONResponse:
     """更新设备"""
     equipment = await service.update_equipment(db, equipment_id, data)
-    return success_response(data=await _equipment_to_response(equipment, db))
+    return success_response(data=await service.to_equipment_response(db, equipment))
 
 
-@router.delete("/equipments/{equipment_id}", summary="删除设备")
+@router.delete(
+    "/equipments/{equipment_id}",
+    summary="删除设备",
+    response_model=ApiResponseEnvelope[None],
+)
 async def delete_equipment(
     equipment_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),

@@ -18,11 +18,16 @@ from app.modules.equipment.schemas import (
     InspectionCompleteRequest,
     WorkOrderResponse,
 )
+from app.shared.schemas import ApiResponseEnvelope
 
 router = APIRouter()
 
 
-@router.post("/complete/{work_order_id}", summary="提交巡检结果")
+@router.post(
+    "/complete/{work_order_id}",
+    summary="提交巡检结果",
+    response_model=ApiResponseEnvelope[WorkOrderResponse],
+)
 async def complete_inspection(
     work_order_id: uuid.UUID,
     data: InspectionCompleteRequest,

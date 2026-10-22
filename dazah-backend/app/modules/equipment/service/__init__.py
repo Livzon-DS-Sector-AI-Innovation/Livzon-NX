@@ -6,6 +6,8 @@ from app.modules.equipment.service.ai.service import (
     parse_manual_submission,
 )
 from app.modules.equipment.service.calibration import (
+    attach_calibration_plan_display,
+    attach_record_display,
     create_calibration_plan,
     create_calibration_record,
     delete_calibration_plan,
@@ -34,6 +36,8 @@ from app.modules.equipment.service.equipment import (
     get_location_by_id,
     get_location_tree,
     get_locations,
+    to_equipment_response,
+    to_equipment_responses,
     update_equipment,
     update_equipment_category,
     update_location,
@@ -88,6 +92,7 @@ from app.modules.equipment.service.maintenance_config import (
     update_claim_timeout_config,
 )
 from app.modules.equipment.service.maintenance_plan import (
+    attach_maintenance_display,
     create_maintenance_plan,
     delete_maintenance_plan,
     generate_due_work_orders,
@@ -107,8 +112,10 @@ from app.modules.equipment.service.personnel import (
     get_personnel_by_id,
     get_role,
     get_role_by_code,
+    list_maintainer_options,
     list_personnel,
     list_roles,
+    list_user_options,
     refresh_feishu,
     update_categories,
     update_personnel,
@@ -116,6 +123,7 @@ from app.modules.equipment.service.personnel import (
 )
 from app.modules.equipment.service.spare_part import (
     adjust_stock,
+    attach_stock_quantities,
     create_spare_part,
     delete_spare_part,
     get_spare_part_by_id,
@@ -134,6 +142,8 @@ from app.modules.equipment.service.work_order import (
     consume_materials,
     create_work_order,
     generate_work_order_no,
+    get_material_consumptions,
+    get_user_work_orders,
     get_work_order_by_id,
     get_work_order_statistics,
     get_work_orders,
@@ -145,10 +155,11 @@ from app.modules.equipment.service.work_order_image import (
     delete_image as delete_work_order_image,
 )
 from app.modules.equipment.service.work_order_image import (
-    get_images as get_work_order_images,
+    get_image_by_id,
+    upload_images,
 )
 from app.modules.equipment.service.work_order_image import (
-    upload_images,
+    get_images as get_work_order_images,
 )
 
 __all__ = [
@@ -156,6 +167,18 @@ __all__ = [
     "analyze_inspection_photo",
     "parse_manual_submission",
     "get_inspection_items_for_session",
+    # 展示字段批量填充
+    "attach_calibration_plan_display",
+    "attach_record_display",
+    "attach_maintenance_display",
+    "attach_stock_quantities",
+    "to_equipment_response",
+    "to_equipment_responses",
+    "list_maintainer_options",
+    "list_user_options",
+    "get_material_consumptions",
+    "get_user_work_orders",
+    "get_image_by_id",
     # calibration
     "create_calibration_plan",
     "create_calibration_record",

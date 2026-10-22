@@ -12,17 +12,22 @@ from app.core.response import paginated_response, success_response
 from app.modules.equipment import service
 from app.modules.equipment.schemas import (
     SparePartCreate,
+    SparePartListItem,
     SparePartResponse,
     SparePartUpdate,
     StockAdjustRequest,
     StockInboundRequest,
     StockResponse,
+    StockWarningResponse,
 )
+from app.shared.schemas import ApiResponseEnvelope
 
 router = APIRouter()
 
 
-@router.post("/", summary="创建备件")
+@router.post(
+    "/", summary="创建备件", response_model=ApiResponseEnvelope[SparePartResponse]
+)
 async def create_spare_part(
     data: SparePartCreate,
     db: AsyncSession = Depends(get_db),
@@ -32,7 +37,11 @@ async def create_spare_part(
     return success_response(data=SparePartResponse.model_validate(spare_part))
 
 
-@router.get("/", summary="备件列表")
+@router.get(
+    "/",
+    summary="备件列表（附库存数量）",
+    response_model=ApiResponseEnvelope[list[SparePartListItem]],
+)
 async def list_spare_parts(
     category: str | None = Query(None, description="备件分类"),
     keyword: str | None = Query(None, description="关键词搜索"),
@@ -53,15 +62,22 @@ async def list_spare_parts(
         page=page,
         page_size=page_size,
     )
+    items = await service.attach_stock_quantities(
+        db, [SparePartListItem.model_validate(sp) for sp in spare_parts]
+    )
     return paginated_response(
-        data=[SparePartResponse.model_validate(sp) for sp in spare_parts],
+        data=items,
         page=page,
         page_size=page_size,
         total=total,
     )
 
 
-@router.get("/stock/warnings", summary="库存预警列表")
+@router.get(
+    "/stock/warnings",
+    summary="库存预警列表",
+    response_model=ApiResponseEnvelope[list[StockWarningResponse]],
+)
 async def get_stock_warnings(
     workshop: str | None = Query(
         None, pattern=r"^\d{3}(-\d)?$", description="车间代码（如 101-1 / 201-1）"
@@ -74,7 +90,11 @@ async def get_stock_warnings(
     )
 
 
-@router.get("/{spare_part_id}", summary="备件详情")
+@router.get(
+    "/{spare_part_id}",
+    summary="备件详情",
+    response_model=ApiResponseEnvelope[SparePartResponse],
+)
 async def get_spare_part(
     spare_part_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -83,7 +103,11 @@ async def get_spare_part(
     return success_response(data=SparePartResponse.model_validate(spare_part))
 
 
-@router.put("/{spare_part_id}", summary="更新备件")
+@router.put(
+    "/{spare_part_id}",
+    summary="更新备件",
+    response_model=ApiResponseEnvelope[SparePartResponse],
+)
 async def update_spare_part(
     spare_part_id: uuid.UUID,
     data: SparePartUpdate,
@@ -94,7 +118,9 @@ async def update_spare_part(
     return success_response(data=SparePartResponse.model_validate(spare_part))
 
 
-@router.delete("/{spare_part_id}", summary="删除备件")
+@router.delete(
+    "/{spare_part_id}", summary="删除备件", response_model=ApiResponseEnvelope[None]
+)
 async def delete_spare_part(
     spare_part_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -104,7 +130,11 @@ async def delete_spare_part(
     return success_response(message="删除成功")
 
 
-@router.get("/{spare_part_id}/stock", summary="查看库存")
+@router.get(
+    "/{spare_part_id}/stock",
+    summary="查看库存",
+    response_model=ApiResponseEnvelope[StockResponse],
+)
 async def get_stock(
     spare_part_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -113,7 +143,11 @@ async def get_stock(
     return success_response(data=StockResponse.model_validate(stock))
 
 
-@router.post("/{spare_part_id}/stock/inbound", summary="入库")
+@router.post(
+    "/{spare_part_id}/stock/inbound",
+    summary="入库",
+    response_model=ApiResponseEnvelope[StockResponse],
+)
 async def inbound_stock(
     spare_part_id: uuid.UUID,
     data: StockInboundRequest,
@@ -124,7 +158,11 @@ async def inbound_stock(
     return success_response(data=StockResponse.model_validate(stock))
 
 
-@router.post("/{spare_part_id}/stock/adjust", summary="盘点调整")
+@router.post(
+    "/{spare_part_id}/stock/adjust",
+    summary="盘点调整",
+    response_model=ApiResponseEnvelope[StockResponse],
+)
 async def adjust_stock(
     spare_part_id: uuid.UUID,
     data: StockAdjustRequest,

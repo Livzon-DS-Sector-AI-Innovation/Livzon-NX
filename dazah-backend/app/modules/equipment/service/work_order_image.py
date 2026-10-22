@@ -105,3 +105,10 @@ async def delete_image(db: AsyncSession, image_id: uuid.UUID) -> None:
         os.remove(image.file_path)
 
     await repo.delete_image(db, image)
+
+
+async def get_image_by_id(
+    db: AsyncSession, image_id: uuid.UUID
+) -> WorkOrderImage | None:
+    """按 ID 获取工单图片记录"""
+    return await repo.get_image_by_id(db, image_id)

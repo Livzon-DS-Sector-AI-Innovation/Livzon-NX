@@ -318,10 +318,12 @@ async def test_sync_all_records_failure_on_unexpected_db_error(
         monkeypatch, [_item("rec_any", _fields(), modified)]
     )
 
-    async def broken_upsert(db: Any, source: str, item: dict[str, Any]) -> None:
+    async def broken_upsert(
+        db: Any, workshop_code: str, source: str, items: list[dict[str, Any]]
+    ) -> None:
         raise RuntimeError("value too long for type character varying(200)")
 
-    monkeypatch.setattr(mirror, "_upsert_record", broken_upsert)
+    monkeypatch.setattr(mirror, "_upsert_records_batch", broken_upsert)
 
     results = await mirror.sync_all(db_session, "201-1", incremental=True)
     for key in ("today", "history", "devices"):

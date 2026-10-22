@@ -17,6 +17,7 @@
 拒收，照常导入并把问题原文记入 data_issue_note，页面标红提示
 人工修正（在编辑抽屉保存后清除）。
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -414,9 +415,7 @@ async def import_equipment_ledger(
                 "manufacturer": _cell_text(merged_row["生产厂家"]) or None,
                 "factory_no": _cell_text(merged_row["出厂编号"]) or None,
                 "description": _cell_text(merged_row["备注"]) or None,
-                "technical_params": parse_tech_params_cell(
-                    merged_row["技术参数"]
-                ),
+                "technical_params": parse_tech_params_cell(merged_row["技术参数"]),
                 "production_date": merged_row["出厂日期"],
                 "arrival_date": merged_row["入厂日期"],
                 "data_issue_note": "；".join(issues) or None,

@@ -162,3 +162,20 @@ class MaterialConsumeResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class MaintainerOption(BaseModel):
+    """工单指派用维修人员选项"""
+
+    user_id: str
+    name: str
+    employee_no: str = ""
+    department_id: str = ""
+
+
+class UserOption(BaseModel):
+    """责任人选择用用户选项"""
+
+    user_id: str
+    name: str
+    employee_no: str = ""

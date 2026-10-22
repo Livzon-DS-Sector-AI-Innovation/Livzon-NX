@@ -19,6 +19,7 @@ from app.modules.equipment.models.inspection_template import (
 
 # ═══════════ 路线 ═══════════
 
+
 async def get_task_by_id(db: AsyncSession, task_id: uuid.UUID) -> InspectionTask | None:
     stmt = (
         select(InspectionTask)
@@ -232,5 +233,3 @@ async def get_equipment_names_by_ids(
 
 
 # ═══════════ 线路地点配置（新） ═══════════
-
-

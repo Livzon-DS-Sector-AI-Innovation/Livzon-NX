@@ -17,11 +17,16 @@ from app.modules.equipment import service
 from app.modules.equipment.feishu.message import send_claim_notification
 from app.modules.equipment.schemas import WorkOrderResponse
 from app.platform.integrations.feishu.contact import is_department_member
+from app.shared.schemas import ApiResponseEnvelope
 
 router = APIRouter()
 
 
-@router.put("/{work_order_id}/claim", summary="抢单（维修人员自主接单）")
+@router.put(
+    "/{work_order_id}/claim",
+    summary="抢单（维修人员自主接单）",
+    response_model=ApiResponseEnvelope[WorkOrderResponse],
+)
 async def claim_work_order(
     work_order_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),

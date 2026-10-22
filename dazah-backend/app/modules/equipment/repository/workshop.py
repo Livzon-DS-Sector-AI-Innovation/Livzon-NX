@@ -15,9 +15,7 @@ from sqlalchemy.sql.selectable import Exists
 from app.modules.equipment.models.equipment import Equipment
 
 
-def equipment_workshop_filter(
-    equipment_id_column: Any, workshop_code: str
-) -> Exists:
+def equipment_workshop_filter(equipment_id_column: Any, workshop_code: str) -> Exists:
     """EXISTS 子查询：实体所属设备归属指定车间。"""
     return sa.exists(
         sa.select(Equipment.id).where(

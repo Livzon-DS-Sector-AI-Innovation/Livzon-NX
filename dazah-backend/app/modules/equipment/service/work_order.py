@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException, NotFoundException
 from app.modules.equipment import repository as repo
-from app.modules.equipment.models import WorkOrder
+from app.modules.equipment.models import SparePartTransaction, WorkOrder
 from app.modules.equipment.schemas import (
     WorkOrderComplete,
     WorkOrderCreate,
@@ -458,3 +458,17 @@ async def consume_materials(
     await db.flush()
 
     return transactions
+
+
+async def get_material_consumptions(
+    db: AsyncSession, work_order_id: uuid.UUID
+) -> list[SparePartTransaction]:
+    """查询工单的物料领用流水"""
+    return await repo.get_material_consumptions(db, work_order_id)
+
+
+async def get_user_work_orders(
+    db: AsyncSession, user_id: uuid.UUID
+) -> list[WorkOrder]:
+    """查询用户的未关闭工单（指派给我的 + 我是责任人的）"""
+    return await repo.get_user_work_orders(db, user_id)

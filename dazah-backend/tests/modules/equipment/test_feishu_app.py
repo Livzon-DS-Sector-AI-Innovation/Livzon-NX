@@ -111,11 +111,13 @@ async def test_update_app_blank_secret_keeps_stored(
     updated = await app_service.update_app(
         db_session,
         item.id,
-        EquipmentFeishuAppUpdateRequest(name="改名", app_id="cli_app1", app_secret=None),
+        EquipmentFeishuAppUpdateRequest(
+            name="改名", app_id="cli_app1", app_secret=None
+        ),
     )
     assert updated.name == "改名"
-    config = app_service.decrypt_app_secret((await _get_app_row(db_session, item.id)).app_secret)
-    assert config == "app_secret_value"
+    secret_row = await _get_app_row(db_session, item.id)
+    assert app_service.decrypt_app_secret(secret_row.app_secret) == "app_secret_value"
 
 
 async def test_update_app_new_secret_takes_effect(
@@ -125,7 +127,9 @@ async def test_update_app_new_secret_takes_effect(
     await app_service.update_app(
         db_session,
         item.id,
-        EquipmentFeishuAppUpdateRequest(name="巡检应用", app_id="cli_app1", app_secret="rotated"),
+        EquipmentFeishuAppUpdateRequest(
+            name="巡检应用", app_id="cli_app1", app_secret="rotated"
+        ),
     )
     row = await _get_app_row(db_session, item.id)
     assert app_service.decrypt_app_secret(row.app_secret) == "rotated"

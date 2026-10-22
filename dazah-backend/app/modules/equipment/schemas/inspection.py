@@ -1,8 +1,8 @@
 """Inspection schemas."""
 
 import uuid
-from datetime import datetime
-from typing import Literal
+from datetime import date, datetime
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -169,8 +169,12 @@ class InspectionTaskDetailResponse(InspectionTaskResponse):
 class EquipmentFeishuAppCreateRequest(BaseModel):
     """新建飞书自建应用凭据请求"""
 
-    name: str = Field(..., min_length=1, max_length=100, description="应用名称（便于辨认）")
-    app_id: str = Field(..., min_length=1, max_length=100, description="飞书应用 App ID")
+    name: str = Field(
+        ..., min_length=1, max_length=100, description="应用名称（便于辨认）"
+    )
+    app_id: str = Field(
+        ..., min_length=1, max_length=100, description="飞书应用 App ID"
+    )
     app_secret: str = Field(..., min_length=1, description="飞书应用 App Secret")
 
 
@@ -178,7 +182,9 @@ class EquipmentFeishuAppUpdateRequest(BaseModel):
     """更新飞书自建应用凭据请求（Secret 留空保留已保存值）"""
 
     name: str = Field(..., min_length=1, max_length=100, description="应用名称")
-    app_id: str = Field(..., min_length=1, max_length=100, description="飞书应用 App ID")
+    app_id: str = Field(
+        ..., min_length=1, max_length=100, description="飞书应用 App ID"
+    )
     app_secret: str | None = Field(
         default=None, description="飞书应用 App Secret（留空保留已保存值）"
     )
@@ -203,7 +209,7 @@ class EquipmentInspectionFeishuConfigUpdateRequest(BaseModel):
 
     feishu_app_id: uuid.UUID | None = Field(
         default=None,
-        description="引用自建应用库记录；提供时凭据以应用库为准，忽略内联 App ID/Secret",
+        description="引用自建应用库；提供时凭据以应用库为准，忽略内联 App ID/Secret",
     )
     app_id: str = Field(default="", max_length=100, description="飞书应用 App ID")
     app_secret: str | None = Field(
@@ -267,3 +273,97 @@ class EquipmentInspectionFeishuConfigTestResult(BaseModel):
     success: bool = Field(description="测试是否通过")
     table_count: int = Field(default=0, description="读取到的多维表格子表数量")
     message: str = Field(default="", description="结果说明（失败时为脱敏原因）")
+
+
+class EquipmentInspectionFeishuRecordItem(BaseModel):
+    """巡检记录（飞书镜像）列表项"""
+
+    id: str
+    workshop_code: str
+    source: str
+    record_id: str | None = None
+    record_date: date | None = None
+    equipment_name: str | None = None
+    equipment_no: str | None = None
+    am_clean: str | None = None
+    am_lubrication: str | None = None
+    am_fastening: str | None = None
+    am_sealing: str | None = None
+    am_vibration: str | None = None
+    am_sound: str | None = None
+    am_surface: str | None = None
+    pm_clean: str | None = None
+    pm_lubrication: str | None = None
+    pm_fastening: str | None = None
+    pm_sealing: str | None = None
+    pm_vibration: str | None = None
+    pm_sound: str | None = None
+    pm_surface: str | None = None
+    anomaly_note: str | None = None
+    process_status: str | None = None
+    has_abnormal: bool | None = None
+    raw_fields: dict[str, Any] | None = None
+    last_modified_at: datetime | None = None
+
+
+class EquipmentInspectionFeishuDeviceItem(BaseModel):
+    """巡检设备清单项（镜像 + 台账关联）"""
+
+    record_id: str
+    equipment_name: str | None = None
+    equipment_no: str | None = None
+    model: str | None = None
+    location_name: str | None = None
+    in_ledger: bool = False
+    today_status: str = "pending"
+    last_inspected_date: str | None = None
+
+
+class EquipmentInspectionFeishuDeviceList(BaseModel):
+    """巡检设备清单返回结构"""
+
+    date: date
+    items: list[EquipmentInspectionFeishuDeviceItem] = Field(default_factory=list)
+
+
+class EquipmentInspectionTodaySummary(BaseModel):
+    """单车间今日巡检进度"""
+
+    date: date
+    total_devices: int = 0
+    inspected: int = 0
+    abnormal: int = 0
+    am_inspected: int = 0
+    pm_inspected: int = 0
+
+
+class EquipmentInspectionTodaySummaryEntry(EquipmentInspectionTodaySummary):
+    """多车间今日巡检进度汇总项"""
+
+    workshop_code: str
+
+
+class EquipmentFeishuSyncTableResult(BaseModel):
+    """单表同步结果（成功含 synced/total，失败仅含 error）"""
+
+    synced: int | None = None
+    total: int | None = None
+    error: str | None = None
+
+
+class EquipmentFeishuSyncStateItem(BaseModel):
+    """镜像同步状态行"""
+
+    table_key: str
+    total_rows: int | None = None
+    last_synced_at: datetime | None = None
+    last_run_at: datetime | None = None
+    last_status: str | None = None
+    last_message: str | None = None
+
+
+class EquipmentFeishuSyncStatus(BaseModel):
+    """镜像同步启用状态与各表最近同步情况"""
+
+    enabled: bool
+    tables: list[EquipmentFeishuSyncStateItem] = Field(default_factory=list)

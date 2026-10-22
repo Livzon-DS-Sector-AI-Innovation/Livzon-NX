@@ -56,6 +56,9 @@ class CalibrationPlanResponse(BaseModel):
     updated_at: datetime
     created_by: uuid.UUID | None
     updated_by: uuid.UUID | None
+    equipment_name: str | None = None
+    equipment_no: str | None = None
+    responsible_person_name: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -93,5 +96,7 @@ class CalibrationRecordResponse(BaseModel):
     updated_at: datetime
     created_by: uuid.UUID | None
     updated_by: uuid.UUID | None
+    equipment_name: str | None = None
+    equipment_no: str | None = None
 
     model_config = {"from_attributes": True}

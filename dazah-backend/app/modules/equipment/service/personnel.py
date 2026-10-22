@@ -28,6 +28,7 @@ from app.modules.equipment.schemas.personnel import (
     RoleResponse,
     RoleUpdate,
 )
+from app.modules.equipment.schemas.work_order import MaintainerOption, UserOption
 from app.platform.identity.models import User
 
 # ── 角色 Service ──
@@ -481,3 +482,32 @@ async def get_personnel_by_id(
         return await get_personnel(db, personnel_id)
     except NotFoundException:
         return None
+
+
+async def list_maintainer_options(
+    db: AsyncSession, workshop_code: str | None = None
+) -> list[MaintainerOption]:
+    """工单指派维修人选项（在岗且有账号）"""
+    personnel_list = await repo.get_active_maintainer_personnel(db, workshop_code)
+    return [
+        MaintainerOption(
+            user_id=str(p.user_id),
+            name=p.name,
+            employee_no=p.employee_no or "",
+            department_id=p.department or "",
+        )
+        for p in personnel_list
+    ]
+
+
+async def list_user_options(db: AsyncSession) -> list[UserOption]:
+    """全体用户选项（工单责任人选择）"""
+    rows = await repo.get_user_option_rows(db)
+    return [
+        UserOption(
+            user_id=str(row.id),
+            name=row.name,
+            employee_no=row.employee_no or "",
+        )
+        for row in rows
+    ]

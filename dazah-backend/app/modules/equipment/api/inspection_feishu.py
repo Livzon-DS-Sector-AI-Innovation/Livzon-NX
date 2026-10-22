@@ -13,6 +13,17 @@ from app.core.database import get_db
 from app.core.deps import CurrentUser
 from app.core.exceptions import AppException
 from app.core.response import paginated_response, success_response
+from app.modules.equipment.schemas import (
+    EquipmentFeishuAppItem,
+    EquipmentFeishuSyncStatus,
+    EquipmentFeishuSyncTableResult,
+    EquipmentInspectionFeishuConfigDetail,
+    EquipmentInspectionFeishuConfigTestResult,
+    EquipmentInspectionFeishuDeviceList,
+    EquipmentInspectionFeishuRecordItem,
+    EquipmentInspectionTodaySummary,
+    EquipmentInspectionTodaySummaryEntry,
+)
 from app.modules.equipment.schemas.inspection import (
     EquipmentFeishuAppCreateRequest,
     EquipmentFeishuAppUpdateRequest,
@@ -21,6 +32,7 @@ from app.modules.equipment.schemas.inspection import (
 from app.modules.equipment.service import feishu_app as app_service
 from app.modules.equipment.service import inspection_feishu_config as config_service
 from app.modules.equipment.service import inspection_feishu_mirror as mirror
+from app.shared.schemas import ApiResponseEnvelope
 
 router = APIRouter()
 
@@ -39,7 +51,11 @@ def _require_user(current_user: CurrentUser) -> None:
         raise AppException(message="需要登录才能执行此操作", status_code=401)
 
 
-@router.get("/feishu/records", summary="巡检记录（飞书镜像）")
+@router.get(
+    "/feishu/records",
+    summary="巡检记录（飞书镜像）",
+    response_model=ApiResponseEnvelope[list[EquipmentInspectionFeishuRecordItem]],
+)
 async def list_feishu_records(
     workshop: str | None = WORKSHOP_QUERY_OPTIONAL,
     source: str | None = Query(
@@ -107,7 +123,11 @@ async def list_feishu_records(
     )
 
 
-@router.get("/feishu/devices", summary="巡检设备清单（飞书镜像 + 台账关联）")
+@router.get(
+    "/feishu/devices",
+    summary="巡检设备清单（飞书镜像 + 台账关联）",
+    response_model=ApiResponseEnvelope[EquipmentInspectionFeishuDeviceList],
+)
 async def list_feishu_devices(
     workshop: str = WORKSHOP_QUERY,
     keyword: str | None = Query(None, description="设备名称/编号搜索"),
@@ -118,7 +138,11 @@ async def list_feishu_devices(
     )
 
 
-@router.get("/feishu/today-summary", summary="今日巡检进度")
+@router.get(
+    "/feishu/today-summary",
+    summary="今日巡检进度",
+    response_model=ApiResponseEnvelope[EquipmentInspectionTodaySummary],
+)
 async def feishu_today_summary(
     workshop: str = WORKSHOP_QUERY,
     db: AsyncSession = Depends(get_db),
@@ -126,14 +150,22 @@ async def feishu_today_summary(
     return success_response(data=await mirror.today_summary(db, workshop))
 
 
-@router.get("/feishu/today-summaries", summary="各车间今日巡检进度汇总")
+@router.get(
+    "/feishu/today-summaries",
+    summary="各车间今日巡检进度汇总",
+    response_model=ApiResponseEnvelope[list[EquipmentInspectionTodaySummaryEntry]],
+)
 async def feishu_today_summaries(
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     return success_response(data=await mirror.today_summaries_all(db))
 
 
-@router.get("/feishu/sync-status", summary="镜像同步状态")
+@router.get(
+    "/feishu/sync-status",
+    summary="镜像同步状态",
+    response_model=ApiResponseEnvelope[EquipmentFeishuSyncStatus],
+)
 async def feishu_sync_status(
     workshop: str = WORKSHOP_QUERY,
     db: AsyncSession = Depends(get_db),
@@ -146,7 +178,11 @@ async def feishu_sync_status(
     )
 
 
-@router.post("/feishu/sync", summary="手动触发飞书同步")
+@router.post(
+    "/feishu/sync",
+    summary="手动触发飞书同步",
+    response_model=ApiResponseEnvelope[dict[str, EquipmentFeishuSyncTableResult]],
+)
 async def feishu_sync_now(
     workshop: str = WORKSHOP_QUERY,
     db: AsyncSession = Depends(get_db),
@@ -160,33 +196,38 @@ async def feishu_sync_now(
     return success_response(data=results)
 
 
-@router.get("/feishu/config", summary="获取设备巡检飞书镜像配置")
+@router.get(
+    "/feishu/config",
+    summary="获取设备巡检飞书镜像配置",
+    response_model=ApiResponseEnvelope[EquipmentInspectionFeishuConfigDetail],
+)
 async def get_feishu_config(
     workshop: str = WORKSHOP_QUERY,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     _require_user(current_user)
-    return success_response(
-        data=await config_service.get_config_detail(db, workshop)
-    )
+    return success_response(data=await config_service.get_config_detail(db, workshop))
 
 
 @router.get(
     "/feishu/config-list",
     summary="飞书配置清单（各车间凭据状态与多维表格链接）",
+    response_model=ApiResponseEnvelope[list[EquipmentInspectionFeishuConfigDetail]],
 )
 async def list_feishu_configs(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     _require_user(current_user)
-    return success_response(
-        data=await config_service.list_config_details(db)
-    )
+    return success_response(data=await config_service.list_config_details(db))
 
 
-@router.put("/feishu/config", summary="保存设备巡检飞书镜像配置")
+@router.put(
+    "/feishu/config",
+    summary="保存设备巡检飞书镜像配置",
+    response_model=ApiResponseEnvelope[EquipmentInspectionFeishuConfigDetail],
+)
 async def save_feishu_config(
     data: EquipmentInspectionFeishuConfigUpdateRequest,
     workshop: str = WORKSHOP_QUERY,
@@ -194,12 +235,14 @@ async def save_feishu_config(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     _require_user(current_user)
-    return success_response(
-        data=await config_service.update_config(db, workshop, data)
-    )
+    return success_response(data=await config_service.update_config(db, workshop, data))
 
 
-@router.post("/feishu/config/test", summary="测试设备巡检飞书镜像连接")
+@router.post(
+    "/feishu/config/test",
+    summary="测试设备巡检飞书镜像连接",
+    response_model=ApiResponseEnvelope[EquipmentInspectionFeishuConfigTestResult],
+)
 async def test_feishu_config(
     workshop: str = WORKSHOP_QUERY,
     db: AsyncSession = Depends(get_db),
@@ -209,7 +252,11 @@ async def test_feishu_config(
     return success_response(data=await config_service.test_config(db, workshop))
 
 
-@router.get("/feishu/apps", summary="自建应用库清单（Secret 不回显）")
+@router.get(
+    "/feishu/apps",
+    summary="自建应用库清单（Secret 不回显）",
+    response_model=ApiResponseEnvelope[list[EquipmentFeishuAppItem]],
+)
 async def list_feishu_apps(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
@@ -218,7 +265,11 @@ async def list_feishu_apps(
     return success_response(data=await app_service.list_apps(db))
 
 
-@router.post("/feishu/apps", summary="新建自建应用凭据")
+@router.post(
+    "/feishu/apps",
+    summary="新建自建应用凭据",
+    response_model=ApiResponseEnvelope[EquipmentFeishuAppItem],
+)
 async def create_feishu_app(
     data: EquipmentFeishuAppCreateRequest,
     db: AsyncSession = Depends(get_db),
@@ -228,7 +279,11 @@ async def create_feishu_app(
     return success_response(data=await app_service.create_app(db, data))
 
 
-@router.put("/feishu/apps/{app_row_id}", summary="更新自建应用凭据")
+@router.put(
+    "/feishu/apps/{app_row_id}",
+    summary="更新自建应用凭据",
+    response_model=ApiResponseEnvelope[EquipmentFeishuAppItem],
+)
 async def update_feishu_app(
     app_row_id: UUID,
     data: EquipmentFeishuAppUpdateRequest,
@@ -239,7 +294,11 @@ async def update_feishu_app(
     return success_response(data=await app_service.update_app(db, app_row_id, data))
 
 
-@router.delete("/feishu/apps/{app_row_id}", summary="删除自建应用凭据")
+@router.delete(
+    "/feishu/apps/{app_row_id}",
+    summary="删除自建应用凭据",
+    response_model=ApiResponseEnvelope[None],
+)
 async def delete_feishu_app(
     app_row_id: UUID,
     db: AsyncSession = Depends(get_db),

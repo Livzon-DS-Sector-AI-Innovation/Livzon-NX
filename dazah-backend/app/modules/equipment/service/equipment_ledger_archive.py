@@ -58,9 +58,7 @@ def parse_ledger_snapshot(data: bytes) -> dict[str, Any]:
             status_code=400, message=f"无法读取 Excel 文件：{error}"
         ) from error
     try:
-        visible = [
-            ws for ws in workbook.worksheets if ws.sheet_state == "visible"
-        ]
+        visible = [ws for ws in workbook.worksheets if ws.sheet_state == "visible"]
         worksheet = visible[0] if visible else workbook.worksheets[0]
         rows: list[list[Any]] = [
             [_serialize_cell(cell.value) for cell in row]
@@ -150,12 +148,8 @@ def serialize_archive(
         "col_count": archive.col_count,
         "import_summary": archive.import_summary,
         "created_by_name": created_by_name,
-        "created_at": (
-            archive.created_at.isoformat() if archive.created_at else None
-        ),
-        "updated_at": (
-            archive.updated_at.isoformat() if archive.updated_at else None
-        ),
+        "created_at": (archive.created_at.isoformat() if archive.created_at else None),
+        "updated_at": (archive.updated_at.isoformat() if archive.updated_at else None),
     }
 
 
@@ -186,9 +180,7 @@ async def list_archives(
         EquipmentLedgerArchive.is_deleted == False,  # noqa: E712
     ]
     if workshop_code:
-        conditions.append(
-            EquipmentLedgerArchive.workshop_code == workshop_code
-        )
+        conditions.append(EquipmentLedgerArchive.workshop_code == workshop_code)
     total = await session.scalar(
         select(func.count(EquipmentLedgerArchive.id)).where(*conditions)
     )
@@ -205,9 +197,7 @@ async def list_archives(
     return items, int(total or 0)
 
 
-async def get_user_name(
-    session: AsyncSession, user_id: uuid.UUID | None
-) -> str | None:
+async def get_user_name(session: AsyncSession, user_id: uuid.UUID | None) -> str | None:
     if user_id is None:
         return None
     from app.platform.identity.models import User

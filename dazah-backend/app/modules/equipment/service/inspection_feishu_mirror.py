@@ -280,6 +280,88 @@ async def _get_state(
     return state
 
 
+_RECORD_CHECK_KEYS = (
+    "am_clean",
+    "am_lubrication",
+    "am_fastening",
+    "am_sealing",
+    "am_vibration",
+    "am_sound",
+    "am_surface",
+    "pm_clean",
+    "pm_lubrication",
+    "pm_fastening",
+    "pm_sealing",
+    "pm_vibration",
+    "pm_sound",
+    "pm_surface",
+)
+
+
+def _record_column_values(
+    workshop_code: str, item: dict[str, Any]
+) -> dict[str, Any] | None:
+    """飞书记录行 → 镜像表列值；record_id 缺失返回 None"""
+    record_id = str(item.get("record_id") or "")
+    if not record_id:
+        return None
+    fields = item.get("fields") or {}
+    values = normalize_record_fields(fields)
+    modified = _datetime_value(item.get("last_modified_time"))
+    return {
+        "record_id": record_id,
+        "workshop_code": workshop_code,
+        "record_date": values.get("record_date"),
+        "equipment_name": values.get("equipment_name"),
+        "equipment_no": values.get("equipment_no"),
+        "anomaly_note": values.get("anomaly_note"),
+        "process_status": values.get("process_status"),
+        "has_abnormal": bool(values.get("has_abnormal")),
+        "raw_fields": fields,
+        "last_modified_at": modified,
+        **{key: values.get(key) for key in _RECORD_CHECK_KEYS},
+    }
+
+
+async def _upsert_records_batch(
+    db: AsyncSession, workshop_code: str, source: str, items: list[dict[str, Any]]
+) -> None:
+    """批量 upsert 记录行：一次 IN 查询定位既有行，新增走批量插入，避免逐行 N+1。"""
+    column_values_list = [
+        values
+        for values in (
+            _record_column_values(workshop_code, item) for item in items
+        )
+        if values is not None
+    ]
+    if not column_values_list:
+        return
+    # 同批重复 record_id 以最后一条为准（飞书侧后修改的记录胜出）
+    by_record_id: dict[str, dict[str, Any]] = {
+        values["record_id"]: values for values in column_values_list
+    }
+    record_ids = list(by_record_id)
+    existing_rows = (
+        await db.execute(
+            select(EquipmentInspectionFeishuRecord).where(
+                EquipmentInspectionFeishuRecord.workshop_code == workshop_code,
+                EquipmentInspectionFeishuRecord.source == source,
+                EquipmentInspectionFeishuRecord.record_id.in_(record_ids),
+                EquipmentInspectionFeishuRecord.is_deleted == False,  # noqa: E712
+            )
+        )
+    ).scalars()
+    existing_map = {row.record_id: row for row in existing_rows}
+    for record_id, values in by_record_id.items():
+        existing = existing_map.get(record_id)
+        if existing is not None:
+            for key, value in values.items():
+                if key != "record_id":
+                    setattr(existing, key, value)
+        else:
+            db.add(EquipmentInspectionFeishuRecord(source=source, **values))
+
+
 async def _upsert_record(
     db: AsyncSession, workshop_code: str, source: str, item: dict[str, Any]
 ) -> None:
@@ -313,10 +395,20 @@ async def _upsert_record(
         **{
             key: values.get(key)
             for key in (
-                "am_clean", "am_lubrication", "am_fastening", "am_sealing",
-                "am_vibration", "am_sound", "am_surface",
-                "pm_clean", "pm_lubrication", "pm_fastening", "pm_sealing",
-                "pm_vibration", "pm_sound", "pm_surface",
+                "am_clean",
+                "am_lubrication",
+                "am_fastening",
+                "am_sealing",
+                "am_vibration",
+                "am_sound",
+                "am_surface",
+                "pm_clean",
+                "pm_lubrication",
+                "pm_fastening",
+                "pm_sealing",
+                "pm_vibration",
+                "pm_sound",
+                "pm_surface",
             )
         },
     }
@@ -324,9 +416,52 @@ async def _upsert_record(
         for key, value in column_values.items():
             setattr(existing, key, value)
     else:
-        db.add(
-            EquipmentInspectionFeishuRecord(source=source, **column_values)
+        db.add(EquipmentInspectionFeishuRecord(source=source, **column_values))
+
+
+async def _upsert_devices_batch(
+    db: AsyncSession, workshop_code: str, items: list[dict[str, Any]]
+) -> None:
+    """批量 upsert 设备行：一次 IN 查询定位既有行，新增走批量插入。"""
+    rows: dict[str, dict[str, Any]] = {}
+    for item in items:
+        record_id = str(item.get("record_id") or "")
+        if not record_id:
+            continue
+        fields = item.get("fields") or {}
+        rows[record_id] = {
+            "equipment_name": _truncate(
+                _text_value(fields.get("设备名称")), _EQUIPMENT_NAME_MAX
+            ),
+            "equipment_no": _truncate(
+                _text_value(fields.get("设备编号")), _EQUIPMENT_NO_MAX
+            ),
+            "last_modified_at": _datetime_value(item.get("last_modified_time")),
+        }
+    if not rows:
+        return
+    existing_rows = (
+        await db.execute(
+            select(EquipmentInspectionFeishuDevice).where(
+                EquipmentInspectionFeishuDevice.workshop_code == workshop_code,
+                EquipmentInspectionFeishuDevice.record_id.in_(list(rows)),
+                EquipmentInspectionFeishuDevice.is_deleted == False,  # noqa: E712
+            )
         )
+    ).scalars()
+    existing_map = {row.record_id: row for row in existing_rows}
+    for record_id, values in rows.items():
+        existing = existing_map.get(record_id)
+        if existing is not None:
+            existing.equipment_name = values["equipment_name"]
+            existing.equipment_no = values["equipment_no"]
+            existing.last_modified_at = values["last_modified_at"]
+        else:
+            db.add(
+                EquipmentInspectionFeishuDevice(
+                    workshop_code=workshop_code, record_id=record_id, **values
+                )
+            )
 
 
 async def _upsert_device(
@@ -392,7 +527,9 @@ async def sync_table(
         if stop_before_ms is not None:
             try:
                 records = await _fetch_pages(
-                    client, table_id, sort_by_modified=True,
+                    client,
+                    table_id,
+                    sort_by_modified=True,
                     stop_before_ms=stop_before_ms,
                 )
             except Exception:  # noqa: BLE001
@@ -403,8 +540,11 @@ async def sync_table(
                     for item in await _fetch_pages(
                         client, table_id, sort_by_modified=False
                     )
-                    if (_datetime_value(item.get("last_modified_time"))
-                        or datetime.min.replace(tzinfo=UTC)) >= watermark
+                    if (
+                        _datetime_value(item.get("last_modified_time"))
+                        or datetime.min.replace(tzinfo=UTC)
+                    )
+                    >= watermark
                 ]
         else:
             records = await _fetch_pages(client, table_id, sort_by_modified=False)
@@ -419,23 +559,20 @@ async def sync_table(
             )
         raise AppException(message=f"飞书多维表格访问失败：{error}{hint}") from error
 
-    synced = 0
+    synced = len(records)
     if table_key == SOURCE_DEVICES:
-        for item in records:
-            await _upsert_device(db, workshop_code, item)
-            synced += 1
+        await _upsert_devices_batch(db, workshop_code, records)
     else:
-        for item in records:
-            await _upsert_record(db, workshop_code, table_key, item)
-            synced += 1
+        await _upsert_records_batch(db, workshop_code, table_key, records)
 
     if not incremental:
         # 全量对账：删除飞书侧已删的行（限定本车间本来源，不影响其他）
         keep_ids = {str(item.get("record_id")) for item in records}
         if table_key == SOURCE_DEVICES:
-            model: type[EquipmentInspectionFeishuDevice] | type[
-                EquipmentInspectionFeishuRecord
-            ] = EquipmentInspectionFeishuDevice
+            model: (
+                type[EquipmentInspectionFeishuDevice]
+                | type[EquipmentInspectionFeishuRecord]
+            ) = EquipmentInspectionFeishuDevice
             scope = [
                 EquipmentInspectionFeishuDevice.workshop_code == workshop_code,
                 EquipmentInspectionFeishuDevice.is_deleted == False,  # noqa: E712
@@ -448,11 +585,11 @@ async def sync_table(
                 EquipmentInspectionFeishuRecord.is_deleted == False,  # noqa: E712
             ]
         locals_rows = (
-            await db.execute(select(model.record_id).where(*scope))
-        ).scalars().all()
+            (await db.execute(select(model.record_id).where(*scope))).scalars().all()
+        )
         stale_ids = [local_id for local_id in locals_rows if local_id not in keep_ids]
-        for local_id in stale_ids:
-            await db.execute(delete(model).where(model.record_id == local_id))
+        if stale_ids:
+            await db.execute(delete(model).where(model.record_id.in_(stale_ids)))
 
     now = datetime.now(UTC)
     if table_key != SOURCE_DEVICES:
@@ -482,8 +619,9 @@ async def sync_table(
                 newest, state.last_synced_at or datetime.min.replace(tzinfo=UTC)
             )
     await db.flush()
-    logger.info("inspection feishu mirror synced: %s +%d total=%d",
-                table_key, synced, total)
+    logger.info(
+        "inspection feishu mirror synced: %s +%d total=%d", table_key, synced, total
+    )
     return {"synced": synced, "total": int(total)}
 
 
@@ -496,8 +634,11 @@ async def sync_all(
     for table_key in (SOURCE_TODAY, SOURCE_HISTORY, SOURCE_DEVICES):
         try:
             results[table_key] = await sync_table(
-                db, workshop_code, table_key,
-                incremental=incremental, config=config,
+                db,
+                workshop_code,
+                table_key,
+                incremental=incremental,
+                config=config,
             )
         except AppException as error:
             state = await _get_state(db, workshop_code, table_key)
@@ -509,12 +650,11 @@ async def sync_all(
         except Exception as error:  # noqa: BLE001
             # 数据库级错误会中止当前事务：回滚整轮保证结果与库一致，
             # 三张表统一记失败等待下次同步重试，避免上升为接口 500。
-            message = (
-                f"同步中断已回滚：{type(error).__name__}: {str(error)[:200]}"
-            )
+            message = f"同步中断已回滚：{type(error).__name__}: {str(error)[:200]}"
             logger.exception(
                 "inspection feishu mirror sync aborted at %s/%s",
-                workshop_code, table_key,
+                workshop_code,
+                table_key,
             )
             await db.rollback()
             for key in (SOURCE_TODAY, SOURCE_HISTORY, SOURCE_DEVICES):
@@ -527,17 +667,19 @@ async def sync_all(
     return results
 
 
-async def get_sync_states(
-    db: AsyncSession, workshop_code: str
-) -> list[dict[str, Any]]:
+async def get_sync_states(db: AsyncSession, workshop_code: str) -> list[dict[str, Any]]:
     rows = (
-        await db.execute(
-            select(EquipmentInspectionFeishuSyncState).where(
-                EquipmentInspectionFeishuSyncState.workshop_code == workshop_code,
-                EquipmentInspectionFeishuSyncState.is_deleted == False,  # noqa: E712
+        (
+            await db.execute(
+                select(EquipmentInspectionFeishuSyncState).where(
+                    EquipmentInspectionFeishuSyncState.workshop_code == workshop_code,
+                    EquipmentInspectionFeishuSyncState.is_deleted == False,  # noqa: E712
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [
         {
             "table_key": row.table_key,
@@ -605,15 +747,19 @@ async def _list_today_records(
     if abnormal_only:
         conditions.append(EquipmentInspectionFeishuRecord.has_abnormal.is_(True))
     rows = (
-        await db.execute(
-            select(EquipmentInspectionFeishuRecord)
-            .where(*conditions)
-            .order_by(
-                EquipmentInspectionFeishuRecord.last_modified_at.desc().nulls_last(),
-                EquipmentInspectionFeishuRecord.record_id.desc(),
+        (
+            await db.execute(
+                select(EquipmentInspectionFeishuRecord)
+                .where(*conditions)
+                .order_by(
+                    EquipmentInspectionFeishuRecord.last_modified_at.desc().nulls_last(),
+                    EquipmentInspectionFeishuRecord.record_id.desc(),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     latest: dict[str, EquipmentInspectionFeishuRecord] = {}
     for record in _valid_today_rows(rows):
         key = _device_key(record.equipment_no, record.equipment_name)
@@ -692,28 +838,42 @@ async def list_records(
         )
     ).scalar_one()
     rows = (
-        await db.execute(
-            select(EquipmentInspectionFeishuRecord)
-            .where(*conditions)
-            .order_by(
-                EquipmentInspectionFeishuRecord.record_date.desc(),
-                EquipmentInspectionFeishuRecord.equipment_no.asc(),
+        (
+            await db.execute(
+                select(EquipmentInspectionFeishuRecord)
+                .where(*conditions)
+                .order_by(
+                    EquipmentInspectionFeishuRecord.record_date.desc(),
+                    EquipmentInspectionFeishuRecord.equipment_no.asc(),
+                )
+                .offset((page - 1) * page_size)
+                .limit(page_size)
             )
-            .offset((page - 1) * page_size)
-            .limit(page_size)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return list(rows), int(total)
 
 
 # 上午/下午检查项列：任一列有值即视为该时段已巡
 _AM_COLUMNS = (
-    "am_clean", "am_lubrication", "am_fastening", "am_sealing",
-    "am_vibration", "am_sound", "am_surface",
+    "am_clean",
+    "am_lubrication",
+    "am_fastening",
+    "am_sealing",
+    "am_vibration",
+    "am_sound",
+    "am_surface",
 )
 _PM_COLUMNS = (
-    "pm_clean", "pm_lubrication", "pm_fastening", "pm_sealing",
-    "pm_vibration", "pm_sound", "pm_surface",
+    "pm_clean",
+    "pm_lubrication",
+    "pm_fastening",
+    "pm_sealing",
+    "pm_vibration",
+    "pm_sound",
+    "pm_surface",
 )
 _NAME_KEY_PREFIX = "N:"
 
@@ -741,8 +901,7 @@ def _valid_today_rows(
     return [
         r
         for r in rows
-        if (value := (r.process_status or "").strip())
-        and value != _STATUS_SPLIT
+        if (value := (r.process_status or "").strip()) and value != _STATUS_SPLIT
     ]
 
 
@@ -763,19 +922,23 @@ async def _today_device_progress(
     """
     today = _cst_today()
     rows = (
-        await db.execute(
-            select(EquipmentInspectionFeishuRecord)
-            .where(
-                EquipmentInspectionFeishuRecord.workshop_code == workshop_code,
-                EquipmentInspectionFeishuRecord.record_date == today,
-                EquipmentInspectionFeishuRecord.is_deleted == False,  # noqa: E712
-            )
-            .order_by(
-                EquipmentInspectionFeishuRecord.last_modified_at.desc().nulls_last(),
-                EquipmentInspectionFeishuRecord.record_id.desc(),
+        (
+            await db.execute(
+                select(EquipmentInspectionFeishuRecord)
+                .where(
+                    EquipmentInspectionFeishuRecord.workshop_code == workshop_code,
+                    EquipmentInspectionFeishuRecord.record_date == today,
+                    EquipmentInspectionFeishuRecord.is_deleted == False,  # noqa: E712
+                )
+                .order_by(
+                    EquipmentInspectionFeishuRecord.last_modified_at.desc().nulls_last(),
+                    EquipmentInspectionFeishuRecord.record_id.desc(),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     progress: dict[str, dict[str, Any]] = {}
     for record in _valid_today_rows(rows):
         key = _device_key(record.equipment_no, record.equipment_name)
@@ -806,13 +969,13 @@ async def _last_inspected_dates(
     )
     rows = (
         await db.execute(
-            select(
-                key_expr, func.max(EquipmentInspectionFeishuRecord.record_date)
-            ).where(
+            select(key_expr, func.max(EquipmentInspectionFeishuRecord.record_date))
+            .where(
                 EquipmentInspectionFeishuRecord.workshop_code == workshop_code,
                 EquipmentInspectionFeishuRecord.is_deleted == False,  # noqa: E712
                 EquipmentInspectionFeishuRecord.record_date.isnot(None),
-            ).group_by(key_expr)
+            )
+            .group_by(key_expr)
         )
     ).all()
     return {key: last for key, last in rows}
@@ -837,12 +1000,16 @@ async def list_devices(
             | func.coalesce(EquipmentInspectionFeishuDevice.equipment_no, "").like(like)
         )
     devices = (
-        await db.execute(
-            select(EquipmentInspectionFeishuDevice)
-            .where(*conditions)
-            .order_by(EquipmentInspectionFeishuDevice.equipment_no.asc())
+        (
+            await db.execute(
+                select(EquipmentInspectionFeishuDevice)
+                .where(*conditions)
+                .order_by(EquipmentInspectionFeishuDevice.equipment_no.asc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     from app.modules.equipment.models.equipment import Equipment
 

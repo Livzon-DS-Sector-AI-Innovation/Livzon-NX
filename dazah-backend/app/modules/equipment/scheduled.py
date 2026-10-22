@@ -39,7 +39,8 @@ class InspectionFeishuMirrorSyncGenerator(TaskGenerator):
         await session.commit()
         logger.info(
             "inspection feishu mirror incremental sync [%s]: %s",
-            workshop_code, results,
+            workshop_code,
+            results,
         )
 
 
@@ -62,7 +63,8 @@ class InspectionFeishuMirrorFullSyncGenerator(TaskGenerator):
         await session.commit()
         logger.info(
             "inspection feishu mirror full sync [%s]: %s",
-            workshop_code, results,
+            workshop_code,
+            results,
         )
 
 

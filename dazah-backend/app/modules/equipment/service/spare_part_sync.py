@@ -127,7 +127,9 @@ async def sync_workshop(db: AsyncSession, workshop_code: str) -> dict[str, Any]:
                     SparePart.workshop_code == workshop_code,
                 )
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     }
     touched_codes: set[str] = set()
     for code, item in aggregated.items():
@@ -154,7 +156,9 @@ async def sync_workshop(db: AsyncSession, workshop_code: str) -> dict[str, Any]:
             await db.execute(
                 select(SparePartStock).where(SparePartStock.is_deleted == False)  # noqa: E712
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     }
     zeroed = 0
     for code, part in existing.items():

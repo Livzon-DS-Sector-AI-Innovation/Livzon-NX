@@ -22,7 +22,7 @@ async def get_equipment_by_id(
 ) -> EquipmentResponse:
     """获取设备信息（供其他模块调用）"""
     equipment = await service.get_equipment_by_id(db, equipment_id)
-    return EquipmentResponse.model_validate(equipment)
+    return await service.to_equipment_response(db, equipment)
 
 
 async def get_equipments_by_category(
@@ -31,19 +31,7 @@ async def get_equipments_by_category(
 ) -> list[EquipmentResponse]:
     """获取指定分类的设备列表（供其他模块调用）"""
     equipments, _ = await service.get_equipments(db, category_id=category_id)
-    result = []
-    for e in equipments:
-        resp = EquipmentResponse.model_validate(e)
-        links = getattr(e, "category_links", []) or []
-        resp.category_ids = [link.category_id for link in links if not link.is_deleted]
-        names = [
-            link.category.name
-            for link in links
-            if not link.is_deleted and link.category
-        ]
-        resp.category_names = "、".join(names) if names else None
-        result.append(resp)
-    return result
+    return await service.to_equipment_responses(db, equipments)
 
 
 async def get_equipments_by_location(
@@ -52,7 +40,7 @@ async def get_equipments_by_location(
 ) -> list[EquipmentResponse]:
     """获取指定位置的设备列表（供其他模块调用）"""
     equipments, _ = await service.get_equipments(db, location_id=location_id)
-    return [EquipmentResponse.model_validate(e) for e in equipments]
+    return await service.to_equipment_responses(db, equipments)
 
 
 async def update_equipment_status(
@@ -66,7 +54,7 @@ async def update_equipment_status(
     equipment = await service.update_equipment(
         db, equipment_id, EquipmentUpdate(status=status)
     )
-    return EquipmentResponse.model_validate(equipment)
+    return await service.to_equipment_response(db, equipment)
 
 
 # ── 人员配置公共接口 ──

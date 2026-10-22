@@ -9,6 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.response import success_response
 from app.modules.equipment import service
+from app.modules.equipment.schemas import (
+    CandidateResponse,
+    FeishuRefreshResult,
+    PersonnelAddResult,
+    PersonnelResponse,
+    RoleResponse,
+)
 from app.modules.equipment.schemas.personnel import (
     PersonnelAddRequest,
     PersonnelCategoryAssign,
@@ -17,6 +24,7 @@ from app.modules.equipment.schemas.personnel import (
     RoleCreate,
     RoleUpdate,
 )
+from app.shared.schemas import ApiResponseEnvelope
 
 router = APIRouter()
 
@@ -24,7 +32,9 @@ router = APIRouter()
 # ═══════════════ 角色 API ═══════════════
 
 
-@router.post("/roles", summary="创建角色")
+@router.post(
+    "/roles", summary="创建角色", response_model=ApiResponseEnvelope[RoleResponse]
+)
 async def create_role(
     data: RoleCreate,
     db: AsyncSession = Depends(get_db),
@@ -33,7 +43,9 @@ async def create_role(
     return success_response(data=role.model_dump(mode="json"))
 
 
-@router.get("/roles", summary="角色列表")
+@router.get(
+    "/roles", summary="角色列表", response_model=ApiResponseEnvelope[list[RoleResponse]]
+)
 async def list_roles(
     scope: str | None = Query(None, description="作用域筛选"),
     is_active: bool | None = Query(None, description="启用状态筛选"),
@@ -54,7 +66,11 @@ async def list_roles(
     )
 
 
-@router.get("/roles/{role_id}", summary="角色详情")
+@router.get(
+    "/roles/{role_id}",
+    summary="角色详情",
+    response_model=ApiResponseEnvelope[RoleResponse],
+)
 async def get_role(
     role_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -63,7 +79,11 @@ async def get_role(
     return success_response(data=role.model_dump(mode="json"))
 
 
-@router.put("/roles/{role_id}", summary="更新角色")
+@router.put(
+    "/roles/{role_id}",
+    summary="更新角色",
+    response_model=ApiResponseEnvelope[RoleResponse],
+)
 async def update_role(
     role_id: uuid.UUID,
     data: RoleUpdate,
@@ -73,7 +93,9 @@ async def update_role(
     return success_response(data=role.model_dump(mode="json"))
 
 
-@router.delete("/roles/{role_id}", summary="删除角色")
+@router.delete(
+    "/roles/{role_id}", summary="删除角色", response_model=ApiResponseEnvelope[None]
+)
 async def delete_role(
     role_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -85,7 +107,11 @@ async def delete_role(
 # ═══════════════ 人员 API ═══════════════
 
 
-@router.post("", summary="从身份系统添加人员")
+@router.post(
+    "",
+    summary="从身份系统添加人员",
+    response_model=ApiResponseEnvelope[PersonnelAddResult],
+)
 async def add_personnel(
     data: PersonnelAddRequest,
     db: AsyncSession = Depends(get_db),
@@ -94,7 +120,9 @@ async def add_personnel(
     return success_response(data=result.model_dump(mode="json"))
 
 
-@router.get("", summary="人员列表")
+@router.get(
+    "", summary="人员列表", response_model=ApiResponseEnvelope[list[PersonnelResponse]]
+)
 async def list_personnel(
     role_id: list[uuid.UUID] | None = Query(None, description="按角色 ID 筛选"),
     is_active: bool | None = Query(None, description="在岗状态筛选"),
@@ -125,7 +153,11 @@ async def list_personnel(
     )
 
 
-@router.get("/candidates", summary="按角色查询可分配人员")
+@router.get(
+    "/candidates",
+    summary="按角色查询可分配人员",
+    response_model=ApiResponseEnvelope[list[CandidateResponse]],
+)
 async def get_candidates(
     role_codes: list[str] = Query(
         ...,
@@ -146,7 +178,11 @@ async def get_candidates(
     return success_response(data=[c.model_dump(mode="json") for c in candidates])
 
 
-@router.get("/{personnel_id}", summary="人员详情")
+@router.get(
+    "/{personnel_id}",
+    summary="人员详情",
+    response_model=ApiResponseEnvelope[PersonnelResponse],
+)
 async def get_personnel(
     personnel_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -155,7 +191,11 @@ async def get_personnel(
     return success_response(data=person.model_dump(mode="json"))
 
 
-@router.put("/{personnel_id}", summary="更新人员")
+@router.put(
+    "/{personnel_id}",
+    summary="更新人员",
+    response_model=ApiResponseEnvelope[PersonnelResponse],
+)
 async def update_personnel(
     personnel_id: uuid.UUID,
     data: PersonnelUpdate,
@@ -165,7 +205,9 @@ async def update_personnel(
     return success_response(data=person.model_dump(mode="json"))
 
 
-@router.delete("/{personnel_id}", summary="移除人员")
+@router.delete(
+    "/{personnel_id}", summary="移除人员", response_model=ApiResponseEnvelope[None]
+)
 async def delete_personnel(
     personnel_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -174,7 +216,11 @@ async def delete_personnel(
     return success_response(message="人员已移除")
 
 
-@router.post("/{personnel_id}/roles", summary="为人员分配角色")
+@router.post(
+    "/{personnel_id}/roles",
+    summary="为人员分配角色",
+    response_model=ApiResponseEnvelope[PersonnelResponse],
+)
 async def assign_roles(
     personnel_id: uuid.UUID,
     data: PersonnelRoleAssign,
@@ -184,7 +230,11 @@ async def assign_roles(
     return success_response(data=person.model_dump(mode="json"))
 
 
-@router.put("/{personnel_id}/roles", summary="全量更新人员角色")
+@router.put(
+    "/{personnel_id}/roles",
+    summary="全量更新人员角色",
+    response_model=ApiResponseEnvelope[PersonnelResponse],
+)
 async def update_roles(
     personnel_id: uuid.UUID,
     data: PersonnelRoleAssign,
@@ -194,7 +244,11 @@ async def update_roles(
     return success_response(data=person.model_dump(mode="json"))
 
 
-@router.post("/{personnel_id}/categories", summary="设置人员角色设备分类")
+@router.post(
+    "/{personnel_id}/categories",
+    summary="设置人员角色设备分类",
+    response_model=ApiResponseEnvelope[PersonnelResponse],
+)
 async def assign_categories(
     personnel_id: uuid.UUID,
     data: PersonnelCategoryAssign,
@@ -204,7 +258,11 @@ async def assign_categories(
     return success_response(data=person.model_dump(mode="json"))
 
 
-@router.put("/{personnel_id}/categories", summary="全量更新人员角色分类")
+@router.put(
+    "/{personnel_id}/categories",
+    summary="全量更新人员角色分类",
+    response_model=ApiResponseEnvelope[PersonnelResponse],
+)
 async def update_categories(
     personnel_id: uuid.UUID,
     data: PersonnelCategoryAssign,
@@ -214,7 +272,11 @@ async def update_categories(
     return success_response(data=person.model_dump(mode="json"))
 
 
-@router.post("/refresh-feishu", summary="手动刷新飞书信息")
+@router.post(
+    "/refresh-feishu",
+    summary="手动刷新飞书信息",
+    response_model=ApiResponseEnvelope[FeishuRefreshResult],
+)
 async def refresh_feishu(
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:

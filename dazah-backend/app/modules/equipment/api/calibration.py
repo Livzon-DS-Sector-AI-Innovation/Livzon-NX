@@ -17,22 +17,33 @@ from app.modules.equipment.schemas import (
     CalibrationRecordCreate,
     CalibrationRecordResponse,
 )
+from app.shared.schemas import ApiResponseEnvelope
 
 router = APIRouter()
 
 
 # ---------- 校准计划 ----------
-@router.post("/plans", summary="新增校准计划")
+@router.post(
+    "/plans",
+    summary="新增校准计划",
+    response_model=ApiResponseEnvelope[CalibrationPlanResponse],
+)
 async def create_calibration_plan(
     data: CalibrationPlanCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     plan = await service.create_calibration_plan(db, data)
-    return success_response(data=CalibrationPlanResponse.model_validate(plan))
+    resp = CalibrationPlanResponse.model_validate(plan)
+    resp = (await service.attach_calibration_plan_display(db, [resp]))[0]
+    return success_response(data=resp)
 
 
-@router.get("/plans", summary="校准计划列表")
+@router.get(
+    "/plans",
+    summary="校准计划列表",
+    response_model=ApiResponseEnvelope[list[CalibrationPlanResponse]],
+)
 async def list_calibration_plans(
     equipment_id: uuid.UUID | None = Query(None, description="设备ID"),
     status: str | None = Query(None, description="状态"),
@@ -51,35 +62,53 @@ async def list_calibration_plans(
         page=page,
         page_size=page_size,
     )
+    responses = await service.attach_calibration_plan_display(
+        db, [CalibrationPlanResponse.model_validate(p) for p in plans]
+    )
     return paginated_response(
-        data=[CalibrationPlanResponse.model_validate(p) for p in plans],
+        data=responses,
         page=page,
         page_size=page_size,
         total=total,
     )
 
 
-@router.get("/plans/overdue", summary="查询到期/逾期的校准计划")
+@router.get(
+    "/plans/overdue",
+    summary="查询到期/逾期的校准计划",
+    response_model=ApiResponseEnvelope[list[CalibrationPlanResponse]],
+)
 async def get_overdue_plans(
     days: int = Query(30, ge=1, description="提前天数"),
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     plans = await service.get_overdue_calibration_plans(db, days)
-    return success_response(
-        data=[CalibrationPlanResponse.model_validate(p) for p in plans]
+    responses = await service.attach_calibration_plan_display(
+        db, [CalibrationPlanResponse.model_validate(p) for p in plans]
     )
+    return success_response(data=responses)
 
 
-@router.get("/plans/{plan_id}", summary="校准计划详情")
+@router.get(
+    "/plans/{plan_id}",
+    summary="校准计划详情",
+    response_model=ApiResponseEnvelope[CalibrationPlanResponse],
+)
 async def get_calibration_plan(
     plan_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     plan = await service.get_calibration_plan_by_id(db, plan_id)
-    return success_response(data=CalibrationPlanResponse.model_validate(plan))
+    resp = CalibrationPlanResponse.model_validate(plan)
+    resp = (await service.attach_calibration_plan_display(db, [resp]))[0]
+    return success_response(data=resp)
 
 
-@router.put("/plans/{plan_id}", summary="修改校准计划")
+@router.put(
+    "/plans/{plan_id}",
+    summary="修改校准计划",
+    response_model=ApiResponseEnvelope[CalibrationPlanResponse],
+)
 async def update_calibration_plan(
     plan_id: uuid.UUID,
     data: CalibrationPlanUpdate,
@@ -87,10 +116,14 @@ async def update_calibration_plan(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     plan = await service.update_calibration_plan(db, plan_id, data)
-    return success_response(data=CalibrationPlanResponse.model_validate(plan))
+    resp = CalibrationPlanResponse.model_validate(plan)
+    resp = (await service.attach_calibration_plan_display(db, [resp]))[0]
+    return success_response(data=resp)
 
 
-@router.delete("/plans/{plan_id}", summary="删除校准计划")
+@router.delete(
+    "/plans/{plan_id}", summary="删除校准计划", response_model=ApiResponseEnvelope[None]
+)
 async def delete_calibration_plan(
     plan_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -101,17 +134,27 @@ async def delete_calibration_plan(
 
 
 # ---------- 校准记录 ----------
-@router.post("/records", summary="新增校准记录")
+@router.post(
+    "/records",
+    summary="新增校准记录",
+    response_model=ApiResponseEnvelope[CalibrationRecordResponse],
+)
 async def create_calibration_record(
     data: CalibrationRecordCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     record = await service.create_calibration_record(db, data)
-    return success_response(data=CalibrationRecordResponse.model_validate(record))
+    resp = CalibrationRecordResponse.model_validate(record)
+    resp = (await service.attach_record_display(db, [resp]))[0]
+    return success_response(data=resp)
 
 
-@router.get("/records", summary="校准记录列表")
+@router.get(
+    "/records",
+    summary="校准记录列表",
+    response_model=ApiResponseEnvelope[list[CalibrationRecordResponse]],
+)
 async def list_calibration_records(
     equipment_id: uuid.UUID | None = Query(None, description="设备ID"),
     plan_id: uuid.UUID | None = Query(None, description="计划ID"),
@@ -130,18 +173,27 @@ async def list_calibration_records(
         page=page,
         page_size=page_size,
     )
+    responses = await service.attach_record_display(
+        db, [CalibrationRecordResponse.model_validate(r) for r in records]
+    )
     return paginated_response(
-        data=[CalibrationRecordResponse.model_validate(r) for r in records],
+        data=responses,
         page=page,
         page_size=page_size,
         total=total,
     )
 
 
-@router.get("/records/{record_id}", summary="校准记录详情")
+@router.get(
+    "/records/{record_id}",
+    summary="校准记录详情",
+    response_model=ApiResponseEnvelope[CalibrationRecordResponse],
+)
 async def get_calibration_record(
     record_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     record = await service.get_calibration_record_by_id(db, record_id)
-    return success_response(data=CalibrationRecordResponse.model_validate(record))
+    resp = CalibrationRecordResponse.model_validate(record)
+    resp = (await service.attach_record_display(db, [resp]))[0]
+    return success_response(data=resp)

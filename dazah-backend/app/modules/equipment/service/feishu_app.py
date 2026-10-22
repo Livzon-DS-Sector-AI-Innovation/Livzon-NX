@@ -52,24 +52,32 @@ def decrypt_app_secret(encrypted: str | None) -> str:
 
 async def _referencing_workshops(db: AsyncSession, app_row_id: UUID) -> list[str]:
     rows = (
-        await db.execute(
-            select(EquipmentInspectionFeishuConfig.workshop_code).where(
-                EquipmentInspectionFeishuConfig.feishu_app_id == app_row_id,
-                EquipmentInspectionFeishuConfig.is_deleted == False,  # noqa: E712
+        (
+            await db.execute(
+                select(EquipmentInspectionFeishuConfig.workshop_code).where(
+                    EquipmentInspectionFeishuConfig.feishu_app_id == app_row_id,
+                    EquipmentInspectionFeishuConfig.is_deleted == False,  # noqa: E712
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return sorted(set(rows))
 
 
 async def list_apps(db: AsyncSession) -> list[EquipmentFeishuAppItem]:
     rows = (
-        await db.execute(
-            select(EquipmentFeishuApp).where(
-                EquipmentFeishuApp.is_deleted == False  # noqa: E712
+        (
+            await db.execute(
+                select(EquipmentFeishuApp).where(
+                    EquipmentFeishuApp.is_deleted == False  # noqa: E712
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     items = []
     for row in rows:
         items.append(
@@ -94,15 +102,21 @@ async def create_app(
     if not name or not app_id:
         raise AppException(message="应用名称与 App ID 不能为空")
     duplicate = (
-        await db.execute(
-            select(EquipmentFeishuApp).where(
-                EquipmentFeishuApp.app_id == app_id,
-                EquipmentFeishuApp.is_deleted == False,  # noqa: E712
+        (
+            await db.execute(
+                select(EquipmentFeishuApp).where(
+                    EquipmentFeishuApp.app_id == app_id,
+                    EquipmentFeishuApp.is_deleted == False,  # noqa: E712
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if duplicate is not None:
-        raise AppException(message=f"App ID {app_id} 已存在于应用库（{duplicate.name}）")
+        raise AppException(
+            message=f"App ID {app_id} 已存在于应用库（{duplicate.name}）"
+        )
     row = EquipmentFeishuApp(
         name=name,
         app_id=app_id,
@@ -133,16 +147,22 @@ async def update_app(
     if not name or not app_id:
         raise AppException(message="应用名称与 App ID 不能为空")
     duplicate = (
-        await db.execute(
-            select(EquipmentFeishuApp).where(
-                EquipmentFeishuApp.app_id == app_id,
-                EquipmentFeishuApp.id != app_row_id,
-                EquipmentFeishuApp.is_deleted == False,  # noqa: E712
+        (
+            await db.execute(
+                select(EquipmentFeishuApp).where(
+                    EquipmentFeishuApp.app_id == app_id,
+                    EquipmentFeishuApp.id != app_row_id,
+                    EquipmentFeishuApp.is_deleted == False,  # noqa: E712
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if duplicate is not None:
-        raise AppException(message=f"App ID {app_id} 已存在于应用库（{duplicate.name}）")
+        raise AppException(
+            message=f"App ID {app_id} 已存在于应用库（{duplicate.name}）"
+        )
     row.name = name
     row.app_id = app_id
     submitted_secret = (data.app_secret or "").strip()

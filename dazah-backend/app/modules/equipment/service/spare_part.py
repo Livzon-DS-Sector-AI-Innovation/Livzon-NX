@@ -12,6 +12,7 @@ from app.modules.equipment.models.spare_part import (
 )
 from app.modules.equipment.schemas.spare_part import (
     SparePartCreate,
+    SparePartListItem,
     SparePartUpdate,
     StockAdjustRequest,
     StockInboundRequest,
@@ -217,3 +218,19 @@ async def get_stock_warnings(
             )
         )
     return result
+
+
+async def attach_stock_quantities(
+    db: AsyncSession, items: list[SparePartListItem]
+) -> list[SparePartListItem]:
+    """批量填充备件列表项的当前库存与安全库存"""
+    if not items:
+        return items
+    stock_map = await repo.get_stocks_by_spare_part_ids(db, [item.id for item in items])
+    for item in items:
+        stock = stock_map.get(item.id)
+        if stock is not None:
+            # 库列实际为 Numeric(12,2)（历史迁移），显式收敛为 int 契约值
+            item.current_qty = int(stock.current_qty)
+            item.safety_qty = int(stock.safety_qty)
+    return items

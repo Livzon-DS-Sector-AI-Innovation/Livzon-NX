@@ -127,9 +127,7 @@ class EquipmentCreate(BaseModel):
     manufacturer: str | None = Field(default=None, max_length=200, description="制造商")
     supplier: str | None = Field(default=None, max_length=200, description="供应商")
     production_date: date | None = Field(default=None, description="出厂日期")
-    factory_no: str | None = Field(
-        default=None, max_length=100, description="出厂编号"
-    )
+    factory_no: str | None = Field(default=None, max_length=100, description="出厂编号")
     arrival_date: date | None = Field(default=None, description="入厂日期")
     commissioning_date: date | None = Field(default=None, description="投用日期")
     description: str | None = Field(default=None, description="备注")
@@ -174,9 +172,7 @@ class EquipmentUpdate(BaseModel):
     manufacturer: str | None = Field(default=None, max_length=200, description="制造商")
     supplier: str | None = Field(default=None, max_length=200, description="供应商")
     production_date: date | None = Field(default=None, description="出厂日期")
-    factory_no: str | None = Field(
-        default=None, max_length=100, description="出厂编号"
-    )
+    factory_no: str | None = Field(default=None, max_length=100, description="出厂编号")
     arrival_date: date | None = Field(default=None, description="入厂日期")
     commissioning_date: date | None = Field(default=None, description="投用日期")
     description: str | None = Field(default=None, description="备注")
@@ -247,3 +243,62 @@ class EquipmentStatistics(BaseModel):
     by_status: dict[str, int]
     by_category: dict[str, int]
     by_location: dict[str, int]
+
+
+class DepartmentOption(BaseModel):
+    """部门下拉选项（含负责人）"""
+
+    id: uuid.UUID
+    name: str
+    leader_user_id: str | None = None
+    leader_id: uuid.UUID | None = None
+    leader_name: str | None = None
+
+
+class EquipmentImportFailure(BaseModel):
+    """台账导入失败行"""
+
+    row: int
+    equipment_no: str | None = None
+    reason: str
+
+
+class EquipmentImportSummary(BaseModel):
+    """台账导入结果统计"""
+
+    total_rows: int = 0
+    created: int = 0
+    updated: int = 0
+    failed: int = 0
+    flagged: int = 0
+    locations_created: int = 0
+    failures: list[EquipmentImportFailure]
+
+
+class EquipmentImportResult(EquipmentImportSummary):
+    """台账导入结果（含留存档 ID）"""
+
+    archive_id: str
+
+
+class EquipmentLedgerArchiveSummary(BaseModel):
+    """台账导入存档列表项（不含表格大字段）"""
+
+    id: str
+    workshop_code: str | None = None
+    file_name: str
+    sheet_name: str | None = None
+    row_count: int | None = None
+    col_count: int | None = None
+    import_summary: dict[str, Any] | None = None
+    created_by_name: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class EquipmentLedgerArchiveDetail(EquipmentLedgerArchiveSummary):
+    """台账导入存档详情（含完整表格快照）"""
+
+    rows: list[list[Any]]
+    merges: list[Any]
+    col_widths: list[float]

@@ -16,9 +16,9 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.equipment.repository.work_order import get_user_work_orders
 from app.modules.equipment.service import (
     complete_work_order,
+    get_user_work_orders,
     get_work_order_by_id,
     start_work_order,
 )
@@ -67,7 +67,6 @@ def _wo_to_dict(wo: Any) -> dict[str, Any]:
         "created_at": wo.created_at.isoformat() if wo.created_at else "",
         "started_at": wo.started_at.isoformat() if wo.started_at else "",
     }
-
 
 
 # ─────────────────────────────────────────────────────────────

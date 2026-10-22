@@ -13,9 +13,9 @@ from app.core.database import get_db
 from app.core.deps import CurrentUser
 from app.core.exceptions import AppException, NotFoundException
 from app.core.response import success_response
-from app.modules.equipment import repository as repo
 from app.modules.equipment import service
 from app.modules.equipment.schemas import WorkOrderImageResponse
+from app.shared.schemas import ApiResponseEnvelope
 
 router = APIRouter()
 
@@ -26,7 +26,11 @@ def _require_user(current_user: CurrentUser) -> uuid.UUID:
     return current_user.id
 
 
-@router.post("/{work_order_id}/images", summary="上传工单图片")
+@router.post(
+    "/{work_order_id}/images",
+    summary="上传工单图片",
+    response_model=ApiResponseEnvelope[list[WorkOrderImageResponse]],
+)
 async def upload_work_order_images(
     work_order_id: uuid.UUID,
     files: list[UploadFile] = File(..., description="图片文件"),
@@ -40,7 +44,11 @@ async def upload_work_order_images(
     )
 
 
-@router.get("/{work_order_id}/images", summary="获取工单图片列表")
+@router.get(
+    "/{work_order_id}/images",
+    summary="获取工单图片列表",
+    response_model=ApiResponseEnvelope[list[WorkOrderImageResponse]],
+)
 async def list_work_order_images(
     work_order_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -60,7 +68,7 @@ async def serve_work_order_image(
     from app.core.storage import get_object
     from app.core.storage import is_enabled as minio_enabled
 
-    image = await repo.get_image_by_id(db, image_id)
+    image = await service.get_image_by_id(db, image_id)
     if not image or str(image.work_order_id) != str(work_order_id):
         raise NotFoundException("图片", str(image_id))
 
@@ -76,7 +84,11 @@ async def serve_work_order_image(
     return FileResponse(image.file_path)
 
 
-@router.delete("/{work_order_id}/images/{image_id}", summary="删除工单图片")
+@router.delete(
+    "/{work_order_id}/images/{image_id}",
+    summary="删除工单图片",
+    response_model=ApiResponseEnvelope[None],
+)
 async def remove_work_order_image(
     work_order_id: uuid.UUID,
     image_id: uuid.UUID,

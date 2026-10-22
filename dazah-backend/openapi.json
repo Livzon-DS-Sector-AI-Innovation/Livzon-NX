@@ -4113,6 +4113,74 @@
         "title": "ApiResponseEnvelope[BatchUpdateStatusResponse]",
         "type": "object"
       },
+      "ApiResponseEnvelope_CalibrationPlanResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CalibrationPlanResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[CalibrationPlanResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_CalibrationRecordResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CalibrationRecordResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[CalibrationRecordResponse]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_CapaAutoFillFromDeviation_": {
         "properties": {
           "code": {
@@ -4723,6 +4791,40 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[ChecklistResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_ClaimTimeoutConfig_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ClaimTimeoutConfig"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[ClaimTimeoutConfig]",
         "type": "object"
       },
       "ApiResponseEnvelope_ComplaintOut_": {
@@ -5439,6 +5541,414 @@
         "title": "ApiResponseEnvelope[EmployeeTrainingListMemberOut]",
         "type": "object"
       },
+      "ApiResponseEnvelope_EquipmentCategoryResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EquipmentCategoryResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[EquipmentCategoryResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_EquipmentFeishuAppItem_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EquipmentFeishuAppItem"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[EquipmentFeishuAppItem]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_EquipmentFeishuSyncStatus_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EquipmentFeishuSyncStatus"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[EquipmentFeishuSyncStatus]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_EquipmentImportResult_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EquipmentImportResult"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[EquipmentImportResult]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_EquipmentInspectionFeishuConfigDetail_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EquipmentInspectionFeishuConfigDetail"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[EquipmentInspectionFeishuConfigDetail]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_EquipmentInspectionFeishuConfigTestResult_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EquipmentInspectionFeishuConfigTestResult"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[EquipmentInspectionFeishuConfigTestResult]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_EquipmentInspectionFeishuDeviceList_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EquipmentInspectionFeishuDeviceList"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[EquipmentInspectionFeishuDeviceList]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_EquipmentInspectionTodaySummary_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EquipmentInspectionTodaySummary"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[EquipmentInspectionTodaySummary]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_EquipmentLedgerArchiveDetail_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EquipmentLedgerArchiveDetail"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[EquipmentLedgerArchiveDetail]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_EquipmentResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EquipmentResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[EquipmentResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_EquipmentStatistics_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EquipmentStatistics"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[EquipmentStatistics]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_FailureCodeResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/FailureCodeResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[FailureCodeResponse]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_FeeDashboardResponse_": {
         "properties": {
           "code": {
@@ -5539,6 +6049,40 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[FeeOverview]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_FeishuRefreshResult_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/FeishuRefreshResult"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[FeishuRefreshResult]",
         "type": "object"
       },
       "ApiResponseEnvelope_FireEquipmentDetailResponse_": {
@@ -6187,6 +6731,109 @@
         "title": "ApiResponseEnvelope[KnowledgeOverview]",
         "type": "object"
       },
+      "ApiResponseEnvelope_LocationResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/LocationResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[LocationResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_MaintenancePlanResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/MaintenancePlanResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[MaintenancePlanResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_NoneType_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "title": "Data",
+            "type": "null"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[NoneType]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_OosOotRecordOut_": {
         "properties": {
           "code": {
@@ -6593,6 +7240,74 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[PageTableTabListResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_PersonnelAddResult_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PersonnelAddResult"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[PersonnelAddResult]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_PersonnelResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PersonnelResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[PersonnelResponse]",
         "type": "object"
       },
       "ApiResponseEnvelope_ProductQualityOut_": {
@@ -7037,6 +7752,40 @@
         "title": "ApiResponseEnvelope[ReturnRecallOut]",
         "type": "object"
       },
+      "ApiResponseEnvelope_RoleResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/RoleResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[RoleResponse]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_SafetyFeishuAppSettingsDetail_": {
         "properties": {
           "code": {
@@ -7103,6 +7852,74 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[SafetyFeishuSettingsTestResult]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_SparePartResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SparePartResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[SparePartResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_StockResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/StockResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[StockResponse]",
         "type": "object"
       },
       "ApiResponseEnvelope_SupplierOut_": {
@@ -7411,6 +8228,74 @@
         "title": "ApiResponseEnvelope[ValidationStatistics]",
         "type": "object"
       },
+      "ApiResponseEnvelope_WorkOrderResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WorkOrderResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[WorkOrderResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_WorkOrderStatistics_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WorkOrderStatistics"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[WorkOrderStatistics]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_dict_str__Any__": {
         "properties": {
           "code": {
@@ -7445,6 +8330,44 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[dict[str, Any]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_dict_str__EquipmentFeishuSyncTableResult__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/EquipmentFeishuSyncTableResult"
+            },
+            "title": "Data",
+            "type": "object"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[dict[str, EquipmentFeishuSyncTableResult]]",
         "type": "object"
       },
       "ApiResponseEnvelope_list_AgentToolCatalogEntry__": {
@@ -7673,6 +8596,120 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[list[AuthorizationMaterialListItem]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_CalibrationPlanResponse__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/CalibrationPlanResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[CalibrationPlanResponse]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_CalibrationRecordResponse__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/CalibrationRecordResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[CalibrationRecordResponse]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_CandidateResponse__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[CandidateResponse]]",
         "type": "object"
       },
       "ApiResponseEnvelope_list_CapaListItem__": {
@@ -7939,6 +8976,44 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[list[ComplaintOut]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_DepartmentOption__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/DepartmentOption"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[DepartmentOption]]",
         "type": "object"
       },
       "ApiResponseEnvelope_list_DepartmentWeeklyConfirmationOut__": {
@@ -8359,6 +9434,272 @@
         "title": "ApiResponseEnvelope[list[EmployeeTrainingSummaryOut]]",
         "type": "object"
       },
+      "ApiResponseEnvelope_list_EquipmentFeishuAppItem__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/EquipmentFeishuAppItem"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[EquipmentFeishuAppItem]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_EquipmentInspectionFeishuConfigDetail__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/EquipmentInspectionFeishuConfigDetail"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[EquipmentInspectionFeishuConfigDetail]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_EquipmentInspectionFeishuRecordItem__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/EquipmentInspectionFeishuRecordItem"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[EquipmentInspectionFeishuRecordItem]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_EquipmentInspectionTodaySummaryEntry__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/EquipmentInspectionTodaySummaryEntry"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[EquipmentInspectionTodaySummaryEntry]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_EquipmentLedgerArchiveSummary__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/EquipmentLedgerArchiveSummary"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[EquipmentLedgerArchiveSummary]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_EquipmentResponse__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/EquipmentResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[EquipmentResponse]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_FailureCodeResponse__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/FailureCodeResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[FailureCodeResponse]]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_list_FeeEntryResponse__": {
         "properties": {
           "code": {
@@ -8663,6 +10004,120 @@
         "title": "ApiResponseEnvelope[list[KnowledgeCommentResponse]]",
         "type": "object"
       },
+      "ApiResponseEnvelope_list_MaintainerOption__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/MaintainerOption"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[MaintainerOption]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_MaintenancePlanResponse__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/MaintenancePlanResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[MaintenancePlanResponse]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_MaterialConsumeResponse__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/MaterialConsumeResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[MaterialConsumeResponse]]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_list_OosOotRecordOut__": {
         "properties": {
           "code": {
@@ -8775,6 +10230,44 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[list[OotLimitProductOut]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_PersonnelResponse__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/PersonnelResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[PersonnelResponse]]",
         "type": "object"
       },
       "ApiResponseEnvelope_list_ProductInfo__": {
@@ -8967,6 +10460,120 @@
         "title": "ApiResponseEnvelope[list[ReturnRecallOut]]",
         "type": "object"
       },
+      "ApiResponseEnvelope_list_RoleResponse__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/RoleResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[RoleResponse]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_SparePartListItem__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SparePartListItem"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[SparePartListItem]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_StockWarningResponse__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/StockWarningResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[StockWarningResponse]]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_list_SupplierOut__": {
         "properties": {
           "code": {
@@ -9003,6 +10610,134 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[list[SupplierOut]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_Union_EquipmentCategoryResponse__EquipmentCategoryTree___": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/EquipmentCategoryResponse"
+                },
+                {
+                  "$ref": "#/components/schemas/EquipmentCategoryTree"
+                }
+              ]
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[Union[EquipmentCategoryResponse, EquipmentCategoryTree]]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_Union_LocationResponse__LocationTree___": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/LocationResponse"
+                },
+                {
+                  "$ref": "#/components/schemas/LocationTree"
+                }
+              ]
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[Union[LocationResponse, LocationTree]]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_UserOption__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/UserOption"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[UserOption]]",
         "type": "object"
       },
       "ApiResponseEnvelope_list_ValidationExecutionListItem__": {
@@ -9155,6 +10890,82 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[list[ValidationReviewListItem]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_WorkOrderImageResponse__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/WorkOrderImageResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[WorkOrderImageResponse]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_WorkOrderResponse__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/WorkOrderResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[WorkOrderResponse]]",
         "type": "object"
       },
       "ApiResponseEnvelope_list_dict_str__Any___": {
@@ -15123,6 +16934,172 @@
         "title": "CalibrationPlanCreate",
         "type": "object"
       },
+      "CalibrationPlanResponse": {
+        "description": "校准计划响应",
+        "properties": {
+          "calibration_type": {
+            "enum": [
+              "内部校准",
+              "外部检定"
+            ],
+            "title": "Calibration Type",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "cycle_months": {
+            "title": "Cycle Months",
+            "type": "integer"
+          },
+          "equipment_id": {
+            "format": "uuid",
+            "title": "Equipment Id",
+            "type": "string"
+          },
+          "equipment_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment Name"
+          },
+          "equipment_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment No"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_calibration_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Calibration Date"
+          },
+          "next_calibration_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Calibration Date"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "responsible_person_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsible Person Id"
+          },
+          "responsible_person_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsible Person Name"
+          },
+          "status": {
+            "enum": [
+              "启用",
+              "停用"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "id",
+          "equipment_id",
+          "calibration_type",
+          "cycle_months",
+          "last_calibration_date",
+          "next_calibration_date",
+          "responsible_person_id",
+          "status",
+          "remark",
+          "created_at",
+          "updated_at",
+          "created_by",
+          "updated_by"
+        ],
+        "title": "CalibrationPlanResponse",
+        "type": "object"
+      },
       "CalibrationPlanUpdate": {
         "description": "更新校准计划请求",
         "properties": {
@@ -15292,6 +17269,222 @@
           "result"
         ],
         "title": "CalibrationRecordCreate",
+        "type": "object"
+      },
+      "CalibrationRecordResponse": {
+        "description": "校准记录响应",
+        "properties": {
+          "calibrated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calibrated By"
+          },
+          "calibration_date": {
+            "format": "date",
+            "title": "Calibration Date",
+            "type": "string"
+          },
+          "calibration_plan_id": {
+            "format": "uuid",
+            "title": "Calibration Plan Id",
+            "type": "string"
+          },
+          "calibration_type": {
+            "enum": [
+              "内部校准",
+              "外部检定"
+            ],
+            "title": "Calibration Type",
+            "type": "string"
+          },
+          "certificate_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate No"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "equipment_id": {
+            "format": "uuid",
+            "title": "Equipment Id",
+            "type": "string"
+          },
+          "equipment_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment Name"
+          },
+          "equipment_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment No"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "next_due_date": {
+            "format": "date",
+            "title": "Next Due Date",
+            "type": "string"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "result": {
+            "enum": [
+              "合格",
+              "不合格"
+            ],
+            "title": "Result",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "id",
+          "calibration_plan_id",
+          "equipment_id",
+          "calibration_date",
+          "calibration_type",
+          "result",
+          "certificate_no",
+          "calibrated_by",
+          "next_due_date",
+          "remark",
+          "created_at",
+          "updated_at",
+          "created_by",
+          "updated_by"
+        ],
+        "title": "CalibrationRecordResponse",
+        "type": "object"
+      },
+      "CandidateResponse": {
+        "description": "可分配人员信息（供其他业务模块调用）",
+        "properties": {
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
+          "feishu_open_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feishu Open Id"
+          },
+          "feishu_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feishu User Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "personnel_id": {
+            "format": "uuid",
+            "title": "Personnel Id",
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/PersonnelRoleInfo"
+            },
+            "title": "Roles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "personnel_id",
+          "name",
+          "department",
+          "feishu_user_id",
+          "feishu_open_id"
+        ],
+        "title": "CandidateResponse",
         "type": "object"
       },
       "CandidateUpdate": {
@@ -19888,6 +22081,45 @@
           "answer"
         ],
         "title": "ChoiceQuestion",
+        "type": "object"
+      },
+      "ClaimTimeoutConfig": {
+        "description": "抢单超时配置（按优先级）",
+        "properties": {
+          "emergency": {
+            "default": 15,
+            "description": "紧急工单超时（分钟）",
+            "maximum": 1440.0,
+            "minimum": 1.0,
+            "title": "Emergency",
+            "type": "integer"
+          },
+          "high": {
+            "default": 30,
+            "description": "高优先级超时（分钟）",
+            "maximum": 1440.0,
+            "minimum": 1.0,
+            "title": "High",
+            "type": "integer"
+          },
+          "low": {
+            "default": 120,
+            "description": "低优先级超时（分钟）",
+            "maximum": 1440.0,
+            "minimum": 1.0,
+            "title": "Low",
+            "type": "integer"
+          },
+          "medium": {
+            "default": 60,
+            "description": "中优先级超时（分钟）",
+            "maximum": 1440.0,
+            "minimum": 1.0,
+            "title": "Medium",
+            "type": "integer"
+          }
+        },
+        "title": "ClaimTimeoutConfig",
         "type": "object"
       },
       "ClaimTimeoutUpdateRequest": {
@@ -27560,6 +29792,60 @@
           "name"
         ],
         "title": "DepartmentCreate",
+        "type": "object"
+      },
+      "DepartmentOption": {
+        "description": "部门下拉选项（含负责人）",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "leader_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leader Id"
+          },
+          "leader_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leader Name"
+          },
+          "leader_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leader User Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "DepartmentOption",
         "type": "object"
       },
       "DepartmentUpdate": {
@@ -38961,6 +41247,190 @@
         "title": "EquipmentCategoryCreate",
         "type": "object"
       },
+      "EquipmentCategoryResponse": {
+        "description": "设备分类响应",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "code",
+          "parent_id",
+          "description",
+          "created_at",
+          "updated_at",
+          "created_by",
+          "updated_by"
+        ],
+        "title": "EquipmentCategoryResponse",
+        "type": "object"
+      },
+      "EquipmentCategoryTree": {
+        "description": "设备分类树形结构",
+        "properties": {
+          "children": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/EquipmentCategoryTree"
+            },
+            "title": "Children",
+            "type": "array"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "code",
+          "parent_id",
+          "description",
+          "created_at",
+          "updated_at",
+          "created_by",
+          "updated_by"
+        ],
+        "title": "EquipmentCategoryTree",
+        "type": "object"
+      },
       "EquipmentCategoryUpdate": {
         "description": "更新设备分类请求",
         "properties": {
@@ -39333,6 +41803,62 @@
         "title": "EquipmentFeishuAppCreateRequest",
         "type": "object"
       },
+      "EquipmentFeishuAppItem": {
+        "description": "飞书自建应用凭据条目（Secret 掩码返回）",
+        "properties": {
+          "app_id": {
+            "description": "飞书应用 App ID",
+            "title": "App Id",
+            "type": "string"
+          },
+          "app_secret_configured": {
+            "description": "是否已配置 App Secret",
+            "title": "App Secret Configured",
+            "type": "boolean"
+          },
+          "created_at": {
+            "description": "创建时间",
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "description": "应用记录 ID",
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "description": "应用名称",
+            "title": "Name",
+            "type": "string"
+          },
+          "referenced_workshops": {
+            "description": "引用该应用的巡检配置车间代码",
+            "items": {
+              "type": "string"
+            },
+            "title": "Referenced Workshops",
+            "type": "array"
+          },
+          "updated_at": {
+            "description": "最近更新时间",
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "app_id",
+          "app_secret_configured",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "EquipmentFeishuAppItem",
+        "type": "object"
+      },
       "EquipmentFeishuAppUpdateRequest": {
         "description": "更新飞书自建应用凭据请求（Secret 留空保留已保存值）",
         "properties": {
@@ -39368,6 +41894,394 @@
           "app_id"
         ],
         "title": "EquipmentFeishuAppUpdateRequest",
+        "type": "object"
+      },
+      "EquipmentFeishuSyncStateItem": {
+        "description": "镜像同步状态行",
+        "properties": {
+          "last_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Message"
+          },
+          "last_run_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run At"
+          },
+          "last_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Status"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
+          },
+          "table_key": {
+            "title": "Table Key",
+            "type": "string"
+          },
+          "total_rows": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Rows"
+          }
+        },
+        "required": [
+          "table_key"
+        ],
+        "title": "EquipmentFeishuSyncStateItem",
+        "type": "object"
+      },
+      "EquipmentFeishuSyncStatus": {
+        "description": "镜像同步启用状态与各表最近同步情况",
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "tables": {
+            "items": {
+              "$ref": "#/components/schemas/EquipmentFeishuSyncStateItem"
+            },
+            "title": "Tables",
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "EquipmentFeishuSyncStatus",
+        "type": "object"
+      },
+      "EquipmentFeishuSyncTableResult": {
+        "description": "单表同步结果（成功含 synced/total，失败仅含 error）",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "synced": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Synced"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "title": "EquipmentFeishuSyncTableResult",
+        "type": "object"
+      },
+      "EquipmentImportFailure": {
+        "description": "台账导入失败行",
+        "properties": {
+          "equipment_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment No"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "row": {
+            "title": "Row",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "row",
+          "reason"
+        ],
+        "title": "EquipmentImportFailure",
+        "type": "object"
+      },
+      "EquipmentImportResult": {
+        "description": "台账导入结果（含留存档 ID）",
+        "properties": {
+          "archive_id": {
+            "title": "Archive Id",
+            "type": "string"
+          },
+          "created": {
+            "default": 0,
+            "title": "Created",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "failures": {
+            "items": {
+              "$ref": "#/components/schemas/EquipmentImportFailure"
+            },
+            "title": "Failures",
+            "type": "array"
+          },
+          "flagged": {
+            "default": 0,
+            "title": "Flagged",
+            "type": "integer"
+          },
+          "locations_created": {
+            "default": 0,
+            "title": "Locations Created",
+            "type": "integer"
+          },
+          "total_rows": {
+            "default": 0,
+            "title": "Total Rows",
+            "type": "integer"
+          },
+          "updated": {
+            "default": 0,
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "failures",
+          "archive_id"
+        ],
+        "title": "EquipmentImportResult",
+        "type": "object"
+      },
+      "EquipmentInspectionFeishuConfigDetail": {
+        "description": "设备巡检飞书镜像配置详情（Secret 掩码返回）",
+        "properties": {
+          "app_id": {
+            "description": "飞书应用 App ID",
+            "title": "App Id",
+            "type": "string"
+          },
+          "app_secret_configured": {
+            "description": "是否已配置 App Secret",
+            "title": "App Secret Configured",
+            "type": "boolean"
+          },
+          "app_secret_masked": {
+            "description": "App Secret 掩码",
+            "title": "App Secret Masked",
+            "type": "string"
+          },
+          "app_token": {
+            "description": "多维表格 App Token",
+            "title": "App Token",
+            "type": "string"
+          },
+          "base_url": {
+            "description": "多维表格完整链接（未填写为空串）",
+            "title": "Base Url",
+            "type": "string"
+          },
+          "device_table_id": {
+            "description": "设备档案表 ID",
+            "title": "Device Table Id",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "当前镜像同步是否实际启用",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "feishu_app_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "引用的自建应用库记录；空=内联凭据",
+            "title": "Feishu App Id"
+          },
+          "feishu_app_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "引用的自建应用名称（便于辨认）",
+            "title": "Feishu App Name"
+          },
+          "history_table_id": {
+            "description": "设备历史巡检记录表 ID",
+            "title": "History Table Id",
+            "type": "string"
+          },
+          "is_enabled": {
+            "description": "启用镜像同步",
+            "title": "Is Enabled",
+            "type": "boolean"
+          },
+          "last_test_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "最近连接测试失败原因",
+            "title": "Last Test Error"
+          },
+          "last_test_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "最近连接测试结果",
+            "title": "Last Test Status"
+          },
+          "last_tested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "最近连接测试时间",
+            "title": "Last Tested At"
+          },
+          "source": {
+            "description": "当前生效配置来源：数据库行或环境变量回退",
+            "enum": [
+              "database",
+              "environment"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "today_table_id": {
+            "description": "今日巡检表 ID",
+            "title": "Today Table Id",
+            "type": "string"
+          },
+          "workshop_code": {
+            "description": "车间代码（配置归属车间）",
+            "title": "Workshop Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workshop_code",
+          "app_id",
+          "app_secret_masked",
+          "app_secret_configured",
+          "app_token",
+          "base_url",
+          "today_table_id",
+          "history_table_id",
+          "device_table_id",
+          "is_enabled",
+          "source",
+          "enabled"
+        ],
+        "title": "EquipmentInspectionFeishuConfigDetail",
+        "type": "object"
+      },
+      "EquipmentInspectionFeishuConfigTestResult": {
+        "description": "设备巡检飞书镜像连接测试结果",
+        "properties": {
+          "message": {
+            "default": "",
+            "description": "结果说明（失败时为脱敏原因）",
+            "title": "Message",
+            "type": "string"
+          },
+          "success": {
+            "description": "测试是否通过",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "table_count": {
+            "default": 0,
+            "description": "读取到的多维表格子表数量",
+            "title": "Table Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "EquipmentInspectionFeishuConfigTestResult",
         "type": "object"
       },
       "EquipmentInspectionFeishuConfigUpdateRequest": {
@@ -39423,7 +42337,7 @@
                 "type": "null"
               }
             ],
-            "description": "引用自建应用库记录；提供时凭据以应用库为准，忽略内联 App ID/Secret",
+            "description": "引用自建应用库；提供时凭据以应用库为准，忽略内联 App ID/Secret",
             "title": "Feishu App Id"
           },
           "history_table_id": {
@@ -39448,6 +42362,1089 @@
           }
         },
         "title": "EquipmentInspectionFeishuConfigUpdateRequest",
+        "type": "object"
+      },
+      "EquipmentInspectionFeishuDeviceItem": {
+        "description": "巡检设备清单项（镜像 + 台账关联）",
+        "properties": {
+          "equipment_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment Name"
+          },
+          "equipment_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment No"
+          },
+          "in_ledger": {
+            "default": false,
+            "title": "In Ledger",
+            "type": "boolean"
+          },
+          "last_inspected_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Inspected Date"
+          },
+          "location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Name"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "record_id": {
+            "title": "Record Id",
+            "type": "string"
+          },
+          "today_status": {
+            "default": "pending",
+            "title": "Today Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "record_id"
+        ],
+        "title": "EquipmentInspectionFeishuDeviceItem",
+        "type": "object"
+      },
+      "EquipmentInspectionFeishuDeviceList": {
+        "description": "巡检设备清单返回结构",
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EquipmentInspectionFeishuDeviceItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "date"
+        ],
+        "title": "EquipmentInspectionFeishuDeviceList",
+        "type": "object"
+      },
+      "EquipmentInspectionFeishuRecordItem": {
+        "description": "巡检记录（飞书镜像）列表项",
+        "properties": {
+          "am_clean": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Am Clean"
+          },
+          "am_fastening": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Am Fastening"
+          },
+          "am_lubrication": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Am Lubrication"
+          },
+          "am_sealing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Am Sealing"
+          },
+          "am_sound": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Am Sound"
+          },
+          "am_surface": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Am Surface"
+          },
+          "am_vibration": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Am Vibration"
+          },
+          "anomaly_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anomaly Note"
+          },
+          "equipment_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment Name"
+          },
+          "equipment_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment No"
+          },
+          "has_abnormal": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Abnormal"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last_modified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Modified At"
+          },
+          "pm_clean": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pm Clean"
+          },
+          "pm_fastening": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pm Fastening"
+          },
+          "pm_lubrication": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pm Lubrication"
+          },
+          "pm_sealing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pm Sealing"
+          },
+          "pm_sound": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pm Sound"
+          },
+          "pm_surface": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pm Surface"
+          },
+          "pm_vibration": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pm Vibration"
+          },
+          "process_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Process Status"
+          },
+          "raw_fields": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Fields"
+          },
+          "record_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Date"
+          },
+          "record_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Id"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "workshop_code": {
+            "title": "Workshop Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workshop_code",
+          "source"
+        ],
+        "title": "EquipmentInspectionFeishuRecordItem",
+        "type": "object"
+      },
+      "EquipmentInspectionTodaySummary": {
+        "description": "单车间今日巡检进度",
+        "properties": {
+          "abnormal": {
+            "default": 0,
+            "title": "Abnormal",
+            "type": "integer"
+          },
+          "am_inspected": {
+            "default": 0,
+            "title": "Am Inspected",
+            "type": "integer"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "inspected": {
+            "default": 0,
+            "title": "Inspected",
+            "type": "integer"
+          },
+          "pm_inspected": {
+            "default": 0,
+            "title": "Pm Inspected",
+            "type": "integer"
+          },
+          "total_devices": {
+            "default": 0,
+            "title": "Total Devices",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date"
+        ],
+        "title": "EquipmentInspectionTodaySummary",
+        "type": "object"
+      },
+      "EquipmentInspectionTodaySummaryEntry": {
+        "description": "多车间今日巡检进度汇总项",
+        "properties": {
+          "abnormal": {
+            "default": 0,
+            "title": "Abnormal",
+            "type": "integer"
+          },
+          "am_inspected": {
+            "default": 0,
+            "title": "Am Inspected",
+            "type": "integer"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "inspected": {
+            "default": 0,
+            "title": "Inspected",
+            "type": "integer"
+          },
+          "pm_inspected": {
+            "default": 0,
+            "title": "Pm Inspected",
+            "type": "integer"
+          },
+          "total_devices": {
+            "default": 0,
+            "title": "Total Devices",
+            "type": "integer"
+          },
+          "workshop_code": {
+            "title": "Workshop Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "workshop_code"
+        ],
+        "title": "EquipmentInspectionTodaySummaryEntry",
+        "type": "object"
+      },
+      "EquipmentLedgerArchiveDetail": {
+        "description": "台账导入存档详情（含完整表格快照）",
+        "properties": {
+          "col_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Col Count"
+          },
+          "col_widths": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Col Widths",
+            "type": "array"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "created_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Name"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "import_summary": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Import Summary"
+          },
+          "merges": {
+            "items": {},
+            "title": "Merges",
+            "type": "array"
+          },
+          "row_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Count"
+          },
+          "rows": {
+            "items": {
+              "items": {},
+              "type": "array"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "sheet_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sheet Name"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "workshop_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workshop Code"
+          }
+        },
+        "required": [
+          "id",
+          "file_name",
+          "rows",
+          "merges",
+          "col_widths"
+        ],
+        "title": "EquipmentLedgerArchiveDetail",
+        "type": "object"
+      },
+      "EquipmentLedgerArchiveSummary": {
+        "description": "台账导入存档列表项（不含表格大字段）",
+        "properties": {
+          "col_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Col Count"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "created_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Name"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "import_summary": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Import Summary"
+          },
+          "row_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Count"
+          },
+          "sheet_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sheet Name"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "workshop_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workshop Code"
+          }
+        },
+        "required": [
+          "id",
+          "file_name"
+        ],
+        "title": "EquipmentLedgerArchiveSummary",
+        "type": "object"
+      },
+      "EquipmentResponse": {
+        "description": "设备响应",
+        "properties": {
+          "arrival_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrival Date"
+          },
+          "asset_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Value"
+          },
+          "category_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Category Ids",
+            "type": "array"
+          },
+          "category_names": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Names"
+          },
+          "commissioning_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commissioning Date"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "data_issue_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Issue Note"
+          },
+          "department_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department Id"
+          },
+          "department_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department Name"
+          },
+          "depreciation_years": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Depreciation Years"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "equipment_no": {
+            "title": "Equipment No",
+            "type": "string"
+          },
+          "factory_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Factory No"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "importance": {
+            "title": "Importance",
+            "type": "string"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Name"
+          },
+          "manufacturer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "production_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Production Date"
+          },
+          "responsible_person_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsible Person Id"
+          },
+          "responsible_person_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsible Person Name"
+          },
+          "specification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Specification"
+          },
+          "status": {
+            "enum": [
+              "在用",
+              "备用",
+              "维修中",
+              "停用",
+              "报废"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "supplier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier"
+          },
+          "technical_params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Technical Params"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          },
+          "warranty_expire_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warranty Expire Date"
+          },
+          "workshop_code": {
+            "title": "Workshop Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "equipment_no",
+          "name",
+          "workshop_code",
+          "location_id",
+          "status",
+          "model",
+          "specification",
+          "manufacturer",
+          "supplier",
+          "production_date",
+          "factory_no",
+          "arrival_date",
+          "commissioning_date",
+          "description",
+          "data_issue_note",
+          "importance",
+          "warranty_expire_date",
+          "asset_value",
+          "depreciation_years",
+          "technical_params",
+          "created_at",
+          "updated_at",
+          "created_by",
+          "updated_by"
+        ],
+        "title": "EquipmentResponse",
+        "type": "object"
+      },
+      "EquipmentStatistics": {
+        "description": "设备统计",
+        "properties": {
+          "by_category": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Category",
+            "type": "object"
+          },
+          "by_location": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Location",
+            "type": "object"
+          },
+          "by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Status",
+            "type": "object"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "by_status",
+          "by_category",
+          "by_location"
+        ],
+        "title": "EquipmentStatistics",
         "type": "object"
       },
       "EquipmentUpdate": {
@@ -41771,6 +45768,91 @@
         "title": "FailureCodeCreate",
         "type": "object"
       },
+      "FailureCodeResponse": {
+        "description": "故障代码响应",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sort_order": {
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "description",
+          "sort_order",
+          "is_active",
+          "created_at",
+          "updated_at",
+          "created_by",
+          "updated_by"
+        ],
+        "title": "FailureCodeResponse",
+        "type": "object"
+      },
       "FailureCodeUpdate": {
         "description": "更新故障代码请求",
         "properties": {
@@ -43760,6 +47842,47 @@
           "config_version"
         ],
         "title": "FeishuGatewayRestartResult",
+        "type": "object"
+      },
+      "FeishuRefreshResult": {
+        "description": "飞书刷新结果",
+        "properties": {
+          "errors": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "skipped": {
+            "description": "跳过（无变更）",
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "total": {
+            "description": "人员总数",
+            "title": "Total",
+            "type": "integer"
+          },
+          "unmatched": {
+            "description": "未匹配（identity 中找不到）",
+            "title": "Unmatched",
+            "type": "integer"
+          },
+          "updated": {
+            "description": "成功更新数",
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "updated",
+          "skipped",
+          "unmatched"
+        ],
+        "title": "FeishuRefreshResult",
         "type": "object"
       },
       "FeishuResourceTemplateCreate": {
@@ -52058,6 +56181,190 @@
         "title": "LocationCreate",
         "type": "object"
       },
+      "LocationResponse": {
+        "description": "位置响应",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "code",
+          "parent_id",
+          "description",
+          "created_at",
+          "updated_at",
+          "created_by",
+          "updated_by"
+        ],
+        "title": "LocationResponse",
+        "type": "object"
+      },
+      "LocationTree": {
+        "description": "位置树形结构",
+        "properties": {
+          "children": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/LocationTree"
+            },
+            "title": "Children",
+            "type": "array"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "code",
+          "parent_id",
+          "description",
+          "created_at",
+          "updated_at",
+          "created_by",
+          "updated_by"
+        ],
+        "title": "LocationTree",
+        "type": "object"
+      },
       "LocationUpdate": {
         "description": "更新位置请求",
         "properties": {
@@ -52167,6 +56474,35 @@
           "reason"
         ],
         "title": "LockWrite",
+        "type": "object"
+      },
+      "MaintainerOption": {
+        "description": "工单指派用维修人员选项",
+        "properties": {
+          "department_id": {
+            "default": "",
+            "title": "Department Id",
+            "type": "string"
+          },
+          "employee_no": {
+            "default": "",
+            "title": "Employee No",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "name"
+        ],
+        "title": "MaintainerOption",
         "type": "object"
       },
       "MaintenanceBody": {
@@ -52306,6 +56642,201 @@
           "frequency_unit"
         ],
         "title": "MaintenancePlanCreate",
+        "type": "object"
+      },
+      "MaintenancePlanResponse": {
+        "description": "维护计划响应",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "equipment_id": {
+            "format": "uuid",
+            "title": "Equipment Id",
+            "type": "string"
+          },
+          "equipment_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment Name"
+          },
+          "equipment_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment No"
+          },
+          "frequency": {
+            "title": "Frequency",
+            "type": "integer"
+          },
+          "frequency_unit": {
+            "enum": [
+              "天",
+              "周",
+              "月",
+              "年"
+            ],
+            "title": "Frequency Unit",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_maintenance_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Maintenance Date"
+          },
+          "maintenance_content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maintenance Content"
+          },
+          "next_maintenance_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Maintenance Date"
+          },
+          "plan_name": {
+            "title": "Plan Name",
+            "type": "string"
+          },
+          "plan_type": {
+            "enum": [
+              "预防性维护",
+              "预测性维护"
+            ],
+            "title": "Plan Type",
+            "type": "string"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "responsible_person_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsible Person Id"
+          },
+          "responsible_person_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsible Person Name"
+          },
+          "status": {
+            "enum": [
+              "启用",
+              "停用",
+              "已完成"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "id",
+          "equipment_id",
+          "plan_name",
+          "plan_type",
+          "frequency",
+          "frequency_unit",
+          "last_maintenance_date",
+          "next_maintenance_date",
+          "responsible_person_id",
+          "maintenance_content",
+          "status",
+          "remark",
+          "created_at",
+          "updated_at",
+          "created_by",
+          "updated_by"
+        ],
+        "title": "MaintenancePlanResponse",
         "type": "object"
       },
       "MaintenancePlanUpdate": {
@@ -52859,6 +57390,61 @@
           "items"
         ],
         "title": "MaterialConsumeRequest",
+        "type": "object"
+      },
+      "MaterialConsumeResponse": {
+        "description": "领料记录响应",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "spare_part_id": {
+            "format": "uuid",
+            "title": "Spare Part Id",
+            "type": "string"
+          },
+          "transaction_type": {
+            "title": "Transaction Type",
+            "type": "string"
+          },
+          "work_order_id": {
+            "format": "uuid",
+            "title": "Work Order Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "spare_part_id",
+          "work_order_id",
+          "transaction_type",
+          "quantity",
+          "remark",
+          "created_at"
+        ],
+        "title": "MaterialConsumeResponse",
         "type": "object"
       },
       "MaterialOptionListResponse": {
@@ -61579,6 +66165,40 @@
         "title": "PersonnelAddRequest",
         "type": "object"
       },
+      "PersonnelAddResult": {
+        "description": "添加人员结果",
+        "properties": {
+          "added": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Added",
+            "type": "array"
+          },
+          "errors": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "skipped": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Skipped",
+            "type": "array"
+          }
+        },
+        "required": [
+          "added"
+        ],
+        "title": "PersonnelAddResult",
+        "type": "object"
+      },
       "PersonnelCategoryAssign": {
         "description": "人员+角色绑定设备分类请求",
         "properties": {
@@ -61592,6 +66212,37 @@
           }
         },
         "title": "PersonnelCategoryAssign",
+        "type": "object"
+      },
+      "PersonnelCategoryInfo": {
+        "description": "人员+角色→分类绑定信息",
+        "properties": {
+          "category_id": {
+            "format": "uuid",
+            "title": "Category Id",
+            "type": "string"
+          },
+          "category_name": {
+            "title": "Category Name",
+            "type": "string"
+          },
+          "role_id": {
+            "format": "uuid",
+            "title": "Role Id",
+            "type": "string"
+          },
+          "role_name": {
+            "title": "Role Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role_id",
+          "role_name",
+          "category_id",
+          "category_name"
+        ],
+        "title": "PersonnelCategoryInfo",
         "type": "object"
       },
       "PersonnelCategoryItem": {
@@ -61615,6 +66266,170 @@
         "title": "PersonnelCategoryItem",
         "type": "object"
       },
+      "PersonnelResponse": {
+        "description": "人员响应",
+        "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/PersonnelCategoryInfo"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
+          "employee_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee No"
+          },
+          "extended_attrs": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extended Attrs"
+          },
+          "feishu_open_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feishu Open Id"
+          },
+          "feishu_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feishu User Id"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "mobile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/PersonnelRoleInfo"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "workshop_code": {
+            "title": "Workshop Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "name",
+          "workshop_code",
+          "employee_no",
+          "department",
+          "feishu_user_id",
+          "feishu_open_id",
+          "mobile",
+          "extended_attrs",
+          "is_active",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "PersonnelResponse",
+        "type": "object"
+      },
       "PersonnelRoleAssign": {
         "description": "人员角色分配请求",
         "properties": {
@@ -61632,6 +66447,36 @@
           "role_ids"
         ],
         "title": "PersonnelRoleAssign",
+        "type": "object"
+      },
+      "PersonnelRoleInfo": {
+        "description": "人员关联的角色信息",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "code",
+          "scope"
+        ],
+        "title": "PersonnelRoleInfo",
         "type": "object"
       },
       "PersonnelStatus": {
@@ -71778,6 +76623,65 @@
         "title": "RolePermissionsRequest",
         "type": "object"
       },
+      "RoleResponse": {
+        "description": "角色响应",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "code",
+          "description",
+          "scope",
+          "is_active",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RoleResponse",
+        "type": "object"
+      },
       "RoleUpdate": {
         "description": "更新角色请求",
         "properties": {
@@ -76072,6 +80976,268 @@
         "title": "SparePartCreate",
         "type": "object"
       },
+      "SparePartListItem": {
+        "description": "备件列表项（附当前库存与安全库存，列表端点批量填充）",
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "current_qty": {
+            "default": 0,
+            "title": "Current Qty",
+            "type": "integer"
+          },
+          "default_supplier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Supplier"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "safety_qty": {
+            "default": 0,
+            "title": "Safety Qty",
+            "type": "integer"
+          },
+          "specification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Specification"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "unit_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Price"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          },
+          "workshop_code": {
+            "title": "Workshop Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "workshop_code",
+          "specification",
+          "unit",
+          "category",
+          "default_supplier",
+          "unit_price",
+          "is_active",
+          "created_at",
+          "updated_at",
+          "created_by",
+          "updated_by"
+        ],
+        "title": "SparePartListItem",
+        "type": "object"
+      },
+      "SparePartResponse": {
+        "description": "备件响应",
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "default_supplier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Supplier"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "specification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Specification"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "unit_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Price"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          },
+          "workshop_code": {
+            "title": "Workshop Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "workshop_code",
+          "specification",
+          "unit",
+          "category",
+          "default_supplier",
+          "unit_price",
+          "is_active",
+          "created_at",
+          "updated_at",
+          "created_by",
+          "updated_by"
+        ],
+        "title": "SparePartResponse",
+        "type": "object"
+      },
       "SparePartUpdate": {
         "description": "更新备件请求",
         "properties": {
@@ -77737,6 +82903,76 @@
           "quantity"
         ],
         "title": "StockInboundRequest",
+        "type": "object"
+      },
+      "StockResponse": {
+        "description": "库存响应",
+        "properties": {
+          "current_qty": {
+            "title": "Current Qty",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "min_order_qty": {
+            "title": "Min Order Qty",
+            "type": "integer"
+          },
+          "safety_qty": {
+            "title": "Safety Qty",
+            "type": "integer"
+          },
+          "spare_part_id": {
+            "format": "uuid",
+            "title": "Spare Part Id",
+            "type": "string"
+          },
+          "warehouse_location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Location"
+          }
+        },
+        "required": [
+          "id",
+          "spare_part_id",
+          "warehouse_location",
+          "current_qty",
+          "safety_qty",
+          "min_order_qty"
+        ],
+        "title": "StockResponse",
+        "type": "object"
+      },
+      "StockWarningResponse": {
+        "description": "库存预警响应",
+        "properties": {
+          "shortage": {
+            "title": "Shortage",
+            "type": "integer"
+          },
+          "spare_part": {
+            "$ref": "#/components/schemas/SparePartResponse"
+          },
+          "stock": {
+            "$ref": "#/components/schemas/StockResponse"
+          }
+        },
+        "required": [
+          "spare_part",
+          "stock",
+          "shortage"
+        ],
+        "title": "StockWarningResponse",
         "type": "object"
       },
       "SubTankRecordUpdate": {
@@ -88602,6 +93838,30 @@
         "title": "UserModulePermissionsUpdate",
         "type": "object"
       },
+      "UserOption": {
+        "description": "责任人选择用用户选项",
+        "properties": {
+          "employee_no": {
+            "default": "",
+            "title": "Employee No",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "name"
+        ],
+        "title": "UserOption",
+        "type": "object"
+      },
       "UserPagePermissionsOut": {
         "properties": {
           "custom_grants": {
@@ -93590,6 +98850,600 @@
           "equipment_id"
         ],
         "title": "WorkOrderCreate",
+        "type": "object"
+      },
+      "WorkOrderImageResponse": {
+        "description": "工单图片响应",
+        "properties": {
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "file_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Size"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "uploaded_at": {
+            "format": "date-time",
+            "title": "Uploaded At",
+            "type": "string"
+          },
+          "work_order_id": {
+            "format": "uuid",
+            "title": "Work Order Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "work_order_id",
+          "file_name",
+          "file_size",
+          "uploaded_at"
+        ],
+        "title": "WorkOrderImageResponse",
+        "type": "object"
+      },
+      "WorkOrderResponse": {
+        "description": "工单响应",
+        "properties": {
+          "action_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Name"
+          },
+          "actual_duration": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Duration"
+          },
+          "assigned_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned At"
+          },
+          "assignee_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Id"
+          },
+          "assignee_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Name"
+          },
+          "cause_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cause Name"
+          },
+          "check_result": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check Result"
+          },
+          "checklist_template_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checklist Template Id"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "equipment_id": {
+            "format": "uuid",
+            "title": "Equipment Id",
+            "type": "string"
+          },
+          "equipment_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment Name"
+          },
+          "equipment_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment No"
+          },
+          "fault_action_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fault Action Id"
+          },
+          "fault_cause_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fault Cause Id"
+          },
+          "fault_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fault Description"
+          },
+          "fault_symptom_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fault Symptom Id"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "images": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/WorkOrderImageResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Images"
+          },
+          "inspection_task_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inspection Task Id"
+          },
+          "maintenance_plan_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maintenance Plan Id"
+          },
+          "order_type": {
+            "enum": [
+              "故障维修",
+              "计划维护",
+              "巡检",
+              "校准",
+              "异常处理",
+              "日常维护"
+            ],
+            "title": "Order Type",
+            "type": "string"
+          },
+          "original_equipment_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Equipment Status"
+          },
+          "planned_start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Start Date"
+          },
+          "priority": {
+            "enum": [
+              "紧急",
+              "高",
+              "中",
+              "低"
+            ],
+            "title": "Priority",
+            "type": "string"
+          },
+          "repair_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repair Detail"
+          },
+          "reported_at": {
+            "format": "date-time",
+            "title": "Reported At",
+            "type": "string"
+          },
+          "reporter_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reporter Id"
+          },
+          "reporter_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reporter Name"
+          },
+          "responsible_person_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsible Person Id"
+          },
+          "responsible_person_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsible Person Name"
+          },
+          "spare_parts_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spare Parts Cost"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "enum": [
+              "待处理",
+              "执行中",
+              "待验收",
+              "已完成",
+              "已关闭"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "symptom_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symptom Name"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          },
+          "verification_remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Remark"
+          },
+          "verification_result": {
+            "anyOf": [
+              {
+                "enum": [
+                  "合格",
+                  "不合格"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Result"
+          },
+          "verified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified At"
+          },
+          "verified_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified By"
+          },
+          "verifier_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verifier Name"
+          },
+          "work_order_no": {
+            "title": "Work Order No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "work_order_no",
+          "equipment_id",
+          "order_type",
+          "priority",
+          "status",
+          "fault_symptom_id",
+          "fault_cause_id",
+          "fault_action_id",
+          "fault_description",
+          "reporter_id",
+          "assignee_id",
+          "verified_by",
+          "reported_at",
+          "assigned_at",
+          "started_at",
+          "completed_at",
+          "verified_at",
+          "verification_result",
+          "verification_remark",
+          "repair_detail",
+          "actual_duration",
+          "original_equipment_status",
+          "maintenance_plan_id",
+          "planned_start_date",
+          "checklist_template_id",
+          "check_result",
+          "spare_parts_cost",
+          "created_at",
+          "updated_at",
+          "created_by",
+          "updated_by"
+        ],
+        "title": "WorkOrderResponse",
+        "type": "object"
+      },
+      "WorkOrderStatistics": {
+        "description": "工单统计",
+        "properties": {
+          "by_priority": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Priority",
+            "type": "object"
+          },
+          "by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Status",
+            "type": "object"
+          },
+          "by_type": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Type",
+            "type": "object"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "by_status",
+          "by_type",
+          "by_priority"
+        ],
+        "title": "WorkOrderStatistics",
         "type": "object"
       },
       "WorkOrderUpdate": {
@@ -107222,7 +113076,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_Union_EquipmentCategoryResponse__EquipmentCategoryTree___"
+                }
               }
             },
             "description": "Successful Response"
@@ -107278,7 +113134,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EquipmentCategoryResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -107336,7 +113194,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
               }
             },
             "description": "Successful Response"
@@ -107392,7 +113252,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EquipmentCategoryResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -107458,7 +113320,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EquipmentCategoryResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -107506,7 +113370,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_DepartmentOption__"
+                }
               }
             },
             "description": "Successful Response"
@@ -107693,7 +113559,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_EquipmentResponse__"
+                }
               }
             },
             "description": "Successful Response"
@@ -107749,7 +113617,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EquipmentResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -107807,7 +113677,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EquipmentImportResult_"
+                }
               }
             },
             "description": "Successful Response"
@@ -107897,7 +113769,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_EquipmentLedgerArchiveSummary__"
+                }
               }
             },
             "description": "Successful Response"
@@ -107955,7 +113829,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
               }
             },
             "description": "Successful Response"
@@ -108010,7 +113886,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EquipmentLedgerArchiveDetail_"
+                }
               }
             },
             "description": "Successful Response"
@@ -108182,7 +114060,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EquipmentStatistics_"
+                }
               }
             },
             "description": "Successful Response"
@@ -108240,7 +114120,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
               }
             },
             "description": "Successful Response"
@@ -108296,7 +114178,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EquipmentResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -108362,7 +114246,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EquipmentResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -108409,7 +114295,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_EquipmentFeishuAppItem__"
+                }
               }
             },
             "description": "Successful Response"
@@ -108464,7 +114352,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EquipmentFeishuAppItem_"
+                }
               }
             },
             "description": "Successful Response"
@@ -108521,7 +114411,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
               }
             },
             "description": "Successful Response"
@@ -108586,7 +114478,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EquipmentFeishuAppItem_"
+                }
               }
             },
             "description": "Successful Response"
@@ -108645,7 +114539,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EquipmentInspectionFeishuConfigDetail_"
+                }
               }
             },
             "description": "Successful Response"
@@ -108712,7 +114608,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EquipmentInspectionFeishuConfigDetail_"
+                }
               }
             },
             "description": "Successful Response"
@@ -108759,7 +114657,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_EquipmentInspectionFeishuConfigDetail__"
+                }
               }
             },
             "description": "Successful Response"
@@ -108818,7 +114718,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EquipmentInspectionFeishuConfigTestResult_"
+                }
               }
             },
             "description": "Successful Response"
@@ -108895,7 +114797,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EquipmentInspectionFeishuDeviceList_"
+                }
               }
             },
             "description": "Successful Response"
@@ -109088,7 +114992,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_EquipmentInspectionFeishuRecordItem__"
+                }
               }
             },
             "description": "Successful Response"
@@ -109147,7 +115053,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_dict_str__EquipmentFeishuSyncTableResult__"
+                }
               }
             },
             "description": "Successful Response"
@@ -109206,7 +115114,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EquipmentFeishuSyncStatus_"
+                }
               }
             },
             "description": "Successful Response"
@@ -109253,7 +115163,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_EquipmentInspectionTodaySummaryEntry__"
+                }
               }
             },
             "description": "Successful Response"
@@ -109312,7 +115224,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EquipmentInspectionTodaySummary_"
+                }
               }
             },
             "description": "Successful Response"
@@ -109391,7 +115305,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_Union_LocationResponse__LocationTree___"
+                }
               }
             },
             "description": "Successful Response"
@@ -109447,7 +115363,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_LocationResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -109505,7 +115423,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
               }
             },
             "description": "Successful Response"
@@ -109561,7 +115481,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_LocationResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -109627,7 +115549,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_LocationResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -109757,7 +115681,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_CalibrationPlanResponse__"
+                }
               }
             },
             "description": "Successful Response"
@@ -109812,7 +115738,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_CalibrationPlanResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -109872,7 +115800,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_CalibrationPlanResponse__"
+                }
               }
             },
             "description": "Successful Response"
@@ -109929,7 +115859,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
               }
             },
             "description": "Successful Response"
@@ -109984,7 +115916,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_CalibrationPlanResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -110049,7 +115983,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_CalibrationPlanResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -110180,7 +116116,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_CalibrationRecordResponse__"
+                }
               }
             },
             "description": "Successful Response"
@@ -110235,7 +116173,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_CalibrationRecordResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -110292,7 +116232,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_CalibrationRecordResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -110339,7 +116281,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ClaimTimeoutConfig_"
+                }
               }
             },
             "description": "Successful Response"
@@ -110394,7 +116338,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ClaimTimeoutConfig_"
+                }
               }
             },
             "description": "Successful Response"
@@ -110441,7 +116387,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_FailureCodeResponse__"
+                }
               }
             },
             "description": "Successful Response"
@@ -110496,7 +116444,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_FailureCodeResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -110553,7 +116503,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
               }
             },
             "description": "Successful Response"
@@ -110608,7 +116560,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_FailureCodeResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -110673,7 +116627,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_FailureCodeResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -110720,7 +116676,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_FailureCodeResponse__"
+                }
               }
             },
             "description": "Successful Response"
@@ -110775,7 +116733,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_FailureCodeResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -110832,7 +116792,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
               }
             },
             "description": "Successful Response"
@@ -110887,7 +116849,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_FailureCodeResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -110952,7 +116916,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_FailureCodeResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -110999,7 +116965,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_FailureCodeResponse__"
+                }
               }
             },
             "description": "Successful Response"
@@ -111054,7 +117022,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_FailureCodeResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -111111,7 +117081,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
               }
             },
             "description": "Successful Response"
@@ -111166,7 +117138,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_FailureCodeResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -111231,7 +117205,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_FailureCodeResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -111298,7 +117274,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkOrderResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -111446,7 +117424,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_MaintenancePlanResponse__"
+                }
               }
             },
             "description": "Successful Response"
@@ -111501,7 +117481,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_MaintenancePlanResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -111561,7 +117543,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_MaintenancePlanResponse__"
+                }
               }
             },
             "description": "Successful Response"
@@ -111618,7 +117602,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
               }
             },
             "description": "Successful Response"
@@ -111673,7 +117659,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_MaintenancePlanResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -111738,7 +117726,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_MaintenancePlanResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -111786,7 +117776,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_UserOption__"
+                }
               }
             },
             "description": "Successful Response"
@@ -111853,7 +117845,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_MaintainerOption__"
+                }
               }
             },
             "description": "Successful Response"
@@ -112019,7 +118013,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_WorkOrderResponse__"
+                }
               }
             },
             "description": "Successful Response"
@@ -112074,7 +118070,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkOrderResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -112140,7 +118138,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkOrderStatistics_"
+                }
               }
             },
             "description": "Successful Response"
@@ -112197,7 +118197,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkOrderResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -112262,7 +118264,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkOrderResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -112329,7 +118333,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkOrderResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -112386,7 +118392,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkOrderResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -112443,7 +118451,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkOrderResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -112510,7 +118520,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkOrderResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -112567,7 +118579,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_WorkOrderImageResponse__"
+                }
               }
             },
             "description": "Successful Response"
@@ -112632,7 +118646,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_WorkOrderImageResponse__"
+                }
               }
             },
             "description": "Successful Response"
@@ -112699,7 +118715,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
               }
             },
             "description": "Successful Response"
@@ -112825,7 +118843,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_MaterialConsumeResponse__"
+                }
               }
             },
             "description": "Successful Response"
@@ -112890,7 +118910,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_MaterialConsumeResponse__"
+                }
               }
             },
             "description": "Successful Response"
@@ -112947,7 +118969,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkOrderResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -113014,7 +119038,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkOrderResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -113265,7 +119291,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_PersonnelResponse__"
+                }
               }
             },
             "description": "Successful Response"
@@ -113320,7 +119348,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_PersonnelAddResult_"
+                }
               }
             },
             "description": "Successful Response"
@@ -113419,7 +119449,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_CandidateResponse__"
+                }
               }
             },
             "description": "Successful Response"
@@ -113466,7 +119498,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_FeishuRefreshResult_"
+                }
               }
             },
             "description": "Successful Response"
@@ -113572,7 +119606,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_RoleResponse__"
+                }
               }
             },
             "description": "Successful Response"
@@ -113627,7 +119663,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_RoleResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -113684,7 +119722,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
               }
             },
             "description": "Successful Response"
@@ -113739,7 +119779,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_RoleResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -113804,7 +119846,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_RoleResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -113861,7 +119905,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
               }
             },
             "description": "Successful Response"
@@ -113916,7 +119962,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_PersonnelResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -113981,7 +120029,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_PersonnelResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -114048,7 +120098,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_PersonnelResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -114113,7 +120165,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_PersonnelResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -114180,7 +120234,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_PersonnelResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -114245,7 +120301,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_PersonnelResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -114392,7 +120450,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_SparePartListItem__"
+                }
               }
             },
             "description": "Successful Response"
@@ -114408,7 +120468,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "备件列表",
+        "summary": "备件列表（附库存数量）",
         "tags": [
           "设备管理"
         ]
@@ -114447,7 +120507,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SparePartResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -114513,7 +120575,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_StockWarningResponse__"
+                }
               }
             },
             "description": "Successful Response"
@@ -114570,7 +120634,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
               }
             },
             "description": "Successful Response"
@@ -114625,7 +120691,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SparePartResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -114690,7 +120758,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SparePartResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -114747,7 +120817,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_StockResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -114814,7 +120886,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_StockResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -114881,7 +120955,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_StockResponse_"
+                }
               }
             },
             "description": "Successful Response"
