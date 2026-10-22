@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  createFeishuApp,
+  deleteFeishuApp,
+  fetchFeishuApps,
   fetchInspectionFeishuConfig,
   fetchInspectionFeishuConfigList,
   fetchInspectionFeishuDevices,
@@ -9,6 +12,7 @@ import {
   testInspectionFeishuConfig,
   triggerInspectionFeishuSync,
   updateInspectionFeishuConfig,
+  updateFeishuApp,
 } from './inspection-feishu'
 
 const BASE = '/api/v1/equipment/inspection/feishu'
@@ -234,5 +238,63 @@ describe('fetchInspectionFeishuConfigList', () => {
     vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ code: 200, data: null })))
     const details = await fetchInspectionFeishuConfigList()
     expect(details).toEqual([])
+  })
+})
+
+describe('feishu apps api', () => {
+  it('lists self-hosted apps and falls back to an empty list', async () => {
+    const fetchMock = vi.fn((_url: unknown) =>
+      jsonResponse({
+        code: 200,
+        data: [{ id: 'app-1', app_id: 'cli_a', app_name: '巡检应用' }],
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchFeishuApps()).resolves.toEqual([
+      { id: 'app-1', app_id: 'cli_a', app_name: '巡检应用' },
+    ])
+    expect(fetchMock).toHaveBeenCalledWith(`${BASE}/apps`)
+
+    fetchMock.mockResolvedValue(jsonResponse({ code: 200, data: null }))
+    await expect(fetchFeishuApps()).resolves.toEqual([])
+  })
+
+  it('creates, updates and deletes an app with the expected method and body', async () => {
+    const fetchMock = vi.fn((_url: unknown) =>
+      jsonResponse({ code: 200, data: { id: 'app-1', app_id: 'cli_a' } }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      createFeishuApp({ app_id: 'cli_a', app_name: '巡检应用', app_secret: 's1' }),
+    ).resolves.toMatchObject({ id: 'app-1' })
+    const post = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(post[0]).toBe(`${BASE}/apps`)
+    expect(post[1]).toMatchObject({ method: 'POST' })
+    expect(JSON.parse(String(post[1].body))).toMatchObject({ app_id: 'cli_a' })
+
+    await expect(
+      updateFeishuApp('app-1', { app_name: '巡检应用2', app_secret: '' }),
+    ).resolves.toMatchObject({ id: 'app-1' })
+    const put = fetchMock.mock.calls[1] as unknown as [string, RequestInit]
+    expect(put[0]).toBe(`${BASE}/apps/app-1`)
+    expect(put[1]).toMatchObject({ method: 'PUT' })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 200, data: null }))
+    await expect(deleteFeishuApp('app-1')).resolves.toBeNull()
+    const del = fetchMock.mock.calls[2] as unknown as [string, RequestInit]
+    expect(del[0]).toBe(`${BASE}/apps/app-1`)
+    expect(del[1]).toMatchObject({ method: 'DELETE' })
+  })
+
+  it('surfaces the backend rejection message on delete', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: unknown) =>
+        jsonResponse({ code: 400, message: '应用仍被巡检配置引用，无法删除' }, 400),
+      ),
+    )
+    await expect(deleteFeishuApp('app-1')).rejects.toThrow('应用仍被巡检配置引用，无法删除')
   })
 })
