@@ -274,7 +274,7 @@ describe('FeishuAppLibraryCard 自建应用库', () => {
     await renderCard(onChanged)
     await clickByText('新建应用')
     // 表单经 mock 绑定输入值后保存
-    const inputs = [...container.querySelectorAll('[role="modal"] input')]
+    const inputs = [...container.querySelectorAll<HTMLInputElement>('[role="modal"] input')]
     expect(inputs.length).toBeGreaterThanOrEqual(3)
     await act(async () => {
       inputs[0].dispatchEvent(new Event('input', { bubbles: true }))
