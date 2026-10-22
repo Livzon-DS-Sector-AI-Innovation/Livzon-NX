@@ -75,3 +75,19 @@ async def test_hazard_due_notify(
 
     result = await hazard_due_reminder.send_test_notification(db)
     return ApiResponseEnvelope(data=result)
+
+
+@feishu_settings_router.post(
+    "/feishu-settings/fire-expiry-notify/test",
+    response_model=ApiResponseEnvelope[dict[str, Any]],
+    summary="测试消防器材有效期提醒推送发送",
+)
+async def test_fire_expiry_notify(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> ApiResponseEnvelope[dict[str, Any]]:
+    """向已配置的群/个人发送一条样例卡片，验证提醒目标配置。"""
+    from app.modules.safety.service import fire_expiry_reminder
+
+    result = await fire_expiry_reminder.send_test_notification(db)
+    return ApiResponseEnvelope(data=result)

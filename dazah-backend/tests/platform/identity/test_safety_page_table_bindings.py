@@ -18,7 +18,7 @@ _SETTINGS_PAGE = "safety:system-config:safety-feishu-settings"
 
 def test_page_table_registry_matches_registered_page_definition() -> None:
     """注册表里的页面标识必须与菜单派生的页面定义一致，否则权限绑定无从生效。"""
-    assert len(PAGE_TABLE_DEFINITIONS) == 8
+    assert len(PAGE_TABLE_DEFINITIONS) == 9
     definition = get_page_table(_PAGE)
     assert definition is not None
     assert definition.page_name == "24小时值班隐患"
@@ -164,6 +164,80 @@ def test_duty_hazard_page_registered_in_lifecycle_ledger() -> None:
 
 
 _QUICK_REPORT_PAGE = "safety:risk-hazard:hazard-inspection:hazard-quick-report"
+
+_FIRE_EQUIPMENT_PAGE = "safety:emergency-accident:fire-equipment-inspection"
+
+
+def test_fire_equipment_inspection_page_registered() -> None:
+    """「灭火器及消防栓点检」镜像页登记、生命周期账本与端点绑定一致。"""
+    definition = get_page_table(_FIRE_EQUIPMENT_PAGE)
+    assert definition is not None
+    assert definition.page_name == "灭火器及消防栓点检"
+    assert definition.route_path == "/safety/fire-inspection"
+
+    page = PAGES_BY_KEY[_FIRE_EQUIPMENT_PAGE]
+    assert page.module_code == "safety"
+    assert page.page_name == "灭火器及消防栓点检"
+    assert page.route_path == "/safety/fire-inspection"
+    # 键与路径不含台账/记录/设置等英文关键词：推导不出敏感动作，
+    # 因此该页的写入绑定也必须为空动作（见 _api_binding_errors）。
+    assert _sensitive_actions(
+        _FIRE_EQUIPMENT_PAGE, "/safety/fire-inspection", "灭火器及消防栓点检"
+    ) == ()
+    assert page_lifecycle_errors(page) == []
+
+    ledger = load_ledger()
+    entry = ledger["pages"][_FIRE_EQUIPMENT_PAGE]
+    assert entry["status"] == "active"
+    assert entry["module_code"] == "safety"
+    assert entry["route_path"] == "/safety/fire-inspection"
+    assert entry["actions"] == {}
+
+
+def test_fire_equipment_routes_bound_to_fire_inspection_page() -> None:
+    routes = [
+        ("GET", "/api/v1/safety/fire-equipment", "query"),
+        ("GET", "/api/v1/safety/fire-equipment/stats", "query"),
+        ("GET", "/api/v1/safety/fire-equipment/checklist", "query"),
+        ("GET", "/api/v1/safety/fire-equipment/{equipment_id}", "query"),
+        ("GET", "/api/v1/safety/fire-inspection-records", "query"),
+        (
+            "POST",
+            "/api/v1/safety/fire-equipment/{equipment_id}/inspections",
+            "operate",
+        ),
+        ("POST", "/api/v1/safety/fire-equipment/writeback-table/init", "operate"),
+        ("POST", "/api/v1/safety/fire-equipment/sync", "operate"),
+    ]
+    for method, path, permission in routes:
+        binding = api_binding_for_route(method, path)
+        assert binding is not None, f"{method} {path} 未登记页面绑定"
+        assert binding.page_keys == (_FIRE_EQUIPMENT_PAGE,)
+        assert binding.permission == permission
+        assert binding.scope_adapter == "not_applicable"
+        # 页面敏感动作为空集，绑定动作必须为空
+        assert binding.sensitive_action is None
+
+
+def test_every_fire_equipment_api_route_has_a_binding() -> None:
+    """消防点检端点↔绑定对等，防止新端点漏登记（403 而非 404 的隐形故障）。"""
+    from app.main import app
+
+    route_paths = {
+        (method, route.path)
+        for route in app.routes
+        if getattr(route, "path", "").startswith(
+            ("/api/v1/safety/fire-equipment", "/api/v1/safety/fire-inspection")
+        )
+        for method in (getattr(route, "methods", None) or ())
+    }
+    assert route_paths, "未收集到消防点检路由"
+    missing = [
+        f"{method} {path}"
+        for method, path in sorted(route_paths)
+        if api_binding_for_route(method, path) is None
+    ]
+    assert missing == []
 
 
 def test_hazard_quick_report_page_registered() -> None:

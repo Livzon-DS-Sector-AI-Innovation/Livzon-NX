@@ -273,6 +273,7 @@ export const moduleMenus: ModuleMenu[] = [
         children: [
           { key: "accident-ledger", label: "事故台账", path: "/safety/accident" },
           { key: "emergency-plan", label: "应急预案", path: "", disabled: true },
+          { key: "fire-equipment-inspection", label: "灭火器及消防栓点检", path: "/safety/fire-inspection" },
         ],
       },
       // ── 安全培训与检查 ──

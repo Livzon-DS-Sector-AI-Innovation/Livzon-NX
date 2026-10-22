@@ -994,6 +994,13 @@ export interface HazardIdentification {
   // Control info
   control_level?: string
   responsible_person?: string
+  // 车间 Excel 表头对齐字段
+  tense?: string
+  state?: string
+  responsible_unit?: string
+  check_frequency?: string
+  check_standard?: string
+  is_major_hazard?: string
   // Workflow status
   ai_node_progress: string
   ai_error_message?: string
@@ -1099,6 +1106,58 @@ export const RECOMMENDATION_PRIORITY_OPTIONS = [
   { value: '中', label: '中', color: 'orange' },
   { value: '低', label: '低', color: 'blue' },
 ]
+
+// ============ Hazard Identification Ledger Import Types ============
+
+export interface HazardImportSampleRow {
+  name?: string | null
+  step?: string | null
+  hazard_desc?: string | null
+  accident?: string | null
+  l?: number | null
+  e?: number | null
+  c?: number | null
+  d?: number | null
+  level?: string | null
+  engineering?: string | null
+}
+
+export interface HazardImportSheetInfo {
+  name: string
+  format?: string | null
+  format_label?: string | null
+  row_count: number
+  skipped: boolean
+  skip_reason?: string | null
+  sample_rows: HazardImportSampleRow[]
+  errors: Array<{ row: number; reason: string }>
+}
+
+export interface HazardImportPreview {
+  filename: string
+  department_guess: string
+  sheets: HazardImportSheetInfo[]
+  total_valid_rows: number
+}
+
+export interface HazardImportResult {
+  imported: number
+  skipped_existing: number
+  duplicate_in_file: number
+  failed_sheets: Array<{ sheet: string; reason: string }>
+  row_errors: Array<{ sheet: string; row: number; reason: string }>
+  archive_path?: string | null
+}
+
+export interface HazardPositionOption {
+  department: string
+  position: string
+}
+
+export interface HazardFilterOptions {
+  departments: string[]
+  positions: HazardPositionOption[]
+}
 
 export interface SafetyDashboardStats {
   total_checks: number

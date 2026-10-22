@@ -4691,6 +4691,40 @@
         "title": "ApiResponseEnvelope[ChangeStatistics]",
         "type": "object"
       },
+      "ApiResponseEnvelope_ChecklistResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ChecklistResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[ChecklistResponse]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_ComplaintOut_": {
         "properties": {
           "code": {
@@ -5505,6 +5539,210 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[FeeOverview]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_FireEquipmentDetailResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/FireEquipmentDetailResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[FireEquipmentDetailResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_FireEquipmentListResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/FireEquipmentListResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[FireEquipmentListResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_FireEquipmentStats_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/FireEquipmentStats"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[FireEquipmentStats]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_FireInspectionListResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/FireInspectionListResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[FireInspectionListResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_FireInspectionRecordItem_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/FireInspectionRecordItem"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[FireInspectionRecordItem]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_FireInspectionWritebackInitResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/FireInspectionWritebackInitResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[FireInspectionWritebackInitResponse]",
         "type": "object"
       },
       "ApiResponseEnvelope_HistoricalDeviationAttachmentOut_": {
@@ -12789,6 +13027,32 @@
         "title": "Body_import_exam_scores_api_v1_hr_training_ledgers_import_exam_scores_post",
         "type": "object"
       },
+      "Body_import_hazard_ledger_api_v1_safety_hazard_identifications_import_post": {
+        "properties": {
+          "department": {
+            "default": "",
+            "description": "部门/车间（默认取文件名推断值）",
+            "title": "Department",
+            "type": "string"
+          },
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "sheets": {
+            "default": "",
+            "description": "要导入的子表名 JSON 数组，空则导入全部可解析子表",
+            "title": "Sheets",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_hazard_ledger_api_v1_safety_hazard_identifications_import_post",
+        "type": "object"
+      },
       "Body_import_position_training_list_api_v1_hr_position_training_lists_import_post": {
         "properties": {
           "file": {
@@ -12931,6 +13195,20 @@
           "coa"
         ],
         "title": "Body_parse_coa_file_api_v1_registration_reference_standards_parse_coa_post",
+        "type": "object"
+      },
+      "Body_parse_hazard_ledger_import_api_v1_safety_hazard_identifications_import_parse_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_parse_hazard_ledger_import_api_v1_safety_hazard_identifications_import_parse_post",
         "type": "object"
       },
       "Body_preview_capa_import_api_v1_quality_capas_import_preview_post": {
@@ -19512,6 +19790,49 @@
         "title": "CheckType",
         "type": "string"
       },
+      "ChecklistItem": {
+        "description": "检查卡检查项（key 是契约，label 展示用）。",
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "ChecklistItem",
+        "type": "object"
+      },
+      "ChecklistResponse": {
+        "properties": {
+          "equipment_type": {
+            "enum": [
+              "extinguisher",
+              "hydrant"
+            ],
+            "title": "Equipment Type",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ChecklistItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "equipment_type"
+        ],
+        "title": "ChecklistResponse",
+        "type": "object"
+      },
       "ChoiceOption": {
         "description": "选择题选项",
         "properties": {
@@ -23738,6 +24059,66 @@
           "inspection_no"
         ],
         "title": "CreateFinishedProductInspectionRequest",
+        "type": "object"
+      },
+      "CreateFireInspectionRequest": {
+        "properties": {
+          "abnormal_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Abnormal Action"
+          },
+          "inspected_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inspected At"
+          },
+          "inspector_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inspector Name"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FireInspectionItemInput"
+            },
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          },
+          "source": {
+            "default": "web",
+            "enum": [
+              "scan",
+              "web"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "CreateFireInspectionRequest",
         "type": "object"
       },
       "CreateHistoricalDeviationRequest": {
@@ -43950,6 +44331,523 @@
         "title": "FillBlankQuestion",
         "type": "object"
       },
+      "FireEquipmentColumn": {
+        "description": "台账页的动态列（与飞书多维表格字段对齐）。",
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "kind"
+        ],
+        "title": "FireEquipmentColumn",
+        "type": "object"
+      },
+      "FireEquipmentDetailResponse": {
+        "description": "扫码页 / 详情抽屉的一次性数据：器材 + 检查卡 + 最近记录。",
+        "properties": {
+          "checklist": {
+            "items": {
+              "$ref": "#/components/schemas/ChecklistItem"
+            },
+            "title": "Checklist",
+            "type": "array"
+          },
+          "equipment": {
+            "$ref": "#/components/schemas/FireEquipmentItem"
+          },
+          "recent_inspections": {
+            "items": {
+              "$ref": "#/components/schemas/FireInspectionRecordItem"
+            },
+            "title": "Recent Inspections",
+            "type": "array"
+          }
+        },
+        "required": [
+          "equipment"
+        ],
+        "title": "FireEquipmentDetailResponse",
+        "type": "object"
+      },
+      "FireEquipmentItem": {
+        "description": "一台消防器材（镜像投影行）。",
+        "properties": {
+          "department": {
+            "title": "Department",
+            "type": "string"
+          },
+          "equipment_no": {
+            "title": "Equipment No",
+            "type": "string"
+          },
+          "equipment_type": {
+            "title": "Equipment Type",
+            "type": "string"
+          },
+          "equipment_type_label": {
+            "title": "Equipment Type Label",
+            "type": "string"
+          },
+          "expiry_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiry Date"
+          },
+          "expiry_days_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiry Days Left"
+          },
+          "expiry_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiry Status"
+          },
+          "fields": {
+            "additionalProperties": true,
+            "title": "Fields",
+            "type": "object"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_inspected_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Inspected At"
+          },
+          "last_inspection_result": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Inspection Result"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
+          },
+          "location": {
+            "title": "Location",
+            "type": "string"
+          },
+          "month_status": {
+            "title": "Month Status",
+            "type": "string"
+          },
+          "record_id": {
+            "title": "Record Id",
+            "type": "string"
+          },
+          "tab_name": {
+            "title": "Tab Name",
+            "type": "string"
+          },
+          "table_id": {
+            "title": "Table Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "equipment_type",
+          "equipment_type_label",
+          "equipment_no",
+          "department",
+          "location",
+          "tab_name",
+          "table_id",
+          "record_id",
+          "month_status"
+        ],
+        "title": "FireEquipmentItem",
+        "type": "object"
+      },
+      "FireEquipmentListResponse": {
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/FireEquipmentColumn"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FireEquipmentItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "FireEquipmentListResponse",
+        "type": "object"
+      },
+      "FireEquipmentStats": {
+        "description": "台账概览 + 镜像绑定/同步状态（页面顶栏一次取全）。",
+        "properties": {
+          "expired_count": {
+            "default": 0,
+            "title": "Expired Count",
+            "type": "integer"
+          },
+          "expiring_in_30_count": {
+            "default": 0,
+            "title": "Expiring In 30 Count",
+            "type": "integer"
+          },
+          "extinguisher_count": {
+            "title": "Extinguisher Count",
+            "type": "integer"
+          },
+          "failed_this_month": {
+            "title": "Failed This Month",
+            "type": "integer"
+          },
+          "hydrant_count": {
+            "title": "Hydrant Count",
+            "type": "integer"
+          },
+          "inspected_this_month": {
+            "title": "Inspected This Month",
+            "type": "integer"
+          },
+          "is_configured": {
+            "default": false,
+            "title": "Is Configured",
+            "type": "boolean"
+          },
+          "last_sync_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync Error"
+          },
+          "last_sync_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync Status"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "uninspected_this_month": {
+            "title": "Uninspected This Month",
+            "type": "integer"
+          },
+          "writeback_enabled": {
+            "default": false,
+            "title": "Writeback Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "total",
+          "extinguisher_count",
+          "hydrant_count",
+          "inspected_this_month",
+          "uninspected_this_month",
+          "failed_this_month"
+        ],
+        "title": "FireEquipmentStats",
+        "type": "object"
+      },
+      "FireInspectionItemInput": {
+        "description": "单条检查项的提交值（label 由服务端按检查卡回填）。",
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "result": {
+            "enum": [
+              "ok",
+              "fail"
+            ],
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "result"
+        ],
+        "title": "FireInspectionItemInput",
+        "type": "object"
+      },
+      "FireInspectionListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FireInspectionRecordItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "FireInspectionListResponse",
+        "type": "object"
+      },
+      "FireInspectionRecordItem": {
+        "description": "一条点检记录（检查项为当次快照）。",
+        "properties": {
+          "abnormal_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Abnormal Action"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "department": {
+            "title": "Department",
+            "type": "string"
+          },
+          "equipment_id": {
+            "format": "uuid",
+            "title": "Equipment Id",
+            "type": "string"
+          },
+          "equipment_no": {
+            "title": "Equipment No",
+            "type": "string"
+          },
+          "equipment_type": {
+            "title": "Equipment Type",
+            "type": "string"
+          },
+          "equipment_type_label": {
+            "title": "Equipment Type Label",
+            "type": "string"
+          },
+          "failed_items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Failed Items",
+            "type": "array"
+          },
+          "feishu_record_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feishu Record Id"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "inspected_at": {
+            "format": "date-time",
+            "title": "Inspected At",
+            "type": "string"
+          },
+          "inspector_name": {
+            "title": "Inspector Name",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "location": {
+            "title": "Location",
+            "type": "string"
+          },
+          "result": {
+            "title": "Result",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "equipment_id",
+          "equipment_type",
+          "equipment_type_label",
+          "equipment_no",
+          "department",
+          "location",
+          "result",
+          "inspector_name",
+          "inspected_at",
+          "source"
+        ],
+        "title": "FireInspectionRecordItem",
+        "type": "object"
+      },
+      "FireInspectionWritebackInitResponse": {
+        "description": "一键初始化点检记录回写子表的结果。",
+        "properties": {
+          "created": {
+            "title": "Created",
+            "type": "boolean"
+          },
+          "table_id": {
+            "title": "Table Id",
+            "type": "string"
+          },
+          "table_name": {
+            "title": "Table Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table_id",
+          "table_name",
+          "created"
+        ],
+        "title": "FireInspectionWritebackInitResponse",
+        "type": "object"
+      },
       "GeneralAuditLogDetail": {
         "properties": {
           "action": {
@@ -44533,6 +45431,41 @@
             ],
             "title": "C Residual"
           },
+          "check_frequency": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check Frequency"
+          },
+          "check_standard": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check Standard"
+          },
+          "control_level": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Control Level"
+          },
           "d_inherent": {
             "anyOf": [
               {
@@ -44710,6 +45643,18 @@
               }
             ],
             "title": "Inherent Risk Level"
+          },
+          "is_major_hazard": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Major Hazard"
           },
           "l_inherent": {
             "anyOf": [
@@ -44910,6 +45855,30 @@
             ],
             "title": "Residual Risk Level"
           },
+          "responsible_person": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsible Person"
+          },
+          "responsible_unit": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsible Unit"
+          },
           "specific_activity": {
             "anyOf": [
               {
@@ -44920,6 +45889,30 @@
               }
             ],
             "title": "Specific Activity"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
+          "tense": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tense"
           },
           "unsafe_behavior": {
             "anyOf": [
@@ -71691,6 +72684,32 @@
             ],
             "title": "Bitable Hazard Table Id"
           },
+          "fire_expiry_notify_chat_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fire Expiry Notify Chat Ids",
+            "type": "array"
+          },
+          "fire_expiry_notify_enabled": {
+            "default": false,
+            "title": "Fire Expiry Notify Enabled",
+            "type": "boolean"
+          },
+          "fire_expiry_notify_milestones": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Fire Expiry Notify Milestones",
+            "type": "array"
+          },
+          "fire_expiry_notify_user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fire Expiry Notify User Ids",
+            "type": "array"
+          },
           "hazard_due_notify_chat_ids": {
             "items": {
               "type": "string"
@@ -86203,6 +87222,32 @@
               }
             ],
             "title": "Bitable Hazard Table Id"
+          },
+          "fire_expiry_notify_chat_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fire Expiry Notify Chat Ids",
+            "type": "array"
+          },
+          "fire_expiry_notify_enabled": {
+            "default": false,
+            "title": "Fire Expiry Notify Enabled",
+            "type": "boolean"
+          },
+          "fire_expiry_notify_milestones": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Fire Expiry Notify Milestones",
+            "type": "array"
+          },
+          "fire_expiry_notify_user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fire Expiry Notify User Ids",
+            "type": "array"
           },
           "hazard_due_notify_chat_ids": {
             "items": {
@@ -216615,6 +217660,56 @@
         ]
       }
     },
+    "/api/v1/safety/feishu-settings/fire-expiry-notify/test": {
+      "post": {
+        "description": "向已配置的群/个人发送一条样例卡片，验证提醒目标配置。",
+        "operationId": "test_fire_expiry_notify_api_v1_safety_feishu_settings_fire_expiry_notify_test_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_dict_str__Any__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "测试消防器材有效期提醒推送发送",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
     "/api/v1/safety/feishu-settings/hazard-due-notify/test": {
       "post": {
         "description": "向已配置的群/个人发送一条样例卡片，验证提醒目标配置。",
@@ -216760,6 +217855,661 @@
           }
         },
         "summary": "查询飞书 WebSocket 连接状态",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/fire-equipment": {
+      "get": {
+        "operationId": "list_fire_equipment_api_v1_safety_fire_equipment_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "器材类型: extinguisher=灭火器 / hydrant=消防栓",
+            "in": "query",
+            "name": "equipment_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "器材类型: extinguisher=灭火器 / hydrant=消防栓",
+              "title": "Equipment Type"
+            }
+          },
+          {
+            "description": "编号/部门/位置/车间关键字",
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "编号/部门/位置/车间关键字",
+              "title": "Keyword"
+            }
+          },
+          {
+            "description": "来源子表 table_id",
+            "in": "query",
+            "name": "table_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "来源子表 table_id",
+              "title": "Table Id"
+            }
+          },
+          {
+            "description": "本月点检状态: inspected=已检 / uninspected=未检",
+            "in": "query",
+            "name": "month_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "本月点检状态: inspected=已检 / uninspected=未检",
+              "title": "Month Status"
+            }
+          },
+          {
+            "description": "有效期状态: expiring=30天内到期 / expired=已过期",
+            "in": "query",
+            "name": "expiry_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "有效期状态: expiring=30天内到期 / expired=已过期",
+              "title": "Expiry Status"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_FireEquipmentListResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "消防器材台账分页列表（编号/部门/位置/最近点检状态）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/fire-equipment/checklist": {
+      "get": {
+        "operationId": "get_fire_equipment_checklist_api_v1_safety_fire_equipment_checklist_get",
+        "parameters": [
+          {
+            "description": "extinguisher / hydrant",
+            "in": "query",
+            "name": "equipment_type",
+            "required": true,
+            "schema": {
+              "description": "extinguisher / hydrant",
+              "title": "Equipment Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ChecklistResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "点检检查卡检查项（灭火器 4 项 / 消防栓 8 项）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/fire-equipment/stats": {
+      "get": {
+        "operationId": "get_fire_equipment_stats_api_v1_safety_fire_equipment_stats_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_FireEquipmentStats_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "消防器材台账概览（类型分布 + 本月点检覆盖 + 同步状态）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/fire-equipment/sync": {
+      "post": {
+        "operationId": "sync_fire_equipment_api_v1_safety_fire_equipment_sync_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_FireEquipmentStats_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "立即同步飞书台账并重新投影消防器材（含待回写点检补写）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/fire-equipment/writeback-table/init": {
+      "post": {
+        "operationId": "init_fire_inspection_writeback_table_api_v1_safety_fire_equipment_writeback_table_init_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_FireInspectionWritebackInitResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "一键初始化「点检记录」回写子表（已存在则复用）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/fire-equipment/{equipment_id}": {
+      "get": {
+        "operationId": "get_fire_equipment_detail_api_v1_safety_fire_equipment__equipment_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "equipment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Equipment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_FireEquipmentDetailResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "消防器材详情（含检查卡与最近点检记录，扫码页使用）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/fire-equipment/{equipment_id}/inspections": {
+      "post": {
+        "operationId": "create_fire_inspection_api_v1_safety_fire_equipment__equipment_id__inspections_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "equipment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Equipment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFireInspectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_FireInspectionRecordItem_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "提交一次点检（检查项须覆盖整卡，结论自动汇总）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/fire-inspection-records": {
+      "get": {
+        "operationId": "list_fire_inspections_api_v1_safety_fire_inspection_records_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "equipment_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Equipment Type"
+            }
+          },
+          {
+            "description": "pass=合格 / fail=不合格",
+            "in": "query",
+            "name": "result",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "pass=合格 / fail=不合格",
+              "title": "Result"
+            }
+          },
+          {
+            "description": "编号/部门/位置/点检人关键字",
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "编号/部门/位置/点检人关键字",
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "query",
+            "name": "inspected_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Inspected From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "inspected_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Inspected To"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_FireInspectionListResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "点检记录台账分页列表（按点检时间倒序）",
         "tags": [
           "安全管理"
         ]
@@ -217079,6 +218829,176 @@
           }
         },
         "summary": "导出危险源辨识台账 PDF",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/hazard-identifications/filter-options": {
+      "get": {
+        "description": "返回已入账记录的去重部门与（部门，岗位）组合，供台账筛选下拉使用。",
+        "operationId": "get_hazard_filter_options_api_v1_safety_hazard_identifications_filter_options_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取台账筛选下拉选项（部门/岗位）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/hazard-identifications/import": {
+      "post": {
+        "description": "把车间 Excel 解析结果写入危险源辨识台账（已完成的记录）。\n\n按内容指纹生成编号，重复导入同一文件会自动跳过已存在记录。",
+        "operationId": "import_hazard_ledger_api_v1_safety_hazard_identifications_import_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_hazard_ledger_api_v1_safety_hazard_identifications_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "导入车间危险源辨识 Excel 到台账",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/hazard-identifications/import/parse": {
+      "post": {
+        "description": "上传车间 Excel 并解析：识别每个子表（sheet）的格式、有效行数与样例行。\n\n支持：作业活动/设备设施分级管控清单、重点风险管控措施清单、\n危险源识别评价表（.xls）。仅解析不落库。",
+        "operationId": "parse_hazard_ledger_import_api_v1_safety_hazard_identifications_import_parse_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_parse_hazard_ledger_import_api_v1_safety_hazard_identifications_import_parse_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "解析车间危险源辨识 Excel（预览子表与行数）",
         "tags": [
           "安全管理"
         ]
